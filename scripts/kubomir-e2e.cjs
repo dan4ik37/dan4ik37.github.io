@@ -7,10 +7,11 @@
 // KB_MODE=perf — замер в профиле телефона (412 × 915, ЦП ×4 медленнее, пресет из аргумента — «средняя» = mid): ясно, снег, дождь —
 //   ЦП мс на кадр (среднее, 95 %, худший), FPS, вызовы, память JS; «до» — SITE_DIR=выгрузка прошлого коммита
 // KB_MODE=soak — 10 мин игры (KB_MIN — другое число минут): ходит, прыгает, плавает и лезет на стены, ставит и ломает блоки,
-//   погода и время суток меняются, телепорты — ошибок и исключений в консоли нет, память JS после сборки мусора — не растёт
+//   погода и время суток меняются, телепорты, бой (меч, щит, лук) — ошибок и исключений в консоли нет, игрок ходит (ввод не заперт),
+//   память JS после сборки мусора — не растёт
 // KB_MODE=reopen — мир закрыть и открыть 8 раз: память JS после сборки мусора — не растёт
 // KB_MODE=combat — две руки и бой (T-012): снимки поз (от 1-го лица, спереди, сзади; фаза удара «заморожена»), зомби — нокаут
-//   мечом, лук — стрела вылетела; ошибок в консоли нет
+//   мечом, лук — стрела вылетела; круги боя (KB_ROUNDS) — память JS не растёт, мобы не копятся; ошибок в консоли нет
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [label = 'now', preset = 'ultra', angle = 'd3d11'] = process.argv.slice(2);
@@ -98,23 +99,37 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           if (n % 20 === 0) T.cam?.((n / 20) % 3 | 0);
           if (n % 25 === 0) { const P = S.P, x = P.x + (rnd() - .5) * 500, z = P.z + (rnd() - .5) * 500; if (T.teleport) T.teleport(x, 110, z); else T.command('/tp ' + x.toFixed(1) + ' 110 ' + z.toFixed(1)); await wait(3000); for (let i = 0; i < 40 && !S.ready; i++) await wait(500); }
           // ходит, прыгает (у стен — лезет, в воде — плывёт и вылезает), смотрит по сторонам
+          const x0 = S.P.x, z0 = S.P.z;
           S.rig.yaw += (rnd() - .5) * 2.5; S.rig.fp = (rnd() - .4) * .5;
           C.press('forward', true); if (rnd() < .6) C.press('jump', true); if (rnd() < .3) C.press('run', true);
           await wait(3500);
+          const mv = Math.hypot(S.P.x - x0, S.P.z - z0), blk = !!C.blocked;
           C.press('jump', false); C.press('run', false); C.press('forward', false);
           // ставит и ломает
           if (n % 3 === 0) { T.give?.({ id: ['planks_oak', 'stone', 'torch', 'glass'][n % 4], n: 16 }); S.P.sel = 0; for (let i = 0; i < 3; i++) { T.use?.(); await wait(150); T.dig?.(); await wait(150); } }
+          // бой (T-012): меч и щит против зомби, поменять руки, лук со стрелой
+          if (n % 4 === 1 && T.attack && S.ents) {
+            S.P.inv[4] = { id: 'sword_iron', n: 1 }; S.P.inv[5] = { id: 'bow', n: 1 }; S.P.inv[6] = { id: 'arrow', n: 8 }; S.P.off = { id: 'shield', n: 1 }; S.P.sel = 4;
+            const d = T.lookDir(), z = S.ents.spawn('zombie', S.P.x + d.x * 2.5, S.P.y, S.P.z + d.z * 2.5, { quiet: true });
+            const lk = S.I.locked; S.I.locked = true;
+            for (let i = 0; i < 8 && z && S.ents.mobs.includes(z); i++) { T.aim(z.x, z.y + 1.2, z.z); T.attack(S, z, null); await wait(700); }   // до нокаута (иначе зомби копятся)
+            S.C.press('place', true); await wait(500); S.C.press('place', false); T.swap?.(); await wait(200); T.swap?.();
+            S.P.sel = 5; await wait(200); S.C.press('place', true); await wait(900); S.C.press('place', false); await wait(400);
+            S.I.locked = lk; S.wasLocked = lk; S.P.sel = 0;   // «отпустили мышь» без меню паузы (иначе ввод заперт до конца прогона)
+          }
           await wait(800);
-          return { n, x: Math.round(S.P.x), y: Math.round(S.P.y), z: Math.round(S.P.z), hp: S.P.hp, pk: !!S.P.pk, hang: !!S.P.hang, water: S.P.water > .3, wx: S.WX.stats?.().zone };
+          return { n, mv: +mv.toFixed(1), blk, x: Math.round(S.P.x), y: Math.round(S.P.y), z: Math.round(S.P.z), hp: S.P.hp, pk: !!S.P.pk, hang: !!S.P.hang, water: S.P.water > .3, wx: S.WX.stats?.().zone };
         })()`, 60000).catch(e => ({ n, err: e.message }));
-        if (n % 10 === 0 || r?.err || r?.closed) console.log('  шаг', JSON.stringify(r), Math.round((Date.now() - t0) / 1000) + ' с');
+        if (n % 10 === 0 || r?.err || r?.closed || r?.blk) console.log('  шаг', JSON.stringify(r), Math.round((Date.now() - t0) / 1000) + ' с');
         if (r?.closed) { ok(false, 'мир закрылся сам во время игры'); break; }
+        if (r && !r.wait && !r.err) { res.walk = (res.walk || 0) + 1; if (r.mv > .5) res.moved = (res.moved || 0) + 1; }
         if (r?.err) { await sleep(1000); if ((res.soakErr = (res.soakErr || 0) + 1) > 5) { ok(false, 'шаг игры падает', r.err); break; } }
       }
       const h1 = await heap(), errs = logs.slice(ex0).filter(l => !/X3595|DevTools|favicon/i.test(l));
-      res.soak = { minutes: MIN, steps: n, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6) };
+      res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6) };
       console.log('ЗАМЕР soak', JSON.stringify(res.soak));
       ok(!errs.length, MIN + ' мин игры — без ошибок и исключений в консоли', errs.slice(0, 6));
+      ok((res.moved | 0) >= (res.walk | 0) * .5, 'игрок ходил (ввод не заперт окном или меню) — в половине шагов и больше', { moved: res.moved | 0, of: res.walk | 0 });
       return;
     }
     if (MODE === 'combat') {
@@ -207,11 +222,38 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         const draw = +CB.drawK(S.F).toFixed(2);
         S.C.press('place', false); await wait(150);
         const a = S.ents.arrows.length; await wait(2500);
-        S.I.locked = lk;
+        S.I.locked = lk; S.wasLocked = lk;
         return { draw, arrows: a, stuck: S.ents.arrows.filter(x => x.stuck).length, n0, n1: P.inv[8]?.n || 0 };
       })()`, 30000);
       console.log('ЗАМЕР лук', JSON.stringify(res.bow));
       ok(res.bow && res.bow.draw >= .99 && res.bow.arrows === 1 && res.bow.n1 === res.bow.n0 - 1, 'лук: натянул ПКМ (1 с), отпустил — стрела вылетела, одна стрела потрачена', res.bow);
+      // утечки: круги боя на месте (зомби — нокаут мечом, щит, поменять руки, выстрел из лука) — память JS после сборки мусора
+      // не растёт, мобы не копятся (KB_ROUNDS — число кругов в замере, по умолчанию 15)
+      const RN = +process.env.KB_ROUNDS || 15;
+      const rounds = n => ev(`(async () => {
+        const wait = ms => new Promise(r => setTimeout(r, ms));
+        const S = GAME_IMPL.kubomir._test.state(), T = GAME_IMPL.kubomir._test, P = S.P, lk = S.I.locked;
+        S.I.locked = true; let ko = 0;
+        for (let c = 0; c < ${n}; c++) {
+          P.hp = 20; P.food = 20; P.inv[0] = { id: 'sword_iron', n: 1 }; P.inv[1] = { id: 'bow', n: 1 }; P.inv[8] = { id: 'arrow', n: 32 }; P.off = { id: 'shield', n: 1 }; P.sel = 0;
+          S.rig.yaw = (c % 4) * Math.PI / 2; S.rig.fp = .05; await wait(100);
+          const d = T.lookDir(), z = S.ents.spawn('zombie', P.x + d.x * 2.4, P.y, P.z + d.z * 2.4, { quiet: true });
+          for (let i = 0; i < 10 && z && S.ents.mobs.includes(z); i++) { T.aim(z.x, z.y + 1.2, z.z); T.attack(S, z, null); await wait(700); }
+          if (z && !S.ents.mobs.includes(z)) ko++;
+          S.C.press('place', true); await wait(500); S.C.press('place', false);
+          T.swap(); await wait(150); T.swap();
+          P.sel = 1; await wait(150); S.C.press('place', true); await wait(1050); S.C.press('place', false); await wait(300); P.sel = 0;
+        }
+        S.I.locked = lk; S.wasLocked = lk;
+        await wait(1500);
+        return { ko, zombies: S.ents.mobs.filter(m => m.type === 'zombie').length, mobs: S.ents.mobs.length, dying: S.ents.dying.length, arrows: S.ents.arrows.length };
+      })()`, 600000);
+      const r0 = await rounds(5), h1 = await heap(), r1 = await rounds(RN), h2 = await heap(), r2 = await rounds(RN), h3 = await heap();
+      res.leak = { rounds: RN, heap: [h1, h2, h3], r0, r1, r2 };
+      console.log('ЗАМЕР утечки', JSON.stringify(res.leak));
+      ok(r1 && r2 && r1.ko >= RN - 1 && r2.ko >= RN - 1, 'круги боя: зомби каждый раз — нокаут', { r1, r2 });
+      ok(r0 && r2 && r2.mobs <= r0.mobs + 4 && r2.dying === 0, 'круги боя: мобы не копятся (свои зомби — нокаут, «пуф» доигран; остальные — сами появились)', { r0, r2 });
+      ok(h3 - h2 < 4, 'круги боя: память JS после сборки мусора не растёт (' + RN + ' кругов — меньше 4 МБ)', res.leak.heap);
       const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`);
       ok(!pr.bad.length, 'бой: все программы шейдеров собрались', pr.bad);
       const bad = logs.filter(l => /WebGLProgram|Shader Error|exception|TypeError|ReferenceError/i.test(l) && !/X3595/.test(l));
