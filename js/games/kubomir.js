@@ -2208,15 +2208,20 @@
     if (C.nm !== nm) { C.nm = nm; const e = h.querySelector('.kb-iname'); e.textContent = nm; e.classList.remove('show'); void e.offsetWidth; if (nm) e.classList.add('show'); }
     // здоровье, еда, воздух (в творчестве — нет)
     // воздух полный — отдельный ключ: иначе с 14,x до 15 Math.ceil не менялся, панель не перерисовывалась и пузырьки оставались на суше
-    const surv = !st.creative, bars = surv ? P.hp + '|' + P.food + '|' + (P.air < 15 ? Math.ceil(P.air) : 'F') + '|' + (P.eyeWater ? 1 : 0) : 'c';
+    // ── KX:food ── сытость еды в руке (kubomir-info.js: st.foodGhost — сколько половинок вернёт): призрачные ножки и «+N лишних»
+    const gh = st.creative ? 0 : st.foodGhost | 0;
+    const surv = !st.creative, bars = surv ? P.hp + '|' + P.food + '|' + (P.air < 15 ? Math.ceil(P.air) : 'F') + '|' + (P.eyeWater ? 1 : 0) + '|' + gh : 'c';
     if (C.bars !== bars) {
       C.bars = bars;
       const icons = (n, full, half, empty) => { let s = ''; for (let i = 0; i < 10; i++) s += n >= (i + 1) * 2 ? full : n === i * 2 + 1 ? half : empty; return s; };
+      // еда: к сытым — призрачные (вернёт еда в руке): полные / половинка
+      const foodIcons = (n, add) => { const to = Math.min(20, n + add); let s = ''; for (let i = 0; i < 10; i++) { const a = (i + 1) * 2, b = i * 2 + 1; s += n >= a ? '<i class="f">🍗</i>' : to >= a ? (n === b ? '<i class="h g">🍗</i>' : '<i class="g">🍗</i>') : n === b ? '<i class="h">🍗</i>' : to === b ? '<i class="e gh">🍗</i>' : '<i class="e">🍗</i>'; } return s; };
       h.querySelector('.kb-bars').hidden = !surv;
       h.classList.toggle('kb-low', surv && P.hp <= 6 && !P.dead);   // мало здоровья — края экрана красноватые
       if (surv) {
         h.querySelector('.kb-hp').innerHTML = icons(P.hp, '<i class="f">❤</i>', '<i class="h">❤</i>', '<i class="e">❤</i>');
-        h.querySelector('.kb-food').innerHTML = icons(P.food, '<i class="f">🍗</i>', '<i class="h">🍗</i>', '<i class="e">🍗</i>');
+        const over = Math.max(0, P.food + gh - 20);
+        h.querySelector('.kb-food').innerHTML = foodIcons(P.food, gh) + (gh && over ? `<b class="kb-fover">+${over | 0} лишн.</b>` : '');
         const air = h.querySelector('.kb-air'); air.hidden = !(P.eyeWater || P.air < 15);
         air.textContent = '🫧'.repeat(Math.max(0, Math.ceil(P.air / 1.5)));
       } else h.querySelector('.kb-air').hidden = true;
@@ -2376,7 +2381,8 @@
     const D = st.lastDeath;
     if (D && D.drop && now() - D.t < 300000) {
       const dx = D.x - P.x, dz = D.z - P.z, d = Math.hypot(dx, dz);
-      if (d > 4) { const f = lookDir(st), a = Math.atan2(dx * f.z - dz * f.x, dx * f.x + dz * f.z), i = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8; return `📍 Твои вещи — в ${Math.round(d)} блоках ${ARROWS[i]} (X ${Math.floor(D.x)}, Z ${Math.floor(D.z)}). Лежат ещё ${Math.ceil((300000 - (now() - D.t)) / 60000)} мин`; }
+      // стрелка: право — (−f.z, f.x), как rig.right() (T-049: раньше знак был наоборот — вещи справа показывались «⬅»)
+      if (d > 4) { const f = lookDir(st), a = Math.atan2(f.x * dz - f.z * dx, dx * f.x + dz * f.z), i = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8; return `📍 Твои вещи — в ${Math.round(d)} блоках ${ARROWS[i]} (X ${Math.floor(D.x)}, Z ${Math.floor(D.z)}). Лежат ещё ${Math.ceil((300000 - (now() - D.t)) / 60000)} мин`; }
       if (d <= 4) st.lastDeath = null;
     }
     if (P.food <= 6) return `🍗 Ты голоден и не можешь бежать: возьми еду в руку и ${touch ? 'нажми на экран' : 'держи ПКМ'} — съешь`;

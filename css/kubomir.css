@@ -312,3 +312,23 @@ html.gs-compact .gs-fs .kb-top .wld-topbtns .gs-ico{width:15px;height:15px}
 .kx-ai{flex:none;width:40px;height:40px;border-radius:10px;background:rgba(0,0,0,.25) center/32px no-repeat;image-rendering:pixelated;display:grid;place-items:center;font-size:20px}
 .kx-btn{flex:none;min-height:40px;padding:6px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#fff;font-weight:800;cursor:pointer}
 .kx-btn.pri{background:linear-gradient(180deg,#4f8cff,#3566d8);border-color:#7aa6ff}
+/* T-049 помощники на экране (kubomir-info.js → D37E.info): сытость еды в руке; на телефоне строки — ниже кнопки ☰; «вместе» — полоса компаса ниже */
+.kb-food .g{filter:saturate(.55) brightness(1.35);opacity:.72}
+.kb-food .gh{filter:saturate(.55) brightness(1.1);opacity:.55}
+body.high .kb-food .g{animation:kbGhost .9s ease-in-out infinite alternate}
+@keyframes kbGhost{from{opacity:.45}to{opacity:.95}}
+.kb-fover{font:800 11px Montserrat,system-ui,sans-serif;color:#fcd34d;align-self:center;margin-right:4px;white-space:nowrap;text-shadow:0 1px 2px #000}
+.kb-touch .kx-info .d37in-chip{font-size:11.5px;padding:2px 8px}
+.kb-hud:has(.kb-coopbar) .kx-info .d37in-cbar{top:40px}
+.kb-hud:has(.kb-coopbar) .kx-info .d37in-card{top:68px}
+.kb-nohud .kx-info{display:none}
+/* телефон: подсказка слева сверху (под подсказкой новичку), полоса компаса и строки — справа под ☰ (не над большими пальцами) */
+.kb-touch .kx-info .d37in-cbar{left:auto;right:8px;top:54px;width:min(200px,46%);margin-left:0}
+.kb-touch .kx-info .d37in-chips{top:54px;right:8px}
+.kb-touch .kx-info .d37in-cbar:not([hidden]) ~ .d37in-chips{top:82px}
+.kb-touch .kx-info .d37in-card{left:8px;top:46px;transform:none;min-width:0;max-width:55%;padding:4px 10px;gap:7px}
+.kb-touch .kx-info .d37in-ci{width:24px;height:24px;font-size:18px}
+.kb-touch .kx-info .d37in-cb b{font-size:12.5px}
+.kb-touch .kx-info .d37in-cb small{font-size:11px}
+.kb-touch .kx-info .d37in-cb small:nth-of-type(n+2),.kb-touch .kx-info .d37in-dr{display:none}
+.kb-touch .kx-info .d37in-cb small.d37in-live:not([hidden]){display:block}

@@ -77,20 +77,25 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     const modes = MODE === 'all' ? ['shots', 'perf', 'leak', 'soak'] : [MODE];
     for (const M of modes) {
       if (M === 'shots') {
-        await openWorld('survival', false);
-        await ev(`(() => { const S = ${T}.state(); S.X.emit('ach', 'night'); S.X.emit('ach', 'iron'); return S.X.acc.open; })()`);
-        await give([['watch', 1], ['compass', 1], ['depth_meter', 1], ['lens', 1], ['ore_finder', 1], ['atlas', 1], ['navigator', 1], ['bed', 2], ['bucket', 1], ['recall', 3], ['master_book', 1], ['map_blank', 4], ['bread', 1], ['apple', 5], ['meat_cooked', 3]]);
-        const worn = await wear(['watch', 'compass', 'lens', 'depth_meter']);
-        ok(worn.length === 4, 'надеты 4 помощника', worn);
-        await ev(`(() => { ${T}.state().ui.open('inv'); return 1; })()`); await sleep(700); await shot('pc-inv');
-        await ev(`(() => { ${T}.state().ui.close(); ${T}.state().X.openAcc(); return 1; })()`); await sleep(700); await shot('pc-acc-sheet');
-        await ev(`(() => { ${T}.state().X.closeSheet(); return 1; })()`); await sleep(500); await shot('pc-hud');
-        await screen(844, 390, true); await ev(`(() => { ${T}.state().ui.open('inv'); return 1; })()`); await sleep(700); await shot('phone-inv');
-        await ev(`(() => { ${T}.state().ui.close(); ${T}.state().X.openAcc(); return 1; })()`); await sleep(700); await shot('phone-acc-sheet');
-        await ev(`(() => { ${T}.state().X.closeSheet(); return 1; })()`); await sleep(500); await shot('phone-hud');
-        await screen(390, 844, true); await shot('phone-portrait-hud');
-        await ev(`(() => { ${T}.state().X.openAcc(); return 1; })()`); await sleep(700); await shot('phone-portrait-acc-sheet');
-        await ev(`(() => { ${T}.state().X.closeSheet(); return 1; })()`);
+        for (const phone of [false, true]) {
+          const P = phone ? 'phone' : 'pc';
+          await openWorld('survival', phone);
+          await ev(`(() => { const S = ${T}.state(); S.X.emit('ach', 'night'); S.X.emit('ach', 'iron'); return S.X.acc.open; })()`);
+          await give([['watch', 1], ['compass', 1], ['depth_meter', 1], ['lens', 1], ['ore_finder', 1], ['atlas', 1], ['navigator', 1], ['bed', 2], ['bucket', 1], ['recall', 3], ['master_book', 1], ['map_blank', 4], ['apple', 5], ['meat_cooked', 3]]);
+          const worn = await wear(['watch', 'compass', 'lens', 'depth_meter']);
+          ok(worn.length === 4, P + ': надеты 4 помощника', worn);
+          // смотрим на землю перед собой (лупа), держим яблоко (сытость), голод — 12
+          await ev(`(async () => { const S = ${T}.state(); S.rig.fp = .7; S.P.food = 12; const j = S.P.inv.findIndex(s => s && s.id === 'apple'); if (j >= 0 && j < 9) S.P.sel = j; else if (j >= 0) { const t = S.P.inv[0]; S.P.inv[0] = S.P.inv[j]; S.P.inv[j] = t; S.P.sel = 0; } ${phone ? `S.hit = null;` : ''} await new Promise(r => setTimeout(r, 900)); return 1; })()`);
+          await ev(`(() => { ${T}.state().ui.open('inv'); return 1; })()`); await sleep(700); await shot(P + '-inv');
+          await ev(`(() => { ${T}.state().ui.close(); ${T}.state().X.openAcc(); return 1; })()`); await sleep(700); await shot(P + '-acc-sheet');
+          await ev(`(() => { ${T}.state().X.closeSheet(); return 1; })()`); await sleep(1200); await shot(P + '-hud');
+          if (phone) {
+            await screen(390, 844, true); await shot('phone-portrait-hud');
+            await ev(`(() => { ${T}.state().X.openAcc(); return 1; })()`); await sleep(700); await shot('phone-portrait-acc-sheet');
+            await ev(`(() => { ${T}.state().X.closeSheet(); return 1; })()`);
+          }
+          await ev(`(async () => { await ${T}.stop(); return 1; })()`, 30000);
+        }
       }
       if (M === 'perf' || M === 'leak' || M === 'soak') console.log('режим', M, '— добавляется по шагам T-049');
     }
