@@ -5,6 +5,11 @@
 // прошла, кадр в полдень не чёрный. Картинка — <папка временных файлов>/gfx-strict-<бэкенд>-<пресет>.png.
 // Запуск из корня сайта: node scripts/gfx-strict.cjs [swiftshader|vulkan|gl|d3d11] [high|mid|ultra|auto] [плотность пикселей] [набор шейдеров] [lose]
 // lose — ещё и потеря контекста WebGL (как на телефоне, выгрузившем видеопамять): страж ничего не выключает, после возврата кадр рисуется
+// PAGE=planet — то же для скрытой «Планеты» (/play/planet, T-075): полёт вниз, посадка в полдень, тени движка на земле, два диапазона
+// глубины (AO на «высокой» — снова есть), все программы (поверхность с перетеканием и тенями, небо, звёзды, тела неба, туман движка с
+// дымкой атмосферы) собрались без предупреждений, страж ничего не выключил — ни навсегда, ни на сессию, самопроверка кадра прошла.
+// T-075 на паузе: новое включается флагом (localStorage d37_planet_v2 = '1') — проверка ставит его сама; PLANET_V2=0 — без флага
+// (как до T-075: один диапазон глубины, без теней на земле и дымки; общие проверки — те же)
 // (Chrome — переменная CHROME или стандартный путь Windows; временная папка — D37_TMP, иначе E:\claude-tmp, иначе системная)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
@@ -41,6 +46,63 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     if (d.method === 'Runtime.exceptionThrown') logs.push('exception: ' + (d.params.exceptionDetails?.exception?.description || d.params.exceptionDetails?.text || '').slice(0, 300));
   });
   const ev = async (expr, ms = 60000) => { const r = await Promise.race([send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }), sleep(ms).then(() => ({ result: { value: null } }))]); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
+  // «Планета» (T-075): спуск, посадка в полдень, проверки — как у мира + свои (два диапазона, тени, AO, туман-дымка)
+  async function planet(){
+    const T = 'GAME_IMPL.planet._test', V2 = process.env.PLANET_V2 !== '0';
+    await send('Page.navigate', { url: BASE + '/#/games/planet' });
+    let up = false;
+    for (let i = 0; i < 240 && !up; i++) { await sleep(500); try { up = await ev(`!!(window.GAME_IMPL?.planet?._test?.S?.V)`, 5000); } catch (e) {} }
+    ok(up, 'планета открылась');
+    if (!up) throw new Error('планета не открылась');
+    await sleep(2500);
+    await ev(`${T}.descend(40)`); await sleep(9000);
+    // полдень на месте посадки: своё время = часы мира + сдвиг
+    await ev(`(() => { const S = ${T}.S, d = S.P.dirFromLatLon(29, 81), hr = S.P.localHour(d, S.t), dt = ((12.5 - hr + 24) % 24) / 24 * S.P.def.day; ${T}.time(S.t + dt, 1); })()`);
+    await ev(`${T}.goto(29, 81, 30)`); await sleep(2000); await ev(`${T}.land()`); await sleep(6000);
+    for (let i = 0; i < 120; i++) { const t = await ev(`(${T}.S.R.guard || {}).tests ?? -1`, 5000).catch(() => -2); if (t >= 1 || t === -1) break; await sleep(500); }
+    const res = await ev(`(async () => {
+      const S = ${T}.S, R = S.R, P = R.post, G = R.guard, V = S.V;
+      let rep = null; if (G) { G.check(x => { rep = x; }); for (let i = 0; i < 80 && !rep; i++) await new Promise(r => setTimeout(r, 100)); }
+      await new Promise(r => setTimeout(r, 500));
+      R.render(); const c = R.r.domElement, k = document.createElement('canvas'); k.width = 206; k.height = Math.round(c.height * 206 / c.width);
+      const g = k.getContext('2d'); g.drawImage(c, 0, 0, k.width, k.height); const d = g.getImageData(0, 0, k.width, k.height).data;
+      let sum = 0, black = 0, n = 0, top = 0, tn = 0; for (let i = 0; i < d.length; i += 4) { const L = .2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2]; sum += L; if (L < 12) black++; n++; if (i / 4 < k.width * Math.round(k.height * .1)) { top += L; tn++; } }
+      const gl = R.r.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const progs = R.r.info.programs.map(p => ({ name: p.name, ok: !p.diagnostics || p.diagnostics.runnable !== false, log: p.diagnostics ? (p.diagnostics.fragmentShader.log || p.diagnostics.vertexShader.log || p.diagnostics.programLog || '').slice(0, 160) : '' }));
+      const st = V.stats(), sh = R.sun && R.sun.castShadow;
+      const terr = R.scene.getObjectByName('planet')?.children?.[0]?.material;
+      return { renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), mobile: D37E.isMobile(), q: R.q, mode: ${T}.state().mode,
+        post: P && { on: P.on, depthOK: P.depthOK, ao: P.ao.on, rt: P.rt.on }, split: st.split, shadow: { cast: !!sh, terrain: terr ? terr.uniforms.uShP.value.x : -1 },
+        aerial: D37E.GFXU.apA ? D37E.GFXU.apA[3] : -1, sunProv: !!D37E.sunProvider?.(), rep: rep && { log: rep.log, sum: rep.sum }, off: D37E.gfxGuardInfo().off, vol: G ? Object.keys(G.vol || {}) : [],
+        stored: (() => { try { return localStorage.getItem('d37_gfx_guard'); } catch (e) { return 'x'; } })(),
+        programs: progs.length, failed: progs.filter(p => !p.ok), withLog: progs.filter(p => p.log).slice(0, 4), frame: { mean: +(sum / n).toFixed(1), black: +(black / n).toFixed(3), sky: +(top / tn).toFixed(1) }, shot: k.toDataURL('image/png') };
+    })()`, 120000);
+    const out = path.join(TMP, `gfx-strict-planet-${angle}-${preset}-${PACK}.png`);
+    fs.writeFileSync(out, Buffer.from(res.shot.split(',')[1], 'base64')); delete res.shot;
+    console.log(`  ${res.renderer} · телефон: ${res.mobile} · качество ${res.q} · ${res.mode} · программ ${res.programs} · кадр ${JSON.stringify(res.frame)} · ${out}`);
+    console.log('  ', JSON.stringify({ post: res.post, split: res.split, shadow: res.shadow, aerial: res.aerial, sunProv: res.sunProv, rep: res.rep, vol: res.vol }).slice(0, 700));
+    ok(res.mobile, 'профиль телефона (E.isMobile)');
+    ok(res.mode === 'walk', 'посадка: пешком на земле');
+    ok(!res.failed.length, 'все программы шейдеров собрались', res.failed);
+    ok(!res.withLog.length, 'без предупреждений компилятора', res.withLog);
+    ok(!res.off.length && !res.stored, 'страж графики ничего не выключил навсегда (и ничего не записал)', { off: res.off, stored: res.stored });
+    ok(!res.vol.length, 'страж ничего не выключил и на эту сессию', res.vol);
+    ok(!res.rep || !res.rep.log.length, 'самопроверка кадра прошла', res.rep);
+    ok(res.frame.mean > 40 && res.frame.black < .25, 'кадр в полдень не чёрный', res.frame);
+    ok(res.frame.sky > 70, 'небо над горизонтом в полдень светлое (верх кадра; дальний проход не стёрт ближним)', res.frame);
+    if (V2) {
+      ok(res.split > 0, 'два диапазона глубины включены', res.split);
+      ok(res.q === 'low' || !res.post || !res.post.depthOK || (preset !== 'high' && preset !== 'ultra') || res.post.ao, 'AO снова работает на планете («высокая»)', res.post);
+      ok(res.q === 'low' || (res.shadow.cast && res.shadow.terrain > 0), 'тени движка ложатся на землю у игрока', res.shadow);
+      ok(res.aerial === 1, 'дымка атмосферы в тумане движка включена', res.aerial);
+    } else {
+      ok(!res.split && !(res.shadow.terrain > 0) && res.aerial !== 1 && (!res.post || !res.post.ao), 'флаги T-075 выкл: как раньше — один диапазон глубины, без AO, теней на земле и дымки',
+        { split: res.split, shadow: res.shadow, aerial: res.aerial, post: res.post });
+    }
+    ok(res.sunProv, 'солнце движка — через E.setSunProvider');
+    const bad = logs.filter(l => /WebGLProgram|Shader Error|страж графики|exception/i.test(l));
+    ok(!bad.length, 'в консоли — без ошибок шейдеров', bad.slice(0, 4));
+  }
   try {
     await send('Page.enable'); await send('Runtime.enable');
     await send('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: +DSF || 1, mobile: true });
@@ -48,7 +110,10 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     const base = preset === 'ultra' ? 'high' : preset;
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: preset, gfx: base, shaders: PACK, pack: PACK }) };
+    if (process.env.PAGE === 'planet' && process.env.PLANET_V2 !== '0') ls.d37_planet_v2 = '1';   // T-075: новое — флагом (на паузе выкл)
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}localStorage.removeItem('d37_gfx_guard');${preset === 'auto' ? `localStorage.removeItem('d37_gfx');` : `localStorage.setItem('d37_gfx',${JSON.stringify(base)});`}}catch(e){}` });
+    if (process.env.PAGE === 'planet') await planet();
+    else {
     await send('Page.navigate', { url: BASE + '/#/games/world' });
     let up = false;
     for (let i = 0; i < 240 && !up; i++) { await sleep(500); try { up = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.R)`, 5000); } catch (e) {} }
@@ -109,6 +174,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       console.log('  потеря контекста:', JSON.stringify(lr).slice(0, 500));
       ok(lr && (lr.skip || (lr.lostNow && !lr.offLost.length)), 'контекст потерян — страж ничего не выключил', lr);
       ok(lr && (lr.skip || (lr.restored && lr.same && !lr.offAfter.length && lr.after > 60 && Math.abs(lr.after - lr.before) < 4)), 'контекст вернулся — тот же мир, кадр как до потери, страж чист', lr);
+    }
     }
   } catch (e) {
     fail++; console.log('ОШИБКА', e.message);

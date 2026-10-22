@@ -13,8 +13,9 @@
 //   M = N·2^L: одна и та же точка в соседних кусках (той же грани, другой грани, на уровень крупнее) даёт ОДНО и то же направление
 //   и высоту до бита — швов нет.
 //   P.select(cam, o, out) — какие куски нужны камере (cam — точка в системе планеты), P.balance — соседи отличаются не больше чем
-//   на уровень, P.stitchMask — у какого края сосед крупнее (сшивка), P.buildChunk(f, L, i, j, N) — сетка куска (типизированные
-//   массивы: в потоке и на странице одинаково), PL.indices(N, mask) — общие индексы сшивки.
+//   на уровень, P.stitchMask — у какого края сосед крупнее (сшивка), P.buildChunk(f, L, i, j, N, { lite }) — сетка куска
+//   (типизированные массивы: в потоке и на странице одинаково; lite — без формы родителя, как до T-075), PL.indices(N, mask) —
+//   общие индексы сшивки.
 //   Плоский кусок (как сейчас «Мир»): P.patch(dir) — своя система координат у якоря (x — восток, y — вверх, z — юг): P.toL / P.toBF,
 //   высота для физики P.patchHeight(fr, x, z) — по тому же треугольнику, что нарисован; вода P.patchWater(fr, x, z);
 //   P.rebaseMap(старый, новый) → { Q, t } — переезд якоря (позиции p' = Q p + t, скорости — Q).
@@ -317,8 +318,10 @@
     flat(N, d){ const detA = d.relief.detail, sea = d.sea ?? 0; return (x, y, z) => sea + 40 + N.fbm(x * 900, y * 900, z * 900, 3) * detA; },
   };
 
-  // ═══ Индексы куска: внутренний квадрат сеткой (диагональ b–c, как у физики) + кольцо из 4 трапеций, сшитых «молнией»:
-  //     у края с крупным соседом нечётные вершины пропускаются — край куска ровно совпадает с краем соседа. Юбки — вниз.
+  // ═══ Индексы куска: КАЖДАЯ клетка — диагональ b–c (как у физики и у «перетекания» LOD: кусок, сжатый к форме родителя, ровно
+  //     повторяет родителя — шагов нет нигде, и у края тоже). У края с крупным соседом (бит маски) — полоса «веером» по парам клеток:
+  //     нечётные вершины края пропускаются, край куска ровно совпадает с краем соседа; в углу, где сшиты оба края, каждый веер
+  //     берёт свою половину угловой клетки. Юбки — вниз.
   //     mask: бит 0 — край i = 0 (−s), 1 — i = N (+s), 2 — j = 0 (−t), 3 — j = N (+t). Вершины: сетка (N+1)², потом юбки 4·(N+1) ═══
   const IDX = new Map();
   function indices(N, mask){
@@ -326,37 +329,32 @@
     if (IDX.has(k)) return IDX.get(k);
     const n1 = N + 1, out = [];
     const vid = (a, b) => b * n1 + a;   // a — по s (i), b — по t (j)
-    // внутренний квадрат [1, N−1]²
-    for (let b = 1; b < N - 1; b++) for (let a = 1; a < N - 1; a++) {
+    const st = e => (mask >> e) & 1;
+    // обычные клетки: все, кроме полос сшитых краёв
+    for (let b = 0; b < N; b++) for (let a = 0; a < N; a++) {
+      if ((a === 0 && st(0)) || (a === N - 1 && st(1)) || (b === 0 && st(2)) || (b === N - 1 && st(3))) continue;
       const A = vid(a, b), B = vid(a + 1, b), C = vid(a, b + 1), D = vid(a + 1, b + 1);
       out.push(A, B, C, B, D, C);
     }
-    // трапеции: край (внешний ряд) и внутренний ряд; «молния» по координате вдоль края; flip — порядок обхода для наружной стороны
-    const zipper = (outer, inner, flip) => {
-      // outer, inner: [[вершина, положение вдоль края], …] по возрастанию положения
-      let a = 0, b = 0;
-      while (a < outer.length - 1 || b < inner.length - 1) {
-        const advA = b >= inner.length - 1 || (a < outer.length - 1 && outer[a + 1][1] <= inner[b + 1][1]);
-        let t;
-        if (advA) { t = [outer[a][0], outer[a + 1][0], inner[b][0]]; a++; }
-        else { t = [outer[a][0], inner[b + 1][0], inner[b][0]]; b++; }
-        if (flip) out.push(t[0], t[2], t[1]); else out.push(t[0], t[1], t[2]);
+    // веер по паре клеток вдоль сшитого края e: внешние (на краю) — только чётные, внутренние — ряд за краем.
+    // o(q), w(q) — вершины внешнего и внутреннего ряда; у концов маленький треугольник берёт вершину соседнего края —
+    // если и тот сшит, её нет (нечётная) — треугольник отдаёт свою половину угловой клетки соседнему вееру
+    const E4 = [   // [внешняя, внутренняя, соседний край у q = 0, у q = N]
+      [q => vid(0, q), q => vid(1, q), 2, 3], [q => vid(N, q), q => vid(N - 1, q), 2, 3],
+      [q => vid(q, 0), q => vid(q, 1), 0, 1], [q => vid(q, N), q => vid(q, N - 1), 0, 1],
+    ];
+    for (let e = 0; e < 4; e++) {
+      if (!st(e)) continue;
+      const [o, w, e0, e1] = E4[e];
+      for (let q = 0; q < N; q += 2) {
+        const first = q === 0 && st(e0), last = q + 2 === N && st(e1);
+        // обход наружу (как у сетки): у краёв 0 и 3 — один порядок, у 1 и 2 — другой
+        if (e === 0) { out.push(o(q), w(q + 1), o(q + 2)); if (!first) out.push(o(q), w(q), w(q + 1)); if (!last) out.push(o(q + 2), w(q + 1), w(q + 2)); }
+        else if (e === 1) { out.push(o(q), o(q + 2), w(q + 1)); if (!first) out.push(o(q), w(q + 1), w(q)); if (!last) out.push(o(q + 2), w(q + 2), w(q + 1)); }
+        else if (e === 2) { out.push(o(q), o(q + 2), w(q + 1)); if (!first) out.push(o(q), w(q + 1), w(q)); if (!last) out.push(o(q + 2), w(q + 2), w(q + 1)); }
+        else { out.push(o(q), w(q + 1), o(q + 2)); if (!first) out.push(o(q), w(q), w(q + 1)); if (!last) out.push(o(q + 2), w(q + 1), w(q + 2)); }
       }
-    };
-    const edge = (e) => {
-      const st = mask >> e & 1 ? 2 : 1, outer = [], inner = [];
-      for (let q = 0; q <= N; q += st) {
-        const v = e === 0 ? vid(0, q) : e === 1 ? vid(N, q) : e === 2 ? vid(q, 0) : vid(q, N);
-        outer.push([v, q]);
-      }
-      for (let q = 1; q <= N - 1; q++) {
-        const v = e === 0 ? vid(1, q) : e === 1 ? vid(N - 1, q) : e === 2 ? vid(q, 1) : vid(q, N - 1);
-        inner.push([v, q]);
-      }
-      // обход: край j = 0 (низ) — как сетка (a, b, c); остальные — по стороне
-      zipper(outer, inner, e === 0 || e === 3);
-    };
-    for (let e = 0; e < 4; e++) edge(e);
+    }
     // юбки: вершины n1² + e·n1 + q (q — по краю); полоса между краем и юбкой (обход наружу; лишнее отсечёт глубина)
     const base = n1 * n1;
     for (let e = 0; e < 4; e++) {
@@ -424,6 +422,20 @@
       return out;
     }
     P.tempAt = tempAt; P.moistAt = moistAt; P.landColor = landColor; P.iceAt = iceAt;
+    // Климат места для погоды движка (T-075, js/engine/climate.js C.CLIMATES) — как цвет поверхности: широта и высота (температура),
+    // влага (пояса пустынь у ±24°); море — 'sea', замёрзшее море и холод — 'snow', выше 1200 ед. над морем — 'mountain', сухо и
+    // тепло — 'desert', жарко и влажно — 'tropic', сухо — 'steppe', иначе — 'temperate'. Средний за год (сезон и сутки добавит погода)
+    P.climateAt = d => {
+      const x = d[0], y = d[1], z = d[2], h = H(x, y, z);
+      if (D.sea != null && h < D.sea) return iceAt(x, y, z) ? 'snow' : 'sea';
+      const T = tempAt(x, y, z, h), m = moistAt(x, y, z), above = h - (D.sea ?? 0);
+      if (T < -2) return 'snow';
+      if (above > 1200) return 'mountain';
+      if (m < .3 && T > 10) return 'desert';
+      if (T > 21 && m > .55) return 'tropic';
+      if (m < .42) return 'steppe';
+      return 'temperate';
+    };
     // всё о точке поверхности: { h, water (глубина ≥ 0 или 0), r, g, b }
     P.surf = (d, out = {}) => {
       const h = H(d[0], d[1], d[2]);
@@ -438,9 +450,15 @@
     function node(f, L, i, j){
       const k = key(f, L, i, j);
       let n = nodes.get(k);
-      if (n) return n;
+      if (n) {
+        // родитель вычищен и создан заново (узел — от поиска соседа, не из kidsOf: чистка его не задела) — ссылку на живого
+        if (L && nodes.get(n.par.key) !== n.par) n.par = node(f, L - 1, i >> 1, j >> 1);
+        return n;
+      }
       n = { key: k, f, L, i, j, c: [0, 0, 0], cp: [0, 0, 0], ang: 0, size: 0, hc: 0, hmin: P.renderMin, hmax: P.maxH, built: false,
-        split: false, leaf: 0, used: 0, mask: 0, par: null, kids: null, nb: null };
+        split: false, leaf: 0, used: 0, mask: 0, par: null, kids: null, nb: null,
+        // LOD v2: ошибки (своя, «4 ребёнка вместо меня» — измеренная и использованная), экранная, перетекание, показ
+        err: -1, eK: -1, eKs: 0, rho: 0, k: 0, kt: 0, kc: 1, kcT: 0, px: 0, mrg: 0, wantM: 0, standT: -1e9, ke: null, rel: null, nbs: null, tShow: 0, dis: 0, pm: 0, below: 0, below2: 0, needM: 0, imp: 0, vis: 0 };
       const M = P2[L] * 2;   // решётка 2×2 на узел: центр — целая точка
       latK(f, i * 2 + 1, j * 2 + 1, M, tmpK); latDir(tmpK[0], tmpK[1], tmpK[2], M, n.c);
       let ang = 0;
@@ -497,25 +515,236 @@
 
     // ── Выбор кусков: делим, пока узел крупный и близко (расстояние — до края узла; разделённый держится до × hyst) ──
     // o: { K, hyst, maxL, cull (горизонт) }; out — список листьев (узлы); возвращает out
+    // LOD v2 (T-075, o.sse = { proj, tau, near, pred: [x, y, z] | null, pre: [] | null, preK }): делим, пока ЭКРАННАЯ ошибка
+    // ρ = eK · proj / d (пикселей) больше tau. eK — насколько 4 ребёнка точнее узла (ед.): измерена, когда все 4 построены (n.eK), до
+    // того — оценка β · err узла; потолок eK ≤ eK родителя / γ (каждый уровень вдвое точнее: тогда при делении и слиянии узел сам
+    // уже не «перетекает» к своему родителю — смена уровня без скачка), пол — «рядом с игроком» (near: самый мелкий уровень
+    // в пределах near ед., как было раньше — физика = нарисованное). Море и равнины — крупными кусками, горы — мелкими.
+    // pre — сюда узлы, чьих детей пора строить заранее: ρ > preK · tau сейчас или > tau в точке pred (куда летит камера)
+    const LODK = P.LOD = { BETA: .5, GAMMA: 1.96, EK0: .42 * (760 + D.relief.amp + D.relief.hills) };
     let selMark = 0;
-    const SEL = { cx: 0, cy: 0, cz: 0, K: 2, hyst: 1.15, maxL: 12, cull: true, out: null };
-    function walk(n){
+    const SEL = { cx: 0, cy: 0, cz: 0, K: 2, hyst: 1.15, maxL: 12, cull: true, out: null, sse: null, proj: 1, tau: 3, nearE: 0, pre: null, preK: .6, px: 0, py: 0, pz: 0, pred: false };
+    // экранная ошибка узла с ошибкой eK на расстоянии d (пол «рядом с игроком» — в eK: nearE · 2^(maxL − 1 − L))
+    const rhoOf = (eK, d) => eK * SEL.proj / (d > 1e-3 ? d : 1e-3);
+    // ошибка «4 ребёнка вместо узла» с потолком (≤ eK родителя / γ) и полом «рядом с игроком» — одна для выбора, «куда летим» и 2 : 1
+    function ekOf(n, eKp){
+      const es = n.err >= 0 ? n.err : n.L ? eKp : LODK.EK0 / LODK.BETA;
+      let eK = min(n.eK >= 0 ? n.eK : LODK.BETA * es, eKp / LODK.GAMMA);
+      if (SEL.nearE > 0 && n.L < SEL.maxL) eK = max(eK, SEL.nearE * P2[SEL.maxL - 1 - n.L]);
+      return eK;
+    }
+    function walk(n, eKp){
       n.used = selMark;
       if (SEL.cull && !P.horizonVisible(n, SEL.cx, SEL.cy, SEL.cz)) { n.split = false; return; }
       const dx = SEL.cx - n.cp[0], dy = SEL.cy - n.cp[1], dz = SEL.cz - n.cp[2];
       const d = max(0, sqrt(dx * dx + dy * dy + dz * dz) - n.ang * R);
-      const want = n.L < SEL.maxL && d < SEL.K * n.size * (n.split ? SEL.hyst : 1);
-      n.split = want;
-      if (want) { const k = kidsOf(n); walk(k[0]); walk(k[1]); walk(k[2]); walk(k[3]); }
-      else { n.leaf = selMark; SEL.out.push(n); }
+      let want;
+      if (SEL.sse) {
+        // своя ошибка (не построен — оценка родителя), «4 ребёнка вместо меня» — измеренная или β · своя; потолок и пол
+        const eK = n.eKs = ekOf(n, eKp);
+        const rho = n.rho = rhoOf(eK, d);
+        want = n.L < SEL.maxL && rho > SEL.tau * (n.split ? 1 / SEL.hyst : 1);
+        n.split = want;
+        if (want) { const k = kidsOf(n); walk(k[0], eK); walk(k[1], eK); walk(k[2], eK); walk(k[3], eK); return; }
+        if (SEL.pre && n.L < SEL.maxL) {
+          let hot = rho > SEL.tau * SEL.preK;
+          if (!hot && SEL.pred) { const ex = SEL.px - n.cp[0], ey = SEL.py - n.cp[1], ez = SEL.pz - n.cp[2]; hot = rhoOf(eK, max(0, sqrt(ex * ex + ey * ey + ez * ez) - n.ang * R)) > SEL.tau; }
+          if (hot) SEL.pre.push(n);
+        }
+      } else {
+        want = n.L < SEL.maxL && d < SEL.K * n.size * (n.split ? SEL.hyst : 1);
+        n.split = want;
+        if (want) { const k = kidsOf(n); walk(k[0]); walk(k[1]); walk(k[2]); walk(k[3]); return; }
+      }
+      n.leaf = selMark; SEL.out.push(n);
     }
     P.select = (cx, cy, cz, o = {}, out = []) => {
       SEL.cx = cx; SEL.cy = cy; SEL.cz = cz; SEL.K = o.K || 2; SEL.hyst = o.hyst || 1.15; SEL.maxL = clamp(o.maxL ?? 12, 0, MAXL); SEL.cull = o.cull !== false;
+      const S = SEL.sse = o.sse || null;
+      if (S) {
+        SEL.proj = S.proj || 1000; SEL.tau = S.tau || 3; SEL.preK = S.preK ?? .6; SEL.pre = S.pre || null; if (SEL.pre) SEL.pre.length = 0;
+        SEL.nearE = S.near > 0 ? SEL.tau * S.near / SEL.proj : 0;   // на расстоянии near ρ мелкого уровня = tau
+        SEL.pred = !!S.pred; if (S.pred) { SEL.px = S.pred[0]; SEL.py = S.pred[1]; SEL.pz = S.pred[2]; }
+      }
       out.length = 0; selMark++; SEL.out = out;
-      for (let f = 0; f < 6; f++) walk(node(f, 0, 0, 0));
-      SEL.out = null;
+      for (let f = 0; f < 6; f++) walk(node(f, 0, 0, 0), Infinity);
+      SEL.out = null; SEL.pre = null;
       if (selMark % 64 === 0) prune(o.keep || 240);
       return out;
+    };
+    P.selMark = () => selMark;
+    // «Куда летим» (T-075): тот же выбор из точки (px, py, pz), но без следов в узлах (выбор показа не трогает) — листья, которые
+    // оттуда нужны, а отсюда ещё за горизонтом (поднимаемся, летим вбок): их строим заранее, и поднявшаяся из-за горизонта земля
+    // сразу своего уровня (не крупный предок рядом с мелкими соседями). out — до cap узлов, важнее — крупнее на экране
+    const PK = { cx: 0, cy: 0, cz: 0, out: null, cap: 16, n: 0 };
+    function peekWalk(n, eKp){
+      const eK = ekOf(n, eKp);
+      if (!P.horizonVisible(n, PK.px, PK.py, PK.pz)) return;
+      const dx = PK.px - n.cp[0], dy = PK.py - n.cp[1], dz = PK.pz - n.cp[2], d = max(0, sqrt(dx * dx + dy * dy + dz * dz) - n.ang * R), rho = rhoOf(eK, d);
+      if (n.L < SEL.maxL && rho > SEL.tau) { const k = kidsOf(n); for (let q = 0; q < 4; q++) peekWalk(k[q], eK); return; }
+      if (!P.horizonVisible(n, PK.cx, PK.cy, PK.cz)) { n.imp = rho; PK.out.push(n); }
+    }
+    P.peek = (cx, cy, cz, px, py, pz, o = {}, out = []) => {
+      out.length = 0;
+      if (!SEL.sse) return out;
+      PK.cx = cx; PK.cy = cy; PK.cz = cz; PK.px = px; PK.py = py; PK.pz = pz; PK.out = out;
+      for (let f = 0; f < 6; f++) peekWalk(node(f, 0, 0, 0), Infinity);
+      PK.out = null;
+      if (out.length > 1) out.sort((a, b) => b.imp - a.imp);
+      if (out.length > (o.cap || 16)) out.length = o.cap || 16;
+      return out;
+    };
+    // кусок узла построен: err — насколько он точнее родителя (ед.); все 4 брата построены — у родителя измеренная eK
+    P.nodeErr = (n, err) => {
+      n.err = err;
+      const p = n.par; if (!p || !(err >= 0)) return;
+      const k = kidsOf(p);
+      let m = 0;
+      for (let q = 0; q < 4; q++) { const e = k[q].err; if (!(e >= 0)) return; if (e > m) m = e; }
+      p.eK = m;
+    };
+
+    // ── Показ по шагам (T-075): что рисовать — по выбранным листьям, но не больше уровня за шаг и без скачков формы ──
+    // Делить показанный узел можно, когда он «осел» (сам уже не перетекает: k ≤ gate), все 4 ребёнка готовы и ни один показанный
+    // сосед не крупнее его (показанное — всегда 2 : 1, маски сшивки работают); дети появляются с k = 1 — ровно в форме родителя —
+    // и за fade с перетекают к своей. Сливать — когда все 4 брата показаны (они уже в форме родителя: ρ < tau) и у родителя нет
+    // соседей мельче его детей. Где показанного нет (поднялось из-за горизонта, начало) — ближайший готовый. ready(n) — кусок есть.
+    // out — показанные узлы; у каждого: n.rel[e] (0 — соседа нет, 1 — такой же уровень (n.nbs[e]), 2 — крупнее (сшить), 3 — мельче),
+    // n.mask — маска сшивки, n.tShow — когда появился. Возвращает { split, merge, stand, need } — need: узлы, которые нужно построить
+    // для следующего шага (дети делимых, родители сливаемых), по важности (n.imp)
+    let dMark = 1, pMark = 1, bMark = 1, b2Mark = 1, mMark = 1, DISP = [];
+    const NEED = [], AHEAD = [], SPL = [], MRG = [], WANT = [];
+    P.lodShow = (ready, now, o = {}, out = []) => {
+      // gate — «осел» (k ≤ gate), gatePx — и скачок k · своя точность ≤ gatePx пикселей (близко к камере — ждём до k = 0)
+      const gate = o.gate ?? .05, gpx = o.gatePx ?? .15, prev = DISP, nm = ++dMark, pm = ++pMark, mm = ++mMark, sm = selMark;
+      bMark++;
+      for (const d of prev) { d.pm = pm; for (let a = d.par; a && a.below !== bMark; a = a.par) a.below = bMark; }
+      out.length = 0; NEED.length = 0; AHEAD.length = 0; SPL.length = 0; MRG.length = 0; WANT.length = 0;
+      const st = { split: 0, merge: 0, stand: 0, need: NEED, ahead: AHEAD, kept: 0, wait: 0, splits: SPL, merges: MRG, mark: nm };
+      const add = (n, fresh) => { if (n.dis === nm) return; n.dis = nm; n.tShow = fresh ? now : 0; n.kc = 1; n.kcT = 0; out.push(n); };
+      const keep = n => { if (n.dis === nm) return; n.dis = nm; out.push(n); st.kept++; };
+      const need = (n, imp) => { if (!ready(n) && n.needM !== nm) { n.needM = nm; n.imp = imp; NEED.push(n); } };
+      // на уровень вперёд: дети детей, которым выбор велит делиться дальше (спуск — строим заранее, без очереди из глубоких листьев)
+      const ahead = (kids, imp) => { for (let q = 0; q < 4; q++) { const c = kids[q]; if (c.split && c.used === sm) { const g = kidsOf(c); for (let r = 0; r < 4; r++) if (!ready(g[r]) && g[r].needM !== nm) { g[r].needM = nm; g[r].imp = imp; AHEAD.push(g[r]); } } } };
+      const shown = n => n.pm === pm;   // показан в прошлый шаг
+      // скачок формы узла в пикселях, если сейчас заменить его (k — его перетекание): k · err · proj / d (lodMorph: n.px)
+      const settled = n => { let k = n.k; if (n.ke) for (let e = 0; e < 4; e++) if (n.ke[e] > k) k = n.ke[e]; return !(k > gate) && !(k * n.px > gpx); };
+      const up = n => { let k = n.k; if (n.ke) for (let e = 0; e < 4; e++) if (n.ke[e] < k) k = n.ke[e]; return !(k < 1 - gate) && !((1 - k) * n.px > gpx); };
+      // 1) показанные: цель — оставить; за горизонтом — прочь; мельче нужно — в список «делить»; слишком мелко — слить, если можно
+      for (const d of prev) {
+        if (d.dis === nm) continue;
+        if (d.used === sm) {
+          if (d.leaf === sm) { keep(d); continue; }   // цель — так и есть
+          if (d.split) WANT.push(d);   // мельче нужно (решим после слияний)
+          continue;   // иначе — за горизонтом: прочь
+        }
+        // не выбран: под целью (слишком мелко) — шаг вверх, когда все 4 брата показаны и уже в форме родителя
+        let a = d.par; while (a && a.used !== sm) a = a.par;
+        if (!a || a.leaf !== sm) continue;
+        const p = d.par, k = kidsOf(p);
+        if (p.dis === nm) continue;
+        // брат не показан и под ним ничего не показано (за горизонтом, место пустое) — слиянию не мешает (родитель его и закроет)
+        const sib = c => shown(c) ? up(c) : c.below !== bMark;
+        const all = (shown(k[0]) || sib(k[0])) && (shown(k[1]) || sib(k[1])) && (shown(k[2]) || sib(k[2])) && (shown(k[3]) || sib(k[3]));
+        const ok4 = all && sib(k[0]) && sib(k[1]) && sib(k[2]) && sib(k[3]);
+        // у родителя нет соседа, показанного мельче его детей (иначе разница в 2 уровня)
+        let fine = false;
+        if (ok4) for (let e = 0; e < 4 && !fine; e++) { const nb = neighbor(p, e); if (nb.below === bMark && nb.kids) for (let q = 0; q < 4; q++) if (nb.kids[q].below === bMark) { fine = true; break; } }
+        if (ok4 && !fine && ready(p)) { add(p, false); p.kc = 0; p.kcT = now; p.mrg = mm; st.merge++; MRG.push(p); }
+        else { if (all && !ready(p)) need(p, 1e9); keep(d); st.wait++; }
+      }
+      // 2) цели без показанного (поднялись из-за горизонта, начало): ближайший готовый на цепочке вверх. До делений: деления
+      //    видят и их (сосед крупнее — подождать), «делимые» (WANT) покрывают свои места так же, как показанные
+      b2Mark++;
+      for (const d of out) for (let a = d.par; a && a.below2 !== b2Mark; a = a.par) a.below2 = b2Mark;
+      for (const d of WANT) { d.wantM = nm; for (let a = d.par; a && a.below2 !== b2Mark; a = a.par) a.below2 = b2Mark; }
+      const leaves = o.leaves || [];
+      for (const t of leaves) {
+        if (t.dis === nm || t.wantM === nm || t.below2 === b2Mark) continue;
+        let a = t.par; while (a && a.dis !== nm && a.wantM !== nm) a = a.par;
+        if (a) continue;
+        // самый мелкий готовый без показанных потомков (иначе он закрыл бы уже показанное — скачок); готовых нет — строить первым
+        // самый крупный такой (место пустое ~кадр-другой: оно только что поднялось из-за горизонта)
+        let best = null, top = null;
+        for (let x = t; x && x.below2 !== b2Mark; x = x.par) { top = x; if (!best && ready(x)) best = x; }
+        if (best) { add(best, best.L > 0); best.mrg = mm; best.standT = now; st.stand++; for (let b = best.par; b && b.below2 !== b2Mark; b = b.par) b.below2 = b2Mark; }
+        else if (top) need(top, 1e12);
+      }
+      // 3) делить (после слияний и «ближайших готовых»): «осел», 4 ребёнка готовы, и ни один сосед не крупнее — ни показанный, ни
+      //    только что слитый или поставленный
+      const coarserNb = n => { for (let e = 0; e < 4; e++) { for (let a = neighbor(n, e).par; a; a = a.par) if (shown(a) || a.mrg === mm) return true; } return false; };
+      for (const d of WANT) {
+        if (d.dis === nm) continue;
+        const k = kidsOf(d);
+        const rk = ready(k[0]) && ready(k[1]) && ready(k[2]) && ready(k[3]);
+        if (!rk) for (let q = 0; q < 4; q++) need(k[q], d.rho);
+        else ahead(k, d.rho);
+        if (rk && settled(d) && !coarserNb(d)) { for (let q = 0; q < 4; q++) { add(k[q], true); k[q].standT = d.standT; } st.split++; SPL.push(d); }
+        else { keep(d); st.wait++; }
+      }
+      // показанный предок закрывает показанных потомков (без наложений)
+      let w = 0;
+      for (const n of out) { let a = n.par, hid = false; while (a) { if (a.dis === nm) { hid = true; break; } a = a.par; } if (!hid) out[w++] = n; else n.dis = 0; }
+      out.length = w;
+      // показанные и их предки — «нужны» (чистка узлов их не тронет)
+      for (const n of out) for (let a = n; a && a.used !== sm; a = a.par) a.used = sm;
+      // соседи и маски — по показанному
+      bMark++;
+      for (const d of out) for (let a = d.par; a && a.below !== bMark; a = a.par) a.below = bMark;
+      for (const n of out) {
+        const rel = n.rel || (n.rel = new Int8Array(4)), nbs = n.nbs || (n.nbs = [null, null, null, null]);
+        let m = 0;
+        for (let e = 0; e < 4; e++) {
+          const nb = neighbor(n, e); nbs[e] = null;
+          if (nb.dis === nm) { rel[e] = 1; nbs[e] = nb; continue; }
+          if (nb.below === bMark) { rel[e] = 3; continue; }
+          let a = nb.par; while (a && a.dis !== nm) a = a.par;
+          if (a) { rel[e] = 2; if (a.L === n.L - 1) m |= 1 << e; } else rel[e] = 0;
+        }
+        n.mask = m;
+      }
+      DISP = out.slice();
+      if (NEED.length > 1) NEED.sort((x, y) => y.imp - x.imp);
+      if (AHEAD.length > 1) AHEAD.sort((x, y) => y.imp - x.imp);
+      return st;
+    };
+    P.lodShown = () => DISP;
+    P.lodReset = () => { for (const d of DISP) d.dis = 0; DISP = []; };
+    // ── Перетекание на этот кадр: k узла = max(к родителю по ρ родителя, «появился» за fade с); k краёв — общие с соседями ──
+    // o: { proj, tau, full (ρ, при котором k = 0; 1,7 · tau), fade (с) }; камера — точка в системе планеты
+    P.lodMorph = (list, cx, cy, cz, now, o = {}) => {
+      const tau = o.tau || 3, full = o.full || tau * 1.7, fade = (o.fade || .12) * 1000, pj = o.proj || 1000, span = 1 / (full - tau);
+      for (let q = 0; q < list.length; q++) {
+        const n = list[q];
+        let kn = 0;
+        const p = n.par;
+        // свой скачок в пикселях, если заменить узел сейчас (для «осел» в lodShow): k · err · proj / d
+        { const ex = cx - n.cp[0], ey = cy - n.cp[1], ez = cz - n.cp[2], dn = max(1e-3, sqrt(ex * ex + ey * ey + ez * ez) - n.ang * R); n.px = n.err > 0 ? n.err * pj / dn : 0; }
+        if (p && p.eKs > 0) {
+          const dx = cx - p.cp[0], dy = cy - p.cp[1], dz = cz - p.cp[2], d = max(1e-3, sqrt(dx * dx + dy * dy + dz * dz) - p.ang * R);
+          kn = clamp((full - p.eKs * pj / d) * span, 0, 1);
+        }
+        // нужно мельче (выбор делит — в том числе ради 2 : 1): перетекание к родителю сходит на нет за fade — потом деление без
+        // скачка; не нужно — потолок возвращается так же плавно
+        const want = n.split && n.used === selMark, dc = n.kcT ? (now - n.kcT) / fade : 1;
+        n.kcT = now;
+        n.kc = want ? max(0, n.kc - dc) : min(1, n.kc + dc);
+        if (kn > n.kc) kn = n.kc;
+        const kt = n.kt = n.tShow ? clamp(1 - (now - n.tShow) / fade, 0, 1) : 0;
+        n.k = kn > kt ? kn : kt;
+      }
+      for (let q = 0; q < list.length; q++) {
+        const n = list[q], ke = n.ke || (n.ke = new Float32Array(4)), rel = n.rel;
+        for (let e = 0; e < 4; e++) {
+          const r = rel ? rel[e] : 0;
+          // общий край: больший k, но не больше потолков обоих (кто собрался делиться — сначала распрямляет и края)
+          // и не меньше «появления» обоих: только что показанный — ровно в форме родителя, и края тоже
+          if (r === 1) { const m = n.nbs[e]; ke[e] = max(min(max(n.k, m.k), n.kc, m.kc), n.kt, m.kt); }
+          // мельче сосед (3): своя точная форма края, но только что показанный — сначала в форме родителя (бывает, только если
+          // родитель стоял рядом с 2 уровнями мельче: «поднялось из-за горизонта»)
+          else ke[e] = r === 2 ? 1 : r === 3 ? n.kt : n.k;
+        }
+      }
     };
     // старые узлы (давно не нужны) — прочь вместе с потомками; ссылки на соседей — заново (чтобы не держать удалённых)
     function drop(n){ if (n.kids) { for (const k of n.kids) drop(k); n.kids = null; } nodes.delete(n.key); }
@@ -541,7 +770,14 @@
             const cov = coverLeaf(neighbor(n, e));
             if (cov && cov.L < n.L - 1) {   // сосед крупнее на 2+ уровня — делим его
               cov.leaf = 0; cov.split = true;
-              for (const c of kidsOf(cov)) { c.leaf = selMark; c.split = false; c.used = selMark; leaves.push(c); }
+              for (const c of kidsOf(cov)) {
+                c.leaf = selMark; c.split = false; c.used = selMark; leaves.push(c);
+                if (SEL.sse) {   // выбор по экранной ошибке: и у этих — ошибка и ρ (как в обходе)
+                  c.eKs = ekOf(c, cov.eKs);
+                  const dx = SEL.cx - c.cp[0], dy = SEL.cy - c.cp[1], dz = SEL.cz - c.cp[2];
+                  c.rho = rhoOf(c.eKs, max(0, sqrt(dx * dx + dy * dy + dz * dz) - c.ang * R));
+                }
+              }
               changed = true;
             }
           }
@@ -558,14 +794,23 @@
     };
 
     // ── Сетка куска: (N+1)² вершин + юбки; позиции — float32 от центра куска (центр — double); нормали int8; цвет+вода uint8 ──
-    P.buildChunk = (f, L, i, j, N = 32) => {
-      const n1 = N + 1, g = N + 3, M = N * P2[L];
+    // «Перетекание» LOD (T-075, CDLOD): у куска уровня L ≥ 1 — форма РОДИТЕЛЯ в тех же вершинах: md (int16 × 4: сдвиг к
+    // поверхности родителя / mscale — int8 давал скачок 0,4 % сдвига на поздних делениях; номер столбца a), np (int8 × 4: нормаль
+    // родителя, номер строки b) и colp (цвет родителя). Чётные вершины
+    // (a, b чётные) — вершины родителя: сдвига нет, нормаль и цвет — ровно как у него (та же решётка, те же числа); нечётные — на
+    // середине ребра или диагонали b–c клетки родителя (так он нарисован). err — наибольший сдвиг (насколько кусок точнее
+    // родителя, ед.): экранная ошибка выбора кусков. Сжатый до k = 1 кусок совпадает с родителем — смена уровня без скачка.
+    const DIRS = [[1, 0], [0, 1], [-1, 1]];   // пара соседей нечётной вершины: по a (a нечётный), по b, по диагонали b–c
+    // o.lite — без формы родителя и его точности (вид без LOD v2, как до T-075): кольцо 1, md / np / colp — null, err −1;
+    // позиции, нормали, цвет — те же до бита (planet-test)
+    P.buildChunk = (f, L, i, j, N = 32, o) => {
+      const lite = !!(o && o.lite), n1 = N + 1, RG = lite ? 1 : 2, g = N + 1 + 2 * RG, M = N * P2[L];   // кольцо 2: нормали родителя (шаг 2) у края
       const HG = new Float64Array(g * g), DX = new Float64Array(g * g * 3), PX = new Float64Array(g * g * 3);
       const K3 = [0, 0, 0], d = [0, 0, 0];
       const gi0 = i * N, gj0 = j * N;
       // высоты: сетка с кольцом вокруг (для нормалей); внутри грани — точки решётки, за краем грани — продолжение параметров
       for (let b = 0; b < g; b++) for (let a = 0; a < g; a++) {
-        const gi = gi0 + a - 1, gj = gj0 + b - 1, q = b * g + a;
+        const gi = gi0 + a - RG, gj = gj0 + b - RG, q = b * g + a;
         if (gi >= 0 && gj >= 0 && gi <= M && gj <= M) { latK(f, gi, gj, M, K3); latDir(K3[0], K3[1], K3[2], M, d); }
         else dirOf(f, 2 * gi / M - 1, 2 * gj / M - 1, d);
         const h = H(d[0], d[1], d[2]);
@@ -575,55 +820,103 @@
         PX[q * 3] = d[0] * hr; PX[q * 3 + 1] = d[1] * hr; PX[q * 3 + 2] = d[2] * hr;
       }
       // центр куска — центральная вершина (на нарисованной высоте)
-      const cq = (N / 2 + 1) * g + (N / 2 + 1), C = new Float64Array([PX[cq * 3], PX[cq * 3 + 1], PX[cq * 3 + 2]]);
+      const cq = (N / 2 + RG) * g + (N / 2 + RG), C = new Float64Array([PX[cq * 3], PX[cq * 3 + 1], PX[cq * 3 + 2]]);
       const V = n1 * n1 + 4 * n1, pos = new Float32Array(V * 3), nrm = new Int8Array(V * 3), col = new Uint8Array(V * 4);
+      const md = lite ? null : new Int16Array(V * 4), np = lite ? null : new Int8Array(V * 4), colp = lite ? null : new Uint8Array(V * 4);
+      const NP = lite ? null : new Float64Array(n1 * n1 * 3), DP = lite ? null : new Float64Array(n1 * n1 * 3);
       let hmin = Infinity, hmax = -Infinity, rad = 0;
       const cc = [0, 0, 0];
       const skirt = 2 + .06 * (PI / 2) * R / P2[L];   // ≈ 6 % стороны куска
+      // нормаль по решётке с шагом s (1 — своя, 2 — родителя): центральные разности (кольцо — общее с соседями); вода — «вверх»
+      const NRM = [0, 0, 0];
+      const normal = (q, s, water, dx, dy, dz) => {
+        if (water) { NRM[0] = dx; NRM[1] = dy; NRM[2] = dz; return NRM; }
+        const qa = q - s, qb = q + s, qc = q - s * g, qd = q + s * g;
+        const ux = PX[qb * 3] - PX[qa * 3], uy = PX[qb * 3 + 1] - PX[qa * 3 + 1], uz = PX[qb * 3 + 2] - PX[qa * 3 + 2];
+        const vx = PX[qd * 3] - PX[qc * 3], vy = PX[qd * 3 + 1] - PX[qc * 3 + 1], vz = PX[qd * 3 + 2] - PX[qc * 3 + 2];
+        let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        if (nx * dx + ny * dy + nz * dz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+        const l = sqrt(nx * nx + ny * ny + nz * nz) || 1; NRM[0] = nx / l; NRM[1] = ny / l; NRM[2] = nz / l;
+        return NRM;
+      };
+      // цвет вершины (суша / вода / лёд) по высоте и «вверх» (крутизна) — в out[o…o+3]
+      const colorAt = (h, dx, dy, dz, wet, ice, up, out, o) => {
+        if (wet && !ice) {
+          landColor(dx, dy, dz, D.sea, 1, cc);   // берег под водой — по климату (лёд у полюсов)
+          out[o] = Math.round(cc[0] * 255); out[o + 1] = Math.round(cc[1] * 255); out[o + 2] = Math.round(cc[2] * 255);
+          out[o + 3] = clamp(128 + Math.round((D.sea - h) / 6), 129, 255);   // вода: 129…255 (глубина / 6 ед.)
+        } else if (ice) {   // замёрзшее море (у полюсов): белое, по нему можно ходить
+          const nzz = NZ2.n3(dx * 600, dy * 600, dz * 600) * .04;
+          out[o] = Math.round((.86 + nzz) * 255); out[o + 1] = Math.round((.92 + nzz) * 255); out[o + 2] = Math.round((.97 + nzz) * 255); out[o + 3] = 0;
+        } else {
+          landColor(dx, dy, dz, h, up, cc);
+          // суша: 0…127 — высота над морем (у берега плавно: берег — линия «0» между вершинами, без ступенек на крупных кусках)
+          out[o] = Math.round(cc[0] * 255); out[o + 1] = Math.round(cc[1] * 255); out[o + 2] = Math.round(cc[2] * 255);
+          out[o + 3] = D.sea == null ? 0 : clamp(127 - Math.round((h - D.sea) / 6), 0, 127);
+        }
+      };
       for (let b = 0; b < n1; b++) for (let a = 0; a < n1; a++) {
-        const q = (b + 1) * g + (a + 1), v = b * n1 + a;
+        const q = (b + RG) * g + (a + RG), v = b * n1 + a;
         const x = PX[q * 3] - C[0], y = PX[q * 3 + 1] - C[1], z = PX[q * 3 + 2] - C[2];
         pos[v * 3] = x; pos[v * 3 + 1] = y; pos[v * 3 + 2] = z;
         const r2 = x * x + y * y + z * z; if (r2 > rad) rad = r2;
         const h = HG[q], dx = DX[q * 3], dy = DX[q * 3 + 1], dz = DX[q * 3 + 2], wet = D.sea != null && h < D.sea, ice = wet && iceAt(dx, dy, dz), water = wet && !ice;
         const hr = h < P.renderMin ? P.renderMin : h; if (hr < hmin) hmin = hr; if (hr > hmax) hmax = hr;
-        // нормаль: центральные разности по решётке (кольцо — общее с соседями)
-        let nx, ny, nz;
-        if (water) { nx = dx; ny = dy; nz = dz; }
-        else {
-          const qa = q - 1, qb = q + 1, qc = q - g, qd = q + g;
-          const ux = PX[qb * 3] - PX[qa * 3], uy = PX[qb * 3 + 1] - PX[qa * 3 + 1], uz = PX[qb * 3 + 2] - PX[qa * 3 + 2];
-          const vx = PX[qd * 3] - PX[qc * 3], vy = PX[qd * 3 + 1] - PX[qc * 3 + 1], vz = PX[qd * 3 + 2] - PX[qc * 3 + 2];
-          nx = uy * vz - uz * vy; ny = uz * vx - ux * vz; nz = ux * vy - uy * vx;
-          if (nx * dx + ny * dy + nz * dz < 0) { nx = -nx; ny = -ny; nz = -nz; }
-          const l = sqrt(nx * nx + ny * ny + nz * nz) || 1; nx /= l; ny /= l; nz /= l;
-        }
+        const n = normal(q, 1, water, dx, dy, dz), nx = n[0], ny = n[1], nz = n[2], up = nx * dx + ny * dy + nz * dz;
         nrm[v * 3] = Math.round(nx * 127); nrm[v * 3 + 1] = Math.round(ny * 127); nrm[v * 3 + 2] = Math.round(nz * 127);
-        if (water) {
-          const dep = D.sea - h;
-          landColor(dx, dy, dz, D.sea, 1, cc);   // берег под водой — по климату (лёд у полюсов)
-          col[v * 4] = Math.round(cc[0] * 255); col[v * 4 + 1] = Math.round(cc[1] * 255); col[v * 4 + 2] = Math.round(cc[2] * 255);
-          col[v * 4 + 3] = clamp(128 + Math.round(dep / 6), 129, 255);   // вода: 129…255 (глубина / 6 ед.)
-        } else if (ice) {   // замёрзшее море (у полюсов): белое, по нему можно ходить
-          const nzz = NZ2.n3(dx * 600, dy * 600, dz * 600) * .04;
-          col[v * 4] = Math.round((.86 + nzz) * 255); col[v * 4 + 1] = Math.round((.92 + nzz) * 255); col[v * 4 + 2] = Math.round((.97 + nzz) * 255); col[v * 4 + 3] = 0;
-        } else {
-          landColor(dx, dy, dz, h, nx * dx + ny * dy + nz * dz, cc);
-          // суша: 0…127 — высота над морем (у берега плавно: берег — линия «0» между вершинами, без ступенек на крупных кусках)
-          col[v * 4] = Math.round(cc[0] * 255); col[v * 4 + 1] = Math.round(cc[1] * 255); col[v * 4 + 2] = Math.round(cc[2] * 255);
-          col[v * 4 + 3] = D.sea == null ? 0 : clamp(127 - Math.round((h - D.sea) / 6), 0, 127);
+        colorAt(h, dx, dy, dz, wet, ice, up, col, v * 4);
+        if (lite) continue;   // без формы родителя
+        // родитель в чётной вершине: та же точка решётки, нормаль с его шагом, цвет по ней (биты — как у него); у воды, льда и
+        // ровного (оба «вверх» ≥ 0,95: скалы, пляж, снег от крутизны не зависят) цвет тот же — без второго landColor
+        if (L && !(a & 1) && !(b & 1)) {
+          const p = normal(q, 2, water, dx, dy, dz), upP = p[0] * dx + p[1] * dy + p[2] * dz;
+          NP[v * 3] = p[0]; NP[v * 3 + 1] = p[1]; NP[v * 3 + 2] = p[2];
+          if (wet || (up >= .95 && upP >= .95)) { colp[v * 4] = col[v * 4]; colp[v * 4 + 1] = col[v * 4 + 1]; colp[v * 4 + 2] = col[v * 4 + 2]; colp[v * 4 + 3] = col[v * 4 + 3]; }
+          else colorAt(h, dx, dy, dz, wet, ice, upP, colp, v * 4);
         }
+        md[v * 4 + 3] = a; np[v * 4 + 3] = b;
       }
-      // юбки: вершины края, опущенные к центру планеты
+      // нечётные вершины: форма родителя — середина ребра (по a или по b) или диагонали b–c его клетки
+      let err = 0, ms = 0;
+      if (lite) err = -1;
+      else if (L) {
+        for (let b = 0; b < n1; b++) for (let a = 0; a < n1; a++) {
+          const v = b * n1 + a, oa = a & 1, ob = b & 1;
+          if (!oa && !ob) continue;
+          const D2 = DIRS[oa && ob ? 2 : oa ? 0 : 1], v0 = (b - D2[1]) * n1 + (a - D2[0]), v1 = (b + D2[1]) * n1 + (a + D2[0]);
+          const q = (b + RG) * g + (a + RG), q0 = (b - D2[1] + RG) * g + (a - D2[0] + RG), q1 = (b + D2[1] + RG) * g + (a + D2[0] + RG);
+          for (let c = 0; c < 3; c++) {
+            const t = (PX[q0 * 3 + c] + PX[q1 * 3 + c]) * .5 - PX[q * 3 + c];
+            DP[v * 3 + c] = t; if (abs(t) > ms) ms = abs(t);
+          }
+          const e = sqrt(DP[v * 3] ** 2 + DP[v * 3 + 1] ** 2 + DP[v * 3 + 2] ** 2); if (e > err) err = e;
+          let px = NP[v0 * 3] + NP[v1 * 3], py = NP[v0 * 3 + 1] + NP[v1 * 3 + 1], pz = NP[v0 * 3 + 2] + NP[v1 * 3 + 2];
+          const l = sqrt(px * px + py * py + pz * pz) || 1; NP[v * 3] = px / l; NP[v * 3 + 1] = py / l; NP[v * 3 + 2] = pz / l;
+          for (let c = 0; c < 4; c++) colp[v * 4 + c] = (colp[v0 * 4 + c] + colp[v1 * 4 + c] + 1) >> 1;
+        }
+        const ks = ms > 0 ? 32767 / ms : 0;
+        for (let v = 0; v < n1 * n1; v++) {
+          md[v * 4] = Math.round(DP[v * 3] * ks); md[v * 4 + 1] = Math.round(DP[v * 3 + 1] * ks); md[v * 4 + 2] = Math.round(DP[v * 3 + 2] * ks);
+          np[v * 4] = Math.round(NP[v * 3] * 127); np[v * 4 + 1] = Math.round(NP[v * 3 + 1] * 127); np[v * 4 + 2] = Math.round(NP[v * 3 + 2] * 127);
+        }
+      } else {   // корень: родителя нет — своя форма
+        for (let v = 0; v < n1 * n1; v++) {
+          np[v * 4] = nrm[v * 3]; np[v * 4 + 1] = nrm[v * 3 + 1]; np[v * 4 + 2] = nrm[v * 3 + 2];
+          colp[v * 4] = col[v * 4]; colp[v * 4 + 1] = col[v * 4 + 1]; colp[v * 4 + 2] = col[v * 4 + 2]; colp[v * 4 + 3] = col[v * 4 + 3];
+        }
+        err = -1;
+      }
+      // юбки: вершины края, опущенные к центру планеты (перетекают вместе с краем)
       for (let e = 0; e < 4; e++) for (let q = 0; q <= N; q++) {
         const a = e === 0 ? 0 : e === 1 ? N : q, b = e === 2 ? 0 : e === 3 ? N : q;
-        const src = b * n1 + a, dst = n1 * n1 + e * n1 + q, gq = (b + 1) * g + (a + 1);
+        const src = b * n1 + a, dst = n1 * n1 + e * n1 + q, gq = (b + RG) * g + (a + RG);
         const dx = DX[gq * 3], dy = DX[gq * 3 + 1], dz = DX[gq * 3 + 2];
         pos[dst * 3] = pos[src * 3] - dx * skirt; pos[dst * 3 + 1] = pos[src * 3 + 1] - dy * skirt; pos[dst * 3 + 2] = pos[src * 3 + 2] - dz * skirt;
         nrm[dst * 3] = nrm[src * 3]; nrm[dst * 3 + 1] = nrm[src * 3 + 1]; nrm[dst * 3 + 2] = nrm[src * 3 + 2];
-        col[dst * 4] = col[src * 4]; col[dst * 4 + 1] = col[src * 4 + 1]; col[dst * 4 + 2] = col[src * 4 + 2]; col[dst * 4 + 3] = col[src * 4 + 3];
+        for (let c = 0; c < 4; c++) col[dst * 4 + c] = col[src * 4 + c];
+        if (!lite) for (let c = 0; c < 4; c++) { colp[dst * 4 + c] = colp[src * 4 + c]; md[dst * 4 + c] = md[src * 4 + c]; np[dst * 4 + c] = np[src * 4 + c]; }
       }
-      return { f, L, i, j, N, key: key(f, L, i, j), centre: C, pos, nrm, col, hmin, hmax, radius: sqrt(rad) + skirt };
+      return { f, L, i, j, N, key: key(f, L, i, j), centre: C, pos, nrm, col, md, np, colp, mscale: ms, err, hmin, hmax, radius: sqrt(rad) + skirt };
     };
 
     // ── Плоский кусок: якорь на уровне моря, базис [восток, вверх, юг] ──

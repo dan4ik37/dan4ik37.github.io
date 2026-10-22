@@ -213,7 +213,13 @@
   // ═══ Время суток и небо ═══
   // Солнце: восход в 6, закат в 18, в полдень выше всего (64°), с востока через юг на запад (как раньше в render.js)
   const MAXEL = 64 * DEG;
+  // Поставщик солнца (T-075): пока задан (планета — js/engine/planet-view.js), E.sunAt берёт направление у него — небо, свет и
+  // отражения движка следуют настоящему солнцу игры; off = E.setSunProvider(f(t, out) → out), off() — снять (только свой)
+  let SUNPROV = null;
+  E.setSunProvider = f => { const me = SUNPROV = typeof f === 'function' ? f : null; return () => { if (SUNPROV === me) SUNPROV = null; }; };
+  E.sunProvider = () => SUNPROV;
   E.sunAt = (t, out = [0, 1, 0]) => {
+    if (SUNPROV) return SUNPROV(t, out);
     const h = ((num(t, 14) % 24) + 24) % 24, el = Math.asin(Math.sin(MAXEL) * Math.sin((h - 6) / 12 * PI));
     const az = PI * .25 + (h - 12) / 12 * PI * .9, ce = Math.cos(el);
     out[0] = Math.cos(az) * ce; out[1] = Math.sin(el); out[2] = Math.sin(az) * ce;
@@ -366,6 +372,23 @@
   U.cl2 = U.cl2 || new Float32Array(4);
   U.clO = U.clO || new Float32Array(4);
   U.clM = U.clM || new Float32Array(4);
+  // Дымка «как в атмосфере» вместо тумана (T-075: планета, planet-view.js ставит каждый кадр; apA.w = 0 — обычный туман):
+  // apA: rgb — рассеяние Рэлея у камеры (1/ед.), w — включено; apB: x — Ми у камеры, y — фаза Ми g, z, w — 1 / высоты однородной
+  // толщи (Рэлей, Ми); apC: xyz — направление на солнце (мир), w — сила дымки; apD: rgb — пропускание воздуха до солнца у камеры
+  U.apA = U.apA || new Float32Array(4);
+  U.apB = U.apB || new Float32Array(4);
+  U.apC = U.apC || new Float32Array(4);
+  U.apD = U.apD || new Float32Array(4);
+  // T-075 на паузе: кусок дымки в тумане — только при localStorage d37_planet_v2 = '1' (читается один раз, при загрузке gfx.js);
+  // без него туман — ровно прежний кусок, E.aerialFog = false (planet-view.js дымку не ставит)
+  const AERIAL = (() => { try { return typeof localStorage !== 'undefined' && localStorage.getItem('d37_planet_v2') === '1'; } catch (e) { return false; } })();
+  E.aerialFog = AERIAL;
+  const AP_PARS = AERIAL ? `
+	uniform vec4 d37ApA;
+	uniform vec4 d37ApB;
+	uniform vec4 d37ApC;
+	uniform vec4 d37ApD;
+	float d37ApG( float x ){ return abs( x ) < 1e-3 ? 1.0 - 0.5 * x : ( 1.0 - exp( - x ) ) / x; }` : '';
 
   // ═══ Куски шейдеров three.js (один раз на всю страницу) ═══
   // Ветер (шейдеры-наборы, 16.10.2026): у материала с define D37_WAVE (R.wave / E.waveMaterial: 1 — трава, верх качается,
@@ -409,7 +432,7 @@
 	varying vec3 vD37Fog;
 	uniform vec4 d37FogA;
 	uniform vec4 d37FogB;
-	uniform vec4 d37FogC;
+	uniform vec4 d37FogC;${AP_PARS}
 	#ifdef FOG_EXP2
 		uniform float fogDensity;
 	#else
@@ -417,8 +440,27 @@
 		uniform float fogFar;
 	#endif
 #endif`;
-  // туман: обычный (по расстоянию) + высотный (плотнее у земли, интеграл по лучу) + к солнцу — тёплый (как небо у солнца)
-  const FOG_F = `#ifdef USE_FOG
+  // туман: обычный (по расстоянию) + высотный (плотнее у земли, интеграл по лучу) + к солнцу — тёплый (как небо у солнца).
+  // Дымка атмосферы (только с AERIAL; d37ApA.w > 0, планета): та же, что у земли планеты — пропускание по лучу (Рэлей по каналам
+  // + Ми, плотность у камеры × средняя по высоте луча) и свет, рассеянный солнцем (фазы Рэлея и Ми к солнцу); «бесконечная толща» —
+  // тональной кривой, как и остальное после неё
+  const AP_F = !AERIAL ? '' : `
+	if ( d37ApA.w > 0.0 ) {
+		vec3 d37Rel = vec3( dot( viewMatrix[ 0 ].xyz, vD37Fog ), dot( viewMatrix[ 1 ].xyz, vD37Fog ), dot( viewMatrix[ 2 ].xyz, vD37Fog ) );
+		float d37L = length( d37Rel ), d37C = dot( d37Rel, d37ApC.xyz ) / max( d37L, 1e-4 );
+		vec3 d37SR = d37ApA.rgb * d37ApG( d37Rel.y * d37ApB.z );
+		float d37SM = d37ApB.x * d37ApG( d37Rel.y * d37ApB.w ), d37Gm = d37ApB.y, d37G2 = d37Gm * d37Gm;
+		vec3 d37Ex = max( d37SR + vec3( d37SM * 1.1 ), vec3( 1e-9 ) );
+		vec3 d37Tv = exp( - d37Ex * d37L );
+		float d37PR = 0.0596831 * ( 1.0 + d37C * d37C );
+		float d37PM = 0.1193662 * ( 1.0 - d37G2 ) * ( 1.0 + d37C * d37C ) / ( ( 2.0 + d37G2 ) * pow( max( 1.0 + d37G2 - 2.0 * d37Gm * d37C, 1e-4 ), 1.5 ) );
+		vec3 d37Inf = d37ApC.w * d37ApD.rgb * ( d37SR * d37PR + vec3( d37SM * d37PM ) ) / d37Ex;
+		#ifdef TONE_MAPPING
+			d37Inf = toneMapping( d37Inf );
+		#endif
+		gl_FragColor.rgb = gl_FragColor.rgb * d37Tv + d37Inf * ( 1.0 - d37Tv );
+	} else {`;
+  const FOG_F = `#ifdef USE_FOG${AP_F}
 	#ifdef FOG_EXP2
 		float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
 	#else
@@ -437,7 +479,8 @@
 			fogFactor = max( fogFactor, 1.0 - exp( - max( d37FogC.z * length( d37Rel ) * d37G, 0.0 ) ) );
 		}
 	}
-	gl_FragColor.rgb = mix( gl_FragColor.rgb, d37Fc, fogFactor );
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, d37Fc, fogFactor );${AERIAL ? `
+	}` : ''}
 #endif`;
   // Мягкие тени без шума и «ряби» (15.10.2026: на полу была рябь — шум поворота выборок по пикселям экрана ползал при
   // движении, на склонах к солнцу ядро затеняло само себя):
@@ -698,6 +741,7 @@ vec3 d37Leaf( vec3 c, float n, float kind ){
     for (const k of LIT) {
       const L = T.ShaderLib && T.ShaderLib[k]; if (!L || !L.uniforms) continue;
       L.uniforms.d37FogA = { value: U.fogA }; L.uniforms.d37FogB = { value: U.fogB }; L.uniforms.d37FogC = { value: U.fogC };
+      if (AERIAL) { L.uniforms.d37ApA = { value: U.apA }; L.uniforms.d37ApB = { value: U.apB }; L.uniforms.d37ApC = { value: U.apC }; L.uniforms.d37ApD = { value: U.apD }; }
       L.uniforms.d37Wind = { value: U.wind };
       if (k !== 'basic' && k !== 'matcap' && k !== 'points' && k !== 'sprite' && k !== 'dashed') L.uniforms.d37Sh = { value: U.sh };
       if (k === 'standard' || k === 'physical') L.uniforms.d37Rt = { value: U.rt };

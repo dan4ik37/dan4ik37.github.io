@@ -332,13 +332,53 @@ Screenshots: `E:\claude-tmp\t051\shots` (`1-orbit` … `7-time`, `phone-*`), Swi
 shadows on terrain, clouds, wave geometry, any game adapter (Мир/Кубомир/Подземье/Студия), rockets/orbits/network; the flight is a free camera, not a
 vehicle; the start is a natural coast because the `mir` spot is sea on seed 37 (M1 pins land there); real-phone GPU time is not measured.
 
+## 12a. T-075 — paused (PL-2 LOD v2 + PL-4 engine integration; 22.10.2026, weekly limit)
+Branch `worktree-agent-a22547bb6ee7652aa`. **Everything new is behind flags that are OFF by default** — `/play/planet` behaves as before
+T-075 (checked: `gfx-strict PAGE=planet PLANET_V2=0` on SwiftShader green — 1 depth range, no AO/shadows/haze, guard writes nothing; Chrome
+smoke — 214 chunks on the ground, 5.7 MB chunk memory, 1 worker on the phone profile, 0 errors). Turn on: `localStorage d37_planet_v2 = '1'`
++ reload (gfx.js reads it at load for the haze chunk), or `o.flags` in `D37E.planetView(R, P, { flags })`; defaults — `D37E.planetView.FLAGS`
+(`lod2, morph, prefetch, split, shadows, aerial, weather`). Flag off = old code paths: `P.select` with `K`, old show/stitch logic, old worker
+count, `buildChunk(…, { lite: true })` (ring 1, no parent data; pos/nrm/col bit-identical — planet-test), shader without `D37_MORPH`/`D37_PSH`,
+sky on layer 0, fog chunks byte-identical to pre-T-075 (all 10 patched chunks compared).
+Always on (finished, tested): `E.setSunProvider` (same behaviour as the old `E.sunAt` wrap), edge-ring triangulation = physics diagonal b–c
+(physics = mesh < 0.02 u at chunk edges), stale-parent relink in `P.node`, worker respawn (≤ 3), `R.guardVolatile` API in post.js (used only
+with `split`), planet-lod-test in `ci-run`.
+
+**Done (with flags on):** screen-space error selection (ρ = eK·proj/d; β 0.5, γ 1.96, measured eK from 4 kids, near floor, hysteresis 1.15;
+τ phone 3 / PC 2.2 px, adaptive bias for leaf budget 220 / 450); CDLOD geomorph (per-vertex parent shape: offset int16, normal int8, colour
+uint8 = +16 B/vertex; chunk k from parent error, fade-in 0.12 s, shared edge k, 4-quad edge blend); step-by-step display `P.lodShow` (gate 0.05 /
+0.15 px, 2:1 kept on screen, stand-ins only without shown descendants); tiered build queue + `P.peek` prefetch 0.6 s ahead; worker pool (phone 2 on
+≥ 6 cores, PC cores − 2 ≤ 3); upload budget 2 / 4 chunks, 96 / 256 KB, 4 ms per frame; two-range depth `R.depthSplit` (near 0.12…S, far 0.95 S…;
+S = clamp(2·altG, 600, 6000); sky on layer 1; post.js/render.js draw both, near pass without background) → AO and SSR on the planet again; guard
+decisions on the planet are session-only; engine shadows on the terrain near the player (4-tap, highp sampler); aerial perspective in the engine
+fog chunk (`E.GFXU.apA…apD`); `P.climateAt` by latitude + `V.climateAt` / `V.weatherPos` / `V.setWeather` → engine weather on the demo (rain,
+snow, sun dims under clouds).
+**Numbers so far.** Node model (`scripts/planet-lod-test.cjs`, phone throughput 1.5 builds/frame): max pop on a normal descent 8.23 → 0.054 px
+(avg 1.30 → 0.001), very fast descent 25 963 → 0.085 px (converges 2.4 s vs 2.0 s), ascent 1 680 → 0.114 px; chunks at the ground: sea 111 → 80,
+mountains 250 → 221; builds per descent 445 → 670 (prefetch); select + show 0.16–0.3 ms, morph 0.006–0.012 ms per frame. Chrome (D3D11, phone
+size, no throttle): ground 214 → 165 chunks, draw calls 72 → 69–72, popMax 0, 0 errors; chunk GPU memory 5.6 → ~10.5 MB (parent data); worker
+build 3.2–4.6 → ~5.3 ms avg (ring 2 + parent data; loaded machine). `gfx-strict PAGE=planet` with the flag: SwiftShader, GL, Vulkan green
+(AO, SSR, shadows, haze, bright sky, nothing switched off by the guard). Tests: planet-test 109, planet-lod-test 17, orbit-test 95, render-test 387.
+**Half-done / not done:** phone-profile A/B (CPU ×4) before → after — started, stopped at the pause; 10-min soak and reopen ×21 with the flag
+(`planet-perf.cjs` now reports three.js object counts and guard state); real phone; GPU memory of parent data (+84 %: pack colp/np only for odd
+vertices or int8 offsets on coarse levels, or lower CAP on phones); worker cost on phones (Chrome's CPU throttle does not slow workers — ×4 by hand);
+haze is a load-time switch (gfx.js `AERIAL`) without a guard key; weather: no rain occlusion under overhangs, no snow cover on the terrain shader;
+CLAUDE.md «🪐 Планета» and docs/progress.md not updated yet.
+**Resume:** (1) `localStorage.setItem('d37_planet_v2','1')`; (2) `node scripts/planet-test.cjs`, `node scripts/planet-lod-test.cjs` (full),
+`node scripts/render-test.cjs <three r149>`, `PAGE=planet node scripts/gfx-strict.cjs swiftshader|gl|vulkan high`, `V2=1 node scripts/planet-perf.cjs
+perf` (and `SITE_DIR=<copy before T-075>` for «before»), `V2=1 … soak 10`, `V2=1 … reopen 21`; (3) numbers OK → `FLAGS` defaults and gfx.js `AERIAL`
+→ true, GAMES_VER, CLAUDE.md, docs/progress.md. Files: `js/engine/planet.js` (sse walk, `lodShow`, `lodMorph`, `peek`, `buildChunk` md/np/colp/err,
+`indices`), `planet-view.js` (FLAGS, pool, budget, morph uniforms, split cameras, shadows, haze, weather API), `planet-worker.js`, `gfx.js`
+(sun provider, haze), `post.js` / `render.js` (two passes, guard `G.vol`), `js/games/planet-demo.js` (weather), `scripts/planet-lod-test.cjs`,
+`planet-test.cjs`, `gfx-strict.cjs` (PAGE=planet, PLANET_V2), `planet-perf.cjs` (V2). Temp files: `E:\claude-tmp\t075`.
+
 ## 13. Step list → board tasks
 | Step | What | Size | After |
 |---|---|---|---|
 | PL-1 | This plan + proof (`planet.js`, `planet-worker.js`, `planet-view.js`, `/play/planet`, tests, phone measurements) | L | — (T-051) |
-| PL-2 | LOD v2: geomorphing (no popping), screen-space error, prefetch along velocity, Worker pool and GPU upload budget, real-phone check, `gfx-strict` on SwiftShader/GL | M | PL-1 |
+| PL-2 | LOD v2: geomorphing (no popping), screen-space error, prefetch along velocity, Worker pool and GPU upload budget, real-phone check, `gfx-strict` on SwiftShader/GL — **T-075: built behind a flag, paused (§12a)** | M | PL-1 |
 | PL-3 | Props and biomes: `D37E.biomes` shared catalog; trees/rocks instanced per finest chunk; colliders near the player | M | PL-1 |
-| PL-4 | Engine integration: formal sun provider in `gfx.js`, terrain receives engine shadows, two-range depth (AO/SSR back on), aerial perspective in the engine fog chunk, `climateAt` from latitude | M | PL-1 (after T-042, T-043) |
+| PL-4 | Engine integration: formal sun provider in `gfx.js`, terrain receives engine shadows, two-range depth (AO/SSR back on), aerial perspective in the engine fog chunk, `climateAt` from latitude — **T-075: built behind a flag, paused (§12a)** | M | PL-1 (after T-042, T-043) |
 | PL-5 | Rebase API for all engine systems (actors, npc, destruct, fx, precip, rigid/Rapier shift, vehicles) + region channels for `net.js` | M | PL-1 |
 | PL-6 | Edits per region (brushes, placed objects): IndexedDB + `planet.sql` (RLS, caps) | L | PL-5 |
 | PL-7 | Smooth voxel caves near the player (surface nets in Workers, spec §3.4) | XL | PL-6 |

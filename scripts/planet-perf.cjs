@@ -10,12 +10,14 @@
 //          node scripts/planet-perf.cjs golden             — T-079: «золотые» значения O.m / рельсов / неба в Chrome = в node (до бита)
 // Переменные: RATE (замедление ЦП, 4), Q (качество, mid), PC=1 — компьютер 1280 × 720 без замедления, CHROME, D37_TMP (временное — на E:).
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
-const SITE = path.join(__dirname, '..');
+// SITE_DIR — другая копия сайта (замер «до» на старых файлах тем же скриптом), D37_OUT — папка отчётов и снимков (в D37_TMP),
+// V2=1 — с флагами T-075 (localStorage d37_planet_v2 = '1': LOD v2, перетекание, два диапазона глубины, тени, дымка, погода)
+const SITE = process.env.SITE_DIR ? path.resolve(process.env.SITE_DIR) : path.join(__dirname, '..');
 const [MODE = 'perf', ARG = ''] = process.argv.slice(2);
 const PC = !!process.env.PC, RATE = PC ? 1 : +(process.env.RATE || 4), Q = process.env.Q || (PC ? 'high' : 'mid');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
-const OUT = path.join(TMP, 't051');
+const OUT = path.join(TMP, process.env.D37_OUT || 't075');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
   '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain', '.ico': 'image/x-icon' };
@@ -69,6 +71,22 @@ const summary = f => {
   const ev = async (expr, ms = 120000) => { const r = await Promise.race([send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }), sleep(ms).then(() => ({ result: { value: '__timeout' } }))]); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
   const shot = async name => { const { data } = await send('Page.captureScreenshot', { format: 'jpeg', quality: 75 }); fs.writeFileSync(path.join(OUT, 'shots', name + '.jpg'), Buffer.from(data, 'base64')); };
   const T = 'GAME_IMPL.planet._test';
+  // сколько живых объектов three (рендереры, геометрии, материалы, буферы кадра, текстуры) — Runtime.queryObjects; ручки отпускаем
+  const countObjs = async () => {
+    const o = {};
+    for (const [k, proto] of [['renderers', 'THREE.WebGLRenderer.prototype'], ['geometries', 'THREE.BufferGeometry.prototype'], ['materials', 'THREE.Material.prototype'], ['targets', 'THREE.WebGLRenderTarget.prototype'], ['textures', 'THREE.Texture.prototype']]) {
+      try {
+        const p = await send('Runtime.evaluate', { expression: proto, objectGroup: 'cnt' });
+        const q = await send('Runtime.queryObjects', { prototypeObjectId: p.result.objectId, objectGroup: 'cnt' });
+        const n = await send('Runtime.callFunctionOn', { objectId: q.objects.objectId, functionDeclaration: 'function(){ return this.length; }', returnByValue: true });
+        o[k] = n.result.value;
+      } catch (e) { o[k] = null; }
+      await send('Runtime.releaseObjectGroup', { objectGroup: 'cnt' });
+    }
+    return o;
+  };
+  // страж графики после сессии на планете: ничего не выключено ни навсегда (localStorage), ни на сессию
+  const guard = () => ev(`(() => { const R = window.GAME_IMPL?.planet?._test?.S?.R; let st = null; try { st = localStorage.getItem('d37_gfx_guard'); } catch (e) {} return { stored: st, off: window.D37E?.gfxGuardInfo?.().off || [], vol: R && R.guard ? Object.keys(R.guard.vol || {}) : [], log: R && R.guard ? R.guard.log.slice(-8) : [], tests: R && R.guard ? R.guard.tests : null }; })()`);
   const stats = async () => ev(`(() => { const s = ${T}.stats(), st = ${T}.state(); return { ...s, mode: st.mode, heap: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null }; })()`);
   const measure = async (ms, during) => {
     await ev(`(window.__plS.f = [], window.__plS.on = true)`);
@@ -87,6 +105,7 @@ const summary = f => {
       await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     }
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q }), d37_gfx: Q };
+    if (process.env.V2 === '1') ls.d37_planet_v2 = '1';
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}}catch(e){}` });
     const open = async () => {
       await send('Page.navigate', { url: BASE + '/#/games/planet' });
@@ -123,6 +142,7 @@ const summary = f => {
       out.flyover = await measure(0, async () => { await ev(`${T}.descend(30)`); await sleep(30000); });
       out.flyoverEnd = await stats();
       out.workers = await workers();
+      out.guard = await guard();
     } else if (MODE === 'soak') {
       const mins = +ARG || 10;
       await open();
@@ -144,6 +164,7 @@ const summary = f => {
         console.log('  ', JSON.stringify(out.minutes[out.minutes.length - 1]));
       }
       out.workers = await workers();
+      out.guard = await guard(); console.log('страж:', JSON.stringify(out.guard));
     } else if (MODE === 'golden') {
       // одинаковость до бита: то же число в node и в Chrome
       const node = (() => { for (const f of ['climate', 'planet', 'orbit', 'system']) require(path.join(SITE, 'js/engine', f + '.js')); return globalThis.D37E.orbitGolden(); })();
@@ -172,16 +193,17 @@ const summary = f => {
       await open(); await sleep(4000);
       await ev('window.gc && window.gc()');
       const base = await ev(`({ heap: +(performance.memory.usedJSHeapSize / 1048576).toFixed(1), canvases: document.querySelectorAll('canvas').length })`);
-      base.workers = await workers();
-      out.base = base; out.cycles = [];
+      base.workers = await workers(); Object.assign(base, await countObjs());
+      out.base = base; out.cycles = []; console.log('  база', JSON.stringify(base));
       for (let i = 0; i < n; i++) {
         await send('Page.navigate', { url: BASE + '/#/games' }); await sleep(800);
         await ev(`location.hash = '#/games/planet'`);
         let ok = false; for (let q = 0; q < 60 && !ok; q++) { await sleep(400); try { ok = await ev(`!!(window.GAME_IMPL?.planet?._test?.S?.V)`, 5000); } catch (e) {} }
-        await ev(`${T}.goto(29, 81, 2000)`); await sleep(1500);
+        await ev(`${T}.goto(29, 81, 30)`); await sleep(1500); await ev(`${T}.land()`); await sleep(1500);
         await ev(`location.hash = '#/games'`); await sleep(700);
-        if (i % 5 === 4) { await ev('window.gc && window.gc()'); await sleep(300); out.cycles.push({ i: i + 1, heap: await ev(`+(performance.memory.usedJSHeapSize / 1048576).toFixed(1)`), canvases: await ev(`document.querySelectorAll('canvas').length`), workers: await workers() }); console.log('  ', JSON.stringify(out.cycles[out.cycles.length - 1])); }
+        if (i % 5 === 4) { await ev('window.gc && window.gc()'); await sleep(300); out.cycles.push({ i: i + 1, heap: await ev(`+(performance.memory.usedJSHeapSize / 1048576).toFixed(1)`), canvases: await ev(`document.querySelectorAll('canvas').length`), workers: await workers(), ...(await countObjs()) }); console.log('  ', JSON.stringify(out.cycles[out.cycles.length - 1])); }
       }
+      out.guard = await guard();
     }
   } catch (e) { failed = true; console.log('ОШИБКА', e.message); out.error = e.message; }
   out.logs = logs.slice(0, 40);

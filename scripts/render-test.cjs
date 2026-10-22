@@ -1321,6 +1321,36 @@ function boundsOk(R){
   LOST = false; ticks(Rx.guard, 2);
   ok(E.gfxGuardState().off.fol === 1, 'контекст вернулся — проверки снова работают (настоящая поломка AO с травой → без травы)', E.gfxGuardInfo().off);
   delete gl.isContextLost;
+  // планета (T-075): пока игра просит R.guardVolatile, решения про то, что читает глубину кадра, — только на этот рендерер:
+  // дальности в десятки км не выключают AO и отражения НАВСЕГДА; настоящая поломка шейдера сцены — как везде, навсегда
+  {
+    const VOLK = new Set(['ao', 'fol', 'rt', 'fg', 'dof', 'codes', 'test', 'post']);
+    const volCase = rep => {
+      for (const k in store) delete store[k];
+      progs.length = 0;
+      const R = mkG(); R.guardVolatile = k => VOLK.has(k);
+      R.post.selfTest = () => ({ codes: R.post.codesOn(), ...rep });
+      R.guard.test(R.scene, cam);
+      return R;
+    };
+    const Rv = volCase({ ...GOOD, AO: B(i => i < 40 ? [255, 0, 255, 128] : [0, 0, 255, 255]) });
+    ok(!Rv.post.fol && Rv.guard.vol.fol === 1 && !E.gfxGuardInfo().off.length && !('d37_gfx_guard' in store) && Rv.guard.log.some(l => l.startsWith('vol:fol')),
+      'планета: AO «почти весь чёрный» → без травы в AO — только на эту сессию (в память устройства не записано)', { off: E.gfxGuardInfo().off, vol: Rv.guard.vol, log: Rv.guard.log });
+    Rv.guard.test(Rv.scene, cam);
+    ok(Rv.guard.vol.ao === 1 && !Rv.post.canAO && !E.gfxGuardInfo().off.length, 'и повторно — без AO, тоже только на сессию');
+    const Rn = mkG();   // планету закрыли, новый рендерер (другая игра): ничего не запомнено
+    ok(Rn.post.fol && Rn.post.canAO && Rn.post.ao.on && !Object.keys(Rn.guard.vol).length, 'новый рендерер без R.guardVolatile — AO и трава в AO снова есть');
+    const Rv2 = volCase({ ...GOOD, SSR: B(i => i < 30 ? [0, 0, 0, 0] : [10, 10, 10, 255]) });
+    ok(Rv2.guard.vol.rt === 1 && !E.gfxGuardInfo().off.length && !('d37_gfx_guard' in store), 'отражения «не числа» на планете — без трассировки только на сессию', { vol: Rv2.guard.vol, off: E.gfxGuardInfo().off });
+    // настоящая поломка (не собралась программа сцены) — навсегда и на планете
+    for (const k in store) delete store[k];
+    progs.length = 0; const Rs2 = mkG(); Rs2.guardVolatile = k => VOLK.has(k);
+    const ms2 = new T.MeshStandardMaterial(), ps2 = failProg('MeshStandardMaterial'); Rs2.scene.add(new T.Mesh(new T.PlaneGeometry(), ms2)); props.set(ms2, { currentProgram: ps2 }); progs.push(ps2);
+    ticks(Rs2.guard, 2);
+    const offS = E.gfxGuardInfo().off;
+    ok(offS.length === 1 && (offS[0] === 'clim' || offS[0] === 'patch') && !Object.keys(Rs2.guard.vol).length, 'на планете не собрался шейдер сцены — как везде (навсегда: это не дальности)', { offS, vol: Rs2.guard.vol });
+    E.gfxGuardReset(); E.gfxPatch(T) || (E.gfxGuardReset(), E.gfxPatch(T)); store.d37_gfx = 'high';
+  }
   // видеокарты: семейство и модель из строки рендерера
   const gi = s => E.gpuInfo({ getExtension: () => ({ UNMASKED_RENDERER_WEBGL: 1 }), getParameter: () => s });
   const GPUS = [['ANGLE (Qualcomm, Adreno (TM) 619, OpenGL ES 3.2)', 'adreno', 'Adreno 619'], ['Mali-G52 MC2', 'mali', 'Mali-G52'], ['PowerVR Rogue GE8320', 'powervr', 'PowerVR Rogue GE8320'],

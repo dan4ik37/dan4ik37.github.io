@@ -1008,6 +1008,16 @@
    ]
   },
   {
+   "f": "js/engine/planet-view.js",
+   "fn": "spawn",
+   "k": "sink:new Worker [Worker]",
+   "c": "const",
+   "n": "адрес потока планеты: 'js/engine/planet-worker.js?v=' + GAMES_VER или o.url из planet-demo.js (константа кода)",
+   "xs": [
+    "url"
+   ]
+  },
+  {
    "f": "js/engine/rigid.js",
    "fn": "load",
    "k": "sink:import() [import(src || E.rigid.URL)]",
