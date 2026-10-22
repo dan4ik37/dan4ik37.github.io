@@ -121,12 +121,15 @@
     let hot = false;
     for (const o of SEEN) {
       if (!SC.get(o.id)) continue;
-      const sx = o.size[0], sy = o.size[1], sz = o.size[2], top = o.pos[1] + sy / 2, foot = Math.sqrt(sx * sz), n = Math.min(5, Math.max(1, Math.round(foot / 3)));
-      const sd = ((o.id.charCodeAt(0) * 31 + o.id.charCodeAt(o.id.length - 1) * 7) % 97) / 97;
+      // языки — вдоль длинной стороны (поворот на 90° по Y — стороны меняются местами), у высокой детали — ещё по середине лица
+      const ry = Math.round(((o.rot?.[1] || 0) % 180 + 180) % 180 / 90) === 1, sx = ry ? o.size[2] : o.size[0], sy = o.size[1], sz = ry ? o.size[0] : o.size[2];
+      const top = o.pos[1] + sy / 2, along = sx >= sz, L = Math.max(sx, sz), n = Math.min(5, Math.max(1, Math.round(L / 1.6))), fs = Math.min(2.6, Math.max(.7, .35 * L / n + .2 * sy + .25));
+      const sd = ((o.id.charCodeAt(0) * 31 + o.id.charCodeAt(o.id.length - 1) * 7) % 97) / 97, heat = o.onfire >= 3 ? 1 : .85;
       for (let k = 0; k < n; k++) {
-        const a = sd * 6.28 + k * 2.4, r = k ? Math.min(sx, sz) * .3 : 0, q = FL.push(); if (q < 0) break;
-        Q[q] = o.pos[0] + Math.cos(a) * r; Q[q + 1] = top - Math.min(.4, sy * .3); Q[q + 2] = o.pos[2] + Math.sin(a) * r;
-        Q[q + 3] = Math.min(2.6, Math.max(.6, foot * .42)); Q[q + 4] = o.onfire >= 3 ? 1 : .85; Q[q + 5] = (sd + k * .37) % 1; Q[q + 6] = .8; Q[q + 7] = 1.2;
+        const u = n > 1 ? (k / (n - 1) - .5) * L * .8 : 0, mid = sy > 2.5 && (k & 1);
+        const q = FL.push(); if (q < 0) break;
+        Q[q] = o.pos[0] + (along ? u : 0); Q[q + 1] = mid ? o.pos[1] - sy * .1 : top - Math.min(.4, sy * .3); Q[q + 2] = o.pos[2] + (along ? 0 : u);
+        Q[q + 3] = mid ? fs * .8 : fs; Q[q + 4] = heat; Q[q + 5] = (sd + k * .37) % 1; Q[q + 6] = mid ? .4 : .8; Q[q + 7] = 1.2;
       }
       if (me && !hot) { const dx = me.x - o.pos[0], dz = me.z - o.pos[2]; if (Math.abs(dx) < sx / 2 + .9 && Math.abs(dz) < sz / 2 + .9 && me.y > o.pos[1] - sy / 2 - 1 && me.y < top + 2.2) hot = true; }
     }

@@ -239,7 +239,9 @@ void main(){
   if (a < 0.003) discard;
   gl_FragColor = vec4(vec3(1.0, 0.85, 0.7) * a, a);
 }`;
-      const F1 = mk(MAXI), mat = new T.ShaderMaterial({ uniforms: U, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false });
+      // смешивание «поверх с подсветкой» (цвет уже умножен на альфу): на тёмном светится, на светлом небе — оранжевый, а не белый
+      const F1 = mk(MAXI), mat = new T.ShaderMaterial({ uniforms: U, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, toneMapped: false,
+        blending: T.CustomBlending, blendEquation: T.AddEquation, blendSrc: T.OneFactor, blendDst: T.OneMinusSrcAlphaFactor });
       const mesh = new T.Mesh(F1.g, mat); mesh.frustumCulled = false; mesh.renderOrder = 6; mesh.name = 'fire:flames'; mesh.userData.dyn = true;
       R.scene.add(mesh);
       let S1 = null, smat = null, smesh = null;
