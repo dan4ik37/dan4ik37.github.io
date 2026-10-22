@@ -278,6 +278,7 @@
       + row('Размер кнопок', range('touchSize', 70, 150, 5))
       + row('Непрозрачность кнопок', range('touchAlpha', 30, 100, 5))
       + row('Для левши', sw('lefty'), 'Джойстик — справа, кнопки — слева.')
+      + (root.D37TouchLayout?.settingsRow ? root.D37TouchLayout.settingsRow() : '')   // «🕹 Настроить кнопки» (js/core/touch-layout.js, кнопку ловит он же)
       + head('Клавиши' + (touchDev ? ' <small>(клавиатура и геймпад)</small>' : ''));
     const C = ctl();
     if (!C && ctlFail) return html + note('Список клавиш не загрузился — проверь интернет и открой окно ещё раз.');
