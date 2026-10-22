@@ -25,14 +25,18 @@
 
   // ═══ Поток (photo-worker.js) с запасным путём в странице ═══
   function makeWorker(url, fabricUrl){
-    let w = null, seq = 0; const wait = new Map();
-    try {
-      if (typeof OffscreenCanvas !== 'undefined' && url) {
+    let w = null, seq = 0, broken = false; const wait = new Map();
+    const can = typeof OffscreenCanvas !== 'undefined' && typeof Worker !== 'undefined' && !!url;
+    // поток создаётся при первой работе; recycle() — закрыть после тяжёлой работы (на телефоне память отдаётся сразу)
+    function spawnW(){
+      if (w || broken || !can) return w;
+      try {
         w = new Worker(url);
         w.onmessage = e => { const p = wait.get(e.data.id); if (!p) return; wait.delete(e.data.id); e.data.ok ? p.res(e.data.out) : p.rej(new Error(e.data.error)); };
-        w.onerror = e => { for (const p of wait.values()) p.rej(new Error('Поток фоторедактора упал')); wait.clear(); try { w.terminate(); } catch (er) {} w = null; };
-      }
-    } catch (e) { w = null; }
+        w.onerror = () => { for (const p of wait.values()) p.rej(new Error('Поток фоторедактора упал')); wait.clear(); try { w.terminate(); } catch (er) {} w = null; };
+      } catch (e) { w = null; broken = true; }
+      return w;
+    }
     const local = {   // то же самое в странице (старый iPhone, ошибка потока)
       async decode(d){
         const bmp = await createImageBitmap(d.blob, { imageOrientation: 'from-image' });
@@ -67,17 +71,18 @@
       },
     };
     return {
-      get threaded(){ return !!w; },
+      get threaded(){ return can && !broken; },
       run(job, data, transfer){
         if (job === 'filter') data.fabricUrl = fabricUrl;
-        if (!w || (job === 'filter' && !fabricUrl)) return local[job](data);
+        if (!spawnW() || (job === 'filter' && !fabricUrl)) return local[job](data);
         return new Promise((res, rej) => {
           const id = ++seq; wait.set(id, { res, rej });
           try { w.postMessage({ id, job, data }, transfer || []); } catch (e) { wait.delete(id); local[job](data).then(res, rej); }
         });
       },
       local: (job, data) => local[job](data),   // запасной путь: поток упал или не загрузил fabric (нет сети)
-      close(){ try { w && w.terminate(); } catch (e) {} w = null; for (const p of wait.values()) p.rej(new Error('closed')); wait.clear(); },
+      recycle(){ if (w && !wait.size) { try { w.terminate(); } catch (e) {} w = null; } },
+      close(){ try { w && w.terminate(); } catch (e) {} w = null; broken = true; for (const p of wait.values()) p.rej(new Error('closed')); wait.clear(); },
     };
   }
 
@@ -87,7 +92,9 @@
     if (!F || !F.Canvas) throw userErr('Не загрузилась основа редактора (fabric.js)');
     const phone = isPhone();
     const B = PC.budget({ phone, devMem: navigator.deviceMemory || 0, maxTex: maxTexture() });
-    const PREV = Math.min(maxTexture(), phone ? 2048 : 4096);   // сторона копии слоя для экрана (коррекции на видеокарте)
+    // сторона копии слоя для экрана (коррекции на видеокарте): телефон — 1536 (экран ~1080 пикселей шириной; память фильтров
+    // ~4× меньше, чем у 3072), компьютер — 4096 (12 Мп показываются почти в полный размер)
+    const PREV = Math.min(maxTexture(), phone ? 1536 : 4096);
     try { F.config.configure({ textureSize: PREV }); } catch (e) {}
     const W = makeWorker(opts.workerUrl, opts.fabricUrl);
     const subs = new Set(opts.onEvent ? [opts.onEvent] : []);
@@ -703,7 +710,7 @@
         replaceDoc('Открыть', () => { setDoc({ w: r.canvas.width, h: r.canvas.height, bg: null, name: cleanName(name), active: L.id, layers: [L] }); });
         fit();
         return { layer: L.id, w: doc.w, h: doc.h, scaled: r.scaled };
-      } finally { busy(false); }
+      } finally { busy(false); if (phone) W.recycle(); }   // телефон: поток с картинками закрыть — память сразу назад
     }
     async function placeBlob(blob, a = {}){
       busy(true, 'Добавляю картинку…');
@@ -715,7 +722,7 @@
         const L = mkRaster(r.canvas, { name: a.name || cleanName(a.fileName || 'Картинка'), x: a.x != null ? a.x : doc.w / 2, y: a.y != null ? a.y : doc.h / 2, scale: k });
         addLayer(L, 'Добавить картинку');
         return { layer: L.id };
-      } finally { busy(false); }
+      } finally { busy(false); if (phone) W.recycle(); }   // телефон: поток с картинками закрыть — память сразу назад
     }
     const cleanName = n => String(n || 'Без названия').replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 60) || 'Без названия';
     function addLayer(L, label, index){
@@ -830,7 +837,7 @@
         const act = doc.layers.findIndex(L => L.id === doc.active);
         replaceDoc('Размер', () => setDoc({ w: nw, h: nh, bg: doc.bg, name: doc.name, active: act >= 0 ? nextLayers[act].id : null, layers: nextLayers }));
         return { w: nw, h: nh };
-      } finally { busy(false); }
+      } finally { busy(false); if (phone) W.recycle(); }   // телефон: поток с картинками закрыть — память сразу назад
     }
 
     // Нарисовать слои в холст размера документа: полный размер, без кэша fabric. full — слои с коррекциями берутся в полном
@@ -869,7 +876,7 @@
         const N = mkRaster(c, { id: below.id, name: below.name, x: doc.w / 2, y: doc.h / 2 }); N.locked = !!below.locked;
         replaceDoc('Объединить', () => { detach(L); const j = detach(below); attach(N, j); doc.active = N.id; }, true);
         return { layer: N.id };
-      } finally { busy(false); }
+      } finally { busy(false); if (phone) W.recycle(); }   // телефон: поток с картинками закрыть — память сразу назад
     }
     async function flatten(){
       if (!doc.layers.length) throw userErr('Нет слоёв');
@@ -879,7 +886,7 @@
         const N = mkRaster(c, { name: 'Сведено', x: doc.w / 2, y: doc.h / 2 }); N.locked = true;
         replaceDoc('Свести', () => setDoc({ w: doc.w, h: doc.h, bg: doc.bg, name: doc.name, active: N.id, layers: [N] }, true), true);
         return { layer: N.id };
-      } finally { busy(false); }
+      } finally { busy(false); if (phone) W.recycle(); }   // телефон: поток с картинками закрыть — память сразу назад
     }
     function dupLayer(L){
       let N;
@@ -931,7 +938,7 @@
         const p = PC.autoParams(st);
         change('Автоулучшение', [L], () => { Object.assign(L.adj, p); applyFilters(L); });
         return p;
-      } finally { busy(false); }
+      } finally { busy(false); if (phone) W.recycle(); }   // телефон: поток с картинками закрыть — память сразу назад
     }
 
     // ── экспорт ──
@@ -951,7 +958,7 @@
         finally { c.width = c.height = 0; }
         if (!blob || !blob.size) throw userErr('Не получилось сохранить картинку');
         return { blob, w, h, type, ext: type === 'image/jpeg' ? 'jpg' : type.split('/')[1] };
-      } finally { busy(false); }
+      } finally { busy(false); if (phone) W.recycle(); }   // телефон: поток с картинками закрыть — память сразу назад
     }
     // Маленькая картинка (превью в «Материалах», ≤ 160 px, JPEG data URL)
     function thumbDataURL(max = 160){
@@ -1150,7 +1157,14 @@
       hist.done = []; hist.undone = [];
       for (const L of all) { detach(L); release(L); }
       for (const L of all) release(L);
-      try { cv.dispose(); } catch (e) {}
+      // холсты fabric: после dispose — нулевой размер (память видеокарты отдаётся сразу, а не при сборке мусора)
+      const lo = cv.lowerCanvasEl, up = cv.upperCanvasEl;
+      try { Promise.resolve(cv.dispose()).then(() => { for (const c of [lo, up]) if (c) c.width = c.height = 0; }, () => {}); } catch (e) {}
+      // фильтры fabric на видеокарте — одни на страницу (свой WebGL): закрыли редактор — отдать память видеокарты сразу
+      try {
+        const be = F.getFilterBackend && F.getFilterBackend(false);
+        if (be) { const gl = be.gl; be.dispose && be.dispose(); try { gl && gl.getExtension('WEBGL_lose_context') && gl.getExtension('WEBGL_lose_context').loseContext(); } catch (e) {} F.setFilterBackend && F.setFilterBackend(undefined); }
+      } catch (e) {}
       W.close();
       subs.clear();
       el.remove && el.remove();

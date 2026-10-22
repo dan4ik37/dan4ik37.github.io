@@ -25,12 +25,17 @@ const BLOCK = ['*://*.supabase.co/*', '*://*.googlesyndication.com/*', '*://*.do
 function startServe(port){ return spawn('python', [path.join(SITE, 'scripts/serve.py'), String(port)], { cwd: SITE, env: { ...process.env, D37_SERVE_QUIET: '1' }, stdio: 'ignore' }); }
 const getRaw = (port, p) => new Promise(res => http.get({ host: '127.0.0.1', port, path: p }, r => { r.resume(); res(r.statusCode); }).on('error', () => res(0)));
 async function waitPort(port){ for (let i = 0; i < 80; i++) { if (await getRaw(port, '/robots.txt')) return true; await sleep(150); } return false; }
-// Память всех процессов этого Chrome (по папке профиля) — Windows; иначе NaN
-function chromeMem(profile){
-  if (process.platform !== 'win32') return NaN;
+// Память всех процессов этого Chrome (по папке профиля) — Windows; иначе NaN. byType: { renderer, gpu, other } — страница отдельно
+// от процесса видеокарты (у того свои кэши: после первых открытий он растёт и стоит — это не утечка страницы)
+function chromeMem(profile, byType){
+  if (process.platform !== 'win32') return byType ? { total: NaN, renderer: NaN, gpu: NaN } : NaN;
   const key = path.basename(profile);
-  const ps = `$s=0; Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${key}') } | ForEach-Object { $s += [int64]$_.PrivatePageCount }; Write-Output $s`;
-  try { return +execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8', timeout: 30000 }).trim(); } catch (e) { return NaN; }
+  const ps = `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${key}') } | ForEach-Object { $t = 'browser'; if ($_.CommandLine -match '--type=([a-z-]+)') { $t = $matches[1] }; Write-Output ($t + ' ' + [int64]$_.PrivatePageCount) }`;
+  let out = '';
+  try { out = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8', timeout: 30000 }); } catch (e) { return byType ? { total: NaN, renderer: NaN, gpu: NaN } : NaN; }
+  const r = { total: 0, renderer: 0, gpu: 0, other: 0 };
+  for (const line of out.trim().split(/\r?\n/)) { const [t, b] = line.trim().split(/\s+/); const v = +b || 0; r.total += v; if (t === 'renderer') r.renderer += v; else if (t === 'gpu-process') r.gpu += v; else r.other += v; }
+  return byType ? r : r.total;
 }
 
 async function chrome(tag){
@@ -63,7 +68,7 @@ async function chrome(tag){
       return r.result.value;
     },
     until: async (expr, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { try { if (await C.ev(expr, 5000)) return Date.now() - t; } catch (e) {} await sleep(100); } return -1; },
-    mem: () => chromeMem(profile),
+    mem: byType => chromeMem(profile, byType),
     gc: async () => { try { await send('HeapProfiler.collectGarbage'); await send('HeapProfiler.collectGarbage'); } catch (e) {} },
     phone: async (cpu = 4) => {
       await send('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: 2.6, mobile: true });
@@ -98,6 +103,7 @@ const RUN = (cmd, args) => `D37Tools.run('photo', ${JSON.stringify(cmd)}, ${JSON
 async function openEditor(C, base){
   await C.load(base + '/photo');
   const t = await C.until('!!(window.D37Photo && window.D37Photo.E && window.D37Tools && D37Tools.get("photo"))', 60000);
+  if (t < 0) throw new Error('редактор не открылся: ' + await C.ev(`JSON.stringify({ route: document.body.dataset.route, href: location.href, apps: !!window.D37Apps, ui: !!window.D37PhotoUI, root: (document.getElementById('photoRoot') || {}).textContent?.slice(0, 160) })`).catch(e => e.message) + ' ' + JSON.stringify(C.errors.slice(0, 3)));
   return t;
 }
 
@@ -177,6 +183,7 @@ async function load(base){
   try {
     await C.phone(4);
     await C.send('Network.setCacheDisabled', { cacheDisabled: true });
+    await C.send('Network.setBypassServiceWorker', { bypass: true });   // без кэша sw.js — как в первый раз
     for (let i = 0; i < 5; i++) {
       await C.load('about:blank'); await sleep(500);
       await C.load(base + '/');   // сайт открыт, человек нажал «Фоторедактор» (раздел без перезагрузки)
@@ -199,8 +206,11 @@ async function big(base){
   const C = await chrome('big');
   try {
     await C.phone(4);
-    await C.load('about:blank'); await sleep(500); const m0 = C.mem();
-    await openEditor(C, base);
+    // нулевая точка — сайт уже открыт (главная), редактор ещё нет: считаем только то, что добавил редактор
+    await C.load(base + '/'); await C.until('typeof D37Route !== "undefined" && document.body.dataset.route === "home"', 30000);
+    await sleep(3000); await C.gc(); await sleep(800); const m0 = C.mem();
+    await C.ev(`D37Route.go('/photo'); 1`);
+    if (await C.until('!!(window.D37Photo && window.D37Photo.E)', 60000) < 0) throw new Error('редактор не открылся');
     await sleep(2000); await C.gc(); const m1 = C.mem();
     const t0 = Date.now();
     const o = JSON.parse(await C.ev(`(${MKIMG})(4000, 3000).then(b => D37Photo.E.openBlob(b, 'test-12mp')).then(r => JSON.stringify(r))`, 180000));
@@ -298,17 +308,28 @@ async function leak(base, n = 20){
       await C.ev(`(${MKIMG})(1600, 1200).then(b => D37Photo.E.openBlob(b, 'leak')).then(() => D37Tools.run('photo', 'adjust', { brightness: 10 })).then(() => 1)`, 60000);
       await C.ev(`D37Route.go('/'); 1`);
       await C.until('!window.D37Photo', 20000);
-      if (i === 1 || i === 10 || i === n) {
-        await sleep(1500); await C.gc(); await sleep(1000);
-        const h = await C.send('Runtime.getHeapUsage').catch(() => ({}));
-        pts.push({ i, memMB: MB(C.mem()), heapMB: MB(h.usedSize || 0), canvases: await C.ev('document.querySelectorAll("canvas").length') });
+      if (i === 1 || i % 4 === 0 || i === n) {
+        await sleep(1500); await C.gc(); await sleep(800);
+        // память «шумит» (сборка мусора, кэши видеокарты): берём наименьшее из 3 замеров, страницу и видеокарту — отдельно
+        let rend = Infinity, gpu = Infinity; for (let k = 0; k < 3; k++) { await C.gc(); const m = C.mem(true); rend = Math.min(rend, m.renderer); gpu = Math.min(gpu, m.gpu); await sleep(400); }
+        const h = await C.send('Runtime.getHeapUsage').catch(() => ({})), dc = await C.send('Memory.getDOMCounters').catch(() => ({}));
+        pts.push({ i, pageMB: MB(rend), gpuMB: MB(gpu), heapMB: MB(h.usedSize || 0), nodes: dc.nodes, listeners: dc.jsEventListeners, canvases: await C.ev('document.querySelectorAll("canvas").length') });
         console.log('leak', JSON.stringify(pts[pts.length - 1]));
       }
     }
-    const grow = pts[pts.length - 1].memMB - pts[0].memMB, growHeap = pts[pts.length - 1].heapMB - pts[0].heapMB;
-    console.log(`leak: ${n} открытий/закрытий — память ${grow > 0 ? '+' : ''}${Math.round(grow)} МБ, куча JS ${growHeap > 0 ? '+' : ''}${growHeap.toFixed(1)} МБ`);
-    ok(!Number.isFinite(grow) || grow < 60, `${n} открытий/закрытий — память не растёт (< 60 МБ)`, pts);
+    // наклон памяти страницы после разогрева (первые 4 раза — кэши кода и шейдеров) — МБ за одно открытие/закрытие
+    const warm = pts.filter(p => p.i >= 4);
+    const slopeOf = k => { const xs = warm.map(p => p.i), ys = warm.map(p => p[k]), mx = xs.reduce((a, b) => a + b) / xs.length, my = ys.reduce((a, b) => a + b) / ys.length;
+      return xs.reduce((s, x, j) => s + (x - mx) * (ys[j] - my), 0) / xs.reduce((s, x) => s + (x - mx) * (x - mx), 0); };
+    const slope = slopeOf('pageMB'), slopeG = slopeOf('gpuMB');
+    const growHeap = pts[pts.length - 1].heapMB - pts[0].heapMB, growNodes = pts[pts.length - 1].nodes - pts[0].nodes;
+    console.log(`leak: ${n} открытий/закрытий — страница ${slope > 0 ? '+' : ''}${slope.toFixed(2)} МБ за раз, видеокарта ${slopeG > 0 ? '+' : ''}${slopeG.toFixed(2)} МБ за раз, куча JS ${growHeap > 0 ? '+' : ''}${growHeap.toFixed(1)} МБ, узлов DOM ${growNodes > 0 ? '+' : ''}${growNodes}`);
+    ok(!Number.isFinite(slope) || slope < 2.5, `${n} открытий/закрытий — память страницы не растёт (< 2,5 МБ за раз)`, pts);
+    // процесс видеокарты держит кэш освобождённых холстов (растёт первые ~10 раз и стоит) — проверяем, что он ограничен
+    const g4 = (pts.find(p => p.i === 4) || pts[0]).gpuMB, gEnd = pts[pts.length - 1].gpuMB;
+    ok(!Number.isFinite(gEnd) || gEnd < g4 + 300, `память видеокарты ограничена (в конце < чем после разогрева + 300 МБ)`, pts);
     ok(growHeap < 8, `куча JS не растёт (< 8 МБ)`, pts);
+    ok(!(growNodes > 200), 'узлы DOM не копятся', pts);
     ok(realErrors(C.errors).length === 0, 'без ошибок', realErrors(C.errors));
   } finally { await C.close(); }
 }

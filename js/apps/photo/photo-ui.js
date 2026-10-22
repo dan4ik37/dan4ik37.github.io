@@ -61,16 +61,17 @@
     const onResize = () => { place(); adCheck(); };
     root.addEventListener('resize', onResize);
 
-    // ── движок ──
-    let E;
+    // ── движок (его события приходят уже во время создания — всё, что они трогают, объявлено выше) ──
+    let E = null, paintT = 0;
+    const want = new Set();
+    function later(what){ want.add(what); if (paintT) return; paintT = requestAnimationFrame(() => { paintT = 0; if (!E || E.disposed) return; const w = new Set(want); want.clear(); if (w.has('title')) paintTitle(); if (w.has('hist')) paintHist(); if (w.has('panel')) paintPanel(); }); }
     try { E = root.D37PhotoCore.create($('.pe-stage-in'), { workerUrl: o.workerUrl, fabricUrl: o.fabricUrl, onEvent }); }
-    catch (e) { $('.pe-stage-in').innerHTML = `<div class="pe-fail">⚠️ ${esc(e.message || e)}<br><small>Обнови страницу или открой в Chrome / Яндекс Браузере.</small></div>`; return { unmount(){ document.body.classList.remove('pe-on'); host.innerHTML = ''; } }; }
+    catch (e) { $('.pe-stage-in').innerHTML = `<div class="pe-fail">⚠️ ${esc(e.message || e)}<br><small>Обнови страницу или открой в Chrome / Яндекс Браузере.</small></div>`; return { active: false, unmount(){ root.removeEventListener('resize', onResize); document.body.classList.remove('pe-on'); host.innerHTML = ''; } }; }
     const api = { E, active: true, open: (blob, name) => openFile(blob, name) };
     root.D37Photo = api;
 
-    let paintT = 0; const want = new Set();
-    function later(what){ want.add(what); if (paintT) return; paintT = requestAnimationFrame(() => { paintT = 0; const w = new Set(want); want.clear(); if (w.has('title')) paintTitle(); if (w.has('hist')) paintHist(); if (w.has('panel')) paintPanel(); }); }
     function onEvent(type, d){
+      if (!E && type !== 'toast' && type !== 'busy' && type !== 'zoom') { later('title'); later('hist'); later('panel'); return; }
       if (type === 'toast') toast(d.msg, d.kind);
       else if (type === 'busy') { const b = $('.pe-busy'); b.hidden = !d.on; b.querySelector('span').textContent = d.text || ''; }
       else if (type === 'history') later('hist');
