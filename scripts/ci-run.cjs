@@ -132,6 +132,14 @@ function runOne(t) {
   });
 }
 const lastLine = out => { const l = out.trim().split(/\r?\n/).filter(Boolean); return (l[l.length - 1] || '').slice(0, 160); };
+// Причина для отметки в GitHub: первая строка FAIL / ошибки Node + итоговая строка. Журнал запуска без входа на GitHub не открыть,
+// а отметки (annotations) видны всем через API — без причины в них упавшую проверку не разобрать
+const why = out => {
+  const l = out.trim().split(/\r?\n/).filter(Boolean);
+  const f = l.find(s => /^\s*(FAIL|✗)\b/.test(s)) || l.find(s => /\b(?:[A-Z][a-z]+)?Error\b:/.test(s));
+  const last = l[l.length - 1] || '';
+  return ((f && f !== last ? f.trim().slice(0, 400) + ' … ' : '') + last.slice(0, 160));
+};
 const tail = (out, n) => out.trim().split(/\r?\n/).slice(-n).join('\n');
 
 // second — результат первой попытки, если это вторая (одна, когда машина свободна)
@@ -147,7 +155,7 @@ async function exec(t, second) {
     if (GH) console.log(`::group::Вывод ${key(t)} (${last ? 'последние 60 строк' : 'первая попытка, 30 строк'})`);
     console.log(tail(res.out, last ? 60 : 30));
     if (GH) console.log('::endgroup::');
-    if (GH && last) console.log(`::${t.optional ? 'warning' : 'error'} title=Проверка ${key(t)} не прошла::${(res.killed ? 'превышен срок. ' : '') + lastLine(res.out).replace(/[\r\n%]/g, ' ')}`);
+    if (GH && last) console.log(`::${t.optional ? 'warning' : 'error'} title=Проверка ${key(t)} не прошла::${(res.killed ? 'превышен срок. ' : '') + why(res.out).replace(/[\r\n%]/g, ' ')}`);
   }
   return res;
 }

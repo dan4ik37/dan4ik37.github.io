@@ -72,6 +72,9 @@ ok(!/--no-privileges/.test(head.toString('utf8').replace(/\n\s*#[^\n]*/g, '')) |
 
 for (const [label, shell] of shells) {
   const L = s => `${label}: ${s}`;
+  // упало посреди (нет папки/журнала — скрипт копий не отработал) — не обрываем весь тест, а пишем причину строкой FAIL:
+  // в GitHub Actions виден только короткий отчёт (журнал без входа не открыть), ci-run берёт из него первую строку FAIL
+  try {
   const baseEnv = `# мои настройки\n\nDATABASE_URL=${DB_URL}\nPG_DUMP=${stub}\n`;
 
   // -Check
@@ -155,6 +158,9 @@ for (const [label, shell] of shells) {
   const s2 = JSON.parse(fs.readFileSync(c.log, 'utf8'));
   ok(s2.args.includes('--schema=public') && !s2.args.includes('--schema=auth'), L('BACKUP_SCHEMAS=public: только public'), s2.args);
   fs.rmSync(other, { recursive: true, force: true });
+  } catch (e) {
+    ok(false, L('проверка оборвалась: ' + String(e && e.message || e).slice(0, 200)), String(e && e.stack || '').split(/\r?\n/).slice(1, 4).map(s => s.trim()).join(' | '));
+  }
 }
 function await_ms(ms) { const t = Date.now(); while (Date.now() - t < ms) { /* ждём: следующий запуск должен быть позже по времени */ } }
 
