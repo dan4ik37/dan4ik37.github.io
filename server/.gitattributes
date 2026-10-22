@@ -1,0 +1,2 @@
+# server/ runs on Linux: always LF line endings (scripts and configs break with CRLF)
+* text=auto eol=lf

@@ -1,0 +1,17 @@
+{
+  "name": "d37-rt",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Realtime relay for dan4ik37.vercel.app (broadcast + presence, Supabase-Realtime-like). See docs/SERVER.md.",
+  "license": "MIT",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "ws": "8.21.3"
+  }
+}

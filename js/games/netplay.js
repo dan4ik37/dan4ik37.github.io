@@ -33,7 +33,7 @@
     function newPc(){
       dropPc();
       if (typeof RTCPeerConnection === 'undefined') { setMode('relay'); return null; }
-      const pc = new RTCPeerConnection({ iceServers: ICE });
+      const pc = new RTCPeerConnection({ iceServers: ICE.concat((typeof window !== 'undefined' && window.D37RT?.ice?.()) || []) });   // + свой TURN (js/core/rt.js), если сервер настроен
       N.pc = pc;
       pc.onicecandidate = e => { if (e.candidate && pc === N.pc) room.send({ type: 'np-ice', sid: N.sid, c: e.candidate.toJSON() }); };
       pc.onconnectionstatechange = () => { if (pc === N.pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) setMode('relay'); };

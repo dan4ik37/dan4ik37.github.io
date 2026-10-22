@@ -2424,6 +2424,24 @@ js/features/games.js и хвост css/premium.css.
   (файл мира = произвольный JSON), строки от хозяина стола в картах и шахматах, ссылка рекламодателя в админке и виджет оплаты — только https.
   Файлы других агентов (kubomir*, podzem*, engine, mir-*, raid*) только прочитаны: там экранирование на месте, записи в списке — с пометкой.
 
+## Свой сервер для игр (T-045; docs/SERVER.md — шаги владельцу и протокол) — server/ на Oracle владельца, клиент js/core/rt.js (D37RT)
+- server/rt — Node 22 + ws 8.21.3 (без своих модулей), server/docker-compose.yml: rt (127.0.0.1:8787) + Caddy (Let's Encrypt
+  IP-сертификат, профиль shortlived, default_sni) + coturn 4.18, всё в сети хоста, у всех mem_limit/cpus; server/ на Vercel не
+  выкладывается (.vercelignore). Ставит владелец: sparse clone → `bash make-env.sh <IP>` (секреты — только server/.env на сервере)
+  → `docker compose up -d --build`. Агенты к серверу не подключаются.
+- RT_URL в config.js пустой (так сейчас) → D37RT.client() = null, всё как было. Задан → GameRoom.channel и IoKit.supaTransport
+  берут канал у D37RT (тот же API, что у канала supabase-js; presence — тем же алгоритмом), netplay — его TURN, calls.js — через
+  window.D37_TURN. Комната НЕ делится: сервер смотрит Supabase-канал каждой своей комнаты и, если там кто-то есть, переводит всю
+  комнату и её «<комната>-…» в Supabase ('mv'); проба 40 КБ на сокет ловит «16 КБ» провайдеров; сервер упал — через 5 с всё в
+  Supabase, presence на переезд «замирает» (игра не видит «соперник ушёл»). ?rt=0 — только Supabase в вкладке.
+- Новая комната — по-прежнему через GameRoom.channel; канал без presence — только «сосед» presence-канала (имя «<комната>-…»),
+  иначе сторож его не увидит. Поменял протокол — server/rt/src/hub.js и js/core/rt.js вместе. Этап 2 (мир, online-users,
+  звонки, набор текста, postgres_changes, облачные сохранения) — docs/SERVER.md, Part 2.
+- Журнал для античита (T-073 будет читать): server/rt/src/audit.js, выключен (AUDIT пусто); игра помечает свои «проверяемые» события
+  в канале: config: { audit: { events: ['in'] } } (только ходы/ввод — не чат и не имена). Формат и пределы — docs/SERVER.md «Anti-cheat feed».
+- Тесты: rt-test (144; ws@8.21.3 + @supabase/supabase-js@2.117.2 в DEPS_DIR — в CI ставятся), rt-load-test (`--quick` в ci-run;
+  без него — 1000 соединений, `--prio` на занятом компьютере), rt-e2e (--e2e: два Chrome, настоящий Supabase, сервер убит).
+
 ## Известные хвосты
 - AdSense: сайт в кабинете зарегистрирован как dan4ik37.github.io и отклонён («бесполезный контент»); главный адрес —
   dan4ik37.vercel.app (github.io перенаправляет туда). Номера блоков вписаны; Google в РФ рекламу не показывает —
