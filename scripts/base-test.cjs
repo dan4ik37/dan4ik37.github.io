@@ -662,5 +662,32 @@ for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interio
   const bd2 = []; WDRAW.th(() => new Gr(), new Gr(), { i: 1, k: 'th', l: 1 }, bd2, x0()); ok(bd2.some(b => b.cam), 'штаб держит камеру (в него не заглянуть насквозь)');
 }
 
+// ═══ Вид военной базы: тела стен — отрезками (меньше тел), детали — меньше граней, дальний вид — без мелочи ═══
+{
+  const { wallRunsLocal, detailOf } = MB._draw, C = Geo.CELL, H = MB.WAR.n * C / 2, ctr = v => -H + (v + .5) * C;
+  let oldN = 0, newN = 0, covered = true, bridged = false;
+  for (let j = 1; j <= 12; j++) {
+    const L = MB.fillLayout(5, j), walls = L.filter(it => it.k === 'wall' && it.l > 0), at = new Set(walls.map(it => it.x + ',' + it.z));
+    for (const it of walls) { oldN++; for (const [dx, dz] of [[1, 0], [0, 1]]) if (at.has((it.x + dx) + ',' + (it.z + dz))) oldN++; }
+    const R = wallRunsLocal(L); newN += R.length;
+    for (const it of walls) if (!R.some(b => Math.abs(ctr(it.x) - b.cx) <= b.w / 2 + 1e-6 && Math.abs(ctr(it.z) - b.cz) <= b.d / 2 + 1e-6)) covered = false;
+    for (const b of R) for (let x = Math.ceil((b.cx - b.w / 2 + H) / C - .5); ctr(x) <= b.cx + b.w / 2; x++) for (let z = Math.ceil((b.cz - b.d / 2 + H) / C - .5); ctr(z) <= b.cz + b.d / 2; z++) if (!at.has(x + ',' + z)) bridged = true;
+  }
+  ok(covered, 'тела стен: каждая клетка стены внутри коробки отрезка');
+  ok(!bridged, 'тела стен: отрезок не перекрывает пустые клетки');
+  ok(newN * 5 <= oldN, `тела стен: отрезков в 5+ раз меньше, чем столбиков и перемычек (${newN} против ${oldN})`, { newN, oldN });
+  const mix = wallRunsLocal([{ i: 1, k: 'wall', x: 3, z: 3, r: 0, l: 1 }, { i: 2, k: 'wall', x: 4, z: 3, r: 0, l: 1 }, { i: 3, k: 'wall', x: 5, z: 3, r: 0, l: 4 }, { i: 4, k: 'wall', x: 6, z: 3, r: 0, l: 4 }, { i: 5, k: 'wall', x: 7, z: 3, r: 0, l: 0 }]);
+  ok(mix.length === 2 && mix.every(b => b.h >= .9) && mix[0].h !== mix[1].h, 'тела стен: разные уровни — разные отрезки своей высоты, строящаяся — не в отрезке', mix);
+  const one = wallRunsLocal([{ i: 1, k: 'wall', x: 9, z: 9, r: 0, l: 2 }]);
+  ok(one.length === 1 && one[0].w === one[0].d && one[0].w >= .5, 'тела стен: одиночный столбик — квадратное тело');
+  // детали вида
+  const ball = detailOf({ s: 'ball', r: .12 }, false), big = detailOf({ s: 'ball', r: .5 }, false), cyl = detailOf({ s: 'cyl', r: .1, h: 1 }, false), keep3 = detailOf({ s: 'cyl', r: 1, h: 1, seg: 3 }, false);
+  ok(ball.seg === 6 && big.seg === 10 && cyl.seg === 6 && keep3.seg === 3, 'детали вида: шары и трубы — меньше граней, явные 3–4 грани (крыши) — как были');
+  ok(detailOf({ s: 'ico', r: .2, det: 1 }, false).det === 0 && detailOf({ s: 'ico', r: 1.2, det: 1 }, false).det === 1, 'детали вида: маленький многогранник проще, большой — как был');
+  const bx = { s: 'box', w: 2, h: 1, d: 2 };
+  ok(detailOf(bx, false) === bx && detailOf(bx, true) === bx, 'детали вида: коробка не меняется');
+  ok(detailOf({ s: 'box', w: .2, h: .2, d: .2 }, true) === null && detailOf({ s: 'box', w: .8, h: .05, d: .8 }, true) === null && detailOf({ s: 'cyl', r: .05, h: 3 }, true) !== null, 'дальний вид: мелочь и тонкие пластинки не рисуются, длинный шест — рисуется');
+}
+
 console.log(`${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);

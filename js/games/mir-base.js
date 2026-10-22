@@ -1107,57 +1107,141 @@
     };
     M.glass = () => M.glassM || (M.glassM = new T.MeshStandardMaterial({ color: '#7dd3fc', transparent: true, opacity: .35, roughness: .1, depthWrite: false }));
     M.boardMat = () => M.boardM || (M.boardM = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) { g.fillStyle = (i + j) % 2 ? '#7c4a26' : '#f2dcb3'; g.fillRect(i * 16, j * 16, 16, 16); } const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; return new T.MeshBasicMaterial({ map: t, toneMapped: false }); })());
-    const m4 = new T.Matrix4(), inv = new T.Matrix4();
-    M.merge = (root, src, tint) => {
-      root.updateMatrixWorld(true);
+    // Склейка пишет вершины сразу в итоговые массивы (без копий каждой детали): положение — float32, нормаль — int8, цвет — uint16
+    // (21 байт на вершину вместо 36). mergeGen — по кусочку: over() → true — пора отдать кадр (yield). После склейки пустые группы
+    // убираются из сцены (иначе их обходят каждый кадр: матрицы и отсечение — это и было «+3 мс» у 12 баз на телефоне)
+    const m4 = new T.Matrix4(), inv = new T.Matrix4(), nm3 = new T.Matrix3(), TP = new Float64Array(9), TN = new Float64Array(9), TI = [0, 0, 0], BB = new Float64Array(6);
+    const LM = new T.Matrix4(), MW = new T.Matrix4(), V3 = new T.Vector3(), S3 = new T.Vector3(), Q4 = new T.Quaternion(), EU = new T.Euler();
+    // Запись детали без THREE.Mesh (вид военной базы — тысячи деталей: меньше мусора и пауз сборщика): геометрия и материал — те же,
+    // что дал бы R.part (кэш по описанию детали), место — в списке группы (userData.rec). Возврат — общая ручка «последней детали»:
+    // position/scale/rotation.set сразу после вызова (крыша казармы), как у сетки
+    const specs = new Map(), scratch = new T.Group();
+    const plainOf = mat => !mat.map && !mat.transparent && !(mat.metalness > .01) && !(mat.emissive && mat.emissive.r + mat.emissive.g + mat.emissive.b > 0);
+    function specOf(o){
+      const mm = o.m, key = `${o.s || 'box'}|${o.w}|${o.h}|${o.d}|${o.r}|${o.r2}|${o.seg}|${o.det}|${o.t}|${o.arc}|${o.c}|${mm && typeof mm === 'object' ? mm.uuid : mm}|${o.flat ? 1 : 0}|${o.rough}|${o.metal}|${o.emissive}|${o.wave}`;
+      let s = specs.get(key);
+      if (!s) {
+        const mesh = R.part(scratch, o); scratch.remove(mesh);
+        const mat = mesh.material, g = mesh.geometry, plain = !Array.isArray(mat) && plainOf(mat);
+        s = { geo: g, mat, n: g.index ? g.index.count : g.attributes.position.count, plain, key: plain ? (mat.isMeshBasicMaterial ? 'glow' : 'std') : mat };
+        specs.set(key, s);
+      }
+      return s;
+    }
+    const HND = { r: null, userData: {}, position: { set(x, y, z){ const r = HND.r; r.x = x; r.y = y; r.z = z; } }, scale: { set(x, y, z){ const r = HND.r; r.sx = x; r.sy = y; r.sz = z; } }, rotation: { set(x, y, z){ const r = HND.r; r.rx = x; r.ry = y; r.rz = z; } } };
+    M.rec = (g, o) => {
+      if (o.dyn) return R.part(g, o);
+      const r = { s: specOf(o), g: null, x: o.x || 0, y: o.y || 0, z: o.z || 0, rx: o.rx || 0, ry: o.yaw || 0, rz: o.rz || 0, sx: o.sx || 1, sy: o.sy || 1, sz: o.sz || 1 };
+      (g.userData.rec || (g.userData.rec = [])).push(r);
+      HND.r = r;
+      return HND;
+    };
+    // Одна деталь → в итоговые массивы с места k (по треугольникам); нижние грани на земле (смотрят вниз, y ≈ 0) не пишутся — их не
+    // видно никогда (≈ 15 % треугольников у построек на земле). Деталь — сетка или запись (M.rec). Возвращает новое k
+    function writePart(o, pos, nor, col, uv, k, tk, tm){
+      let g, mat, mw;
+      if (o.isMesh) { g = o.geometry; mat = o.material; mw = o.matrixWorld; }
+      else { g = o.s.geo; mat = o.s.mat; LM.compose(V3.set(o.x, o.y, o.z), Q4.setFromEuler(EU.set(o.rx, o.ry, o.rz)), S3.set(o.sx, o.sy, o.sz)); mw = MW.multiplyMatrices(o.g.matrixWorld, LM); }
+      m4.multiplyMatrices(inv, mw); nm3.getNormalMatrix(m4);
+      const e = m4.elements, q = nm3.elements, idx = g.index ? g.index.array : null, P = g.attributes.position.array;
+      const Na = g.attributes.normal ? g.attributes.normal.array : null, U = g.attributes.uv ? g.attributes.uv.array : null, flat = !!mat.flatShading || !Na;
+      const n = idx ? idx.length : P.length / 3, c = mat.color;
+      const cr = col ? c.r + (tk ? (tm[0] - c.r) * tk : 0) : 0, cg = col ? c.g + (tk ? (tm[1] - c.g) * tk : 0) : 0, cb = col ? c.b + (tk ? (tm[2] - c.b) * tk : 0) : 0;
+      for (let t = 0; t + 2 < n; t += 3) {
+        for (let s = 0; s < 3; s++) {
+          const vi = TI[s] = idx ? idx[t + s] : t + s, px = P[vi * 3], py = P[vi * 3 + 1], pz = P[vi * 3 + 2], j = s * 3;
+          TP[j] = e[0] * px + e[4] * py + e[8] * pz + e[12]; TP[j + 1] = e[1] * px + e[5] * py + e[9] * pz + e[13]; TP[j + 2] = e[2] * px + e[6] * py + e[10] * pz + e[14];
+          if (!flat) {
+            const ax = Na[vi * 3], ay = Na[vi * 3 + 1], az = Na[vi * 3 + 2];
+            let nx = q[0] * ax + q[3] * ay + q[6] * az, ny = q[1] * ax + q[4] * ay + q[7] * az, nz = q[2] * ax + q[5] * ay + q[8] * az;
+            const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1; TN[j] = nx / l; TN[j + 1] = ny / l; TN[j + 2] = nz / l;
+          }
+        }
+        if (flat) {   // грань (как computeVertexNormals у несвязной сетки): (C − B) × (A − B)
+          const ux = TP[6] - TP[3], uy = TP[7] - TP[4], uz = TP[8] - TP[5], wx = TP[0] - TP[3], wy = TP[1] - TP[4], wz = TP[2] - TP[5];
+          let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+          const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1; nx /= l; ny /= l; nz /= l;
+          TN[0] = TN[3] = TN[6] = nx; TN[1] = TN[4] = TN[7] = ny; TN[2] = TN[5] = TN[8] = nz;
+        }
+        if (TN[1] < -.95 && TN[4] < -.95 && TN[7] < -.95 && Math.abs(TP[1]) < .06 && Math.abs(TP[4]) < .06 && Math.abs(TP[7]) < .06) continue;
+        for (let s = 0; s < 3; s++, k++) {
+          const j = k * 3, i = s * 3, ny = TN[i + 1], y = TP[i + 1], x = TP[i], z = TP[i + 2];
+          pos[j] = x; pos[j + 1] = y; pos[j + 2] = z;
+          if (x < BB[0]) BB[0] = x; if (x > BB[3]) BB[3] = x; if (y < BB[1]) BB[1] = y; if (y > BB[4]) BB[4] = y; if (z < BB[2]) BB[2] = z; if (z > BB[5]) BB[5] = z;
+          nor[j] = Math.round(TN[i] * 127); nor[j + 1] = Math.round(ny * 127); nor[j + 2] = Math.round(TN[i + 2] * 127);
+          if (U && uv) { uv[k * 2] = U[TI[s] * 2]; uv[k * 2 + 1] = U[TI[s] * 2 + 1]; }
+          if (col) {
+            const a = Math.abs(ny) < .6 ? .62 + .38 * Math.min(1, Math.max(0, y / 1.4)) : 1;
+            col[j] = Math.round(Math.min(1, Math.max(0, cr * a)) * 65535); col[j + 1] = Math.round(Math.min(1, Math.max(0, cg * a)) * 65535); col[j + 2] = Math.round(Math.min(1, Math.max(0, cb * a)) * 65535);
+          }
+        }
+      }
+      return k;
+    }
+    M.mergeGen = function* (root, src, tint, over){
+      // матрицы — своим обходом (с паузами), подвижное (userData.dyn) не трогаем
+      root.updateWorldMatrix(true, false);
+      if (src !== root) { src.updateMatrix(); src.matrixWorld.multiplyMatrices(src.parent.matrixWorld, src.matrix); }
       const tk = tint ? tint.k : 0, tm = tint ? tint.mix : null;
       inv.copy(root.matrixWorld).invert();
-      const buckets = new Map(), drop = [];
-      src.traverse(o => {
-        if (!o.isMesh || o.userData.dyn) return;
-        for (let p = o.parent; p && p !== src; p = p.parent) if (p.userData.dyn) return;
-        const mat = o.material;
-        if (Array.isArray(mat)) return;
-        const plain = !mat.map && !mat.transparent && !(mat.metalness > .01) && !(mat.emissive && mat.emissive.r + mat.emissive.g + mat.emissive.b > 0);
-        const key = plain ? (mat.isMeshBasicMaterial ? 'glow' : 'std') : mat;
-        let b = buckets.get(key);
-        if (!b) buckets.set(key, b = { key, mat, plain, list: [], n: 0 });
-        m4.multiplyMatrices(inv, o.matrixWorld);
-        const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
-        g.applyMatrix4(m4);
-        if (mat.flatShading) g.computeVertexNormals();
-        b.list.push({ g, c: mat.color }); b.n += g.attributes.position.count;
-        drop.push(o);
-      });
+      const buckets = new Map(), drop = [], stack = [src];
+      let hasDyn = false, cnt = 0;
+      const bucket = (key, mat, plain) => { let b = buckets.get(key); if (!b) buckets.set(key, b = { key, mat, plain, list: [], n: 0 }); return b; };
+      while (stack.length) {
+        const node = stack.pop(), ch = node.children, rec = node.userData.rec;
+        if (rec) for (let i = 0; i < rec.length; i++) { const r = rec[i], s = r.s; if (Array.isArray(s.mat)) continue; r.g = node; const b = bucket(s.key, s.mat, s.plain); b.list.push(r); b.n += s.n; }
+        for (let i = 0; i < ch.length; i++) {
+          const o = ch[i];
+          if (o.userData.dyn) { hasDyn = true; continue; }
+          o.updateMatrix(); o.matrixWorld.multiplyMatrices(node.matrixWorld, o.matrix);
+          if (o.children.length || o.userData.rec) stack.push(o);
+          if (!o.isMesh || !o.geometry?.attributes?.position) continue;
+          const mat = o.material;
+          if (Array.isArray(mat)) continue;
+          const plain = plainOf(mat), b = bucket(plain ? (mat.isMeshBasicMaterial ? 'glow' : 'std') : mat, mat, plain);
+          b.list.push(o); b.n += o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count;
+          drop.push(o);
+        }
+        if (over && (++cnt & 31) === 0 && over()) yield;
+      }
       const out = [];
       for (const b of buckets.values()) {
-        const pos = new Float32Array(b.n * 3), nor = new Float32Array(b.n * 3), col = b.plain ? new Float32Array(b.n * 3) : null, uv = b.plain ? null : new Float32Array(b.n * 2);
+        const pos = new Float32Array(b.n * 3), nor = new Int8Array(b.n * 3), col = b.plain ? new Uint16Array(b.n * 3) : null, uv = b.plain ? null : new Float32Array(b.n * 2);
         let k = 0;
-        for (const { g, c } of b.list) {
-          const gp = g.attributes.position, gn = g.attributes.normal, gu = g.attributes.uv;
-          pos.set(gp.array, k * 3); if (gn) nor.set(gn.array, k * 3);
-          for (let i = 0; i < gp.count; i++) {
-            if (col) { const a = gn && Math.abs(gn.getY(i)) < .6 ? .62 + .38 * Math.min(1, Math.max(0, gp.getY(i) / 1.4)) : 1; col[(k + i) * 3] = (c.r + (tk ? (tm[0] - c.r) * tk : 0)) * a; col[(k + i) * 3 + 1] = (c.g + (tk ? (tm[1] - c.g) * tk : 0)) * a; col[(k + i) * 3 + 2] = (c.b + (tk ? (tm[2] - c.b) * tk : 0)) * a; }
-            else if (gu) { uv[(k + i) * 2] = gu.getX(i); uv[(k + i) * 2 + 1] = gu.getY(i); }
-          }
-          k += gp.count; g.dispose();
-        }
+        BB[0] = BB[1] = BB[2] = Infinity; BB[3] = BB[4] = BB[5] = -Infinity;
+        for (let i = 0; i < b.list.length; i++) { k = writePart(b.list[i], pos, nor, col, uv, k, tk, tm); if (over && (i & 7) === 7 && over()) yield; }
+        if (!k) continue;
+        const cut = (a, w) => (k < b.n ? a.slice(0, k * w) : a);   // нижние грани не записаны — хвост массивов отрезать
         const mg = new T.BufferGeometry();
-        mg.setAttribute('position', new T.BufferAttribute(pos, 3)); mg.setAttribute('normal', new T.BufferAttribute(nor, 3));
-        if (col) mg.setAttribute('color', new T.BufferAttribute(col, 3)); else mg.setAttribute('uv', new T.BufferAttribute(uv, 2));
-        mg.computeBoundingSphere();
+        mg.setAttribute('position', new T.BufferAttribute(cut(pos, 3), 3)); mg.setAttribute('normal', new T.BufferAttribute(cut(nor, 3), 3, true));
+        if (col) mg.setAttribute('color', new T.BufferAttribute(cut(col, 3), 3, true)); else mg.setAttribute('uv', new T.BufferAttribute(cut(uv, 2), 2));
+        // сфера отсечения — по рамке, набранной при записи (computeBoundingSphere прошёл бы все вершины ещё дважды — долгий кадр)
+        const bc = new T.Vector3((BB[0] + BB[3]) / 2, (BB[1] + BB[4]) / 2, (BB[2] + BB[5]) / 2);
+        mg.boundingSphere = new T.Sphere(bc, Math.hypot(BB[3] - BB[0], BB[4] - BB[1], BB[5] - BB[2]) / 2);
         const mesh = new T.Mesh(mg, b.plain ? (b.key === 'glow' ? M.glow : M.std) : b.mat);
         mesh.userData.mbOwn = true;
         if (!low) { mesh.castShadow = b.key !== 'glow' && !b.mat?.userData?.noCast && !b.mat?.transparent; mesh.receiveShadow = b.key !== 'glow'; }
         root.add(mesh); out.push(mesh);
       }
-      drop.forEach(o => o.parent?.remove(o));
+      if (!hasDyn && src !== root) src.parent?.remove(src);   // подвижного нет — исходные детали уходят разом (без удаления по одной)
+      else { drop.forEach(o => o.parent?.remove(o)); pruneEmpty(src); if (src !== root && !src.children.length) src.parent?.remove(src); }
       return out;
     };
+    M.merge = (root, src, tint) => { const it = M.mergeGen(root, src, tint, null); let r = it.next(); while (!r.done) r = it.next(); return r.value; };
     M.dispose = () => { for (const m of [M.std, M.glow, M.ghostOk, M.ghostBad, M.sel, M.glassM, M.boardM]) { m?.map?.dispose(); m?.dispose(); } };
     return M;
   }
   const disposeTree = g => { g.traverse(o => { if (o.isMesh && o.userData.mbOwn) o.geometry.dispose(); }); g.parent?.remove(g); };
+  // Пустые группы после склейки — из сцены (подвижное, userData.dyn, остаётся как было)
+  function pruneEmpty(o){
+    const ch = o.children;
+    for (let i = ch.length - 1; i >= 0; i--) {
+      const c = ch[i];
+      if (c.userData.dyn) continue;
+      if (c.children.length) pruneEmpty(c);
+      if (!c.children.length && !c.isMesh && !c.isLight && !c.isPoints && !c.isLine && !c.isSprite) o.remove(c);
+    }
+  }
   // Тело из описания постройки: b — в системе постройки (центр cx, cz, поворот r), всё → мир по рамке участка lot
   function addBodyTo(ph, list, lot, cx, cz, r, b){
     const [lx, lz] = rotXZ(r, b.x || 0, b.z || 0), [wx, wz] = lotToWorld(lot, cx + lx, cz + lz);
@@ -2167,13 +2251,52 @@
     void now;
     return s.layout;
   }
+  // Тела стен базы: прямые отрезки одного уровня (вдоль x и вдоль z) — одна коробка на отрезок (была — столбик и перемычка на клетку);
+  // одиночный столбик — как был. Итог — в системе участка: { cx, cz, w, d, h } (низ — на земле)
+  function wallRunsLocal(layout){
+    const at = new Map(), runOf = new Set(), out = [];
+    for (const it of layout) if (it.k === 'wall' && it.l > 0) at.set(it.x + ',' + it.z, it);
+    const put = (x0, z0, x1, z1, it) => {
+      const st = WALL_WST[Math.max(1, it.l) - 1], pw = Math.max(.5, st.post[0]), h = Math.max(st.post[1], .9, st.seg?.[1] || 0);
+      const [ax, az] = GW.itemCenter({ k: 'wall', x: x0, z: z0, r: 0 }), [bx, bz] = GW.itemCenter({ k: 'wall', x: x1, z: z1, r: 0 });
+      out.push({ cx: (ax + bx) / 2, cz: (az + bz) / 2, w: Math.abs(bx - ax) + pw, d: Math.abs(bz - az) + pw, h });
+    };
+    for (const [dx, dz] of [[1, 0], [0, 1]]) for (const it of at.values()) {
+      const prev = at.get((it.x - dx) + ',' + (it.z - dz));
+      if (prev && prev.l === it.l) continue;   // не начало отрезка
+      let end = it, n = 1;
+      for (let nx = at.get((it.x + dx) + ',' + (it.z + dz)); nx && nx.l === it.l; nx = at.get((nx.x + dx) + ',' + (nx.z + dz))) { end = nx; n++; }
+      if (n < 2) continue;
+      put(it.x, it.z, end.x, end.z, it);
+      for (let c = it, k = 0; k < n; k++, c = at.get((c.x + dx) + ',' + (c.z + dz))) runOf.add(c);
+    }
+    for (const it of at.values()) if (!runOf.has(it)) put(it.x, it.z, it.x, it.z, it);
+    return out;
+  }
+  // Деталь для вида базы: дальний — без мелочи (< 0,35 м, тонкое < 0,12 при длине < 1 м), круглое — меньше граней (и вблизи: 6–16
+  // вместо 14); null — не рисовать
+  function detailOf(o, far){
+    const s = o.s || 'box';
+    if (far) {
+      const rr = 2 * Math.max(o.r || 0, o.r2 || 0), a = s === 'box' ? o.w || 0 : rr, b = s === 'box' ? o.h || 0 : s === 'ball' || s === 'ico' ? rr : o.h || 0, c = s === 'box' ? o.d || 0 : rr;
+      const mx = Math.max(a, b, c), mn = Math.min(a, b, c);
+      if (mx < .35 || (mn < .12 && mx < 1)) return null;
+    }
+    if (s === 'ball') { const cap = far ? 6 : o.r < .16 ? 6 : o.r < .35 ? 8 : 10; return !o.seg || o.seg > cap ? { ...o, seg: cap } : o; }
+    if (s === 'cyl' || s === 'cone') {
+      const r = Math.max(o.r || 0, o.r2 || 0), cap = far ? (r < .6 ? 6 : 10) : r < .2 ? 6 : r < .6 ? 8 : r < 1.6 ? 12 : 16;
+      return (o.seg || (s === 'cone' ? 12 : 14)) > cap ? { ...o, seg: cap } : o;
+    }
+    if (s === 'ico') return (o.det ?? 1) > 0 && (far || o.r < .6) ? { ...o, det: 0 } : o;
+    return o;
+  }
   function startWar(S, HK){
     const MW = root.MirWar, R = S.R, E = root.D37E;
     if (!MW?.PLOTS?.length || !R || !E) return null;
     const T = R.T, ph = S.ph, X = S.X, MZ = root.MirZones;
     const PLS = MW.PLOTS, PERW = Math.min(WAR.per, PLS.length);
     const LOTW = PLS.map(P => ({ x: P.cx, z: P.cz, yaw: WAR_YAW[P.gate?.side] ?? 0, P }));
-    const W = { sector: 0, cam: null, me: null, data: new Map(), maxId: 0, views: [], sql: null, off: 0, bm: null, pend: 0, dirty: false, stopped: false, near: false, loadT: 0, queue: new Set(), sectors: 1 };
+    const W = { sector: 0, cam: null, me: null, data: new Map(), maxId: 0, views: [], sql: null, off: 0, bm: null, pend: 0, dirty: false, stopped: false, near: false, loadT: 0, queue: new Set(), sectors: 1, urgent: -1 };
     W.M = makeMats(R);
     const M = W.M, P = (g, o) => R.part(g, o);
     const authed = () => typeof currentUser !== 'undefined' && !!currentUser;
@@ -2252,24 +2375,43 @@
       return d ? { mine: false, plot: id, ...d } : null;
     };
     const sigOf = i => !i ? 'free' : [i.id, i.mine ? 1 : 0, i.color, i.skin || '', ...i.layout.map(it => `${it.i}${it.k}${it.x},${it.z},${it.r},${it.l}${it.ul ? '^' + it.ul : ''}`)].join(';');
+    // Вид базы строится по кусочку (бюджет кадра, как у зон: телефон 3 мс, ПК 3,5; база рядом и своя при стройке — больше), старый
+    // вид виден до замены. Подробный вид — у баз ближе LODR.near м до участка (дальше LODR.far — простой: без мелочи, меньше граней);
+    // тела физики — только у баз ближе PHYS_IN (дальше PHYS_OUT — убраны), стены — одним телом на прямой отрезок
+    const LODR = { near: 55, far: 75 }, PHYS_IN = 35, PHYS_OUT = 50;
+    const plotDist = (j, x, z) => { const Q = LOTW[j].P; return Math.hypot(Math.max(Q.x0 - x, 0, x - Q.x1), Math.max(Q.z0 - z, 0, z - Q.z1)); };
+    function bodiesOn(v){
+      if (v.phys) return;
+      v.phys = true;
+      for (const d of v.bdesc) {
+        if (d.ladder) { const ld = E.ladder?.(ph, d.ladder); if (ld) v.bodies.push(ld.zone); }
+        else v.bodies.push(d.t === 'cyl' ? ph.addCyl(d) : d.t === 'wedge' ? ph.addWedge(d) : ph.addBox(d));
+      }
+    }
+    function bodiesOff(v){ for (const b of v.bodies) ph.remove(b); v.bodies.length = 0; v.phys = false; }
     function clearView(v){
       if (!v) return;
-      for (const b of v.bodies) ph.remove(b);
+      bodiesOff(v);
       for (const it of v.items) X.remove(it);
       if (v.root) disposeTree(v.root);
-      v.bodies = []; v.items = []; v.root = null;
+      v.items = []; v.root = null;
     }
-    function buildView(j){
-      const old = W.views[j], info = lotInfo(j), sig = sigOf(info);
-      if (old && old.sig === sig) { old.info = info; return old; }
-      clearView(old);
-      const lot = LOTW[j];
-      const v = { j, lot, sig, info, bodies: [], items: [], root: null, hts: new Map() };
-      W.views[j] = v;
+    // Тело постройки → описание в мире (как addBodyTo): создаётся, только пока база рядом
+    function bodyDesc(lot, cx, cz, r, b){
+      const [lx, lz] = rotXZ(r, b.x || 0, b.z || 0), [wx, wz] = lotToWorld(lot, cx + lx, cz + lz), data = { cam: !!b.cam, floor: b.floor };
+      return b.t === 'cyl' ? { t: 'cyl', x: wx, z: wz, y: b.y0 + b.h / 2, r: b.r, hy: b.h / 2, tag: 'mb', data }
+        : { t: b.t === 'wedge' ? 'wedge' : 'box', x: wx, z: wz, y: b.y0 + b.h / 2, hx: b.w / 2, hy: b.h / 2, hz: b.d / 2, yaw: lot.yaw + r * PI / 2 + (b.yaw || 0), tag: 'mb', data };
+    }
+    const wallRuns = (layout, lot, out) => { for (const b of wallRunsLocal(layout)) out.push(bodyDesc(lot, b.cx, b.cz, 0, { t: 'box', y0: 0, w: b.w, h: b.h, d: b.d })); };
+    const NOPART = { position: { set(){} }, rotation: { set(){} }, scale: { set(){} }, userData: {} };
+    const PART = [(g, o) => { const q = detailOf(o, false); return q ? M.rec(g, q) : NOPART; }, (g, o) => { const q = detailOf(o, true); return q ? M.rec(g, q) : NOPART; }];
+    // Вид базы j уровня lod (0 — подробный, 1 — дальний): генератор, отдаёт кадр, когда over(); итог — новый вид (в сцене ещё нет)
+    function* viewGen(j, lod, over, job){
+      const info = lotInfo(j), lot = LOTW[j];
+      const v = { j, lot, sig: sigOf(info), info, lod, bodies: [], bdesc: [], phys: false, items: [], root: null, hts: new Map(), spots: [] };
       if (!info) return v;
-      const g = R.group(R.scene, lot.x, 0, lot.z, lot.yaw), src = new T.Group();
-      g.add(src);
-      v.root = g;
+      const g = job.g = new T.Group(), src = new T.Group(), P = PART[lod ? 1 : 0];
+      g.position.set(lot.x, 0, lot.z); g.rotation.y = lot.yaw; g.add(src);
       // открытая часть участка — светлее (растёт со штабом), занятые клетки у въезда — бетон
       const [lo, hi] = WRules.boxOf(info), w0 = (hi - lo) * CELL;
       P(src, { s: 'box', y: .04, w: w0, h: .03, d: w0, c: '#b3a77f' });
@@ -2286,18 +2428,36 @@
         else if (it.k === 'wall') h = drawWall(P, bg, it, bd, [[1, 0], [0, 1]].filter(([dx, dz]) => walls.has((it.x + dx) + ',' + (it.z + dz))), WALL_WST);
         else h = (WDRAW[it.k] || DRAW[it.k])?.(P, bg, it, bd, x) || 2;
         if (it.ul && it.l > 0) scaffold(P, bg, fw * CELL + .2, Math.min(h, 4), false);
-        for (const b of bd) addBodyTo(ph, v.bodies, lot, cx, cz, r, b);
+        if (!(it.k === 'wall' && it.l > 0)) for (const b of bd) v.bdesc.push(bodyDesc(lot, cx, cz, r, b));   // готовые стены — отрезками ниже
         v.hts.set(it.i, h);
         if (x.ladder && it.l > 0) {
           const L = x.ladder, [lx, lz] = rotXZ(r, L.x, L.z), [wx, wz] = lotToWorld(lot, cx + lx, cz + lz), [ex, ez] = rotXZ(r, L.ex, L.ez), [wex, wez] = lotToWorld(lot, cx + ex, cz + ez);
-          const ld = E.ladder?.(ph, { x: wx, z: wz, yaw: lot.yaw + r * PI / 2, top: L.top, w: .9, bottom: 0, exit: { x: wex, y: L.top, z: wez } });
-          if (ld) v.bodies.push(ld.zone);
+          v.bdesc.push({ ladder: { x: wx, z: wz, yaw: lot.yaw + r * PI / 2, top: L.top, w: .9, bottom: 0, exit: { x: wex, y: L.top, z: wez } } });
         }
-        addItemPrompts(v, it, lot, cx, cz);
+        v.spots.push([it, cx, cz]);
+        if (over()) yield;
       }
-      M.merge(g, src, SKINS[info.skin] || null);
+      wallRuns(info.layout, lot, v.bdesc);
+      const ms = yield* M.mergeGen(g, src, SKINS[info.skin] || null, over);
+      if (lod) for (const m of ms) m.castShadow = false;   // дальняя база — за коробкой теней
+      // вид неподвижен: матрицы — один раз, каждый кадр сцена его не обходит
       g.updateMatrixWorld(true);
+      g.traverse(o => { o.matrixAutoUpdate = false; });
+      g.matrixWorldAutoUpdate = false;
+      v.root = g; job.g = null;
       return v;
+    }
+    // Готовый вид — на место старого: старый (сетки, тела, подсказки) убран, новый — в сцене, тела — если база рядом
+    function swapView(j, v){
+      const old = W.views[j];
+      if ((old?.root && old.lod === 0) || (v.root && v.lod === 0)) R.shadowDirty?.();   // тени — только у подробных (дальние их не отбрасывают)
+      clearView(old);
+      W.views[j] = v;
+      if (v.root) R.scene.add(v.root);
+      for (const [it, cx, cz] of v.spots) addItemPrompts(v, it, v.lot, cx, cz);
+      v.spots = null;
+      const pc = S.P.ch;
+      if (v.root && plotDist(j, pc.x, pc.z) < PHYS_IN) bodiesOn(v);
     }
     // Подсказки «[E]»: своим — штаб, производство, казарма, техника, бункер; чужим — штаб (о базе, дружеский бой)
     function addItemPrompts(v, it, lot, cx, cz){
@@ -2312,15 +2472,61 @@
       else if (D0.slots) add(0, D0.d * CELL / 2 + .4, 1.6, () => `${D0.e} ${D0.n}: техника`, () => vehPanel(it.k, v, it));
       else if (it.k === 'bunker') add(0, 1.9, 1.3, () => '🕳️ Спуститься в бункер', () => enterBunker(v, it));
     }
-    // Все 12 участков сектора — в очередь (строятся по одному за кадр, ближние — первыми)
+    // Все 12 участков сектора — в очередь (строятся по кусочку, ближние — первыми; своя база после хода — сразу за текущей)
     function rebuildAll(){ for (let j = 0; j < PERW; j++) W.queue.add(j); }
-    function buildNext(){
-      if (!W.queue.size) return;
+    let job = null, deadline = 0;
+    const over = () => performance.now() > deadline;
+    const wantLod = (j, d) => (d < LODR.near ? 0 : d > LODR.far ? 1 : W.views[j]?.lod ?? 1);
+    function stopJob(){ if (!job) return; try { job.gen.return(); } catch (e) {} if (job.g) disposeTree(job.g); job = null; }
+    function pickNext(){
       const pc = S.P.ch; let best = -1, bd = Infinity;
-      for (const j of W.queue) { const L = LOTW[j], d = Math.hypot(pc.x - L.x, pc.z - L.z); if (d < bd) { bd = d; best = j; } }
-      if (best < 0 || bd > 330) return;
-      W.queue.delete(best);
-      buildView(best);
+      if (W.urgent >= 0 && W.queue.has(W.urgent)) best = W.urgent;
+      else for (const j of W.queue) { const d = plotDist(j, pc.x, pc.z); if (d < bd) { bd = d; best = j; } }
+      if (best < 0 || (best !== W.urgent && bd > 280)) return -1;
+      return best;
+    }
+    // Постройка видов в пределах бюджета кадра ms (тот же вид — без постройки)
+    function buildNext(ms = W.budget || (E.isMobile?.() ? 3 : 3.5)){
+      const t0 = performance.now();
+      for (;;) {
+        if (!job) {
+          const j = pickNext(); if (j < 0) return;
+          W.queue.delete(j);
+          const pc = S.P.ch, d = plotDist(j, pc.x, pc.z), lod = wantLod(j, d), cur = W.views[j], info = lotInfo(j);
+          if (cur && cur.sig === sigOf(info) && (!info || cur.lod === lod)) { cur.info = info; if (W.urgent === j) W.urgent = -1; continue; }
+          // своя база после хода — бюджет ×3, база под ногами — ×2: новое появляется через пару кадров
+          job = { j, g: null, urgent: W.urgent === j, k: W.urgent === j ? 3 : d < 12 ? 2 : 1 };
+          if (job.urgent) W.urgent = -1;
+          job.gen = viewGen(j, lod, over, job);
+        }
+        deadline = t0 + ms * job.k;
+        if (over()) return;
+        const r = job.gen.next();
+        if (!r.done) return;
+        const j = job.j; job = null;
+        swapView(j, r.value);
+        if (performance.now() > t0 + ms) return;
+      }
+    }
+    // Своя база поменялась: перестроить первой (идущую постройку своей базы — заново)
+    function rebuildOwn(){
+      if (!W.me || sectorOf(W.me.id) !== W.sector) return;
+      const j = slotOf(W.me.id);
+      if (job?.j === j) stopJob();
+      W.queue.add(j); W.urgent = j;
+    }
+    // Раз в 0,25 с: тела физики у ближних баз, подробный / дальний вид по расстоянию
+    let lodT = 0;
+    function lodTick(dt){
+      lodT += dt; if (lodT < .25) return;
+      lodT = 0;
+      const pc = S.P.ch;
+      for (let j = 0; j < W.views.length; j++) {
+        const v = W.views[j]; if (!v?.root) continue;
+        const d = plotDist(j, pc.x, pc.z);
+        if (!v.phys && d < PHYS_IN) bodiesOn(v); else if (v.phys && d > PHYS_OUT && !(cellar && cellar.j === j)) bodiesOff(v);
+        if (wantLod(j, d) !== v.lod && !(job && job.j === j)) W.queue.add(j);
+      }
     }
 
     // ── Ходы ──
@@ -2355,7 +2561,7 @@
       return res;
     }
     function afterChange(a, r, o = {}){
-      if (W.me && sectorOf(W.me.id) === W.sector) { const j = slotOf(W.me.id); W.queue.delete(j); buildView(j); }
+      rebuildOwn();
       if (!o.quiet) {
         if (a === 'collect' && r.got) { toast(`🧱 +${r.got} в казну`, true); sfx('coin'); }
         else if (a === 'gift' && r.got) { toast(`🎁 Подарок дня: +${r.got} 🧱 в казну`, true); sfx('coin'); }
@@ -2502,7 +2708,7 @@
     function setSector(s){
       if (s === W.sector || s < 0 || s >= WAR.plots / WAR.per) return;
       if (W.bm) BM.exit();
-      W.sector = s; W.data.clear(); rebuildAll(); loadSector(); HK.retrack?.();
+      W.sector = s; W.data.clear(); stopJob(); rebuildAll(); loadSector(); HK.retrack?.();
     }
     function teleport(x, z, yaw){
       const P0 = S.P; if (!P0) return;
@@ -2712,22 +2918,30 @@
     const tags = makeTags(R, q('.mb-tags'), GW, 'wb');
     // имена баз над штабами (рядом)
     const nameEls = new Map();
+    // (место и текст надписи считаются один раз на вид — v.nm; за кадр — только проекция и сдвиг, без мусора)
+    let namesWrap = null;
     function drawNames(){
-      const cam = R.camera.position, seen = new Set(), wrap = q('.wb-names-tags');
+      const cam = R.camera.position;
+      namesWrap = namesWrap || q('.wb-names-tags');
+      for (const [k, el] of nameEls) el._seen = false;
       for (const v of W.views) {
         if (!v?.info || !v.root?.visible) continue;
-        const th = v.info.layout.find(e => e.k === 'th'); if (!th) continue;
-        const [cx, cz] = GW.itemCenter(th), [wx, wz] = lotToWorld(v.lot, cx, cz), d = Math.hypot(cam.x - wx, cam.z - wz);
-        if (d > 90) continue;
-        const [sx, sy, vis] = R.project(wx, (v.hts.get(th.i) || 6) + 1.2, wz); if (!vis) continue;
+        let nm = v.nm;
+        if (nm === undefined) {
+          const th = v.info.layout.find(e => e.k === 'th');
+          if (th) { const [cx, cz] = GW.itemCenter(th), [wx, wz] = lotToWorld(v.lot, cx, cz); nm = { x: wx, z: wz, y: (v.hts.get(th.i) || 6) + 1.2, txt: `🏯 ${v.info.name}${v.info.mine ? ' · моя' : ''}`, sx: -1, sy: -1 }; }
+          v.nm = nm = nm || null;
+        }
+        if (!nm || Math.hypot(cam.x - nm.x, cam.z - nm.z) > 90) continue;
+        const pr = R.project(nm.x, nm.y, nm.z); if (!pr[2]) continue;
         let el = nameEls.get(v.j);
-        const txt = `🏯 ${v.info.name}${v.info.mine ? ' · моя' : ''}`;
-        if (!el) { el = document.createElement('div'); el.className = 'wb-tag'; wrap.appendChild(el); nameEls.set(v.j, el); }
-        if (el.textContent !== txt) { el.textContent = txt; el.style.setProperty('--c', v.info.color); }
-        el.style.transform = `translate(${Math.round(sx)}px,${Math.round(sy)}px) translate(-50%,-100%)`;
-        seen.add(v.j);
+        if (!el) { el = document.createElement('div'); el.className = 'wb-tag'; namesWrap.appendChild(el); nameEls.set(v.j, el); }
+        if (el._txt !== nm.txt) { el._txt = el.textContent = nm.txt; el.style.setProperty('--c', v.info.color); }
+        const sx = Math.round(pr[0]), sy = Math.round(pr[1]);
+        if (sx !== el._sx || sy !== el._sy) { el._sx = sx; el._sy = sy; el.style.transform = `translate(${sx}px,${sy}px) translate(-50%,-100%)`; }
+        el._seen = true;
       }
-      for (const [k, el] of nameEls) if (!seen.has(k)) { el.remove(); nameEls.delete(k); }
+      for (const [k, el] of nameEls) if (!el._seen) { el.remove(); nameEls.delete(k); }
     }
     // Табличка участка (mir-war.js): подсказка и действие
     W.signPrompt = P0 => {
@@ -2753,11 +2967,11 @@
       if (near !== W.near) { W.near = near; if (near) { if (Date.now() - W.loadT > 20000) loadSector(); rebuildAll(); } }
       BM.update(dt);
       if (presT > .5) { presT = 0; hideOthers(); }
-      if (W.near) buildNext();
+      if (W.near) { lodTick(dt); buildNext(); }
       if (tick > 90 && (W.near || W.bm)) { tick = 0; loadSector(); }
       if (W.bm && !W.me) BM.exit();
       // ушёл далеко — виды баз убраны (память, тела)
-      if (!near && W.views.some(v => v?.root) && !inZone(pc.x, pc.z, 260)) { for (const v of W.views) clearView(v); W.views = []; }
+      if (!near && (job || W.views.some(v => v?.root)) && !inZone(pc.x, pc.z, 260)) { stopJob(); for (const v of W.views) clearView(v); W.views = []; }
       if (cellar && pc.y > -1.5) leaveBunker(true);   // вышел из подвала не по лестнице (телепорт, карта)
     };
     W.frame = (dt, t) => {
@@ -2765,7 +2979,7 @@
       for (const v of W.views) if (v?.root) { const d = Math.hypot(cam.x - v.lot.x, cam.z - v.lot.z); v.root.visible = d < 230; }
       const inz = inZone(S.P.ch.x, S.P.ch.z, 40);
       if (topBtn.hidden === (inz || !!W.me)) topBtn.hidden = !(inz || !!W.me);
-      const fab = q('.mb-fab'), canB = canEdit() && !W.bm && BM.onMyLot();
+      const fab = W.fab || (W.fab = q('.mb-fab')), canB = canEdit() && !W.bm && BM.onMyLot();
       if (fab.hidden === canB) fab.hidden = !canB;
       BM.frame(t);
       if ((W.near || W.bm) && !cellar) { tags.draw(W.views, W.me, nowS(), true); drawNames(); } else { tags.clear(); for (const el of nameEls.values()) el.remove(); nameEls.clear(); }   // в подвале надписи баз сверху не видны
@@ -2805,6 +3019,7 @@
       W.stopped = true;
       BM.dispose();
       leaveBunker(true);
+      stopJob();
       for (const v of W.views) clearView(v);
       S.el.removeEventListener('click', onClick);
       S.wrap.removeEventListener('pointermove', onPtr);
@@ -2820,13 +3035,14 @@
       views: () => W.views.filter(v => v?.root).length, lotInfo, BM, enterBunker, leaveBunker, cellar: () => cellar, setSector, PLS, LOTW,
       // замер: все участки сектора — базы штаба th (по максимуму), строятся сразу
       fill: async (th = 5) => { W.data.clear(); for (let j = 0; j < PERW; j++) { const id = W.sector * WAR.per + j + 1; W.data.set(id, infoOf({ id, name_k: j % NAMES.length, name_n: 1, color: j % COLORS.length, uid: null, nick: 'Тест', layout: fillLayout(th, j + 1), rev: 1, tr: 0, sh: 0, skin: '', n: 1 })); }
-        W.near = true; rebuildAll(); while (W.queue.size) { buildNext(); await new Promise(r => setTimeout(r, 0)); } return W.views.filter(v => v?.root).length; },
+        W.near = true; rebuildAll(); for (let k = 0; k < 4000 && (W.queue.size || job); k++) { buildNext(50); await new Promise(r => setTimeout(r, 0)); } return W.views.filter(v => v?.root).length; },
       me: m => { W.me = m ? fromServer(m) : null; rebuildAll(); renderHud(); },
+      job: () => (job ? { j: job.j, urgent: job.urgent } : null), lodRange: (a, b) => { LODR.near = a; LODR.far = b; rebuildAll(); }, budget: ms => { W.budget = ms; }, lod: () => W.views.map(v => (v?.root ? v.lod : null)), phys: () => W.views.map(v => (v?.root ? (v.phys ? v.bodies.length : 0) : null)),
     };
     init().then(() => { if (mbGo === 'build') goBuild(); else if (mbGo === 'wb') goWb(); });
     return W;
   }
 
   root.MirBase = { DEFS, FURN, WDEFS, UNITS, HERO, RAID, LEAGUES, league, SKINS, VEH, NAMES, COLORS, RANKS, WAR, baseName, SERVER, WSERVER, Rules, WRules, makeRules, Geo, GW, WHY, zone, build, start, startWar, fillLayout, fmtT,
-    _draw: { DRAW, WDRAW, FDRAW, WALL_ST, WALL_WST, drawWall } };
+    _draw: { DRAW, WDRAW, FDRAW, WALL_ST, WALL_WST, drawWall, wallRunsLocal, detailOf } };
 })();
