@@ -296,8 +296,10 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         for (let r = 64; r < 6000; r += 64) for (let a = 0; a < 48; a++) { const x = Math.round(x0 + r * Math.cos(a / 48 * 6.2832)), z = Math.round(z0 + r * Math.sin(a / 48 * 6.2832)); if (okAt(x, z)) return { x, z }; }
         return null;
       })()`, 120000);
-      const QUICK = process.env.KB_WATER === 'pool';   // только бассейн (быстрые пробы вида), без океана, болота, реки и замеров
-      if (!QUICK) { res.ocean = await findBiome(0, 6); res.swamp = await findBiome(8, 1); res.river = await findBiome(9, 2); }
+      // KB_WATER=pool — только бассейн (быстрые пробы вида), без океана, болота, реки и замеров; KB_WATER=perf — только замеры (бассейн и
+      // океан, по 10 с, после того как мир подгрузился), без снимков — для пар «до/после»
+      const QUICK = process.env.KB_WATER === 'pool', PERF = process.env.KB_WATER === 'perf';
+      if (!QUICK) { res.ocean = await findBiome(0, 6); if (!PERF) { res.swamp = await findBiome(8, 1); res.river = await findBiome(9, 2); } }
       console.log('  места', JSON.stringify({ pool: res.place, ocean: res.ocean, swamp: res.swamp, river: res.river }));
       if (!res.place) throw new Error('нет места для бассейна');
       res.tp = await tpTo(res.place.x + .5, res.place.h + 2, res.place.z + .5);
@@ -349,19 +351,43 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const WINTER = { seed: 'kb', mode: 'fixed', season: 'winter', weather: 'clear', lapse: 0, seaY: 52 };
       const shore = { x: pool.cx + .5, y: pool.gy, z: pool.cz + .5, fly: false };
       // замер: N секунд кадров — ЦП (кадр игры), видеокарта (таймер запросов вокруг R.render), FPS, вызовы
-      const measure = (name, sec) => ev(`(async () => {
+      const measure = (name, sec, noWater) => ev(`(async () => {
         const S = GAME_IMPL.kubomir._test.state(), R = S.R, gl = R.r.getContext(), ext = R.r.capabilities.isWebGL2 && gl.getExtension('EXT_disjoint_timer_query_webgl2');
         const r0 = R.render, qs = [], gpu = [], cpu = [], dts = []; let run = true;
+        for (let i = 0; i < 80; i++) { const s = S.ST?.stats; if (S.ready && s && !s.jobs && !s.pend) break; await new Promise(r => setTimeout(r, 500)); }   // мир подгрузился
+        const hideW = v => { for (const c of S.VR.chunks) { const m = c.vis && c.vis.water; if (m) m.visible = !v; } };
+        if (${noWater ? 'true' : 'false'}) hideW(true);
         R.render = function (...a) { let q = null; if (ext && run) { q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); } const o = r0.apply(this, a); if (q) { gl.endQuery(ext.TIME_ELAPSED_EXT); qs.push(q); } return o; };
         const tick = () => { if (!run) return; cpu.push(R.stats.cpuFrame); dts.push(R.stats.dt); requestAnimationFrame(tick); };
         await new Promise(r => setTimeout(r, 1500)); requestAnimationFrame(tick);
-        await new Promise(r => setTimeout(r, ${sec * 1000})); run = false; R.render = r0;
+        await new Promise(r => setTimeout(r, ${sec * 1000})); run = false; R.render = r0; hideW(false);
         for (let k = 0; k < 120 && qs.length; k++) { while (qs.length && gl.getQueryParameter(qs[0], gl.QUERY_RESULT_AVAILABLE)) { const q = qs.shift(); if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) gpu.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6); gl.deleteQuery(q); } if (qs.length) await new Promise(r => setTimeout(r, 16)); }
         for (const q of qs) gl.deleteQuery(q);
         const avg = a => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length); cpu.sort((a, b) => a - b); gpu.sort((a, b) => a - b);
         return { name: ${JSON.stringify(name)}, frames: cpu.length, cpu: +avg(cpu).toFixed(2), cpu95: +(cpu[Math.floor(cpu.length * .95)] || 0).toFixed(2), gpu: gpu.length ? +avg(gpu).toFixed(3) : null, gpu95: gpu.length ? +gpu[Math.floor(gpu.length * .95)].toFixed(3) : null, fps: +(1000 / avg(dts)).toFixed(1), calls: R.stats.calls, q: R.q };
       })()`, 120000);
       res.perf = [];
+      if (PERF) {
+        await sky(10.5, SUMMER, false);
+        await view(-Math.PI / 2, .3, shore);
+        if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+        res.perf.push(await measure('бассейн днём', 10));
+        res.perf.push(await measure('бассейн днём, без воды', 10, true));
+        if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        if (res.ocean) {
+          res.tpOcean = await tpTo(res.ocean.x + .5, 56, res.ocean.z + .5, true);
+          await view(.6, .12, { x: res.ocean.x + .5, y: 56, z: res.ocean.z + .5, fly: true });
+          if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+          res.perf.push(await measure('океан днём', 10));
+          res.perf.push(await measure('океан днём, без воды', 10, true));
+          if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        }
+        for (const p of res.perf) console.log('ЗАМЕР', JSON.stringify(p));
+        res.heapMB = await heap(); console.log('память JS, МБ', res.heapMB);
+        const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`);
+        ok(!pr.bad.length, 'вода (замер): все программы шейдеров собрались', pr.bad);
+        return;
+      }
       // ── бассейн: день, низкий взгляд, закат, ночь ──
       await sky(10.5, SUMMER, false);
       await view(-Math.PI / 2, .42, shore); await shot('pool-day');
