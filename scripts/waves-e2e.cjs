@@ -301,6 +301,29 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       if (phone) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
     }
 
+    if (MODE === 'capsize') {   // шторм, крутой поворот на полном ходу: катер переворачивается, я — в воде рядом, через 8 с встаёт, можно снова сесть
+      await setView({ wind: 18, windDir: 1.2, thunder: 1 }, 'cap');
+      const r = await ev(`(async () => {
+        const S = GAME_IMPL.world._test.state(), V = S.zones.veh, v = V.list.get('w_boat1'), VE = D37E.vehicle;
+        V._.enter(v, 0); v.x = -455; v.z = 300;
+        const orig = VE.input; VE.input = (C, vv, out) => Object.assign(out, { thr: 1, steer: 1, up: 0, boost: 1, brake: 0, on: true });
+        let t0 = performance.now(), capAt = 0;
+        while (performance.now() - t0 < 90000 && !v.capsized) await new Promise(q => setTimeout(q, 100));
+        VE.input = orig;
+        if (!v.capsized) return { capsized: false, roll: v.roll };
+        capAt = performance.now();
+        await new Promise(q => setTimeout(q, 1500));
+        const mid = { inVeh: V.inVeh(), swim: S.P.swim, roll: +v.roll.toFixed(2), hp: v.hp, prompt: v.item?.prompt?.() || '', flag: VE.unpack(VE.pack(v)).capsized };
+        while (performance.now() - capAt < 12000 && v.capsized) await new Promise(q => setTimeout(q, 200));
+        await new Promise(q => setTimeout(q, 2500));
+        const after = { capsized: !!v.capsized, roll: +v.roll.toFixed(2), prompt: v.item?.prompt?.() || '' };
+        return { capsized: true, sec: +((capAt - t0) / 1000).toFixed(1), mid, after, hp: v.hp, maxHp: v.def.hp };
+      })()`, 150000);
+      console.log('  переворот:', JSON.stringify(r));
+      ok(r.capsized && !r.mid.inVeh && r.mid.swim && Math.abs(r.mid.roll) > 2 && r.mid.flag && /перевернулся/.test(r.mid.prompt), 'шторм: катер перевернулся — я в воде рядом, лежит вверх дном, флаг в снимке, сесть нельзя', r);
+      ok(r.capsized && !r.after.capsized && Math.abs(r.after.roll) < 1 && /Сесть/.test(r.after.prompt) && r.hp === r.maxHp, 'через 8 с встал сам, без урона, можно снова сесть', r);
+      console.log('  снимок', await shot('capsize'));
+    }
     if (MODE === 'reopen') {   // мир закрыть и открыть N раз (по умолчанию 20): поля, «блины», материалы волн и память не растут
       const n = Math.max(2, +MIN || 20), cnt = () => ev(`(() => { if (window.gc) gc(); const W = D37E.waves || { fields: new Set(), patches: new Set(), mats: new Set() }; return { fields: W.fields.size, patches: W.patches.size, mats: W.mats.size, heapMB: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : 0, pre: GAME_IMPL.world._test.state()?.R?.preRender?.length || 0 }; })()`);
       const first = await cnt(), hist = [first];
