@@ -12,7 +12,11 @@ if ! printf '%s' "$IP" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
 fi
 # внутренний адрес машины (Oracle: 10.0.0.x) — с него coturn принимает и пересылает, наружу говорит публичный
 PRIV="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}')"
-[ -n "$PRIV" ] || PRIV="$(hostname -I | awk '{print $1}')"
+[ -n "$PRIV" ] || PRIV="$(hostname -I 2>/dev/null | awk '{print $1}')"
+if ! printf '%s' "$PRIV" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+  echo "Не нашёл внутренний адрес сервера (обычно 10.0.0.x). Покажи главному вывод команды:  ip -4 addr"
+  exit 1
+fi
 if [ -f .env ]; then
   sed -i -e "s/^RT_HOST=.*/RT_HOST=$IP/" -e "s/^TURN_PUBLIC_IP=.*/TURN_PUBLIC_IP=$IP/" -e "s/^TURN_PRIVATE_IP=.*/TURN_PRIVATE_IP=$PRIV/" .env
   echo "Адреса в .env обновлены (публичный $IP, внутренний $PRIV), секреты прежние."
