@@ -458,6 +458,7 @@
       if (!P || P.isHost || !P.host) return;
       S.hiAt = now();
       const m = { t: 'hi', n: meName(), s: c.me.skin || null, a: clamp(+c.me.aspect || 1.6, .3, 3.5) };
+      if (typeof c.me.design === 'string') m.d = c.me.design.slice(0, 16);   // облик («Путь клетки»: код частей) — хозяин проверит сам
       if (S.claim && !S.gotYou) m.cl = S.claim;   // хозяин сменился: свои клетки/червяк — с каждым «привет», пока он не ответит
       P.send(P.host, m);
     }
@@ -485,11 +486,11 @@
     function becomeHost(P){
       const wasGuest = S.role === 'guest' && S.G && S.G.ready;
       if (wasGuest) {
-        const r = sim.fromMirror(S.G, { key: P.me, name: meName(), skin: c.me.skin || null });
+        const r = sim.fromMirror(S.G, { key: P.me, name: meName(), skin: c.me.skin || null, design: c.me.design });
         S.W = r.W; S.me = r.me; S.caps = sim.capOf(S.G); S.migrated++;
       } else {
         S.W = sim.newWorld(seed());
-        S.me = sim.addOwner(S.W, { key: P.me, name: meName(), skin: c.me.skin || null, bot: false, spawn: true });
+        S.me = sim.addOwner(S.W, { key: P.me, name: meName(), skin: c.me.skin || null, design: c.me.design, bot: false, spawn: true });
       }
       S.role = 'host'; S.L = { t0: 0, n: 0 }; S.guests.clear(); S.claimWait.clear(); S.plVer = -1; S.G = null;
       for (const p of P.players) if (p.id !== P.me) addGuest(p, wasGuest);
@@ -517,8 +518,8 @@
         if (!g) return;
         if (d.t === 'hi') {
           g.aspect = clamp(+d.a || 1.6, .3, 3.5);
-          const nm = cleanName(d.n, g.idx);
-          if (nm !== g.name || JSON.stringify(d.s || null) !== g.skinJ) { g.name = nm; g.skinJ = JSON.stringify(d.s || null); sim.setOwner(S.W, g.idx, { name: nm, skin: d.s }); }
+          const nm = cleanName(d.n, g.idx), dz = typeof d.d === 'string' ? d.d.slice(0, 16) : undefined;
+          if (nm !== g.name || JSON.stringify(d.s || null) !== g.skinJ || dz !== g.design) { g.name = nm; g.skinJ = JSON.stringify(d.s || null); g.design = dz; sim.setOwner(S.W, g.idx, { name: nm, skin: d.s, design: dz }); }
           if (d.cl && S.claimWait.has(from)) { S.claimWait.delete(from); sim.applyClaim(S.W, g.idx, d.cl, S.caps); }
           S.P.send(from, { t: 'you', i: g.idx });
           S.P.send(from, { t: 'pl', l: sim.owners(S.W) });
@@ -555,7 +556,7 @@
     function onError(reason){
       if (S.closed) return;
       S.P = null;
-      if (reason === 'full' && S.pub && S.pubN < PUB_TRIES) { S.pubN++; join(pubCode(S.pubN)); return; }
+      if (reason === 'full' && S.pub && S.pubN < PUB_TRIES) { S.pubN++; join(pubCode(S.pubN, S.pubPre)); return; }
       S.err = reason;
       cb('onStatus', 'error', reason);
     }
@@ -572,7 +573,7 @@
       stopNet();
       S.role = 'off'; S.code = ''; S.pub = false;
       S.W = sim.newWorld(seed());
-      S.me = sim.addOwner(S.W, { key: 'me', name: meName(), skin: c.me.skin || null, bot: false, spawn: true });
+      S.me = sim.addOwner(S.W, { key: 'me', name: meName(), skin: c.me.skin || null, design: c.me.design, bot: false, spawn: true });
       sim.setHumans(S.W, 1);
       S.L = { t0: 0, n: 0 }; S.inLog.clear();
       cb('onRole', 'off'); cb('onYou', S.me);
@@ -581,8 +582,8 @@
     S.online = (code, o = {}) => {
       stopNet();
       S.role = 'none'; S.W = null; S.G = null; S.me = -1; S.err = '';
-      S.pub = !!o.pub; S.pubN = 1;
-      join(S.pub ? pubCode(1) : code);
+      S.pub = !!o.pub; S.pubN = 1; S.pubPre = typeof o.prefix === 'string' && /^[a-z]{2,8}$/.test(o.prefix) ? o.prefix : 'pub';   // своя общая арена (путь: pool1, reef1…)
+      join(S.pub ? pubCode(1, S.pubPre) : code);
       loopOn();
     };
     S.setInput = (state, t) => { S.inLog.set(state, t == null ? now() : t); };
@@ -592,9 +593,9 @@
     };
     // Своё имя/раскраска/форма экрана поменялись: хозяину — сразу в мир, гость — «привет» хозяину (форма экрана — для обзора)
     S.setMe = (o2) => {
-      const look = o2.nick !== undefined || o2.skin !== undefined;
+      const look = o2.nick !== undefined || o2.skin !== undefined || o2.design !== undefined;
       Object.assign(c.me, o2);
-      if ((S.role === 'off' || S.role === 'host') && look && S.W) sim.setOwner(S.W, S.me, { name: meName(), skin: c.me.skin });
+      if ((S.role === 'off' || S.role === 'host') && look && S.W) sim.setOwner(S.W, S.me, { name: meName(), skin: c.me.skin, design: c.me.design });
       else if (S.role === 'guest') sendHi();
     };
     S.humans = () => (S.P ? S.P.players.length : 1);
@@ -612,7 +613,7 @@
     S._join = join;
     return S;
   }
-  const pubCode = n => 'pub' + n;
+  const pubCode = (n, pre) => (pre || 'pub') + n;
   function seed(){ return (Math.floor(Math.random() * 2147483646) + 1) | 0; }
   function guestKey(){ try { return root.GameRoom?.guestId?.() || ((typeof currentUser !== 'undefined' && currentUser?.id) || 'g-' + Math.random().toString(36).slice(2, 10)); } catch (e) { return 'g-' + Math.random().toString(36).slice(2, 10); } }
   function myKey(){ try { return (typeof currentUser !== 'undefined' && currentUser?.id) || root.GameRoom?.guestId?.() || guestKey(); } catch (e) { return guestKey(); } }
@@ -812,7 +813,7 @@
   // Подпись сети: «🤖 с ботами» / «🌐 общая · 👥 3 · 80 мс» / «🔗 abc123 · 👥 2 · 🐢» (🐢 — без прямой связи, медленнее)
   function netLabel(S){
     if (!S || S.role === 'off') return '🤖 с ботами';
-    const pub = /^pub\d+$/.test(S.code || ''), m = S.netMode();
+    const pub = S.pub || /^pub\d+$/.test(S.code || ''), m = S.netMode();
     return `${pub ? '🌐 общая арена' : '🔗 ' + S.code} · 👥 ${S.humans()}${m === 'relay' || m === 'connecting' ? ' · 🐢' : ''}${S.role === 'guest' && S.rtt ? ` · ${Math.round(S.rtt)} мс` : ''}`;
   }
   // Итог жизни: рекорд и XP (онлайн — от 2 людей в комнате), монеты — очки/100, до 10 (coin_run_cap)
