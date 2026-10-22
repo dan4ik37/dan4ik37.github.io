@@ -1337,13 +1337,16 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       else if (POSTK.includes(k)) { P?.disable(k); R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // через полсекунды — помогло ли
       else if (k === 'clim' && why !== 'link') { R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // погода на поверхностях: данные шейдеров больше не ставятся (precip.js) — сразу
       else if (k === 'waves') { E.waves?.disable?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // волны (waves.js): вода без кусков волн, «блины» прочь, физика без волн
-      else { if (k === 'patch') E.gfxUnpatch?.(T); if (k === 'clim') E.climUnpatch?.(T); G.wait = true; rebuild = true; }   // нужен новый рендерер: игра пересоберёт мир
+      else if (k === 'aerial' && why !== 'link') { E.aerialPatch?.(T, false); G.testAt = Math.min(G.testAt, G.n + 30); }   // дымка (планета): сразу без неё — d37ApA.w = 0
+      else { if (k === 'patch') E.gfxUnpatch?.(T); if (k === 'clim') E.climUnpatch?.(T); if (k === 'aerial') E.aerialPatch?.(T, false); G.wait = true; rebuild = true; }   // нужен новый рендерер: игра пересоберёт мир
       try { window.dispatchEvent(new CustomEvent('d37:gfxfallback', { detail: { k, why, prog, rebuild } })); } catch (e) {}
       return true;
     }
     // сцена: по ступеньке — коды в альфе → свои куски шейдеров → «низкая» (не собралось — коды не помогут: это не текст шейдера)
     function ladder(why, prog = ''){
       if (G.wait) return;
+      // дымка атмосферы в тумане (планета, gfx.js E.aerialFog) — новее всего: кадр с ней «не числа» / чернеет — сначала без неё
+      if (why !== 'link' && E.aerialFog && E.GFXU?.apA?.[3] > 0 && on('aerial')) { off('aerial', why, prog); return; }
       // волны (waves.js, D37_GW) — новее всего: кадр с ними «не числа» / чернеет — сначала без них
       if (why !== 'link' && E.waves?.active?.() && on('waves')) { off('waves', why, prog); return; }
       // погода на поверхностях (gfx.js D37_CLIM): кадр с ней чернеет / «не числа» — потом без неё
@@ -1383,6 +1386,8 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
           continue;
         }
         if (lb.post) off(lb.post === 'ao' && P?.fol && on('fol') ? 'fol' : PROGK[lb.post] || 'post', 'link', lb.post);
+        // не собралась программа с туманом, пока стоит кусок с дымкой (планета) — сначала без дымки
+        else if (E.aerialFog && on('aerial') && lb.mat && lb.mat.fog !== false && !lb.mat.isShaderMaterial) off('aerial', 'link', lb.scene);
         // не собралась программа с куском погоды (материалы со светом, вода, купол с радугой) — сначала без погоды
         else if (E.climShaders && on('clim') && lb.mat && (lb.mat.isMeshStandardMaterial || lb.mat.isMeshLambertMaterial || lb.mat.defines?.D37_RBOW !== undefined)) off('clim', 'link', lb.scene);
         else ladder('link', lb.scene);

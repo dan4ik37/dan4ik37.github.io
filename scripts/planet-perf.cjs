@@ -11,7 +11,8 @@
 // Переменные: RATE (замедление ЦП, 4), Q (качество, mid), PC=1 — компьютер 1280 × 720 без замедления, CHROME, D37_TMP (временное — на E:).
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 // SITE_DIR — другая копия сайта (замер «до» на старых файлах тем же скриптом), D37_OUT — папка отчётов и снимков (в D37_TMP),
-// V2=1 — с флагами T-075 (localStorage d37_planet_v2 = '1': LOD v2, перетекание, два диапазона глубины, тени, дымка, погода)
+// V2=1 / V2=0 — флаги T-075 вкл / выкл (localStorage d37_planet_v2: LOD v2, перетекание, два диапазона глубины, тени, дымка, погода;
+// без V2 — по умолчанию), PF='{"weather":false}' — отдельные флаги поверх (localStorage d37_planet_flags)
 const SITE = process.env.SITE_DIR ? path.resolve(process.env.SITE_DIR) : path.join(__dirname, '..');
 const [MODE = 'perf', ARG = ''] = process.argv.slice(2);
 const PC = !!process.env.PC, RATE = PC ? 1 : +(process.env.RATE || 4), Q = process.env.Q || (PC ? 'high' : 'mid');
@@ -105,7 +106,8 @@ const summary = f => {
       await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     }
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q }), d37_gfx: Q };
-    if (process.env.V2 === '1') ls.d37_planet_v2 = '1';
+    if (process.env.V2 === '1' || process.env.V2 === '0') ls.d37_planet_v2 = process.env.V2;
+    if (process.env.PF) ls.d37_planet_flags = process.env.PF;   // отдельные флаги поверх: PF='{"weather":false}'
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}}catch(e){}` });
     const open = async () => {
       await send('Page.navigate', { url: BASE + '/#/games/planet' });
@@ -159,8 +161,9 @@ const summary = f => {
         await ev(`${T}.time(null, ${k % 2 ? 300 : 1})`);
         await ev(`${T}.orbit()`); await sleep(3000);
         await ev('window.gc && window.gc()');
-        const s = await stats();
-        out.minutes.push({ t: +((Date.now() - t0) / 60000).toFixed(1), heap: s.heap, cached: s.cached, nodes: s.nodes, gpuKB: s.gpuKB, errors: s.errors, built: s.built, rebases: s.rebases, logs: logs.length });
+        const s = await stats(), ob = await countObjs();
+        out.minutes.push({ t: +((Date.now() - t0) / 60000).toFixed(1), heap: s.heap, cached: s.cached, nodes: s.nodes, gpuKB: s.gpuKB, errors: s.errors, built: s.built, rebases: s.rebases, logs: logs.length,
+          geo: ob.geometries, mat: ob.materials, tex: ob.textures, rnd: ob.renderers, workers: s.workers });
         console.log('  ', JSON.stringify(out.minutes[out.minutes.length - 1]));
       }
       out.workers = await workers();

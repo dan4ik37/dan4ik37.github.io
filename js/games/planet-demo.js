@@ -257,7 +257,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     if (st.wx) {   // погода: частицы и небо движка — каждый кадр, свет планеты — 4 раза в секунду
       try {
         st.wx.frame(dt);
-        if ((st.wxT = (st.wxT || 0) - dt) <= 0) { st.wxT = .25; const v = st.wx.vis || st.wx.state; V.setWeather(v ? { cloud: v.cloud, rain: v.rain, fog: v.fog, storm: v.thunder } : null); }
+        if ((st.wxT = (st.wxT || 0) - dt) <= 0) { st.wxT = .25; const v = st.wx.vis || st.wx.state; V.setWeather(v ? { cloud: v.cloud, rain: v.rain, fog: v.fog, storm: v.thunder, snowCover: v.snowCover, wet: v.wet } : null); }
       } catch (e) { console.warn('планета: погода', e); try { st.wx.dispose(); } catch (e2) {} st.wx = null; V.setWeather(null); }
     }
     V.update(dt, st.t, ms);

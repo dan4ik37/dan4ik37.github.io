@@ -1351,6 +1351,20 @@ function boundsOk(R){
     ok(offS.length === 1 && (offS[0] === 'clim' || offS[0] === 'patch') && !Object.keys(Rs2.guard.vol).length, 'на планете не собрался шейдер сцены — как везде (навсегда: это не дальности)', { offS, vol: Rs2.guard.vol });
     E.gfxGuardReset(); E.gfxPatch(T) || (E.gfxGuardReset(), E.gfxPatch(T)); store.d37_gfx = 'high';
   }
+  // дымка атмосферы на планете (T-075): кусок тумана с дымкой — только пока открыта планета (E.aerialPatch); страж — ключ 'aerial'
+  {
+    const C = T.ShaderChunk, f0 = C.fog_fragment, p0 = C.fog_pars_fragment;
+    ok(E.aerialPatch(T, true) === true && E.aerialFog && C.fog_fragment.includes('d37ApA.w > 0.0') && C.fog_pars_fragment.includes('uniform vec4 d37ApD')
+      && T.ShaderLib.standard.uniforms.d37ApA?.value === E.GFXU.apA, 'дымка: кусок тумана с дымкой ставится, общие числа — у материалов');
+    E.GFXU.apA[3] = 1;
+    const nanA = { ...GOOD, A: B(i => i < 10 ? [0, 0, 0, 0] : [60, 140, 60, 255]) };
+    const ca = judgeCase([nanA, nanA]);
+    ok(ca.off === 'aerial' && !E.aerialFog && E.GFXU.apA[3] === 0 && C.fog_fragment === f0 && C.fog_pars_fragment === p0,
+      'кадр с дымкой «не числа» → страж: без дымки сразу (d37ApA.w = 0, кусок — прежний), остальное не тронуто', { off: ca.off, ap: E.aerialFog });
+    ok(E.aerialPatch(T, true) === false && !E.aerialFog, 'страж запомнил: на этом устройстве дымка больше не ставится');
+    E.gfxGuardReset(); E.gfxPatch(T) || (E.gfxGuardReset(), E.gfxPatch(T)); store.d37_gfx = 'high';
+    ok(E.aerialPatch(T, true) && E.aerialPatch(T, false) && !E.aerialFog && C.fog_fragment === f0, '«↺ Вернуть всё» — снова можно; планету закрыли — туман прежний');
+  }
   // видеокарты: семейство и модель из строки рендерера
   const gi = s => E.gpuInfo({ getExtension: () => ({ UNMASKED_RENDERER_WEBGL: 1 }), getParameter: () => s });
   const GPUS = [['ANGLE (Qualcomm, Adreno (TM) 619, OpenGL ES 3.2)', 'adreno', 'Adreno 619'], ['Mali-G52 MC2', 'mali', 'Mali-G52'], ['PowerVR Rogue GE8320', 'powervr', 'PowerVR Rogue GE8320'],

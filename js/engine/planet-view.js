@@ -44,7 +44,14 @@
   // перезагрузка — gfx.js E.aerialFog) или o.flags в D37E.planetView(R, P, { flags }); навсегда — true здесь
   const FLAGS = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false };
   const FLAGS_ON = { lod2: true, morph: true, prefetch: true, split: true, shadows: true, aerial: true, weather: true };
-  const v2on = () => { try { return typeof localStorage !== 'undefined' && localStorage.getItem('d37_planet_v2') === '1'; } catch (e) { return false; } };
+  const FLAGS_OFF = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false };
+  const v2ls = () => { try { return typeof localStorage !== 'undefined' ? localStorage.getItem('d37_planet_v2') : null; } catch (e) { return null; } };
+  // замеры по частям и отладка: localStorage d37_planet_flags = '{"weather":false}' — отдельные флаги поверх (только известные)
+  const v2flags = () => {
+    const o2 = {};
+    try { const s = typeof localStorage !== 'undefined' && localStorage.getItem('d37_planet_flags'), j = s ? JSON.parse(s) : null; if (j && typeof j === 'object') for (const k in FLAGS_ON) if (k in j) o2[k] = !!j[k]; } catch (e) {}
+    return o2;
+  };
 
   // ═══ GLSL: атмосфера (Рэлей + Ми, оптическая глубина к солнцу — приближение функции Чепмена, Шулер, GPU Pro 3;
   //     та же формула на JS — D37E.planet.chapman, сверка с численным интегралом — scripts/planet-test.cjs) ═══
@@ -183,6 +190,9 @@ uniform float uBetaM;
 uniform vec4 uAtm3;
 uniform vec4 uLit;
 uniform vec4 uBlob;
+#ifdef D37_PWX
+uniform vec4 uWx;
+#endif
 uniform float uTime;
 #ifdef D37_PSH
 uniform vec3 uPlanetC;
@@ -226,6 +236,15 @@ void main(){
   float a = vCol.a, wf = smoothstep( 0.494, 0.51, a ), water = clamp( ( a - 0.5 ) * 2.6, 0.0, 1.0 );
   vec3 N = normalize( vN ), L = uSunL, V = normalize( cameraPosition - vW );
   float mu = dot( vUp, L );
+#ifdef D37_PWX
+  // погода у камеры (V.setWeather): снег ложится на смотрящее вверх (край — пятнами), мокрая земля темнее; дальше uWx.z — нет
+  // (там свой климат); на воде — нет
+  if ( uWx.x + uWx.y > 0.0 ) {
+    float wk = ( 1.0 - smoothstep( uWx.z * 0.6, uWx.z, cd ) ) * ( 1.0 - wf );
+    float sn = uWx.x * wk * smoothstep( 0.62, 0.86, dot( N, vUp ) + ( d37N( vW.xz * 0.35 ) - 0.5 ) * 0.3 );
+    alb = mix( alb * ( 1.0 - 0.35 * uWx.y * wk ), vec3( 0.80, 0.83, 0.87 ), sn );
+  }
+#endif
 #ifdef D37_PSH
   vec3 sun = uLit.x * vSunT * d37Shadow();
 #else
@@ -344,9 +363,14 @@ void main(){
   // ═══ Вид ═══
   E.planetView = function (R, P, o = {}){
     const T = R.T, PL = E.planet, D = P.def, q = R.q || 'mid', mob = !!E.isMobile?.(), low = q === 'low';
-    const F = { ...FLAGS, ...(v2on() ? FLAGS_ON : {}), ...(o.flags || {}) };
+    const v2 = v2ls(), F = { ...FLAGS, ...(v2 === '1' ? FLAGS_ON : v2 === '0' ? FLAGS_OFF : {}), ...v2flags(), ...(o.flags || {}) };
     if (!F.lod2) F.morph = F.prefetch = false;
     const BO = { lite: !F.lod2 };   // без LOD v2 — кусок собирается как раньше (без формы родителя и его точности — дешевле)
+    // дымка до вещей движка: кусок тумана с дымкой — только пока открыта планета (gfx.js E.aerialPatch; страж снимает — ключ 'aerial')
+    const apOn = !!(F.aerial && E.aerialPatch && E.aerialPatch(T, true));
+    // видеопамять: кусок, спрятанный дольше GPU_HOLD мс, отдаёт буферы видеокарты (данные в памяти страницы остаются — покажется
+    // снова, three загрузит заново); с LOD v2
+    const GPU_HOLD = o.gpuHold ?? 3000;
     const N = 32, K = o.K ?? (mob || low ? 1.0 : 1.25), maxL = o.maxL ?? 12;
     // LOD v2: экранная ошибка (пикселей CSS, телефон крупнее), перетекание (fade с, «осел» — k ≤ GATE), рядом с игроком — самый
     // мелкий уровень в пределах NEAR ед.; в видеокарту за кадр — не больше BUDGET кусков и BUDGET_B байт
@@ -380,10 +404,10 @@ void main(){
     V.U = U;   // общие числа атмосферы — и для неба системы (space-view.js: тела в небе — сквозь тот же воздух)
     // поверхность: свои числа — перетекание куска (на каждый кусок — перед его рисованием) и тени движка
     const TU = { ...U, uMk: { value: new T.Vector4(0, 0, N, 4) }, uMe: { value: new T.Vector4() }, uShM: { value: new T.Matrix4() }, uShMap: { value: null },
-      uShP: { value: new T.Vector4(0, 0, 0, 0) } };
+      uShP: { value: new T.Vector4(0, 0, 0, 0) }, uWx: { value: new T.Vector4(0, 0, 3000, 0) } };
     const terrainMat = new T.ShaderMaterial({ name: 'planet', uniforms: TU, vertexShader: TERRAIN_V, fragmentShader: TERRAIN_F, fog: false, lights: false,
-      defines: { D37_MORPH: F.morph ? 1 : false, D37_PSH: F.shadows ? 1 : false } });
-    terrainMat.customProgramCacheKey = () => 'd37planet2' + (F.morph ? 'm' : '') + (F.shadows ? 's' : '');
+      defines: { D37_MORPH: F.morph ? 1 : false, D37_PSH: F.shadows ? 1 : false, D37_PWX: F.weather ? 1 : false } });
+    terrainMat.customProgramCacheKey = () => 'd37planet2' + (F.morph ? 'm' : '') + (F.shadows ? 's' : '') + (F.weather ? 'w' : '');
     own.push(terrainMat);
     // небо: купол (у камеры) и оболочка (вокруг планеты)
     const mkSky = mode => {
@@ -429,7 +453,7 @@ void main(){
     const chunks = new Map();   // ключ → { key, n, data, mesh, used, state: 0 нет / 1 в очереди / 2 строится / 3 готов / 4 данные пришли }
     P.onNode = n => { const c = chunks.get(n.key); if (c && c.data) { P.nodeRange(n, c.data.hmin, c.data.hmax); P.nodeErr(n, c.data.err); } };
     const ST = V.st = { built: 0, buildMs: 0, buildMax: 0, integ: 0, integMs: 0, integMax: 0, integKB: 0, selMs: 0, selMax: 0, sel: 0, mainBuilds: 0, rebases: 0, evicted: 0, errors: 0, workerOk: false,
-      respawns: 0, pre: 0, preBuilt: 0, splits: 0, merges: 0, popMax: 0, popSum: 0, popN: 0, morphMs: 0, upMs: 0, uploads: 0 };
+      respawns: 0, pre: 0, preBuilt: 0, splits: 0, merges: 0, popMax: 0, popSum: 0, popN: 0, morphMs: 0, upMs: 0, uploads: 0, gpuFreed: 0 };
     const queue = [], preQ = [];   // ждут сборки: шаг и листья; заранее (дети «вот-вот делимых» и «куда летим»)
     const workers = [];
     let reqId = 0;
@@ -469,13 +493,22 @@ void main(){
       ready.push(c);
     }
     const ready = [];
-    function chunkOf(n){ let c = chunks.get(n.key); if (!c) { c = { key: n.key, n, data: null, mesh: null, used: 0, state: 0, mask: -1, pre: false, qm: 0, pri: 0, bytes: 0, root: false }; chunks.set(n.key, c); } c.n = n; return c; }
+    function chunkOf(n){ let c = chunks.get(n.key); if (!c) { c = { key: n.key, n, data: null, mesh: null, used: 0, state: 0, mask: -1, pre: false, qm: 0, pri: 0, bytes: 0, root: false, gpu: false, hid: 0 }; chunks.set(n.key, c); } c.n = n; return c; }
+    // буферы куска в видеокарте — прочь (общие индексы — не трогаем: отвязать, освободить, привязать снова)
+    let gpuAt = 0;
+    function gpuFree(c){
+      const g = c.mesh.geometry;
+      g.setIndex(null); g.dispose(); g.setIndex(IDX[c.mask >= 0 ? c.mask : 0]);
+      c.gpu = false; ST.gpuFreed++;
+    }
     // перед рисованием куска: его перетекание (k, k краёв, масштаб сдвига) — в общие числа материала; не изменилось — не трогаем
     const MK = TU.uMk.value, ME = TU.uMe.value, LAST = [NaN, NaN, NaN, NaN, NaN, NaN];
     function morphUp(){
       const c = this.userData.c, n = c.n, on = F.morph && n && n.ke;
-      const k = on ? n.k : 0, ke = on ? n.ke : null, ms = c.data ? c.data.mscale : 0;
+      const k = on ? n.k : 0, ke = on ? n.ke : null;
       const e0 = ke ? ke[0] : 0, e1 = ke ? ke[1] : 0, e2 = ke ? ke[2] : 0, e3 = ke ? ke[3] : 0;
+      // не перетекает (k и края 0) — масштаб не важен: у всех таких одно и то же (иначе каждый кусок перезаливал бы числа материала)
+      const ms = !(k > 0) && !(e0 > 0) && !(e1 > 0) && !(e2 > 0) && !(e3 > 0) ? 0 : c.data ? c.data.mscale : 0;
       if (k === LAST[0] && ms === LAST[1] && e0 === LAST[2] && e1 === LAST[3] && e2 === LAST[4] && e3 === LAST[5]) return;
       LAST[0] = k; LAST[1] = ms; LAST[2] = e0; LAST[3] = e1; LAST[4] = e2; LAST[5] = e3;
       MK.x = k; MK.y = ms; ME.set(e0, e1, e2, e3);
@@ -574,10 +607,10 @@ void main(){
     // бюджет кусков: выбрано больше — допустимая ошибка на экране растёт (плавно: куски перетекают), меньше 80 % — назад
     const LEAF_MAX = o.leafMax ?? (mob || low ? 220 : 450), PRE_MAX = mob || low ? 6 : 12;
     let bias = 1;
-    let showMark = 1, lastSel = -1e9, selX = Infinity, selY = Infinity, selZ = Infinity, waitMore = false;
+    let showMark = 1, lastSel = -1e9, selX = Infinity, selY = Infinity, selZ = Infinity, waitMore = false, chgAt = 0;
     const LS = { split: 0, merge: 0 };
     function select(){
-      const t0 = now();
+      const t0 = now(), wasDirty = dirty;
       const cx = V.camBF[0], cy = V.camBF[1], cz = V.camBF[2];
       if (F.lod2) {
         SSE.proj = MORPH.proj = projNow();
@@ -600,7 +633,10 @@ void main(){
         if (st.merges) for (const p of st.merges) { let kmin = 1, e = 0; for (const c of p.kids || []) { kmin = min(kmin, F.morph ? c.k : 0); e = max(e, c.err); } popAdd(1 - kmin, e, p, MORPH.proj); }
         ST.splits += st.split; ST.merges += st.merge;
         LS.split = st.split; LS.merge = st.merge;
-        waitMore = st.wait > 0 || st.split > 0 || st.merge > 0 || st.need.length > 0;
+        // шаг показа идёт — выбирать чаще (60 мс). Ждём то, что само не изменится (сосед крупнее, кусок ещё строится) — не крутить
+        // выбор вхолостую: через 0,4 с после последней перемены — как обычно (сдвинулась камера, готов новый кусок)
+        if (st.split || st.merge || st.stand || wasDirty) chgAt = t0;
+        waitMore = st.split > 0 || st.merge > 0 || ((st.wait > 0 || st.need.length > 0) && t0 - chgAt < 400);
         if (leaves.length > LEAF_MAX) bias = min(4, bias * 1.06); else if (leaves.length < LEAF_MAX * .8) bias = max(1, bias / 1.03);
         // в очередь по ступеням: шаг показа (дети делимых, родители сливаемых, поднявшееся из-за горизонта), на уровень вперёд,
         // «куда летим» (из-за горизонта), листья не глубже 2 уровней под показанным; глубже — потом (их черёд придёт шагами)
@@ -633,9 +669,14 @@ void main(){
       // в сцену / из сцены
       nowSet.clear();
       for (const n of vis) nowSet.add(n.key);
-      for (const k2 of shown) if (!nowSet.has(k2)) { const c = chunks.get(k2); if (c?.mesh) grp.remove(c.mesh); }
-      for (const n of vis) if (!shown.has(n.key)) { const c = chunks.get(n.key); if (c?.mesh) grp.add(c.mesh); }
+      for (const k2 of shown) if (!nowSet.has(k2)) { const c = chunks.get(k2); if (c?.mesh) { grp.remove(c.mesh); c.hid = t0; } }
+      for (const n of vis) if (!shown.has(n.key)) { const c = chunks.get(n.key); if (c?.mesh) { grp.add(c.mesh); c.gpu = true; } }
       shown.clear(); for (const k2 of nowSet) shown.add(k2);
+      // спрятанные дольше GPU_HOLD — без буферов в видеокарте (корни — всегда с ними: ими закрываем, пока строится нужное)
+      if (F.lod2 && t0 - gpuAt > 500) {
+        gpuAt = t0;
+        for (const c of chunks.values()) if (c.gpu && c.mesh && !c.root && !shown.has(c.key) && t0 - c.hid > GPU_HOLD) gpuFree(c);
+      }
       // кэш: старые — прочь (не показанные, не корни, давно не нужные)
       if (chunks.size > CAP) {
         const old = [];
@@ -711,12 +752,16 @@ void main(){
       out[0] = ll[1] * Math.PI / 180 * P.R; out[1] = -ll[0] * Math.PI / 180 * P.R; out[2] = l - P.SEAR;
       return out;
     };
-    // погода → свет планеты: тучи гасят солнце и дымку, небо серее (wx: { cloud, rain, snow, fog, storm } 0…1 | null)
+    // погода → свет планеты: тучи гасят солнце и дымку, небо серее; снег на земле и мокрая земля — у камеры (шейдер, флаг weather)
+    // (wx: { cloud, rain, fog, storm, snowCover, wet } 0…1 | null). Навесов на планете нет (рельеф — поле высот): укрытие от дождя
+    // (карта «что над головой» precip.js) не нужно, пока нет построек и пещер
     let wxK = { sun: 1, sky: 1, gray: 0 };
     V.setWeather = wx => {
-      if (!wx) { wxK = { sun: 1, sky: 1, gray: 0 }; sunKAt = -1; return; }
+      const W4 = TU.uWx.value;
+      if (!wx) { wxK = { sun: 1, sky: 1, gray: 0 }; sunKAt = -1; W4.x = W4.y = 0; return; }
       const over = clamp(+wx.cloud || 0, 0, 1) ** 2, rain = clamp(+wx.rain || 0, 0, 1), fog = clamp(+wx.fog || 0, 0, 1), storm = clamp(+wx.storm || 0, 0, 1);
       wxK = { sun: clamp(1 - .78 * over - .1 * fog - .15 * storm, .08, 1), sky: clamp(1 - .35 * over - .15 * rain - .2 * storm, .3, 1), gray: clamp(.6 * over + .4 * fog, 0, 1) };
+      W4.x = clamp(+wx.snowCover || 0, 0, 1); W4.y = clamp(+wx.wet || 0, 0, 1);
       sunKAt = -1;
     };
 
@@ -907,7 +952,10 @@ void main(){
       errors: ST.errors, respawns: ST.respawns, workers: workers.filter(W => W && W.ok && !W.dead).length, nodes: P.nodes.size, alt: V.alt, altG: V.altG, near: nearFar[0], far: nearFar[1],
       pre: ST.pre, preBuilt: ST.preBuilt, splits: ST.splits, merges: ST.merges, popMax: +ST.popMax.toFixed(3), popAvg: ST.popN ? +(ST.popSum / ST.popN).toFixed(4) : 0, popN: ST.popN,
       uploads: ST.uploads, split: R.depthSplit === SPLIT ? SPLIT.dist : 0,
-      gpuKB: Math.round([...chunks.values()].reduce((s, c) => s + (c.mesh ? c.bytes || 0 : 0), 0) / 1024),
+      // gpuKB — буферы кусков в видеокарте (показанные и спрятанные недавно; без LOD v2 — все с сеткой, как раньше), cacheKB — данные
+      // всех кусков в памяти страницы
+      gpuKB: Math.round([...chunks.values()].reduce((s, c) => s + (c.mesh && (!F.lod2 || c.gpu || c.root) ? c.bytes || 0 : 0), 0) / 1024),
+      cacheKB: Math.round([...chunks.values()].reduce((s, c) => s + (c.mesh ? c.bytes || 0 : 0), 0) / 1024), gpuFreed: ST.gpuFreed,
     });
     V.dispose = () => {
       if (V.dead) return;
@@ -923,7 +971,7 @@ void main(){
       if (R.depthSplit === SPLIT) R.depthSplit = null;
       if (R.guardVolatile && R.guardVolatile !== guardVolWas) R.guardVolatile = guardVolWas || null;
       if (!camL1) R.camera.layers.disable(1);
-      if (GU && GU.apA) GU.apA[3] = 0;   // дымка движка — снова обычный туман
+      if (apOn) E.aerialPatch(T, false); else if (GU && GU.apA) GU.apA[3] = 0;   // дымка движка — снова обычный туман (и кусок — прежний)
       TU.uShMap.value = null;
       offSun(); P.onNode = null;
     };
