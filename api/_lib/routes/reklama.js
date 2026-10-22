@@ -92,6 +92,7 @@ const CSS = `
 .mk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.8rem;margin-top:1.4rem}
 .mk-stat{padding:1rem 1.1rem;border-radius:16px;background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;gap:.2rem}
 .mk-stat b{font-family:Oswald,sans-serif;font-size:2rem;line-height:1;background:linear-gradient(135deg,#fff,#ffb3c4);-webkit-background-clip:text;background-clip:text;color:transparent}
+:root[data-theme="light"] .mk-stat b{background-image:linear-gradient(135deg,#14141e,#b8203d)}
 .mk-stat small{font-size:.74rem;color:var(--muted)}
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
 .mk-games a{font-weight:700}
@@ -103,6 +104,6 @@ const CSS = `
 .mk-cta{display:flex;gap:.5rem;flex-wrap:wrap}
 .mk-self{border-color:rgba(255,209,102,.35);background:linear-gradient(180deg,rgba(255,209,102,.06),transparent),var(--card)}
 .mk-self>p{font-size:.88rem;color:rgba(var(--text-rgb),.85);margin-bottom:.8rem}
-.mk-price{color:#ffe08a!important;font-weight:700}
+.mk-price{color:var(--gold-hi)!important;font-weight:700}
 .mk-self .mk-cta{margin-top:.9rem}
 `;

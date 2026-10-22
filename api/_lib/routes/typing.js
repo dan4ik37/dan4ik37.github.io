@@ -104,14 +104,14 @@ const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
 .lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:780px}
-.tp-chal{margin-top:.8rem;padding:.7rem 1rem;border-radius:12px;background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.35);color:#ffd166;font-weight:800}
+.tp-chal{margin-top:.8rem;padding:.7rem 1rem;border-radius:12px;background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.35);color:var(--gold-t);font-weight:800}
 .ty{margin-top:1.4rem;padding:1.2rem;border-radius:20px;background:var(--card);border:1px solid var(--line)}
 .ty-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;text-align:center;margin-bottom:1rem}
 .ty-stats div{padding:.6rem .3rem;border-radius:12px;background:rgba(var(--fg-rgb),.04)}
 .ty-stats b{display:block;font:800 1.4rem Montserrat,sans-serif}
 .ty-stats small{font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .ty-text{padding:1rem 1.1rem;border-radius:14px;background:rgba(0,0,0,.25);border:1px solid var(--line);font-size:1.15rem;line-height:1.75;letter-spacing:.01em;cursor:text;user-select:none}
-.ty-text span.ok{color:#4ade80}
+.ty-text span.ok{color:var(--ok-hi)}
 .ty-text span.bad{color:#fff;background:rgba(255,45,85,.55);border-radius:3px}
 .ty-text span.cur{border-bottom:2px solid #ffd166}
 .ty-in{width:100%;margin-top:.8rem;padding:.8rem 1rem;border-radius:12px;border:1.5px solid var(--line);background:rgba(var(--fg-rgb),.05);color:var(--text);font:600 1rem Montserrat,sans-serif;resize:none}

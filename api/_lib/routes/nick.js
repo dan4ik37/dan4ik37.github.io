@@ -75,7 +75,7 @@ const CSS = `
 .nk-row>span{flex:none;width:96px;font-size:.75rem;font-weight:800;color:var(--muted);padding-top:.4rem;text-transform:uppercase;letter-spacing:.06em}
 .nk-row>div{display:flex;flex-wrap:wrap;gap:.35rem;flex:1;min-width:0}
 .nk-opt{border:1.5px solid var(--line);background:rgba(var(--fg-rgb),.03);color:var(--muted);border-radius:10px;padding:.4rem .75rem;font:700 .76rem Montserrat,sans-serif;cursor:pointer}
-.nk-opt.on{color:#fff;border-color:var(--accent);background:rgba(255,45,85,.14)}
+.nk-opt.on{color:var(--text-hi);border-color:var(--accent);background:rgba(255,45,85,.14)}
 .nk-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:.5rem;margin-top:1rem}
 .nk-nick{border:1px solid var(--line);background:rgba(var(--fg-rgb),.04);color:var(--text);border-radius:12px;padding:.75rem .6rem;font:700 .92rem Montserrat,sans-serif;cursor:pointer;transition:border-color .15s,background .15s;word-break:break-all}
 .nk-nick:hover{border-color:var(--accent)}

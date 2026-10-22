@@ -71,7 +71,7 @@ const CSS = `
 .hy-origin{display:flex;gap:1rem;align-items:center;margin-top:1.4rem;padding:.8rem;border-radius:16px;background:linear-gradient(135deg,rgba(255,209,102,.1),var(--card) 60%);border:1px solid rgba(255,209,102,.35);text-decoration:none;max-width:720px}
 .hy-origin img{width:200px;height:auto;border-radius:10px;flex:none}
 .hy-origin span{display:flex;flex-direction:column;gap:.3rem}
-.hy-origin small{color:#ffd166;font-weight:800;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}
+.hy-origin small{color:var(--gold-t);font-weight:800;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}
 .hy-list{margin-top:1.6rem;display:flex;flex-direction:column;gap:0;border-left:2px solid var(--line);margin-left:.6rem}
 .hy{position:relative;display:grid;grid-template-columns:120px 1fr;gap:1rem;padding:1rem 0 1.2rem 1.4rem}
 .hy::before{content:'';position:absolute;left:-7px;top:1.35rem;width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(255,45,85,.2)}

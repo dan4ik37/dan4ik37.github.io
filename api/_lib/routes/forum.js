@@ -258,21 +258,21 @@ const CSS = `
 .fr-t{font-weight:800;font-size:.95rem;word-break:break-word}
 .fr-x{font-size:.82rem;color:rgba(var(--text-rgb),.75);word-break:break-word}
 .fr-m{font-size:.74rem;color:var(--muted)}
-.fr-role{display:inline-block;padding:0 .4rem;border-radius:6px;background:rgba(255,45,85,.16);color:#ff8fa8;font-size:.66rem;font-weight:800;vertical-align:middle}
+.fr-role{display:inline-block;padding:0 .4rem;border-radius:6px;background:rgba(255,45,85,.16);color:var(--pink-t);font-size:.66rem;font-weight:800;vertical-align:middle}
 .fr-post{margin-top:.7rem;padding:1rem 1.2rem;border-radius:14px;background:var(--card);border:1px solid var(--line)}
 .fr-post header{display:flex;justify-content:space-between;gap:.6rem;flex-wrap:wrap;font-size:.8rem}
 .fr-post time{color:var(--muted);font-size:.74rem}
 .fr-first{margin-top:1.2rem;border-color:rgba(145,71,255,.35)}
 .fr-body{margin-top:.5rem;font-size:.9rem;line-height:1.65;word-break:break-word;color:rgba(var(--text-rgb),.9)}
 .fr-post.fr-first .fr-body{margin-top:0}
-.fr-body a{color:#7cc4ff}
+.fr-body a{color:var(--link)}
 .fr-empty{margin-top:1rem}
 .fr-note{margin-top:1.6rem;font-size:.75rem}
 .fr-video{margin-top:1rem}
 .id-row{display:grid;grid-template-columns:auto 1fr;column-gap:.9rem}
 .id-row>:not(.id-votes){grid-column:2}
-.id-votes{grid-row:1/span 3;align-self:center;min-width:3.4rem;text-align:center;padding:.4rem .5rem;border-radius:10px;background:rgba(255,209,102,.1);color:#ffd166;font-weight:800;font-size:.8rem}
+.id-votes{grid-row:1/span 3;align-self:center;min-width:3.4rem;text-align:center;padding:.4rem .5rem;border-radius:10px;background:rgba(255,209,102,.1);color:var(--gold-t);font-weight:800;font-size:.8rem}
 .id-st{display:inline-block;padding:.05rem .5rem;border-radius:999px;font-size:.7rem;font-weight:800;background:rgba(var(--fg-rgb),.06);color:var(--muted);vertical-align:middle}
-.id-planned{background:rgba(124,196,255,.14);color:#7cc4ff}.id-done{background:rgba(34,197,94,.16);color:#4ade80}.id-rejected{background:rgba(255,45,85,.12);color:#ff8fa8}
+.id-planned{background:rgba(124,196,255,.14);color:var(--link)}.id-done{background:rgba(34,197,94,.16);color:var(--ok-hi)}.id-rejected{background:rgba(255,45,85,.12);color:var(--pink-t)}
 @media(max-width:600px){.fr-row{padding:.8rem .9rem}.id-row{column-gap:.6rem}.id-votes{min-width:2.8rem}}
 `;

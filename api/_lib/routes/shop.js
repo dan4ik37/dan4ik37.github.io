@@ -97,11 +97,11 @@ const CSS = `
 .sp-hero h1{margin-top:0}
 .lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:720px}
 .small{font-size:.8rem;margin-top:.7rem}
-.small a,.sp-list a,.sp-legal a{color:#7cc4ff}
+.small a,.sp-list a,.sp-legal a{color:var(--link)}
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
 .sp-packs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.7rem}
 .sp-pack{position:relative;display:flex;flex-direction:column;align-items:center;gap:.1rem;padding:1rem .6rem;border-radius:14px;background:rgba(120,190,255,.06);border:1px solid rgba(145,200,255,.25);text-align:center}
-.sp-pack b{font-family:Oswald,sans-serif;font-size:1.4rem;color:#cfeaff}
+.sp-pack b{font-family:Oswald,sans-serif;font-size:1.4rem;color:var(--gem-t)}
 .sp-pack span{font-size:.72rem;color:var(--muted)}
 .sp-pack em{font-style:normal;font-weight:800;margin-top:.35rem}
 .sp-pack small{font-size:.7rem;color:var(--muted)}

@@ -112,6 +112,8 @@ const CSS = `
 .vp-table tr:last-child td{border-bottom:0}
 .vp-table th{font-family:Oswald,sans-serif;font-size:1rem;letter-spacing:.04em}
 .vp-table th.b{color:#cd8c3c}.vp-table th.s{color:#c8d2e1}.vp-table th.g{color:#ffc328}
+:root[data-theme="light"] .vp-hero h1{background-image:linear-gradient(135deg,#a86a00,#8a3c00)}
+:root[data-theme="light"] .vp-table th.b{color:#9a5a12}:root[data-theme="light"] .vp-table th.s{color:#56657a}:root[data-theme="light"] .vp-table th.g{color:var(--gold-t)}
 .vp-table td:last-child{background:rgba(255,195,40,.05)}
 .vp-steps{padding-left:1.2rem;display:flex;flex-direction:column;gap:.45rem;font-size:.9rem}
 .vp-steps a{color:var(--accent)}

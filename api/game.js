@@ -192,10 +192,10 @@ const SHARE_JS = `
 
 const GAME_CSS = `
 .challenge{margin-bottom:1.2rem;padding:.9rem 1.1rem;border-radius:14px;background:linear-gradient(90deg,rgba(255,45,85,.22),rgba(255,107,53,.12));border:1px solid rgba(255,45,85,.45);font-size:.95rem}
-.challenge span{color:#ffd166;font-weight:800}
+.challenge span{color:var(--gold-t);font-weight:800}
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
-.crumbs a:hover{color:#fff}
+.crumbs a:hover{color:var(--text-hi)}
 .ghero{display:flex;gap:1.4rem;align-items:flex-start}
 .gbig{font-size:4.5rem;line-height:1;flex:none;filter:drop-shadow(0 10px 30px rgba(255,45,85,.35))}
 .ghero h1{margin-top:0}
@@ -206,7 +206,7 @@ const GAME_CSS = `
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
 .box ol,.box ul{padding-left:1.3rem;display:flex;flex-direction:column;gap:.45rem;font-size:.92rem;color:rgba(var(--text-rgb),.86)}
 .box ul.feat{list-style:none;padding-left:0}
-.box ul.feat li::before{content:'✓ ';color:#22c55e;font-weight:800}
+.box ul.feat li::before{content:'✓ ';color:var(--ok-t);font-weight:800}
 .faq details{border-top:1px solid var(--line);padding:.75rem 0}
 .faq details:first-of-type{border-top:0;padding-top:0}
 .faq summary{cursor:pointer;font-weight:700;font-size:.92rem}

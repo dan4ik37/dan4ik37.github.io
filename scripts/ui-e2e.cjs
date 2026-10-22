@@ -3,12 +3,14 @@
 //   perf  — профиль телефона (412×915, ЦП ×4 медленнее): мини-карточка — до первого кадра и до «всё догрузилось» (первый раз и
 //           повтор), страница профиля — время ЦП (скрипты + стили + раскладка) и «до последнего изменения»; медианы, мс
 //   leak  — 20 раз открыть/закрыть мини-карточку и 10 раз зайти в профиль: слушатели window/document, узлы DOM, память (после сборки)
-//   cls   — сдвиг раскладки при загрузке (тёмная, светлая, «Авто» при светлой системе): CLS и цвет фона первого кадра
+//   cls   — тема до первого кадра (тёмная, светлая, «Авто» при светлой и тёмной системе): фон и data-theme первого кадра = после
+//           загрузки, сдвигов у светлой не больше, чем у тёмной (CLS_PATH — какую страницу, по умолчанию «/»)
 //   shots — снимки: телефон и ПК × тёмная и светлая — главная, профиль, мини-карточка, чат (SHOTS — папка; по умолчанию D37_TMP)
 //   flags — откат: UI_V2 = false и THEME_LIGHT = false (config.js подменяется на лету) — профиль старый, светлой темы нет, без ошибок
+//   ci    — leak + cls + flags (так зовёт scripts/ci-run.cjs --e2e)
 // Сайт отдаёт scripts/serve.py (поднимается сам на свободном порту) или BASE=http://localhost:5500. UID — чей профиль открывать
 // (по умолчанию — первый профиль с аватаркой). Данные — настоящий Supabase (только чтение; без входа). Временное — D37_TMP.
-// Запуск из корня сайта: node scripts/ui-e2e.cjs [perf|leak|cls|shots|flags|all]
+// Запуск из корня сайта: node scripts/ui-e2e.cjs [perf|leak|cls|shots|flags|ci|all]
 const fs = require('fs'), os = require('os'), path = require('path'), net = require('net'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
@@ -34,7 +36,7 @@ async function startSite(){
 }
 
 // ═══ Chrome через протокол отладки ═══
-async function chrome({ phone = true, w = 412, h = 915, cpu = 1, ls = {}, scheme = 'dark', block = [], intercept = null } = {}){
+async function chrome({ phone = true, w = 412, h = 915, cpu = 1, ls = {}, scheme = 'dark', block = [], intercept = null, init = '' } = {}){
   const port = 9600 + Math.floor(Math.random() * 600), profile = fs.mkdtempSync(path.join(TMP, 'd37-ui-'));
   const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio', '--js-flags=--expose-gc', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMP, TEMP: TMP } });
   let page = null;
@@ -71,6 +73,7 @@ async function chrome({ phone = true, w = 412, h = 915, cpu = 1, ls = {}, scheme
   // без окошек сайта (возраст, «установить приложение», выбор режима); режим «Слабое» — как средний телефон
   const L = Object.assign({ d37_perf: 'low', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_ds_tip: '1' }, ls);
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{if(!sessionStorage.getItem('d37_e2e_ls')){${Object.entries(L).map(([k, v]) => v === null ? `localStorage.removeItem(${JSON.stringify(k)});` : `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}sessionStorage.setItem('d37_e2e_ls','1')}}catch(e){}` });
+  if (init) await send('Page.addScriptToEvaluateOnNewDocument', { source: init });
   const shot = async file => { const s = await send('Page.captureScreenshot', { format: 'jpeg', quality: 82 }); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, Buffer.from(s.data, 'base64')); return file; };
   const go = async (url, wait = 0) => { await send('Page.navigate', { url }); if (wait) await sleep(wait); };
   const until = async (expr, ms = 20000, step = 100) => { const t = Date.now(); while (Date.now() - t < ms) { try { if (await ev(expr)) return true; } catch (e) {} await sleep(step); } return false; };
@@ -193,24 +196,27 @@ async function leak(site){
   return { c0, c1, c2 };
 }
 
-// CLS и цвет первого кадра: тема ставится до первой отрисовки — сдвигов нет, фон сразу нужного цвета
+// CLS и первый кадр: тема ставится до первой отрисовки — фон и data-theme в первом кадре те же, что после загрузки, а сдвигов
+// у светлой не больше, чем у тёмной (сама тема ничего не двигает). Первый кадр — первый requestAnimationFrame после появления <body>
+// (раньше браузер не рисует: стили в <head> держат отрисовку).
+const FIRST = `(() => { try { const rec = () => { if (window.__d37first) return; window.__d37first = { bg: getComputedStyle(document.body).backgroundColor, theme: document.documentElement.dataset.theme || '', t: Math.round(performance.now()) }; };
+  new MutationObserver((l, o) => { if (document.body) { o.disconnect(); requestAnimationFrame(rec); } }).observe(document, { childList: true, subtree: true }); } catch (e) {} })()`;
 const CLS_PROBE = `new Promise(res => { let cls = 0; try { new PerformanceObserver(l => { for (const e of l.getEntries()) if (!e.hadRecentInput) cls += e.value; }).observe({ type: 'layout-shift', buffered: true }); } catch (e) {}
-  setTimeout(() => res({ cls: Math.round(cls * 1000) / 1000, src: (performance.getEntriesByType('layout-shift') || []).slice(0, 0), theme: document.documentElement.dataset.theme || '', bg: getComputedStyle(document.body).backgroundColor }), 2500); })`;
+  setTimeout(() => res({ cls: Math.round(cls * 1000) / 1000, theme: document.documentElement.dataset.theme || '', bg: getComputedStyle(document.body).backgroundColor }), 2500); })`;
 async function cls(site){
-  console.log('\n— cls: тема до первого кадра');
+  const at = process.env.CLS_PATH || '/';
+  console.log('\n— cls: тема до первого кадра (' + at + ', телефон, ЦП ×4)');
   const out = {};
-  for (const [name, ls, scheme] of [['dark', {}, 'dark'], ['light', { d37_theme: 'light' }, 'dark'], ['auto-light', { d37_theme: 'auto' }, 'light']]) {
-    const B = await chrome({ cpu: 4, ls, scheme });
-    let firstBg = null;
-    await B.send('Page.navigate', { url: site.base + (process.env.CLS_PATH || '/') });
-    // первый кадр: как только есть <body> — цвет фона
-    for (let i = 0; i < 100 && !firstBg; i++) { try { firstBg = await B.ev(`document.body ? getComputedStyle(document.body).backgroundColor : null`); } catch (e) {} if (!firstBg) await sleep(20); }
+  for (const [name, ls, scheme, want] of [['dark', {}, 'dark', ''], ['light', { d37_theme: 'light' }, 'dark', 'light'], ['auto-light', { d37_theme: 'auto' }, 'light', 'light'], ['auto-dark', { d37_theme: 'auto' }, 'dark', '']]) {
+    const B = await chrome({ cpu: 4, ls, scheme, init: FIRST });
+    await B.go(site.base + at, 0);
     await B.until(READY, 30000);
-    const r = await B.ev(CLS_PROBE);
-    out[name] = { ...r, firstBg };
-    console.log(' ', name, JSON.stringify(out[name]));
-    ok(r.cls < 0.05, `${name}: CLS < 0.05`, r.cls);
-    ok(firstBg === r.bg, `${name}: фон первого кадра = фон после загрузки (без «вспышки»)`, [firstBg, r.bg]);
+    const r = await B.ev(CLS_PROBE), f = await B.ev('window.__d37first || null');
+    out[name] = { ...r, first: f };
+    console.log(' ', name.padEnd(10), JSON.stringify(out[name]));
+    ok(r.theme === want, `${name}: тема ${want || 'тёмная'}`, r.theme);
+    ok(!!f && f.theme === r.theme && f.bg === r.bg, `${name}: первый кадр — уже этой темы (без «вспышки»)`, [f, r.bg]);
+    if (name !== 'dark') ok(r.cls <= out.dark.cls + .05, `${name}: сдвигов не больше, чем у тёмной (тема ничего не двигает)`, [r.cls, out.dark.cls]);
     ok(!B.errs.length, `${name}: без ошибок`, B.errs.slice(0, 3));
     await B.close();
   }
@@ -262,11 +268,12 @@ async function flags(site){
   const site = await startSite();
   const res = {};
   try {
-    if (MODE === 'perf' || MODE === 'all') res.perf = await perf(site);
-    if (MODE === 'leak' || MODE === 'all') res.leak = await leak(site);
-    if (MODE === 'cls' || MODE === 'all') res.cls = await cls(site);
-    if (MODE === 'shots' || MODE === 'all') await shots(site);
-    if (MODE === 'flags' || MODE === 'all') await flags(site);
+    const on = m => MODE === m || MODE === 'all' || (MODE === 'ci' && ['leak', 'cls', 'flags'].includes(m));
+    if (on('perf')) res.perf = await perf(site);
+    if (on('leak')) res.leak = await leak(site);
+    if (on('cls')) res.cls = await cls(site);
+    if (on('shots')) await shots(site);
+    if (on('flags')) await flags(site);
   } finally { site.stop(); }
   if (process.env.OUT) fs.writeFileSync(process.env.OUT, JSON.stringify(res, null, 1));
   console.log(fails ? `\n✗ провалов: ${fails}` : '\n✓ всё в порядке');

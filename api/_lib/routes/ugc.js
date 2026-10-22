@@ -145,7 +145,7 @@ const CSS = `
 .ug-au-ava{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:1.6rem;background:rgba(155,109,255,.2)}
 .ug-au-lbl{font-size:.68rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .ug-au-nick{font-weight:800;font-size:1.1rem;text-decoration:none}
-.ug-role{font-size:.7rem;font-weight:800;padding:.1rem .45rem;border-radius:999px;background:rgba(255,45,85,.18);color:#ff8fa8}
+.ug-role{font-size:.7rem;font-weight:800;padding:.1rem .45rem;border-radius:999px;background:rgba(255,45,85,.18);color:var(--pink-t)}
 .ug-author small{color:var(--muted);font-size:.8rem}
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
 .ug-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.7rem;margin-top:.7rem}

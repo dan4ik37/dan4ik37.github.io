@@ -33,7 +33,7 @@ const TESTS = [
   { f: 'xss-test.cjs', t: 300 },   // чужой текст не становится разметкой (T-011): разбор всех js/api + злые строки; ~30 с ЦП
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
   { f: 'ads-test.cjs' }, { f: 'ad-direct-test.cjs' }, { f: 'pay-test.cjs' }, { f: 'referral-test.cjs' }, { f: 'economy-test.cjs' },
-  { f: 'community-test.cjs' }, { f: 'settings-test.cjs' }, { f: 'touch-layout-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },
+  { f: 'community-test.cjs' }, { f: 'settings-test.cjs' }, { f: 'ui-test.cjs' }, { f: 'touch-layout-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },
   { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'planet-test.cjs' }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },
   { f: 'physics-test.cjs', soft: 'rapier' }, { f: 'tiles-test.cjs' }, { f: 'mirplay-test.cjs' }, { f: 'kubomir-input-test.cjs' },
   { f: 'world-zones-test.cjs' }, { f: 'city-test.cjs' }, { f: 'city-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'city-sim.cjs', args: ['--days', '60', '--players', '20,100'], t: 180 },
@@ -60,7 +60,8 @@ const TESTS = [
   { f: 'waves-e2e.cjs', args: ['look'], e2e: true, t: 600 },   // волны (T-022c): видеокарта = JS, шейдеры собрались, катер качается
   { f: 'menu-e2e.cjs', args: ['all'], env: { KB_WORLD: '0' }, e2e: true, t: 900 },   // T-043: одно меню ☰ (мир, Кубомир, Подземье), окно ⚙️ (Главное, поиск), геймпад, скорость, утечки
   { f: 'touch-hud-e2e.cjs', e2e: true, t: 900, env: { TH_MODE: 'full', SCREENS: '[[844,390],[390,844]]' } },   // «Кубомир» на телефоне: кнопки компактно, каждая — своё действие, «Настроить кнопки»
-  { f: 'photo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },   // фоторедактор: все команды, кнопки, отмена (fabric.js с jsDelivr)
+  { f: 'photo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },
+  { f: 'ui-e2e.cjs', args: ['ci'], e2e: true, t: 600 },   // T-086: мини-карточка и профиль без утечек, тема до первого кадра (без «вспышки»), откат флагами   // фоторедактор: все команды, кнопки, отмена (fabric.js с jsDelivr)
   { f: 'city-e2e.cjs', e2e: true, needs: 'pglite', t: 900 },   // «Живой город»: работа с сервера (city.sql в PGlite), банк, окно экономики, два игрока
   { f: 'rt-e2e.cjs', e2e: true, needs: 'rt', t: 600 },   // свой сервер: два Chrome, io-игра и стол, сервер убит посреди партии → Supabase
 ];

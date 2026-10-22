@@ -99,7 +99,7 @@ const CSS = `
 .ab-facts div{padding:.8rem 1rem;border-radius:14px;background:var(--card);border:1px solid var(--line)}
 .ab-facts dt{font-size:.68rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .ab-facts dd{margin-top:.2rem;font-weight:700;font-size:.95rem}
-.ab-facts a,.box a{color:#7cc4ff}
+.ab-facts a,.box a{color:var(--link)}
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
 .box p{font-size:.9rem;color:rgba(var(--text-rgb),.86)}
 .box ul{padding-left:1.2rem;display:flex;flex-direction:column;gap:.45rem;font-size:.9rem;color:rgba(var(--text-rgb),.86)}

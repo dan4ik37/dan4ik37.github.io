@@ -558,7 +558,7 @@ html.d37-h18 [data-age="18"]{display:none!important}
 #gamesStageTitle .age-b{margin-left:.35rem;font-size:.6rem}
 .vthumb .age-b{position:absolute;top:32px;right:8px;z-index:3}
 .age-chip{display:inline-flex;align-items:center;gap:.35rem}
-.age-mark{display:inline-flex;align-items:center;justify-content:center;min-width:2.4em;height:1.6em;padding:0 .4em;border-radius:6px;border:1.5px solid rgba(var(--text-rgb),.45);font:800 .72rem/1 Montserrat,system-ui,sans-serif;color:#f0f0f8;vertical-align:middle;margin-right:.35rem}
+.age-mark{display:inline-flex;align-items:center;justify-content:center;min-width:2.4em;height:1.6em;padding:0 .4em;border-radius:6px;border:1.5px solid rgba(var(--text-rgb),.45);font:800 .72rem/1 Montserrat,system-ui,sans-serif;color:var(--text,#f0f0f8);vertical-align:middle;margin-right:.35rem}
 .footer-age{font-size:.68rem;color:var(--muted,#8d8daa);margin:0 0 .9rem}
 .age-sheet{position:fixed;right:16px;bottom:16px;z-index:9250;width:min(390px,calc(100vw - 32px));color:#f0f0f8;font-family:Montserrat,system-ui,sans-serif}
 .age-sheet.edit{z-index:100600;left:50%;right:auto;bottom:50%;transform:translate(-50%,50%)}

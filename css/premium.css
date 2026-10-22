@@ -1564,7 +1564,7 @@ body.high .vnew{animation:pillPulse 2.4s ease-out infinite;color:#fff}
 
 /* Узкий телефон: шапка с колокольчиком должна помещаться (лого, язык, 🔔, профиль, меню) */
 @media(max-width:480px){
-  #nav{padding-left:.9rem;padding-right:.9rem}
+  #nav,#nav.scrolled{padding-left:.9rem;padding-right:.9rem}   /* .scrolled (2rem по бокам) уводил ☰ за край экрана на 360 px */
   body.is-authed #globalAuthLabel{display:none}
   body.is-authed .global-auth-btn{padding:.38rem .6rem}
 }
@@ -2244,10 +2244,12 @@ body.chat-full .chat-full-btn{border-color:var(--accent);color:var(--text-hi)}
 
 /* Меню ☰ на телефоне/планшете: пункты были ~20px в высоту и шириной с текст — промахивались. Теперь плитки 44px в две колонки */
 @media(max-width:1180px){
-  .nav-links{gap:.35rem!important;padding:.8rem 1rem 1rem!important;max-height:calc(100dvh - 56px);overflow-y:auto}
-  .nav-links.open{display:grid!important;grid-template-columns:1fr 1fr}
+  /* фон — сплошной: полупрозрачный под размытием шапки (backdrop-filter у #nav) просвечивал героем; колонки — поровну (длинные
+     «Разместить рекламу», «Установить приложение» раньше раздвигали сетку за край экрана) — T-086 */
+  .nav-links{gap:.35rem!important;padding:.8rem 1rem 1rem!important;max-height:calc(100dvh - 56px);overflow-y:auto;background:var(--bg)!important}
+  .nav-links.open{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))}
   .nav-links a:not(.nav-donate),.nav-links .nav-more-panel a{display:flex!important;align-items:center;gap:.3rem;min-height:44px;padding:.55rem .85rem!important;
-    border-radius:12px!important;background:rgba(var(--fg-rgb),.035)!important;color:var(--text)}
+    border-radius:12px!important;background:rgba(var(--fg-rgb),.035)!important;color:var(--text);white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   .nav-links a.active-route{background:var(--ac-18)!important}
   .nav-links a.nav-vip{margin-left:0;justify-content:center}
   .nav-links a.nav-donate{display:flex!important;align-items:center;justify-content:center;min-height:44px;align-self:stretch}
@@ -2326,10 +2328,10 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 @media(max-width:768px){.today-grid>.today-card:last-child{grid-column:1/-1}}
 
 /* «🟢 Сейчас на сайте: N» над «Сегодня на сайте» (renderTodayOnline в games.js, счёт — presence чата) */
-.today-online{display:inline-flex;align-items:center;gap:.5rem;margin:0 0 .7rem;padding:.4rem .85rem;border-radius:999px;background:rgba(34,197,94,.1);
+.today-online{display:inline-block;line-height:1.45;margin:0 0 .7rem;padding:.4rem .85rem;border-radius:999px;background:rgba(34,197,94,.1);
   border:1px solid rgba(34,197,94,.35);color:var(--text);text-decoration:none;font-size:.8rem;font-weight:600}
 .today-online[hidden]{display:none}
-.today-online i{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e}
+.today-online i{display:inline-block;vertical-align:.08em;margin-right:.45rem;width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e}
 .today-online b{color:#4ade80}
 
 /* «🆕 Новое на сайте» (whatsNewHtml в games.js) */

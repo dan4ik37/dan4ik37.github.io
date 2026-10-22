@@ -20,11 +20,11 @@
 :root[data-theme="light"] .vthumb-ph{background:linear-gradient(135deg,#e6e8f0,#d9dce8)}
 :root[data-theme="light"] .vthumb{background:var(--bg2)}
 :root[data-theme="light"] .today-online b{color:var(--ok-t)}
-:root[data-theme="light"] :is(.xp-today,.xp-chip b,.xp-top-xp){color:#15803d}
+:root[data-theme="light"] :is(.xp-today,.xp-chip b,.xp-top-xp){color:var(--ok-t)}
 :root[data-theme="light"] .xp-lvl b.lv-t10{color:#6d28d9}
-:root[data-theme="light"] .xp-lvl b.lv-t20{color:#946200}
+:root[data-theme="light"] .xp-lvl b.lv-t20{color:var(--gold-t)}
 :root[data-theme="light"] .dc-box summary{color:#8a6d00}
-:root[data-theme="light"] .dc-warn{color:#b45309!important}
+:root[data-theme="light"] .dc-warn{color:#92400e!important}
 :root[data-theme="light"] .lb-dn{color:#8a6d00}
 :root[data-theme="light"] .id-form{--in-bg:#fff}
 :root[data-theme="light"] .shorts-page{background:var(--bg)}
@@ -32,18 +32,37 @@
 :where(:root[data-theme="light"]) .lv-badge:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#4b4d60;background:rgba(23,25,50,.06);border-color:rgba(23,25,50,.14)}
 :where(:root[data-theme="light"]) .lv-badge.lv-t5:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#0369a1;background:rgba(3,105,161,.08);border-color:rgba(3,105,161,.35)}
 :where(:root[data-theme="light"]) .lv-badge.lv-t10:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#6d28d9;background:rgba(109,40,217,.08);border-color:rgba(109,40,217,.35)}
-:where(:root[data-theme="light"]) .lv-badge.lv-t20:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#946200;background:rgba(180,120,0,.1);border-color:rgba(180,120,0,.4)}
+:where(:root[data-theme="light"]) .lv-badge.lv-t20:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:var(--gold-t);background:rgba(180,120,0,.1);border-color:rgba(180,120,0,.4)}
 :where(:root[data-theme="light"]) .lv-badge.lv-t30:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
 
 /* витрина игр (вне игры — сама игра остаётся тёмной) */
-:root[data-theme="light"] #gamesHub :is(.gm-rec,.gm-top-score){color:#946200}
+:root[data-theme="light"] #gamesHub :is(.gm-rec,.gm-top-score){color:var(--gold-t)}
 :root[data-theme="light"] #gamesHub .gm-tab.active{color:var(--accent-t)}
+/* задание дня, сезон и задания недели — в «Играх» и на своём профиле */
+:root[data-theme="light"] .dq-body b{color:#8a5a00}
+:root[data-theme="light"] .dq-btn.ghost{color:#8a5a00;border-color:rgba(180,120,0,.5)}
+:root[data-theme="light"] .dq-done{color:var(--ok-t)}
+:root[data-theme="light"] .sq{background:linear-gradient(135deg,rgba(var(--fg-rgb),.03),rgba(155,109,255,.06))}
+:root[data-theme="light"] :is(.sq-t b,.sq-sub a,.sq-how a,.sq-more a){color:color-mix(in srgb,var(--sc) 55%,#000)}
+:root[data-theme="light"] :is(.sq-bar,.sq-pb){background:rgba(var(--fg-rgb),.08)}
+:root[data-theme="light"] .sq-c{background:rgba(var(--fg-rgb),.04);border-color:rgba(var(--fg-rgb),.1);opacity:.85}
+:root[data-theme="light"] .sq-c.big{border-color:rgba(var(--fg-rgb),.22)}
+:root[data-theme="light"] .sq-c small{color:#8a5a00}
+:root[data-theme="light"] .sq-c.got::before{color:var(--ok-t)}
+:root[data-theme="light"] .sq-pick{border-color:rgba(var(--fg-rgb),.18);background:rgba(var(--fg-rgb),.04)}
+:root[data-theme="light"] .sq-pick.on{background:rgba(var(--fg-rgb),.08)}
+:root[data-theme="light"] .sq-q{background:rgba(var(--fg-rgb),.035)}
+:root[data-theme="light"] .sq-path{scrollbar-color:rgba(var(--fg-rgb),.22) transparent}
+/* подвал: служебные ссылки и подпись — читаемо на светлом */
+:root[data-theme="light"] .footer-site{opacity:.92}
+:root[data-theme="light"] .footer-copy{color:rgba(var(--fg-rgb),.55)}
+:root[data-theme="light"] :is(.pf-card,#profileStaffVipPanel,#profileStaffPanel,#donateLoginPanel,#profileVipPromo,#profileVipPerksPanel,#profileAdminPanel,.profile-stat-card){box-shadow:var(--sh-1)}
 
 /* магазин 💎 */
 :root[data-theme="light"] :is(.shp-note,.shp-wait,.pg-mode button.on){color:#8a5a00}
-:root[data-theme="light"] .shp-wallet .shp-warn{color:#b45309}
+:root[data-theme="light"] .shp-wallet .shp-warn{color:#92400e}
 :root[data-theme="light"] :is(.shp-bal,.shp-pack-gems,.shp-don-table b,.shp-price,.pg-row b,.gm-gems){color:#0369a1}
-:root[data-theme="light"] .shp-row .plus{color:#15803d}
+:root[data-theme="light"] .shp-row .plus{color:var(--ok-t)}
 :root[data-theme="light"] :is(.shp-row .minus,.shp-modal-err){color:#b91c1c}
 
 /* окно «⚙️ Настройки»: своя палитра окна — переменные (тёмные значения — в premium.css как запасные) */
@@ -197,3 +216,7 @@ html.ui2 #profileContent.pf2-other .pf-stats .profile-stat-card:has(#profileStat
   html.ui2 #profileAddFriendWrap .pf-btn:not(.pf-more){flex:1 1 auto}
 }
 @media (max-width:380px){html.ui2 .pf2-quick{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ═══ §4 Телефон 360–412 px (UI_V2): шапка не тесная — язык компактнее (≤ 380 px — без глобуса, «RU ▾»), логотип чуть меньше ═══ */
+@media (max-width:420px){html.ui2 .lang-btn{padding:.4rem .6rem;gap:.25rem;letter-spacing:.4px}}
+@media (max-width:380px){html.ui2 .lang-btn svg{display:none}html.ui2 .nav-logo{font-size:1.55rem;letter-spacing:.1em}}

@@ -110,7 +110,7 @@ const CSS = `
 .wh-spin:disabled{opacity:.75;cursor:default}
 .wh-side{display:flex;flex-direction:column;gap:.6rem;min-width:0}
 .wh-res{min-height:3.2rem;display:flex;align-items:center;justify-content:center;text-align:center;padding:.6rem;border-radius:14px;background:rgba(var(--fg-rgb),.04);font-size:1.05rem;font-weight:700}
-.wh-res b{color:#ffd166;font-size:1.35rem;margin-left:.3rem;word-break:break-word}
+.wh-res b{color:var(--gold-t);font-size:1.35rem;margin-left:.3rem;word-break:break-word}
 .wh-lbl{font-size:.72rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 #whOpts{width:100%;resize:vertical;min-height:170px;padding:.7rem .8rem;border-radius:12px;border:1.5px solid var(--line);background:rgba(var(--fg-rgb),.04);color:var(--text);font:600 .95rem Montserrat,sans-serif;line-height:1.5}
 #whOpts:focus{outline:none;border-color:var(--accent)}

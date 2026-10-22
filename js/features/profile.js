@@ -372,8 +372,8 @@ async function renderProfilePage(viewUserId){
     }
     if (profileViewedId !== targetId) return;
     // «⋯» — общая мини-карточка: звонок, «📍 К нему», блокировка, модерация (те же правила, js/features/minicard.js)
-    const more = window.D37Mini ? `<button type="button" class="pf-btn pf-btn-ghost pf-more" data-mini-uid="${esc(targetId)}" data-mini-nick="${esc(profile.nick || '')}" title="Ещё: позвонить, к нему в игру, заблокировать" aria-label="Ещё действия">⋯</button>` : '';
-    addFriendWrap.innerHTML = (buttons[status] || '') + more;
+    addFriendWrap.innerHTML = buttons[status] || '';
+    if (window.D37Mini) addFriendWrap.insertAdjacentHTML('beforeend', `<button type="button" class="pf-btn pf-btn-ghost pf-more" data-mini-uid="${esc(targetId)}" data-mini-nick="${esc(profile.nick || '')}" title="Ещё: позвонить, к нему в игру, заблокировать" aria-label="Ещё действия">⋯</button>`);
     addFriendWrap.style.display = '';
   } else {
     addFriendWrap.style.display = 'none';
@@ -679,15 +679,31 @@ const THEME_PRESETS = [
   { key: 'green',   label: 'Зелёный',                 a1: '#16a34a', a2: '#4ade80' },
   { key: 'gold',    label: 'Золотой',                 a1: '#ffd700', a2: '#ff9500' },
 ];
+// Светлая тема (T-086): текст цветом акцента — темнее самого акцента, пока контраст с самым тёмным светлым фоном (--bg2 #e7e9f1,
+// яркость 0,816) не станет ≥ 4,5 (WCAG AA). Иначе «Золотой» (#ffd700) на светлом фоне не читается. → --accent-ink (index.html: --accent-t)
+function accentInk(hex){
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim()); if (!m) return '';
+  const n = parseInt(m[1], 16), c = [n >> 16 & 255, n >> 8 & 255, n & 255];
+  const lin = v => { v /= 255; return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  for (let k = .72; k > .1; k -= .04) {
+    const d = c.map(v => Math.round(v * k)), L = .2126 * lin(d[0]) + .7152 * lin(d[1]) + .0722 * lin(d[2]);
+    if ((.816 + .05) / (L + .05) >= 4.5) return '#' + d.map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+  return '#000000';
+}
 function applyThemeAccent(profile){
+  const st = document.documentElement.style;
   if (!profile || !(isVipActive(profile) || donorLevelOf(profile) > 0) || !profile.theme_accent) {
-    document.documentElement.style.removeProperty('--accent');
-    document.documentElement.style.removeProperty('--accent2');
+    st.removeProperty('--accent');
+    st.removeProperty('--accent2');
+    st.removeProperty('--accent-ink');
     return;
   }
   const [a1, a2] = String(profile.theme_accent).split(',');
-  if (a1) document.documentElement.style.setProperty('--accent', a1.trim());
-  if (a2) document.documentElement.style.setProperty('--accent2', a2.trim());
+  if (a1) st.setProperty('--accent', a1.trim());
+  if (a2) st.setProperty('--accent2', a2.trim());
+  const ink = accentInk(a1);
+  if (ink) st.setProperty('--accent-ink', ink); else st.removeProperty('--accent-ink');
 }
 function renderThemePresets(currentValue){
   const wrap = document.getElementById('profileThemeSwatches');

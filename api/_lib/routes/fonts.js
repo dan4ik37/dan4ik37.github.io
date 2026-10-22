@@ -94,7 +94,7 @@ const CSS = `
 .ft-in:focus{border-color:var(--accent)}
 .ft-decor{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.8rem}
 .ft-d{border:1.5px solid var(--line);background:rgba(var(--fg-rgb),.03);color:var(--muted);border-radius:10px;padding:.4rem .7rem;font:700 .76rem Montserrat,sans-serif;cursor:pointer}
-.ft-d.on{color:#fff;border-color:var(--accent);background:rgba(255,45,85,.14)}
+.ft-d.on{color:var(--text-hi);border-color:var(--accent);background:rgba(255,45,85,.14)}
 .ft-note{margin-top:.7rem;font-size:.8rem}
 .ft-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.5rem;margin-top:1rem}
 .ft-row{display:flex;flex-direction:column;align-items:flex-start;gap:.2rem;text-align:left;border:1px solid var(--line);background:rgba(var(--fg-rgb),.04);color:var(--text);border-radius:12px;padding:.65rem .8rem;cursor:pointer;transition:border-color .15s,background .15s;min-width:0}
@@ -102,7 +102,7 @@ const CSS = `
 .ft-row span{font-size:1.15rem;line-height:1.35;word-break:break-all;font-family:system-ui,'Segoe UI Symbol','Noto Sans Symbols 2','Noto Sans Math',sans-serif}
 .ft-row:hover{border-color:var(--accent)}
 .ft-row.ok{border-color:#22c55e;background:rgba(34,197,94,.12)}
-.ft-copied{margin-top:.8rem;font-size:.82rem;color:#4ade80;min-height:1.2rem;word-break:break-all}
+.ft-copied{margin-top:.8rem;font-size:.82rem;color:var(--ok-hi);min-height:1.2rem;word-break:break-all}
 .ft-sym{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.7rem}
 .ft-sym button{min-width:44px;min-height:44px;border:1px solid var(--line);background:rgba(var(--fg-rgb),.04);color:var(--text);border-radius:10px;font-size:1.1rem;cursor:pointer}
 .ft-sym button:hover{border-color:var(--accent)}

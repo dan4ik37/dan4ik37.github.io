@@ -95,11 +95,11 @@ const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
 .lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:760px}
-.cp-chal{margin-top:.8rem;padding:.7rem 1rem;border-radius:12px;background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.35);color:#ffd166;font-weight:800}
+.cp-chal{margin-top:.8rem;padding:.7rem 1rem;border-radius:12px;background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.35);color:var(--gold-t);font-weight:800}
 .cp{margin-top:1.4rem;padding:1.2rem;border-radius:18px;background:var(--card);border:1px solid var(--line)}
 .cp-modes{display:flex;gap:.4rem;justify-content:center}
 .cp-modes button{border:1.5px solid var(--line);background:rgba(var(--fg-rgb),.03);color:var(--muted);border-radius:10px;padding:.5rem 1rem;font:800 .8rem Montserrat,sans-serif;cursor:pointer;min-height:40px}
-.cp-modes button.on{color:#fff;border-color:var(--accent);background:rgba(255,45,85,.14)}
+.cp-modes button.on{color:var(--text-hi);border-color:var(--accent);background:rgba(255,45,85,.14)}
 .cp-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin:1rem 0;text-align:center}
 .cp-stats div{padding:.6rem .3rem;border-radius:12px;background:rgba(var(--fg-rgb),.04)}
 .cp-stats b{display:block;font:800 1.5rem Montserrat,sans-serif}

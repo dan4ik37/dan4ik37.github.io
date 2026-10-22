@@ -105,7 +105,7 @@ const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
 .lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:780px}
-.qz-friend{margin-bottom:.4rem;padding:.7rem 1rem;border-radius:12px;background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.35);color:#ffd166;font-weight:700}
+.qz-friend{margin-bottom:.4rem;padding:.7rem 1rem;border-radius:12px;background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.35);color:var(--gold-t);font-weight:700}
 .qz{margin-top:1.4rem;padding:1.4rem;border-radius:20px;background:var(--card);border:1px solid var(--line);min-height:260px;scroll-margin-top:80px}
 .qz-start{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;min-height:220px;text-align:center;color:var(--muted)}
 .qz-go{font-size:1rem;padding:.9rem 1.8rem}
@@ -123,9 +123,9 @@ const CSS = `
 .qz-res h2{font-size:2rem;text-transform:none;letter-spacing:0;margin:0}
 .qz-res p{max-width:560px;color:rgba(var(--text-rgb),.88)}
 .qz-act{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;margin-top:.8rem}
-.qz-copied{color:#4ade80;font-size:.85rem;min-height:1.2rem}
+.qz-copied{color:var(--ok-hi);font-size:.85rem;min-height:1.2rem}
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
-.box a{color:#7cc4ff}
+.box a{color:var(--link)}
 .qz-all{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:.7rem;margin-top:.5rem}
 .qz-all div{padding:.8rem 1rem;border-radius:12px;background:rgba(var(--fg-rgb),.04)}
 .qz-all p{font-size:.86rem;color:rgba(var(--text-rgb),.8);margin-top:.3rem}
