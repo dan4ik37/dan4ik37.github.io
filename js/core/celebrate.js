@@ -457,7 +457,7 @@ body.cel-ban-on .cel-adv{display:none}
       const amt = SS.get('wxAmt');
       return '<div class="gs-sec">Погода в 3D-мирах</div>'
         + row('Эффекты погоды', sw('wxFx'), 'Дождь, снег, лужи, осенняя листва и гроза в 3D. Выкл — всегда ясно.')
-        + row('Сколько частиц', `<div class="gs-range"><input type="range" min="0" max="100" step="10" value="${amt}" data-range="wxAmt" data-mul="1" aria-label="Сколько частиц"><output data-out="wxAmt">${amt}%</output></div>`, 'Капли и снежинки вокруг; меньше — быстрее на слабом телефоне.')
+        + row('Сколько частиц', `<div class="gs-range"><input type="range" min="0" max="100" step="10" value="${amt}" data-range="wxAmt" data-mul="1" aria-label="Сколько частиц"><output data-out="wxAmt">${amt}%</output></div>`, 'Капли и снежинки; меньше — быстрее.')
         + '<div class="gs-sec">Праздники</div>'
         + row('Салют и поздравления', sw('holidays'), 'Салют в Новый год (в твою полночь), Наурыз и другие праздники.')
         + (cal ? `<p class="gs-note">Сейчас в общем мире: ${cal.icon} ${esc(cal.name)}${st ? ` · ${c.STATE_ICONS[st.state] || ''} ${esc(c.STATE_NAMES[st.state] || '')}, ${Math.round(st.temp)}°` : ''}. Времена года — примерно по 39 дней; декабрь–февраль — зима.${nx ? ` Ближайший праздник: ${nx.h.icon} ${esc(nx.h.name)}${nxD > 0 ? ` — через ${nxD} дн.` : ''}` : ''}</p>` : '')

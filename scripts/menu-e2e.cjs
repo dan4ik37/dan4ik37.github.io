@@ -5,7 +5,8 @@
 //   games — «Кубомир» (меню миров), «Подземье» (пауза), обычная игра (шапка), «Студия 3D»: где ⚙️ ⛶ ❓ и сколько раз;
 //   perf  — телефон (ЦП ×4 медленнее): меню открывается (☰ и Esc), окно ⚙️ открывается, вкладка, поиск — медианы, мс;
 //   leak  — 20 раз меню → ⚙️ → вкладка → поиск → закрыть: слушатели window/document, узлы DOM, память после сборки мусора;
-//   pad   — поддельный геймпад и клавиатура: ↑↓ по меню, Ⓐ / Ⓑ, LB/RB — вкладки, → / ← у ползунка, Esc в поиске.
+//   pad   — поддельный геймпад и клавиатура: ↑↓ по меню, Ⓐ / Ⓑ, LB/RB — вкладки, → / ← у ползунка, Esc в поиске;
+//   tour  — (не входит в all) снимок каждой вкладки окна ⚙️, подсказки в одну строку, несколько поисков — посмотреть глазами.
 // SITE_DIR — другая копия сайта (снимки «до»), TAG — подпись снимков (before / after), SHOTS — папка снимков (иначе D37_TMP).
 // Запуск из корня сайта: node scripts/menu-e2e.cjs [shots|games|perf|leak|pad|all]   (CHROME — путь к Chrome)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
@@ -408,6 +409,35 @@ async function pad(){
   await B.close();
 }
 
+// ═══ Обзор: снимок каждой вкладки окна ⚙️ в мире и несколько поисков (глазами — понятно ли) ═══
+async function tour(screen){
+  const B = await chrome(screen);
+  try {
+    console.log(`Обзор вкладок: ${screen.join(' ')} (${TAG})`);
+    await openWorld(B);
+    await B.ev(`D37Settings.open({ ctx: 'engine' })`); await sleep(300);
+    const tabs = await B.ev(`[...document.querySelectorAll('.gs-set-tabs [data-tab]')].map(b => b.dataset.tab)`);
+    for (const id of tabs) {
+      await B.ev(`document.querySelector('.gs-set-tabs [data-tab="${id}"]').click()`); await sleep(350);
+      const rows = await B.ev(`[...document.querySelectorAll('.gs-set-body .gs-row')].map(r => { const b = r.querySelector('.gs-lbl b'), s = r.querySelector('.gs-lbl small'); return [b ? b.textContent.trim() : '', s ? s.getClientRects().length : 0]; })`);
+      // подсказка в одну строку: сколько строк занимает <small> (по прямоугольникам строк)
+      const lines = await B.ev(`[...document.querySelectorAll('.gs-set-body .gs-lbl small')].map(s => { const r = s.getBoundingClientRect(), lh = parseFloat(getComputedStyle(s).lineHeight) || 16; return Math.round(r.height / lh); })`);
+      const longs = await B.ev(`[...document.querySelectorAll('.gs-set-body .gs-lbl small')].filter(s => s.getBoundingClientRect().height > (parseFloat(getComputedStyle(s).lineHeight) || 16) * 1.5).map(s => s.parentElement.querySelector('b')?.textContent.trim() || '?')`);
+      if (longs.length) console.log('    в 2+ строки:', longs.join(' · '));
+      console.log(`  ${id}: строк ${rows.length}, подсказок в 1 строку ${lines.filter(n => n <= 1).length}/${lines.length}${lines.some(n => n > 2) ? ' (длинные: ' + lines.filter(n => n > 2).length + ')' : ''}; сброс: ${await B.ev(`(() => { const b = document.querySelector('[data-gs="reset"]'); return b.hidden ? 'нет' : b.textContent; })()`)}`);
+      await B.shot('t-' + id);
+    }
+    for (const q of ['клавиши', 'fps', 'кнопки', 'мышь', 'тормозит', 'звук']) {
+      await B.ev(`(() => { const i = document.querySelector('.gs-set-find'); i.value = ${JSON.stringify(q)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`); await sleep(250);
+      const found = await B.ev(`[...document.querySelectorAll('.gs-set-body .gs-row, .gs-set-body .gs-krow')].filter(r => r.offsetParent).map(r => (r.querySelector('.gs-lbl b') || r.querySelector('span'))?.textContent.trim()).filter(Boolean)`);
+      console.log(`  поиск «${q}»: ${found.length} — ${found.slice(0, 8).join(' · ')}${found.length > 8 ? ' …' : ''}`);
+      if (q === 'кнопки') await B.shot('t-search-knopki');
+    }
+    ok(!B.errs.length, 'без ошибок страницы', B.errs.slice(0, 3));
+  } catch (e) { ok(false, 'исключение: ' + e.message); }
+  await B.close();
+}
+
 // ═══ Что растёт в DOM после открытий окна ⚙️ (по вкладкам) — для разбора ═══
 async function diag(){
   const B = await chrome(['pc', 1440, 900]);
@@ -437,6 +467,7 @@ async function diag(){
   if (MODE === 'perf' || MODE === 'all') await perf();
   if (MODE === 'leak' || MODE === 'all') await leak();
   if (MODE === 'pad' || MODE === 'all') await pad();
+  if (MODE === 'tour') for (const s of screens) await tour(s);
   server.close();
   console.log(fails ? `✗ ${fails} проверок не прошло` : '✓ всё прошло', '· снимки:', SHOTS);
   process.exit(fails ? 1 : 0);

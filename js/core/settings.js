@@ -306,7 +306,8 @@
   function hasWord(text, w){
     const t = ' ' + text;
     if (w.length >= 4 ? t.includes(w) : t.includes(' ' + w)) return true;
-    for (const e of ENDS) if (w.length - e.length >= 3 && w.endsWith(e)) return t.includes(' ' + w.slice(0, -e.length));
+    // основа и (если длинная) без ещё одной буквы — беглые гласные: «кнопки» → «кнопк» → «кноп…» = «кнопок»
+    for (const e of ENDS) if (w.length - e.length >= 3 && w.endsWith(e)) { const st = w.slice(0, -e.length); return t.includes(' ' + st) || (st.length >= 5 && t.includes(' ' + st.slice(0, -1))); }
     return false;
   }
   const matchText = (text, words) => words.every(w => hasWord(text, w));
@@ -384,7 +385,7 @@
   const volRow = () => {
     const m = get('mute');
     return row('Громкость', `<div class="gs-vol">${sw('mute', { inv: true, label: 'Звук в играх' })}${range('vol', 0, 100, 5, 1, { dis: m, label: 'Громкость' })}</div>`,
-      m ? 'Звук игр выключен — включи переключателем.' : 'Всех звуков в играх. Отдельно эффекты и голос — во вкладке «🔊 Звук».', { words: 'звук громко тихо выключить тишина' });
+      m ? 'Звук игр выключен — включи переключателем.' : 'Всех звуков игр (по отдельности — «🔊 Звук»).', { words: 'звук громко тихо выключить тишина' });
   };
   function perfRow(){
     const perf = typeof currentPerf !== 'undefined' ? currentPerf : null;   // performance-mode.js
@@ -489,11 +490,11 @@
         const cap = s => capture && capture.id === a.id && capture.slot === s;
         const k = s => { const code = a.keys[s]; return `<button type="button" class="gs-key${cap(s) ? ' cap' : ''}${code && bad.has(a.id + '|' + code) ? ' bad' : ''}" data-key="${a.id}:${s}"${a.locked ? ' disabled' : ''} title="${a.locked ? 'Эту клавишу поменять нельзя' : 'Нажми и затем нужную клавишу'}" aria-label="${esc(a.title)}: ${s ? 'вторая' : 'первая'} клавиша">${cap(s) ? 'Нажми клавишу…' : esc(C.keyName(code))}</button>`; };
         const def = a.keys[0] === (a.def[0] || '') && a.keys[1] === (a.def[1] || '');
-        html += `<div class="gs-krow" data-words="клавиша кнопка ${esc(g)}"><span>${esc(a.title)}</span>${k(0)}${k(1)}<button type="button" class="gs-kreset" data-keyreset="${a.id}" title="Как было" aria-label="${esc(a.title)}: как было"${a.locked || def ? ' disabled' : ''}>↺</button></div>`;
+        html += `<div class="gs-krow" data-words="клавиша ${esc(g)}"><span>${esc(a.title)}</span>${k(0)}${k(1)}<button type="button" class="gs-kreset" data-keyreset="${a.id}" title="Как было" aria-label="${esc(a.title)}: как было"${a.locked || def ? ' disabled' : ''}>↺</button></div>`;
       }
       html += '</div>';
     }
-    return html + row('', '<button type="button" class="gs-btn" data-keysall="1">↺ Все клавиши как были</button>', 'Нажми на клавишу и потом новую. Esc — отмена, Backspace — убрать. Работает в 3D-мирах.', { words: 'клавиши сбросить по умолчанию' });
+    return html + row('', '<button type="button" class="gs-btn" data-keysall="1">↺ Все клавиши как были</button>', 'Нажми клавишу, потом новую: Esc — отмена, Backspace — убрать.', { words: 'клавиши сбросить по умолчанию' });
   }
   function startCapture(id, slot){
     stopCapture();

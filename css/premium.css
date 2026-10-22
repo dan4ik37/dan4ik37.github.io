@@ -3816,7 +3816,7 @@ html.gs-set-open,html.gs-set-open body{overflow:hidden}
 .gs-sw input:checked+i{background:var(--accent,#7c3aed)}
 .gs-sw input:checked+i::after{transform:translateX(22px)}
 .gs-sw input:focus-visible+i{outline:2px solid #fff;outline-offset:2px}
-.gs-range{display:flex;align-items:center;gap:.7rem;width:min(300px,52vw)}
+.gs-range{display:flex;align-items:center;gap:.7rem;width:min(260px,46vw)}
 .gs-range.dis{opacity:.45}
 .gs-range input{flex:1;min-width:0;accent-color:var(--accent,#7c3aed);height:28px}
 .gs-range output{min-width:3.4em;text-align:right;font-weight:800;font-size:.82rem;white-space:nowrap}
