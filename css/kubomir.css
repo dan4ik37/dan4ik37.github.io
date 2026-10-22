@@ -226,6 +226,8 @@ body.high .kb-lockhint{animation:kbHint 1.8s ease-in-out infinite}
 /* ☁️ облако (T-019): отметки у миров, миры с других устройств, «какую версию оставить» */
 .kb-cloudbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between;margin:10px 0 2px;padding:8px 10px;border-radius:10px;background:rgba(79,140,255,.1);color:#cfe0ff;font-size:.86rem}
 .kb-cloudbar .kb-btn{min-height:34px;padding:4px 12px}
+.kb-cloudbar .kb-cfull{flex-basis:100%;color:#ffd38a}
+.kb-cloudbar .kb-cadm{flex-basis:100%;font-size:.78rem;opacity:.85}
 .kb-cl{display:block;margin-top:2px;font-size:.78rem}
 .kb-cl[hidden]{display:none}
 .kb-cl.ok{color:#86efac}.kb-cl.wait{color:#aab3d6}.kb-cl.new{color:#93c5fd}.kb-cl.warn{color:#fde68a}

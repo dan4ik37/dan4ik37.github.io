@@ -35,7 +35,7 @@ const TESTS = [
   { f: 'community-test.cjs' }, { f: 'settings-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },
   { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },
   { f: 'physics-test.cjs', soft: 'rapier' }, { f: 'tiles-test.cjs' }, { f: 'mirplay-test.cjs' }, { f: 'kubomir-input-test.cjs' },
-  { f: 'world-zones-test.cjs' }, { f: 'vehicle-test.cjs' }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' },
+  { f: 'world-zones-test.cjs' }, { f: 'vehicle-test.cjs' }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' }, { f: 'cloud-test.cjs' },
   // языки скриптов ждут настоящие таймеры (по 5–60 мс): под нагрузкой других проверок опаздывают (так упала lang-cs-test) — идут по одной
   { f: 'lang-cs-test.cjs', serial: true }, { f: 'lang-java-test.cjs', serial: true }, { f: 'lang-lua-test.cjs', serial: true }, { f: 'lang-wasm-test.cjs', env: { D37_SKIP: 'cpp,rust' } },
   { f: 'voxel-test.cjs', serial: true, retry: 2 },

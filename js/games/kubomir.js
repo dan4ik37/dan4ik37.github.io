@@ -235,10 +235,12 @@
   }
 
   // ═══ ☁️ Облако (js/core/cloud.js + ugc.sql): копия миров — открыть на другом устройстве ═══
-  // Мир живёт в браузере, облако — копия (meta.cloud { on, ver, dirty, conflict }). Вошёл — мир, который играешь, сам попадает в
-  // облако, пока есть места (3, VIP — 5); копия — каждые 3 минуты игры и при выходе в меню. Перед игрой: в облаке новее, а здесь не
-  // менялся — скачать; менялись оба — «Какую версию оставить?» (подсказка — новее по игровому времени meta.gt). Гостю чужого мира
-  // (игра вместе) облака нет — мир хозяина.
+  // Мир живёт в браузере, облако — копия (meta.cloud { on, ver, dirty, conflict, hb, hm, hx }). Вошёл — мир, который играешь, сам
+  // попадает в облако, пока есть места (сколько миров и какого размера — решает сервер: cloud_rule в ugc.sql); копия — каждые 3 минуты
+  // игры и при выходе в меню, но только если мир поменялся (подпись V.store.sig: hb — блоки, hm — вещи и настройки, hx — ещё и где стоит
+  // игрок; без картинки мира). Перед игрой: в облаке новее, а здесь не менялся — скачать; менялись оба — «Какую версию оставить?»
+  // (подсказка — новее по игровому времени meta.gt). Облако сайта переполнено — копия ждёт, мир сохраняется в браузере. Гостю чужого
+  // мира (игра вместе) облака нет — мир хозяина.
   const CLOUD = () => window.D37Cloud;
   const cloudOn = () => !!CLOUD()?.available?.();
   let cloudCache = null;   // { at, r } — ответ cloud_list (20 с)
@@ -272,7 +274,8 @@
     const r = await cloudRows(true);
     if (view !== 'menu' || !sc.isConnected) return;
     if (!r) { bar.textContent = '☁️ Облако сейчас недоступно — миры сохраняются в браузере.'; return; }
-    bar.innerHTML = `<span>☁️ Облако: ${r.used} из ${r.slots} мест · файл до ${C.fmtSize(r.max_bytes || C.RULES.maxBytes)}</span>`;
+    bar.innerHTML = `<span>☁️ Облако: ${r.used} из ${r.slots} мест · мир до ${C.fmtSize(r.max_bytes || C.RULES.maxBytes)}${r.plus ? ' ✨' : ''}</span>` + (r.full ? '<span class="kb-cfull">☁️ Облако переполнено — сохранение в браузере работает</span>' : '');
+    cloudAdmin(bar);
     const local = new Set(list.map(w => w.id));
     for (const w of list) {
       const card = sc.querySelector(`.kb-world[data-id="${CSS.escape(w.id)}"]`); if (!card) continue;
@@ -315,7 +318,23 @@
     toastMsg(res?.ok ? '☁️ Мир в облаке' : '☁️ ' + cloudWhy(res));
     cloudCache = null; showMenu();
   }
-  const cloudWhy = r => ({ conflict: 'В облаке другая версия — выбери при входе в мир, какую оставить', slots: 'Мест в облаке нет', full: 'Облако сайта заполнено — пока сохраняем только в браузере', size: 'Мир больше 5 МБ — в облако не помещается', too_fast: 'Слишком часто — сохраним позже', auth: 'Войди в аккаунт', off: 'Облако появится, когда сайт обновится', zip: 'Браузер не смог сжать мир', net: 'Нет связи — сохраним позже' })[r?.reason] || 'Не получилось — сохраним позже';
+  const cloudWhy = r => ({ conflict: 'В облаке другая версия — выбери при входе в мир, какую оставить', slots: 'Мест в облаке нет', full: 'Облако переполнено — сохранение в браузере работает', size: `Мир больше ${CLOUD()?.fmtSize?.(r.max || CLOUD().RULES.maxBytes) || 'предела'} — в облако не помещается (в браузере сохраняется)`, too_fast: 'Слишком часто — сохраним позже', auth: 'Войди в аккаунт', off: 'Облако появится, когда сайт обновится', zip: 'Браузер не смог сжать мир', net: 'Нет связи — сохраним позже' })[r?.reason] || 'Не получилось — сохраним позже';
+  // админу — сколько занято хранилища сайта (cloud_usage; бесплатный тариф — 1 ГБ на всё)
+  async function cloudAdmin(bar){
+    let admin = false; try { admin = (typeof currentRole !== 'undefined' && currentRole === 'admin') || (typeof currentProfile !== 'undefined' && currentProfile?.role === 'admin'); } catch (e) {}
+    if (!admin || !CLOUD()?.usage) return;
+    const u = await CLOUD().usage().catch(() => null);
+    if (!u?.ok || !bar.isConnected) return;
+    const s = document.createElement('span'); s.className = 'kb-cadm';
+    s.textContent = `👑 ☁️ Облако: ${Math.round(u.site_bytes / 1048576)} МБ из ${u.site_mb} · сохранения игр — ${CLOUD().fmtSize(u.cloud_bytes || 1)}, миров ${u.worlds}${u.full ? ' · новые сохранения остановлены' : ''}`;
+    bar.appendChild(s);
+  }
+  // подпись мира и упакованный мир (без картинки) — что отправлять и отправлять ли
+  async function cloudPack(meta){
+    const V = VX(), data = await V.store.packWorld(meta.id, { cloud: true });
+    return data ? { data, sig: V.store.sig?.(await V.store.world(meta.id), data) || null } : null;
+  }
+  const sigSame = (m, s, exit) => !!(s && m && m.hb === s.b && m.hm === s.m && (!exit || m.hx === s.x));
   // Отправить копию мира (meta — объект мира; идёт игра — тот же, что S.meta). Поверх — только если копия совпадала с облаком
   // (meta.cloud.ver) или выбрали «оставить эту»
   async function cloudUpload(meta, o = {}){
@@ -324,10 +343,12 @@
     if (meta._cloudBusy) return null;
     meta._cloudBusy = true;
     try {
-      const data = await V.store.packWorld(meta.id);
-      if (!data) return null;
-      const r = await C.put(ID, meta.id, { name: meta.name, data, gt: meta.gt || 0, base: Number.isInteger(m.ver) ? m.ver : null, force: !!(o.force || m.force) });
-      if (r.ok) { m.ver = r.ver; m.dirty = false; m.at = Date.now(); m.conflict = null; m.force = false; m.full = false; m.bytes = r.bytes; }
+      const pk = await cloudPack(meta);
+      if (!pk) return null;
+      // не поменялся с прошлой отправки — не отправлять (место и трафик бесплатного тарифа общие на весь сайт)
+      if (Number.isInteger(m.ver) && !o.force && !m.force && sigSame(m, pk.sig, o.exit)) { m.dirty = false; return { ok: true, same: true }; }
+      const r = await C.put(ID, meta.id, { name: meta.name, data: pk.data, gt: meta.gt || 0, base: Number.isInteger(m.ver) ? m.ver : null, force: !!(o.force || m.force) });
+      if (r.ok) { m.ver = r.ver; m.dirty = false; m.at = Date.now(); m.conflict = null; m.force = false; m.full = false; m.bytes = r.bytes; if (pk.sig) { m.hb = pk.sig.b; m.hm = pk.sig.m; m.hx = pk.sig.x; } }
       else if (r.reason === 'conflict') m.conflict = { ver: r.ver, gt: r.gt, at: r.at, device: r.device };
       else if (r.reason === 'slots') { m.on = false; m.full = true; }
       await V.store.putWorld(meta).catch(() => {});
@@ -340,7 +361,8 @@
     const C = CLOUD(), V = VX();
     const raw = await C.get(ID, row);
     const { world, recs } = V.store.unpackWorld(raw);
-    world.cloud = { on: true, ver: row.ver, dirty: false, at: Date.now() };
+    const sg = V.store.sig?.(world, raw);
+    world.cloud = Object.assign({ on: true, ver: row.ver, dirty: false, at: Date.now() }, sg ? { hb: sg.b, hm: sg.m, hx: sg.x } : {});
     world.played = Date.now();
     delete world._cloudBusy;
     await V.store.replaceWorld(id, world, recs);
@@ -361,8 +383,12 @@
       else if (!w.cloud) { w.cloud = { on: false, full: true }; await V.store.putWorld(w); toastMsg(`☁️ В облаке уже ${r.used} из ${r.slots} миров — этот сохраняется только в браузере`); }
       return w;
     }
-    const a = C.resolve(w.cloud, row);
+    let a = C.resolve(w.cloud, row);
     if (a === 'gone') { w.cloud = { on: false, off: true }; await V.store.putWorld(w); toastMsg('☁️ Этот мир убрали из облака на другом устройстве — здесь он остался'); return w; }
+    if (a === 'conflict' && w.cloud?.dirty && Number.isInteger(w.cloud.ver) && w.cloud.hb) {   // «менялся» — по подписи: только гулял — не спрашивать
+      const pk = await cloudPack(w).catch(() => null);
+      if (sigSame(w.cloud, pk?.sig, true)) { w.cloud.dirty = false; a = 'down'; }
+    }
     if (a === 'down') {
       if (sc) sc.innerHTML = '<div class="kb-load"><div class="spinner"></div><b>☁️ Скачиваем новую версию из облака…</b></div>';
       try { const nw = await cloudDownload(row, w.id); toastMsg('☁️ Загружена версия из облака'); return nw; }
@@ -613,8 +639,8 @@
     let saved = null;
     try { if (!o.quick) await (saved = saveAll(st, true)); else saved = saveAll(st, true); } catch (e) { console.error(e); }
     // ☁️ копия в облако: вышел в меню или ушёл со страницы (вкладку не закрыли); закрыли вкладку — отправится в следующий раз
-    if ((!o.quick || o.cloud) && st.meta.cloud?.on && !st.coopGuest && cloudOn()) Promise.resolve(saved).catch(() => {}).then(() => cloudUpload(st.meta)).then(r => {
-      if (r?.ok) toastMsg('☁️ Мир сохранён в облаке', true); else if (r && r.reason !== 'too_fast') toastMsg('☁️ ' + cloudWhy(r));
+    if ((!o.quick || o.cloud) && st.meta.cloud?.on && !st.coopGuest && cloudOn()) Promise.resolve(saved).catch(() => {}).then(() => cloudUpload(st.meta, { exit: true })).then(r => {
+      if (r?.ok && !r.same) toastMsg('☁️ Мир сохранён в облаке', true); else if (r && !r.ok && r.reason !== 'too_fast') toastMsg('☁️ ' + cloudWhy(r));
       if (view === 'menu' && el && !S) showMenu();
     });
     try { st.loop?.stop(); } catch (e) {}
@@ -2116,6 +2142,7 @@
       if (!r || r.ok || S !== st) return;
       if (r.reason === 'conflict') st.H?.toast('☁️ В облаке другая версия этого мира — выйди в меню миров: спросим, какую оставить');
       else if (r.reason === 'slots') st.H?.toast('☁️ ' + cloudWhy(r));
+      else if (r.reason === 'full' || r.reason === 'size') { if (!st.cloudWarned) { st.cloudWarned = true; st.H?.toast('☁️ ' + cloudWhy(r)); } st.cloudNext = now() + 30 * 60000; }
       else st.cloudNext = now() + (r.reason === 'too_fast' ? 25000 : 60000);
     }, () => { st.cloudBusy = false; });
   }

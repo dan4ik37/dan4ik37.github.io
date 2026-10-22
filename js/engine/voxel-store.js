@@ -41,6 +41,7 @@
   async function st(name, mode = 'readonly'){ const d = await open(); if (!d) return null; return d.transaction(name, mode).objectStore(name); }
 
   const RG = 32;   // область — 32×32 чанка
+  const SIG_SKIP = ['cloud', 'gt', 'played', 'time', 'day', 'coop', 'snow', 'ice', 'ents', 'thumb', '_cloudBusy'], SIG_SKIP_P = ['x', 'y', 'z', 'yaw', 'pitch', 'hp', 'food', 'sat', 'sel', 'fly'];
   const ckey = (id, cx, cz) => `${id}|${Math.floor(cx / RG)},${Math.floor(cz / RG)}|${cx}|${cz}`;
   const S = V.store = {
     ready: () => open().then(d => !!d),
@@ -166,9 +167,23 @@
       }
       return u8;
     },
-    async packWorld(id){
-      const w = await S.world(id); if (!w) return null;
+    async packWorld(id, o = {}){
+      let w = await S.world(id); if (!w) return null;
+      if (o.cloud) { w = Object.assign({}, w); delete w.thumb; delete w._cloudBusy; }   // в облако — без картинки мира (JPEG не сжимается)
       return S.packRecs(w, await S.allChunks(id));
+    },
+    // ☁️ подпись мира — отправлять в облако, только если поменялся: b — правки и плитки (всё после заголовка), m — мир без того, что
+    // меняется само (время суток и игровое, отметки облака и игры вместе, снег и лёд погоды, мобы и вещи вокруг, где стоит и куда
+    // смотрит игрок, здоровье и еда), x — m + клетка игрока, здоровье и еда (при выходе из мира)
+    sig(world, u8){
+      const H = root.D37Cloud?.hash; if (!H || !(u8 instanceof Uint8Array) || u8.length < 8) return null;
+      const hl = new DataView(u8.buffer, u8.byteOffset, u8.byteLength).getUint32(4, true);
+      const w = Object.assign({}, world || {});
+      for (const k of SIG_SKIP) delete w[k];
+      const p = w.player || null;
+      if (p) { w.player = Object.assign({}, p); for (const k of SIG_SKIP_P) delete w.player[k]; }
+      const m = H(JSON.stringify(w));
+      return { b: H(u8, 8 + hl), m, x: H(m + '|' + (p ? [Math.floor(p.x), Math.floor(p.y), Math.floor(p.z), p.hp | 0, p.food | 0].join(',') : '')) };
     },
     // разобрать (с проверкой всего: размеры, номера ячеек, «основа» — ровно V.CELLS) → { world, recs }
     unpackWorld(u8){

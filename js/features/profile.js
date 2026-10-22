@@ -315,6 +315,7 @@ async function renderProfilePage(viewUserId){
   }
   document.getElementById('profileAdminPanel').style.display = (isOwn && profile.role === 'admin') ? 'block' : 'none';
   if (isOwn && profile.role === 'admin' && typeof renderAdminDonationClaims === 'function') renderAdminDonationClaims();
+  if (isOwn && profile.role === 'admin') renderAdminCloudLine();
 
   const staffPanel = document.getElementById('profileStaffPanel');
   if (isOwn && (profile.role === 'moderator' || profile.role === 'helper')) {
@@ -1426,3 +1427,20 @@ document.addEventListener('click', e => {
     pop.style.display = 'none';
   }
 });
+
+// ☁️ «Облако» в панели администратора: сколько занято хранилища сайта (бесплатный тариф Supabase — 1 ГБ на ВСЁ: сохранения игр,
+// модели, эмодзи, реклама). cloud_usage() в ugc.sql (только админ); при 800 МБ новые сохранения в облако не принимаются (cloud_rule
+// cap_mb). Нет функции (ugc.sql не запущен) — строки нет
+async function renderAdminCloudLine(){
+  const grid = document.querySelector('#profileAdminPanel .pf-admin-grid');
+  if (!grid || typeof sbClient === 'undefined' || !sbClient) return;
+  let el = document.getElementById('pfCloudLine');
+  if (!el) { el = document.createElement('div'); el.id = 'pfCloudLine'; el.style.cssText = 'margin-top:.7rem;font-size:.78rem;opacity:.9'; el.hidden = true; grid.after(el); }
+  const res = await sbClient.rpc('cloud_usage').catch(e => ({ error: e }));
+  const u = res && !res.error ? res.data : null;
+  if (!u || !u.ok) { el.hidden = true; return; }
+  const mb = n => Math.round((+n || 0) / 1048576);
+  el.textContent = `☁️ Облако: ${mb(u.site_bytes)} МБ из ${u.site_mb} · сохранения игр — ${mb(u.cloud_bytes)} МБ (${u.worlds} миров, ${u.users} чел.)` +
+    (u.full ? ` · 🔴 занято больше ${u.cap_mb} МБ — новые сохранения в облако остановлены` : ` · предел для сохранений — ${u.cap_mb} МБ`);
+  el.hidden = false;
+}

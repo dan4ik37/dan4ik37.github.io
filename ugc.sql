@@ -353,11 +353,15 @@ create policy "ugc3d: читать свои, проверенные, модер�
 --  путь, что выдал cloud_begin (место проверено), новая версия — новый файл, старый удаляется после cloud_commit.
 --  Строка мира — cloud_saves: имя, размер, версия (растёт на каждой записи — по ней видно, что мир меняли с другого устройства),
 --  игровое время (gt, с), устройство. Писать в таблицу напрямую нельзя — только функциями ниже.
---  Числа — cloud_rule(): мест 3 (VIP — 5, только удобство), файл до 5 МБ, всего на сайт — 700 МБ (бесплатный тариф Supabase —
---  1 ГБ на всё хранилище), записывать мир не чаще раза в 20 с. Предложения — меняет владелец здесь (копия в js/core/cloud.js RULES).
---  Нужны: только auth.users и storage (есть всегда); vip_tier_of — если есть (progression.sql), иначе VIP-мест нет.
---  Проверка после запуска (гостем): /rpc/cloud_rule {"p_key":"slots"} → 3; /rpc/cloud_list {"p_game":"kubomir"} → {"ok":false,"reason":"auth"};
---  /rest/v1/cloud_saves?select=world&limit=0 → 200 (404/PGRST205 — не применён).
+--  Числа — ОДНО место, cloud_rule() (ПРЕДЛОЖЕНИЯ — решает владелец): обычный аккаунт — 2 мира по 2 МБ, VIP или «💛 Донатер» — 4 по
+--  4 МБ (только удобство); хранилище сайта — 1 ГБ на ВСЁ (бесплатный тариф Supabase: модели, эмодзи, реклама, сохранения): занято
+--  800 МБ — новые сохранения и рост старых не принимаются («облако переполнено — сохранение в браузере работает»), записывать мир
+--  не чаще раза в 20 с. Замер (scripts/cloud-test.cjs, оценка сверху): мир после часа игры ≈ 3 КБ, после 5 часов ≈ 9 КБ (сжатый);
+--  мир из Minecraft — ≈ 1,3 КБ на чанк (область 32×32 ≈ 1,3 МБ).
+--  Админ видит, сколько занято: cloud_usage() — строка «☁️ Облако: X МБ из 1024» в панели администратора.
+--  Нужны: только auth.users и storage (есть всегда); perk_tier_of (premium.sql) или vip_tier_of (progression.sql) — если есть.
+--  Проверка после запуска (гостем): /rpc/cloud_rule {"p_key":"slots"} → 2; /rpc/cloud_list {"p_game":"kubomir"} → {"ok":false,"reason":"auth"};
+--  /rpc/cloud_usage {} → {"ok":false,"reason":"auth"}; /rest/v1/cloud_saves?select=world&limit=0 → 200 (404/PGRST205 — не применён).
 -- ═══════════════════════════════════════════════════════════════════
 create table if not exists public.cloud_saves (
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -387,22 +391,51 @@ revoke all on public.cloud_saves from anon;
 
 -- ── Числа облака (одно место) ──
 create or replace function public.cloud_rule(p_key text) returns bigint language sql immutable as $$
-  select case p_key when 'slots' then 3 when 'slots_vip' then 5 when 'max_bytes' then 5242880 when 'total_mb' then 700
+  select case p_key
+    when 'slots' then 2 when 'max_bytes' then 2097152              -- обычный аккаунт: 2 мира по 2 МБ (сжатый файл)
+    when 'slots_plus' then 4 when 'max_bytes_plus' then 4194304    -- VIP или «💛 Донатер»: 4 мира по 4 МБ
+    when 'site_mb' then 1024                                       -- всё хранилище сайта (бесплатный тариф Supabase)
+    when 'cap_mb' then 800                                         -- занято столько (всё хранилище) — новых сохранений нет
     when 'min_gap_s' then 20 when 'pending_min' then 15 else null end::bigint
 $$;
 grant execute on function public.cloud_rule(text) to anon, authenticated;
 
--- мест у человека: VIP (любого уровня, в т. ч. за уровень) — больше; нет vip_tier_of — как у всех
-create or replace function public.cloud_slots(uid uuid) returns int
+-- VIP (любой, в т. ч. за уровень) или «💛 Донатер» — лучшая ветка perk_tier_of (premium.sql); нет её — vip_tier_of; нет и её — нет
+create or replace function public.cloud_plus(uid uuid) returns boolean
 language plpgsql stable security definer set search_path = public as $$
 declare t text;
 begin
-  if to_regprocedure('public.vip_tier_of(uuid)') is not null then
+  if to_regprocedure('public.perk_tier_of(uuid)') is not null then
+    begin execute 'select public.perk_tier_of($1)' into t using uid; exception when others then t := null; end;
+  elsif to_regprocedure('public.vip_tier_of(uuid)') is not null then
     begin execute 'select public.vip_tier_of($1)' into t using uid; exception when others then t := null; end;
   end if;
-  return (case when t is not null then public.cloud_rule('slots_vip') else public.cloud_rule('slots') end)::int;
+  return t is not null and t <> '';
 end $$;
+revoke execute on function public.cloud_plus(uuid) from public, anon, authenticated;
+create or replace function public.cloud_slots(uid uuid) returns int language sql stable security definer set search_path = public as $$
+  select (case when public.cloud_plus(uid) then public.cloud_rule('slots_plus') else public.cloud_rule('slots') end)::int
+$$;
 revoke execute on function public.cloud_slots(uuid) from public, anon, authenticated;
+create or replace function public.cloud_max(uid uuid) returns bigint language sql stable security definer set search_path = public as $$
+  select case when public.cloud_plus(uid) then public.cloud_rule('max_bytes_plus') else public.cloud_rule('max_bytes') end
+$$;
+revoke execute on function public.cloud_max(uuid) from public, anon, authenticated;
+-- сколько занято всего хранилища сайта (все папки), байт; нет доступа к storage — хотя бы сохранения
+create or replace function public.cloud_site_bytes() returns bigint
+language plpgsql stable security definer set search_path = public, storage as $$
+declare n bigint;
+begin
+  begin select coalesce(sum(nullif(o.metadata ->> 'size', '')::bigint), 0) into n from storage.objects o;
+  exception when others then n := null;
+  end;
+  return greatest(coalesce(n, 0), (select coalesce(sum(s.bytes), 0) from public.cloud_saves s));
+end $$;
+revoke execute on function public.cloud_site_bytes() from public, anon, authenticated;
+create or replace function public.cloud_full() returns boolean language sql stable security definer set search_path = public as $$
+  select public.cloud_site_bytes() >= public.cloud_rule('cap_mb') * 1048576
+$$;
+revoke execute on function public.cloud_full() from public, anon, authenticated;
 
 -- ── Свои миры в облаке ──
 create or replace function public.cloud_list(p_game text) returns jsonb
@@ -410,7 +443,7 @@ language plpgsql stable security definer set search_path = public as $$
 declare uid uuid := auth.uid();
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
-  return jsonb_build_object('ok', true, 'slots', public.cloud_slots(uid), 'max_bytes', public.cloud_rule('max_bytes'),
+  return jsonb_build_object('ok', true, 'slots', public.cloud_slots(uid), 'max_bytes', public.cloud_max(uid), 'plus', public.cloud_plus(uid), 'full', public.cloud_full(),
     'used', (select count(*) from public.cloud_saves s where s.user_id = uid and s.game = p_game and s.path is not null),
     'list', coalesce((select jsonb_agg(jsonb_build_object('world', s.world, 'name', s.name, 'bytes', s.bytes, 'ver', s.ver, 'gt', s.gt,
         'device', s.device, 'path', s.path, 'at', s.updated_at) order by s.updated_at desc)
@@ -422,12 +455,13 @@ grant execute on function public.cloud_list(text) to anon, authenticated;
 --    другая — 'conflict' (мир меняли с другого устройства: игра спросит, какую версию оставить; p_force — «оставить эту») ──
 create or replace function public.cloud_begin(p_game text, p_world text, p_name text, p_bytes bigint, p_base int, p_gt double precision, p_device text, p_force boolean)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); s public.cloud_saves%rowtype; n int; sl int; tot bigint; p text; gap int := public.cloud_rule('min_gap_s')::int;
+declare uid uuid := auth.uid(); s public.cloud_saves%rowtype; n int; sl int; p text; gap int := public.cloud_rule('min_gap_s')::int; mx bigint;
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if coalesce(p_game, '') !~ '^[a-z]{2,16}$' or coalesce(p_world, '') !~ '^[A-Za-z0-9_-]{2,40}$' then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
-  if p_bytes is null or p_bytes < 1 or p_bytes > public.cloud_rule('max_bytes') then
-    return jsonb_build_object('ok', false, 'reason', 'size', 'max', public.cloud_rule('max_bytes'));
+  mx := public.cloud_max(uid);
+  if p_bytes is null or p_bytes < 1 or p_bytes > mx then
+    return jsonb_build_object('ok', false, 'reason', 'size', 'max', mx);
   end if;
   -- брошенные места (файл так и не дошёл) — освободить
   delete from public.cloud_saves where user_id = uid and path is null and coalesce(pend_at, created_at) < now() - make_interval(mins => public.cloud_rule('pending_min')::int);
@@ -446,9 +480,11 @@ begin
     insert into public.cloud_saves (user_id, game, world, name, pend_at) values (uid, p_game, p_world, left(btrim(coalesce(p_name, '')), 40), now())
       returning * into s;
   end if;
-  -- всё облако сайта (бесплатный тариф): не больше total_mb
-  select coalesce(sum(bytes), 0) into tot from public.cloud_saves;
-  if tot - s.bytes + p_bytes > public.cloud_rule('total_mb') * 1048576 then return jsonb_build_object('ok', false, 'reason', 'full'); end if;
+  -- хранилище сайта (бесплатный тариф, 1 ГБ на всё): занято больше cap_mb — новый мир и рост старого не принимаем (не растущий — можно)
+  if p_bytes > coalesce(s.bytes, 0) and public.cloud_site_bytes() + p_bytes - coalesce(s.bytes, 0) > public.cloud_rule('cap_mb') * 1048576 then
+    if s.path is null then delete from public.cloud_saves where user_id = uid and game = p_game and world = p_world; end if;
+    return jsonb_build_object('ok', false, 'reason', 'full');
+  end if;
   p := uid::text || '/' || p_game || '/' || p_world || '/' || (s.ver + 1)::text || '-' || substr(md5(random()::text || clock_timestamp()::text), 1, 10) || '.kbw';
   update public.cloud_saves set pending = p, pend_at = now() where user_id = uid and game = p_game and world = p_world;
   return jsonb_build_object('ok', true, 'path', p, 'ver', s.ver);
@@ -494,10 +530,26 @@ end $$;
 revoke execute on function public.cloud_delete(text, text) from public, anon;
 grant execute on function public.cloud_delete(text, text) to authenticated;
 
--- ── Хранилище saves: закрытое, файл до 5 МБ; загрузить — только выданный путь (место проверено), читать и удалять — свою папку ──
+-- ── Админ: сколько занято (строка «☁️ Облако: X МБ из 1024» в панели администратора) ──
+create or replace function public.cloud_usage() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); sb bigint;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not exists (select 1 from public.profiles p where p.id = uid and p.role = 'admin') then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  sb := public.cloud_site_bytes();
+  return jsonb_build_object('ok', true, 'site_bytes', sb, 'site_mb', public.cloud_rule('site_mb'), 'cap_mb', public.cloud_rule('cap_mb'),
+    'full', sb >= public.cloud_rule('cap_mb') * 1048576,
+    'cloud_bytes', (select coalesce(sum(s.bytes), 0) from public.cloud_saves s), 'worlds', (select count(*) from public.cloud_saves s where s.path is not null),
+    'users', (select count(distinct s.user_id) from public.cloud_saves s where s.path is not null));
+end $$;
+revoke execute on function public.cloud_usage() from public, anon;
+grant execute on function public.cloud_usage() to authenticated;
+
+-- ── Хранилище saves: закрытое, файл до 4 МБ (больший предел — у VIP); загрузить — только выданный путь, читать и удалять — свою папку ──
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('saves', 'saves', false, 5242880, array['application/octet-stream'])
-on conflict (id) do update set public = false, file_size_limit = 5242880, allowed_mime_types = array['application/octet-stream'];
+values ('saves', 'saves', false, 4194304, array['application/octet-stream'])
+on conflict (id) do update set public = false, file_size_limit = 4194304, allowed_mime_types = array['application/octet-stream'];
 
 drop policy if exists "saves: загрузить выданный путь" on storage.objects;
 create policy "saves: загрузить выданный путь" on storage.objects for insert to authenticated
