@@ -134,6 +134,10 @@
       "destination": "/api/pages?page=raid"
     },
     {
+      "source": "/api/diag",
+      "destination": "/api/pages?page=diag"
+    },
+    {
       "source": "/api/feed",
       "destination": "/api/pages?page=feed"
     },

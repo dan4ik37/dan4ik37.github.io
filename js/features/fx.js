@@ -73,18 +73,20 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') setOpen(false); });
     panel.addEventListener('click', () => setOpen(false));
 
+    // Классы — только toggle(…, вкл): add/remove пишут атрибут class даже без перемены, а MutationObserver ниже смотрит на class
+    // внутри links (там и сама пилюля) → было вечное «поменял → снова поставить» на каждом кадре (≈ 1 мс на кадр в играх на телефоне)
     function placeIndicator() {
       const desktop = window.innerWidth > 1180;
       let target = $('a.active-route', links);
       const inMore = target && panel.contains(target);
       wrap.classList.toggle('has-active', !!inMore);
       if (inMore) target = btn;
-      if (!desktop || !target || target.classList.contains('nav-donate')) { ind.classList.remove('on'); return; }
+      if (!desktop || !target || target.classList.contains('nav-donate')) { ind.classList.toggle('on', false); return; }
       const lr = links.getBoundingClientRect(), tr = target.getBoundingClientRect();
-      if (!tr.width) { ind.classList.remove('on'); return; }
+      if (!tr.width) { ind.classList.toggle('on', false); return; }
       ind.style.width = tr.width + 'px';
       ind.style.transform = 'translateX(' + (tr.left - lr.left) + 'px)';
-      ind.classList.add('on');
+      ind.classList.toggle('on', true);
     }
     const place = () => requestAnimationFrame(placeIndicator);
     new MutationObserver(place).observe(links, { attributes: true, attributeFilter: ['class'], subtree: true });

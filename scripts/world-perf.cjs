@@ -177,6 +177,35 @@ const server = http.createServer((req, res) => {
       console.log('программы', JSON.stringify(r));
       throw new Error('замер программ готов');
     }
+    if (MODE === 'base') {   // военные базы боевой зоны (mir-base.js, startWar): у базы и в центре кольца; есть _test.fill — 12 баз штаба 5
+      await send('Page.navigate', { url: BASE + '/#/games/world' });
+      let ok9 = false; for (let i = 0; i < 240 && !ok9; i++) { await sleep(500); try { ok9 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+      if (!ok9) throw new Error('мир не открылся');
+      const prep = await ev(`(async () => {
+        const A = window.D37Age; if (A) { A.known = () => true; A.canOpen = () => true; A.allows = () => true; A.group = () => 'adult'; }
+        const S = GAME_IMPL.world._test.state(), z = S.zones, P = S.P, L = MirWar.PLOTS, Q = L[1];
+        S.fixedTime = 13; P.place(Q.cx, MirZones.terrain(Q.cx, Q.cz) + .3, Q.cz, 0);
+        const zs = z.zoneState('war'); if (!zs.ready) await z.buildNow(zs);
+        const W = S.base?.war; let filled = 0;
+        if (W?._test?.fill) filled = await W._test.fill(5);
+        await new Promise(r => setTimeout(r, 4000));
+        window.__long = 0; window.__fr = 0; let last = performance.now();
+        const tick = t => { const d = t - last; last = t; window.__fr++; if (d > 50) window.__long++; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+        return { filled, views: W?._test?.views?.() ?? null };
+      })()`, 240000);
+      console.log('подготовка', JSON.stringify(prep));
+      await send('Emulation.setCPUThrottlingRate', { rate: +RATE || 4 });
+      for (const [name, js] of [['у базы (участок wb02)', `const Q = MirWar.PLOTS[1]; P.place(Q.cx, MirZones.terrain(Q.cx, Q.cz) + .3, Q.z1 - 6, 0); S.rig.yaw = 0`],
+        ['центр кольца баз', `const C = MirWar.CENTER; P.place((C.x0 + C.x1) / 2, .3, C.z0 + 4, 0); S.rig.yaw = 0`], ['у базы wb07 (юго-запад)', `const Q = MirWar.PLOTS[6]; P.place(Q.cx, .3, Q.z0 + 8, Math.PI); S.rig.yaw = Math.PI`]]) {
+        await ev(`(async () => { const S = GAME_IMPL.world._test.state(), P = S.P; ${js}; await new Promise(r => setTimeout(r, 3000)); const ST = S.R.stats; ST.frames = ST.sumDt = ST.maxDt = ST.sumCpu = ST.maxCpu = ST.sumR = 0; window.__long = 0; window.__fr = 0; })()`, 60000);
+        await sleep(6000);
+        const s = await ev(`(() => { const S = GAME_IMPL.world._test.state(), R = S.R, ST = R.stats, n = Math.max(1, ST.frames), m = R.r.info.memory;
+          return { fps: +(1000 / (ST.sumDt / n)).toFixed(1), cpu: +(ST.sumCpu / n).toFixed(2), cpuMax: +ST.maxCpu.toFixed(1), long: window.__long, frames: window.__fr, calls: ST.calls, tris: R.r.info.render.triangles,
+            geo: m.geometries, tex: m.textures, bodies: S.ph.cols?.size ?? null, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null, q: R.q, views: S.base?.war?._test?.views?.() ?? null }; })()`);
+        s.name = name; rows.push(s); console.log(name.padEnd(30), JSON.stringify(s));
+      }
+      throw new Error('замер баз готов');
+    }
     if (MODE === 'approach') {   // въезд в каждую зону — на свежей странице (зона строится один раз)
       for (const [zid, from] of [['metro', [650, 225]], ['war', [-288, 720]], ['kids', [230, -330]]].filter(([k]) => !process.env.ZONES || process.env.ZONES.split(',').includes(k))) {
         await send('Page.navigate', { url: 'about:blank' }); await sleep(300);
