@@ -2072,7 +2072,11 @@
     const w = wrap(), h = st.hudEl; if (!w || !h || !st.I?.touch) return;
     const W = w.clientWidth, H = w.clientHeight; if (!W || !H) return;
     const s = Math.max(24, Math.min(W > H ? (H <= 460 ? 32 : 40) : 34, Math.floor((W - 24 - 16 - 8) / 9)));
-    if (st.kbS !== s) { st.kbS = s; h.style.setProperty('--kb-s', s + 'px'); }
+    if (st.kbS !== s) {
+      st.kbS = s; h.style.setProperty('--kb-s', s + 'px');
+      // кнопки встают выше панели — мерить её после смены размера (при «уменьшить движение» у сайта всё с переходом 0,01 мс)
+      requestAnimationFrame(() => { if (S === st) st.tl?.layout(true); });
+    }
     st.tl?.layout();
   }
 

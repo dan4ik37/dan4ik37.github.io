@@ -185,6 +185,7 @@ let BASE = '';
         console.log('  интерфейс занимает', cov?.pct + '%', cov && cov.W + '×' + cov.H);
         await shot(send, tag);
         results.push({ screen: VW + '×' + VH, pct: cov?.pct });
+        if (MODE === 'full') await worldChecks(B, VW, VH);
       }
     } catch (e) { ok(false, 'прогон упал: ' + (e.message || e)); }
     finally { B?.close(); }
@@ -230,7 +231,7 @@ async function fullChecks(B, VW, VH, row){
   ok(jump && G.btns.every(b => b.w <= jump.w), '«прыжок» — самая крупная');
   ok(jump && jump.x > G.wrap.l + G.wrap.w * .6, '«прыжок» — справа (под большим пальцем)', jump);
   // пересчитать раскладку ещё раз — кнопки там же (раскладка не зависит от того, когда её считали)
-  const dbg = await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), w = document.querySelector('.kb-wrap').getBoundingClientRect(), r = s => { const e = document.querySelector(s); if (!e) return null; const q = e.getBoundingClientRect(); return [Math.round(q.top - w.top), Math.round(q.bottom - w.top), Math.round(q.height)]; }; const a = { bottom: r('.kb-bottom'), bars: r('.kb-bars'), hot: r('.kb-hotbar'), air: r('.kb-air'), iname: r('.kb-iname'), s: getComputedStyle(document.querySelector('.kb-hud')).getPropertyValue('--kb-s') }; S.tl.layout(true); return a; })()`);
+  const dbg = await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), w = document.querySelector('.kb-wrap').getBoundingClientRect(), r = s => { const e = document.querySelector(s); if (!e) return null; const q = e.getBoundingClientRect(); return [Math.round(q.top - w.top), Math.round(q.bottom - w.top), Math.round(q.height)]; }; const a = { bottom: r('.kb-bottom'), bars: r('.kb-bars'), hot: r('.kb-hotbar'), air: r('.kb-air'), iname: r('.kb-iname'), s: getComputedStyle(document.querySelector('.kb-hud')).getPropertyValue('--kb-s'), av: S.tl.o.avoid().map(q => [q.label, Math.round(q.t), Math.round(q.b), Math.round(q.l), Math.round(q.r)]), def: (d => [Math.round(d.jump.x), Math.round(d.jump.y)])(S.tl.o.defaults(S.tl.W, S.tl.H, 1, {})) }; a.before = [S.tl.W, S.tl.H, Math.round(S.tl.pos.get('jump')?.y), document.querySelector('.kb-tbar [data-id="jump"]').style.top, document.querySelectorAll('.kb-tbar').length, D37TouchLayout._test.live()]; S.tl.layout(true); a.after = [S.tl.W, S.tl.H, Math.round(S.tl.pos.get('jump')?.y), document.querySelector('.kb-tbar [data-id="jump"]').style.top]; return a; })()`);
   const jr = (await geo()).btns.find(b => b.id === 'jump');
   ok(jr && Math.abs(jr.rx - jump.rx) < 1 && Math.abs(jr.ry - jump.ry) < 1, 'раскладка пересчитана заново — кнопки на тех же местах', [jump, jr, dbg]);
   // нажатия: каждая кнопка → своё действие
@@ -305,7 +306,11 @@ async function fullChecks(B, VW, VH, row){
   const dx = land ? -150 : -90, dy = land ? -60 : -120;
   const steps = []; for (let i = 1; i <= 6; i++) steps.push([pj.x + dx * i / 6, pj.y + dy * i / 6]);
   await touch(send, pj.x, pj.y, 60, steps);
-  for (let i = 0; i < 2; i++) { const p = await ev(`(() => { const r = document.querySelector('.tl-ed [data-tl="bigger"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`); await touch(send, p[0], p[1], 50); }
+  for (let i = 0; i < 2; i++) {   // «＋» два раза; ждём, пока надпись размера сменится (касание доходит до страницы не мгновенно)
+    const p = await ev(`(() => { const r = document.querySelector('.tl-ed [data-tl="bigger"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2, document.querySelector('.tl-ed-sz').textContent]; })()`);
+    await touch(send, p[0], p[1], 50);
+    await ev(`(async () => { const was = ${JSON.stringify(p[2])}; for (let i = 0; i < 40 && document.querySelector('.tl-ed-sz').textContent === was; i++) await new Promise(r => setTimeout(r, 25)); return 1; })()`);
+  }
   const pj2 = await ev(`(() => { const r = document.querySelector('.tl-ed .tl-p[data-id="jump"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
   ok(Math.abs(pj2.x - (pj.x + dx)) < 6 && Math.abs(pj2.y - (pj.y + dy)) < 6, 'в редакторе «прыжок» перетащился пальцем', [pj, pj2]);
   ok(pj2.w > pj.w * 1.12, 'кнопка «+» — «прыжок» крупнее', [pj.w, pj2.w]);
@@ -326,7 +331,7 @@ async function fullChecks(B, VW, VH, row){
   await ev(`(() => { D37TouchLayout.edit(); return 1; })()`); await sleep(400);
   for (const k of ['reset', 'done']) { const p = await ev(`(() => { const r = document.querySelector('.tl-ed [data-tl="${k}"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`); await touch(send, p[0], p[1], 50); await sleep(300); }
   const back = (await geo()).btns.find(b => b.id === 'jump');
-  const dbg2 = await ev(`(() => { const w = document.querySelector('.kb-wrap').getBoundingClientRect(), r = s => { const e = document.querySelector(s); if (!e) return null; const q = e.getBoundingClientRect(); return [Math.round(q.top - w.top), Math.round(q.bottom - w.top), Math.round(q.height), e.hidden ? 'h' : '']; }; return { bottom: r('.kb-bottom'), bars: r('.kb-bars'), hot: r('.kb-hotbar'), oslot: r('.kb-oslot'), air: r('.kb-air'), s: getComputedStyle(document.querySelector('.kb-hud')).getPropertyValue('--kb-s'), wrap: [w.width, w.height] }; })()`);
+  const dbg2 = await ev(`(() => { const w = document.querySelector('.kb-wrap').getBoundingClientRect(), r = s => { const e = document.querySelector(s); if (!e) return null; const q = e.getBoundingClientRect(); return [Math.round(q.top - w.top), Math.round(q.bottom - w.top), Math.round(q.height), e.hidden ? 'h' : '']; }; return { bottom: r('.kb-bottom'), bars: r('.kb-bars'), hot: r('.kb-hotbar'), oslot: r('.kb-oslot'), air: r('.kb-air'), s: getComputedStyle(document.querySelector('.kb-hud')).getPropertyValue('--kb-s'), wrap: [w.width, w.height], av: (S => S.tl.o.avoid().map(q => [q.label, Math.round(q.t), Math.round(q.b), Math.round(q.l), Math.round(q.r)]))(GAME_IMPL.kubomir._test.state()), def: (S => (d => [Math.round(d.jump.x), Math.round(d.jump.y)])(S.tl.o.defaults(S.tl.W, S.tl.H, 1, {})))(GAME_IMPL.kubomir._test.state()) }; })()`);
   ok(back && Math.abs(back.rx - jump.rx) < 2 && Math.abs(back.ry - jump.ry) < 2 && Math.abs(back.w - jump.w) < 2, '«Как было» — «прыжок» на месте по умолчанию', [back, jump, dbg, dbg2]);
   // ── утечки: вещи 20 раз, редактор 10 раз ──
   const c0 = await counters(send, ev);
@@ -345,6 +350,53 @@ async function fullChecks(B, VW, VH, row){
   console.log('  узлы / слушатели: до', JSON.stringify(c0), '→ после 20+10', JSON.stringify(c1), '→ ещё 20+10', JSON.stringify(c2));
   row.leak = { c0, c1, c2 };
   ok(c2.listeners - c1.listeners <= 2 && c2.nodes - c1.nodes <= 60, 'вещи 20 раз и редактор 10 раз — слушатели и узлы не растут', { c0, c1, c2 });
+}
+
+// ═══ «Мир Денчика»: кнопки движка (.e-btn) — сетка, пока игрок не переставил; переставил — свободно (.tl-free), «Как было» — снова сетка ═══
+async function worldChecks(B, VW, VH){
+  const { send, ev } = B;
+  const geo = () => ev(`(() => { const w = document.querySelector('.wld-wrap').getBoundingClientRect(), eb = document.querySelector('.e-btns');
+    const btns = [...document.querySelectorAll('.e-btns .e-btn')].filter(b => !b.hidden && b.getBoundingClientRect().width).map((b, i) => { const r = b.getBoundingClientRect(); return { i, l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, x: r.left + r.width / 2, y: r.top + r.height / 2, rx: r.left + r.width / 2 - w.left, ry: r.top + r.height / 2 - w.top }; });
+    return { btns, free: eb?.classList.contains('tl-free') }; })()`);
+  if (process.env.TH_DBG) console.log('   d37e-css:', JSON.stringify(await ev(`(() => { const t = document.getElementById('d37e-css')?.textContent || ''; const i = t.indexOf('tl-free'); return [t.length, t.slice(Math.max(0, i - 30), i + 260), [...document.getElementById('d37e-css').sheet.cssRules].filter(r => r.cssText.includes('tl-free')).map(r => r.cssText)]; })()`)));
+  if (process.env.TH_DBG) console.log('   переход:', JSON.stringify(await ev(`(() => { const s = getComputedStyle(document.querySelector('.e-btns')); return [s.transitionProperty, s.transitionDuration, s.animationName]; })()`)));
+  if (process.env.TH_DBG) console.log('   переключение tl-free:', JSON.stringify(await ev(`(() => { const eb = document.querySelector('.e-btns'), c = () => { const s = getComputedStyle(eb); return s.right + '/' + s.bottom + '/' + s.paddingBottom + '/' + s.display; }; const a = c(); eb.classList.add('tl-free'); const b = c(); eb.classList.remove('tl-free'); const d = c(); void eb.offsetWidth; const e = c(); return [a, b, d, e]; })()`)));
+  const G = await geo();
+  ok(G.btns.length >= 2 && G.btns.every(b => b.w >= 46 && b.w <= 64) && !G.free, '«Мир»: кнопки движка 50 / 62 px, сеткой', G.btns.map(b => Math.round(b.w)));
+  const jb = G.btns.reduce((a, b) => b.w > a.w ? b : a, G.btns[0]);   // «прыжок» — большая
+  await ev(`(() => { D37Settings.open({ ctx: 'engine', tab: 'controls' }); return 1; })()`); await sleep(500);
+  const row = await ev(`!!document.querySelector('#gsSettings [data-tl-edit]:not([disabled])')`);
+  ok(row, '«Мир»: ⚙️ → Управление — есть «Настроить кнопки»');
+  if (!row) { await ev(`D37Settings.close()`); return; }
+  await ev(`(() => { document.querySelector('#gsSettings [data-tl-edit]').click(); return 1; })()`); await sleep(500);
+  const pj = await ev(`(() => { const p = document.querySelector('.tl-ed .tl-p[data-id="jump"]'); if (!p) return null; const r = p.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, n: document.querySelectorAll('.tl-ed .tl-p').length }; })()`);
+  ok(!!pj && Math.abs(pj.x - jb.x) < 12 && Math.abs(pj.y - jb.y) < 2, '«Мир»: в редакторе «прыжок» там же, где в сетке (сетка — с кнопкой «действие»: без неё сдвиг на промежуток)', [pj, jb]);
+  if (!pj) return;
+  const steps = []; for (let i = 1; i <= 6; i++) steps.push([pj.x - 90 * i / 6, pj.y - 70 * i / 6]);
+  await touch(send, pj.x, pj.y, 60, steps);
+  const done = await ev(`(() => { const r = document.querySelector('.tl-ed [data-tl="done"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await touch(send, done[0], done[1], 50); await sleep(400);
+  const G1 = await geo(), j1 = G1.btns.reduce((a, b) => b.w > a.w ? b : a, G1.btns[0]);
+  ok(G1.free && Math.abs(j1.x - (pj.x - 90)) < 4 && Math.abs(j1.y - (pj.y - 70)) < 4 && Math.abs(j1.w - jb.w) < 2, '«Мир»: «Готово» — «прыжок» на новом месте, кнопки — свободно', [j1, pj, G1.free]);
+  await ev(`(() => { const S = GAME_IMPL.world._test.state(); window.__wj = []; const C = S.C, cp = C.press; C.press = (a, v) => { __wj.push(a + ':' + v); return cp(a, v); }; return 1; })()`);
+  const hitEl = await ev(`(() => { const e = document.elementFromPoint(${j1.x}, ${j1.y}); if (!e) return null; const path = []; for (let p = e; p && path.length < 6; p = p.parentElement) path.push((p.tagName + '.' + String(p.className || '').split(' ').join('.')).slice(0, 40)); return (e.closest('.e-btn') ? 'кнопка' : 'не кнопка') + ': ' + path.join(' < ') + ' | ' + e.outerHTML.slice(0, 160); })()`);
+  await touch(send, j1.x, j1.y, 120);
+  const log = await ev(`window.__wj || []`);
+  ok(log.includes('jump:true') && log.includes('jump:false'), '«Мир»: на новом месте «прыжок» прыгает', [log, hitEl]);
+  const vis0 = await ev(`[...document.querySelectorAll('.e-btns .e-btn')].map(b => b.hidden ? 0 : 1).join('')`);
+  await ev(`(() => { D37TouchLayout.edit(); return 1; })()`); await sleep(300);
+  for (const k of ['reset', 'done']) { const p = await ev(`(() => { const r = document.querySelector('.tl-ed [data-tl="${k}"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`); await touch(send, p[0], p[1], 50); await sleep(300); }
+  const G2 = await geo(), j2 = G2.btns.reduce((a, b) => b.w > a.w ? b : a, G2.btns[0]);
+  const dump = await ev(`(() => { const all = [...document.querySelectorAll('.e-btns')], eb = all[0], cs = getComputedStyle(eb); return { n: all.length, par: eb.parentElement.className, cls: eb.className, st: eb.getAttribute('style'), pad: cs.paddingBottom, tr: cs.transform, bottom: cs.bottom, right: cs.right, pos: cs.position, disp: cs.display, vis: [...eb.children].map(b => (b.hidden ? 'h' : 'v') + ':' + b.getAttribute('style')).join(' | '), vis0: '${vis0}', css: [...document.styleSheets].filter(s => { try { return [...s.cssRules].some(r => r.cssText?.includes('e-btns')); } catch (e) { return false; } }).map(s => (s.href || s.ownerNode?.id || 'inline').slice(-30)) }; })()`);
+  ok(!G2.free && Math.abs(j2.rx - jb.rx) < 2 && Math.abs(j2.ry - jb.ry) < 2, '«Мир»: «Как было» — снова сетка, «прыжок» на месте', [j2, jb, G2.free, dump]);
+  if (process.env.TH_DBG) {
+    await send('DOM.enable'); await send('CSS.enable');
+    const doc = await send('DOM.getDocument', { depth: 1 });
+    const n = await send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '.e-btns' });
+    const m = await send('CSS.getMatchedStylesForNode', { nodeId: n.nodeId });
+    for (const r of m.matchedCSSRules) console.log('   правило:', r.rule.selectorList.text, '→', r.rule.style.cssProperties.filter(p => /right|bottom|padding|inset/.test(p.name)).map(p => p.name + ':' + p.value + (p.important ? '!' : '')).join('; '));
+    if (m.inlineStyle) console.log('   inline:', m.inlineStyle.cssText);
+  }
 }
 
 // ═══ «Подземье»: кнопки не наезжают, под пальцем — свои, «Настроить кнопки» в ⚙️ → «⛏ Подземье» двигает их (CSS-переменные) ═══

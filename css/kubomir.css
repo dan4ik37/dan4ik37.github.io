@@ -227,6 +227,10 @@ body.high .kb-lockhint{animation:kbHint 1.8s ease-in-out infinite}
 .kb-touch .kb-tip.open button{display:block;width:24px;height:24px}
 .kb-touch .kb-tip.mini{width:30px;min-height:30px;height:30px;padding:0;justify-content:center;border-radius:50%}
 .kb-touch .kb-tip.mini>div{display:none}
+/* без переходов размера и места: при «уменьшить движение» сайт даёт всему переход 0,01 мс — раскладка кнопок (js/core/touch-layout.js)
+   мерила бы панель и кнопки на старом месте (у ячеек остаются только свои переходы: подскок выбранной) */
+.kb-touch .kb-bottom,.kb-touch .kb-bottom *:not(.kb-slot),.kb-touch .kb-oslot,.kb-tbar .kb-tbtn{transition:none!important}
+.kb-touch .kb-slot{transition-property:transform,border-color,background!important}
 html.gs-compact .gs-fs .kb-touch .kb-tip:not(.open){max-width:min(360px,calc(100% - 150px))}
 html.gs-compact .gs-fs .kb-top .kb-where{display:none}
 html.gs-compact .gs-fs .kb-top .wld-topbtns{gap:4px}

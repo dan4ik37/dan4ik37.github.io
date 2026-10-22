@@ -3,8 +3,9 @@
 //  сообщения, прицел, кнопки телефона (прыжок, действие, присесть, бег…) и джойстик — стили вставляет сам (#d37e-css)
 // ═══════════════════════════════════════
 // H = D37E.ui(el, C) → H.prompt(текст, удержание 0…1), H.stamina(0…1, выдохся), H.toast(текст, хорошо?), H.crosshair(вкл),
-// H.buttons([{ id, icon, label, action, hold }]) — кнопки справа снизу (тем же путём, что клавиши: C.press), H.show(id, вкл),
-// H.dispose(). Кнопка «действие» сама появляется, когда есть подсказка.
+// H.buttons([{ id, icon, label, action, hold }], { layout, title }) — кнопки справа снизу (тем же путём, что клавиши: C.press),
+// H.show(id, вкл), H.dispose(). Кнопка «действие» сама появляется, когда есть подсказка. Кнопки 50 px («большие» 62; T-074 —
+// компактнее), игрок может переставить их (⚙️ → «Управление» → «🎮 Настроить кнопки», js/core/touch-layout.js).
 (() => {
   const E = window.D37E = window.D37E || {};
   const CSS = `
@@ -26,12 +27,16 @@
 .e-cross{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.35)}
 .e-btns{position:absolute;right:max(12px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(3,auto);gap:10px;
   align-items:end;justify-items:center;pointer-events:none}
-.e-btn{pointer-events:auto;touch-action:none;width:58px;height:58px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(18,14,36,.55);color:#fff;
-  font-size:22px;display:grid;place-items:center;line-height:1;position:relative;-webkit-tap-highlight-color:transparent}
-.e-btn b{position:absolute;bottom:-15px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:800;white-space:nowrap;text-shadow:0 1px 3px #000}
-.e-btn.big{width:74px;height:74px;font-size:28px}
+.e-btn{pointer-events:auto;touch-action:none;width:50px;height:50px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(18,14,36,.5);color:#fff;
+  font-size:20px;display:grid;place-items:center;line-height:1;position:relative;-webkit-tap-highlight-color:transparent;box-sizing:border-box;padding:0}
+.e-btn b{position:absolute;bottom:-13px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:800;white-space:nowrap;text-shadow:0 1px 3px #000}
+.e-btn.big{width:62px;height:62px;font-size:25px}
 .e-btn.on,.e-btn:active{background:rgba(124,58,237,.75);border-color:#fff}
 .e-btn[hidden]{display:none}
+/* без переходов: при «уменьшить движение» сайт даёт всему переход 0,01 мс — раскладка (js/core/touch-layout.js) мерила бы старое место */
+.e-hud .e-btns,.e-hud .e-btn{transition:none!important}
+.e-hud .e-btns.tl-free{left:0!important;right:0!important;top:0!important;bottom:0!important;display:block;transform:none!important;padding:0!important;direction:ltr!important}
+.e-btns.tl-free .e-btn{position:absolute;margin:0}
 `;
   function css(){
     if (document.getElementById('d37e-css')) return;
@@ -72,7 +77,7 @@
       crosshair(on){ cross.hidden = !on; },
       // кнопки для пальца: нажал — как клавиша действия (C.press), отпустил — отпущена. «Отпустил» ловит и окно (палец увели
       // с кнопки и отпустили где угодно), перерисовка кнопок (вошёл в боевую зону) отпускает нажатые — иначе кнопка «залипала»
-      buttons(list){
+      buttons(list, o = {}){
         releaseBtns();
         btns.innerHTML = ''; byId.clear(); actBtn = null;
         for (const b of list) {
@@ -88,11 +93,47 @@
           if (b.action === 'interact') { actBtn = d; d.hidden = !lastText; }
           btns.appendChild(d); byId.set(b.id || b.action, d);
         }
+        tlAttach(list, o);
       },
       show(id, on){ const d = byId.get(id); if (d) d.hidden = !on; },
       button: id => byId.get(id),
-      dispose(){ clearTimeout(toastT); releaseBtns(); for (const f of offs) f(); offs.length = 0; hud.remove(); },
+      dispose(){ clearTimeout(toastT); releaseBtns(); tl?.detach(); tl = null; ro?.disconnect(); for (const f of offs) f(); offs.length = 0; hud.remove(); },
     };
+    // ── своя раскладка кнопок (T-074): ⚙️ → «Управление» → «🎮 Настроить кнопки» (js/core/touch-layout.js). Пока игрок её не
+    // трогал — сетка, как была (CSS); переставил — кнопки стоят свободно (.tl-free: px по окну игры, с поправкой на zoom «Размера
+    // интерфейса» у .e-hud). Набор кнопок = своя раскладка («Мир» и «Студия 3D» с одинаковыми кнопками — общая, в боевой зоне — своя);
+    // o.layout — своё имя, false — без настройки. Стили пишутся только при смене окна/настроек (ResizeObserver → layout())
+    let tl = null, ro = null;
+    const tlFree = on => { if (btns.classList.contains('tl-free') !== on) btns.classList.toggle('tl-free', on); };
+    function tlAttach(list, o){
+      tl?.detach(); tl = null; tlFree(false);
+      const TL = window.D37TouchLayout;
+      if (!TL || !list.length || o.layout === false) return;
+      const ids = list.map(b => b.id || b.action);
+      let h = 0; for (const c of ids.join(',')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+      const items = list.map(b => ({ id: b.id || b.action, icon: b.icon, label: b.label || '', opt: b.action === 'interact' ? 'когда рядом есть что сделать' : undefined }));
+      tl = TL.attach({ id: o.layout || 'e3d-' + h.toString(36), title: o.title || 'Кнопки 3D-мира', el, items: () => items, btn: k => byId.get(k) || null,
+        defaults: (W, H, k, cx) => gridPos(cx), apply: (k, b, p) => tlPlace(b, p) });
+      if (!ro && window.ResizeObserver) { ro = new ResizeObserver(() => tl?.layout()); ro.observe(el); }
+    }
+    // по умолчанию — где кнопки стоят в сетке (меряем со всеми кнопками, и спрятанной «действие»): для правой руки
+    function gridPos(cx){
+      const free = btns.classList.contains('tl-free'), keep = [], out = {};
+      tlFree(false);
+      for (const b of byId.values()) { const s = b.style; keep.push([b, s.left, s.top, s.width, s.height, s.fontSize, b.hidden]); s.left = s.top = s.width = s.height = s.fontSize = ''; b.hidden = false; }
+      const B = el.getBoundingClientRect();
+      for (const [k, b] of byId) { const r = b.getBoundingClientRect(); if (!r.width) continue; const x = r.left + r.width / 2 - B.left; out[k] = { x: cx?.lefty ? B.width - x : x, y: r.top + r.height / 2 - B.top, d: r.width }; }
+      for (const [b, l, t, w, hh, f, hid] of keep) { const s = b.style; s.left = l; s.top = t; s.width = w; s.height = hh; s.fontSize = f; b.hidden = hid; }
+      tlFree(free);
+      return out;
+    }
+    function tlPlace(b, p){
+      const s = b.style;
+      if (!p.any) { tlFree(false); if (s.left) s.left = s.top = s.width = s.height = s.fontSize = ''; return; }
+      tlFree(true);
+      const z = parseFloat(getComputedStyle(hud).zoom) || 1, x = p.lefty ? p.W - p.x : p.x;
+      s.left = (x - p.d / 2) / z + 'px'; s.top = (p.y - p.d / 2) / z + 'px'; s.width = s.height = p.d / z + 'px'; s.fontSize = p.d * .4 / z + 'px';
+    }
     // нажатые кнопки: отпустить, если палец отпустили не над ними, окно потеряло фокус, вкладку спрятали
     const pressed = new Set(), offs = [];
     function releaseBtns(){ for (const r of [...pressed]) r.set(false); }

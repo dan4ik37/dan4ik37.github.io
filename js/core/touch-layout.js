@@ -10,7 +10,8 @@
 //   btn: id => элемент кнопки (или null),
 //   defaults: (W, H, k, { lefty }) => ({ id: { x, y, d } }),   // середины (px от левого верхнего угла окна) и диаметры — для ПРАВОЙ
 //                                                   // руки; k — «Размер кнопок» из ⚙️ (1 = 100 %); левша — зеркало делает помощник
-//   apply: (id, el, { x, y, d, lefty, W, H, k }) — своя расстановка (по умолчанию left/top/width/height в px, зеркало для левши),
+//   apply: (id, el, { x, y, d, lefty, W, H, k, custom, any }) — своя расстановка (по умолчанию left/top/width/height в px, зеркало
+//          для левши); custom — эта кнопка переставлена игроком, any — хоть одна (игра может до этого держать свою сетку),
 //   avoid: () => [{ l, t, r, b, label }]        // что кнопкам закрывать нельзя (панель вещей…) — подсветка в редакторе
 //   onEdit: (on, overlay) => {}                 // редактор открыт/закрыт — игра не слушает пальцы (overlay.close() — «Отмена»)
 // })
@@ -125,9 +126,10 @@
     if (!force && key === T.key) return;
     T.key = key; T.W = W; T.H = H;
     T.pos = compute(T, W, H, k);
+    let any = false; for (const p of T.pos.values()) if (p.custom) { any = true; break; }
     for (const [id, p] of T.pos) {
       const b = T.o.btn ? T.o.btn(id) : null; if (!b) continue;
-      if (T.o.apply) T.o.apply(id, b, { x: p.x, y: p.y, d: p.d, lefty: L, W, H, k });
+      if (T.o.apply) T.o.apply(id, b, { x: p.x, y: p.y, d: p.d, lefty: L, W, H, k, custom: p.custom, any });
       else place(b, L ? W - p.x : p.x, p.y, p.d);
     }
   }
@@ -137,7 +139,9 @@
     s.setProperty('--tl-d', r1(d) + 'px');
   }
   // «⚙️ Размер кнопок», «Для левши» поменяли — расставить заново
-  root.addEventListener?.('d37:settings', e => { const k = e.detail?.key; if (k === 'touchSize' || k === 'lefty' || k === '*') for (const T of live) T.layout(true); });
+  // через кадр: игра могла сдвинуть свои панели (левша), а при «уменьшить движение» сайт даёт всему переход 0,01 мс — мерить после него
+  const raf = root.requestAnimationFrame || (f => setTimeout(f, 16));
+  root.addEventListener?.('d37:settings', e => { const k = e.detail?.key; if (k === 'touchSize' || k === 'lefty' || k === '*') { for (const T of live) T.layout(true); raf(() => { for (const T of live) T.layout(true); }); } });
   const liveT = () => { const T = cur; if (!T || T.dead || !T.o.el?.isConnected) return null; return T.o.el.getClientRects?.().length ? T : null; };
 
   // ═══ Редактор: перетащить, размер, «Как было» ═══
@@ -220,7 +224,15 @@
     const pr = ed.press; if (!pr || pr.pid !== e.pointerId) return;
     ed.press = null;
     const hit = e.type === 'pointerup' ? (doc.elementFromPoint?.(e.clientX, e.clientY) || e.target)?.closest?.('[data-tl]') : null;   // отпустил на той же кнопке (палец не увели)
-    if (hit === pr.b && !pr.b.disabled) onBar({ target: pr.b });
+    if (hit === pr.b && !pr.b.disabled) { swallowClick(e.clientX, e.clientY); onBar({ target: pr.b }); }
+  }
+  // «Готово»/«Отмена» закрывают редактор по «отпустил» — следующий за ним «клик» браузера попал бы в то, что под пальцем
+  // (⚙️ игры открыл бы настройки): этот один клик рядом с местом нажатия глотаем
+  function swallowClick(x, y){
+    const t0 = root.performance?.now?.() || 0;
+    const f = e => { root.removeEventListener('click', f, true); if ((root.performance?.now?.() || 0) - t0 < 800 && Math.hypot(e.clientX - x, e.clientY - y) < 40) { e.preventDefault(); e.stopImmediatePropagation(); } };
+    root.addEventListener('click', f, true);
+    setTimeout(() => root.removeEventListener('click', f, true), 800);
   }
   function onBar(e){
     const b = e.target.closest?.('[data-tl]'); if (!b || !ed || b.disabled) return;
@@ -290,6 +302,7 @@
 .tl-ed-sz{min-width:42px;text-align:center;font:800 12px Montserrat,system-ui,sans-serif;color:#ffd23f}
 .tl-ed-st{flex-basis:100%;text-align:center;font-size:11px;line-height:1.3;color:#c9d2f0}
 .tl-ed-st.bad{color:#ffb4b4}
+.tl-ed .tl-p,.tl-ed .tl-ed-bar,.tl-ed .tl-av{transition:none!important}
 .tl-p{position:absolute;border-radius:50%;display:grid;place-items:center;background:rgba(40,60,120,.5);border:2px dashed rgba(255,255,255,.75);line-height:1;cursor:grab;touch-action:none;box-sizing:border-box}
 .tl-p.sel{border-style:solid;border-color:#ffd23f;box-shadow:0 0 0 3px rgba(255,210,63,.35)}
 .tl-p.bad{border-color:#ff6b6b;box-shadow:0 0 0 3px rgba(255,80,80,.4)}

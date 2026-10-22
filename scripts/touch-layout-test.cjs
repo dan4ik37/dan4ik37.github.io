@@ -9,7 +9,7 @@ let pass = 0, fail = 0;
 const ok = (c, msg, extra) => { if (c) pass++; else { fail++; console.log('  ✗', msg, extra !== undefined ? JSON.stringify(extra).slice(0, 400) : ''); } };
 
 function env(store0 = {}){
-  const store = new Map(Object.entries(store0)), L = new Map();
+  const store = new Map(Object.entries(store0)), L = new Map(), ticks = [];
   let writes = 0;
   const el = (w = 0, h = 0) => {
     const st = { setProperty(k, v){ this[k] = v; writes++; } };
@@ -24,7 +24,7 @@ function env(store0 = {}){
     addEventListener(){},
   };
   const ctx = {
-    console, Math, Map, Set, JSON, Array, Object, String, Number, Boolean, Promise, Proxy, Infinity, NaN,
+    console, Math, Map, Set, JSON, Array, Object, String, Number, Boolean, Promise, Proxy, Infinity, NaN, setTimeout: f => { ticks.push(f); return ticks.length; },
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
     document: doc, getComputedStyle: () => ({ paddingTop: '0px', paddingRight: '0px', paddingBottom: '0px', paddingLeft: '0px' }),
     D37Opt: { lefty: false }, D37Settings: { _ts: 100, get(k){ return k === 'touchSize' ? this._ts : undefined; }, isOpen: () => false },
@@ -34,7 +34,7 @@ function env(store0 = {}){
   ctx.window = ctx;
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(SITE, 'js/core/touch-layout.js'), 'utf8'), ctx, { filename: 'touch-layout.js' });
-  return { ctx, TL: ctx.D37TouchLayout, el, store, fire: (ev, d) => { for (const f of L.get(ev) || []) f({ detail: d }); }, writes: () => writes };
+  return { ctx, TL: ctx.D37TouchLayout, el, store, fire: (ev, d) => { for (const f of L.get(ev) || []) f({ detail: d }); while (ticks.length) ticks.shift()(); }, writes: () => writes };
 }
 const ITEMS = [{ id: 'jump', icon: '⤒', label: 'прыжок' }, { id: 'sneak', icon: '⬇', label: 'красться' }, { id: 'down', icon: '⤓', label: 'вниз', same: 'sneak' }, { id: 'inv', icon: '🎒', label: 'вещи' }];
 // по умолчанию: «прыжок» в правом нижнем углу, остальные — левее и выше (для правой руки)
