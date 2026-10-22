@@ -81,6 +81,7 @@ const GAME_TAGS = {
   guess: 'friends brain', '2048': 'friends brain', checkers: 'friends cards', catch: 'friends action', sea: 'friends cards',
   snake: 'friends action', memory: 'friends brain', ttt: 'friends cards', reaction: 'friends action', emoji: 'new friends brain',
   clicker: 'action', quiz: 'tools', wheel: 'tools', random: 'tools', typing: 'tools', cps: 'tools action', fonts: 'tools',
+  photo: 'new tools',   // 🖼️ Фоторедактор — во вкладке «🛠 Тесты и инструменты» (владелец 22.10: «фоторедактор можно в инструменты засунуть»)
 };
 let gamesCat = 'all';
 try { gamesCat = localStorage.getItem('d37_games_cat') || 'all'; } catch (e) {}
