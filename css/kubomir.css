@@ -138,12 +138,15 @@ body.high .kb-hud.kb-low .kb-lowhp{animation:kbLow 1.5s ease-in-out infinite}
 .kb-wrap .e-btns{bottom:calc(max(14px,env(safe-area-inset-bottom)) + var(--kb-s) + 34px)}
 html.gs-lefty .kb-wrap .e-btns{left:max(12px,env(safe-area-inset-left));right:auto}
 /* ── управление как в Майнкрафте: кнопки телефона (как в Bedrock), кольцо ломания, F1, протяжка в вещах ── */
-.kb-tbar{position:absolute;right:max(12px,env(safe-area-inset-right));bottom:calc(max(14px,env(safe-area-inset-bottom)) + var(--kb-s) + 30px);z-index:5;display:grid;grid-template-columns:repeat(2,auto);gap:10px;align-items:end;justify-items:center;pointer-events:none}
-html.gs-lefty .kb-tbar{left:max(12px,env(safe-area-inset-left));right:auto}
-.kb-tbtn{pointer-events:auto;touch-action:none;width:56px;height:56px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(18,14,36,.55);color:#fff;font-size:22px;display:grid;place-items:center;line-height:1;position:relative;-webkit-tap-highlight-color:transparent;font-family:Montserrat,system-ui,sans-serif}
-.kb-tbtn b{position:absolute;bottom:-15px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:800;white-space:nowrap;text-shadow:0 1px 3px #000}
-.kb-tbtn.big{width:74px;height:74px;font-size:28px;grid-column:span 2}
-.kb-tbtn.on,.kb-tbtn:active{background:rgba(79,140,255,.7);border-color:#fff}
+/* кнопки телефона (T-074): значки 44 px («прыжок» 54) у правого большого пальца, полупрозрачные; где стоят и какого размера —
+   js/core/touch-layout.js (left/top/width/height и --tl-d; левша — зеркально); подпись — до первого нажатия (.new) и пока держишь
+   (.held); ::after — чуть больше места для пальца (промахнулся на пару пикселей — всё равно попал) */
+.kb-tbar{position:absolute;inset:0;z-index:5;pointer-events:none}
+.kb-tbtn{position:absolute;left:0;top:0;width:44px;height:44px;box-sizing:border-box;padding:0;pointer-events:auto;touch-action:none;border-radius:50%;border:1.5px solid rgba(255,255,255,.42);background:rgba(16,18,34,.42);color:#fff;font-size:calc(var(--tl-d,44px) * .44);display:grid;place-items:center;line-height:1;-webkit-tap-highlight-color:transparent;font-family:Montserrat,system-ui,sans-serif;opacity:var(--gs-touch-a,1);box-shadow:0 2px 8px rgba(0,0,0,.22)}
+.kb-tbtn::after{content:'';position:absolute;inset:-6px;border-radius:50%}
+.kb-tbtn b{display:none;position:absolute;left:50%;bottom:calc(100% + 3px);transform:translateX(-50%);padding:1px 6px;border-radius:6px;background:rgba(0,0,0,.6);font:800 9.5px/1.25 Montserrat,system-ui,sans-serif;white-space:nowrap;pointer-events:none;text-shadow:0 1px 2px #000}
+.kb-tbtn.new b,.kb-tbtn.held b{display:block}
+.kb-tbtn.on,.kb-tbtn.held{background:rgba(79,140,255,.62);border-color:#fff}
 .kb-tbtn[hidden]{display:none}
 .kb-ring{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;pointer-events:none;z-index:5;
   background:conic-gradient(#ffd23f calc(var(--k,0) * 1%),rgba(255,255,255,.18) 0);-webkit-mask:radial-gradient(circle,transparent 24px,#000 25px);mask:radial-gradient(circle,transparent 24px,#000 25px)}
@@ -192,13 +195,47 @@ body.high .kb-lockhint{animation:kbHint 1.8s ease-in-out infinite}
 @keyframes kbTip{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 .kb-dead small.kb-where{color:#d9e4ff}
 .kb-dead .kb-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-/* телефон стоя: кнопки (вещи, красться, прыжок) — выше полосок здоровья и еды, подсказка — компактнее */
+/* телефон стоя: подсказка — компактнее (кнопки выше панели вещей ставит js/core/touch-layout.js) */
 @media (max-width:640px){
-  .kb-tbar{bottom:calc(max(14px,env(safe-area-inset-bottom)) + var(--kb-s) + 64px)}
   .kb-wrap .e-btns{bottom:calc(max(14px,env(safe-area-inset-bottom)) + var(--kb-s) + 64px)}
   .kb-tip{font-size:12.5px;max-width:calc(100% - 20px);padding:6px 8px}
   .kb-log{bottom:calc(var(--kb-s) + 96px)}
 }
+/* ── телефон (T-074, владелец 22.10: «сделай не так размашисто… а то пол-экрана всё»; .kb-touch — у окна игры с пальцем) ──
+   ячейки панели меньше (размер — kubomir.js hudFit: --kb-s у .kb-hud), сердечки и еда мелко и прямо над панелью, название вещи —
+   над сердечками (не отнимая места), подсказка — одной строкой, потом значок 💡; сверху лёжа — только маленькие ⚙️ ⛶ ❓ */
+.kb-touch .kb-bottom{gap:2px;bottom:max(6px,env(safe-area-inset-bottom))}
+.kb-touch .kb-bars{width:calc(var(--kb-s) * 9 + 22px)}
+.kb-touch .kb-hp,.kb-touch .kb-food{font-size:11px;gap:0}
+.kb-touch .kb-air{font-size:11px}
+.kb-touch .kb-iname{position:absolute;left:50%;bottom:calc(100% + 4px);transform:translateX(-50%);min-height:0;padding:1px 8px;font-size:12px;white-space:nowrap}
+@media (orientation:portrait){.kb-touch .kb-iname{left:0;transform:none}html.gs-lefty .kb-touch .kb-iname{left:auto;right:0}}
+.kb-touch .kb-hotbar{gap:2px;padding:3px;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.kb-touch .kb-slot{border-width:1.5px;border-radius:7px}
+.kb-touch .kb-slot i{inset:3px}
+.kb-touch .kb-slot b{font-size:11px}
+.kb-touch .kb-oslot{border-width:1.5px;box-shadow:none}
+.kb-touch .kb-oslot::before{top:-12px;font-size:9px}
+.kb-tipi{display:none;font-style:normal}
+.kb-touch .kb-tip{left:max(8px,env(safe-area-inset-left));top:max(8px,env(safe-area-inset-top));max-width:min(360px,calc(100% - 24px));min-height:28px;box-sizing:border-box;padding:4px 10px 4px 7px;gap:6px;align-items:center;border-radius:999px;background:rgba(10,14,26,.6);font-size:12px;line-height:1.3}
+.kb-touch .kb-tip>div{min-width:0}
+.kb-touch .kb-tip b,.kb-touch .kb-tip button{display:none}
+.kb-touch .kb-tip span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kb-touch .kb-tipi{display:block;font-size:14px;line-height:1}
+.kb-touch .kb-tip.open{align-items:flex-start;border-radius:12px;max-width:min(380px,calc(100% - 24px));background:rgba(10,14,26,.8)}
+.kb-touch .kb-tip.open span{white-space:normal}
+.kb-touch .kb-tip.open button{display:block;width:24px;height:24px}
+.kb-touch .kb-tip.mini{width:30px;min-height:30px;height:30px;padding:0;justify-content:center;border-radius:50%}
+.kb-touch .kb-tip.mini>div{display:none}
+/* без переходов размера и места: при «уменьшить движение» сайт даёт всему переход 0,01 мс — раскладка кнопок (js/core/touch-layout.js)
+   мерила бы панель и кнопки на старом месте (у ячеек остаются только свои переходы: подскок выбранной) */
+.kb-touch .kb-bottom,.kb-touch .kb-bottom *:not(.kb-slot),.kb-touch .kb-oslot,.kb-tbar .kb-tbtn{transition:none!important}
+.kb-touch .kb-slot{transition-property:transform,border-color,background!important}
+html.gs-compact .gs-fs .kb-touch .kb-tip:not(.open){max-width:min(360px,calc(100% - 150px))}
+html.gs-compact .gs-fs .kb-top .kb-where{display:none}
+html.gs-compact .gs-fs .kb-top .wld-topbtns{gap:4px}
+html.gs-compact .gs-fs .kb-top .wld-topbtns button{width:34px;height:34px;border-radius:10px;font-size:.78rem;background:rgba(10,8,24,.45)}
+html.gs-compact .gs-fs .kb-top .wld-topbtns .gs-ico{width:15px;height:15px}
 /* ── две руки и бой (docs/COMBAT.md): ячейка левой руки слева от панели, перезарядка удара под прицелом, вспышка отбива ── */
 .kb-hrow{position:relative;display:flex;justify-content:center}
 .kb-oslot{position:absolute;right:calc(100% + 10px);bottom:4px;width:var(--kb-s);height:var(--kb-s);border-radius:8px;background:linear-gradient(180deg,rgba(28,32,48,.72),rgba(10,12,20,.82));border:2px solid rgba(255,255,255,.18);box-sizing:border-box;pointer-events:auto;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35);touch-action:none}
@@ -208,7 +245,7 @@ body.high .kb-lockhint{animation:kbHint 1.8s ease-in-out infinite}
 .kb-oslot u{position:absolute;left:10%;bottom:3px;height:3px;border-radius:2px;display:block;box-shadow:0 0 0 1px rgba(0,0,0,.55)}
 .kb-oslot.stow{opacity:.42}
 .kb-oslot::before{content:'🫲';position:absolute;left:50%;top:-15px;transform:translateX(-50%);font-size:11px;opacity:.85}
-@media (max-width:640px){.kb-oslot{right:auto;left:2px;bottom:calc(100% + 40px)}}
+@media (max-width:640px){.kb-oslot{right:auto;left:2px;bottom:calc(100% + 40px)}html.gs-lefty .kb-touch .kb-oslot{left:auto;right:2px}}
 .kb-cool{position:absolute;left:50%;top:calc(50% + 13px);width:24px;height:5px;margin-left:-12px;border-radius:3px;background:rgba(0,0,0,.45);overflow:hidden;pointer-events:none;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
 .kb-cool[hidden]{display:none}
 .kb-cool i{position:absolute;left:0;top:0;bottom:0;width:calc(var(--k,0) * 1%);background:#cfd6e6;border-radius:3px}

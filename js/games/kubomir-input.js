@@ -14,7 +14,8 @@
 // полёт). Две руки (docs/COMBAT.md): F — поменять руки (как в Майнкрафте), «держать щит / тянуть лук» — ПКМ / LT (на телефоне —
 // своя кнопка: K.press('offuse')).
 // Палец: K.finger — палец, который сейчас держит мир ({ x, y, t, moved }), K.taps — короткие нажатия ({ x, y });
-// K.touchBar(wrap, list) — кнопки справа снизу (прыжок, красться, полёт вверх/вниз, вещи, ⛏/🧱 в режиме «прицел»).
+// K.touchBar(wrap, list, { game }) — кнопки телефона (прыжок, красться, полёт вверх/вниз, вещи, руки, щит, ⛏/🧱 в режиме «прицел»):
+// только значки, подпись — до первого нажатия и пока держишь; расставляет их kubomir.js через D37TouchLayout (js/core/touch-layout.js).
 (() => {
   const LS = 'd37_kb_keys';
   // id, название, клавиши по умолчанию [клавиатура, геймпад]
@@ -193,25 +194,34 @@
     K.frameEnd = () => {};
 
     // ── кнопки телефона: { id, icon, label, big, hold: 'jump' | 'sneak' | …, onTap, toggle, cls } ──
-    K.touchBar = (wrap, list) => {
+    // T-074: значки без постоянных подписей; подпись видна до первого нажатия этой кнопки (D37TouchLayout.seen, o.game) и пока
+    // кнопку держат (.held); где стоит кнопка — решает D37TouchLayout (kubomir.js touchUI), здесь только position: absolute
+    K.touchBar = (wrap, list, o = {}) => {
       let bar = wrap.querySelector('.kb-tbar');
       if (!bar) { bar = document.createElement('div'); bar.className = 'kb-tbar'; wrap.appendChild(bar); }
       bar.innerHTML = '';
-      const byId = new Map();
+      const byId = new Map(), TL = window.D37TouchLayout, game = o.game || '';
       for (const b of list) {
         const d = document.createElement('button');
-        d.type = 'button'; d.className = 'kb-tbtn' + (b.big ? ' big' : '') + (b.cls ? ' ' + b.cls : ''); d.innerHTML = `${b.icon}${b.label ? `<b>${b.label}</b>` : ''}`;
+        const fresh = !!(game && b.label && TL?.seen && !TL.seen(game, b.id));
+        d.type = 'button'; d.className = 'kb-tbtn' + (b.big ? ' big' : '') + (b.cls ? ' ' + b.cls : '') + (fresh ? ' new' : ''); d.innerHTML = `${b.icon}${b.label ? `<b>${b.label}</b>` : ''}`;
         d.dataset.id = b.id;
+        if (b.label) d.setAttribute('aria-label', b.label);
         const set = v => {
           d.classList.toggle('on', v);
           if (b.c) C.press(b.c, v);
           if (b.k) K.press(b.k, v);
         };
-        d.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { d.setPointerCapture(e.pointerId); } catch (er) {} if (b.toggle) { d.classList.toggle('on', b.toggle()); return; } if (b.onTap) { b.onTap(); return; } set(true); });
-        if (!b.toggle && !b.onTap) for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) d.addEventListener(ev, () => set(false));
+        d.addEventListener('pointerdown', e => {
+          e.preventDefault(); e.stopPropagation(); try { d.setPointerCapture(e.pointerId); } catch (er) {}
+          d.classList.add('held');
+          if (d.classList.contains('new')) { d.classList.remove('new'); TL?.markSeen?.(game, b.id); }
+          if (b.toggle) { d.classList.toggle('on', b.toggle()); return; } if (b.onTap) { b.onTap(); return; } set(true);
+        });
+        for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) d.addEventListener(ev, () => { d.classList.remove('held'); if (!b.toggle && !b.onTap) set(false); });
         bar.appendChild(d); byId.set(b.id, d);
       }
-      return { el: bar, btn: id => byId.get(id), show: (id, v) => { const d = byId.get(id); if (d) d.hidden = !v; }, on: (id, v) => byId.get(id)?.classList.toggle('on', !!v) };
+      return { el: bar, btn: id => byId.get(id), show: (id, v) => { const d = byId.get(id); if (d && d.hidden !== !v) d.hidden = !v; }, on: (id, v) => { const d = byId.get(id); if (d && d.classList.contains('on') !== !!v) d.classList.toggle('on', !!v); } };
     };
     // экранная кнопка своего действия (вниз в полёте и т. п.): как клавиша
     K.press = (id, v) => { if (v) { if (!virt.has(id)) vEdge.add(id); virt.add(id); } else virt.delete(id); };

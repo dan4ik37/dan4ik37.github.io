@@ -129,7 +129,7 @@
     if (!list.length) box.innerHTML = '<div class="kb-empty">Миров пока нет. Нажми «➕ Новый мир» — и вперёд!</div>';
     else box.innerHTML = list.map(w => `<div class="kb-world" data-id="${esc(w.id)}">
         <div class="kb-thumb">${w.thumb ? `<img src="${esc(w.thumb)}" alt="">` : '<span>🧊</span>'}</div>
-        <div class="kb-wi"><b>${esc(w.name)}</b><small>${w.mode === 'creative' ? '🎨 Творчество' : '⚔️ Выживание'} · зерно ${esc(w.seed)} · ${new Date(w.played || w.created || Date.now()).toLocaleDateString('ru')}${w.mods?.length ? ' · 🧩 ' + w.mods.length : ''}</small><small class="kb-cl" hidden></small></div>
+        <div class="kb-wi"><b>${esc(w.name)}</b><small>${w.mode === 'creative' ? '🎨 Творчество' : '⚔️ Выживание'} · зерно ${esc(w.seed)} · ${new Date(w.played || w.created || Date.now()).toLocaleDateString('ru')}${w.mods?.length ? ' · 🧩 ' + w.mods.length : ''}${w.support === 'soft' || w.support === 'real' ? ' · ' + (w.support === 'real' ? '🏗' : '🏚') : ''}</small><small class="kb-cl" hidden></small></div>
         <div class="kb-wb"><button type="button" class="kb-btn primary" data-w="play">▶ Играть</button><button type="button" class="kb-btn" data-w="rename" title="Переименовать">✏️</button><button type="button" class="kb-btn" data-w="cloud" title="Облако: сохранять копию мира (открыть на другом устройстве)" hidden>☁️</button><button type="button" class="kb-btn" data-w="export" title="Выгрузить файл мира">📤</button><button type="button" class="kb-btn danger" data-w="del" title="Удалить">🗑</button></div></div>`).join('');
     box.addEventListener('click', e => { const b = e.target.closest('[data-w]'), w = e.target.closest('.kb-world'); if (!b || !w) return; worldAct(b.dataset.w, w.dataset.id, list.find(x => x.id === w.dataset.id)); });
     cloudMenu(sc, list);   // ☁️ облако: отметки у миров, миры с других устройств (без входа — подсказка)
@@ -175,10 +175,12 @@
       <div class="kb-seg" data-f="mode"><button type="button" class="on" data-v="survival">⚔️ Выживание</button><button type="button" data-v="creative">🎨 Творчество</button></div>
       <div class="kb-seg" data-f="diff"><button type="button" data-v="peaceful">🕊 Мирно</button><button type="button" class="on" data-v="easy">🙂 Легко</button><button type="button" data-v="normal">😈 Обычно</button><button type="button" data-v="hard">💀 Сложно</button></div>
       <p class="kb-note kb-diffnote">Легко: ночью приходят мобы, но после нокаута вещи остаются.</p>
+      <div class="kb-seg" data-f="support" title="Обрушение и прочность построек (выбирается один раз — при создании мира)"><button type="button" class="on" data-v="off">🧱 Обрушение: выкл</button><button type="button" data-v="soft">🏚 Мягкое</button><button type="button" data-v="real">🏗 Реализм</button></div>
+      <p class="kb-note kb-supnote">${esc(window.KubomirSupport?.NOTES?.off || '')}</p>
       ${mods.length ? `<div class="kb-modpick"><b>🧩 Моды в этом мире</b>${mods.map(m => `<label class="kb-chk"><input type="checkbox" data-mod="${esc(m.id)}"> ${esc(m.manifest?.name || m.id)} <small>${esc(m.manifest?.version || '')}</small></label>`).join('')}</div>` : '<p class="kb-note">🧩 Моды можно добавить в меню миров → «Моды».</p>'}
       <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-n="go">🌍 Создать мир</button><button type="button" class="kb-btn" data-n="back">← Назад</button></div></div>`;
     const DN = { peaceful: 'Мирно: мобов-врагов нет, голод не отнимает здоровье.', easy: 'Легко: ночью приходят мобы, но после нокаута вещи остаются.', normal: 'Обычно: после нокаута вещи выпадают — успей их подобрать.', hard: 'Сложно: мобов больше и бьют в полтора раза сильнее, голод может довести до нокаута, вещи после нокаута выпадают.' };
-    sc.querySelectorAll('.kb-seg').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); if (g.dataset.f === 'diff') sc.querySelector('.kb-diffnote').textContent = DN[b.dataset.v]; }));
+    sc.querySelectorAll('.kb-seg').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); if (g.dataset.f === 'diff') sc.querySelector('.kb-diffnote').textContent = DN[b.dataset.v]; if (g.dataset.f === 'support') sc.querySelector('.kb-supnote').textContent = window.KubomirSupport?.NOTES?.[b.dataset.v] || ''; }));
     sc.querySelector('[data-n="back"]').onclick = showMenu;
     sc.querySelector('[data-n="go"]').onclick = async () => {
       const f = k => sc.querySelector(`[data-f="${k}"]`);
@@ -188,6 +190,7 @@
       const mode = f('mode').querySelector('.on')?.dataset.v || 'survival', diff = f('diff').querySelector('.on')?.dataset.v || 'easy';
       const modIds = [...sc.querySelectorAll('[data-mod]:checked')].map(x => x.dataset.mod);
       const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, seed, mode, diff, created: Date.now(), played: Date.now(), time: 8, mods: modIds, palette: null, player: null, v: 1, genVer: 2 };
+      const sup = f('support')?.querySelector('.on')?.dataset.v; if (sup === 'soft' || sup === 'real') w.support = sup;   // обрушение (T-022a): старые миры — выкл
       await V.store.putWorld(w);
       playById(w.id);   // через сверку с облаком: вошёл и есть место — новый мир сразу «в облаке»
     };
@@ -461,8 +464,8 @@
   function help(){
     const t = window.D37Full?.isTouch?.() || E()?.isTouch?.();
     const txt = t ? (opts.touchMode === 'cross'
-        ? 'Джойстик слева — идти, палец справа — смотреть. Прицел в центре: нажми по экрану — поставить/открыть, держи — ломать (или ⛏ и 🧱). ⤒ — прыжок (два раза в «Творчестве» — полёт, ⤓ — вниз), ⬇ — красться, 🎒 — вещи. Панель вещей — проведи пальцем, подержи ячейку — выбросить.'
-        : 'Как в Bedrock: джойстик слева — идти, палец справа — смотреть. Нажми по блоку — поставить/открыть/съесть, держи палец на блоке — ломать (вокруг пальца — кольцо), нажми по мобу — удар (бей вовремя — сильнее). ⤒ — прыжок (два раза в «Творчестве» — полёт, ⤓ — вниз), ⬇ — красться, 🎒 — вещи, 🔄 — поменять руки (левая — щит, факел, еда), 🛡 — держать щит (вовремя — отбив) или тянуть лук. Панель вещей — проведи пальцем, подержи ячейку — выбросить. В ⚙️ можно включить «прицел».')
+        ? 'Джойстик слева — идти, палец справа — смотреть. Прицел в центре: нажми по экрану — поставить/открыть, держи — ломать (или ⛏ и 🧱). ⤒ — прыжок (два раза в «Творчестве» — полёт, ⤓ — вниз), ⬇ — красться, 🎒 — вещи. Панель вещей — проведи пальцем, подержи ячейку — выбросить. Кнопки можно переставить и поменять размер: ⚙️ → «Управление» → «🎮 Настроить кнопки».'
+        : 'Как в Bedrock: джойстик слева — идти, палец справа — смотреть. Нажми по блоку — поставить/открыть/съесть, держи палец на блоке — ломать (вокруг пальца — кольцо), нажми по мобу — удар (бей вовремя — сильнее). ⤒ — прыжок (два раза в «Творчестве» — полёт, ⤓ — вниз), ⬇ — красться, 🎒 — вещи, 🔄 — поменять руки (левая — щит, факел, еда), 🛡 — держать щит (вовремя — отбив) или тянуть лук. Панель вещей — проведи пальцем, подержи ячейку — выбросить. В ⚙️ можно включить «прицел», а в ⚙️ → «Управление» → «🎮 Настроить кнопки» — переставить кнопки и поменять их размер.')
       : 'Как в Майнкрафте: WASD — идти, Пробел — прыжок (два раза в «Творчестве» — полёт), Shift — красться (с края не упадёшь), Ctrl или два раза W — бег. ЛКМ (держать) — ломать, ПКМ — поставить/открыть/съесть, СКМ — взять блок в руку, колесо и 1–9 — ячейки, Q — выбросить (Ctrl+Q — стопку), E — вещи, F — поменять руки (в левой — щит, факел, еда: ПКМ ими, если правой нечего делать), F5 — вид, F1 — спрятать интерфейс, F3 — сведения, T или Enter — чат, / — команда (/help), Esc — меню. В вещах: Shift+клик — перекинуть, ПКМ с протяжкой — по одной в каждую ячейку, ЛКМ с протяжкой — поровну, двойной клик — собрать. Бой: бей вовремя — полоска под прицелом полная (часто — слабо), меч — серия из трёх ударов, топор — сверху и выбивает щит; щит — держи ПКМ, подними прямо перед ударом — отбив (моб оглушён); лук — держи ПКМ и отпусти (дольше — сильнее). Геймпад: RT — ломать/бить, LT — ставить/щит/лук, LB/RB — ячейки, Y — вещи, B — красться, ↑ — поменять руки. Клавиши — в ⚙️ → «🧊 Кубомир».';
     if (window.GameKit?.ask) window.GameKit.ask(txt, { yes: 'Понятно', no: null }); else alert(txt);
   }
@@ -595,12 +598,13 @@
     if (guest && st.ents) st.ents.client = true;   // мобы и вещи — снимками хозяина
     else if (meta.ents && st.ents) st.ents.load(meta.ents);
     st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;
+    st.sup = window.KubomirSupport?.attach?.(st) || null; st.shakeOK = () => shakeOK(st);   // обрушение и прочность (T-022a; мир без него — null)
     st.swimDeep = swimDeep; st.swimDrawY = (a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt);   // 👥 у других игроков — так же (kubomir-coop.js)   // руки как в Майнкрафте, свет человечков
     st.weatherOff = opts.weather === false;
     st.seasons = ['calendar', 'cycle', 'off'].includes(opts.seasons) ? opts.seasons : 'calendar';   // времена года (движок погоды)
     st.WX = window.KubomirWeather ? window.KubomirWeather.create(st) : null;   // дождь и снег по биому (расписание — от зерна и дня)
     st.ui = window.KubomirUI ? window.KubomirUI.create(st, uiHooks()) : null;
-    if (I.touch) touchUI(st);   // кнопки телефона — когда уже есть игрок
+    if (I.touch) { hudFit(st); hudUpdate(st); touchUI(st); }   // ячейки панели — по окну, полоски заполнены (кнопки встают выше них), кнопки телефона — когда уже есть игрок
     crossUpdate(st);
     // моды: события в песочнице
     st.modRun = window.KubomirMods && !guest ? window.KubomirMods.run(st, modState, modHooks()) : null;
@@ -608,7 +612,7 @@
     st.stage = el.closest('#gamesStage');
     st.offCtx = window.D37Settings?.context({ engine: true, R: () => S?.R, gfx: () => setTimeout(() => restartWorld(), 60), view: v => { if (S && S.rig.mode !== v) toggleView(); }, onClose: () => S?.C?.reset_state() });
     settingsTab();
-    st.ro = window.ResizeObserver ? new ResizeObserver(() => { if (S?.R && !S.R.dead) S.R.resize(); }) : null;
+    st.ro = window.ResizeObserver ? new ResizeObserver(() => { if (S?.R && !S.R.dead) { S.R.resize(); hudFit(S); } }) : null;
     st.ro?.observe(wr); R.resize();
     st.loop = Ex.loop(update, frame);
     st.tick = setInterval(housekeeping, 1000);
@@ -689,8 +693,9 @@
     st.ST?.close(); st.VR?.dispose(); st.A?.dispose();
     st.C?.dispose(); st.I?.dispose(); st.H?.dispose(); st.K?.dispose();
     try { st.R?.dispose(); } catch (e) {}
+    st.tl?.detach(); st.tl = null;
     st.hudEl?.remove(); st.modWin?.remove(); st.tbar?.el?.remove(); st.ringEl?.remove(); st.lockEl?.remove();
-    wrap()?.classList.remove('kb-nohud', 'kb-touchtap');
+    wrap()?.classList.remove('kb-nohud', 'kb-touchtap', 'kb-touch');
     settingsTab(true);
   }
   async function restartWorld(){ if (!S) return; const m = S.meta; await stopWorld(); playWorld(m); }
@@ -807,6 +812,7 @@
     // 20 раз в секунду: мобы, вода, печи, голод
     if (st.steps % 3 === 0) {
       st.ents?.tick(1 / 20);
+      st.sup?.step();   // обрушение: очередь падающих кусков (по бюджету шага; kubomir-support.js)
       if (!st.creative) survivalTick(st, 1 / 20);
       st.modRun?.tick(1 / 20);
     }
@@ -1444,11 +1450,13 @@
     if (b.shape === V.SHAPE.door) { const oy = st2 & 8 ? -1 : 1, o = W.raw(x, y + oy, z); if (o > 0 && (o & 0xfff) === b.id) W.set(x, y + oy, z, 0); }
     // блок льда над водой — становится водой (как в Майнкрафте): не пустота над озером
     const toWater = b.name === 'ice' && V.T.liquid[W.get(x, y - 1, z)] === 1;
+    const sc = st.sup && !only ? st.sup.code(x, y, z) : 0;   // обрушение: чем была клетка (постройка / природное) — до правки
     W.set(x, y, z, toWater ? V.cell(V.ID.water) : 0, { urgent: 3 });
     st.AU?.play(digSound(b), { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5, vol: .8 });
     if (st.ents?.breakFx) st.ents.breakFx(x, y, z, b.id); else st.ents?.debris(x, y, z, b.id);   // осколки кувыркаются и прыгают
     if (only) return;
     if (opts.fell !== false && /^log_/.test(b.name)) st.ents?.fellTree?.(x, y, z, by);   // подрубил дерево — валится (kubomir-ents.js)
+    if (sc) st.sup.removed(x, y, z, sc);   // что держалось через эту клетку — падает (kubomir-support.js)
     if (st.creative) return;
     if (canHarvestTool(b, toolId)) for (const [name, n] of dropsOf(st, b)) st.ents?.addItem(x + .5, y + .4, z + .5, { id: name, n });
     // сундук и печь — содержимое тоже
@@ -1754,6 +1762,7 @@
     if (!b) return false;
     const T = placeTarget(st, hit, b); if (!T) return false;
     const { x, y, z, state } = T;
+    if (st.sup && !st.sup.canPlace(x, y, z, b)) { if (now() - (st.supT || 0) > 2500) { st.supT = now(); st.H.toast('🧱 Тут не удержится — поставь опору ближе (колонну или стену)'); } return false; }
     if (st.coopGuest) st.net.reqPlace(x, y, z, V.cell(b.id, state), b.shape === V.SHAPE.door ? V.cell(b.id, state | 8) : null, it.name);   // 👥 хозяину
     if (b.shape === V.SHAPE.door) {
       W.set(x, y, z, V.cell(b.id, state), { urgent: 3 });
@@ -2001,6 +2010,7 @@
     }
     const ghost = T && mode === 'ghost' && b.shape === V.SHAPE.cube, frame = T && mode === 'frame';
     if (VR.ghost) VR.ghost(ghost ? b.name : null, ghost ? T.x : 0, ghost ? T.y : 0, ghost ? T.z : 0, it?.name);
+    if (frame) T.tint = st.sup ? st.sup.tint(T, b) : null;   // обрушение: рамка — цветом устойчивости
     if (VR.preview) VR.preview(frame ? T : null);
     st.placeAt = T;   // для проверок
   }
@@ -2010,18 +2020,26 @@
     const K = st.K || NOK, k = st.mine.k || 0, f = K.finger, on = k > 0 && !!st.hit && !st.C.blocked;
     let r = st.ringEl;
     if (!r) { r = st.ringEl = document.createElement('div'); r.className = 'kb-ring'; r.innerHTML = '<i></i>'; wrap()?.appendChild(r); }
-    r.hidden = !on;
+    if (r.hidden !== !on) r.hidden = !on;   // не писать в DOM каждый кадр (T-074: без перестройки интерфейса за кадр)
     if (!on) return;
     const b = wrap().getBoundingClientRect(), tap = opts.touchMode !== 'cross' && f;
     r.style.left = (tap ? f.x - b.left : b.width / 2) + 'px'; r.style.top = (tap ? f.y - b.top : b.height / 2) + 'px';
     r.style.setProperty('--k', String(Math.round(k * 100)));
   }
-  // кнопки телефона «как в Bedrock»: прыжок (в полёте — вверх), красться (переключатель; в полёте — вниз), вещи;
-  // в режиме «прицел» — ещё ⛏ и 🧱
+  // кнопки телефона «как в Bedrock»: прыжок (в полёте — вверх), красться (переключатель; в полёте — вниз), вещи, руки, щит/лук;
+  // в режиме «прицел» — ещё ⛏ и 🧱. Компактно (T-074, владелец 22.10: «сделай не так размашисто… а то пол-экрана всё»): значки
+  // 44 px («прыжок» 54, ⛏ и 🧱 — 50) у правого большого пальца: «прыжок» в углу, остальные — вокруг (KB_SLOTS: сдвиг от середины
+  // «прыжка» и диаметр при «Размере кнопок» 100 %), подписи — до первого нажатия и пока держишь. Где стоят — D37TouchLayout
+  // (js/core/touch-layout.js): по умолчанию — KB_SLOTS (выше панели вещей, если та под ними), игрок переставляет в ⚙️ → «Управление»
+  // → «🎮 Настроить кнопки»; левша — зеркально; стили пишутся только при смене окна/настроек, не каждый кадр.
+  const KB_SLOTS = {
+    tap: { jump: [0, 0, 54], sneak: [-66, 6, 44], down: [-66, 6, 44], inv: [2, -68, 44], swap: [-64, -62, 44], off: [-130, 6, 44] },
+    cross: { jump: [0, 0, 54], mine: [-68, 6, 50], place: [-66, -64, 50], inv: [2, -70, 44], sneak: [-134, 6, 44], down: [-134, 6, 44], swap: [-130, -62, 44], off: [-4, -134, 44] },
+  };
   function touchUI(st){
     const K = st.K; if (!K) return;
-    const cross = opts.touchMode === 'cross';
-    wrap()?.classList.toggle('kb-touchtap', !cross);
+    const cross = opts.touchMode === 'cross', w = wrap();
+    w?.classList.toggle('kb-touchtap', !cross); w?.classList.add('kb-touch');
     st.touchSneak = false;
     const list = [
       { id: 'inv', icon: '🎒', label: 'вещи', onTap: () => { if (S?.ui?.isOpen()) S.ui.close(); else S?.ui?.open('inv'); } },
@@ -2032,16 +2050,75 @@
     // две руки: поменять (как F) и держать щит / тянуть лук (как ПКМ); «щит» видна, только когда есть щит или лук
     list.push({ id: 'swap', icon: '🔄', label: 'руки', onTap: () => { if (S && !S.P.dead) swapHands(S); } }, { id: 'off', icon: '🛡', label: 'щит', k: 'offuse' });
     list.push({ id: 'jump', icon: '⤒', label: 'прыжок', big: true, c: 'jump' });
-    st.tbar = K.touchBar(wrap(), list);
+    st.tbar = K.touchBar(w, list, { game: ID });
     st.tbarSync = () => { const fly = !!S?.P?.fly; st.tbar.show('sneak', !fly); st.tbar.show('down', fly); st.tbar.btn('jump').querySelector('b').textContent = fly ? 'вверх' : 'прыжок'; if (fly && S) S.touchSneak = false; st.tbar.on('sneak', !!S?.touchSneak); };
     st.tbar.show('off', false); st.hud.tb = '';
     st.tbarSync();
+    const slots = KB_SLOTS[cross ? 'cross' : 'tap'], TL = window.D37TouchLayout;
+    st.tl?.detach();
+    st.tl = TL && w ? TL.attach({ id: ID, title: 'Кубомир', el: w,
+      items: () => list.map(b => ({ id: b.id, icon: b.id === 'off' ? '🛡' : b.icon, label: b.id === 'off' ? 'щит / лук' : b.label, same: b.id === 'down' ? 'sneak' : undefined, opt: b.id === 'off' ? 'когда в руке' : undefined })),
+      btn: id => (S === st && st.tbar?.btn(id)) || null,
+      defaults: (W, H, k, cx) => kbSlots(st, slots, W, H, k, cx),
+      avoid: () => kbAvoid(st),
+      onEdit: (on, ov) => kbEdit(st, on, ov) }) : null;
+    if (!st.tl && w) { const p = kbSlots(st, slots, w.clientWidth, w.clientHeight, 1); for (const id in p) { const b = st.tbar.btn(id); if (b) { const q = p[id]; b.style.cssText = `left:${q.x - q.d / 2}px;top:${q.y - q.d / 2}px;width:${q.d}px;height:${q.d}px;--tl-d:${q.d}px`; } } }   // помощник не загрузился — по умолчанию
+  }
+  // раскладка по умолчанию: «прыжок» в правом нижнем углу (с вырезом экрана), остальные — сдвигами KB_SLOTS × размер кнопок;
+  // задевает панель вещей, сердечки или левую руку (телефон стоя: панель во всю ширину) — вся группа выше. sf.r — вырез справа
+  // (у левши кнопки слева — там свой вырез, но телефоны с вырезом сбоку бывают только лёжа, и он с обеих сторон одинаковый)
+  function kbSlots(st, S0, W, H, k, cx){
+    const sf = window.D37TouchLayout?.safe?.(wrap()) || { r: 0, b: 0 }, jr = S0.jump[2] * k / 2;
+    const av = kbAvoid(st, true).map(a => cx?.lefty ? { l: W - a.r, r: W - a.l, t: a.t, b: a.b } : a);   // раскладка — для правой руки (левша — зеркало)
+    const jx = W - sf.r - 16 - jr;
+    let jy = H - sf.b - 16 - jr;
+    for (let pass = 0; pass < 2; pass++) {
+      let up = 0;
+      for (const id in S0) {
+        const [dx, dy, d] = S0[id], x = jx + dx * k, y = jy + dy * k, r = d * k / 2 + 8;
+        for (const a of av) if (x + r > a.l && x - r < a.r && y + r > a.t && y - r < a.b) up = Math.max(up, y + r - a.t);
+      }
+      if (up <= 0) break;
+      jy -= up;
+    }
+    const out = {};
+    for (const id in S0) { const [dx, dy, d] = S0[id]; out[id] = { x: jx + dx * k, y: jy + dy * k, d: d * k }; }
+    return out;
+  }
+  // что кнопки не должны закрывать (в координатах окна игры): панель вещей с сердечками, левая рука, значки сверху (лёжа — поверх игры)
+  function kbAvoid(st, bottom){
+    const w = wrap(), h = st.hudEl; if (!w || !h) return [];
+    const B = w.getBoundingClientRect(), out = [];
+    const add = (e, label) => { if (!e || e.hidden) return; const r = e.getBoundingClientRect(); if (r.width && r.height) out.push({ l: r.left - B.left, t: r.top - B.top, r: r.right - B.left, b: r.bottom - B.top, label }); };
+    // панель и полоски — по отдельности (пузырьки воздуха под водой — посередине и ненадолго: раскладку от них не двигаем)
+    add(h.querySelector('.kb-hotbar'), 'панель вещей'); add(h.querySelector('.kb-bars'), 'здоровье и еда'); add(h.querySelector('.kb-oslot'), 'левая рука');
+    if (!bottom) { const top = el?.querySelector('.kb-top'); if (top && getComputedStyle(top).position === 'absolute') add(top.querySelector('.wld-topbtns'), 'значки'); }
+    return out;
+  }
+  // редактор кнопок открыт — мир не слушает пальцы (как окно), окна вещей и меню закрыты
+  function kbEdit(st, on, ov){
+    if (S !== st) return;
+    if (on) { if (st.ui?.isOpen()) st.ui.close(); closeMenu(); st.C?.reset_state(); st.K?.reset?.(); st.modWin = ov; }
+    else { if (st.modWin === ov) st.modWin = null; st.C?.reset_state(); }
+  }
+  // ячейки панели вещей на телефоне — по окну игры (T-074): лёжа 32 (низкий экран) / 40, стоя — до 34 и не шире окна;
+  // на компьютере — как было (css/kubomir.css). Пишется только при смене размера (ResizeObserver), потом — раскладка кнопок
+  function hudFit(st){
+    const w = wrap(), h = st.hudEl; if (!w || !h || !st.I?.touch) return;
+    const W = w.clientWidth, H = w.clientHeight; if (!W || !H) return;
+    const s = Math.max(24, Math.min(W > H ? (H <= 460 ? 32 : 40) : 34, Math.floor((W - 24 - 16 - 8) / 9)));
+    if (st.kbS !== s) {
+      st.kbS = s; h.style.setProperty('--kb-s', s + 'px');
+      // кнопки встают выше панели — мерить её после смены размера (при «уменьшить движение» у сайта всё с переходом 0,01 мс)
+      requestAnimationFrame(() => { if (S === st) st.tl?.layout(true); });
+    }
+    st.tl?.layout();
   }
 
   // ═══ Экран: полоски здоровья и еды, панель вещей, отладка ═══
   function hudBuild(wr){
     const h = document.createElement('div'); h.className = 'kb-hud';
-    h.innerHTML = `<div class="kb-flash"></div><div class="kb-hurt"></div><div class="kb-lowhp"></div><div class="kb-parry"></div><div class="kb-cool" hidden><i></i></div><div class="kb-dbg" hidden></div><div class="kb-log"></div><div class="kb-tip" hidden><div><b>ПОДСКАЗКА</b><span></span></div><button type="button" aria-label="Скрыть подсказки" title="Скрыть подсказки в этом мире">✕</button></div>
+    h.innerHTML = `<div class="kb-flash"></div><div class="kb-hurt"></div><div class="kb-lowhp"></div><div class="kb-parry"></div><div class="kb-cool" hidden><i></i></div><div class="kb-dbg" hidden></div><div class="kb-log"></div><div class="kb-tip" hidden><i class="kb-tipi" aria-hidden="true">💡</i><div><b>ПОДСКАЗКА</b><span></span></div><button type="button" aria-label="Скрыть подсказки" title="Скрыть подсказки в этом мире">✕</button></div>
       <div class="kb-bottom"><div class="kb-bars"><div class="kb-hp"></div><div class="kb-food"></div></div><div class="kb-air"></div><div class="kb-iname"></div>
       <div class="kb-hrow"><div class="kb-oslot" title="Левая рука: щит, факел, еда (F — поменять руки)" aria-label="Левая рука"><i></i><b></b><u></u></div><div class="kb-hotbar">${Array.from({ length: 9 }, (_, i) => `<div class="kb-slot" data-s="${i}"><i></i><b></b><u></u></div>`).join('')}</div></div></div>
       <div class="kb-loadbar" hidden><div class="spinner"></div><b>Строим мир вокруг…</b><small></small></div>`;
@@ -2050,6 +2127,8 @@
     // ячейка левой руки: нажал — поменять руки (на телефоне это и есть кнопка «F»)
     h.querySelector('.kb-oslot').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); if (S && !S.P.dead) swapHands(S); });
     h.querySelector('.kb-tip button').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); if (S) { S.meta.tips = false; tipsUpdate(S); S.H?.toast('Подсказки скрыты (вернуть — ⚙️ «🧊 Кубомир»)'); } });
+    // телефон: нажал на подсказку — целиком (с ✕), ещё раз — свернуть в 💡
+    h.querySelector('.kb-tip').addEventListener('pointerdown', e => { if (!S?.I?.touch || e.target.closest('button')) return; e.stopPropagation(); e.preventDefault(); tipMode(S, e.currentTarget, S.tipM === 'open' ? 'mini' : 'open'); });
     let hp = null;
     const slotAt = (x, y) => { const s = document.elementFromPoint(x, y)?.closest?.('.kb-hotbar [data-s]'); return s ? +s.dataset.s : -1; };
     const holdDrop = () => { if (!hp || !S) return; dropSel(S, false); hp.timer = setTimeout(holdDrop, 220); };
@@ -2252,6 +2331,7 @@
         if (!b || (v & 0xfff) !== b.id || y < 1 || y >= V.H - 1) return false;
         const cur = W.get(x, y, z); if (cur < 0 || !V.blocks[cur].replace) return false;
         const door = b.shape === V.SHAPE.door, h = door ? 2 : 1;
+        if (st.sup && !st.sup.canPlace(x, y, z, b)) return false;   // обрушение: не удержится — нельзя
         if (door) { const up = W.get(x, y + 1, z); if (up < 0 || !V.blocks[up].replace || v2 == null || (v2 & 0xfff) !== b.id || !((v2 >>> 12) & 8)) return false; }
         // твёрдое — не в игрока и не в моба (сам гость себя проверил: у хозяина его место — с опозданием)
         if (b.solid && (boxOverlap(st.P, x, y, z, h) || st.ents?.blocked?.(x, y, z) || (st.ents?.others || []).some(o => o.G !== G && !o.dead && boxOverlap({ x: o.x, y: o.y, z: o.z, w: PW, h: PH }, x, y, z, h)))) return false;
@@ -2298,10 +2378,19 @@
     if (!A.iron) return '🔩 Железная руда — рыжие пятна в камне. Выплавь её в печи (топливо — уголь или доски)';
     return '';
   }
+  // раз в секунду (housekeeping). Телефон (T-074): новая подсказка — одной строкой на 6 с, потом — значок 💡 (нажать — целиком
+  // на 12 с, с ✕ «скрыть совсем»); компьютер — карточка, как была
+  const TIP_LINE = 6000, TIP_OPEN = 12000;
   function tipsUpdate(st){
     const box = st.hudEl?.querySelector('.kb-tip'); if (!box) return;
     const txt = !st.creative && st.meta.tips !== false && !st.P.dead && st.ready ? tipText(st) : '';
-    if (st.tipNow !== txt) { st.tipNow = txt; box.hidden = !txt; if (txt) box.querySelector('span').textContent = txt; }
+    if (st.tipNow !== txt) { st.tipNow = txt; box.hidden = !txt; if (txt) { box.querySelector('span').textContent = txt; tipMode(st, box, 'line'); } }
+    else if (txt && st.I?.touch && st.tipUntil && now() > st.tipUntil) tipMode(st, box, 'mini');
+  }
+  function tipMode(st, box, m){
+    const touch = !!st.I?.touch;
+    st.tipM = m; st.tipUntil = !touch || m === 'mini' ? 0 : now() + (m === 'line' ? TIP_LINE : TIP_OPEN);
+    box.classList.toggle('mini', touch && m === 'mini'); box.classList.toggle('open', touch && m === 'open');
   }
 
   // ═══ Достижения ═══

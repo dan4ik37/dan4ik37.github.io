@@ -204,6 +204,7 @@
     const c = newChunk(d);
     const meta = G.metaOf.get(k); G.metaOf.delete(k);
     if (meta && meta.ch) for (const [ax, ay, items] of meta.ch) G.chests.set(ax + ',' + ay, items);
+    if (meta && meta.pl && meta.pl.length === 512) c.pl = new Uint8Array(meta.pl);   // обрушение (T-022a): что поставил игрок
     if (meta && d.gen === false) c.mod = true;
     G.chunks.set(k, c);
     lastC = null;
@@ -345,7 +346,7 @@
       if (!G || G.W?.id !== wid) return;
       let save = null;
       try { if (rec && rec.d) save = PZ.unpackChunk(rec.d instanceof Uint8Array ? rec.d : new Uint8Array(rec.d)); } catch (e) { save = null; }
-      if (rec && rec.ch) G.metaOf.set(k, { ch: rec.ch });
+      if (rec && (rec.ch || rec.pl)) G.metaOf.set(k, { ch: rec.ch, pl: rec.pl });
       if (save) G.worker.post({ t: 'load', cx, cy, save }); else G.worker.post({ t: 'load', cx, cy });
     }, () => { if (G && G.W?.id === wid) G.worker.post({ t: 'load', cx, cy }); });
   }
@@ -1263,9 +1264,11 @@
     }
     if (f === T.TRUNK || f === T.CACTUS) { fellTree(x, y, f); return true; }
     if (f === T.POT) { potLoot(x, y); }
+    const sc = G.sup ? G.sup.code(x, y) : 0;   // обрушение: чем была плитка (постройка / природное) — до правки
     setCell(x, y, 0, 0);
     dropOf(t, x + .5, y + .5);
     afterBreak(x, y, f, 1, 1, quiet);
+    if (G.sup) { G.sup.placed(x, y, false); if (sc) G.sup.removed(x, y, sc); }
     return true;
   }
   function afterBreak(x, y, f, w, h, quiet){
@@ -1394,6 +1397,7 @@
     if (id === T.ROPE && !(P.SOLID[fgAt(tx, ty - 1)] || fgAt(tx, ty - 1) === T.ROPE)) return 'Верёвку вешают под блок или другую верёвку';
     if (P.SUP[id] === 1 && !(P.SOLID[fgAt(tx, ty + 1)] === 1)) return '-';
     if (!anySupport(tx, ty) && id !== T.ROPE) return '-';
+    if (G.sup && !G.sup.canPlace(id, tx, ty)) return 'Не удержится — поставь опору ближе (колонну или стену)';   // обрушение
     return '';
   }
   function canWall(it, tx, ty){
@@ -1418,6 +1422,7 @@
       const cur = fgAt(tx, ty);
       if (cur) setCell(tx, ty, 0, 0);
       setCell(tx, ty, id, 0, null, s === 1 ? 0 : null);
+      G.sup?.placed(tx, ty);   // обрушение: поставил игрок (держится по материалу)
       if (id === T.TORCH) ach('torch');
     }
     useOne();
@@ -1817,6 +1822,7 @@
       updNpcs(dt);
       updProjs(dt);
       updItems(dt);
+      G.sup?.step(dt);   // обрушение: падающие куски (podzem-support.js)
       if ((G.tick & 1) === 0) liquids();
       if (G.spawnGrace > 0) G.spawnGrace -= dt;
       G.spawnT -= dt; if (G.spawnT <= 0) { G.spawnT += 1; spawnTick(); }
@@ -2334,6 +2340,10 @@
     if (lit) { const L = lightAt(x + w / 2, y + h / 2); r = r * L[0] | 0; g = g * L[1] | 0; b = b * L[2] | 0; }
     G.R.sprite(null, x, y, w, h, q[0], q[1], q[0] + q[2], q[1] + q[3], r, g, b, (a ?? 1) * 255 | 0, flip, rot, ox, oy);
   }
+  // обрушение (podzem-support.js): цвет устойчивости и картинка плитки из атласа
+  const SUPC = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]], UV = [0, 0];
+  function supRGB(lv){ const c = (G.sup?.COLORS || [])[lv] ?? 0xffffff, o = SUPC[lv] || SUPC[0]; o[0] = c >> 16 & 255; o[1] = c >> 8 & 255; o[2] = c & 255; return o; }
+  function tileUV(f){ const c = G.A?.tile?.[f]; if (c === undefined || c < 0) return null; UV[0] = (c % 64) * 16; UV[1] = (c >> 6) * 16; return UV; }
   function itemSpr(id, x, y, w, h, rot, ox, oy, flip, lit = true){
     const c = G.A.item[id]; if (c === undefined) return;
     const u = (c % 64) * 16, v = (c >> 6) * 16;
@@ -2396,6 +2406,7 @@
     for (const n of G.npcs) drawChar(G.guideH, n.anim, n.animT, n.x + n.w / 2, n.y + n.h, n.dir < 0, false, null, null);
     // выпавшие предметы (покачиваются)
     for (const it of G.items) itemSpr(it.id, it.x - .1, it.y - .15 + Math.sin(t * 3 + it.x) * .06, .8, .8, 0);
+    if (G.sup) G.sup.draw(G.R, tileUV, lightAt, G.alpha);   // обрушение: падающие куски
     // мобы
     for (const m of G.mobs) {
       const D = m.D, fr = A.spr[D.spr]; if (!fr) continue;
@@ -2454,7 +2465,9 @@
       if (work && (it.kind === 'tile' || it.kind === 'wall')) {
         const c = G.A.item[it.key];
         if (c !== undefined) { const u = (c % 64) * 16, v = (c >> 6) * 16; G.R.sprite(null, tg.x + .1, tg.y + .1, .8, .8, u, v, u + 16, v + 16, tg.ok ? 200 : 255, tg.ok ? 255 : 110, tg.ok ? 200 : 110, tg.ok ? 150 : 90); }
-        spr('frame', 0, tg.x, tg.y, 1, 1, false, 0, tg.ok ? [120, 255, 150] : [255, 90, 90], tg.ok ? .85 : .5, null, null, false);
+        const sid = G.sup && it.kind === 'tile' ? it.tileId || PZ.TILE[it.tile]?.id : 0, slv = sid && tg.ok ? G.sup.level(sid, tg.x, tg.y) : -1;   // обрушение: рамка — цветом устойчивости
+        spr('frame', 0, tg.x, tg.y, 1, 1, false, 0, slv >= 0 ? supRGB(slv) : tg.ok ? [120, 255, 150] : [255, 90, 90], tg.ok ? .85 : .5, null, null, false);
+        if (sid) { const D = G.sup.dots(tg.x, tg.y, G.cellRev | 0, G.t); for (let k = 0; k < D.n; k++) spr('white', 0, D.xy[k * 2] + .38, D.xy[k * 2 + 1] + .38, .24, .24, false, 0, supRGB(D.lv[k]), .8, null, null, false); }
       } else {
         const ok = work ? tg.ok : inReach(tg.x, tg.y);
         spr('frame', 0, tg.x, tg.y, 1, 1, false, 0, ok ? [255, 255, 255] : [255, 90, 90], ok ? .75 : .32, null, null, false);
@@ -2535,6 +2548,7 @@
         if (G.hitStop > 0) { G.hitStop -= dt; acc = 0; }   // миг после сильного удара
         while (acc >= 1 / 60 && n < 5) { step(1 / 60); acc -= 1 / 60; n++; }
         if (n === 5) acc = 0;
+        G.alpha = acc * 60;   // доля до следующего шага (рисовать падающее плавно)
         drainInbox(G.state === 'loading' ? 12 : 2);
         if (G.state === 'loading') loadingTick();
         render();
@@ -2612,7 +2626,9 @@
   function chunkRecord(c){
     const ch = [];
     for (const [k, items] of G.chests) { const [ax, ay] = k.split(',').map(Number); if (ax >> CB === c.cx && ay >> CB === c.cy) ch.push([ax, ay, items.map(s => s ? { id: s.id, n: s.n } : null)]); }
-    return { d: PZ.packChunk(c), ch };
+    const r = { d: PZ.packChunk(c), ch };
+    if (c.pl && c.pl.some(v => v)) r.pl = c.pl.slice();   // обрушение: что поставил игрок
+    return r;
   }
   function saveChunks(list){
     if (!G?.W) return Promise.resolve();
@@ -2646,7 +2662,7 @@
     const dirty = [...G.dirtySave].filter(c => c.mod);
     const j = { w: G.W.id, at: Date.now(), world: worldRecord(), char: charRecord(), chunks: {} };
     let size = 0;
-    for (const c of dirty) { const r = chunkRecord(c), s = PZ.toB64(r.d); size += s.length; if (size > 1.5e6) break; j.chunks[c.cx + '|' + c.cy] = { d: s, ch: r.ch }; }
+    for (const c of dirty) { const r = chunkRecord(c), s = PZ.toB64(r.d); size += s.length; if (size > 1.5e6) break; j.chunks[c.cx + '|' + c.cy] = { d: s, ch: r.ch, pl: r.pl ? PZ.toB64(r.pl) : undefined }; }
     lsSet(LS_JOURNAL, JSON.stringify(j));
     saveAll();
   }
@@ -2656,7 +2672,7 @@
     if (!j || !j.w) return;
     try {
       const recs = [];
-      for (const [k, v] of Object.entries(j.chunks || {})) { const [cx, cy] = k.split('|').map(Number); recs.push([ckey(j.w, cx, cy), { d: PZ.fromB64(v.d), ch: v.ch || [] }]); }
+      for (const [k, v] of Object.entries(j.chunks || {})) { const [cx, cy] = k.split('|').map(Number); recs.push([ckey(j.w, cx, cy), { d: PZ.fromB64(v.d), ch: v.ch || [], pl: v.pl ? PZ.fromB64(v.pl) : undefined }]); }
       if (recs.length) await DB.putMany('chunks', recs);
       const w = await DB.get('worlds', j.w);
       if (j.world && (!w || (w.updated || 0) <= j.at)) await DB.put('worlds', j.world);
@@ -2674,10 +2690,12 @@
     let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
     return h >>> 0 || 1;
   }
-  function newWorldRecord(name, seedText, mods){
+  function newWorldRecord(name, seedText, mods, support){
     const seed = seedOf(seedText), gen = PZ.makeGen(seed), sp = gen.spawnPoint();
-    return { id: uid('w'), name: String(name || 'Мой мир').slice(0, 32), seed, seedText: String(seedText || seed).slice(0, 40), created: Date.now(), updated: Date.now(), playtime: 0,
+    const w = { id: uid('w'), name: String(name || 'Мой мир').slice(0, 32), seed, seedText: String(seedText || seed).slice(0, 40), created: Date.now(), updated: Date.now(), playtime: 0,
       spawn: { x: sp.x, y: sp.y + 1 }, time: .08, day: 1, flags: {}, mods: (mods || []).slice(0, 16), palette: {}, maxDepth: 0, guide: null, ver: 1 };
+    if (support === 'soft' || support === 'real') w.support = support;   // обрушение (T-022a): только новые миры, старые — выкл
+    return w;
   }
   function newCharRecord(name){
     const inv = Array(INV_N).fill(null);
@@ -2692,7 +2710,7 @@
     const w = await DB.get('worlds', id); if (!w) return null;
     const [keys, vals] = await DB.getRange('chunks', id + '|', id + '|￿');
     const chunks = {};
-    keys.forEach((k, i) => { const [, cx, cy] = k.split('|'); chunks[cx + '|' + cy] = { d: PZ.toB64(vals[i].d instanceof Uint8Array ? vals[i].d : new Uint8Array(vals[i].d)), ch: vals[i].ch || [] }; });
+    keys.forEach((k, i) => { const [, cx, cy] = k.split('|'); chunks[cx + '|' + cy] = { d: PZ.toB64(vals[i].d instanceof Uint8Array ? vals[i].d : new Uint8Array(vals[i].d)), ch: vals[i].ch || [], pl: vals[i].pl ? PZ.toB64(vals[i].pl instanceof Uint8Array ? vals[i].pl : new Uint8Array(vals[i].pl)) : undefined }; });
     return { fmt: 'd37-podzem-world', v: 1, at: Date.now(), world: w, chunks };
   }
   async function importWorld(data){
@@ -2702,7 +2720,8 @@
     for (const [k, v] of Object.entries(data.chunks || {})) {
       const m = /^(-?\d+)\|(\d+)$/.exec(k); if (!m) continue;
       const d = PZ.fromB64(v.d); PZ.unpackChunk(d);   // проверка: битый — исключение
-      recs.push([ckey(w.id, +m[1], +m[2]), { d, ch: Array.isArray(v.ch) ? v.ch.slice(0, 64) : [] }]);
+      let pl; if (typeof v.pl === 'string') { pl = PZ.fromB64(v.pl); if (pl.length !== 512) pl = undefined; }
+      recs.push([ckey(w.id, +m[1], +m[2]), { d, ch: Array.isArray(v.ch) ? v.ch.slice(0, 64) : [], pl }]);
       if (recs.length > 20000) break;
     }
     if (recs.length) await DB.putMany('chunks', recs);
@@ -2719,6 +2738,10 @@
     return c;
   }
 
+  // обрушение (podzem-support.js): что переходнику нужно от игры
+  const SUPH = { cAt: (x, y) => cAt(x, y), idx, fgAt: (x, y) => fgAt(x, y), setCell: (x, y, f, st, w, lq) => setCell(x, y, f, st, w, lq), checkSupport: (x, y) => checkSupport(x, y),
+    debris: (x, y, w, h, f, n) => debris(x, y, w, h, tileColor(f, 0), n), dropTile: (f, x, y) => { const t = TILES[f] || G.modTiles?.[f]; if (t) dropOf(t, x + .5, y + .5); },
+    snd: (n, o) => snd(n, o), hurtPlayer: (d, k, by) => hurtPlayer(d, k, by), P };
   // ═══ Запуск мира ═══
   let playTok = 0;
   async function play(worldId, charId){
@@ -2733,6 +2756,7 @@
     if (!(CH.hp > 0)) CH.hp = CH.maxHp;   // сохранились мёртвыми (вкладку закрыли во время возрождения)
     W.flags = W.flags || {}; W.palette = W.palette || {};
     G.W = W; G.CH = CH;
+    G.sup = window.PZSupport?.attach?.(G, SUPH) || null;   // обрушение и прочность (podzem-support.js; мир без него — null)
     G.gen = PZ.makeGen(W.seed);
     wavesStart(W);   // волны мира (waves.js): зерно мира, своя погода
     G.chunks.clear(); G.pending.clear(); G.want.clear(); G.metaOf.clear(); G.dirtySave.clear(); G.chests = new Map();
@@ -2776,7 +2800,7 @@
     G.modsStop?.();
     G.worker?.stop(); G.worker = null;
     for (const c of G.chunks.values()) G.R?.chunkFree(c);
-    G.chunks.clear(); G.W = null; G.CH = null; G.state = 'menu';
+    G.chunks.clear(); G.W = null; G.CH = null; G.state = 'menu'; G.sup = null;
     wavesStop();
     ambienceOff();
   }

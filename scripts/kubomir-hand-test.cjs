@@ -830,6 +830,96 @@ function fakeWorld(sky, blk, walls = new Set()){
       ok(V.component(W, [[5, 11, 5]], { take: v => (v & 0xfff) === ID.log_oak, max: 2 }) === null && V.stabilityOf(V.blocks[ID.log_oak]).base > 0, 'V.component: больше предела — null; запас прочности (на будущее) — данные есть'); }
   }
 
+  // ═══ 12. Обрушение и прочность (T-022a: D37E.support + kubomir-support.js + fallGroup drop) ═══
+  sec('обрушение: постройка держится по материалу, подрубил опору — падает куском и ложится блоками; своды пещер в «реализме»');
+  {
+    run('js/engine/support.js'); run('js/games/kubomir-support.js');
+    const KS = window.KubomirSupport, SUP = E.support, key = (x, y, z) => x + ',' + y + ',' + z;
+    // мир: ниже y 10 — природный камень; правки игрока — в «чанке» (edits по номеру клетки, как у V.World)
+    const mkSW = (floor = 10) => { const cells = new Map(), chunks = new Map(); const W = { seed: 9, rev: 0, listeners: [], cells, chunks,
+      raw(x, y, z){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (y < 0) return 7; if (y >= 128) return 0; const v = cells.get(key(x, y, z)); return v === undefined ? (y < floor ? ID.stone : 0) : v; },
+      get(x, y, z){ const v = this.raw(x, y, z); return v < 0 ? -1 : v & 0xfff; },
+      chunk(cx, cz){ const k = cx + '|' + cz; let c = chunks.get(k); if (!c) chunks.set(k, c = { cx, cz, edits: null, gen: true }); return c; },
+      set(x, y, z, v, o = {}){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); cells.set(key(x, y, z), v); this.rev++; if (!o.nat) { const c = this.chunk(x >> 4, z >> 4); (c.edits || (c.edits = new Map())).set(((x & 15) << 11) | ((z & 15) << 7) | y, v); } return true; },
+      lightAt(){ return 15 << 12; }, loaded: () => true, heightAt: () => floor, chunkAt(x, z){ return this.chunk(Math.floor(x) >> 4, Math.floor(z) >> 4); } }; return W; };
+    const mkS = (W, support, diff = 'easy') => { const S12 = { R: Object.assign({}, R, { lighting: { time: 12 }, night: 0 }), VR, W, P: { x: 30.5, y: 10, z: 30.5, vx: 0, vy: 0, vz: 0, dead: false }, ox: 0, oz: 0, meta: { diff, support }, ST: { rd: 6 }, creative: false };
+      const X = window.KubomirEnts.create(S12); S12.ents = X; X.spawnT = 1e9; S12.sup = KS.attach(S12); return { X, S12 }; };
+    const PL = V.cell(ID.planks_oak), CB = V.cell(ID.cobble);
+    ok(KS.attach({ meta: {}, W: mkSW() }) === null && KS.attach({ meta: { support: 'off' }, W: mkSW() }) === null, 'старый мир (нет meta.support) и «выкл» — без обрушения');
+    // постройка: доски — столб 5 и балка вбок
+    const build = W => { for (let y = 10; y < 15; y++) W.set(50, y, 50, PL); for (let x = 51; x <= 54; x++) W.set(x, 14, 50, PL); };
+    { const W = mkSW(); build(W); const { X, S12 } = mkS(W, 'real');
+      const s = S12.sup;
+      ok(s.code(50, 12, 50) === ((SUP.MAT.wood << 2) | 2) && s.code(50, 5, 50) === ((SUP.MAT.rock << 2) | 3) && s.code(50, 20, 50) === 0, 'код клетки: доска — постройка (дерево), камень под землёй — природная скала, воздух — пусто');
+      const b = V.blocks[ID.planks_oak];
+      ok(!s.canPlace(55, 14, 50, b) && s.canPlace(54, 15, 50, b), 'реализм: столб из досок 5 и балка 4 — пятый вбок уже не держится, сверху на конец балки — можно');
+      const T1 = { x: 51, y: 15, z: 50 }, T2 = { x: 55, y: 14, z: 50 };
+      const c1 = s.tint(T1, b).slice(), l1 = s.level(), c2 = s.tint(T2, b).slice(), l2 = s.level();
+      ok(l1 <= 2 && l2 >= 3 && c1.join() !== c2.join(), 'рамка «куда встанет блок» — цветом: у столба крепко, на конце балки — красная', { l1, l2 });
+      X.dispose(); }
+    // подрубил столб: верх столба и балка падают куском, ложатся блоками (сколько было — столько и есть: блоками или вещами)
+    const collapse = (frames) => {
+      const W = mkSW(); build(W); const { X, S12 } = mkS(W, 'soft');
+      const code = S12.sup.code(50, 11, 50); W.set(50, 11, 50, 0);
+      const ng = S12.sup.removed(50, 11, 50, code);
+      const res = { ng, groups: X.groups.length, drop: !!X.groups[0]?.F, removed: W.get(50, 14, 50) === 0 && W.get(53, 14, 50) === 0, ticks: -1 };
+      for (let i = 0; i < 400 && X.groups.length; i++) { X.tick(1 / 20); if (frames) for (let k = 0; k < frames(i); k++) { X.frac = (k + 1) / (frames(i) + 1); X.frame(1 / 144, i / 20); } if (!X.groups.length) res.ticks = i; }
+      let blocks = 0; for (const [k, v] of W.cells) if ((v & 0xfff) === ID.planks_oak) blocks++;
+      res.blocks = blocks; res.items = X.items.reduce((a, e) => a + (e.s.id === 'planks_oak' ? e.s.n : 0), 0);
+      res.top = []; for (let x = 50; x <= 54; x++) { let y = 20; while (y > 9 && W.get(x, y, 50) !== ID.planks_oak) y--; res.top.push(y); }
+      X.dispose(); return res;
+    };
+    const A = collapse(null), B = collapse(i => 1 + (i * 7) % 5);
+    ok(A.ng === 1 && A.groups === 1 && A.drop && A.removed, 'подрубил столб — верх столба и балка падают одним куском (drop)', A);
+    ok(A.ticks > 2 && A.ticks < 60 && B.ticks === A.ticks && A.top.join() === B.top.join(), 'падает по тактам игры: кадры не влияют (тот же такт и то же место)', [A.ticks, B.ticks, A.top, B.top]);
+    ok(A.blocks + A.items === 4 + 3 + 1, 'ничего не потерялось: 7 упавших + 1 оставшийся — блоками или вещами', A);
+    ok(A.top.every(y => y === 13), 'лёг блоками на остаток столба (упал на 1 блок), балка — держится и после падения', A.top);
+    { const W = mkSW(); build(W); const { X, S12 } = mkS(W, 'soft'); ok(S12.sup.canPlace(55, 14, 50, V.blocks[ID.planks_oak]) && !S12.sup.canPlace(57, 14, 50, V.blocks[ID.planks_oak]), '«мягкое»: природное — опора, балка длиннее (5-й вбок можно); в воздухе без соседей — нельзя'); X.dispose(); }
+    // легло и не держится само (лёг краем на столб) — падает дальше: проверка после падения (каскад, X.recheck)
+    { const W = mkSW(); for (let y = 10; y < 15; y++) W.set(60, y, 50, PL); for (let x = 61; x <= 69; x++) W.set(x, 14, 50, PL);   // «легла» балка 9 — дальше 4 не держится
+      const { X, S12 } = mkS(W, 'real'); const xyz = []; for (let x = 61; x <= 69; x++) xyz.push(x, 14, 50);
+      S12.sup.recheck(xyz);
+      for (let i = 0; i < 600 && X.groups.length; i++) X.tick(1 / 20);
+      let hang = 0, ground = 0; for (let x = 61; x <= 69; x++) { if (W.get(x, 14, 50) === ID.planks_oak) hang++; if (W.get(x, 10, 50) === ID.planks_oak) ground++; }
+      ok(hang === 4 && ground === 5 && S12.sup.stats.groups === 1, 'легла и не держится — дальняя часть балки падает дальше и ложится на землю', { hang, ground, groups: S12.sup.stats.groups });
+      X.dispose(); }
+    // сетка падающего куска: грани между кубиками куска не рисуются (3×3×3 досок — только наружные 54 квадрата)
+    { const W = mkSW(); const { X } = mkS(W, 'soft'); const cells = []; for (let x = 0; x < 3; x++) for (let y = 0; y < 3; y++) for (let z = 0; z < 3; z++) cells.push(60 + x, 20 + y, 60 + z, PL);
+      const g = X.fallGroup(cells, { x: 61.5, y: 20, z: 61.5 }, { x: 1, z: 0 }, { drop: true, cap: 8 });
+      ok(g && g.geo.attributes.position.count === 54 * 4 && g.geo.index.count === 54 * 6, 'сетка падающего куска 3×3×3: только наружные грани (54 квадрата вместо 162)', g && g.geo.attributes.position.count);
+      X.dispose(); }
+    // факел на падающем — отпадает вещью
+    { const W = mkSW(); build(W); W.set(52, 15, 50, V.cell(ID.torch, 0)); const { X, S12 } = mkS(W, 'soft');
+      const code = S12.sup.code(50, 11, 50); W.set(50, 11, 50, 0); S12.sup.removed(50, 11, 50, code);
+      ok(W.get(52, 15, 50) === 0 && X.items.some(e => e.s.id === 'torch'), 'факел на падающей балке — отпал вещью'); X.dispose(); }
+    // своды пещер: «реализм» — широкий зал обваливается (лёг булыжником), «мягкое» — нет
+    const cave = (support) => {
+      const W = mkSW(40);
+      for (let x = 15; x < 38; x++) for (let z = 5; z < 28; z++) for (let y = 25; y < 28; y++) if (!(x === 37 && z === 16)) W.set(x, y, z, 0, { nat: false });
+      const { X, S12 } = mkS(W, support);
+      const code = S12.sup.code(37, 26, 16); W.set(37, 26, 16, 0);
+      // выкопали «вручную» без пересчёта весь зал, кроме одной клетки у стены — дальше по-честному: последняя клетка
+      const ng = S12.sup.removed(37, 26, 16, code);
+      for (let i = 0; i < 400 && X.groups.length; i++) X.tick(1 / 20);
+      let cob = 0; for (const [, v] of W.cells) if ((v & 0xfff) === ID.cobble) cob++;
+      X.dispose(); return { ng, cob, ms: S12.sup.stats.maxMs };
+    };
+    const Cr = cave('real'), Cs = cave('soft');
+    ok(Cs.ng === 0 && Cs.cob === 0, '«мягкое»: свод пещеры не обваливается', Cs);
+    ok(Cr.ng >= 0 && typeof Cr.ms === 'number', 'реализм: пересчёт свода — ' + Cr.ms.toFixed(1) + ' мс', Cr);
+    // зал: сначала 13×13 честно по клеткам (держится), потом шире — середина падает и ложится булыжником
+    { const W = mkSW(40); const { X, S12 } = mkS(W, 'real'); let fell = 0;
+      const dig = (x, y, z) => { const c = S12.sup.code(x, y, z); W.set(x, y, z, 0); fell += S12.sup.removed(x, y, z, c); };
+      for (let x = 20; x < 33; x++) for (let z = 10; z < 23; z++) for (let y = 25; y < 28; y++) dig(x, y, z);
+      const f13 = fell;
+      for (let x = 15; x < 38; x++) for (let z = 5; z < 28; z++) for (let y = 25; y < 28; y++) if (W.get(x, y, z)) dig(x, y, z);
+      for (let i = 0; i < 400 && X.groups.length; i++) X.tick(1 / 20);
+      let cob = 0; for (const [, v] of W.cells) if ((v & 0xfff) === ID.cobble) cob++;
+      ok(f13 === 0 && fell > 0 && cob > 0, 'реализм: зал 13×13 держится; выкопал до 23×23 — свод обвалился и лёг булыжником', { f13, fell, cob, solves: S12.sup.stats.solves, avgMs: +(S12.sup.stats.ms / S12.sup.stats.solves).toFixed(2), maxMs: +S12.sup.stats.maxMs.toFixed(1) });
+      console.log(`  реализм, копание зала по клетке: ${S12.sup.stats.solves} пересчётов, в среднем ${(S12.sup.stats.ms / S12.sup.stats.solves).toFixed(2)} мс, худший ${S12.sup.stats.maxMs.toFixed(1)} мс`);
+      X.dispose(); }
+  }
+
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

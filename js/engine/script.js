@@ -616,6 +616,17 @@
       Set(state){ send('mode', { cmd: 'weather', state: String(state ?? '').slice(0, 20) }); },   // только у хозяина мира; '' / 'auto' — по расписанию
       toString(){ return 'Weather'; },
     };
+    // ── Прочность построек (Support.*) — её считает хозяин мира (studio3d-support.js, js/engine/support.js): держание деталей
+    // (0…100; 100 — на земле), что обрушилось; Break — сломать деталь (что держалось через неё — падает) ──
+    const SPS = { mode: 'off', sup: Object.create(null) };
+    const Support = {
+      get Mode(){ return SPS.mode; },
+      Holds(p){ const id = p && p.__id; if (!id || !objs.has(id)) return false; const v = SPS.sup[id]; return v === undefined ? true : v > 0; },
+      Get(p){ const id = p && p.__id; const v = id ? SPS.sup[id] : undefined; return v === undefined ? (id && objs.has(id) ? 100 : 0) : v; },
+      Break(p){ const id = p && p.__id; if (id) send('mode', { cmd: 'support', op: 'break', id }); },
+      Collapsed: signal(),
+      toString(){ return 'Support'; },
+    };
     const scriptObj = s => ({ Name: s.name, Parent: s.parent ? proxyOf(s.parent) : workspace, ClassName: 'Script', Disabled: false,
       IsA(c){ return c === 'Script' || c === 'BaseScript' || c === 'LuaSourceContainer' || c === 'Instance'; },
       FindFirstChild(){ return null; }, GetChildren(){ return []; }, Destroy(){}, GetFullName(){ return (s.parent && proxyOf(s.parent) ? proxyOf(s.parent).GetFullName() : 'Workspace') + '.' + s.name; }, toString(){ return s.name; } });
@@ -633,7 +644,7 @@
         // библиотеки языков (lang-*.js) приходят текстом — регистрируются в globalThis.D37Lang
         globalThis.D37Lang = globalThis.D37Lang || {};
         for (const id of Object.keys(d.libs || {})) { try { (0, eval)(d.libs[id]); } catch (e5) { send('error', { script: '', line: 0, msg: 'Язык ' + id + ': ' + String(e5 && e5.message || e5).slice(0, 200) }); } }
-        const API = { game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera, Weather };
+        const API = { game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera, Weather, Support };
         for (const s of d.scripts) {
           curScript = s.name;
           if (s.lang && s.lang !== 'js') {
@@ -646,10 +657,10 @@
             continue;
           }
           try {
-            const fn = new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'task', 'wait', 'print', 'warn', 'gui', 'sound', 'random', 'BrickColor', 'CFrame', 'Game', 'Camera', 'Weather',
+            const fn = new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'task', 'wait', 'print', 'warn', 'gui', 'sound', 'random', 'BrickColor', 'CFrame', 'Game', 'Camera', 'Weather', 'Support',
               'return (async () => {\n' + s.code + '\n})();');
             const scr = scriptObj(s);
-            const r = fn(scr, game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera, Weather);
+            const r = fn(scr, game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera, Weather, Support);
             const nm = s.name; if (r && r.catch) r.catch(e3 => err(nm, e3));
           } catch (e4) { err(s.name, e4); }
         }
@@ -702,6 +713,12 @@
         // погода: состояние (раз в несколько секунд и при смене), смена погоды, праздник
         else if (d.ev === 'weather') { if (d.s && typeof d.s === 'object') for (const k of Object.keys(WS)) if (d.s[k] !== undefined) WS[k] = typeof WS[k] === 'number' ? +d.s[k] || 0 : String(d.s[k]).slice(0, 30); if (d.changed) Weather.Changed._fire(WS.state, WS.season); }
         else if (d.ev === 'holiday') { WS.holiday = String(d.id || '').slice(0, 30); Weather.Holiday._fire(WS.holiday, String(d.greet || '').slice(0, 80)); }
+        // прочность: держание деталей и что обрушилось (Support.Collapsed — по вызову на деталь)
+        else if (d.ev === 'support') {
+          if (typeof d.mode === 'string') SPS.mode = d.mode.slice(0, 8);
+          if (d.sup && typeof d.sup === 'object') for (const k of Object.keys(d.sup).slice(0, 3000)) SPS.sup[k] = Math.max(0, Math.min(100, +d.sup[k] || 0));
+          if (Array.isArray(d.fell)) for (const id of d.fell.slice(0, 500)) if (typeof id === 'string' && objs.has(id)) { SPS.sup[id] = 0; Support.Collapsed._fire(proxyOf(id)); }
+        }
         return;
       }
     };

@@ -53,7 +53,7 @@
     // чекпоинта гонки; touch — ещё check (чекпоинт), hill (зона «Царя горы»), zspawn (здесь появляются зомби).
     Camera: { name: 'Камера', pos: [0, 6, 12], rot: [-20, 0, 0], fov: 50, kind: 'fixed' },
   };
-  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit', 'rate', 'color2', 'touch', 'look', 'seed', 'act', 'speed', 'radius', 'damage', 'fov', 'team', 'order'];
+  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit', 'rate', 'color2', 'touch', 'look', 'seed', 'act', 'speed', 'radius', 'damage', 'fov', 'team', 'order', 'smat'];   // smat — материал прочности (studio3d-support.js)
   const r3 = v => Math.round(v * 1000) / 1000;
   const copy = v => Array.isArray(v) ? v.slice() : v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v;
 
