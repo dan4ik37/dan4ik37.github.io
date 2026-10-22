@@ -10,6 +10,10 @@
 //   DS.ahead(x, z, r, power) — что можно сломать машиной силы power (1 — машина, 2 — танк/грузовик) у точки
 //   DS.breakId(id, seed, dx, dz, remote) — сломать; из сети — remote: без повторной рассылки (DS.onBreak — только своё)
 //   DS.debris(o) — свой обломок; DS.update(dt) — раз в кадр; DS.stats(); DS.dispose()
+// Деревья пород (T-022b): есть сетка дерева (E.trees.lookup(id) — её отдаёт тот, кто рисует: «Мир Денчика» — worldmap.js) — ствол
+// ломается по месту удара: пень остаётся (до восстановления), падает настоящий верх (срез сетки, js/engine/trees3d.js T3.cut), лёг —
+// брёвна по длине ствола и листва облаком. Высота среза — в зерне события (младшие 6 бит × 0,15; 0 — по зерну 0,7…1,3 — бампер,
+// гусеница танка): у всех игроков одинаково, сеть не меняется (то же «сломан id» с зерном)
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const E = root.D37E = root.D37E || {};
@@ -73,7 +77,27 @@
 
     // ── Падающее (дерево, столб): поворот вокруг основания, ускоряется, упал — пыль и куски ──
     const fallers = [];
+    // высота среза ствола из зерна события (у всех одинаково): младшие 6 бит × 0,15 (удар с высотой), 0 — 0,7…1,3 (машина, танк)
+    const cutOf = (seed, h) => { const c = seed & 63, y = c ? c * .15 : .7 + ((seed >>> 6) & 255) / 255 * .6; return Math.max(.35, Math.min(h * .45, y)); };
+    DS.cutOf = cutOf;
+    function treeFaller(b, seed, dx, dz, info){
+      const r = rng(seed), by = cutOf(seed, info.h), l = Math.hypot(dx, dz) || 1, TT = E.trees3d;
+      const geo = TT.cut(R, info.geo, by / info.s);
+      const g = new T.Group(), m = new T.Mesh(geo, info.mat);
+      m.position.y = -by; m.rotation.y = info.yaw; m.scale.setScalar(info.s); m.castShadow = !low; m.receiveShadow = !low; if (info.depth && !low) m.customDepthMaterial = info.depth;
+      g.add(m); g.position.set(b.x, (b.y ?? info.y) + by, b.z); grp.add(g);
+      // пень — до восстановления дерева
+      const tr = Math.max(.12, info.trunkR * 1.05);
+      const st = piece('cyl', { x: b.x, y: (b.y ?? info.y) + by / 2, z: b.z, sx: tr * 2, sy: by, sz: tr * 2, c: '#6b4a2c', fixed: true, life: RESTORE + 600 });
+      b._stump = st; b._stumpBorn = st.born;
+      fallers.push({ b, g, geo, info, by, x: b.x, y: (b.y ?? info.y) + by, z: b.z, dx: dx / l, dz: dz / l, th: .04, w: .5 + r() * .4, L: Math.max(1.5, info.h - by), seed, parts: [] });
+      burst('dust', b.x, (b.y ?? info.y) + by, b.z, 10, '#8b6a45');
+      o.sfx?.('break', { x: b.x, y: (b.y ?? 0) + by, z: b.z, vol: .7 });
+    }
     function faller(b, seed, dx, dz){
+      // дерево пород с настоящей сеткой — ствол ломается по месту удара (сетка падает), иначе — как раньше (куски-примитивы)
+      const info = (b.kind === 'tree' || b.kind === 'pine') && E.trees?.lookup && E.trees3d?.cut ? E.trees.lookup(b.id) : null;
+      if (info && info.geo) { try { treeFaller(b, seed, dx, dz, info); return; } catch (e) { console.error(e); } }
       const r = rng(seed), L = b.h || 4, parts = [];
       const add = (shape, lx, ly, lz, sx, sy, sz, c) => { const it = piece(shape, { x: b.x, y: b.y, z: b.z, sx, sy, sz, c, fixed: true, life: 99 }); parts.push({ it, o: [lx, ly, lz] }); return it; };
       if (b.kind === 'tree' || b.kind === 'pine') {
@@ -93,6 +117,7 @@
       F.w += 1.5 * G / Math.max(1, F.L) * Math.sin(F.th + .05) * dt * .55;
       F.th = Math.min(PI / 2, F.th + F.w * dt);
       AX.set(F.dz, 0, -F.dx).normalize(); Qa.setFromAxisAngle(AX, F.th);
+      if (F.g) { F.g.quaternion.copy(Qa); if (F.th >= PI / 2 - .02) return landTree(F); return false; }
       for (const p of F.parts) {
         V3.set(p.o[0], p.o[1], p.o[2]).applyQuaternion(Qa);
         p.it.x = F.x + V3.x; p.it.y = F.y + V3.y; p.it.z = F.z + V3.z; p.it.q.copy(Qa);
@@ -124,6 +149,23 @@
       return true;
     }
 
+    // упал верх дерева пород: сетка прочь, брёвна по длине ствола (от среза), листва облаком у кроны, пыль
+    function landTree(F){
+      const r = rng(F.seed + 7), I = F.info, L = F.L, tr = Math.max(.12, I.trunkR * .8), n = Math.max(2, Math.min(4, Math.round(L / 2.4)));
+      grp.remove(F.g); F.geo.dispose(); F.g = null;
+      Qa.setFromUnitVectors(UP, V3.set(F.dx, 0, F.dz));
+      const len = Math.min(L * .5, 4.5);
+      for (let k = 0; k < n; k++) {
+        const d = len * (k + .5) / n, px = F.x + F.dx * d, pz = F.z + F.dz * d;
+        piece('cyl', { x: px, y: groundY(px, pz, F.y + 2) + tr, z: pz, sx: tr * 2, sy: len / n * .92, sz: tr * 2, c: '#7a4f2c', q: Qa, vx: (r() - .5) * 2, vy: 1 + r() * 1.5, vz: (r() - .5) * 2, av: 1.2, life: low ? 10 : 25 });
+      }
+      const tip = [F.x + F.dx * L * .7, F.z + F.dz * L * .7], gy = groundY(tip[0], tip[1], F.y + 2);
+      burst('dust', tip[0], gy + .4, tip[1], 22, '#b59a73');
+      if (!/dead/.test(I.sp || '')) burst('leaves', tip[0], gy + 1.5, tip[1], I.pine ? 22 : 30, I.pine ? '#2f6b3a' : '#5aa845');
+      o.sfx?.('break', { x: tip[0], y: gy + .5, z: tip[1], vol: .8 });
+      o.onLand?.(F.b, tip[0], tip[1]);
+      return true;
+    }
     // ── Частицы (общий fx.js): пыль, листва, искры, щепки, брызги стекла — одним эмиттером на вид ──
     const EM = {};
     function burst(kind, x, y, z, n, color){
@@ -203,6 +245,7 @@
     };
     function restore(b){
       DS.broken.delete(b.id); b.hp = b.hp0;
+      if (b._stump) { if (b._stump.on && b._stump.born === b._stumpBorn) hidePiece(pools.cyl, b._stump); b._stump = null; }   // пень — прочь, дерево снова целое
       for (const c of b.bodies || []) ph?.readd?.(c);
       try { b.hide?.(false); } catch (e) { console.error(e); }
       if (b.temp) DS.remove(b.id);
@@ -216,7 +259,9 @@
         if (DS.broken.has(b.id) || (hit.kinds && !hit.kinds.includes(b.kind)) || !allowed(b)) return;
         if (hit.y != null && b.y != null && (hit.y < b.y - .5 || hit.y > b.y + (b.h || 3) + 1)) return;
         b.hp -= dmg;
-        if (b.hp <= 0) { if (DS.breakId(b.id, (Math.random() * 1e9) | 0, hit.dx ?? b.x - x, hit.dz ?? b.z - z)) n++; }
+        // высота удара — в зерно (младшие 6 бит): у деревьев пород ствол ломается по месту удара, у всех игроков одинаково
+        let s = ((Math.random() * 1e9) | 0) & ~63; if (hit.y != null && b.y != null) s |= Math.max(3, Math.min(60, Math.round((hit.y - b.y) / .15)));
+        if (b.hp <= 0) { if (DS.breakId(b.id, s, hit.dx ?? b.x - x, hit.dz ?? b.z - z)) n++; }
       });
       return n;
     };
@@ -226,7 +271,7 @@
       o.provide?.(x, z, r + 4, DS);
       near(x, z, r, b => {
         if (DS.broken.has(b.id) || !allowed(b) || (b.power ?? POWER[b.kind] ?? 1) > power) return;
-        if (DS.breakId(b.id, (Math.random() * 1e9) | 0, dx, dz)) { n++; slow *= b.kind === 'tree' || b.kind === 'pine' ? .7 : .88; }
+        if (DS.breakId(b.id, ((Math.random() * 1e9) | 0) & ~63, dx, dz)) { n++; slow *= b.kind === 'tree' || b.kind === 'pine' ? .7 : .88; }   // машина: срез — у бампера (0,7…1,3)
       });
       return { n, slow };
     };
@@ -258,7 +303,7 @@
       if (DS.broken.size) for (const [id, at] of DS.broken) if (DS.t >= at) { const b = DS.list.get(id); if (b && !(o.busy?.(b))) restore(b); else if (!b) DS.broken.delete(id); }
     };
     DS.stats = () => { const s = { fallers: fallers.length, broken: DS.broken.size, list: DS.list.size }; for (const k in pools) s[k] = pools[k].items.filter(x => x.on).length; return s; };
-    DS.clear = () => { fallers.length = 0; for (const k in pools) for (const it of pools[k].items) if (it.on) hidePiece(pools[k], it); };
+    DS.clear = () => { for (const F of fallers) if (F.g) { grp.remove(F.g); F.geo.dispose(); F.g = null; } fallers.length = 0; for (const k in pools) for (const it of pools[k].items) if (it.on) hidePiece(pools[k], it); };
     DS.dispose = () => {
       DS.clear();
       for (const id of [...DS.broken.keys()]) { const b = DS.list.get(id); if (b) restore(b); }

@@ -1078,8 +1078,8 @@
       haloMat = new T.SpriteMaterial({ map: t, transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false }); R.own.push(haloMat);
       return haloMat;
     }
-    R.prefab = (name, opts = {}, ph) => { const f = PF[name] || R.prefabs[name]; if (!f) throw new Error('предмет: ' + name); return f(opts, ph, R); };
-    R.prefabs = {};   // игра может добавить свои
+    R.prefab = (name, opts = {}, ph) => { const f = PF[name] || R.prefabs[name] || E.prefabs?.[name]; if (!f) throw new Error('предмет: ' + name); return f(opts, ph, R); };
+    R.prefabs = {};   // игра может добавить свои; E.prefabs — общие предметы движка (деревья пород — js/engine/trees3d.js, T-022b)
 
     // Текст на плоскости (табличка)
     function textTex(text, bg){

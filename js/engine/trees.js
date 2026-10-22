@@ -476,17 +476,17 @@
         const r0 = segs[i + 6] * rk, n = lod >= 2 ? 4 : r0 > .32 ? (lod ? 6 : 8) : r0 > .12 ? (lod ? 4 : 5) : 3;
         const rot = ((hash(ch, S.seed, 5) & 255) / 255) * TAU;
         let d = norm([segs[i + 3] - segs[i], segs[i + 4] - segs[i + 1], segs[i + 5] - segs[i + 2]]);
-        const t0 = kind === 2 ? .55 : .62 + (depth ? .06 : 0);
-        let prev = ring(bark, [segs[i], segs[i + 1] - (kind === 0 && i === 0 ? .25 : 0), segs[i + 2]], d, r0, n, kind === 0 ? t0 - .08 : t0, rot);
+        const t0 = kind === 2 ? .42 : .46 + (depth ? .04 : 0);   // тон коры (0,5 — свой цвет): у корня темнее, к макушке светлее
+        let prev = ring(bark, [segs[i], segs[i + 1] - (kind === 0 && i === 0 ? .25 : 0), segs[i + 2]], d, r0, n, kind === 0 ? t0 - .06 : t0, rot);
         for (let k = i; k <= j; k += 11) {
           const dn = norm([segs[k + 3] - segs[k], segs[k + 4] - segs[k + 1], segs[k + 5] - segs[k + 2]]);
           let dd = dn;
           if (k + 11 <= j) { const nx = norm([segs[k + 14] - segs[k + 11], segs[k + 15] - segs[k + 12], segs[k + 16] - segs[k + 13]]); dd = norm([dn[0] + nx[0], dn[1] + nx[1], dn[2] + nx[2]]); }
-          const cur = ring(bark, [segs[k + 3], segs[k + 4], segs[k + 5]], dd, segs[k + 7] * rk, n, Math.min(.98, t0 + (segs[k + 4] / Math.max(4, S.H)) * .3), rot);
+          const cur = ring(bark, [segs[k + 3], segs[k + 4], segs[k + 5]], dd, segs[k + 7] * rk, n, Math.min(.7, t0 + (segs[k + 4] / Math.max(4, S.H)) * .12), rot);
           tube(bark, prev, cur, n); prev = cur; d = dn;
         }
         const re = segs[j + 7] * rk;
-        cap(bark, prev, n, [segs[j + 3] + d[0] * re * .8, segs[j + 4] + d[1] * re * .8, segs[j + 5] + d[2] * re * .8], d, .7);
+        cap(bark, prev, n, [segs[j + 3] + d[0] * re * .8, segs[j + 4] + d[1] * re * .8, segs[j + 5] + d[2] * re * .8], d, .52);
       }
       i = j + 11;
     }
