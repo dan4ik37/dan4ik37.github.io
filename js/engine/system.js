@@ -148,7 +148,8 @@
       let cur = star;
       for (let deep = 0; deep < 8; deep++) {
         let into = null;
-        for (const k of cur.kids) {
+        for (let q = 0; q < cur.kids.length; q++) {
+          const k = cur.kids[q];
           if (!(k.soi > 0)) continue;
           const j = 3 * k.i, dx = p[0] - S.pos[j], dy = p[1] - S.pos[j + 1], dz = p[2] - S.pos[j + 2];
           if (dx * dx + dy * dy + dz * dz < k.soi * k.soi) { into = k; break; }
@@ -165,7 +166,8 @@
       if (!(ds > star.R)) return 1;
       const as = m.asin(star.R / ds);
       let f = 1;
-      for (const b of S.list) {
+      for (let q = 0; q < n; q++) {
+        const b = S.list[q];
         if (b === skipA || b === skipB || b.rails === 'visual') continue;
         const j = 3 * b.i, bx = S.pos[j] - p[0], by = S.pos[j + 1] - p[1], bz = S.pos[j + 2] - p[2], db = sqrt(bx * bx + by * by + bz * bz);
         const dot = bx * sx + by * sy + bz * sz;
@@ -230,7 +232,8 @@
       const cx = ox + CP[0], cy = oy + CP[1], cz = oz + CP[2];
       const rs = sqrt(ox * ox + oy * oy + oz * oz);
       let n = 0;
-      for (const b of S.list) {
+      for (let q = 0; q < S.list.length; q++) {
+        const b = S.list[q];
         if (b === ob || (b.stub && !o2.stubs) || b.rails === 'visual') continue;
         const e = out[n] || (out[n] = entry()); n++;
         const j = 3 * b.i, rx = S.pos[j] - ox, ry = S.pos[j + 1] - oy, rz = S.pos[j + 2] - oz;
@@ -355,5 +358,19 @@
     return S;
   }
 
-  E.system = { HOME, SUN, LUNA, DESERT, STUBS, create, mul3, rotLon, rotX, apply, applyT, lambertPhase };
+  // «Золотые» значения системы: O.m и рельсы (O.golden) + положения всех тел и небо родной в 40 моментов → свёртка битов
+  function golden(){
+    const g = O.golden(), S = create(HOME), dv = new DataView(new ArrayBuffer(8));
+    let h = parseInt(g.hash.slice(0, 8), 16) >>> 0, n = g.n;
+    const mix = v => { dv.setFloat64(0, v); for (let k = 0; k < 8; k++) h = Math.imul(h ^ dv.getUint8(k), 16777619) >>> 0; n++; };
+    const F = { M: new Float64Array(9), sun: new Float64Array(3) };
+    for (let k = 0; k < 40; k++) {
+      const t = 2.5e7 + k * 7919.37, ms = O.EPOCH_MS + t * 1000;
+      S.at(t); for (let j = 0; j < S.pos.length; j++) mix(S.pos[j]);
+      S.frame('home', t, ms, F); for (let j = 0; j < 9; j++) mix(F.M[j]);
+    }
+    return { hash: g.hash + '-' + h.toString(16).padStart(8, '0'), n, ver: g.ver };
+  }
+  E.system = { HOME, SUN, LUNA, DESERT, STUBS, create, golden, mul3, rotLon, rotX, apply, applyT, lambertPhase };
+  E.orbitGolden = golden;
 })();

@@ -41,30 +41,31 @@
   const ksin = r => { const z = r * r; return r + r * z * (S1 + z * (S2 + z * (S3 + z * (S4 + z * (S5 + z * (S6 + z * (S7 + z * S8))))))); };
   // cos: 1 − z/2 с поправкой на ошибку округления (w + ((1 − w) − hz)) — точнее у π/4
   const kcos = r => { const z = r * r, hz = .5 * z, w = 1 - hz; return w + (((1 - w) - hz) + z * z * (C2 + z * (C3 + z * (C4 + z * (C5 + z * (C6 + z * (C7 + z * (C8 + z * C9)))))))); };
-  let RQ = 0;   // четверть после приведения (0…3)
+  const RQA = new Int32Array(1);   // четверть после приведения (0…3) — в типизированном массиве: запись числа в переменную модуля «упаковывает» его (мусор)
   function reduce(x){
     const k = round(x * INV_HPI);
-    RQ = k - 4 * floor(k / 4);
+    RQA[0] = k - 4 * floor(k / 4);
     return ((x - k * P1) - k * P2) - k * P3;
   }
   function sin(x){
     if (!(abs(x) <= 1e300)) return x - x;   // NaN, ±∞ → NaN
+    if (x === 0) return x;   // ±0
     if (abs(x) <= QPI) return ksin(x);
     const r = reduce(x);
-    return RQ === 0 ? ksin(r) : RQ === 1 ? kcos(r) : RQ === 2 ? -ksin(r) : -kcos(r);
+    const q = RQA[0]; return q === 0 ? ksin(r) : q === 1 ? kcos(r) : q === 2 ? -ksin(r) : -kcos(r);
   }
   function cos(x){
     if (!(abs(x) <= 1e300)) return x - x;
     if (abs(x) <= QPI) return kcos(x);
     const r = reduce(x);
-    return RQ === 0 ? kcos(r) : RQ === 1 ? -ksin(r) : RQ === 2 ? -kcos(r) : ksin(r);
+    const q = RQA[0]; return q === 0 ? kcos(r) : q === 1 ? -ksin(r) : q === 2 ? -kcos(r) : ksin(r);
   }
   // оба сразу (одно приведение): out[0] = sin, out[1] = cos
   const SC = new Float64Array(2);
   function sincos(x, out = SC){
     if (!(abs(x) <= 1e300)) { out[0] = out[1] = x - x; return out; }
     let r = x, q = 0;
-    if (abs(x) > QPI) { r = reduce(x); q = RQ; }
+    if (abs(x) > QPI) { r = reduce(x); q = RQA[0]; }
     const s = ksin(r), c = kcos(r);
     if (q === 0) { out[0] = s; out[1] = c; } else if (q === 1) { out[0] = c; out[1] = -s; } else if (q === 2) { out[0] = -s; out[1] = -c; } else { out[0] = -c; out[1] = s; }
     return out;
@@ -443,6 +444,28 @@
     return out;
   }
 
-  E.orbit = { m, U, G0, DEG, EPOCH_MS, el, elRad, state, pos, nuAt, meanAt, meanOfNu, fromState, uv, stumpff, hohmann, lambert, soi, disc, crossTime, vmax, predict,
+  // ═══ «Золотые» значения: тысячи вызовов O.m и рельсов → одна свёртка битов. Должна совпасть в node и во всех браузерах (число
+  //     хранит scripts/orbit-test.cjs; в Chrome — scripts/planet-perf.cjs golden). Поменял O.m — новое число и O.m.VER + 1 ═══
+  function golden(){
+    const dv = new DataView(new ArrayBuffer(8));
+    let h1 = 0x811c9dc5, h2 = 0x5bd1e995, n = 0;
+    const mix = v => { dv.setFloat64(0, v); for (let k = 0; k < 8; k++) { const b = dv.getUint8(k); h1 = Math.imul(h1 ^ b, 16777619) >>> 0; h2 = Math.imul(h2 ^ b, 0x2545f491) >>> 0; } n++; };
+    let s = 12345; const rnd = () => (s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 4294967296;
+    for (let i = 0; i < 400; i++) {
+      const x = (rnd() * 2 - 1) * 2000, y = rnd() * 2 - 1, z = rnd() * 2 - 1;
+      mix(sin(x)); mix(cos(x)); sincos(x * .001, SC); mix(SC[0]); mix(SC[1]); mix(atan2(y, z)); mix(asin(y)); mix(acos(z));
+      mix(exp((rnd() * 2 - 1) * 700)); mix(log(rnd() * 1e6 + 1e-300)); mix(log1p(y * .3)); mix(sinh(y * 5)); mix(cosh(z * 5)); mix(asinh(x)); mix(acosh(1 + abs(x)));
+      mix(atanh(y * .999)); mix(pow(rnd() * 1e3, .4));
+    }
+    const S6 = new Float64Array(6);
+    for (let i = 0; i < 60; i++) {
+      const hyp = i % 3 === 0, E1 = elRad(hyp ? -(2e5 + rnd() * 1e6) : 2e5 + rnd() * 1e7, hyp ? 1.05 + rnd() * 3 : rnd() * .95, rnd() * 3, rnd() * 6, rnd() * 6, rnd() * 6 - 3, 0, 3.8e11);
+      state(E1, rnd() * 1e5, S6); for (let k = 0; k < 6; k++) mix(S6[k]);
+      uv(3.8e11, [S6[0], S6[1], S6[2]], [S6[3], S6[4], S6[5]], rnd() * 3e3, S6); for (let k = 0; k < 6; k++) mix(S6[k]);
+    }
+    return { hash: h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0'), n, ver: m.VER };
+  }
+
+  E.orbit = { m, U, G0, DEG, EPOCH_MS, el, elRad, state, pos, nuAt, meanAt, meanOfNu, fromState, uv, stumpff, hohmann, lambert, soi, disc, crossTime, vmax, predict, golden,
     period: (a, mu) => TAU * sqrt(abs(a) * a * a / mu), aOf: (T, mu) => pow(mu * (T / TAU) * (T / TAU), 1 / 3) };
 })();
