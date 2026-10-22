@@ -327,11 +327,13 @@
       if (VS.me && VS.me.seat > 0 && VS.me.v.capsized) intoWater(VS.me.v);   // пассажир: лодку перевернуло — в воду рядом
     };
     // ── волны (waves.js): качка чужой и стоящей лодки — у себя (дальше 220 от камеры — не нужна); удар о волну; переворот ──
+    const PO = { yr: 0, dist: 0 };   // без мусора за шаг
     function boatPose(v, dt){
       const c = R.camera.position, d = Math.hypot(v.x - c.x, v.z - c.z);
       if (d > 220) return;
       const yr = v._pyaw === undefined ? 0 : VE.H.angDiff(v._pyaw, v.yaw) / Math.max(dt, 1e-3); v._pyaw = v.yaw;
-      if (BOAT.pose(v, dt, env, { yr: Math.max(-1.5, Math.min(1.5, yr)), dist: d })) ph.update(v.body, VE.bodyOf(v));
+      PO.yr = Math.max(-1.5, Math.min(1.5, yr)); PO.dist = d;
+      if (BOAT.pose(v, dt, env, PO)) ph.update(v.body, VE.bodyOf(v));
     }
     function capFrom(v, s, out){   // снимок: перевёрнута ли (флаг FL.capsized); без водителя встаёт по своим часам через 8 с
       if (s.capsized) { if (!v.capsized) { v.capsized = 1; v.capSg = s.roll >= 0 ? 1 : -1; } if (out || !v.capWall) v.capWall = now() + 8000; }

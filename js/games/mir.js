@@ -800,12 +800,12 @@
     const REF = [[F.ocean, -540, 280, WM ? WM.SEA : 0], [F.lake, 0, 0, 0], [F.canal, 215, 258, -2.4], [F.pond, POND.x, POND.z, POND.wl]];
     let W = null;
     try { W = C?.world ? C.world({ seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour }) : null; } catch (e) {}
-    let tq = 0;
+    let tq = 0, forced = null;
     const tick = dt => {
       if ((tq -= dt) > 0) return;
       tq = 2;
       const ms = Date.now();
-      for (const [f, x, z, y] of REF) if (f) { let s = null; try { s = W?.at(x, z, ms, y); } catch (e) {} f.weather(s || {}); }
+      for (const [f, x, z, y] of REF) if (f) { let s = forced; if (!s) try { s = W?.at(x, z, ms, y); } catch (e) {} f.weather(s || {}); }
     };
     tick(0);
     const list = Object.values(F).filter(Boolean), at = WV.attach(R, list);
@@ -821,6 +821,7 @@
     const OUT = { y: 0, vx: 0, vz: 0 };
     return {
       F, fieldAt, tick,
+      force: s => { forced = s || null; tq = 0; tick(0); },   // проверки: своя погода волн ({ wind, windDir, thunder }) / null — как у всех
       live: (x, z) => { const f = fieldAt(x, z); return f && f.H > 1e-5 ? f : null; },
       waveAt: (x, z, out = OUT) => { const f = fieldAt(x, z); return f && f.H > 1e-5 ? f.sample(x, z, WV.time(), out) : null; },
       dispose(){ at.dispose(); for (const f of list) WV.free(f); },

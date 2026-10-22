@@ -21,7 +21,7 @@
   const NOIN = { thr: 0, steer: 0, up: 0, boost: 0, brake: 0, on: false };
   const CAP_ROLL = .62, CAP_STORM = .45, CAP_TIME = 8;   // крен переворота, шторм не меньше, сколько лежит перевёрнутой (с)
   const canCapsize = d => d.water.capsize ?? d.size[2] <= 7;
-  const HS = {};
+  const HS = {}, VIS = { vis: true, dist: -1, t: 0 }, POSE0 = {};
   // качка на волне: пружины подъёма, тангажа и крена к целям от высот под корпусом. o.vis — только картинка (чужая или стоящая
   // лодка: без ударов, переворота и сноса), o.dist — с какого расстояния смотрим (дальние короткие волны в шейдере гаснут)
   function floatOn(v, dt, F, wl, yr, env, o = null){
@@ -31,9 +31,16 @@
     v.wm = HS.m;
     if (v.wy === undefined || v.wy !== v.wy) { v.wy = HS.heave; v.wvy = 0; v.wpv = 0; v.wrv = 0; v.wHb = HS.bow; v.wBowY = v.wy; }
     const kS = clamp(5.8 / L, .45, 1.4), kD = Math.sqrt(kS);   // меньше лодка — быстрее отвечает волне
-    v.wvy += (16 * kS * (HS.heave - v.wy) - 4.8 * kD * v.wvy) * dt; v.wy += v.wvy * dt;
+    const lift = (d.water.plane ?? (L <= 7 ? .22 : .08)) * Math.min(1, sp);   // на ходу катер «глиссирует» — выше над водой
+    v.wvy += (16 * kS * (HS.heave + lift - v.wy) - 4.8 * kD * v.wvy) * dt; v.wy += v.wvy * dt;
     const pT = HS.pitch - Math.min(1, sp) * .07;   // на ходу нос над водой
     v.wpv += (22 * kS * (pT - v.pitch) - 5.2 * kD * v.wpv) * dt; v.pitch += v.wpv * dt;
+    // борт не уходит под гребень: середина, нос и корма — не ниже воды минус надводный борт (лодка всплывает на волну)
+    if (!v.capsized) {
+      const fb = Math.max(.15, d.size[1] * .5 - d.water.draft) * .85, sa = HS.a * Math.sin(v.pitch);
+      const lo = Math.max(HS.c, HS.bow + sa, HS.stern - sa) - fb;
+      if (v.wy < lo) { v.wy = lo; if (v.wvy < 0) v.wvy = 0; }
+    }
     const storm = F.storm * HS.m;
     if (!v.capsized) {
       const rT = HS.roll + yr * (.12 + .32 * storm);   // в шторм крутой поворот на ходу кладёт лодку на борт сильнее
@@ -119,10 +126,11 @@
       } else { v.grounded = v.grounded || v.y <= groundAt(env, v.x, v.z) + .05; settle(v, dt, env, .3); if (v.capsized) { v.capsized = 0; v.roll = 0; } }
     },
     // чужая (по сети) или стоящая лодка: та же качка у себя (место и курс — как есть, скорость — из снимка); o: { yr, dist, t }
-    pose(v, dt, env, o = {}){
+    pose(v, dt, env, o = POSE0){
       const d = v.def, F = env.waves ? env.waves(v.x, v.z) : null, wl = floats(env, d, v.x, v.z);
       if (!F || wl === null) return false;
-      floatOn(v, dt, F, wl, o.yr || 0, env, { vis: true, dist: o.dist ?? -1, t: o.t ?? root.D37E.waves.time() });
+      VIS.dist = o.dist ?? -1; VIS.t = o.t ?? root.D37E.waves.time();   // без мусора за шаг: общий объект
+      floatOn(v, dt, F, wl, o.yr || 0, env, VIS);
       return true;
     },
     canCapsize,

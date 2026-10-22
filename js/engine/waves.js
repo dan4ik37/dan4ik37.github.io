@@ -52,11 +52,13 @@
 
   const W = E.waves = { v: 1, P, N, G0, KINDS, enabled: true, mats: new Set(), patches: new Set(), fields: new Set() };
   W.time = (ms = Date.now()) => { const p = P * 1000; return ((ms % p) + p) % p / 1000; };
-  // часы шага (лодка, пловец): +dt за шаг — у 30/60/144 кадров одинаково; ушли от общих > 0,5 с (вкладка спала) — к общим
+  // часы шага (лодка, пловец): +dt за шаг — у 30/60/144 кадров одинаково (начало — общее время по сетке 0,25 с: первый шаг
+  // при любой частоте кадров берёт то же начало); ушли от общих > 0,5 с (вкладка спала) — снова к общим
+  const snap = t => Math.floor(t / .25) * .25;
   W.clock = (o, dt, ms) => {
     const now = W.time(ms);
-    if (!(o.wt >= 0)) o.wt = now;
-    else { o.wt += dt; if (o.wt >= P) o.wt -= P; let d = now - o.wt; if (d > P / 2) d -= P; else if (d < -P / 2) d += P; if (Math.abs(d) > .5) o.wt = now; }
+    if (!(o.wt >= 0)) o.wt = snap(now);
+    else { o.wt += dt; if (o.wt >= P) o.wt -= P; let d = now - o.wt; if (d > P / 2) d -= P; else if (d < -P / 2) d += P; if (Math.abs(d) > .5) o.wt = snap(now); }
     return o.wt;
   };
 
@@ -102,13 +104,14 @@
       if (side) F.dx[i] = th > 1 ? -1 : 1;
     }
     // ── погода → высота и крутизна: ветер дует «куда» windDir — сильнее волны, идущие по ветру ──
+    const WT = new Float64Array(N);
     F.weather = (s = {}) => {
       const wind = Math.max(0, num(s.wind, K.calm)), wd = num(s.windDir, th0), th = cl(num(s.thunder, 0), 0, 1), ice = cl(num(s.ice, 0), 0, 1);
       const on = W.enabled && F.gain > 0 ? 1 : 0;
       const H0 = Math.min(K.max, K.base + K.perW * wind * wind + K.storm * th);
       const H = H0 * F.gain * (1 - sm(.5, .8, ice)) * on;
       let ws = 0;
-      const wt = [0, 0, 0, 0];
+      const wt = WT;
       for (let i = 0; i < N; i++) { const c = side ? F.dx[i] * Math.cos(wd) : Math.cos(F.th[i] - wd); wt[i] = K.share[i] * (.35 + .65 * (.5 + .5 * c)); ws += wt[i]; }
       let kA = 0, ddx = 0, ddz = 0;
       for (let i = 0; i < N; i++) { F.A[i] = H * wt[i] / ws; kA += F.k[i] * F.A[i]; ddx += F.dx[i] * F.A[i]; ddz += F.dz[i] * F.A[i]; }
@@ -197,7 +200,7 @@
     const hl = F.sample(x + lx * b, z + lz * b, t, PS, dist).y, hr = F.sample(x - lx * b, z - lz * b, t, PS, dist).y;
     const c = F.sample(x, z, t, PS, dist);
     out.heave = (hb + hs + hl + hr + 2 * c.y) / 6; out.pitch = Math.atan2(hs - hb, 2 * a); out.roll = Math.atan2(hl - hr, 2 * b);
-    out.bow = hb; out.m = c.m; out.vx = c.vx; out.vz = c.vz;
+    out.bow = hb; out.stern = hs; out.left = hl; out.right = hr; out.c = c.y; out.a = a; out.b = b; out.m = c.m; out.vx = c.vx; out.vz = c.vz;
     return out;
   };
 
