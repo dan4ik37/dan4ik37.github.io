@@ -248,6 +248,59 @@ async function ui(base){
   } finally { await C.close(); }
 }
 
+// 📦 Проект .d37photo и черновик: сохранить → открыть — те же слои, пиксели, надписи, коррекции; ушёл из редактора с работой —
+// черновик, «↩ Продолжить»; ушёл и сразу вернулся — тот же редактор, работа на месте
+async function proj(base){
+  const C = await chrome('proj');
+  const J = async e => JSON.parse(await C.ev(e, 120000));
+  // слои как данные + по 3 точки пикселей с каждого слоя-картинки (сравнение «как было»)
+  const SNAP = `JSON.stringify((() => { const E = D37Photo.E; return { w: E.doc.w, h: E.doc.h, layers: E.doc.layers.map(L => { const i = E.layerInfo(L); delete i.id;
+    if (L.type === 'raster') { const g = L.canvas.getContext('2d'), c = L.canvas; i.pts = [[0.2, 0.3], [0.5, 0.5], [0.8, 0.7], [0.5, 0.7917]].map(([x, y]) => Array.from(g.getImageData(Math.floor(c.width * x), Math.floor(c.height * y), 1, 1).data)); }
+    for (const k of ['x', 'y', 'w', 'h']) i[k] = Math.round(i[k]); return i; }) }; })())`;
+  try {
+    await C.phone(1);
+    await openEditor(C, base);
+    await C.ev(`(${MKIMG})(1600, 1200).then(b => D37Photo.E.openBlob(b, 'проект-тест')).then(() => 1)`, 60000);
+    for (const [cmd, args] of [['adjust', { brightness: 20, saturation: -30 }], ['filter', { preset: 'sepia' }], ['text', { text: 'Проект', color: 'yellow', size: 120, x: 800, y: 300 }],
+      ['layerNew', { name: 'Кисть' }], ['draw', { points: [[100, 900], [1500, 1000]], size: 40, color: '#ff0000' }], ['layer', { opacity: 60, blend: 'multiply' }]]) {
+      const r = await J(RUN(cmd, args)); if (!r.ok) throw new Error(cmd + ': ' + r.error);
+    }
+    const s0 = await J(SNAP);
+    const sz = await C.ev(`D37Photo.E.saveProject().then(b => (window.__pj = b, D37PhotoCmds.isProject(b).then(p => p ? b.size : -1)))`, 120000);
+    ok(sz > 1000, 'проект сохранён: файл .d37photo', sz);
+    await J(RUN('new', { w: 300, h: 300 }));
+    const o = await C.ev(`D37Photo.E.openProject(window.__pj, 'x').then(r => JSON.stringify(r))`, 120000).then(JSON.parse);
+    const s1 = await J(SNAP);
+    ok(o.layers === 3 && s0.layers[2].pts[3][0] > 200 && JSON.stringify(s1) === JSON.stringify(s0), 'проект открыт: слои, пиксели, надпись, коррекции, наложение — как были', { s0, s1 });
+    await J(RUN('undo'));
+    ok((await C.ev('D37Photo.E.doc.w')) === 300, '«↶» после «Открыть проект» — прежняя работа');
+    await J(RUN('redo'));
+    // черновик: правка → ушёл из редактора → вернулся → «↩ Продолжить»
+    await J(RUN('text', { text: 'Черновик', y: 1000 }));
+    const n = await C.ev('D37Photo.E.doc.layers.length');
+    await C.ev(`D37Route.go('/'); 1`);
+    ok(await C.until('!document.querySelector("#photoRoot .pe")', 60000) >= 0, 'ушёл из редактора — закрылся сам после черновика');
+    const dm = await C.ev(`D37Assets.meta(localStorage.getItem('d37_pe_draft') || '-').then(m => m ? JSON.stringify({ type: m.type, name: m.name, extra: m.extra, size: m.size }) : 'null')`).then(JSON.parse);
+    ok(dm && dm.type === 'project' && /Черновик/.test(dm.name) && dm.extra && dm.extra.draft, 'черновик в «Моих материалах»', dm);
+    await C.ev(`D37Route.go('/photo'); 1`);
+    ok(await C.until('!!document.querySelector(".pe-draft:not([hidden]) [data-a=draft]")', 20000) >= 0, 'вернулся — на старте «↩ Продолжить: …»');
+    await C.ev(`document.querySelector('.pe-draft [data-a=draft]').click(); 1`);
+    const back = await C.until(`D37Photo.E.doc.layers.length === ${n} && D37Photo.E.doc.layers.some(L => L.type === 'text' && L.obj.text === 'Черновик')`, 30000);
+    ok(back >= 0, '«Продолжить» — вся работа на месте (со слоями)', await C.ev('D37Photo.E.doc.layers.length'));
+    // ушёл и сразу вернулся (черновик ещё пишется) — тот же редактор, второй не открывается
+    await J(RUN('text', { text: 'Ещё', y: 200 }));
+    const n2 = await C.ev('(window.__pe1 = D37Photo, D37Photo.E.doc.layers.length)');
+    await C.ev(`D37Route.go('/'); setTimeout(() => D37Route.go('/photo'), 0); 1`);
+    await sleep(2500);
+    const same = await J(`JSON.stringify({ same: window.D37Photo === window.__pe1, n: D37Photo && D37Photo.E.doc.layers.length, editors: document.querySelectorAll('#photoRoot .pe').length, paused: D37Photo && D37Photo.E.paused, on: document.body.classList.contains('pe-on') })`);
+    ok(same.same && same.n === n2 && same.editors === 1 && !same.paused && same.on, 'ушёл и сразу вернулся — тот же редактор, работа на месте', same);
+    // испорченный файл проекта — понятная ошибка, работа не тронута
+    const er = await C.ev(`D37Photo.E.openProject(new Blob(['D37PHOT1', new Uint8Array([9, 0, 0, 0]), '{"v":1,"w"', 'xxxx']), 'битый').then(() => 'открылся', e => e.message)`);
+    ok(/не открылся/.test(er) && (await C.ev('D37Photo.E.doc.layers.length')) === n2, 'битый проект — понятный отказ, работа цела', er);
+    ok(realErrors(C.errors).length === 0, 'без ошибок', realErrors(C.errors));
+  } finally { await C.close(); }
+}
+
 // 🪄 «Убрать фон» (ИИ в браузере): скачивает ONNX Runtime Web и модель (~8 МБ) — отдельный режим ai
 async function aiBg(base){
   const C = await chrome('ai');
@@ -403,7 +456,7 @@ async function soak(base, minutes){
     const errs = [...new Set(realErrors(C.errors))];
     const still = await C.ev('!!(window.D37Photo && window.D37Photo.E && !window.D37Photo.E.disposed)').catch(() => false);
     // закрыть редактор — память должна вернуться (страница; видеокарта держит кэш)
-    await C.ev(`D37Route.go('/'); 1`); await C.until('!window.D37Photo', 20000);
+    await C.ev(`D37Route.go('/'); 1`); await C.until('!document.querySelector("#photoRoot .pe")', 60000);   // закрылся совсем (черновик сохранён)
     await sleep(2000); let mc = { total: Infinity, renderer: Infinity, gpu: Infinity }; for (let k = 0; k < 3; k++) { await C.gc(); const m = C.mem(true); if (m.total < mc.total) mc = m; await sleep(500); }
     console.log('soak', minutes, 'мин:', n, 'действий', JSON.stringify(acts), 'ошибок', errs.length, 'падений', C.crashes.length,
       'наибольшая память', Math.max(...samples.map(s => s.memMB)), 'МБ (страница', Math.max(...samples.map(s => s.pageMB)), ', видеокарта', Math.max(...samples.map(s => s.gpuMB)),
@@ -425,7 +478,7 @@ async function leak(base, n = 20){
       await C.until('!!(window.D37Photo && window.D37Photo.E)', 60000);
       await C.ev(`(${MKIMG})(1600, 1200).then(b => D37Photo.E.openBlob(b, 'leak')).then(() => D37Tools.run('photo', 'adjust', { brightness: 10 })).then(() => 1)`, 60000);
       await C.ev(`D37Route.go('/'); 1`);
-      await C.until('!window.D37Photo', 20000);
+      await C.until('!document.querySelector("#photoRoot .pe")', 60000);   // черновик сохранён, редактор закрыт совсем
       if (i === 1 || i % 4 === 0 || i === n) {
         await sleep(1500); await C.gc(); await sleep(800);
         // память «шумит» (сборка мусора, кэши видеокарты): берём наименьшее из 3 замеров, страницу и видеокарту — отдельно
@@ -475,6 +528,11 @@ async function shots(base){
     await C.shot(path.join(TMP, 'shots/pe-phone-text.jpg'));
     const taps = await C.ev(`(() => { const els = [...document.querySelectorAll('.pe button, .pe input, .pe select')].filter(e => { const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2 && r.bottom > 0 && r.top < innerHeight; }); return { total: els.length, under40: els.filter(e => { const r = e.getBoundingClientRect(); return Math.min(r.width, r.height) < 40; }).map(e => (e.className || e.tagName) + ':' + Math.round(e.getBoundingClientRect().width) + 'x' + Math.round(e.getBoundingClientRect().height)), overflowX: document.documentElement.scrollWidth > innerWidth + 1 }; })()`);
     console.log('phone tap targets:', JSON.stringify(taps));
+    // ушёл с работой и вернулся — на старте «↩ Продолжить» (черновик)
+    await C.ev(`D37Route.go('/'); 1`); await C.until('!document.querySelector("#photoRoot .pe")', 60000);
+    await C.ev(`D37Route.go('/photo'); 1`); await C.until('!!document.querySelector(".pe-draft:not([hidden])")', 20000); await sleep(700);
+    await C.shot(path.join(TMP, 'shots/pe-phone-draft.jpg'));
+    await C.ev(`document.querySelector('.pe-draft [data-a=draft]')?.click(); 1`); await C.until('D37Photo.E.doc.layers.length >= 2', 20000);
     await C.desktop(1440, 900); await sleep(1200);
     await C.ev(`document.querySelector('.pe-tool[data-tool="layers"]').click(); 1`); await sleep(800);
     await C.shot(path.join(TMP, 'shots/pe-desktop.jpg'));
@@ -491,6 +549,7 @@ async function shots(base){
     const base = `http://localhost:${port}`;
     if (MODE === 'smoke' || MODE === 'all') await smoke(base);
     if (MODE === 'ui' || MODE === 'all') await ui(base);
+    if (MODE === 'proj' || MODE === 'all') await proj(base);
     if (MODE === 'ai' || (MODE === 'all' && !process.env.D37_NO_AI)) await aiBg(base);
     if (MODE === 'load' || MODE === 'all') await load(base);
     if (MODE === 'big' || MODE === 'all') await big(base);

@@ -8,7 +8,7 @@
 // /photo/<номер материала> — сразу открыть картинку из «Моих материалов» (так другой инструмент «отправляет в фоторедактор»).
 (function () {
   'use strict';
-  const VER = '3';   // 3 — ctx.steps (шаги «Отменить» по факту), текст новой надписи — тем же шагом
+  const VER = '4';   // 4 — проект .d37photo и черновик при уходе из редактора
   const FABRIC = 'https://cdn.jsdelivr.net/npm/fabric@7.4.0/dist/index.min.js';
   // ИИ «🪄 Убрать фон» — только по кнопке: ONNX Runtime Web 1.30.0 (MIT) с jsDelivr + модель U²-Netp (Apache-2.0, ~4,6 МБ)
   // с Hugging Face, закреплённая на коммите (лицензии проверены — docs/PHOTO.md)
@@ -41,13 +41,17 @@
   }
   const need = names => Promise.all(names.map(n => script(CORE[n] || n)));
 
-  let cur = null, opening = 0;
+  // away — редактор, из которого ушли: сохраняет черновик несохранённой работы (или остался скрытым — черновик не сохранился)
+  let cur = null, opening = 0, away = null;
   const onRoute = () => (typeof currentRoute === 'function' ? currentRoute() : '') === 'photo';
   async function open(app, param){
     if (app !== 'photo') return;
     const host = document.getElementById('photoRoot');
     if (!host) return;
     if (cur && cur.active) return;   // уже открыт (тот же раздел)
+    if (away && away.c.active && away.c.resume) {   // вернулись, пока он ещё здесь, — тот же редактор, как был
+      const a = away; away = null; a.back = true; cur = a.c; cur.resume(param); return;
+    }
     const my = ++opening;
     host.innerHTML = '<div class="pe-loading" role="status"><i></i><b>🖼 Фоторедактор</b><span>Загружаю…</span></div>';
     const navB = document.getElementById('nav'); if (navB) host.firstChild.style.top = Math.round(navB.getBoundingClientRect().bottom) + 'px';
@@ -65,8 +69,14 @@
   }
   function close(){
     opening++;
-    if (cur) { try { cur.unmount && cur.unmount(); } catch (e) { console.warn(e); } cur = null; }
-    const host = document.getElementById('photoRoot'); if (host) host.innerHTML = '';
+    const c = cur, host = document.getElementById('photoRoot'); cur = null;
+    if (c && c.active && c.leave) {   // несохранённое — черновиком, потом закроется сам (photo-ui.js leave)
+      const a = { c, back: false }; away = a;
+      Promise.resolve(c.leave(() => a.back)).catch(e => console.warn(e)).finally(() => { if (away === a && !c.active) away = null; });
+      return;
+    }
+    if (c) { try { c.unmount && c.unmount(); } catch (e) { console.warn(e); } }
+    if (host && !(away && away.c.active)) host.innerHTML = '';
   }
   window.addEventListener('d37:route', () => { if (!onRoute()) close(); });
 

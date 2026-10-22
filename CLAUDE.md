@@ -2083,11 +2083,14 @@ js/features/games.js и хвост css/premium.css.
   меняются (размер, объединить). Коррекции — на экране копия ≤1536 (телефон) / ≤4096 (ПК) с WebGL-фильтрами fabric, при сохранении —
   те же фильтры в полный размер в потоке (photo-worker.js importScripts fabric). Кисть: отмена — куски 256×256 холстами (без чтения пикселей).
 - «Мои материалы» — js/core/assets.js (D37Assets, IndexedDB «d37-assets», только этот браузер). «📤 Сохранить» → скачать / материалы /
-  «Студия 3D» (плоскость с картинкой в «🧩 Модели» через D37E.models). ИИ — js/core/ai-bridge.js (D37AI: задание для ИИ без ключей,
+  «Студия 3D» (плоскость с картинкой в «🧩 Модели» через D37E.models) / проект со слоями .d37photo (формат и проверка чужого файла —
+  photo-cmds.js packProject/readProject). Ушёл из /photo с несохранённым — черновик-проект (один, закреплён; d37_pe_draft), на старте
+  «↩ Продолжить»; вернулся, пока пишется, — тот же редактор (apps.js away / photo-ui leave·resume); не записалось — редактор ждёт скрытым.
+  ИИ — js/core/ai-bridge.js (D37AI: задание для ИИ без ключей,
   ответ JSON выполняется по шагам) и «🪄 Убрать фон» (U²-Netp Apache-2.0 + ONNX Runtime Web MIT, ~8 МБ при первом нажатии).
 - Реклама: только loading при загрузке редактора и столбик rail справа на ПК ≥ 1400 px, не поверх холста. 0+.
-- Тесты: node scripts/photo-test.cjs (145), node scripts/photo-e2e.cjs smoke|ui|ai|load|big|leak|soak|shot (Chrome, профиль телефона;
-  ui — настоящими касаниями: кисть, щипок, надпись, обрезка 9:16, слои, «↶»).
+- Тесты: node scripts/photo-test.cjs (166), node scripts/photo-e2e.cjs smoke|ui|proj|ai|load|big|leak|soak|shot (Chrome, профиль
+  телефона; ui — настоящими касаниями: кисть, щипок, надпись, обрезка 9:16, слои, «↶»; proj — проект и черновик).
 - Исправлено попутно: js/features/fx.js placeIndicator вызывал сам себя каждый кадр на всех страницах (classList.add/remove без изменений
   пишет атрибут → MutationObserver) — теперь toggle(…, вкл).
 

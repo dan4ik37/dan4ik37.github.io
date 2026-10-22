@@ -45,7 +45,7 @@
     <div class="pe-panel"><div class="pe-ph"><b></b><button type="button" class="pe-btn pe-pclose" data-a="pclose" aria-label="Свернуть панель">▾</button></div><div class="pe-pb"></div></div>
     <aside class="pe-ad" aria-label="Реклама"><div class="pe-ad-in"></div></aside>
   </div>
-  <input type="file" accept="image/*" class="pe-file" hidden>
+  <input type="file" accept="image/*,.d37photo" class="pe-file" hidden>
 </div>`;
     const $ = s => host.querySelector(s), pe = $('.pe'), fileIn = $('.pe-file');
     document.body.classList.add('pe-on');
@@ -336,6 +336,11 @@
       else if (a === 'open') { ui.fileMode = 'open'; fileIn.click(); }
       else if (a === 'assets') openAssets('open');
       else if (a === 'startClose') hideStart();
+      else if (a === 'draft') { const id = b.dataset.id; hideStart(); run('open', { asset: id }); }
+      else if (a === 'draftDel') {
+        if (root.GameKit && root.GameKit.ask && !await root.GameKit.ask('Удалить черновик? Вернуть его не получится.')) return;
+        await E.dropDraft(); const d = $('.pe-draft'); if (d) { d.hidden = true; d.innerHTML = ''; }
+      }
     }
     async function newCanvas(w, h){
       if (E.dirty && root.GameKit && root.GameKit.ask) { if (!await root.GameKit.ask('Начать новый холст? Текущую работу можно вернуть кнопкой «↶ Отменить».')) return; }
@@ -351,6 +356,11 @@
       hideStart();
       const mode = ui.fileMode === 'auto' ? (E.dirty ? 'place' : 'open') : ui.fileMode;
       ui.fileMode = 'open';
+      // проект со слоями (.d37photo) — всегда «открыть» (вместо текущей работы; «↶» вернёт её)
+      if (/\.d37photo$/i.test(String(name || '')) || await PC.isProject(blob).catch(() => false)) {
+        try { await E.openProject(blob, String(name || '').replace(/\.d37photo$/i, '')); } catch (er) { toast('⚠ ' + (er.message || er), 'err'); }
+        return;
+      }
       if (mode === 'place') return placeBlob(blob, name);
       try { await E.openBlob(blob, name); } catch (er) { toast('⚠ ' + (er.message || er), 'err'); }
     }
@@ -363,9 +373,10 @@
     const stage = $('.pe-stage');
     const onDragOver = e => { if (e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files')) { e.preventDefault(); stage.classList.add('pe-drop'); } };
     const onDragLeave = () => stage.classList.remove('pe-drop');
-    const onDrop = e => { stage.classList.remove('pe-drop'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (!f) return; e.preventDefault(); if (/^image\//.test(f.type)) { ui.fileMode = 'auto'; openFile(f, f.name); } else toast('Это не картинка', 'warn'); };
+    const onDrop = e => { stage.classList.remove('pe-drop'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (!f) return; e.preventDefault(); if (/^image\//.test(f.type) || /\.d37photo$/i.test(f.name)) { ui.fileMode = 'auto'; openFile(f, f.name); } else toast('Это не картинка', 'warn'); };
     stage.addEventListener('dragover', onDragOver); stage.addEventListener('dragleave', onDragLeave); stage.addEventListener('drop', onDrop);
     const onPaste = e => {
+      if (E.paused) return;   // редактор скрыт (ушли в другой раздел) — вставка не наша
       const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       const it = [...((e.clipboardData && e.clipboardData.items) || [])].find(x => x.kind === 'file' && /^image\//.test(x.type));
       if (!it) return; e.preventDefault(); ui.fileMode = 'auto'; openFile(it.getAsFile(), 'Вставка');
@@ -373,9 +384,16 @@
     root.addEventListener('paste', onPaste);
 
     // ── стартовая карточка ──
+    const ago = t => { const s = (Date.now() - (t || 0)) / 1000; if (s < 90) return 'только что'; if (s < 3600) return Math.round(s / 60) + ' мин назад'; if (s < 86400) return Math.round(s / 3600) + ' ч назад'; try { return new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }); } catch (e) { return ''; } };
     function showStart(){
       const s = $('.pe-start'); ui.startShown = true;
-      s.innerHTML = `<div class="pe-card"><b>🖼 Фоторедактор</b><p>Открой фото или начни с пустого холста. Работает без входа; фото не уходят на сервер.</p>
+      // ушёл из редактора с несохранённой работой — она в черновике: «Продолжить» первым
+      E.findDraft().then(m => {
+        const d = s.querySelector('.pe-draft'); if (!m || !d || s.hidden) return;
+        d.innerHTML = `<button type="button" class="pe-big pe-acc" data-a="draft" data-id="${esc(m.id)}">${m.thumb ? `<img src="${esc(m.thumb)}" alt="">` : '<i>↩</i>'}<span>Продолжить: ${esc(String(m.name || '').replace(/^Черновик: /, ''))}<small>черновик · ${esc(ago(m.updated))} · ${m.w}×${m.h}</small></span></button><button type="button" class="pe-mini" data-a="draftDel" title="Удалить черновик" aria-label="Удалить черновик">✕</button>`;
+        d.hidden = false;
+      });
+      s.innerHTML = `<div class="pe-card"><b>🖼 Фоторедактор</b><div class="pe-draft" hidden></div><p>Открой фото или начни с пустого холста. Работает без входа; фото не уходят на сервер.</p>
         <div class="pe-row"><button type="button" class="pe-big pe-acc" data-a="open">📂 Открыть фото</button><button type="button" class="pe-big" data-a="assets">📁 Мои материалы</button></div>
         <div class="pe-chips">${NEW_PRESETS.map(([t, w, h, d]) => `<button type="button" class="pe-chip" data-new="${w}x${h}">${esc(d)} <small>${t}</small></button>`).join('')}</div>
         <button type="button" class="pe-link" data-a="startClose">Рисовать на белом холсте →</button></div>`;
@@ -417,6 +435,8 @@
         { id: 'webp', icon: '💾', t: 'Скачать WebP', sub: 'ещё меньше файл', run: () => exportTo('download', 'webp', 88) },
         { sep: true },
         { id: 'assets', icon: '📁', t: 'В «Мои материалы»', sub: 'чтобы взять в другом инструменте сайта', run: () => exportTo('assets', 'png') },
+        { id: 'proj', icon: '📦', t: 'Проект со слоями (.d37photo)', sub: 'скачать: потом открыть и дальше править слои и надписи', run: () => saveProjectTo('download') },
+        { id: 'projA', icon: '📦', t: 'Проект в «Мои материалы»', sub: 'со слоями, только в этом браузере', run: () => saveProjectTo('assets') },
         { id: 'studio3d', icon: '🧱', t: 'В «Студию 3D»', sub: 'картинкой-плоскостью в «🧩 Модели»', run: () => exportTo('studio3d', 'png') },
         { id: 'video', icon: '🎬', t: 'В видеоредактор', sub: 'скоро', off: true },
         { id: 'avatar', icon: '🎭', t: 'На персонажа', sub: 'скоро', off: true },
@@ -433,6 +453,20 @@
       else if (to === 'studio3d') { toast('🧱 Готово: «Студия 3D» → 🧩 Модели', 'ok'); }
     }
 
+    // Проект со слоями: скачать файлом или в «Мои материалы»; сохранили — черновик больше не нужен
+    async function saveProjectTo(to){
+      try {
+        const blob = await E.saveProject(), name = (E.doc.name || 'Проект').slice(0, 60);
+        if (to === 'download') { E.download(blob, name + '.d37photo'); toast(`📦 Проект скачан (${MB(blob.size)}) — открыть: ☰ → «Открыть фото…»`, 'ok'); }
+        else {
+          if (!root.D37Assets) throw new Error('Хранилище материалов не загрузилось');
+          await root.D37Assets.put(blob, { type: 'project', name, tool: 'photo', w: E.doc.w, h: E.doc.h, thumb: E.thumbDataURL() });
+          toast('📦 Проект сохранён в «Мои материалы»', 'ok');
+        }
+        E.markSaved(); await E.dropDraft(); paintTitle();
+      } catch (er) { toast('⚠ ' + (er.message || er), 'err'); }
+    }
+
     // ═══ «Мои материалы» ═══
     async function openAssets(mode){
       if (!root.D37Assets) { toast('Хранилище материалов не загрузилось', 'err'); return; }
@@ -442,19 +476,22 @@
       const close = () => box.remove();
       async function paint(){
         let list = [];
-        try { list = await root.D37Assets.list({ type: 'image' }); } catch (er) { box.querySelector('.pe-assets').innerHTML = `<p class="pe-warn">${esc(er.message)}</p>`; return; }
+        try { list = (await root.D37Assets.list()).filter(m => m.type === 'image' || (m.type === 'project' && m.tool === 'photo')); } catch (er) { box.querySelector('.pe-assets').innerHTML = `<p class="pe-warn">${esc(er.message)}</p>`; return; }
         const u = await root.D37Assets.usage().catch(() => null);
         box.querySelector('.pe-usage').textContent = u ? `Занято: ${MB(u.bytes)} из ${MB(u.cap)} · всё хранится только в этом браузере` : '';
-        box.querySelector('.pe-assets').innerHTML = list.length ? `<ul>${list.map(m => `<li data-asset="${esc(m.id)}"><span class="pe-ath">${m.thumb ? `<img src="${esc(m.thumb)}" alt="">` : '🖼'}</span>
-          <span class="pe-an"><b>${esc(m.name)}</b><small>${m.w}×${m.h} · ${MB(m.size)}${m.tool ? ' · ' + esc(m.tool) : ''}</small></span>
-          <button type="button" class="pe-mini" data-use="open">Открыть</button><button type="button" class="pe-mini" data-use="place">Слоем</button><button type="button" class="pe-mini pe-danger" data-use="del" aria-label="Удалить">🗑</button></li>`).join('')}</ul>`
+        box.querySelector('.pe-assets').innerHTML = list.length ? `<ul>${list.map(m => { const pj = m.type === 'project'; return `<li data-asset="${esc(m.id)}"><span class="pe-ath">${m.thumb ? `<img src="${esc(m.thumb)}" alt="">` : (pj ? '📦' : '🖼')}</span>
+          <span class="pe-an"><b>${esc(m.name)}</b><small>${pj ? '📦 проект со слоями · ' : ''}${m.w}×${m.h} · ${MB(m.size)}${m.tool && !pj ? ' · ' + esc(m.tool) : ''}</small></span>
+          <button type="button" class="pe-mini" data-use="open">Открыть</button>${pj ? '' : '<button type="button" class="pe-mini" data-use="place">Слоем</button>'}<button type="button" class="pe-mini pe-danger" data-use="del" aria-label="Удалить">🗑</button></li>`; }).join('')}</ul>`
           : '<p class="pe-hint">Пока пусто. Нажми «📤 Сохранить → В «Мои материалы»», и картинку можно будет взять в других инструментах сайта.</p>';
       }
       box.addEventListener('click', async e => {
         if (e.target === box || e.target.closest('[data-x]')) { close(); return; }
         const b = e.target.closest('[data-use]'); if (!b) return;
         const id = b.closest('[data-asset]').dataset.asset;
-        if (b.dataset.use === 'del') { await root.D37Assets.remove(id); paint(); return; }
+        if (b.dataset.use === 'del') {
+          if (root.GameKit && root.GameKit.ask && !await root.GameKit.ask('Удалить из «Моих материалов»? Вернуть не получится.')) return;
+          await root.D37Assets.remove(id); paint(); return;
+        }
         close(); hideStart();
         run(b.dataset.use === 'place' ? 'place' : 'open', { asset: id });
       });
@@ -513,6 +550,39 @@
       if (root.D37Photo === api) root.D37Photo = null;
     }
     api.unmount = unmount;
+
+    // Ушли в другой раздел сайта: несохранённая работа — черновиком в «Мои материалы» (на старте — «↩ Продолжить»), потом
+    // закрыть. Вернулись, пока сохраняли (stay() → true), — тот же редактор, как был. Черновик не сохранился (мало места) —
+    // редактор остаётся скрытым (это единственная копия работы; вернёшься — всё на месте), закрытие вкладки спросит браузер.
+    let leaving = null, stay = () => false;
+    function leave(stayFn){
+      stay = typeof stayFn === 'function' ? stayFn : () => false;
+      if (!api.active) return Promise.resolve();
+      E.pause(true); closeMenu();
+      if (root.D37Photo === api) root.D37Photo = null;   // «редактор на экране» (горячие клавиши сайта снова работают)
+      try { root.D37AI && root.D37AI.close(); } catch (e) {}
+      if (root.D37Full && pe.classList.contains('gs-fs')) { try { root.D37Full.release(pe); } catch (e) {} }
+      document.body.classList.remove('pe-on');
+      if (leaving) return leaving;
+      leaving = (async () => {
+        let failed = false;
+        for (let i = 0; i < 3 && api.active && E.edited && root.D37Assets && !stay(); i++) {
+          try { await E.saveDraft(); } catch (e) { console.warn('photo: черновик не сохранился', e); failed = true; break; }
+        }
+        leaving = null;
+        if (!api.active || stay() || (failed && E.edited)) return;
+        unmount();
+      })();
+      return leaving;
+    }
+    function resume(param){
+      if (!api.active) return false;
+      E.pause(false); root.D37Photo = api; document.body.classList.add('pe-on'); place(); adCheck();
+      const id = /^a[a-z0-9]{6,30}$/.test(String(param || '')) ? String(param) : '';
+      if (id) run('open', { asset: id });
+      return true;
+    }
+    api.leave = leave; api.resume = resume;
     return api;
   }
 

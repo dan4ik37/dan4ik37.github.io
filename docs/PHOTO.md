@@ -71,6 +71,13 @@ to put the release into our repo (needs owner permission). Exact files (`photocr
 - «📤 Send to»: download PNG/JPG/WebP; «Мои материалы»; **«Студия 3D»** — a picture plane (OBJ+MTL+PNG) compiled by the existing
   `D37E.models.compile/save` → appears in Studio 3D «🧩 Модели». Stubs (disabled, with reason): video editor (T-018), avatar decal,
   chat (needs moderation rules — kids). Other tools open an image in the editor via `/photo/<asset id>`.
+- Project `.d37photo` (whole work with layers): 8-byte magic `D37PHOT1` + JSON length + JSON (layer props, adjustments, filter,
+  text) + layer images (lossless PNG; an untouched photo keeps its original JPEG/WebP — smaller, no recompression). Download it or
+  keep it in «Мои материалы»; open from the file picker / drag-and-drop / `open` command. A foreign file is fully validated
+  (`D37PhotoCmds.readProject`: known fields only, numbers clamped, sizes and offsets checked, no `__proto__` effects) and is
+  scaled down to the device budget if it came from a bigger device. **Draft:** leaving `/photo` with unsaved edits stores the work
+  as one pinned draft project (replaced each time) and then closes the editor; the start card offers «↩ Продолжить». Coming back
+  while it is still saving resumes the same editor; if saving fails (no space) the editor stays hidden so the work is not lost.
 - `js/core/ai-bridge.js` — `D37AI`: «📋 copy task for AI» (rules + `D37Tools.describe` + goal; no keys, nothing sent), paste the
   answer back → extracted JSON → validated → run step by step with a progress list and «↶ undo all». Modes Ollama/WebLLM/cloud — later.
 
@@ -96,11 +103,13 @@ all processes of that Chrome **over the home page** (min of 3 after GC), page (r
 |---|---|
 | First open of `/photo` from the loaded site, cache + SW off (`load`) | ready **0.53 s** median (0.39–0.82); **316 KB** transferred on the local server without compression (our 7 files 205 KB raw = 57 KB brotli; fabric.js from jsDelivr ≈110 KB) → ≈170 KB in production |
 | 12-MP JPEG 4000×3000 (`big`) | open 1.05 s (decode in the worker, not downscaled); adjust preview 0.13 s; 5 brush strokes 0.58 s; full-size JPEG export with the same filters 4.7 s (3.0 MB). Memory: +271 MB after open, +348 MB adjust, **+365 MB peak** after strokes, +309 MB after export — page process below the home baseline, the rest is the GPU process. 24 MP → downscaled to 4096×2730 in the worker with a warning |
-| 10-min random soak (`soak 10`: commands, taps, drags, pinches, sliders, menus) | **2298 actions, 0 errors, 0 crashes**; memory +95…485 MB (GPU process ≤ 427 MB), undo history ≤ 92 MB (phone budget 96 MB); after closing the editor the page is 29 MB below the home baseline (first build of the editor, before the memory fixes: 1918 actions, up to 990 MB) |
+| 10-min random soak (`soak 10`: commands, taps, drags, pinches, sliders, menus) | final build (with drafts): **2139 actions, 0 errors, 0 crashes**, peak +408 MB (page +9 MB, GPU process 373 MB), undo history ≤ 91 MB (phone budget 96 MB); after closing (draft saved first) the page is 30 MB below the home baseline. Previous build: 2298 actions, 0 errors, peak +485 MB. First build, before the memory fixes: 1918 actions, up to 990 MB |
 | 20 and 48 open/close (`leak [48]`, desktop profile, 1600×1200 photo + adjust each time) | page **−2.0 / −1.0 MB per cycle**, JS heap +0.6 / +0.7 MB total, DOM nodes flat, canvases 2 → 2, listeners 410 → 410; the GPU process wanders 440–830 MB, and after a «low memory» signal (`Memory.simulatePressureNotification`, what phones send) it returns to **488 MB = its level after warm-up** → Chrome's cache, not a leak |
 | Touch UI on the phone profile (`ui`) | finger brush draws a line = one undo step; two-finger pinch zooms ×1.5+ and leaves no stroke; tap with «Текст» → caption, text from the field; crop 9:16 by buttons; layers panel; «↶» twice removes caption with its text |
 | «🪄 Убрать фон» (`ai`, PC) | first use ≈ 9 s including ≈ 8 MB download (U²-Netp + ORT wasm), undo restores pixels |
+| Project and draft (`proj`, phone profile) | save → open gives identical layers, pixels, text, adjustments, blend; undo returns the previous work; leave with edits → draft → «↩ Продолжить» restores all layers; leave and return at once → same editor; broken file → clear error, work intact |
 
-Reproduce: `node scripts/photo-e2e.cjs smoke|ui|ai|load|big|leak [N]|soak [min]|shot|all` (Chrome; temp files in
-`E:\claude-tmp\photo`), `node scripts/photo-test.cjs` (145, no browser: D37Tools, D37Assets with a fake IndexedDB, D37AI,
-D37PhotoCmds, wiring of routes/sitemap/sw/index/games/age). Not done on real devices (iPhone/Android) — only emulation.
+Reproduce: `node scripts/photo-e2e.cjs smoke|ui|proj|ai|load|big|leak [N]|soak [min]|shot|all` (Chrome; temp files in
+`E:\claude-tmp\photo`), `node scripts/photo-test.cjs` (166, no browser: D37Tools, D37Assets with a fake IndexedDB, D37AI,
+D37PhotoCmds incl. the project format and hostile files, wiring of routes/sitemap/sw/index/games/age). Not done on real devices
+(iPhone/Android) — only emulation.

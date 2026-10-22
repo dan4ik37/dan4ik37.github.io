@@ -215,6 +215,50 @@ function fakeIDB(){
   reg();
   ok(/Фоторедактор/.test(PC.DESCRIBE) && PC.FONT_NAMES.includes('Montserrat') && PC.hasBold('Russo One') === false && PC.isGoogleFont('Arial') === false, 'описание и шрифты');
 
+  // ═══ Проект .d37photo: упаковать → прочитать; чужой (испорченный, хитрый) файл — понятный отказ или только известные поля ═══
+  {
+    const png = new Blob([new Uint8Array([137, 80, 78, 71, 1, 2, 3])], { type: 'image/png' }), jpg = new Blob([new Uint8Array([255, 216, 255, 9, 9])], { type: 'image/jpeg' });
+    const meta = { w: 1080, h: 1350, name: 'Пост', active: 1, layers: [
+      { t: 'raster', name: 'Фон', locked: true, p: { left: 540, top: 675, scaleX: 1, scaleY: 1, opacity: 1, visible: true, globalCompositeOperation: 'source-over' }, adj: { brightness: 20 }, preset: 'sepia', cw: 1080, ch: 1350, mime: 'image/jpeg', part: 1 },
+      { t: 'text', name: 'Т: Привет', p: { text: 'Привет', fontFamily: 'Rubik', fontSize: 90, fill: '#ffe000', stroke: '#000000', strokeWidth: 6, fontWeight: 'bold', textAlign: 'center', shadow: { color: 'rgba(0,0,0,0.55)', blur: 11, offsetX: 4, offsetY: 4, type: 'shadow' }, left: 540, top: 300 } },
+      { t: 'raster', name: 'Кисть', p: { left: 540, top: 675, opacity: 0.5, globalCompositeOperation: 'multiply' }, cw: 1080, ch: 1350, mime: 'image/png', part: 0 }] };
+    const file = PC.packProject(meta, [png, jpg]);
+    ok(file.size === 12 + new TextEncoder().encode(JSON.stringify(Object.assign({}, meta, { v: 1, app: 'd37photo', layers: meta.layers.map(l => l.t === 'raster' ? Object.assign({}, l, { part: l.part === 0 ? [0, png.size] : [png.size, jpg.size] }) : l) }))).length + png.size + jpg.size, 'проект: заголовок 12 байт + JSON + картинки подряд');
+    ok(await PC.isProject(file) && !(await PC.isProject(png)), 'isProject: по первым 8 байтам');
+    const P = await PC.readProject(file), m2 = P.meta;
+    ok(m2.w === 1080 && m2.h === 1350 && m2.name === 'Пост' && m2.active === 1 && m2.layers.length === 3, 'readProject: документ', m2);
+    const bg = m2.layers[0], tx = m2.layers[1], br = m2.layers[2];
+    ok(bg.t === 'raster' && bg.locked && bg.adj.brightness === 20 && bg.preset === 'sepia' && bg.mime === 'image/jpeg' && bg.p.left === 540, 'readProject: слой-картинка — коррекции, фильтр, исходный JPEG', bg);
+    ok(tx.p.text === 'Привет' && tx.p.fontFamily === 'Rubik' && tx.p.fill === '#ffe000' && tx.p.shadow.color === '#0000008c' && tx.p.shadow.blur === 11 && !('type' in tx.p.shadow), 'readProject: надпись — шрифт, цвет, тень', tx);
+    ok(br.p.globalCompositeOperation === 'multiply' && br.p.opacity === 0.5 && !('fontSize' in br.p), 'readProject: наложение и прозрачность; у картинки нет полей текста', br);
+    const bj = new Uint8Array(await P.part(bg).arrayBuffer()), bp = new Uint8Array(await P.part(br).arrayBuffer());
+    ok(bj[0] === 255 && bj.length === jpg.size && bp[0] === 137 && bp.length === png.size && P.part(bg).type === 'image/jpeg', 'readProject: картинки слоёв — те же байты', { bj: Array.from(bj), bp: Array.from(bp) });
+    // хитрый и испорченный
+    const raw = (obj, extra = []) => { const j = new TextEncoder().encode(typeof obj === 'string' ? obj : JSON.stringify(obj)), h = new Uint8Array(12); for (let i = 0; i < 8; i++) h[i] = 'D37PHOT1'.charCodeAt(i); new DataView(h.buffer).setUint32(8, j.length, true); return new Blob([h, j].concat(extra)); };
+    const bad = async (b, re, name) => { let e = null; try { await PC.readProject(b); } catch (er) { e = er; } ok(e && e.user && re.test(e.message), name, e && e.message); };
+    await bad(new Blob(['PK\x03\x04 это zip, а не проект']), /не проект/, 'чужой файл — «это не проект»');
+    await bad(raw({ v: 2, w: 10, h: 10, layers: [{ t: 'text', p: {} }] }), /версия/, 'другая версия — отказ');
+    await bad(raw({ v: 1, w: 99999, h: 10, layers: [{ t: 'text', p: {} }] }), /размер документа/, 'гигантский документ — отказ');
+    await bad(raw({ v: 1, w: 10, h: 10, layers: [] }), /нет слоёв/, 'без слоёв — отказ');
+    await bad(raw({ v: 1, w: 10, h: 10, layers: Array.from({ length: PC.PROJ_MAX_LAYERS + 1 }, () => ({ t: 'text', p: {} })) }), /слишком много/, 'слишком много слоёв — отказ');
+    await bad(raw({ v: 1, w: 10, h: 10, layers: [{ t: 'raster', cw: 10, ch: 10, part: [0, 999] }] }, [png]), /за пределами/, 'картинка слоя за концом файла — отказ');
+    await bad(raw({ v: 1, w: 10, h: 10, layers: [{ t: 'script', p: {} }] }), /неизвестный вид/, 'неизвестный вид слоя — отказ');
+    { const b = raw({ v: 1, w: 10, h: 10, layers: [] }), u = new Uint8Array(await b.arrayBuffer()); u[8] = 255; u[9] = 255; u[10] = 255; u[11] = 127; await bad(new Blob([u]), /заголовок/, 'длина описания больше файла — отказ'); }
+    await bad(new Blob([new Uint8Array([68, 51, 55, 80, 72, 79, 84, 49, 5, 0, 0, 0, 123, 34, 120, 34, 58])]), /описание повреждено/, 'битый JSON — отказ');
+    const sly = await PC.readProject(raw({ v: 1, w: 10, h: 10, name: '<img src=x onerror=alert(1)>', active: 99, layers: [
+      { t: 'raster', name: 'a'.repeat(300), cw: 10, ch: 10, part: [0, png.size], mime: 'text/html', preset: '__proto__', adj: { brightness: 9e9, evil: 1, contrast: 'x' },
+        p: { left: 1e12, scaleX: 0, opacity: 7, globalCompositeOperation: 'url(javascript:x)', onclick: 'x', __proto__: { polluted: 1 }, fontSize: 50, src: 'https://evil' } },
+      { t: 'text', p: { text: 'x'.repeat(900), fontFamily: 'Evil Font', fill: 'javascript:alert(1)', fontWeight: 900, shadow: { color: 'url(x)', blur: 1e9 }, textAlign: 'evil' } }] }, [png]));
+    const s0 = sly.meta.layers[0], s1 = sly.meta.layers[1];
+    ok(!/[<>]/.test(sly.meta.name) && sly.meta.active === 1 && s0.name.length === 60, 'хитрый проект: имя без <>, номер слоя в пределах, имя слоя ≤ 60', sly.meta);
+    ok(s0.preset === 'none' && s0.mime === 'image/png' && s0.adj.brightness === 100 && !('evil' in s0.adj) && !('contrast' in s0.adj), 'хитрый проект: фильтр, вид картинки и коррекции — только допустимые', s0);
+    ok(s0.p.left === 1e6 && s0.p.scaleX === 1 && s0.p.opacity === 1 && !('globalCompositeOperation' in s0.p) && !('onclick' in s0.p) && !('src' in s0.p) && !('fontSize' in s0.p) && ({}).polluted === undefined, 'хитрый проект: свойства — только известные, числа в пределах, прототип не испорчен', s0.p);
+    ok(s1.p.text.length === 500 && !('fontFamily' in s1.p) && !('fill' in s1.p) && !('fontWeight' in s1.p) && !('textAlign' in s1.p) && s1.p.shadow.color === '#0000008c' && s1.p.shadow.blur === 500, 'хитрый проект: надпись — длина, шрифт, цвет и тень только допустимые', s1.p);
+    // "__proto__" в самом JSON (JSON.parse делает его обычным полем) — не переносится никуда
+    const pj = await PC.readProject(raw('{"v":1,"w":10,"h":10,"__proto__":{"polluted":1},"layers":[{"t":"text","__proto__":{"polluted":2},"p":{"__proto__":{"polluted":3},"text":"ok"}}]}'));
+    ok(pj.meta.layers[0].p.text === 'ok' && pj.meta.polluted === undefined && pj.meta.layers[0].polluted === undefined && pj.meta.layers[0].p.polluted === undefined && ({}).polluted === undefined, 'хитрый проект: "__proto__" в JSON — без последствий', pj.meta);
+  }
+
   // ═══ Раздел /photo связан везде ═══
   const read = rel => fs.readFileSync(path.join(SITE, rel), 'utf8');
   const router = read('js/ui/router.js'), vj = JSON.parse(read('vercel.json')), sw = read('sw.js'), idx = read('index.html'), games = read('js/features/games.js');

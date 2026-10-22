@@ -146,6 +146,90 @@
     return out;
   }
 
+  // ═══ Проект «.d37photo» — вся работа со слоями одним файлом (черновик при уходе из редактора, «Сохранить проект») ═══
+  // Файл: 8 байт 'D37PHOT1' + длина JSON (4 байта, little-endian) + JSON (UTF-8) + картинки слоёв подряд (PNG; нетронутое фото —
+  // своим исходным JPEG/WebP). JSON: { v: 1, w, h, name, active (номер слоя по порядку), layers: [{ t: 'raster', name, locked,
+  // p, adj, preset, cw, ch, mime, part: [сдвиг, длина] } | { t: 'text', name, locked, p }] }. Чужой файл проверяется целиком:
+  // берутся только известные поля, числа — в разумных пределах (файл из интернета не подсунет ни лишнего, ни гигантского).
+  const PROJ_MAGIC = 'D37PHOT1', PROJ_MAX_JSON = 2e6, PROJ_MAX_LAYERS = 80, PROJ_MAX_SIDE = 16384;
+  const PROJ_MIME = ['image/png', 'image/jpeg', 'image/webp'];
+  const P_NUM = { left: [-1e6, 1e6], top: [-1e6, 1e6], angle: [-36000, 36000], scaleX: [-1000, 1000], scaleY: [-1000, 1000], opacity: [0, 1],
+    skewX: [-89, 89], skewY: [-89, 89], fontSize: [1, 2000], strokeWidth: [0, 200] };
+  const P_TEXT_NUM = ['fontSize', 'strokeWidth'];
+  const P_ENUM = { fontWeight: ['normal', 'bold'], fontStyle: ['normal', 'italic'], textAlign: ['left', 'center', 'right', 'justify'] };
+  const BLEND_OPS = Object.values(BLENDS);
+  const perr = m => Object.assign(new Error('Проект не открылся: ' + m), { user: true });
+  const cleanStr = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f<>]/g, '').slice(0, n);
+  function cleanProps(p, text){
+    const o = {}; if (!p || typeof p !== 'object') return o;
+    for (const k in P_NUM) {
+      if (p[k] == null || (!text && P_TEXT_NUM.includes(k))) continue;
+      const v = +p[k]; if (Number.isFinite(v)) o[k] = clamp(v, P_NUM[k][0], P_NUM[k][1]);
+    }
+    if (o.scaleX === 0) o.scaleX = 1; if (o.scaleY === 0) o.scaleY = 1;
+    for (const k of ['flipX', 'flipY', 'visible']) if (typeof p[k] === 'boolean') o[k] = p[k];
+    if (BLEND_OPS.includes(p.globalCompositeOperation)) o.globalCompositeOperation = p.globalCompositeOperation;
+    if (!text) return o;
+    if (typeof p.text === 'string') o.text = p.text.slice(0, 500) || ' ';
+    if (FONT_NAMES.includes(p.fontFamily)) o.fontFamily = p.fontFamily;
+    for (const k in P_ENUM) if (P_ENUM[k].includes(p[k])) o[k] = p[k];
+    for (const k of ['fill', 'stroke']) { const c = color(p[k]); if (c) o[k] = c; }
+    const s = p.shadow;
+    if (s === null) o.shadow = null;
+    else if (s && typeof s === 'object') {
+      const n = (v, a, b) => clamp(Number.isFinite(+v) ? +v : 0, a, b);
+      o.shadow = { color: color(s.color) || '#0000008c', blur: n(s.blur, 0, 500), offsetX: n(s.offsetX, -1000, 1000), offsetY: n(s.offsetY, -1000, 1000) };
+    }
+    return o;
+  }
+  function cleanLayer(l, size){
+    if (!l || typeof l !== 'object') throw perr('слой — не объект');
+    const name = cleanStr(l.name, 60) || 'Слой';
+    if (l.t === 'text') return { t: 'text', name, locked: !!l.locked, p: cleanProps(l.p, true) };
+    if (l.t !== 'raster') throw perr('неизвестный вид слоя');
+    const cw = +l.cw, ch = +l.ch;
+    if (!(Number.isInteger(cw) && Number.isInteger(ch) && cw >= 1 && ch >= 1 && cw <= PROJ_MAX_SIDE && ch <= PROJ_MAX_SIDE)) throw perr('размер слоя');
+    const pt = Array.isArray(l.part) ? l.part : [], off = +pt[0], len = +pt[1];
+    if (!(Number.isInteger(off) && Number.isInteger(len) && off >= 0 && len > 0 && off + len <= size)) throw perr('картинка слоя за пределами файла');
+    const adj = {};
+    if (l.adj && typeof l.adj === 'object') for (const k of ADJ_KEYS) { const v = +l.adj[k]; if (Number.isFinite(v) && v) adj[k] = clamp(v, ADJ[k].min, ADJ[k].max); }
+    const preset = Object.prototype.hasOwnProperty.call(PRESETS, l.preset) ? l.preset : 'none';
+    const mime = PROJ_MIME.includes(l.mime) ? l.mime : 'image/png';
+    return { t: 'raster', name, locked: !!l.locked, p: cleanProps(l.p, false), adj, preset, cw, ch, mime, part: [off, len] };
+  }
+  // meta.layers[i].part — номер картинки в parts (Blob) или нет у надписи → Blob файла
+  function packProject(meta, parts){
+    let off = 0; const refs = parts.map(b => { const r = [off, b.size]; off += b.size; return r; });
+    const layers = meta.layers.map(l => (l.t === 'raster' ? Object.assign({}, l, { part: refs[l.part] }) : l));
+    const json = new TextEncoder().encode(JSON.stringify(Object.assign({}, meta, { v: 1, app: 'd37photo', layers })));
+    const head = new Uint8Array(12), n = json.length;
+    for (let i = 0; i < 8; i++) head[i] = PROJ_MAGIC.charCodeAt(i);
+    head[8] = n & 255; head[9] = (n >>> 8) & 255; head[10] = (n >>> 16) & 255; head[11] = (n >>> 24) & 255;
+    return new Blob([head, json].concat(parts), { type: 'application/x-d37photo' });
+  }
+  async function isProject(blob){
+    if (!blob || typeof blob.size !== 'number' || blob.size < 12) return false;
+    const b = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+    return String.fromCharCode.apply(null, Array.from(b)) === PROJ_MAGIC;
+  }
+  // Blob файла → { meta (проверенный), part(слой) → Blob картинки }; ошибка — понятным текстом
+  async function readProject(blob){
+    if (!blob || typeof blob.size !== 'number' || blob.size < 16) throw perr('файл пустой');
+    const head = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+    if (String.fromCharCode.apply(null, Array.from(head.subarray(0, 8))) !== PROJ_MAGIC) throw perr('это не проект фоторедактора (.d37photo)');
+    const n = (head[8] | (head[9] << 8) | (head[10] << 16) | (head[11] << 24)) >>> 0;
+    if (!(n > 1 && n <= PROJ_MAX_JSON && 12 + n <= blob.size)) throw perr('заголовок повреждён');
+    let m; try { m = JSON.parse(await blob.slice(12, 12 + n).text()); } catch (e) { throw perr('описание повреждено'); }
+    if (!m || typeof m !== 'object' || m.v !== 1) throw perr('другая версия проекта — обнови страницу');
+    const w = +m.w, h = +m.h;
+    if (!(Number.isInteger(w) && Number.isInteger(h) && w >= 1 && h >= 1 && w <= PROJ_MAX_SIDE && h <= PROJ_MAX_SIDE)) throw perr('размер документа');
+    if (!Array.isArray(m.layers) || !m.layers.length || m.layers.length > PROJ_MAX_LAYERS) throw perr('нет слоёв или их слишком много');
+    const data = blob.slice(12 + n), layers = m.layers.map(l => cleanLayer(l, data.size));
+    const active = Number.isInteger(m.active) && m.active >= 0 && m.active < layers.length ? m.active : layers.length - 1;
+    return { meta: { v: 1, w, h, name: cleanStr(m.name, 60), active, layers },
+      part: l => data.slice(l.part[0], l.part[0] + l.part[1], l.mime) };
+  }
+
   // ═══ Схемы команд «d37 v1» инструмента photo ═══
   const LAYER = { type: ['integer', 'string'], description: 'номер слоя из info или "active" (выбранный)', default: 'active' };
   const COLOR = { type: 'string', pattern: COLOR_RE, description: 'цвет: #rrggbb, rgba(…) или название (red, жёлтый…)' };
@@ -164,7 +248,7 @@
   const SCHEMAS = {
     info:       { title: 'Что открыто: размер, слои, выбранный слой', args: obj({}) },
     new:        { title: 'Новый пустой документ', undoable: true, args: obj({ w: INT(16, 8192), h: INT(16, 8192), bg: { type: 'string', pattern: COLOR_RE, default: '#ffffff', description: 'фон; transparent — прозрачный' }, name: { type: 'string', maxLength: 60 } }, ['w', 'h']) },
-    open:       { title: 'Открыть картинку из «Моих материалов» вместо текущей работы', undoable: true, args: obj({ asset: { type: 'string', pattern: '^a[a-z0-9]{6,30}$' } }, ['asset']) },
+    open:       { title: 'Открыть картинку или проект со слоями из «Моих материалов» вместо текущей работы', undoable: true, args: obj({ asset: { type: 'string', pattern: '^a[a-z0-9]{6,30}$' } }, ['asset']) },
     place:      { title: 'Добавить картинку из «Моих материалов» новым слоем', undoable: true, args: obj({ asset: { type: 'string', pattern: '^a[a-z0-9]{6,30}$' }, x: NUM(-20000, 20000), y: NUM(-20000, 20000), scale: NUM(0.01, 20), name: { type: 'string', maxLength: 60 } }, ['asset']) },
     crop:       { title: 'Обрезать: рамка x, y, w, h ИЛИ пропорция aspect по центру', undoable: true, args: obj({ x: INT(-20000, 20000), y: INT(-20000, 20000), w: INT(1, 20000), h: INT(1, 20000), aspect: { type: 'string', enum: ASPECTS } }),
       check: a => (a.aspect ? (a.x != null || a.w != null ? 'или aspect, или x/y/w/h' : '') : (a.w == null || a.h == null ? 'нужна рамка w и h (и x, y) или aspect' : '')) },
@@ -203,7 +287,8 @@
     'Номера слоёв — из команды info (поле layers[].id); "active" — выбранный слой. Картинки для open/place — номера из «Моих материалов» (export … to: "assets" возвращает asset).';
 
   const api = { NAMED, color, COLOR_RE, FONTS, FONT_NAMES, isGoogleFont, hasBold, BLENDS, BLEND_RU, ADJ, ADJ_KEYS, PRESETS, PRESET_CLASS, filterSpecs,
-    budget, fitSize, ASPECTS, aspectRect, clipRect, autoParams, SCHEMAS, DESCRIBE, clamp };
+    budget, fitSize, ASPECTS, aspectRect, clipRect, autoParams, SCHEMAS, DESCRIBE, clamp,
+    PROJ_MAGIC, PROJ_MAX_LAYERS, packProject, readProject, isProject, cleanProps };
   root.D37PhotoCmds = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

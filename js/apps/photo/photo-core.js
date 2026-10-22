@@ -115,7 +115,7 @@
 
     // ── документ ──
     const doc = { w: 1280, h: 720, bg: '#ffffff', name: 'Без названия', layers: [], active: null, seq: 0 };
-    let tool = 'move', dirty = false, disposed = false, queue = Promise.resolve(), busyN = 0;
+    let tool = 'move', dirty = false, disposed = false, paused = false, queue = Promise.resolve(), busyN = 0;
     const brush = { size: 24, color: '#ff3b5c', opacity: 100, hardness: 80 };
     const layerById = id => doc.layers.find(L => L.id === id) || null;
     const activeLayer = () => layerById(doc.active);
@@ -142,6 +142,9 @@
       L.obj.d37id = L.id;
       return L;
     }
+    // Нетронутое фото слоя — его исходный файл (JPEG/PNG/WebP): проект хранит его, а не PNG (в разы меньше, без пересжатия)
+    const SRC_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+    function keepSrc(L, blob){ if (blob && SRC_MIME.includes(blob.type) && blob.size > 0 && blob.size < L.canvas.width * L.canvas.height * 4) L.src = { blob, rev: L.pxRev, mime: blob.type }; }
     function textProps(a, base){
       const p = {};
       if (a.text != null) p.text = String(a.text).slice(0, 500);
@@ -205,7 +208,7 @@
     // Освободить память слоя, которого больше нет ни в документе, ни в истории
     function release(L){
       if (!L || L.dead || doc.layers.includes(L)) return;
-      L.dead = true;
+      L.dead = true; L.src = null;
       if (L.type === 'raster') dropFilt(L);
       try { L.obj.dispose && L.obj.dispose(); } catch (e) {}
       if (L.canvas) { L.canvas.width = L.canvas.height = 0; L.canvas = null; }
@@ -215,6 +218,7 @@
 
     // ── история ──
     const hist = { done: [], undone: [], bytes: 0, seq: 0 };   // seq — сколько шагов записано всего (для ctx.steps у D37Tools)
+    let baseSeq = 0;   // seq, когда работу открыли / создали / сохранили: больше — есть несохранённая работа (черновик при уходе)
     function dropRedo(){
       for (const e of hist.undone) { hist.bytes -= e.bytes || 0; try { e.free && e.free('redo'); } catch (er) {} }
       hist.undone = [];
@@ -615,7 +619,7 @@
     const scene = p => { const v = cv.viewportTransform; return { x: (p.x - v[4]) / v[0], y: (p.y - v[5]) / v[3] }; };
     let downSnap = null;
     function onDown(e){
-      if (disposed) return;
+      if (disposed || paused) return;
       pts.set(e.pointerId, local(e));
       if (pts.size === 2) {   // второй палец — щипок/сдвиг; начатое одним пальцем отменяем
         if (stroke) { strokeCancel(stroke); stroke = null; }
@@ -651,7 +655,7 @@
       if (tool === 'move') { const A = activeLayer(); downSnap = A ? { L: A, s: snapL(A) } : null; }
     }
     function onMove(e){
-      if (disposed) return;
+      if (disposed || paused) return;
       if (pts.has(e.pointerId)) pts.set(e.pointerId, local(e));
       if (gest && pts.size >= 2) {
         const [a, b] = [...pts.values()];
@@ -697,12 +701,13 @@
     });
 
     // ═══ Команды: открыть, создать, обрезать, размер, поворот… (то, что делают и кнопки, и ИИ) ═══
-    async function decode(blob){
+    async function decode(blob, maxPixels){
       if (!blob || !/^image\//.test(blob.type || 'image/')) throw userErr('Это не картинка');
+      const job = { blob, maxSide: B.maxSide, maxPixels: Math.max(1, Math.min(B.maxPixels, maxPixels || B.maxPixels)) };
       let r;
-      try { r = await W.run('decode', { blob, maxSide: B.maxSide, maxPixels: B.maxPixels }); }
+      try { r = await W.run('decode', job); }
       catch (e) {
-        try { r = await W.local('decode', { blob, maxSide: B.maxSide, maxPixels: B.maxPixels }); }
+        try { r = await W.local('decode', job); }
         catch (er) { throw userErr('Не получилось открыть картинку (формат не поддерживается или файл повреждён)'); }
       }
       const c = canvasOf(r.w, r.h); c.getContext('2d').drawImage(r.bitmap, 0, 0); r.bitmap.close && r.bitmap.close();
@@ -715,8 +720,9 @@
         const r = await decode(blob);
         scaledNote(r);
         const L = mkRaster(r.canvas, { name: 'Фон', x: r.canvas.width / 2, y: r.canvas.height / 2 }); L.locked = true;
+        keepSrc(L, blob);
         replaceDoc('Открыть', () => { setDoc({ w: r.canvas.width, h: r.canvas.height, bg: null, name: cleanName(name), active: L.id, layers: [L] }); });
-        fit();
+        fit(); baseSeq = hist.seq;   // только что открытое — ещё не «работа» (черновик не нужен)
         return { layer: L.id, w: doc.w, h: doc.h, scaled: r.scaled };
       } finally { busy(false); if (phone) W.recycle(); }   // телефон: поток с картинками закрыть — память сразу назад
     }
@@ -728,6 +734,7 @@
         scaledNote(r);
         let k = a.scale || Math.min(1, doc.w / r.canvas.width, doc.h / r.canvas.height);
         const L = mkRaster(r.canvas, { name: a.name || cleanName(a.fileName || 'Картинка'), x: a.x != null ? a.x : doc.w / 2, y: a.y != null ? a.y : doc.h / 2, scale: k });
+        keepSrc(L, blob);
         addLayer(L, 'Добавить картинку');
         return { layer: L.id };
       } finally { busy(false); if (phone) W.recycle(); }   // телефон: поток с картинками закрыть — память сразу назад
@@ -752,7 +759,7 @@
       if (bg) { const g = c.getContext('2d'); g.fillStyle = bg; g.fillRect(0, 0, w, h); }
       const L = mkRaster(c, { name: 'Фон', x: w / 2, y: h / 2 }); L.locked = true;
       replaceDoc('Новый документ', () => setDoc({ w, h, bg: null, name: cleanName(a.name || 'Без названия'), active: L.id, layers: [L] }));
-      fit();
+      fit(); baseSeq = hist.seq;
       return { w, h, layer: L.id };
     }
     // Обрезка: документ = рамка, слои сдвигаются (пиксели не режутся — можно вернуть)
@@ -1013,6 +1020,100 @@
       return c;
     }
 
+    // ═══ Проект «.d37photo»: слои как есть (картинки — PNG без потерь или исходный файл нетронутого фото, надписи — текстом,
+    //     коррекции и фильтры — числами). Формат и проверка чужого файла — D37PhotoCmds.packProject / readProject ═══
+    async function encodePng(c){
+      try { const bmp = await createImageBitmap(c); return (await W.run('encode', { bitmap: bmp, type: 'image/png' }, [bmp])).blob; }
+      catch (e) { const bmp = await createImageBitmap(c); return (await W.local('encode', { bitmap: bmp, type: 'image/png' })).blob; }
+    }
+    async function saveProject(label){
+      busy(true, label || 'Сохраняю проект…');
+      try {
+        const layers = [], parts = [];
+        for (const L of doc.layers.slice()) {
+          const s = snapL(L), o = { t: L.type, name: L.name, locked: !!L.locked, p: s.p };
+          if (L.type === 'raster') {
+            let b = L.src && L.src.rev === L.pxRev ? L.src.blob : null;
+            const mime = b ? L.src.mime : 'image/png';
+            if (!b) b = await encodePng(L.canvas);
+            if (!b || !b.size) throw userErr('Не получилось сохранить слой «' + L.name + '»');
+            Object.assign(o, { adj: s.adj, preset: s.preset, cw: L.canvas.width, ch: L.canvas.height, mime, part: parts.length });
+            parts.push(b);
+          }
+          layers.push(o);
+        }
+        return PC.packProject({ w: doc.w, h: doc.h, name: doc.name, active: doc.layers.findIndex(L => L.id === doc.active), layers }, parts);
+      } finally { busy(false); if (phone) W.recycle(); }
+    }
+    async function openProject(blob, name){
+      busy(true, 'Открываю проект…');
+      const made = [];
+      try {
+        const P = await PC.readProject(blob), m = P.meta;
+        // проект больше, чем умеет это устройство (с компьютера на телефон): документ и слои меньше, на холсте всё там же
+        const g = Math.min(1, B.maxSide / Math.max(m.w, m.h));
+        const want = m.layers.reduce((s, l) => s + (l.t === 'raster' ? l.cw * l.ch : 0), 0) * g * g;
+        const k = want > B.totalPixels * 0.9 ? Math.sqrt(B.totalPixels * 0.9 / want) : 1;
+        let scaled = g < 1 || k < 1;
+        for (const l of m.layers) {
+          const p = Object.assign({}, l.p);
+          if (p.left != null) p.left *= g;
+          if (p.top != null) p.top *= g;
+          let L;
+          if (l.t === 'raster') {
+            const part = P.part(l), r = await decode(part, Math.floor(l.cw * l.ch * g * g * k * k));
+            if (r.canvas.width < l.cw * g * 0.999) scaled = true;
+            L = mkRaster(r.canvas, { name: l.name });
+            const f = l.cw / r.canvas.width;   // слой стал меньше в f раз — во столько же больше его масштаб
+            p.scaleX = (p.scaleX != null ? p.scaleX : 1) * f * g; p.scaleY = (p.scaleY != null ? p.scaleY : 1) * f * g;
+            L.adj = Object.assign({}, l.adj); L.preset = l.preset;   // фильтры наложит attach()
+            keepSrc(L, part);
+            applySnap(L, { name: l.name, locked: l.locked, p, adj: L.adj, preset: L.preset });
+          } else {
+            p.scaleX = (p.scaleX != null ? p.scaleX : 1) * g; p.scaleY = (p.scaleY != null ? p.scaleY : 1) * g;
+            L = mkText({ text: p.text || 'Текст' });
+            applySnap(L, { name: l.name, locked: l.locked, p });
+          }
+          made.push(L);
+        }
+        const act = made[m.active] || made[made.length - 1];
+        replaceDoc('Открыть проект', () => setDoc({ w: Math.max(16, Math.round(m.w * g)), h: Math.max(16, Math.round(m.h * g)), bg: null,
+          name: cleanName(m.name || name), active: act.id, layers: made }));
+        fit(); baseSeq = hist.seq;
+        if (scaled) toast('Проект уменьшен под память этого устройства (на холсте всё на своих местах)', 'warn');
+        return { layers: made.length, w: doc.w, h: doc.h, scaled };
+      } catch (e) {
+        for (const L of made) release(L);
+        throw e;
+      } finally { busy(false); if (phone) W.recycle(); }
+    }
+    // ── Черновик: ушли из редактора с несохранённой работой — проект молча в «Мои материалы» (один, последний) ──
+    const DRAFT_KEY = 'd37_pe_draft';
+    const draftId = () => { try { return localStorage.getItem(DRAFT_KEY) || ''; } catch (e) { return ''; } };
+    async function saveDraft(){
+      if (hist.seq <= baseSeq || !doc.layers.length) return null;
+      const A = assets(), seq = hist.seq;
+      const blob = await saveProject('Сохраняю черновик…');
+      // закреплён: чистка места («давно не открывали») черновик не тронет — он один (каждый новый заменяет прежний)
+      const meta = { type: 'project', name: 'Черновик: ' + doc.name, tool: 'photo', w: doc.w, h: doc.h, thumb: thumbDataURL(), extra: { draft: 1 }, pinned: true };
+      let rec = null; const id = draftId();
+      if (id) { try { const old = await A.meta(id); if (old && old.type === 'project') rec = await A.replace(id, blob, meta); } catch (e) { rec = null; } }
+      if (!rec) rec = await A.put(blob, meta);
+      try { localStorage.setItem(DRAFT_KEY, rec.id); } catch (e) {}
+      baseSeq = seq;
+      emit('draft', rec);
+      return rec;
+    }
+    async function findDraft(){
+      const id = draftId(); if (!id || !root.D37Assets) return null;
+      try { const m = await root.D37Assets.meta(id); return m && m.type === 'project' ? m : null; } catch (e) { return null; }
+    }
+    async function dropDraft(){
+      const id = draftId(); if (!id) return;
+      try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+      try { root.D37Assets && await root.D37Assets.remove(id); } catch (e) {}
+    }
+
     // ═══ Отправить в «Студию 3D»: картинка → плоскость (OBJ + MTL + PNG) → «🧩 Модели» студии (js/engine/model.js) ═══
     async function toStudio3d(blob, w, h, name){
       if (!root.D37E || !root.D37E.models) {
@@ -1050,7 +1151,12 @@
     const RUN = {
       info: () => info(),
       new: a => newDoc(a),
-      open: async a => { const g = await assets().get(a.asset); if (!g || g.meta.type !== 'image') throw userErr('Нет такой картинки в «Моих материалах»'); return openBlob(g.blob, g.meta.name); },
+      open: async a => {
+        const g = await assets().get(a.asset);
+        if (g && g.meta.type === 'project') return openProject(g.blob, String(g.meta.name || '').replace(/^Черновик: /, ''));
+        if (!g || g.meta.type !== 'image') throw userErr('Нет такой картинки в «Моих материалах»');
+        return openBlob(g.blob, g.meta.name);
+      },
       place: async a => { const g = await assets().get(a.asset); if (!g || g.meta.type !== 'image') throw userErr('Нет такой картинки в «Моих материалах»'); return placeBlob(g.blob, Object.assign({ fileName: g.meta.name }, a)); },
       crop: a => crop(a),
       resize: a => resizeImage(a),
@@ -1146,7 +1252,7 @@
 
     // ═══ Клавиши (компьютер) ═══
     function onKey(e){
-      if (disposed || e.defaultPrevented) return;
+      if (disposed || paused || e.defaultPrevented) return;   // paused — редактор скрыт (ушли в другой раздел, сохраняется черновик)
       const t = e.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
       if (e.type === 'keyup') { if (e.code === 'Space') { spaceDown = false; cv.defaultCursor = tool === 'hand' ? 'grab' : cv.defaultCursor; } return; }
       if (typing) return;
@@ -1225,6 +1331,10 @@
       layerInfo, layerThumb, thumbDataURL, previewFilters, applyFilters, cropRect, setCropAspect, get cropAspect(){ return cropAspect; },
       // файл с устройства (кнопки, перетащить, вставить) — в той же очереди, что и команды: не пересекаются с ними
       openBlob: serial(openBlob), placeBlob: serial(placeBlob), exportBlob: serial(exportBlob), toStudio3d, download, histState, get dirty(){ return dirty; }, set dirty(v){ dirty = !!v; },
+      // проект и черновик: edited — есть работа после открытия/создания/сохранения; markSaved — сохранили (проектом)
+      saveProject: serial(() => saveProject()), openProject: serial(openProject), saveDraft: serial(saveDraft), findDraft, dropDraft,
+      get edited(){ return hist.seq > baseSeq; }, markSaved(){ baseSeq = hist.seq; dirty = false; emit('dirty', false); },
+      pause(on){ paused = !!on; if (paused) { pts.clear(); gest = pan = null; if (stroke) { const st = stroke; stroke = null; strokeEnd(st); } } }, get paused(){ return paused; },
       get threaded(){ return W.threaded; }, on(f){ subs.add(f); return () => subs.delete(f); }, emit, toast, dispose, get disposed(){ return disposed; },
       _test: { hist, rasterPixels, renderLayers, strokeBegin, strokeTo, strokeEnd },
     };
