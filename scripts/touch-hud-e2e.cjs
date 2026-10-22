@@ -97,8 +97,11 @@ async function openKubomir(B, VW, VH){
   const ls = { d37_perf: 'low', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_gfx: 'low', d37_settings: JSON.stringify({ gfxPreset: 'low', gfx: 'low', autoLand: true }), d37_kb_opt: JSON.stringify({ rd: 4 }) };
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `if(!localStorage.getItem(${JSON.stringify(k)}))localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}}catch(e){}` });
   await send('Page.navigate', { url: BASE + '/#/games/kubomir' });
-  for (let i = 0; i < 120; i++) { await sleep(500); if (await ev(`!!document.querySelector('.kb-menu [data-m="new"]')`, 3000).catch(() => false)) break; }
-  await ev(`(() => { document.querySelector('.kb-menu [data-m="new"]').click(); return 1; })()`);
+  let menu = false;
+  for (let i = 0; i < 120 && !menu; i++) { await sleep(500); menu = await ev(`!!document.querySelector('.kb-menu [data-m="new"]')`, 3000).catch(() => false); }
+  if (!menu) { await shot(send, `kubomir-${VW}x${VH}-debug-open`); throw new Error('меню миров не появилось: ' + JSON.stringify(await ev(`({ hash: location.hash, path: location.pathname, stage: document.querySelector('#gamesStage')?.className, txt: document.body.innerText.slice(0, 300) })`).catch(e => e.message))); }
+  // меню миров может перерисоваться (облако, список) — нажимать «Новый мир», пока не откроется окно нового мира
+  for (let i = 0; i < 20; i++) { if (await ev(`(() => { if (document.querySelector('[data-f="seed"]')) return true; document.querySelector('.kb-menu [data-m="new"]')?.click(); return !!document.querySelector('[data-f="seed"]'); })()`)) break; await sleep(300); }
   await sleep(400);
   await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 't074'; document.querySelector('[data-f="mode"] [data-v="survival"]')?.click(); document.querySelector('[data-f="diff"] [data-v="peaceful"]')?.click(); document.querySelector('[data-n="go"]')?.click(); return 1; })()`);
   let up = false;
