@@ -399,3 +399,4 @@ Owner must decide (5):
    stage, portals to games) stays a neutral «timeless» area so the site's mini-games stay reachable on day 1; the battle zone and
    military bases stay a separate mode with their own progression (era-themed weapons later); players keep денки and skills from P1;
    the current city layouts become the modern-era blueprints. This reshapes P2–P7: a new plan (board T-053) comes BEFORE P2.
+   Owner correction (22.10): «я же говорил план: сначала бактерия или микроб, и потом развитие мира везде» — the cities-from-zero are the CIVILIZATION part of the full path of docs/superpowers/specs/2026-10-16-universe-design.md §5–§7: cell (microbe) → creature → tribe → settlement from zero → eras → today → space, all on one planet (T-051) and across our games («везде»). T-053 plans the whole path and the build order starting from the cell stage («Клеточки» already has data-driven cell PARTS).
