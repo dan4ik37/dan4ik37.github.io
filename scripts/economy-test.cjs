@@ -4,6 +4,9 @@
 // coin_run_cap, coin_level_item), games-more.sql (game_win_xp). Клиент: js/features/xp.js (XP_NUM, LEVEL_REWARDS),
 // js/features/achievements.js (ACHIEVEMENT_DEFS), js/core/coins.js (RULES, RUN_CAP), js/core/avatar.js (PARTS — вещи «за уровень»),
 // формулы монет в js/games/*.js, api/_lib/routes/vip.js (FREE), css/premium.css (эффекты ника).
+// С 22.10.2026 (раздел 7): задания недели, сезонный путь, новогоднее задание — games-more.sql (quest_rule, weekly_quest_pool,
+// season_ladder, season_themes, advent_task) ↔ js/features/games.js (QUEST_NUM, WEEKLY_QUESTS, SEASON_LADDER, SEASON_THEMES),
+// js/core/celebrate.js (ADVENT), avatar.js (вещи-награды, 8-е поле), css/premium.css (рамки сезонов).
 const fs = require('fs'), path = require('path'), vm = require('vm'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
@@ -156,6 +159,77 @@ if (sim) {
   }
   const act = by(sim.now, 'active');
   ok(act.at[5] <= 7 && act.at[10] <= 40, 'активный: 5 уровень (друзья) за неделю, 10-й (титул) — за ~месяц', [act.at[5], act.at[10]]);
+  // задания недели, сезон и новогоднее задание не разгоняют уровни (темп docs/ECONOMY.md — примерно тот же: не больше чем на 12 %)
+  ok(sim.noquests && sim.noquests.length === 3, 'расчёт без заданий недели и сезона — есть (economy-sim)');
+  for (const nq of sim.noquests || []) {
+    const b = by(sim.now, nq.id);
+    for (const L of [10, 30, 50]) ok(b.at[L] >= nq.at[L] * .88, `${nq.id}: с заданиями недели и сезоном ${L} уровень — не больше чем на 12 % быстрее`, [nq.at[L], b.at[L]]);
+    ok(b.perDay - nq.perDay <= 15 && b.coins - nq.coins <= 40, `${nq.id}: прибавка небольшая (XP ≤ 15, 🪙 ≤ 40 в день)`, [nq.perDay, b.perDay, nq.coins, b.coins]);
+  }
+  const qa = by(sim.quests || [], 'active'), qc = by(sim.quests || [], 'casual');
+  ok(qa && qa.lv === 25 && qc && qc.lv >= 15 && qc.lv < 25, 'сезон: активный проходит путь за месяц, обычный — большую часть', [qa && qa.lv, qc && qc.lv]);
+}
+
+// ═══ 7. Задания недели, сезонный путь, новогоднее задание (games-more.sql ↔ js/features/games.js, js/core/celebrate.js; 22.10.2026) ═══
+{
+  const G = load('js/features/games.js', '({ QUEST_NUM, WEEKLY_QUESTS, SEASON_LADDER, SEASON_THEMES, seasonTitleDef })', { setInterval: () => 0, clearTimeout(){} });
+  const CE = load('js/core/celebrate.js', 'window.D37Celebrate', { setInterval: () => 0, clearTimeout(){} });
+  const qr = pairs(fnBody(more, 'quest_rule'));
+  ok(Object.keys(qr).length >= 15 && same(Object.keys(qr).sort(), Object.keys(G.QUEST_NUM).sort()), 'QUEST_NUM и quest_rule — одни и те же ключи', [Object.keys(qr), Object.keys(G.QUEST_NUM)]);
+  for (const k in qr) ok(G.QUEST_NUM[k] === qr[k], `QUEST_NUM.${k} = quest_rule('${k}')`, [G.QUEST_NUM[k], qr[k]]);
+  const js = (name, re) => { const m = re.exec(more); return m ? JSON.parse(m[1]) : null; };
+  // задания недели: тот же пул, в том же порядке (от порядка зависит, какие задания у недели)
+  const pool = js('pool', /function public\.weekly_quest_pool\(\)[\s\S]*?select '(\[[\s\S]*?\])'::jsonb/);
+  ok(Array.isArray(pool) && pool.length >= 12, 'weekly_quest_pool — список', pool && pool.length);
+  ok(same(pool.map(e => e.code), Object.keys(G.WEEKLY_QUESTS)), 'WEEKLY_QUESTS = weekly_quest_pool: те же коды в том же порядке');
+  for (const e of pool) {
+    const c = G.WEEKLY_QUESTS[e.code] || {};
+    ok(c.slot === e.slot && c.n === e.n && c.stat === e.stat, `задание ${e.code}: место, сколько, что считать`, [c.slot, c.n, c.stat, e]);
+    ok(new RegExp(`\\b${e.n}\\b`).test(c.text || '') || e.n === 1, `задание ${e.code}: число ${e.n} в тексте`, c.text);
+    ok(fnBody(more, 'weekly_quest_stats').includes(`'${e.stat}'`), `счётчик ${e.stat} есть в weekly_quest_stats`);
+  }
+  const slots = [...new Set(pool.map(e => e.slot))].sort();
+  ok(same(slots, [1, 2, 3, 4, 5, 6]), 'шесть мест — шесть заданий в неделю', slots);
+  // выбор недели — без случайности: (w + s) mod вариантов; за год встречается каждое задание
+  ok(/res := res \|\| arr\[1 \+ \(\(w \+ s\) % k \+ k\) % k\]/.test(fnBody(more, 'weekly_quest_codes')), 'weekly_quest_codes: место s недели w — вариант (w + s) mod k');
+  const pick = w => slots.map(s => { const a = pool.filter(e => e.slot === s); return a[((w + s) % a.length + a.length) % a.length].code; });
+  const seen = new Set(); for (let w = 0; w < 52; w++) pick(w).forEach(c => seen.add(c));
+  ok(seen.size === pool.length, 'за год встречается каждое задание недели', [seen.size, pool.length]);
+  ok(same(pick(41), ['w_play15', 'w_win12', 'w_games7', 'w_words3', 'w_hard1', 'w_puzzle5']), 'неделя 19.10.2026 (№ 41) — те же задания, что на сервере (PGlite)', pick(41));
+  // сезон: лестница и темы — одинаковые; только 🪙 и украшения (ни XP, ни VIP, ни силы)
+  const lad = js('ladder', /function public\.season_ladder\(\)[\s\S]*?select '(\[[\s\S]*?\])'::jsonb/);
+  ok(same(lad, G.SEASON_LADDER), 'SEASON_LADDER = season_ladder');
+  ok(lad.length === qr.s_levels && lad.every((e, i) => e.lv === i + 1), 'уровни сезона 1…' + qr.s_levels + ' подряд', lad.length);
+  ok(lad.every(e => Object.keys(e).every(k => ['lv', 'coins', 'title', 'item', 'frame'].includes(k))), 'награды сезона — только монеты, титулы, вещь и рамка');
+  ok(lad.filter(e => e.title === 1).length === 1 && lad.filter(e => e.title === 2).length === 1 && lad.filter(e => e.item).length === 1 && lad.filter(e => e.frame).length === 1, 'за сезон: 2 титула, вещь, рамка');
+  const seasonCoins = lad.reduce((a, e) => a + (e.coins || 0), 0);
+  ok(seasonCoins <= 600, 'монет за весь сезон — немного (≤ 600)', seasonCoins);
+  const th = js('themes', /function public\.season_themes\(\)[\s\S]*?select '(\[[\s\S]*?\])'::jsonb/);
+  ok(same(th, G.SEASON_THEMES), 'SEASON_THEMES = season_themes');
+  ok(same(th.map(t => t.m), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) && new Set(th.map(t => t.id)).size === 12, 'темы на все 12 месяцев, id разные');
+  const css = read('css/premium.css');
+  for (const t of th) {
+    const m = /^skin:(\w+):(\w+)$/.exec(t.item), p = m && CH.PARTS[m[1]]?.list.find(x => x[0] === m[2]);
+    ok(p && p[7] === 2 && p[2] === 0 && !p[5] && !p[6], `вещь темы ${t.id} — в avatar.js, «за сезон» (8-е поле 2), не продаётся`, t.item);
+    ok(CH.price(t.item) === null && !coins.includes(`'${t.item}'`), `вещь темы ${t.id} — без цены (coin_price → null)`, t.item);
+    ok(['item', 'pet', 'trail'].includes(m && m[1]), `вещь темы ${t.id} — эмодзи-слот (2D и 3D без моделей)`, t.item);
+    ok(css.includes(`.lv-frame-ss[data-ss="${t.id}"]{--ssc:${t.color};--sse:'${t.icon}'}`), `рамка темы ${t.id} — в css/premium.css (цвет и значок как в season_themes)`);
+  }
+  ok(G.seasonTitleDef('ss:2026-11:1')?.title === 'Осенний дождь 2026' && /Легенда/.test(G.seasonTitleDef('ss:2027-01:2')?.title) && G.seasonTitleDef('ss:x') === null, 'титулы сезона: «тема год» и «Легенда: …»');
+  ok(/'ss:' \|\| ym \|\| ':' \|\| \(e->>'title'\)/.test(fnBody(more, 'season_claim_at')), 'season_claim_at выдаёт титулы ss:ГГГГ-ММ:N (как seasonTitleDef)');
+  // платного пути нет — только выключатель; случайности нет
+  ok(/function public\.season_paid_on\(\) returns boolean language sql immutable as \$\$ select false \$\$/.test(more), 'платного пути нет: season_paid_on() → false');
+  const qsql = more.slice(more.indexOf('ЗАДАНИЯ НЕДЕЛИ, СЕЗОННЫЙ ПУТЬ И НОВОГОДНЕЕ ЗАДАНИЕ'));
+  ok(qsql.length > 1000 && !/random\(|gen_random|setseed|tablesample/i.test(qsql), 'в заданиях, сезоне и новогоднем задании нет случайности');
+  ok(!/premium_|gems|vip_grants/.test(qsql), 'сезон и задания не трогают 💎 и VIP');
+  // новогоднее задание: те же 31 задание; ⛄ — вещь «Новый год» (8-е поле 3)
+  const adv = /function public\.advent_task\(p_day int\)[\s\S]*?select \(array\[([\s\S]*?)\]\)\[p_day\]/.exec(more);
+  const advSql = adv ? [...adv[1].matchAll(/'([^']+)'/g)].map(m => m[1]) : [];
+  ok(CE.ADVENT.length === 31 && same(advSql, CE.ADVENT.map(t => t.kind + (t.n > 1 ? '*' + t.n : ''))), 'advent_task = ADVENT (31 задание, «*N» — сколько раз)', advSql.length);
+  const snow = CH.PARTS.pet.list.find(x => x[0] === 'snowman');
+  ok(snow && snow[7] === 3 && CH.price('skin:pet:snowman') === null && fnBody(more, 'advent_claim_at').includes("'skin:pet:snowman'"), '⛄ «Снеговик» — награда новогоднего задания (не продаётся)');
+  ok(!!CH.grantOf(2) && !!CH.grantOf(3) && !!CH.grantOf(1), 'подписи наград в гардеробе: друзья, сезон, Новый год');
+  ok(X.XP_NUM && /weekly: 'Задания недели'/.test(read('js/features/xp.js')) && /advent: 'Новогоднее задание'/.test(read('js/features/xp.js')), 'XP_SOURCE_LABEL: задания недели и новогоднее задание');
 }
 
 console.log(`${pass} ок, ${fail} ошибок`);

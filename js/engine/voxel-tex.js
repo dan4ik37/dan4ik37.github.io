@@ -292,6 +292,60 @@
       if (v) put(d, x, y, (v === 1 ? hp : pal)[3]);
     }
   };
+  // ── бой (22.10.2026): лук, стрела, щит — тоже 32×32, тем же светом сверху слева и обводкой (вещь в руке выдавлена по пикселям) ──
+  // маска: 0 — пусто, 1…n — цвет из палитры [основа, свет, тень, обводка] своего номера
+  function paint32(d, M, pals){
+    const e = (x, y) => x < 0 || y < 0 || x >= N || y >= N || !M[y * N + x];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const v = M[y * N + x]; if (!v) continue;
+      const P4 = pals[v - 1]; let c = P4[0];
+      if (e(x - 1, y) || e(x, y - 1) || e(x - 1, y - 1)) c = P4[1]; else if (e(x + 1, y) || e(x, y + 1) || e(x + 1, y + 1)) c = P4[2];
+      put(d, x, y, c);
+    }
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (M[y * N + x]) continue;
+      let v = 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < N && yy < N && M[yy * N + xx]) v = Math.max(v, M[yy * N + xx]); }
+      if (v) put(d, x, y, pals[v - 1][3]);
+    }
+  }
+  const mask32 = () => new Uint8Array(N * N);
+  function seg32(M, x0, y0, x1, y1, w, v){
+    const sc = N / 32; x0 *= sc; y0 *= sc; x1 *= sc; y1 *= sc; w *= sc;
+    const dx = x1 - x0, dy = y1 - y0, L2 = dx * dx + dy * dy || 1;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const px = x + .5, py = y + .5, t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / L2)), qx = x0 + dx * t - px, qy = y0 + dy * t - py; if (qx * qx + qy * qy <= w * w / 4) M[y * N + x] = v; }
+  }
+  const WOOD4 = ['#a8743e', '#d19a5c', '#7a5128', '#3a2410'].map(hx), STRING4 = ['#ece6d6', '#ffffff', '#b8b0a0', '#5a5448'].map(hx);
+  // лук: дуга дерева (ручка в середине темнее) и тетива
+  P.bow32 = d => {   // дуга (центр 4,46; 16, радиус 13 — концы на x 8,5) выгнута вправо, тетива — слева; ручка — середина дуги
+    const M = mask32(), cx = 4.46, cy = 16, r = 13.04, A = 1.257;
+    for (let i = 0; i < 40; i++) { const a = -A + 2 * A * i / 40, a2 = -A + 2 * A * (i + 1) / 40; seg32(M, cx + Math.cos(a) * r, cy + Math.sin(a) * r, cx + Math.cos(a2) * r, cy + Math.sin(a2) * r, i > 15 && i < 25 ? 3.6 : 2.6, 1); }
+    seg32(M, 8.5, 3.6, 8.5, 28.4, 1.1, 2);
+    paint32(d, M, [WOOD4, STRING4]);
+    const sc = N / 32;
+    for (let y = Math.round(13 * sc); y < Math.round(19 * sc); y++) for (let x = Math.round(15 * sc); x < Math.round(19.5 * sc); x++) { const i = (y * N + x) * 4; if (d[i + 3] && M[y * N + x] === 1) { d[i] *= .7; d[i + 1] *= .62; d[i + 2] *= .55; } }
+  };
+  // стрела: древко по диагонали, наконечник из кремня, оперение
+  P.arrow32 = d => {
+    const M = mask32();
+    seg32(M, 5, 27, 24.5, 7.5, 1.9, 1);
+    for (const [x, y] of [[24, 4.5], [27.5, 8], [28.5, 3.5]]) seg32(M, 23.5, 8.5, x, y, 2.6, 2);
+    seg32(M, 26, 6, 28.5, 3.5, 2.4, 2);
+    for (const [x0, y0, x1, y1] of [[4, 23, 9, 28], [6, 21, 11, 26], [8, 19, 12, 23]]) { seg32(M, x0, y0 - 2.5, x1 - 1, y1 - 3.5, 2, 3); seg32(M, x0 + 2.5, y0, x1 - .5, y1 - 1, 2, 3); }
+    paint32(d, M, [WOOD4, ['#6b6b74', '#a6a6b0', '#44444c', '#1f1f24'].map(hx), ['#f2f2f2', '#ffffff', '#c8c8c8', '#6a6a6a'].map(hx)]);
+  };
+  // щит: доски в железной оправе, умбон посередине (как у викингов — скруглённый квадрат)
+  P.shield32 = d => {
+    const M = mask32(), sc = N / 32;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const px = (x + .5) / sc - 16, py = (y + .5) / sc - 16.5, r = Math.max(Math.abs(px) / 12.5, Math.abs(py) / 14), bot = py > 6 ? Math.hypot(px / 12.5, (py - 6) / 8.5) : 0;
+      if (r > 1 || bot > 1) continue;
+      const rim = r > .86 || bot > .86, boss = Math.hypot(px, py + .5) < 3.2;
+      M[y * N + x] = boss ? 3 : rim ? 2 : 1;
+    }
+    paint32(d, M, [WOOD4, ['#c9ccd2', '#f2f4f7', '#8c9099', '#33363c'].map(hx), ['#d8dbe0', '#ffffff', '#9aa0a8', '#3b3f46'].map(hx)]);
+    // доски: тёмные швы по вертикали
+    for (let y = 0; y < N; y++) for (const sx of [11.3, 16, 20.7]) { const x = Math.round(sx * sc), i = (y * N + x) * 4; if (M[y * N + x] === 1) { d[i] *= .72; d[i + 1] *= .7; d[i + 2] *= .66; } }
+  };
   P.ingot = (d, s) => { const c = hx(s.c), lt = shade(c, 1.2), dk = shade(c, .7); for (let y = 6; y < 11; y++) for (let x = 2; x < 14; x++) { const top = y === 6, edge = x === 2 || x === 13 || y === 10; if ((x < 3 || x > 12) && (y === 6)) continue; put(d, x, y, top ? lt : edge ? dk : c); } put(d, 4, 7, shade(c, 1.45)); put(d, 5, 7, shade(c, 1.3)); outline(d); };
   P.gem = (d, s) => {
     const c = hx(s.c), lt = shade(c, 1.35), dk = shade(c, .65);
@@ -402,7 +456,7 @@
     }
   };
   const SPRITE = new Set(['stick', 'tool', 'ingot', 'gem', 'lump', 'food', 'feather', 'plant', 'torch', 'ladder']);
-  const SPRITE32 = new Set(['tool32']);   // вещи, нарисованные сразу в полный размер (фон прозрачный)
+  const SPRITE32 = new Set(['tool32', 'bow32', 'arrow32', 'shield32']);   // вещи, нарисованные сразу в полный размер (фон прозрачный)
   // Ваниль: имя → рисунок (цвета — свои; никаких чужих картинок)
   const S = V.TEX_SPECS = {
     stone: { k: 'stone', c: '#7d7d80', a: .1 }, cobble: { k: 'cobble', c: '#808083', m: '#4e4e52' }, dirt: { k: 'dirt', c: '#7a5634', a: .15 },
@@ -430,6 +484,7 @@
     item_apple: { k: 'food', c: '#d8302a', leaf: true }, item_meat_raw: { k: 'food', c: '#d9605a', bone: true }, item_meat_cooked: { k: 'food', c: '#8a4a22', bone: true },
     item_chicken_raw: { k: 'food', c: '#f0c2a8', bone: true }, item_chicken_cooked: { k: 'food', c: '#c8843a', bone: true }, item_feather: { k: 'feather' },
     item_slime_ball: { k: 'lump', c: '#7bd36a' }, item_door: { k: 'door' },
+    item_flint: { k: 'gem', c: '#4a4a54' }, item_fiber: { k: 'plant', c: '#9ccf5c' }, item_bow: { k: 'bow32' }, item_arrow: { k: 'arrow32' }, item_shield: { k: 'shield32' },
   };
   for (let i = 0; i < 8; i++) S['destroy_' + i] = { k: 'destroy', st: i };
   for (const [m, M] of Object.entries(V.TOOL_MATS || {})) for (const k of ['pick', 'axe', 'shovel', 'sword']) S[`item_${k}_${m}`] = { k: 'tool32', tool: k, m, c: M.color };

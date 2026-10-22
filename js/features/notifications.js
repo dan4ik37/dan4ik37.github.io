@@ -10,7 +10,7 @@
 const NOTIF_ICON = {
   forum_reply: '💬', mention: '@', friend_request: '🤝', friend_accept: '🤝',
   idea_planned: '💡', idea_done: '🎬', idea_rejected: '💭', idea_votes: '🔥', referral: '🔗',
-  level_up: '⬆️', level_reward: '🎁',
+  level_up: '⬆️', level_reward: '🎁', season: '🏆', advent: '⛄',   // сезонный путь, новогоднее задание (games-more.sql)
   ref_join: '🎉', ref_reward: '🎁', ref_hold: '⏳', ref_bonus: '💎',   // 👥 приглашения (referrals2.sql)
   raid: '⚔️',   // набеги: «на тебя напали» / «отбился» (raids.sql)
   cm_event: '📅', cm_mention: '@', cm_reply: '↩️', cm_report: '🚩', cm_mod: '🛡', cm_boost: '🚀'   // сообщества (community.sql, community.sql)

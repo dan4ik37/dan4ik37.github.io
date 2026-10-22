@@ -70,6 +70,10 @@ const ACHIEVEMENT_DEFS = [
 ];
 const ACH_BY_CODE = Object.fromEntries(ACHIEVEMENT_DEFS.map(d => [d.code, d]));
 const TITLE_MIN_LEVEL = 10;
+// Титул рядом с ником: ачивка или титул сезона ('ss:ГГГГ-ММ:1|2' — seasonTitleDef в games.js, season_claim в games-more.sql)
+function achTitleDef(code){
+  return (code && ACH_BY_CODE[code]) || (typeof seasonTitleDef === 'function' ? seasonTitleDef(code) : null) || null;
+}
 
 // Отмечаем сегодняшний визит — вызывается раз при входе (onAuthStateChange
 // в chat.js). Не критично, если не выполнится (нет сети и т.п.) — просто
@@ -202,9 +206,12 @@ async function renderTitlePicker(earned){
   }
   const cur = curRes.data?.code || '';
   const opts = ACHIEVEMENT_DEFS.filter(d => earned.has(d.code));
+  // надет титул сезона — тоже в списке (выбрать другой сезонный — «Игры» → сезон → «Мои награды сезонов»)
+  const ss = /^ss:/.test(cur) && achTitleDef(cur);
   box.innerHTML = `<label class="tp-row"><span>🏷 Титул рядом с ником</span>
       <select id="titleSelect" onchange="saveTitle(this.value)">
         <option value="">— без титула —</option>
+        ${ss ? `<option value="${esc(cur)}" selected>${ss.icon} ${esc(ss.title)}</option>` : ''}
         ${opts.map(d => `<option value="${d.code}"${d.code === cur ? ' selected' : ''}>${d.icon} ${esc(d.title)}</option>`).join('')}
       </select></label><span id="titleStatus" class="tp-status"></span>`;
 }
@@ -212,7 +219,8 @@ async function renderTitlePicker(earned){
 async function saveTitle(code){
   const st = document.getElementById('titleStatus');
   if (st) { st.style.color = 'var(--muted)'; st.textContent = 'Сохраняем…'; }
-  const { data, error } = await sbClient.rpc('set_title', { p_code: code || null });
+  const { data, error } = /^ss:/.test(code || '') ? await sbClient.rpc('season_title_set', { p_code: code })
+    : await sbClient.rpc('set_title', { p_code: code || null });
   const ok = !error && data?.ok;
   if (st) {
     st.style.color = ok ? '#22c55e' : '#f87171';
@@ -231,7 +239,7 @@ async function renderProfileTitle(uid){
   el.hidden = true;
   if (typeof xpGetExtras !== 'function') return;
   const ex = await xpGetExtras(uid);
-  const d = ex?.title && ACH_BY_CODE[ex.title];
+  const d = ex?.title && achTitleDef(ex.title);
   if (!d) return;
   el.textContent = `${d.icon} ${d.title}`;
   el.hidden = false;

@@ -17,14 +17,18 @@
 // украшений — своя (FR), игре она не мешает. X.room(вещь) (ставит игра) — есть ли место: только тогда вещь тянется к игроку.
 (() => {
   const V = () => window.D37E.vox;
+  const CBK = () => window.D37E.combat;   // ядро боя (js/engine/combat.js); нет — мобы без стойкости и оглушения
   const now = () => performance.now();
   const MOBS = {
     cow: { title: 'Корова', hp: 10, w: .9, h: 1.3, speed: 1.3, passive: true, drops: [['meat_raw', 1, 3]], snd: 'kb_moo', body: '#5a3a26', spot: '#f2efe9', legs: '#3a2618', head: '#5a3a26' },
     pig: { title: 'Свинья', hp: 10, w: .9, h: 1, speed: 1.4, passive: true, drops: [['meat_raw', 1, 2]], snd: 'kb_oink', body: '#f0a3a8', spot: '#e48b93', legs: '#e48b93', head: '#f0a3a8' },
     chicken: { title: 'Курица', hp: 4, w: .45, h: .8, speed: 1.2, passive: true, drops: [['chicken_raw', 1, 1], ['feather', 0, 2]], snd: 'kb_cluck', body: '#f6f6f2', spot: '#e33', legs: '#f2b630', head: '#f6f6f2' },
-    zombie: { title: 'Зомби', hp: 20, w: .6, h: 1.85, speed: 2.4, passive: false, dmg: 3, wind: .4, drops: [], snd: 'kb_groan', body: '#3b6fa8', spot: '#2c4e7a', legs: '#2c3f6b', head: '#5f9e5a', burns: true },
-    slime: { title: 'Слизень', hp: 8, w: .8, h: .8, speed: 3, passive: false, dmg: 2, wind: .3, drops: [['slime_ball', 1, 2]], snd: 'kb_squish', body: '#6fcf5a', spot: '#4caa40', legs: '#4caa40', head: '#6fcf5a', hop: true },
+    zombie: { title: 'Зомби', hp: 20, w: .6, h: 1.85, speed: 2.4, passive: false, dmg: 3, wind: .4, drops: [], snd: 'kb_groan', body: '#3b6fa8', spot: '#2c4e7a', legs: '#2c3f6b', head: '#5f9e5a', burns: true, cb: { poise: 1, invT: .45, stagT: .5, kbRes: .15 } },
+    slime: { title: 'Слизень', hp: 8, w: .8, h: .8, speed: 3, passive: false, dmg: 2, wind: .3, drops: [['slime_ball', 1, 2]], snd: 'kb_squish', body: '#6fcf5a', spot: '#4caa40', legs: '#4caa40', head: '#6fcf5a', hop: true, cb: { poise: .6, invT: .35, stagT: .4, kbRes: 0 } },
   };
+  // бой (docs/COMBAT.md, D37E.combat): у каждого моба — стойкость (сколько «силы ударов» держит до оглушения), неуязвимость после
+  // удара, оглушение, стойкость к отбросу; звери — по умолчанию (ниже)
+  const CB_DEF = { poise: .5, invT: .45, stagT: .35, kbRes: 0 };
 
   // ═══ Свет существ — как у кубиков, плавно ═══
   // Lit.sample(W, x, y, z, out) → out = [небо, R, G, B] — уровни 0…15 дробные: 8 клеток вокруг точки (веса — по расстоянию до
@@ -481,6 +485,7 @@
         else if (kind === 'spark') emit(GL, 4, x, y, z, (FR() - .5) * 3, 1 + FR() * 2.5, (FR() - .5) * 3, .3 + FR() * .3, .07, .03, 1, 1.5, 1.1, .4, 1.2, -9);
         else if (kind === 'flame') emit(GL, 0, x + (FR() - .5) * .5, y + FR() * .4, z + (FR() - .5) * .5, (FR() - .5) * .3, 1.2 + FR(), (FR() - .5) * .3, .35 + FR() * .25, .24, .06, .9, 1.4, .55, .12, 2, 0);
         else if (kind === 'firefly') emit(GL, 3, x, y, z, 0, 0, 0, 5 + FR() * 4, .12, .12, .9, .75, 1.25, .35, 1.5, 0);
+        else if (kind === 'star') { const an = FR() * 6.283; emit(GL, 3, x + Math.cos(an) * .32, y, z + Math.sin(an) * .32, -Math.sin(an) * 1.4, .15, Math.cos(an) * 1.4, .45, .1, .06, 1, 1.5, 1.3, .35, .5, 0); }   // оглушён: звёздочки кружат над головой
       }
     };
     // сломал блок: осколки-кубики + пыль; трава, цветы, факел, лестница — мелкими точками
@@ -751,6 +756,7 @@
       const M = MOBS[type], id = ++X.seq;
       const m = { id, type, x, y, z, vx: 0, vy: 0, vz: 0, yaw: o.yaw ?? X.rng() * 6.28, hp: o.hp ?? M.hp, ground: false, walk: 0, state: 'idle', stT: 0, tgtYaw: 0, hurtT: 0, atkT: 0, flee: 0, hopT: 0, lit: Lit.make(T), sndT: 4 + X.rng() * 10, rng: V().rng(V().hash(W.seed, id, now() | 0)), burnT: 0, age: 0, wind: 0, lunge: 0, dying: 0, quiet: !!o.quiet };
       m.px = m.rx = x; m.py = m.ry = y; m.pz = m.rz = z; m.pyaw = m.ryaw = m.yaw; m.pwalk = m.rwalk = 0;
+      window.D37E?.combat?.init(m, M.cb || CB_DEF);   // поля боя прямо в мобе: неуязвимость, стойкость, оглушение
       Lit.update(m.lit, S, x, y + M.h * .6, z, 0);
       view.add(m);
       X.mobs.push(m);
@@ -762,10 +768,13 @@
     // через 0,62 с — «пуф» (облачко и звук), через 0,9 с — исчезает
     const DIE_T = .9, POOF_T = .62;
     function dieMob(m){ const i = X.mobs.indexOf(m); if (i >= 0) X.mobs.splice(i, 1); m.dying = 1e-4; m.wind = 0; m.lunge = 0; X.dying.push(m); }
-    X.damage = (m, dmg, nx, nz, by) => {
+    // res — итог удара ядра боя (CB.hit / CB.receive): отброс по оружию и силе, замах сбивает только оглушение (сильный удар);
+    // без него — как раньше (любой удар сбивает замах, отброс 6)
+    X.damage = (m, dmg, nx, nz, by, res) => {
       if (m.hp <= 0) return;
-      m.hp -= dmg; m.hurtT = .35; m.wind = 0;   // удар сбивает замах
-      m.vx += nx * 6; m.vz += nz * 6; m.vy = Math.max(m.vy, 4.5);
+      m.hp -= dmg; m.hurtT = .35;
+      if (res) { if (res.stagger) m.wind = 0; m.vx += res.kx; m.vz += res.kz; m.vy = Math.max(m.vy, res.ky); }
+      else { m.wind = 0; m.vx += nx * 6; m.vz += nz * 6; m.vy = Math.max(m.vy, 4.5); }   // удар сбивает замах
       S.AU?.play(MOBS[m.type].snd, { x: m.x - S.ox, y: m.y + 1, z: m.z - S.oz, vol: .6, rate: 1.15 });
       if (MOBS[m.type].passive) { m.flee = 4; }
       if (m.hp <= 0) {
@@ -800,6 +809,85 @@
       return best;
     };
     X.blocked = (x, y, z) => X.mobs.some(m => { const M = MOBS[m.type], hw = M.w / 2; return m.x + hw > x && m.x - hw < x + 1 && m.z + hw > z && m.z - hw < z + 1 && m.y + M.h > y && m.y < y + 1; });
+
+    // ═══ Стрелы (лук игрока): летят дугой (тяжесть 20, лёгкое сопротивление), попали в блок — торчат (подобрать — пройти рядом,
+    // лежат 60 с), в моба — урон и отброс через ядро боя (неуязвимость моба, стойкость) и исчезают. Все стрелы — одна сетка
+    // (InstancedMesh, до 48), свет — по клетке (раз в такт), между тактами — плавно (X.frac) ═══
+    const AN = 48, arrows = X.arrows = [];
+    const aGeo = arrowGeo(T), aMat = new T.MeshBasicMaterial({ vertexColors: true });   // свет — цветом экземпляра (как у осколков)
+    const aMesh = new T.InstancedMesh(aGeo, aMat, AN);
+    aMesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
+    aMesh.instanceColor = new T.InstancedBufferAttribute(new Float32Array(AN * 3), 3); aMesh.instanceColor.setUsage(T.DynamicDrawUsage);
+    aMesh.count = 0; aMesh.visible = false; aMesh.frustumCulled = false; R.scene.add(aMesh);
+    const AOUT = { dmg: 0, kb: 0, poise: 0, guardBreak: 0 }, AQ = new T.Quaternion(), AV = new T.Vector3(), AZ = new T.Vector3(0, 0, 1);
+    const ARR_PICK = t => V().T.solid[t] === 1;
+    // x, y, z — откуда (мир), v — скорость (блоков/с), dmg — урон, o: { pick — можно подобрать (выживание), crit — полная натяжка }
+    X.shoot = (x, y, z, vx, vy, vz, dmg, o) => {
+      if (arrows.length >= AN) { let k = arrows.findIndex(a => a.stuck); if (k < 0) k = 0; arrows.splice(k, 1); }
+      const a = { x, y, z, px: x, py: y, pz: z, vx, vy, vz, dx: 0, dy: 0, dz: 1, dmg, stuck: false, age: 0, pick: !!o?.pick, crit: !!o?.crit, r: 1, g: 1, b: 1 };
+      const l = Math.hypot(vx, vy, vz) || 1; a.dx = vx / l; a.dy = vy / l; a.dz = vz / l;
+      arrows.push(a);
+      return a;
+    };
+    function arrowsTick(dt){
+      if (!arrows.length) return;
+      const P = S.P, Vx = V();
+      for (let i = arrows.length - 1; i >= 0; i--) {
+        const a = arrows[i];
+        a.px = a.x; a.py = a.y; a.pz = a.z; a.age += dt;
+        if (a.stuck) {
+          if (a.age > 60 || !W.loaded(a.x, a.z)) { arrows.splice(i, 1); continue; }
+          if (a.pick && !P.dead && Math.abs(P.x - a.x) < 1.3 && Math.abs(P.z - a.z) < 1.3 && a.y > P.y - .6 && a.y < P.y + 2.2 && a.age > .5) {
+            const left = X.give ? X.give({ id: 'arrow', n: 1 }) : 1;
+            if (!left) { S.AU?.play('kb_pop', { vol: .35, rate: 1.2 }); X.hookPickup?.('arrow', 1); arrows.splice(i, 1); continue; }
+          }
+          if ((X.tickN + i) % 10 === 0) { const L = lightRGB(a.x, a.y, a.z); a.r = L[0]; a.g = L[1]; a.b = L[2]; }
+          continue;
+        }
+        a.vy = Math.max(-40, a.vy - 20 * dt);
+        const f = Math.exp(-dt * .3); a.vx *= f; a.vy *= f; a.vz *= f;
+        const sp = Math.hypot(a.vx, a.vy, a.vz), len = sp * dt;
+        if (len < 1e-6 || a.age > 12 || a.y < -10) { arrows.splice(i, 1); continue; }
+        a.dx = a.vx / sp; a.dy = a.vy / sp; a.dz = a.vz / sp;
+        const h = Vx.raycast(W, a.x, a.y, a.z, a.dx, a.dy, a.dz, len, ARR_PICK), tB = h ? h.t : len;
+        const m = X.rayMob(a.x, a.y, a.z, a.dx, a.dy, a.dz, tB);
+        if (m) {
+          const C = CBK(), M = MOBS[m.type];
+          AOUT.dmg = a.dmg; AOUT.kb = 3 + 3 * Math.min(1, sp / 30); AOUT.poise = a.crit ? 1.2 : .6; AOUT.guardBreak = 0;
+          if (C && m.cf) C.receive(m, AOUT, a.x - a.dx, a.z - a.dz, m.x, m.z, null);
+          else { AOUT.ignored = 0; AOUT.kx = a.dx * AOUT.kb; AOUT.kz = a.dz * AOUT.kb; AOUT.ky = 2.5; AOUT.stagger = 0; }
+          if (!AOUT.ignored) {
+            X.damage(m, AOUT.dmg, a.dx, a.dz, 'player', AOUT);
+            X.glow('spark', a.x + a.dx * tB, a.y + a.dy * tB, a.z + a.dz * tB, a.crit ? 6 : 3);
+            S.AU?.play('kb_arrow', { x: m.x - S.ox, y: m.y + M.h * .6, z: m.z - S.oz, vol: .6, rate: 1.2 });
+            arrows.splice(i, 1); continue;
+          }
+        }
+        if (h) {
+          a.x += a.dx * Math.max(0, h.t - .12); a.y += a.dy * Math.max(0, h.t - .12); a.z += a.dz * Math.max(0, h.t - .12);
+          a.stuck = true; a.age = 0; a.vx = a.vy = a.vz = 0;
+          const L = lightRGB(a.x, a.y, a.z); a.r = L[0]; a.g = L[1]; a.b = L[2];
+          S.AU?.play('kb_arrow', { x: a.x - S.ox, y: a.y, z: a.z - S.oz, vol: .45 });
+          X.shards(h.x, h.y, h.z, h.v & 0xfff, 2, (HF.nx = h.nx, HF.ny = h.ny, HF.nz = h.nz, HF));
+          continue;
+        }
+        a.x += a.vx * dt; a.y += a.vy * dt; a.z += a.vz * dt;
+        if ((X.tickN + i) % 4 === 0) { const L = lightRGB(a.x, a.y, a.z); a.r = L[0]; a.g = L[1]; a.b = L[2]; }
+        if (a.crit && (X.tickN & 1)) X.glow('spark', a.x, a.y, a.z, 1);   // полная натяжка — искры за стрелой
+      }
+    }
+    function arrowsFrame(al){
+      let k = 0;
+      for (let i = 0; i < arrows.length; i++) {
+        const a = arrows[i], q = a.stuck ? 1 : al;
+        AV.set(a.dx, a.dy, a.dz); AQ.setFromUnitVectors(AZ, AV);
+        DUM.position.set(a.px + (a.x - a.px) * q - S.ox, a.py + (a.y - a.py) * q, a.pz + (a.z - a.pz) * q - S.oz);
+        DUM.quaternion.copy(AQ); DUM.scale.set(1, 1, 1); DUM.updateMatrix();
+        aMesh.setMatrixAt(k, DUM.matrix); aMesh.instanceColor.setXYZ(k, a.r, a.g, a.b); k++;
+      }
+      aMesh.count = k; aMesh.visible = k > 0;
+      if (k) { aMesh.instanceMatrix.needsUpdate = true; aMesh.instanceColor.needsUpdate = true; }
+    }
     const MB = { x: 0, y: 0, z: 0, w: 1, h: 1, hitX: false, hitY: false, hitZ: false }, TC = {};
     function mobsTick(dt){
       const P = S.P, Vx = V(), night = isNight();
@@ -815,12 +903,16 @@
         if (dp > (S.ST.rd * 16 + 24)) { if (!M.passive || dp > S.ST.rd * 16 + 48) removeMob(m); continue; }
         if (!W.loaded(m.x, m.z) || !W.loaded(m.x + 8, m.z) || !W.loaded(m.x - 8, m.z)) continue;
         m.hurtT = Math.max(0, m.hurtT - dt); m.atkT -= dt; m.sndT -= dt;
+        if (m.cf) CBK().step(m, dt);   // бой: неуязвимость, оглушение, стойкость — по тактам
         Vx.touching(W, m.x, m.y, m.z, M.w, M.h, TC);
         const inWater = TC.water > .4;
         // мозги
         let wx = 0, wz = 0, sp = M.speed;
         const hostile = !M.passive && !S.creative && !P.dead && S.meta.diff !== 'peaceful';
-        if (hostile && dp < 18 && Math.abs(P.y - m.y) < 8) {
+        if (m.stag > 0) {   // оглушён (отбили щитом или сбили с ног сильным ударом): не бьёт, топчется, над головой — звёздочки
+          m.wind = 0; m.state = 'stag';
+          if ((m.dzT = (m.dzT || 0) - dt) <= 0) { m.dzT = .2; X.glow('star', m.x, m.y + M.h + .25, m.z, 1); }
+        } else if (hostile && dp < 18 && Math.abs(P.y - m.y) < 8) {
           wx = dxp / (dp || 1); wz = dzp / (dp || 1); m.state = 'chase';
           // удар: замах (видно, что сейчас ударит) → выпад; отошёл за время замаха — промах
           const reach = M.w / 2 + .75, near = Math.abs(P.y + .9 - (m.y + M.h / 2)) < 1.6;
@@ -1086,6 +1178,7 @@
       fallingTick(dt);
       groupsTick(dt);
       mobsTick(dt);
+      arrowsTick(dt);
       dyingTick(dt);
       updatesTick();
       furnaceTick(dt);
@@ -1094,13 +1187,13 @@
     };
     X.frame = (dt, t) => {
       const a = X.frac >= 0 && X.frac <= 1 ? X.frac : 1;
-      itemsFrame(t, dt, a); mobsFrame(dt, t, a); debrisFrame(dt);
+      itemsFrame(t, dt, a); mobsFrame(dt, t, a); arrowsFrame(a); debrisFrame(dt);
       for (const f of X.falling) { const y = f.py + (f.y - f.py) * a; f.m.position.set(f.x - S.ox, y + .5, f.z - S.oz); Lit.update(f.lit, S, f.x, y + .5, f.z, dt); VR.itemLightF(f.m.geometry, f.lit.lv); }
       flyersFrame(dt); popsFrame(dt); shardsFrame(dt); groupsFrame(dt, a);
       ambient(dt);
       poolFrame(PF, dt, t); poolFrame(GL, dt, t, S.KL?.recs?.size && FXQ >= .5 ? halos : null);
     };
-    X.fxStats = () => ({ shards: sLive, puffs: PF.live, glows: GL.live, items: X.items.length, falling: X.falling.length, dying: X.dying.length, pops: pops.length, flyers: flyers.length, trees: groups.length });
+    X.fxStats = () => ({ shards: sLive, puffs: PF.live, glows: GL.live, items: X.items.length, falling: X.falling.length, dying: X.dying.length, pops: pops.length, flyers: flyers.length, trees: groups.length, arrows: arrows.length });
     X.fxObjects = () => ({ shards: shMesh, puffs: PF.o, glows: GL.o });   // для проверок
     // звери мира сохраняются (враги — нет)
     X.save = () => X.mobs.filter(m => MOBS[m.type].passive).slice(0, 48).map(m => ({ t: m.type, x: +m.x.toFixed(2), y: +m.y.toFixed(2), z: +m.z.toFixed(2), hp: m.hp }));
@@ -1121,6 +1214,7 @@
       view.dispose();
       R.scene.remove(dPts); dGeo.dispose(); dMat.dispose();
       R.scene.remove(shMesh); shGeo.dispose(); shMat.dispose(); shMesh.dispose?.();
+      R.scene.remove(aMesh); aGeo.dispose(); aMat.dispose(); aMesh.dispose?.(); arrows.length = 0;
       for (const p of [PF, GL]) { R.scene.remove(p.o); p.g.dispose(); p.m.dispose(); p.tex.dispose(); }
       X.items = []; X.falling = []; X.mobs = []; X.dying = []; flyers.length = 0; pops.length = 0;
     };
@@ -1177,7 +1271,7 @@
         const mesh = geo => { const o = new T.Mesh(geo, mat); o.castShadow = true; return o; };
         const body = mesh(p.body); g.add(body);
         // pose: размах шага, пружина (sq), голова (hy, hp), замах и выпад (wk, lk) — плавные копии логики; bt — с появления
-        m.parts = { g, mat, chk: 0, body, amp: 0, sq: 0, sqV: 0, hy: 0, hp: 0, wk: 0, lk: 0, bt: m.quiet ? 9 : 0, gw: true, headY: p.headY || 0, headZ: p.headZ || 0, cr: 1, cg: 1, cb: 1 };
+        m.parts = { g, mat, chk: 0, body, amp: 0, sq: 0, sqV: 0, hy: 0, hp: 0, wk: 0, lk: 0, sk: 0, bt: m.quiet ? 9 : 0, gw: true, headY: p.headY || 0, headZ: p.headZ || 0, cr: 1, cg: 1, cb: 1 };
         if (p.head) { const h = new T.Group(); h.rotation.order = 'YXZ'; h.position.set(0, p.headY, p.headZ || 0); h.add(mesh(p.head)); g.add(h); m.parts.head = h; }
         if (p.leg) { m.parts.legs = []; const zs = p.legZ ? [p.legZ, -p.legZ] : [0]; for (const z of zs) for (const x of [-p.legX, p.legX]) { const l = new T.Group(); l.position.set(x, p.legY, z); l.add(mesh(p.leg)); g.add(l); m.parts.legs.push(l); } }
         if (p.arm) { m.parts.arms = []; for (const x of [-p.armX, p.armX]) { const a = new T.Group(); a.position.set(x, p.armY, 0); a.add(mesh(p.arm)); g.add(a); m.parts.arms.push(a); } }
@@ -1203,6 +1297,9 @@
         const hk = !dead && m.hurtT > 0 ? m.hurtT / .35 : 0;
         let lean = M.hop ? 0 : p.lk * .3 - p.wk * .16, roll = 0, lift = 0, sc = p.bt < .3 ? Math.max(.05, backOut(p.bt / .3)) : 1;
         lean -= hk * hk * .38;
+        // оглушён (отбили щитом): качается, отклонился назад, голова «плывёт»
+        const skT = !dead && m.stag > 0 ? 1 : 0; p.sk += (skT - p.sk) * Math.min(1, d * 10);
+        if (p.sk > .01) { lean -= .14 * p.sk; roll += Math.sin(t * 7.5 + m.id) * .13 * p.sk; }
         if (dead) {
           const k1 = Math.min(1, m.dying / .4), side = m.id & 1 ? 1 : -1;
           roll = side * Math.PI / 2 * ease3(k1);
@@ -1230,6 +1327,7 @@
           }
           p.hy += (hy - p.hy) * Math.min(1, d * 5); p.hp += (hp - p.hp) * Math.min(1, d * 5);
           p.head.rotation.y = p.hy; p.head.rotation.x = p.hp + Math.sin(walk * 2) * .07 * p.amp;
+          p.head.rotation.z = p.sk > .01 ? Math.sin(t * 10 + m.id) * .3 * p.sk : 0;
           if (m.type === 'chicken') p.head.position.z = p.headZ + Math.max(0, Math.sin(walk * 2)) * .07 * p.amp;   // клюёт на ходу
         }
         // цвет: удар — красный (свет — в униформе m.lit.u); смерть — красный, потом белеет
@@ -1246,6 +1344,11 @@
       remove(m){ R.scene.remove(m.parts.g); m.parts.mat.dispose(); },
       dispose(){ for (const p of Object.values(mobGeo)) for (const g of Object.values(p)) if (g && g.isBufferGeometry) g.dispose(); base.dispose(); },
     };
+  }
+  // стрела: древко вдоль +z (острие — вперёд, начало координат — середина), наконечник, оперение крестом
+  function arrowGeo(T){
+    const box = (w, h, d, x, y, z, col) => { const g = new T.BoxGeometry(w, h, d); g.translate(x, y, z); const c = new T.Color(col), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute('color', new T.BufferAttribute(a, 3)); return g; };
+    return mergeGeos(T, [box(.035, .035, .62, 0, 0, -.04, '#9c7444'), box(.07, .07, .1, 0, 0, .3, '#6b6b74'), box(.12, .012, .16, 0, 0, -.3, '#f2f2f2'), box(.012, .12, .16, 0, 0, -.3, '#e04848')]);
   }
   // склеить коробки (позиции, нормали, цвета) в одну геометрию
   function mergeGeos(T, list){

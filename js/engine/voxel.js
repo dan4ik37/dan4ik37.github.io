@@ -190,6 +190,13 @@
     I({ name: `${k}_${m}`, title: `${M.title[K[1]]} ${K[0]}`, tex: `item_${k}_${m}`, stack: 1, fuel: m === 'wood' ? 10 : 0,
       tool: { kind: k, tier: M.tier, speed: k === 'sword' ? 1.5 : M.speed, dur: M.dur, dmg: K[2] + M.dmg } });
   }
+  // бой (22.10.2026, docs/COMBAT.md): щит — только в левой руке (блок и отбив), лук — двумя руками (стрелы), кремень и волокно —
+  // из гравия и травы. grip — хват (D37E.combat: 'one' | 'two' | 'off'); у щита и лука «инструмент» — ради износа (dur)
+  I({ name: 'flint', title: 'Кремень', tex: 'item_flint' });
+  I({ name: 'fiber', title: 'Волокно', tex: 'item_fiber' });
+  I({ name: 'arrow', title: 'Стрела', tex: 'item_arrow' });
+  I({ name: 'bow', title: 'Лук', tex: 'item_bow', stack: 1, fuel: 10, grip: 'two', tool: { kind: 'bow', tier: 0, speed: 1, dur: 384, dmg: 1 } });
+  I({ name: 'shield', title: 'Щит', tex: 'item_shield', stack: 1, grip: 'off', tool: { kind: 'shield', tier: 0, speed: 1, dur: 336, dmg: 1 } });
   V.VANILLA_ITEMS = V.items.length;
 
   // ═══ Рецепты (верстак 3×3, в руках 2×2) и печь ═══
@@ -226,6 +233,10 @@
     R({ pattern: ['M', '|', '|'], key: { M: k, '|': 'stick' }, out: 'shovel_' + m, n: 1 });
     R({ pattern: ['M', 'M', '|'], key: { M: k, '|': 'stick' }, out: 'sword_' + m, n: 1 });
   }
+  R({ pattern: ['#i#', '###', ' # '], key: { '#': '#planks', i: 'iron_ingot' }, out: 'shield', n: 1 });
+  R({ pattern: [' |f', '| f', ' |f'], key: { '|': 'stick', f: 'fiber' }, out: 'bow', n: 1, mirror: true });
+  R({ pattern: ['k', '|', 'p'], key: { k: 'flint', '|': 'stick', p: 'feather' }, out: 'arrow', n: 4 });
+  R({ pattern: ['k', '|', 'p'], key: { k: 'cobble', '|': 'stick', p: 'feather' }, out: 'arrow', n: 2 });   // без кремня — из булыжника, меньше
   V.addSmelt('ore_iron', 'iron_ingot'); V.addSmelt('ore_gold', 'gold_ingot'); V.addSmelt('sand', 'glass'); V.addSmelt('cobble', 'stone');
   V.addSmelt('clay_ball', 'brick'); V.addSmelt('meat_raw', 'meat_cooked'); V.addSmelt('chicken_raw', 'chicken_cooked');
   V.addSmelt('log_oak', 'coal'); V.addSmelt('log_birch', 'coal'); V.addSmelt('log_spruce', 'coal');
