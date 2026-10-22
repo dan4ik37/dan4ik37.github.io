@@ -301,7 +301,7 @@ html.gs-compact .gs-fs .kb-top .wld-topbtns .gs-ico{width:15px;height:15px}
 .kb-slot.acc{border-color:rgba(170,130,255,.5);background:linear-gradient(180deg,rgba(170,130,255,.16),rgba(170,130,255,.05))}
 .kb-slot.acc.lock{display:grid;place-items:center;font-size:15px;opacity:.6;cursor:help}
 .kb-slot.acc.off{opacity:.45;filter:grayscale(.7)}
-.kb-wrap.d37sh-docked .kb-inv{padding-right:calc(var(--d37sh-w,0px) + 16px)}
+.kb-wrap.d37sh-docked .kb-inv{padding-right:calc(max(300px, min(420px, 46% - 8px)) + 18px)}
 .kx-acc{display:flex;flex-direction:column;gap:6px}
 .kx-arow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
 .kx-arow.lock{opacity:.62}

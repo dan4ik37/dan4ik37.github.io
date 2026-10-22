@@ -22,22 +22,30 @@
 
   // ═══ Значки вещей (2D canvas, без WebGL): блок — изометрический кубик, вещь — спрайт ═══
   const iconCache = new Map(), tileCache = new Map();
+  // рисунок слоя (RGBA TS×TS): готовый — из последней сборки текстур (V.painted; тот же слой — по имени: моды переиспользуют номера
+  // слоёв), иначе — нарисовать (V.paint — до 18 мс на рисунок на телефоне ×4; T-049)
+  V.layerPixels = layer => {
+    const t = V.tex[layer], p = V.painted;
+    if (p && p.names && p.names[layer] === t.name && p[layer]) return p[layer];
+    return V.paint(t.name, V.specOf ? V.specOf(t.name) : t.spec || V.TEX_SPECS[t.name]);
+  };
   function tileCanvas(layer){
     if (tileCache.has(layer)) return tileCache.get(layer);
-    const t = V.tex[layer], d = V.paint(t.name, V.specOf ? V.specOf(t.name) : t.spec || V.TEX_SPECS[t.name]);
+    const t = V.tex[layer], d = V.layerPixels(layer);
     const TS = V.TEX || 16, c = document.createElement('canvas'); c.width = c.height = TS;
     const g = c.getContext('2d'), im = g.createImageData(TS, TS); im.data.set(d); g.putImageData(im, 0, 0);
     tileCache.set(layer, c);
     return c;
   }
-  // тонировка (трава, листва) для значка
+  // тонировка (трава, листва) для значка — прямо из рисунка слоя (раньше: drawImage → getImageData — чтение холста с видеокарты,
+  // на телефоне до десятков мс при первом значке травы или листвы)
   function tinted(layer, rgb){
     const k = 'tint:' + layer + ':' + rgb.join(',');
     if (tileCache.has(k)) return tileCache.get(k);
-    const TS = V.TEX || 16, src = tileCanvas(layer), c = document.createElement('canvas'); c.width = c.height = TS;
-    const g = c.getContext('2d'); g.drawImage(src, 0, 0);
-    const im = g.getImageData(0, 0, TS, TS);
-    for (let i = 0; i < im.data.length; i += 4) { im.data[i] = im.data[i] * rgb[0] / 255; im.data[i + 1] = im.data[i + 1] * rgb[1] / 255; im.data[i + 2] = im.data[i + 2] * rgb[2] / 255; }
+    const d = V.layerPixels(layer);
+    const TS = V.TEX || 16, c = document.createElement('canvas'); c.width = c.height = TS;
+    const g = c.getContext('2d'), im = g.createImageData(TS, TS), o = im.data;
+    for (let i = 0; i < o.length; i += 4) { o[i] = d[i] * rgb[0] / 255; o[i + 1] = d[i + 1] * rgb[1] / 255; o[i + 2] = d[i + 2] * rgb[2] / 255; o[i + 3] = d[i + 3]; }
     g.putImageData(im, 0, 0); tileCache.set(k, c);
     return c;
   }
@@ -411,6 +419,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     VR.aniso = aniso;
     function buildTextures(){
       const all = V.paintAll(), L = all.length, TS = V.TEX || 16;
+      V.painted = all; all.names = V.tex.map(t => t.name);   // T-049: готовые рисунки слоёв — значкам и мини-карте (V.layerPixels)
       if (tex) tex.dispose();
       if (gl2) {
         const data = new Uint8Array(TS * TS * 4 * L);
@@ -769,7 +778,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
         quads.push([3, 2, 1, 0].map(i => ({ p: [P[i][0], P[i][1], th ? -th : -.001], uv: UV[i], layer, nrm: 5, col })));
         const tx = th ? V.tex[layer] : null, snow = V.texIdx?.get('snow');
         if (tx && snow != null) {
-          const px = V.paint(tx.name, V.specOf ? V.specOf(tx.name) : tx.spec), n = Math.round(Math.sqrt(px.length / 4)), op = (x, y) => x >= 0 && y >= 0 && x < n && y < n && px[(y * n + x) * 4 + 3] > 100;
+          const px = V.layerPixels(layer), n = Math.round(Math.sqrt(px.length / 4)), op = (x, y) => x >= 0 && y >= 0 && x < n && y < n && px[(y * n + x) * 4 + 3] > 100;
           for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
             if (!op(x, y)) continue;
             const o = (y * n + x) * 4, c = [px[o], px[o + 1], px[o + 2]], X0 = x / n - .5, X1 = (x + 1) / n - .5, Y0 = .5 - (y + 1) / n, Y1 = .5 - y / n;

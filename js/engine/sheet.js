@@ -4,7 +4,8 @@
 // ═══════════════════════════════════════
 // sh = D37E.sheet.open(родитель, { id, title, tabs: [{ id, label }], tab, search: { ph, value }, cls, render(body, ctx), onTab(id),
 //   onSearch(q), onBack() → true (свой «назад» — например, из карточки в список), onClose() }) — один лист за раз (новый закрывает
-//   прошлый). ctx = { tab, q, sh }. sh.redraw(), sh.setTab(id), sh.setTitle(t), sh.close(), sh.el, sh.body.
+//   прошлый). ctx = { tab, q, sh }. sh.redraw(), sh.setTab(id), sh.setTitle(t), sh.close(), sh.el, sh.body; справа (широкое окно) —
+//   у родителя класс d37sh-docked, ширина листа — sh.w (как в CSS: max(300, min(420, 46 % − 8)) px).
 // Мышь и пальцы над листом в игру не проходят. Esc закрывает лист, если фокус внутри (игра зовёт D37E.sheet.escape() сама, когда
 // Esc пришёл к ней). Геймпад (опрос — только пока лист открыт и есть геймпад): крестовина / стик — фокус к ближайшему по
 // направлению (сетки значков и списки), Ⓐ — нажать (при отпускании), Ⓑ — назад или закрыть, LB / RB — вкладки.
@@ -75,7 +76,7 @@
     sh.close = () => {
       if (sh.dead) return; sh.dead = true;
       el.remove(); if (cur === sh) cur = null;
-      parent.classList.remove('d37sh-docked'); parent.style.removeProperty('--d37sh-w');
+      if (sh.w) parent.classList.remove('d37sh-docked');
       padStop();
       try { o.onClose?.(); } catch (e) { console.error(e); }
     };
@@ -97,12 +98,17 @@
     el.addEventListener('keyup', e => e.stopPropagation());
     if (find) find.addEventListener('input', () => { sh.q = find.value; try { o.onSearch?.(sh.q); } catch (e) {} sh.redraw(); });
     parent.appendChild(el);
-    if (where === 'dock' && wide) { parent.classList.add('d37sh-docked'); parent.style.setProperty('--d37sh-w', el.offsetWidth + 'px'); }
+    // справа: ширина листа — как в CSS (.d37sh.dock), без замера (замер и своя переменная на родителе пересчитывали стили всей игры:
+    // переменная CSS наследуется всеми потомками — на телефоне это десятки мс); игре — класс d37sh-docked и sh.w
+    sh.w = where === 'dock' && wide ? Math.round(Math.max(300, Math.min(420, W * .46 - 8))) : 0;
+    if (sh.w) parent.classList.add('d37sh-docked');
     cur = sh;
     sh.redraw();
-    // фокус: на компьютере — в поиск (если есть), на телефоне — не открывать клавиатуру
+    // фокус: на компьютере — в поиск (если есть), на телефоне — не открывать клавиатуру. После кадра: focus() сразу заставлял
+    // браузер считать раскладку нового листа посреди открытия (≈ 30 мс на телефоне), а так её считает обычный кадр
     const touch = root.matchMedia?.('(pointer: coarse)')?.matches;
-    try { (find && !touch ? find : sh.body).focus({ preventScroll: true }); } catch (e) {}
+    const focusNow = () => { if (sh.dead || cur !== sh) return; try { (find && !touch ? find : sh.body).focus({ preventScroll: true }); } catch (e) {} };
+    if (root.requestAnimationFrame) root.requestAnimationFrame(() => setTimeout(focusNow, 0)); else focusNow();
     padWake();
     return sh;
   }
@@ -189,5 +195,5 @@
     return L;
   }
 
-  E.sheet = { open, escape, vlist, current: () => cur, closeAll: () => { if (cur) cur.close(); }, esc };
+  E.sheet = { open, escape, vlist, current: () => cur, closeAll: () => { if (cur) cur.close(); }, esc, css };   // css() — стили заранее (при входе в игру: вставка <style> пересчитывает всю страницу — не на первом открытии)
 })();

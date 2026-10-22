@@ -36,6 +36,7 @@
     while (P.acc.length < ACC_MAX) P.acc.push(null);
     const H = Ex.host({ id: 'kubomir', ext: () => st.P.ext, onFail: f => g.toast?.('⚠️ Помощник «' + (f.title || f.id) + '» выключен до перезахода (ошибка)') });
     const X = { st, g, H, emit: H.emit, ext: H.ext, feats: [], sheet: null };
+    try { Ex.sheet?.css?.(); } catch (e) {}   // стили листов — сразу (вставка <style> пересчитывает страницу: пусть при входе, не при первом окне)
     // ── прогресс игрока (для ячеек и заданий): свои достижения (у гостя «вместе» мир чужой — считаем по игроку) ──
     const prog = H.ext('prog'); if (!prog.ach || typeof prog.ach !== 'object') prog.ach = {};
     for (const k in st.meta?.ach || {}) if (!st.coopGuest) prog.ach[k] = 1;   // старые миры: уже полученные достижения этого мира
@@ -116,7 +117,23 @@
     X.isOpen = () => !!(X.sheet && !X.sheet.dead);
     X.escape = () => { if (!X.isOpen()) return false; X.sheet.goBack(); return true; };
     X.closeSheet = () => { if (X.isOpen()) X.sheet.close(); };
-    X.dispose = () => { X.closeSheet(); H.dispose(); };
+    // значки вещей — заранее, в простое браузера (по несколько за раз): первое открытие сумки, книги рецептов, заданий не рисует
+    // каждый значок заново (V.icon + перевод в картинку — на телефоне ×4 до 2 мс на значок, 100+ вещей)
+    let warmI = 0, warmId = 0, warmOff = false;
+    const hasDoc = typeof document !== 'undefined' && typeof window !== 'undefined';
+    const ric = hasDoc && window.requestIdleCallback ? f => window.requestIdleCallback(f, { timeout: 4000 }) : f => setTimeout(() => f({ timeRemaining: () => 4, didTimeout: false }), 250);
+    const cic = id => { try { (hasDoc && window.cancelIdleCallback && window.requestIdleCallback ? window.cancelIdleCallback : clearTimeout)(id); } catch (e) {} };
+    function warm(dl){
+      warmId = 0; if (warmOff) return;
+      const V = VX(), L = V.items || [];
+      for (let n = 0; warmI < L.length && n < 6; n++) {
+        if (n && !(dl.timeRemaining() > 3)) break;
+        const it = L[warmI++]; if (it && it.name) { try { V.iconURL(it.name, 40); } catch (e) { warmOff = true; return; } }
+      }
+      if (warmI < L.length) warmId = ric(warm);
+    }
+    if (hasDoc && VX()?.iconURL) warmId = ric(warm);
+    X.dispose = () => { warmOff = true; if (warmId) cic(warmId); warmId = 0; X.closeSheet(); H.dispose(); };
     // ── лист «💍 Помощники»: что надето, что в сумке, как открыть ещё ячейки (телефон, геймпад — кнопками) ──
     X.openAcc = () => X.open({ id: 'acc', title: '💍 Помощники', sub: 'аксессуары — действуют, пока надеты', render: body => accSheet(body) });
     function accSheet(body){

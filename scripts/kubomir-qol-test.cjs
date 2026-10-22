@@ -201,7 +201,7 @@ function mkSt(o = {}){
       card(r){ H.cardRec = r ? { key: r.key, name: r.name, lines: r.lines.map(l => l.slice()), live: r.live } : null; },
       compass(b, l){ H.comp = b == null ? null : { b, n: l ? l.length : 0 }; }, show(v){ H.shown = v; }, dispose(){} }); };
     // мир: один чанк, блок под прицелом — (5, 10, 5); значки вещей в node — строкой (в браузере — картинка canvas)
-    V.iconURL = id => 'icon:' + id;
+    V.iconURL = id => 'icon:' + id; V.icon = id => 'icon:' + id;
     const W = new V.World({ seed: 1 }); const ch = new V.Chunk(0, 0); W.add(ch);
     const hud = mkHud();
     const { st, g } = mkSt({ g: { infoHud: () => hud, canHarvestTool: (b, t) => KB.xHooks({}).canHarvestTool(b, t), breakTime: b => KB.breakTime(st, b), lookDir: () => ({ x: 0, y: 0, z: -1 }) } });
@@ -322,7 +322,20 @@ function mkSt(o = {}){
     ok(diff === 0 && n > 5000, 'ускоритель рецептов = старый перебор (все рецепты, зеркально, в углу сетки + 5000 случайных)', { n, diff });
     let t0 = process.hrtime.bigint(); for (let i = 0; i < 20000; i++) V.craft(['planks_oak', 'planks_oak', null, 'planks_oak', 'planks_oak', null, null, null, null], 3, 3); const fast = Number(process.hrtime.bigint() - t0) / 1e6;
     t0 = process.hrtime.bigint(); for (let i = 0; i < 20000; i++) V.craftLinear(['planks_oak', 'planks_oak', null, 'planks_oak', 'planks_oak', null, null, null, null], 3, 3); const slow = Number(process.hrtime.bigint() - t0) / 1e6;
-    console.log(`  V.craft 20 000 раз: с ускорителем ${fast.toFixed(1)} мс, перебором ${slow.toFixed(1)} мс`);
+    console.log(`  V.craft 20 000 раз (доски 2×2 — первые в списке): с ускорителем ${fast.toFixed(1)} мс, перебором ${slow.toFixed(1)} мс`);
+    {
+      // модпак: +1000 рецептов (формы 1…3 × 1…3) — сетка, которая ни к чему не подходит (её проверяет каждое движение в сетке верстака)
+      const base = V.recipes.length, ks = { a: 'cobble', b: 'iron_ingot', c: 'gold_ingot', d: 'coal', e: 'glass', f: 'flint' };
+      for (let i = 0; i < 1000; i++) { const rh = 1 + Math.floor(rnd() * 3), rw = 1 + Math.floor(rnd() * 3), p = []; for (let y = 0; y < rh; y++) { let q = ''; for (let x = 0; x < rw; x++) q += 'abcdef'[Math.floor(rnd() * 6)]; p.push(q); } V.addRecipe({ pattern: p, key: ks, out: 'stone', n: 1 }); }
+      const none = ['diamond', 'stick', null, 'slime_ball', 'feather', null, null, null, null];
+      let d2 = 0; for (let i = 0; i < 3000; i++) { const w = 3, gg = []; for (let k = 0; k < 9; k++) gg.push(rnd() < .5 ? ks['abcdef'[Math.floor(rnd() * 6)]] : null); if (!same(V.craft(gg, w, w), V.craftLinear(gg, w, w))) d2++; }
+      ok(d2 === 0, 'модпак +1000 рецептов: ускоритель = перебор (3000 сеток)', d2);
+      t0 = process.hrtime.bigint(); for (let i = 0; i < 20000; i++) V.craft(none, 3, 3); const f2 = Number(process.hrtime.bigint() - t0) / 1e6;
+      t0 = process.hrtime.bigint(); for (let i = 0; i < 2000; i++) V.craftLinear(none, 3, 3); const s2 = Number(process.hrtime.bigint() - t0) / 1e6 * 10;
+      console.log(`  модпак +1000 рецептов, сетка без рецепта, 20 000 раз: с ускорителем ${f2.toFixed(1)} мс, перебором ≈ ${s2.toFixed(0)} мс`);
+      ok(f2 * 5 < s2, 'с модпаком ускоритель быстрее перебора хотя бы в 5 раз', { f2, s2 });
+      V.recipes.length = base;
+    }
     // моды: рецепт добавили — указатель перестроился сам
     const r0 = V.addRecipe({ pattern: ['ff', 'ff'], key: { f: 'flint' }, out: 'gravel', n: 1 });
     ok(V.craft(['flint', 'flint', 'flint', 'flint'], 2, 2)?.out === 'gravel', 'новый рецепт (мод) — виден сразу (указатель перестроился)');

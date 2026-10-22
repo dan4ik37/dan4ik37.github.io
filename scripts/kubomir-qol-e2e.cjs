@@ -131,7 +131,116 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           await ev(`(async () => { await ${T}.stop(); return 1; })()`, 30000);
         }
       }
-      if (M === 'perf' || M === 'leak' || M === 'soak') console.log('режим', M, '— добавляется по шагам T-049');
+      // ── общее для замеров: мир на телефоне, все помощники надеты (часы, компас, глубиномер, лупа, рудоискатель, атлас), книги открыты ──
+      const gear = async () => {
+        await ev(`(() => { const S = ${T}.state(); for (const a of ['night', 'iron', 'deep', 'diamond']) S.X.emit('ach', a); S.meta.diff = 'peaceful'; return S.X.acc.open; })()`);
+        await give([['watch', 1], ['compass', 1], ['depth_meter', 1], ['lens', 1], ['ore_finder', 1], ['atlas', 1], ['master_book', 1], ['planks_oak', 20], ['bed', 1], ['bucket', 2], ['map_blank', 6], ['apple', 10], ['torch', 32], ['cobble', 64], ['recall', 4]]);
+        const w = await wear(['watch', 'compass', 'depth_meter', 'lens', 'ore_finder', 'atlas']);
+        await ev(`(() => { const S = ${T}.state(), V = D37E.vox, j = S.P.inv.findIndex(s => s && s.id === 'master_book'); if (j >= 0) { S.P.sel = j < 9 ? j : 0; if (j >= 9) { const t = S.P.inv[0]; S.P.inv[0] = S.P.inv[j]; S.P.inv[j] = t; } S.X.useItem(S.P.inv[S.P.sel], V.item('master_book'), 'main', null); S.X.closeSheet(); } const M = S.X.feats.find(f => f.id === 'map'); for (let i = 0; i < 6; i++) { S.P.x += 3; M._add(); } S.P.x -= 18; return 1; })()`);
+        return w;
+      };
+      // время помощников за кадр (их крючки X.hud / X.update — обёрткой; кадр движка — R.stats.cpuFrame)
+      const measure = (sec, walk) => ev(`(async () => {
+        const S = ${T}.state(), X = S.X, h0 = X.hud, u0 = X.update, C = S.C, wait = ms => new Promise(r => setTimeout(r, ms));
+        let th = 0, nh = 0, mh = 0, tu = 0, nu = 0; const cpu = [];
+        X.hud = dt => { const t = performance.now(); h0(dt); const d = performance.now() - t; th += d; nh++; if (d > mh) mh = d; };
+        X.update = dt => { const t = performance.now(); u0(dt); tu += performance.now() - t; nu++; };
+        let run = true; const tick = () => { if (!run) return; cpu.push(S.R.stats.cpuFrame); requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+        if (${!!walk}) { C.press('forward', true); }
+        const t0 = performance.now(); while (performance.now() - t0 < ${sec * 1000}) { if (${!!walk}) S.rig.yaw += .02; await wait(100); }
+        C.press('forward', false); run = false; X.hud = h0; X.update = u0;
+        cpu.sort((a, b) => a - b); const avg = a => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length);
+        return { frames: nh, hudMs: +(th / Math.max(1, nh)).toFixed(3), hudMax: +mh.toFixed(2), updMs: +(tu / Math.max(1, nu)).toFixed(4), cpu: +avg(cpu).toFixed(2), p95: +(cpu[Math.floor(cpu.length * .95)] || 0).toFixed(2), calls: S.R.stats.calls };
+      })()`, (sec + 20) * 1000);
+      if (M === 'perf') {
+        await openWorld('survival', true);
+        await gear();
+        await ev(`(async () => { const S = ${T}.state(); S.R.lighting.time = 12; S.paused = true; S.rig.fp = .3; await new Promise(r => setTimeout(r, 4000)); return 1; })()`);
+        await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+        const res = {};
+        for (const [name, walk, on] of [['прогрев', false, true], ['стоит, всё надето', false, true], ['идёт, всё надето', true, true], ['стоит, снято всё', false, false], ['идёт, снято всё', true, false]]) {
+          if (!on) await ev(`(() => { const S = ${T}.state(); for (let i = 0; i < S.P.acc.length; i++) S.P.acc[i] = null; S.X.accChanged(); return 1; })()`);
+          res[name] = await measure(15, walk);
+          console.log('ЗАМЕР', name, JSON.stringify(res[name]));
+        }
+        // открыть листы (ЦП ×4): первый раз и потом
+        await ev(`(() => { const S = ${T}.state(); S.X.closeSheet(); return 1; })()`);
+        const openT = await ev(`(async () => { const S = ${T}.state(), X = S.X, out = {}, wait = ms => new Promise(r => setTimeout(r, ms));
+          const t = async (name, f) => { const a = performance.now(); f(); const b = performance.now(); await new Promise(r => requestAnimationFrame(() => r())); out[name] = +(b - a).toFixed(1); X.closeSheet(); S.ui.close?.(); await wait(300); };
+          for (const k of [1, 2]) {
+            await t('вещи ' + k, () => S.ui.open('inv'));
+            await t('помощники ' + k, () => X.openAcc());
+            await t('рецепты ' + k, () => X.openRecipes());
+            await t('рецепт компаса ' + k, () => X.openRecipes('compass'));
+            await t('атлас ' + k, () => X.feats.find(f => f.id === 'map').pick('x:atlas'));
+            await t('дорожная книга ' + k, () => X.feats.find(f => f.id === 'quests')._open());
+          }
+          return out; })()`, 60000);
+        console.log('ОТКРЫТЬ, мс (ЦП ×4):', JSON.stringify(openT));
+        res.open = openT;
+        await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        const A = res['стоит, всё надето'], B = res['стоит, снято всё'], Aw = res['идёт, всё надето'];
+        ok(A.hudMs <= .2 && Aw.hudMs <= .3, 'помощники на экране: ≤ 0,2 мс на кадр стоя и ≤ 0,3 на ходу (телефон, ЦП ×4)', { stand: A.hudMs, walk: Aw.hudMs, off: B.hudMs });
+        ok(Object.entries(openT).filter(([k]) => / 2$/.test(k)).every(([, v]) => v <= 60), 'листы открываются ≤ 60 мс (повторно, ЦП ×4)', openT);
+        fs.writeFileSync(path.join(SHOTS, '..', TAG + '-perf.json'), JSON.stringify(res, null, 1));
+      }
+      if (M === 'leak') {
+        await openWorld('survival', true);
+        await gear();
+        const cycle = async n => ev(`(async () => { const S = ${T}.state(), X = S.X, wait = ms => new Promise(r => setTimeout(r, ms));
+          for (let i = 0; i < ${'${n}'}; i++) {
+            S.ui.open('inv'); await wait(30); X.openRecipes(); await wait(30); X.openRecipes('torch'); await wait(30); X.closeSheet(); S.ui.close();
+            X.openAcc(); await wait(30); X.closeSheet();
+            X.feats.find(f => f.id === 'map').pick('x:atlas'); await wait(30); X.closeSheet();
+            const F = X.feats.find(f => f.id === 'quests'); F._open(); await wait(30); document.querySelector('[data-q]')?.click(); await wait(30); X.closeSheet();
+          }
+          return 1; })()`.replace('${n}', String(n)), 120000);
+        await cycle(3);   // прогрев (первые открытия создают своё один раз)
+        const c0 = await counts(), h0 = await heap();
+        await cycle(20);
+        const c1 = await counts(), h1 = await heap();
+        console.log('УТЕЧКИ: до', JSON.stringify(c0), h0, 'МБ, после 20 кругов', JSON.stringify(c1), h1, 'МБ');
+        ok(c1.nodes - c0.nodes < 150 && c1.listeners - c0.listeners <= 4 && h1 - h0 < 3, '20 открытий / закрытий всех листов и окна вещей: узлы, слушатели и память не растут', { c0, c1, h0, h1 });
+        // мир закрыть и открыть 5 раз: помощники снимают свои слушатели и слои
+        const r0 = await counts(), m0 = await heap();
+        for (let i = 0; i < 5; i++) await ev(`(async () => { const t = ${T}, S = t.state(), id = S.meta.id; await t.stop(); await new Promise(r => setTimeout(r, 300)); location.hash = '#/games/kubomir/play/' + id; for (let k = 0; k < 120; k++) { await new Promise(r => setTimeout(r, 500)); const s = t.state(); if (s && s.ready && s.X) break; } return !!t.state()?.X; })()`, 90000);
+        await sleep(3000);
+        const r1 = await counts(), m1 = await heap();
+        console.log('МИР 5 раз: до', JSON.stringify(r0), m0, 'МБ, после', JSON.stringify(r1), m1, 'МБ');
+        ok(r1.listeners - r0.listeners <= 6 && m1 - m0 < 25, 'мир закрыть / открыть 5 раз — слушатели и память на месте', { r0, r1, m0, m1 });
+      }
+      if (M === 'soak') {
+        const MIN = +process.env.QOL_MIN || 10;
+        await openWorld('survival', false);
+        await gear();
+        const h0 = await heap(), c0 = await counts();
+        const t0 = Date.now(); let rounds = 0;
+        // случайная игра с помощниками: ходит и смотрит, копает и ставит, открывает листы, ест, спит, ведро, лист карты, точки, свиток
+        while (Date.now() - t0 < MIN * 60000) {
+          await ev(`(async () => { const S = ${T}.state(), X = S.X, V = D37E.vox, C = S.C, P = S.P, r = Math.random, wait = ms => new Promise(q => setTimeout(q, ms));
+            const pick = r();
+            if (pick < .3) { C.press('forward', true); S.rig.yaw += (r() - .5) * 2; await wait(1500 + r() * 2000); C.press('forward', false); if (r() < .3) { C.press('jump', true); await wait(200); C.press('jump', false); } }
+            else if (pick < .4) { S.rig.fp = .7; await wait(300); if (S.hit) ${T}.dig(); await wait(200); const j = P.inv.findIndex(s => s && s.id === 'cobble'); if (j >= 0 && j < 9) { P.sel = j; ${T}.use(); } }
+            else if (pick < .5) { X.openRecipes(['torch', 'compass', 'bed', 'watch'][Math.floor(r() * 4)]); await wait(600); X.closeSheet(); }
+            else if (pick < .58) { X.feats.find(f => f.id === 'quests')._open(); await wait(500); X.closeSheet(); }
+            else if (pick < .64) { X.feats.find(f => f.id === 'map').pick('x:atlas'); await wait(400); X.closeSheet(); if (r() < .3 && P.ext.map.wp.length < 60) X.feats.find(f => f.id === 'map')._add(); }
+            else if (pick < .7) { S.ui.open('inv'); await wait(500); S.ui.close(); }
+            else if (pick < .75) { P.food = 12; const j = P.inv.findIndex(s => s && s.id === 'apple'); if (j >= 0 && j < 9) { P.sel = j; await wait(200); } }
+            else if (pick < .8) { const t = S.R.lighting.time; S.R.lighting.time = 22; const x = Math.floor(P.x) + 2, z = Math.floor(P.z), y = S.W.heightAt(x, z); if (y > 0) { S.W.set(x, y, z, V.cell(V.ID.bed), { urgent: 3 }); S.W.set(x, y + 1, z, 0); S.W.set(x, y + 2, z, 0); X.useBlock({ x, y, z, v: V.cell(V.ID.bed), nx: 0, ny: 1, nz: 0 }, V.block('bed')); await wait(1800); } if (S.R.lighting.time > 20) S.R.lighting.time = t; }
+            else if (pick < .85) { const j = P.inv.findIndex(s => s && s.id === 'map_blank'); if (j >= 0) { P.x += 140; X.useItem(P.inv[j], V.item('map_blank'), 'main', null); } }
+            else if (pick < .9) { const j = P.inv.findIndex(s => s && /^bucket/.test(s.id)); if (j >= 0 && j < 9) { P.sel = j; S.rig.fp = 1; S.steps += 60; X.useItem(P.inv[j], V.item(P.inv[j].id), 'main', S.hit); } }
+            else if (pick < .93) { const j = P.inv.findIndex(s => s && s.id === 'recall'); if (j >= 0) { S.steps += 600; X.useItem(P.inv[j], V.item('recall'), 'main', null); await wait(2500); } }
+            else { const i = Math.floor(r() * 6); const s = P.acc[i]; if (s) { X.unequip(i); await wait(300); const j = P.inv.findIndex(q => q && q.id === s.id); if (j >= 0) X.equip(P.inv[j], () => { P.inv[j] = null; }); } }
+            if (P.dead) document.querySelector('.kb-dead [data-r]')?.click();
+            return 1; })()`, 60000).catch(e => logs.push('soak: ' + e.message));
+          rounds++;
+          if (rounds % 40 === 0) console.log('  soak: ' + Math.round((Date.now() - t0) / 60000) + ' мин, кругов ' + rounds + ', ошибок в консоли ' + logs.length);
+        }
+        const h1 = await heap(), c1 = await counts(), st1 = await ev(`(() => { const S = ${T}.state(); return { alive: S.X.H.stats(), wp: S.P.ext.map.wp.length, quests: S.X.quests.stats(), x: Math.round(S.P.x), ready: S.ready }; })()`);
+        console.log('SOAK', MIN, 'мин: кругов', rounds, 'память', h0, '→', h1, 'МБ, DOM', JSON.stringify(c0), '→', JSON.stringify(c1), JSON.stringify(st1));
+        ok(!st1.alive.dead.length, 'за ' + MIN + ' мин ни один помощник не выключился', st1.alive);
+        ok(c1.listeners - c0.listeners <= 8 && h1 - h0 < 40, 'слушатели на месте, память на полке', { c0, c1, h0, h1 });
+      }
     }
     const bad = logs.filter(l => !/WebGL|GPU stall|X3595|Wake Lock|wakeLock|NotAllowedError|AudioContext|favicon|404/.test(l));
     ok(!bad.length, 'в консоли нет ошибок и предупреждений', bad.slice(0, 8));

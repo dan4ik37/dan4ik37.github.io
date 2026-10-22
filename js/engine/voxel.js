@@ -295,8 +295,9 @@
 
   const tagHas = (k, name) => k[0] === '#' ? (V.TAGS[k.slice(1)] || []).includes(name) : k === name;
   V.tagHas = tagHas;
-  // Ускоритель (T-049, план §4.2 H1): рецепты разложены по «форме» — размер и какие клетки заняты (и зеркально), списки — по числу
-  // вещей; V.craft проверяет только подходящие по форме — в том же порядке, что и раньше (первый подошедший — как был). Указатель
+  // Ускоритель (T-049, план §4.2 H1): рецепты разложены по «форме» — размер и какие клетки заняты (и зеркально) — и по вещи в первой
+  // занятой клетке (метка вроде #доски — общая корзина формы: её члены смотрим при проверке, моды могут их дописать); списки — по
+  // числу вещей. V.craft проверяет только подходящие — в том же порядке, что и раньше (первый подошедший — как был). Указатель
   // строится заново, когда список рецептов поменялся (моды: другая длина или другой последний рецепт)
   let CI = null;
   const craftIndex = () => {
@@ -306,7 +307,11 @@
     L.forEach((r, i) => {
       if (r.list) { add(list, r.list.length, i); return; }
       const P = r.pattern, rh = P.length, rw = Math.max(...P.map(s => s.length));
-      for (const mir of r.mirror === false ? [false] : [false, true]) { let m = 0; for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) if ((P[y][mir ? rw - 1 - x : x] || ' ') !== ' ') m |= 1 << (y * rw + x); add(shape, rw + 'x' + rh + ':' + m, i); }
+      for (const mir of r.mirror === false ? [false] : [false, true]) {
+        let m = 0, first = null;
+        for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) { const ch = P[y][mir ? rw - 1 - x : x] || ' '; if (ch !== ' ') { m |= 1 << (y * rw + x); if (first === null) first = (r.key && r.key[ch]) || ''; } }
+        add(shape, rw + 'x' + rh + ':' + m + (first && first[0] !== '#' ? '|' + first : '|#'), i);
+      }
     });
     return (CI = { n: L.length, last, shape, list });
   };
@@ -316,12 +321,13 @@
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (grid[y * w + x]) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
     if (x1 < 0) return null;
     const cw = x1 - x0 + 1, chh = y1 - y0 + 1;
-    let mask = 0, nf = 0;
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (grid[y * w + x]) { mask |= 1 << ((y - y0) * cw + (x - x0)); nf++; }
-    const I = craftIndex(), a = I.shape.get(cw + 'x' + chh + ':' + mask), b = I.list.get(nf);
-    if (!a && !b) return null;
-    // кандидаты — по порядку рецептов (слить два упорядоченных списка)
-    const cand = !a ? b : !b ? a : (() => { const out = []; let i = 0, j = 0; while (i < a.length || j < b.length) out.push(j >= b.length || (i < a.length && a[i] < b[j]) ? a[i++] : b[j++]); return out; })();
+    let mask = 0, nf = 0, first = null;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const v = grid[y * w + x]; if (v) { mask |= 1 << ((y - y0) * cw + (x - x0)); nf++; if (first === null) first = v; } }
+    const I = craftIndex(), k = cw + 'x' + chh + ':' + mask, a = I.shape.get(k + '|' + first), t = I.shape.get(k + '|#'), b = I.list.get(nf);
+    if (!a && !t && !b) return null;
+    // кандидаты — по порядку рецептов (слить упорядоченные списки, без повторов)
+    let cand = a || t || b;
+    if ((a ? 1 : 0) + (t ? 1 : 0) + (b ? 1 : 0) > 1) { cand = []; for (const q of [a, t, b]) if (q) for (const i of q) cand.push(i); cand.sort((p, q) => p - q); let n = 0; for (let i = 0; i < cand.length; i++) if (!i || cand[i] !== cand[i - 1]) cand[n++] = cand[i]; cand.length = n; }
     return craftScan(grid, w, h, cand);
   };
   // Старый перебор всех рецептов (для проверки ускорителя: scripts/kubomir-qol-test.cjs сравнивает оба на всех рецептах и 5000 сетках)

@@ -26,7 +26,7 @@
       try {
         const L = b?.texf ? b.texf.top : -1;
         if (L >= 0) {
-          const tx = V.tex[L], d = V.paint(tx.name, V.specOf ? V.specOf(tx.name) : tx.spec || V.TEX_SPECS[tx.name]);
+          const tx = V.tex[L], d = V.layerPixels ? V.layerPixels(L) : V.paint(tx.name, V.specOf ? V.specOf(tx.name) : tx.spec || V.TEX_SPECS[tx.name]);   // готовый рисунок слоя (рендер), иначе — нарисовать
           let r = 0, gg = 0, bb = 0, n = 0; for (let i = 0; i < d.length; i += 16) if (d[i + 3] > 100) { r += d[i]; gg += d[i + 1]; bb += d[i + 2]; n++; }
           if (n) { r /= n; gg /= n; bb /= n; const tn = TINTS[b.tint]; if (tn) { r = r * tn[0] / 255; gg = gg * tn[1] / 255; bb = bb * tn[2] / 255; } c = E().mapkit.pack(r, gg, bb); }
         }
@@ -77,6 +77,7 @@
       st.W.listeners.push(onEditFn);
     };
     f.dispose = () => { mm?.dispose(); mm = null; const L = st.W?.listeners, i = L ? L.indexOf(onEditFn) : -1; if (i >= 0) L.splice(i, 1); g.hudEl?.()?.classList.remove('kx-mmon'); };
+    f._t = { TILES, mm: () => mm };   // для проверок и замеров (scripts/kubomir-qol-e2e.cjs)
     f.hud = dt => {
       if (!mm) return;
       const on = X.on('map') && !!st.ready && !P.dead && !st.hudHidden;

@@ -4,11 +4,13 @@
 // ═══════════════════════════════════════
 // hud = D37E.info.hud(родитель, { cls }) — слой поверх игры (pointer-events: none):
 //   hud.chip(id, значок, текст, порядок) — строка справа сверху (часы, координаты, глубина, руда); hud.hide(id)
-//   hud.card(rec | null) — карточка «что под прицелом» сверху по центру: { key, icon (адрес картинки) | emo, name, sub, lines: [[текст,
-//     цвет 'ok' | 'warn' | 'bad' | '']], drops: [адрес картинки], hearts: [сколько, из скольких] } — перерисовка только при смене key
+//   hud.card(rec | null) — карточка «что под прицелом» сверху по центру: { key, icon (холст canvas или адрес картинки) | emo, name, sub,
+//     lines: [[текст, цвет 'ok' | 'warn' | 'bad' | '']], drops: [холст или адрес] } — перерисовка только при смене key
+//     (холст копируется drawImage — без toDataURL: перевод значка в адрес на телефоне стоил миллисекунды)
 //     (живое — сердечки, прогресс — rec.live: та же карточка, меняется одна строка)
-//   hud.compass(курс 0…2π от севера по часовой, метки [{ a — курс на метку, ic — значок, far — далеко }]) — полоса сверху: С, В, Ю, З
-//     и метки в поле зрения (±90°); двигается transform, когда курс поменялся на 1° и больше
+//   hud.compass(курс 0…2π от севера по часовой, метки [{ a — курс на метку, ic — значок, far — далеко }], номер меток) — полоса сверху:
+//     С, В, Ю, З и метки в поле зрения (±90°); двигается transform, когда курс поменялся на 1° и больше; номер меток тот же и курс
+//     не сдвинулся — метки не пересчитываются (игра меняет номер, когда пересчитала углы)
 //   hud.show(вкл) — спрятать всё (F1, нокаут); hud.dispose()
 // Пишет в DOM только то, что поменялось (сравнение с прошлым), без мусора за кадр (строки — только при смене).
 (() => {
@@ -24,13 +26,19 @@
 .d37in-chip i{font-style:normal}
 .d37in-card{position:absolute;left:50%;top:34px;transform:translateX(-50%);min-width:180px;max-width:min(380px,70%);padding:6px 12px 7px;border-radius:12px;background:rgba(10,14,26,.74);border:1px solid rgba(255,255,255,.14);box-shadow:0 6px 18px rgba(0,0,0,.35);display:flex;gap:10px;align-items:center;transition:none}
 .d37in-card[hidden]{display:none}
-.d37in-ci{flex:none;width:34px;height:34px;background:center/contain no-repeat;image-rendering:pixelated;display:grid;place-items:center;font-size:24px}
+.d37in-ci{flex:none;position:relative;width:34px;height:34px;background:center/contain no-repeat;image-rendering:pixelated;display:grid;place-items:center;font-size:24px}
+.d37in-ci canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
+.d37in-ci canvas[hidden]{display:none}
+.d37in-ci i{font-style:normal}
 .d37in-cb{min-width:0;flex:1}
 .d37in-cb b{display:block;font-size:14px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .d37in-cb small{display:block;font-size:11.5px;line-height:1.3;color:#c8cfea}
+.d37in-cb small[hidden]{display:none}
 .d37in-cb small.ok{color:#86efac}.d37in-cb small.warn{color:#fcd34d}.d37in-cb small.bad{color:#fca5a5}
 .d37in-dr{display:flex;gap:3px;margin-top:2px}
-.d37in-dr i{width:18px;height:18px;background:center/contain no-repeat;image-rendering:pixelated}
+.d37in-dr[hidden],.d37in-dr span[hidden],.d37in-dr canvas[hidden]{display:none}
+.d37in-dr span{position:relative;width:18px;height:18px;background:center/contain no-repeat;image-rendering:pixelated}
+.d37in-dr canvas{position:absolute;inset:0;width:18px;height:18px;image-rendering:pixelated}
 .d37in-hp{color:#ff5a6e;font-size:12px;letter-spacing:-1px}
 .d37in-cbar{position:absolute;left:50%;top:6px;width:min(360px,56%);height:22px;margin-left:calc(min(360px,56%) / -2);overflow:hidden;border-radius:8px;background:linear-gradient(90deg,transparent,rgba(10,14,26,.62) 18%,rgba(10,14,26,.62) 82%,transparent);transition:none}
 .d37in-cbar[hidden]{display:none}
@@ -39,7 +47,7 @@
 .d37in-strip span.n{color:#ff6b6b}
 .d37in-strip span.t{color:rgba(223,229,255,.45);font-size:9px}
 .d37in-cbar::after{content:'';position:absolute;left:50%;top:0;width:2px;height:6px;margin-left:-1px;background:#ffd23f}
-.d37in-mk{position:absolute;top:2px;width:22px;margin-left:-11px;text-align:center;font-size:13px;line-height:18px}
+.d37in-mk{position:absolute;left:0;top:2px;width:22px;margin-left:-11px;text-align:center;font-size:13px;line-height:18px;will-change:transform}
 .d37in-mk[hidden]{display:none}
 .d37in-mk.far{opacity:.6;font-size:11px}
 `;
@@ -51,9 +59,18 @@
     if (!doc || !parent) return null;
     css();
     const el = doc.createElement('div'); el.className = 'd37in' + (o.cls ? ' ' + o.cls : '');
-    el.innerHTML = '<div class="d37in-cbar" hidden><div class="d37in-strip"></div></div><div class="d37in-card" hidden><span class="d37in-ci"></span><div class="d37in-cb"></div></div><div class="d37in-chips"></div>';
+    // карточка — постоянные узлы (имя, 5 строк, 4 значка добычи, живая строка): смена цели меняет только текст и картинки, без
+    // новых узлов и холстов (раньше на каждую цель — новые узлы и холсты добычи: на ходу это мусор и лишняя работа видеокарте)
+    const LN = 5, DR = 4;
+    el.innerHTML = '<div class="d37in-cbar" hidden><div class="d37in-strip"></div></div><div class="d37in-card" hidden><span class="d37in-ci"><canvas width="34" height="34"></canvas><i></i></span><div class="d37in-cb"><b></b><small class="d37in-sub" hidden></small>'
+      + '<small class="d37in-ln" hidden></small>'.repeat(LN) + '<div class="d37in-dr" hidden>' + '<span hidden><canvas width="18" height="18"></canvas></span>'.repeat(DR) + '</div><small class="d37in-live" hidden></small></div></div><div class="d37in-chips"></div>';
     parent.appendChild(el);
     const chipsEl = el.querySelector('.d37in-chips'), cardEl = el.querySelector('.d37in-card'), cardIc = cardEl.querySelector('.d37in-ci'), cardBody = cardEl.querySelector('.d37in-cb');
+    const icCv = cardIc.querySelector('canvas'), icEmo = cardIc.querySelector('i'), icG = icCv.getContext('2d'); icG.imageSmoothingEnabled = false;
+    const nameEl = cardBody.querySelector('b'), subEl = cardBody.querySelector('.d37in-sub'), lineEls = Array.from(cardBody.querySelectorAll('.d37in-ln')), liveEl = cardBody.querySelector('.d37in-live');
+    const drEl = cardBody.querySelector('.d37in-dr'), drSlots = Array.from(drEl.children).map(sp => { const cv = sp.firstChild, g = cv.getContext('2d'); g.imageSmoothingEnabled = false; return { sp, cv, g }; });
+    // значок: готовый холст (без перекодирования в картинку — на телефоне toDataURL стоит миллисекунды) или адрес картинки
+    const isCanvas = v => !!v && typeof v === 'object' && typeof v.getContext === 'function';
     const chips = new Map();
     const H = { el };
     // ── строки справа сверху ──
@@ -75,22 +92,42 @@
       if (!rec) { if (cardKey !== null) { cardKey = null; liveKey = null; cardEl.hidden = true; } return; }
       if (rec.key !== cardKey) {
         cardKey = rec.key; liveKey = null;
-        if (rec.icon) { cardIc.textContent = ''; cardIc.style.backgroundImage = 'url(' + rec.icon + ')'; } else { cardIc.style.backgroundImage = ''; cardIc.textContent = rec.emo || ''; }
-        cardBody.textContent = '';
-        const b = doc.createElement('b'); b.textContent = rec.name || ''; cardBody.appendChild(b);
-        if (rec.sub) { const s = doc.createElement('small'); s.textContent = rec.sub; cardBody.appendChild(s); }
-        for (const [t, c] of rec.lines || []) { const s = doc.createElement('small'); s.textContent = t; if (c) s.className = c; cardBody.appendChild(s); }
-        if (rec.drops && rec.drops.length) { const dr = doc.createElement('div'); dr.className = 'd37in-dr'; for (const u of rec.drops.slice(0, 4)) { const i = doc.createElement('i'); i.style.backgroundImage = 'url(' + u + ')'; dr.appendChild(i); } cardBody.appendChild(dr); }
-        const live = doc.createElement('small'); live.className = 'd37in-live'; live.hidden = true; cardBody.appendChild(live);
+        icG.clearRect(0, 0, 34, 34);
+        const cv = isCanvas(rec.icon);
+        icCv.hidden = !cv; if (cv) icG.drawImage(rec.icon, 0, 0, 34, 34);
+        cardIc.style.backgroundImage = !cv && rec.icon ? 'url(' + rec.icon + ')' : '';
+        icEmo.textContent = rec.icon ? '' : rec.emo || '';
+        nameEl.textContent = rec.name || '';
+        subEl.hidden = !rec.sub; if (rec.sub) subEl.textContent = rec.sub;
+        const L = rec.lines || [];
+        for (let i = 0; i < LN; i++) {
+          const e = lineEls[i], l = L[i];
+          if (!l) { if (!e.hidden) e.hidden = true; continue; }
+          e.hidden = false; e.textContent = l[0]; e.className = l[1] ? 'd37in-ln ' + l[1] : 'd37in-ln';
+        }
+        const D = rec.drops || [];
+        drEl.hidden = !D.length;
+        for (let i = 0; i < DR; i++) {
+          const s = drSlots[i], u = D[i];
+          if (!u) { if (!s.sp.hidden) s.sp.hidden = true; continue; }
+          s.sp.hidden = false;
+          const cv = isCanvas(u);
+          s.g.clearRect(0, 0, 18, 18); s.cv.hidden = !cv; if (cv) s.g.drawImage(u, 0, 0, 18, 18);
+          s.sp.style.backgroundImage = cv ? '' : 'url(' + u + ')';
+        }
         cardEl.hidden = false;
       }
       // живая строка (сердечки моба, печь): только текст
       const lv = rec.live || '';
-      if (lv !== liveKey) { liveKey = lv; const live = cardBody.querySelector('.d37in-live'); if (live) { live.hidden = !lv; live.textContent = lv; live.className = 'd37in-live' + (rec.liveCls ? ' ' + rec.liveCls : ''); } }
+      if (lv !== liveKey) { liveKey = lv; liveEl.hidden = !lv; liveEl.textContent = lv; liveEl.className = 'd37in-live' + (rec.liveCls ? ' ' + rec.liveCls : ''); }
     };
     // ── полоса компаса ──
     const cbar = el.querySelector('.d37in-cbar'), strip = el.querySelector('.d37in-strip');
-    let cbOn = false, cbDeg = null, W = 0;
+    // ширину полосы меряем только при показе и после изменения окна (чтение clientWidth на каждом шаге заставляло браузер
+    // пересчитывать раскладку всей страницы — на телефоне это миллисекунды)
+    let cbOn = false, cbDeg = null, W = 0, wDirty = true;
+    const onResize = () => { wDirty = true; };
+    root.addEventListener?.('resize', onResize);
     const marks = [];
     const buildStrip = () => {
       // буквы на трёх оборотах (−360…+720°) — сдвиг полосы покрывает любой курс без перестройки
@@ -98,15 +135,20 @@
       for (let k = -1; k <= 2; k++) for (let d = 15; d < 360; d += 30) if (d % 45) h += `<span class="t" style="left:${(d + k * 360) * PX_PER_DEG}px">·</span>`;
       strip.innerHTML = h;
     };
-    H.compass = (bearing, list) => {
+    // rev — номер списка меток (игра меняет его, когда пересчитала углы): курс не сдвинулся на 1° и номер тот же — метки не трогаем
+    let mkRev = NaN;
+    H.compass = (bearing, list, rev) => {
       if (bearing == null) { if (cbOn) { cbOn = false; cbar.hidden = true; } return; }
-      if (!cbOn) { cbOn = true; cbar.hidden = false; if (!strip.firstChild) buildStrip(); cbDeg = null; }
-      const deg = ((bearing * 180 / Math.PI) % 360 + 360) % 360;
-      if (cbDeg === null || Math.abs(deg - cbDeg) >= 1) {
-        cbDeg = deg;
-        W = cbar.clientWidth || W || 360;
-        strip.style.transform = 'translateX(' + Math.round(W / 2 - deg * PX_PER_DEG) + 'px)';
+      if (!cbOn) { cbOn = true; cbar.hidden = false; if (!strip.firstChild) buildStrip(); cbDeg = null; wDirty = true; }
+      if (wDirty) { wDirty = false; W = cbar.clientWidth || W || 360; cbDeg = null; }
+      const deg0 = ((bearing * 180 / Math.PI) % 360 + 360) % 360, turned = cbDeg === null || Math.abs(deg0 - cbDeg) >= 1;
+      if (turned) {
+        cbDeg = deg0;
+        strip.style.transform = 'translateX(' + Math.round(W / 2 - deg0 * PX_PER_DEG) + 'px)';
       }
+      if (!turned && rev !== undefined && rev === mkRev) return;
+      mkRev = rev;
+      const deg = cbDeg;   // метки — по тому же курсу, что и полоса (не разъезжаются с буквами)
       // метки: в поле ±(W/2) px
       const n = list ? list.length : 0;
       for (let i = 0; i < n || i < marks.length; i++) {
@@ -119,13 +161,13 @@
         if (m.d.hidden === vis) m.d.hidden = !vis;
         if (!vis) continue;
         if (m.ic !== q.ic) { m.ic = q.ic; m.d.textContent = q.ic; }
-        if (m.x !== x) { m.x = x; m.d.style.left = x + 'px'; }
+        if (m.x !== x) { m.x = x; m.d.style.transform = 'translateX(' + x + 'px)'; }   // transform — без пересчёта раскладки
         const far = !!q.far; if (m.far !== far) { m.far = far; m.d.classList.toggle('far', far); }
       }
     };
     let shown = true;
-    H.show = v => { v = !!v; if (v !== shown) { shown = v; el.hidden = !v; } };
-    H.dispose = () => { el.remove(); chips.clear(); marks.length = 0; };
+    H.show = v => { v = !!v; if (v !== shown) { shown = v; el.hidden = !v; if (v) wDirty = true; } };
+    H.dispose = () => { el.remove(); chips.clear(); marks.length = 0; root.removeEventListener?.('resize', onResize); };
     return H;
   }
 

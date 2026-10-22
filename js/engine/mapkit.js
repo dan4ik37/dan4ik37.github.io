@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════
 // Мини-карта — «окно» на холсте: 10 × 10 участков по 16 клеток вокруг игрока; участок рисуется в окно ОДИН раз (и заново — только
 // когда поменялся), кадр карты — один drawImage окна + метки. Ушёл на 2 участка — окно сдвигается (старое переносится, новое
-// дорисовывается). Без мусора за кадр: один ImageData 16×16 на всё.
+// дорисовывается). Без мусора за кадр: один ImageData 16×16 на всё; значки меток — готовыми картинками (не fillText на кадр).
 //   M = D37E.mapkit.minimap(родитель, { size: 128, cls, onTap })
 //   M.frame(x, z, yaw, tiles, marks) — нарисовать (сама решает, нужно ли: сдвиг ≥ 0,5 клетки, поворот ≥ 3°, новый участок, метки)
 //     tiles — переходник игры: { rev(cx, cz) → номер правки участка или −1 (нет участка), fill(cx, cz, out Uint32Array(256)) → true }
@@ -30,6 +30,19 @@
   const shade = (c, k) => { const r = Math.min(255, (c & 255) * k), g = Math.min(255, (c >>> 8 & 255) * k), b = Math.min(255, (c >>> 16 & 255) * k); return pack(r, g, b, c >>> 24); };
 
   const N = 10, T = 16;   // окно: 10 × 10 участков по 16
+  // значок метки — картинкой: fillText эмодзи на каждом кадре карты стоил больше всего остального вместе (подбор цветного шрифта
+  // на телефоне — ~1 мс на значок); рисуем каждый значок один раз на размер и дальше копируем drawImage
+  const ICON_CV = new Map();   // размер → (значок → холст)
+  function iconCv(ic, px){
+    let m = ICON_CV.get(px); if (!m) ICON_CV.set(px, m = new Map());
+    let c = m.get(ic);
+    if (c) return c;
+    if (m.size > 96) m.clear();
+    const s = Math.ceil(px * 1.35); c = doc.createElement('canvas'); c.width = c.height = s;
+    const g = c.getContext('2d'); g.font = px + 'px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ic, s / 2, s / 2 + px * .06);
+    m.set(ic, c);
+    return c;
+  }
   function minimap(parent, o = {}){
     if (!doc || !parent) return null;
     css();
@@ -43,7 +56,7 @@
     const tmp = doc.createElement('canvas'); tmp.width = tmp.height = N * T; const tg = tmp.getContext('2d');
     const img = wg.createImageData(T, T), px = new Uint32Array(img.data.buffer);
     const revs = new Int32Array(N * N).fill(-2), revs2 = new Int32Array(N * N);   // какой номер правки участка нарисован (−2 — ничего)
-    const FONT = (12 * dpr) + 'px sans-serif';
+    const IPX = Math.round(12 * dpr);
     let ax = 0, az = 0, anchored = false, lastX = NaN, lastZ = NaN, lastYaw = NaN, need = true, scanI = 0, markKey = 0;
     parent.appendChild(el);
     if (o.onTap) el.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); o.onTap(e); });
@@ -95,7 +108,7 @@
         const m = marks[q]; let mx = (m.x - x) * sc, mz = (m.z - z) * sc;
         const lim = c - 7 * dpr, far = Math.abs(mx) > lim || Math.abs(mz) > lim;
         if (far) { const k = lim / Math.max(Math.abs(mx), Math.abs(mz)); mx *= k; mz *= k; g.fillStyle = m.col || '#ffd23f'; g.beginPath(); g.arc(c + mx, c + mz, 3.2 * dpr, 0, 6.2832); g.fill(); continue; }
-        g.font = FONT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(m.ic || '📍', c + mx, c + mz);
+        const ic = iconCv(m.ic || '📍', IPX), h = ic.width >> 1; g.drawImage(ic, Math.round(c + mx) - h, Math.round(c + mz) - h);
       }
       // игрок — стрелка по взгляду (север — вверх)
       g.translate(c, c); g.rotate(-yaw);

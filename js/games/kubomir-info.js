@@ -45,7 +45,9 @@
       hud.show(live);
       if (!live) return;
       const dir = X.on('dir');
-      if (dir) hud.compass(bearing(), marks()); else hud.compass(null);
+      // углы меток — когда отошёл на 0,3 блока или раз в 0,5 с (новая точка, дом); курс полосы — каждый кадр (сдвиг на 1° — сразу)
+      if (dir) { if ((mkT -= dt) <= 0 || Math.abs(P.x - mkX) + Math.abs(P.z - mkZ) > .3) { mkT = .5; mkX = P.x; mkZ = P.z; marks(); mkRev++; } hud.compass(bearing(), mkOut, mkRev); }
+      else hud.compass(null);
       if ((tick -= dt) > 0) return;
       tick = .1;
       chips(dir);
@@ -56,7 +58,7 @@
     const bearing = () => { const y = st.rig?.yaw || 0; return ((-y) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2); };
     const MK = [];   // метки полосы компаса (дом, вещи после нокаута, точки атласа) — объекты переиспользуются
     const mk = (i, x, z, ic) => { const m = MK[i] || (MK[i] = { a: 0, ic: '', far: false }); const dx = x - P.x, dz = z - P.z; m.a = Math.atan2(dx, -dz); m.ic = ic; m.far = dx * dx + dz * dz > 400 * 400; return m; };
-    let mkOut = [];
+    let mkOut = [], mkT = 0, mkX = NaN, mkZ = NaN, mkRev = 0;
     function marks(){
       let n = 0;
       const h = X.home?.(); if (h) mk(n++, h.x, h.z, '🏠');
@@ -146,13 +148,13 @@
         REC.emo = { cow: '🐄', pig: '🐖', chicken: '🐔', zombie: '🧟', slime: '🟩' }[m.type] || '🐾';
         REC.name = M.title || m.type;
         REC.lines.push([M.passive ? 'Мирное существо' : 'Опасно: бьёт, если подойти', M.passive ? 'ok' : 'bad']);
-        for (const d of M.drops || []) if (V.item(d[0]) && REC.drops.length < 4) REC.drops.push(V.iconURL(d[0], 40));
+        for (const d of M.drops || []) if (V.item(d[0]) && REC.drops.length < 4) REC.drops.push(V.icon(d[0], 40));
         liveLine();
         return;
       }
       const h = st.hit, b = h.ice ? V.blocks[V.ID.ice] : V.blocks[h.v & 0xfff], s = P.inv[P.sel], toolId = s ? s.id : '';
       const iname = b.name === 'door_oak' ? 'door' : b.name === 'furnace_lit' ? 'furnace' : b.name;
-      if (V.item(iname)) REC.icon = V.iconURL(iname, 40); else REC.emo = '🧱';
+      if (V.item(iname)) REC.icon = V.icon(iname, 40); else REC.emo = '🧱';
       REC.name = h.ice ? 'Лёд на воде' : b.title || b.name;
       if (st.creative) REC.lines.push(['🎨 Творчество: ломается сразу', 'ok']);
       else if (b.hard < 0 && !h.ice) REC.lines.push(['Не сломать', 'bad']);
@@ -164,8 +166,8 @@
         REC.lines.push([(b.tool ? '⛏ ' : '✋ ') + need + ' · ' + secs + ' с' + (h.ice ? '' : !drop ? ' · ничего не выпадет' : !right ? ' · медленно' : ''), h.ice || (drop && right) ? 'ok' : !drop ? 'bad' : 'warn']);
         if (!h.ice) {
           const ex = V.DROPS?.[b.name] || [];
-          let rep = false; for (const e of ex) { if (V.item(e[0]) && REC.drops.length < 4) REC.drops.push(V.iconURL(e[0], 40)); if (e[3] && e[1] >= 1) rep = true; }
-          if (!rep && b.drop && V.item(b.drop) && REC.drops.length < 4) REC.drops.unshift(V.iconURL(b.drop, 40));
+          let rep = false; for (const e of ex) { if (V.item(e[0]) && REC.drops.length < 4) REC.drops.push(V.icon(e[0], 40)); if (e[3] && e[1] >= 1) rep = true; }
+          if (!rep && b.drop && V.item(b.drop) && REC.drops.length < 4) REC.drops.unshift(V.icon(b.drop, 40));
         }
       }
       if (Array.isArray(b.info)) for (const t of b.info.slice(0, 2)) REC.lines.push([String(t).slice(0, 80), '']);   // строки мода (info)
