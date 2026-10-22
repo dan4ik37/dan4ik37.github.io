@@ -1655,54 +1655,67 @@ body.low .donation-alert-icon{animation:none}
 
   <!-- Сам профиль -->
   <div id="profileContent" style="display:none">
-    <div id="profileBanner" style="position:relative;height:180px;border-radius:16px;background:linear-gradient(135deg,rgba(255,45,85,.25),rgba(145,71,255,.25));background-size:cover;background-position:center;overflow:hidden">
-      <div id="profileBannerEditBtn" style="display:none;position:absolute;top:.8rem;right:.8rem;gap:.4rem">
-        <label style="background:rgba(0,0,0,.5);backdrop-filter:blur(6px);border:1px solid rgba(var(--fg-rgb),.2);color:#fff;border-radius:8px;padding:.5rem .9rem;font-size:.72rem;cursor:pointer;font-weight:700">
+    <!-- Шапка: фон, аватар, ник и значки. Профиль 2.0 (html.ui2 — UI_V2 в js/core/config.js, стили — css/ui2.css): ещё уровень,
+         быстрые числа и кнопки дружбы прямо в шапке; карточки — в две колонки (profile.js pf2Layout) -->
+    <div class="pf-head">
+    <div id="profileBanner" class="pf-banner">
+      <div id="profileBannerEditBtn" class="pf-banner-edit" style="display:none">
+        <label class="pf-ovbtn">
           🖼 Сменить фон
           <input type="file" id="profileBannerInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="uploadProfileImage('profile-bg', this.files[0])" style="display:none">
         </label>
-        <button id="profileBannerRemoveBtn" onclick="removeProfileImage('profile-bg')" style="display:none;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);border:1px solid rgba(var(--fg-rgb),.2);color:#fff;border-radius:8px;padding:.5rem .7rem;font-size:.72rem;cursor:pointer" aria-label="Удалить фон">🗑</button>
+        <button id="profileBannerRemoveBtn" class="pf-ovbtn" onclick="removeProfileImage('profile-bg')" style="display:none" aria-label="Удалить фон">🗑</button>
       </div>
     </div>
 
-    <div style="display:flex;align-items:flex-end;gap:1.2rem;margin-top:-48px;margin-left:1.5rem;position:relative;z-index:2">
-      <div style="position:relative">
-        <div id="profileAvatarImg" style="width:96px;height:96px;border-radius:50%;border:4px solid var(--bg);background:var(--tw);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:800;color:#fff;background-size:cover;background-position:center"></div>
-        <label id="profileAvatarEditBtn" style="display:none;position:absolute;bottom:0;right:0;width:30px;height:30px;border-radius:50%;background:var(--accent);border:3px solid var(--bg);align-items:center;justify-content:center;cursor:pointer;font-size:.8rem">
+    <div class="pf-hrow">
+      <div class="pf-avw">
+        <div id="profileAvatarImg" class="pf-ava"></div>
+        <label id="profileAvatarEditBtn" class="pf-ava-edit" style="display:none" title="Сменить аватарку">
           ✎
           <input type="file" id="profileAvatarInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="uploadProfileImage('avatars', this.files[0])" style="display:none">
         </label>
-        <button id="profileAvatarRemoveBtn" onclick="removeProfileImage('avatars')" aria-label="Удалить аватарку" style="display:none;position:absolute;bottom:0;left:-8px;width:26px;height:26px;border-radius:50%;background:rgba(255,45,85,.85);border:3px solid var(--bg);color:#fff;cursor:pointer;font-size:.65rem">🗑</button>
+        <button id="profileAvatarRemoveBtn" class="pf-ava-del" onclick="removeProfileImage('avatars')" aria-label="Удалить аватарку" style="display:none">🗑</button>
       </div>
-      <div style="padding-bottom:.5rem;flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-          <span id="profileNick" style="font-size:1.3rem;font-weight:800"></span>
+      <div class="pf-info">
+        <div class="pf-nickline">
+          <span id="profileNick" class="pf-nick"></span>
           <span id="profileRoleBadge"></span>
-          <span id="profileVipBadge" style="display:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-size:.62rem;font-weight:800;padding:.15rem .5rem;border-radius:5px;letter-spacing:.5px">✨ VIP</span>
+          <span id="profileVipBadge" class="pf-vipbadge" style="display:none">✨ VIP</span>
           <span id="profileTitle" class="nick-title nick-title-lg" hidden></span>
-          <button id="profileNickEditBtn" onclick="toggleNickEdit(true)" style="display:none;background:none;border:none;color:var(--tw);cursor:pointer;font-size:.7rem;font-weight:700">✎ Сменить ник</button>
+          <button id="profileNickEditBtn" class="pf-link" onclick="toggleNickEdit(true)" style="display:none">✎ Сменить ник</button>
         </div>
         <div id="profileNickEditWrap" style="display:none;margin-top:.4rem;gap:.4rem;max-width:260px">
-          <input id="profileNickInput" maxlength="24" style="flex:1;background:rgba(var(--fg-rgb),.06);border:1.5px solid var(--border);border-radius:8px;padding:.4rem .6rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem;outline:none">
-          <button onclick="saveProfileNick()" style="padding:.4rem .7rem;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.75rem;cursor:pointer">✓</button>
-          <button onclick="toggleNickEdit(false)" style="padding:.4rem .7rem;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:.75rem;cursor:pointer">✕</button>
+          <input id="profileNickInput" maxlength="24" aria-label="Новый ник" style="flex:1;background:rgba(var(--fg-rgb),.06);border:1.5px solid var(--border);border-radius:8px;padding:.4rem .6rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem;outline:none">
+          <button onclick="saveProfileNick()" aria-label="Сохранить ник" style="padding:.4rem .7rem;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.75rem;cursor:pointer">✓</button>
+          <button onclick="toggleNickEdit(false)" aria-label="Отмена" style="padding:.4rem .7rem;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:.75rem;cursor:pointer">✕</button>
         </div>
         <div id="profileVipExpireWarn" style="display:none;font-size:.7rem;color:#ffb020;margin-top:.35rem;font-weight:700"></div>
-        <div style="margin-top:.4rem">
-          <span id="profileStatusView" style="color:var(--muted);font-size:.78rem;font-style:italic"></span>
-          <button id="profileStatusEditBtn" onclick="toggleStatusEdit(true)" style="display:none;background:none;border:none;color:var(--tw);cursor:pointer;font-size:.7rem;margin-left:.4rem" title="Изменить статус">✎</button>
+        <div class="pf-statusline">
+          <span id="profileStatusView" class="pf-status"></span>
+          <button id="profileStatusEditBtn" class="pf-link" onclick="toggleStatusEdit(true)" style="display:none;margin-left:.4rem" title="Изменить статус" aria-label="Изменить статус">✎</button>
           <div id="profileStatusEditWrap" style="display:none;gap:.4rem;margin-top:.3rem;max-width:280px">
-            <input id="profileStatusInput" maxlength="60" placeholder="🎮 играю в Valorant..." style="flex:1;background:rgba(var(--fg-rgb),.06);border:1.5px solid var(--border);border-radius:8px;padding:.35rem .6rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.75rem;outline:none">
-            <button onclick="saveProfileStatus()" style="padding:.35rem .6rem;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.7rem;cursor:pointer">✓</button>
-            <button onclick="toggleStatusEdit(false)" style="padding:.35rem .6rem;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:.7rem;cursor:pointer">✕</button>
+            <input id="profileStatusInput" maxlength="60" placeholder="🎮 играю в Valorant..." aria-label="Статус" style="flex:1;background:rgba(var(--fg-rgb),.06);border:1.5px solid var(--border);border-radius:8px;padding:.35rem .6rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.75rem;outline:none">
+            <button onclick="saveProfileStatus()" aria-label="Сохранить статус" style="padding:.35rem .6rem;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.7rem;cursor:pointer">✓</button>
+            <button onclick="toggleStatusEdit(false)" aria-label="Отмена" style="padding:.35rem .6rem;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:.7rem;cursor:pointer">✕</button>
           </div>
         </div>
         <div id="profileNickError" style="font-size:.68rem;color:var(--accent);margin-top:.2rem"></div>
-        <div style="display:flex;align-items:center;gap:.4rem">
+        <div class="pf-emailline">
           <span id="profileEmail" style="font-size:.75rem;color:var(--muted)"></span>
           <button id="profileEmailToggle" onclick="toggleProfileEmailVisibility()" style="display:none;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:0" title="Показать/скрыть почту">👁</button>
         </div>
+        <!-- профиль 2.0: уровень и опыт до следующего (xp_summary — renderProfileXp в xp.js) -->
+        <div class="pf2-lv" id="pf2Lv" hidden><b id="pf2LvN">Lv 1</b><span class="pf2-bar"><i id="pf2LvBar"></i></span><small id="pf2LvT"></small></div>
       </div>
+    </div>
+    <!-- профиль 2.0: быстрые числа (серия — current_streak, опыт — xp_summary, партии — game_stats, ачивки — my_achievements) -->
+    <div class="pf2-quick" id="pf2Quick" aria-label="Коротко о профиле">
+      <div class="pf2-q"><b id="pf2Streak">—</b><span>🔥 дней подряд</span></div>
+      <div class="pf2-q"><b id="pf2Xp">—</b><span>⭐ опыта</span></div>
+      <div class="pf2-q"><b id="pf2Games">—</b><span>🎮 партий</span></div>
+      <div class="pf2-q"><b id="pf2Ach">—</b><span>🏆 ачивок</span></div>
+    </div>
     </div>
 
     <div id="profileUploadStatus" style="font-size:.72rem;text-align:center;min-height:1rem;margin-top:.5rem"></div>
@@ -1717,37 +1730,13 @@ body.low .donation-alert-icon{animation:none}
     <div id="profileHiddenNote" class="pf-card pf-card-muted" style="display:none;margin-top:1.2rem;text-align:center"></div>
 
     <!-- Статистика профиля -->
-    <div id="profileStatsRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.7rem;margin-top:1.2rem">
-      <div class="profile-stat-card" style="animation-delay:.04s">
-        <div style="font-size:1.25rem">📅</div>
-        <div id="profileStatRegDate" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
-        <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">На сайте с</div>
-      </div>
-      <div class="profile-stat-card" style="animation-delay:.11s">
-        <div style="font-size:1.25rem">⏳</div>
-        <div id="profileStatDays" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
-        <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">Дней с нами</div>
-      </div>
-      <div class="profile-stat-card" style="animation-delay:.18s">
-        <div style="font-size:1.25rem">👥</div>
-        <div id="profileStatFriends" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
-        <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">Друзей</div>
-      </div>
-      <div class="profile-stat-card" style="animation-delay:.25s">
-        <div style="font-size:1.25rem">📝</div>
-        <div id="profileStatThreads" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
-        <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">Тем на форуме</div>
-      </div>
-      <div class="profile-stat-card" style="animation-delay:.32s">
-        <div style="font-size:1.25rem">🔗</div>
-        <div id="profileStatReferrals" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
-        <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem" title="Друзья по твоей ссылке, дошедшие до 3 уровня">Привёл друзей</div>
-      </div>
-      <div class="profile-stat-card" style="animation-delay:.38s">
-        <div style="font-size:1.25rem">🔥</div>
-        <div id="profileStatStreak" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
-        <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">Дней подряд</div>
-      </div>
+    <div id="profileStatsRow" class="pf-stats">
+      <div class="profile-stat-card" style="animation-delay:.04s"><div class="psc-i">📅</div><div id="profileStatRegDate" class="psc-v">—</div><div class="psc-l">На сайте с</div></div>
+      <div class="profile-stat-card" style="animation-delay:.11s"><div class="psc-i">⏳</div><div id="profileStatDays" class="psc-v">—</div><div class="psc-l">Дней с нами</div></div>
+      <div class="profile-stat-card" style="animation-delay:.18s"><div class="psc-i">👥</div><div id="profileStatFriends" class="psc-v">—</div><div class="psc-l">Друзей</div></div>
+      <div class="profile-stat-card" style="animation-delay:.25s"><div class="psc-i">📝</div><div id="profileStatThreads" class="psc-v">—</div><div class="psc-l">Тем на форуме</div></div>
+      <div class="profile-stat-card" style="animation-delay:.32s"><div class="psc-i">🔗</div><div id="profileStatReferrals" class="psc-v">—</div><div class="psc-l" title="Друзья по твоей ссылке, дошедшие до 3 уровня">Привёл друзей</div></div>
+      <div class="profile-stat-card" style="animation-delay:.38s"><div class="psc-i">🔥</div><div id="profileStatStreak" class="psc-v">—</div><div class="psc-l">Дней подряд</div></div>
     </div>
 
     <div id="profileAboutCard" class="pf-card pf-card-accent" style="margin-top:1.5rem">
@@ -1779,6 +1768,12 @@ body.low .donation-alert-icon{animation:none}
           <button onclick="toggleGamesEdit(false)" class="pf-btn pf-btn-ghost pf-btn-sm">Отмена</button>
         </div>
       </div>
+    </div>
+
+    <!-- Профиль 2.0: витрина — лучшие полученные ачивки (renderShowcase в profile.js по ответу renderAchievements); без UI_V2 не видна -->
+    <div id="pf2Showcase" class="pf-card pf-card-tw pf2-show" hidden>
+      <div class="pf-kicker pf2-kick"><span>🏆 Витрина</span><button type="button" class="pf-link" onclick="document.getElementById('profileAchievementsCard')?.scrollIntoView({behavior:'smooth',block:'start'})">все ачивки →</button></div>
+      <div class="pf2-show-grid" id="pf2ShowGrid"></div>
     </div>
 
     <!-- Уровень и XP (js/features/xp.js, xp.sql) — скрыт, пока xp.sql не выполнен -->
@@ -1828,6 +1823,8 @@ body.low .donation-alert-icon{animation:none}
 
     <!-- Друзья — только на своём профиле -->
     <div id="profileFriendsPanel" class="pf-card pf-card-tw" style="display:none;margin-top:1rem">
+      <!-- профиль 2.0: друзья кружками (renderFriendsPanel в friends.js); без UI_V2 не виден -->
+      <div class="pf2-fprev" id="pf2FriendsPrev" hidden></div>
       <div class="pf-kicker" style="margin-bottom:.6rem">👥 Заявки в друзья</div>
       <div id="friendRequestsList" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem"></div>
       <div class="pf-kicker" style="margin-bottom:.6rem;display:flex;justify-content:space-between;gap:.5rem">Друзья <span id="friendsLimitNote" class="ach-summary"></span></div>
@@ -1976,24 +1973,7 @@ body.low .donation-alert-icon{animation:none}
   </div>
 </div>
 
-<!-- Мини-профиль (всплывает по клику на ник, как в Discord) -->
-<div id="miniProfilePopover" style="display:none;position:fixed;z-index:9600;width:260px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.5);overflow:hidden">
-  <div id="miniProfileBanner" style="height:70px;background:linear-gradient(135deg,rgba(255,45,85,.25),rgba(145,71,255,.25));background-size:cover;background-position:center"></div>
-  <div style="padding:0 1rem 1rem">
-    <div id="miniProfileAvatar" style="width:64px;height:64px;border-radius:50%;border:3px solid var(--card);margin-top:-32px;background:var(--tw);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background-size:cover;background-position:center"></div>
-    <div style="display:flex;align-items:center;gap:.4rem;margin-top:.5rem">
-      <span id="miniProfileNick" style="font-weight:800;font-size:.9rem"></span>
-      <span id="miniProfileVip" style="display:none">✨</span>
-    </div>
-    <div id="miniProfileTitle" class="nick-title" hidden style="margin-top:.25rem"></div>
-    <div id="miniProfileRoleBadge" style="margin-top:.2rem"></div>
-    <div id="miniProfileStatus" style="font-size:.72rem;color:var(--muted);font-style:italic;margin-top:.3rem"></div>
-    <p id="miniProfileBio" style="font-size:.75rem;color:var(--muted);margin-top:.5rem;line-height:1.5"></p>
-    <div id="miniProfileGames" style="margin-top:.4rem"></div>
-    <div id="miniProfileFriendAction" style="margin-top:.6rem"></div>
-    <a id="miniProfileLink" href="#" style="display:block;margin-top:.6rem;font-size:.72rem;color:var(--tw);text-decoration:underline">Открыть профиль →</a>
-  </div>
-</div>
+<!-- Мини-профиль: общая мини-карточка игрока — рисует js/features/minicard.js (D37Mini) -->
 
 <!-- ФОРУМ -->
 <div class="wrap reveal" id="forum-page">
@@ -2726,6 +2706,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/forum.js"></script>
 <script src="js/features/friends.js"></script>
 <script src="js/features/lfg.js"></script>
+<script src="js/features/minicard.js"></script>
 <script src="js/features/twitch.js"></script>
 <script src="js/features/soundboard.js"></script>
 <script src="js/features/easter-egg.js"></script>

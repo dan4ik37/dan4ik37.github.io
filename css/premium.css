@@ -779,6 +779,29 @@ body.low .orbit,body.low .sat-i{animation:none!important}
   box-shadow:0 30px 70px -30px rgba(0,0,0,.6);
 }
 
+/* ---- Шапка профиля: классы вместо прежних inline-стилей разметки (вид тот же; профиль 2.0 — css/ui2.css, html.ui2) ---- */
+.pf-banner{position:relative;height:180px;border-radius:16px;background:linear-gradient(135deg,rgba(255,45,85,.25),rgba(145,71,255,.25));background-size:cover;background-position:center;overflow:hidden}
+.pf-banner-edit{position:absolute;top:.8rem;right:.8rem;gap:.4rem}
+.pf-ovbtn{background:rgba(0,0,0,.5);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:.5rem .9rem;font-size:.72rem;cursor:pointer;font-weight:700;font-family:inherit}
+button.pf-ovbtn{padding:.5rem .7rem;font-weight:400}
+.pf-hrow{display:flex;align-items:flex-end;gap:1.2rem;margin-top:-48px;margin-left:1.5rem;position:relative;z-index:2}
+.pf-avw{position:relative}
+.pf-ava{width:96px;height:96px;border-radius:50%;border:4px solid var(--bg);background:var(--tw);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:800;color:#fff;background-size:cover;background-position:center}
+.pf-ava-edit{position:absolute;bottom:0;right:0;width:30px;height:30px;border-radius:50%;background:var(--accent);border:3px solid var(--bg);align-items:center;justify-content:center;cursor:pointer;font-size:.8rem}
+.pf-ava-del{position:absolute;bottom:0;left:-8px;width:26px;height:26px;border-radius:50%;background:rgba(255,45,85,.85);border:3px solid var(--bg);color:#fff;cursor:pointer;font-size:.65rem}
+.pf-info{padding-bottom:.5rem;flex:1;min-width:0}
+.pf-nickline{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.pf-nick{font-size:1.3rem;font-weight:800}
+.pf-vipbadge{background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-size:.62rem;font-weight:800;padding:.15rem .5rem;border-radius:5px;letter-spacing:.5px}
+.pf-link{background:none;border:none;color:var(--tw-t);cursor:pointer;font-size:.7rem;font-weight:700;font-family:inherit}
+.pf-statusline{margin-top:.4rem}
+.pf-status{color:var(--muted);font-size:.78rem;font-style:italic}
+.pf-emailline{display:flex;align-items:center;gap:.4rem}
+.pf-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.7rem;margin-top:1.2rem}
+.psc-i{font-size:1.25rem}
+.psc-v{font-weight:800;font-size:.82rem;margin-top:.3rem}
+.psc-l{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem}
+
 /* ---- Баннер и аватар ---- */
 #profileBanner{
   border-radius:22px;border:1px solid var(--line-hi);
@@ -876,26 +899,10 @@ body.high #profileVipBadge{animation:badgePopIn .45s var(--ease-spring) both,bad
 }
 .profile-admin-btn:hover{transform:translateY(-2px);background:rgba(255,45,85,.22);box-shadow:0 12px 26px -12px rgba(255,45,85,.6)}
 
-/* ---- Мини-профиль: стекло + мягкое появление вместо мгновенного display:block ---- */
-#miniProfilePopover{
-  border-radius:18px;
-  background:rgba(16,16,26,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  border:1px solid var(--line-hi);
-  box-shadow:0 30px 70px -20px rgba(0,0,0,.7),0 0 0 1px rgba(0,0,0,.4);
-  transform-origin:top left;
-}
-body.high #miniProfilePopover{animation:miniPopIn .3s var(--ease-spring) both}
-@keyframes miniPopIn{from{opacity:0;transform:translateY(-8px) scale(.93)}}
-#miniProfileBanner{position:relative}
-#miniProfileBanner::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(var(--bg-rgb),0),rgba(var(--bg-rgb),.5))}
-#miniProfileAvatar{box-shadow:0 10px 24px -10px rgba(0,0,0,.7)}
-#miniProfileNick{font-family:var(--font-display);letter-spacing:.02em;font-size:1.05rem!important;font-weight:500!important;text-transform:none}
-#miniProfileVip{transition:color .2s}
-#miniProfileLink{transition:color .2s}
-#miniProfileLink:hover{color:#fff}
+/* ---- Мини-профиль — общая мини-карточка игрока: css/ui2.css (.d37m, T-086) ---- */
 
 /* ---- Курсор-прожектор и магнит теперь и на профиле ---- */
-:is(.pf-card,.profile-stat-card,#miniProfilePopover,#profileLoggedOut){
+:is(.pf-card,.profile-stat-card,#profileLoggedOut){
   --mx:-400px;--my:-400px;--cc:var(--pfc,var(--accent));
   border:1px solid transparent;
   background:
@@ -1587,7 +1594,6 @@ body.high .lv-frame-30::after{animation:lvFrameSpin 6s linear infinite}
   color:var(--gold-t);background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.3);white-space:nowrap;vertical-align:middle}
 .nick-title[hidden]{display:none}
 .nick-title-lg{font-size:.7rem;margin-left:0}
-#miniProfileTitle{margin-left:0}
 
 .ach-summary{font-size:.66rem;font-weight:700;color:var(--muted);letter-spacing:0;text-transform:none}
 .ach-badge .ach-xp{font-size:.52rem;font-weight:800;color:var(--gold-t);opacity:.85}

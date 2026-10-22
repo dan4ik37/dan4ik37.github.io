@@ -158,7 +158,7 @@ async function renderAchievements(targetId, isOwn){
       sbClient.rpc('current_streak', { uid: targetId }),
     ]);
     if (streakEl) streakEl.textContent = streakRes.error ? '—' : (streakRes.data ?? 0);
-    if (achRes.error) { box.innerHTML = ''; return; }
+    if (achRes.error) { box.innerHTML = ''; return { earned: new Set(), streak: streakRes.error ? null : (streakRes.data ?? 0) }; }
     const earned = new Set((achRes.data || []).filter(r => r.earned).map(r => r.code));
     const { special, regular } = achVisibleDefs(earned);
     // Закрытых много (50+) — на телефоне это лента на 15 экранов. Показываем полученные + 8 следующих, остальные — по кнопке
@@ -184,8 +184,10 @@ async function renderAchievements(targetId, isOwn){
     } else {
       const tp = document.getElementById('profileTitlePicker'); if (tp) tp.hidden = true;
     }
+    return { earned, streak: streakRes.error ? null : (streakRes.data ?? 0) };   // профиль 2.0: витрина и быстрые числа (profile.js pf2Ach)
   } catch(e) {
     box.innerHTML = '';
+    return null;
   }
 }
 

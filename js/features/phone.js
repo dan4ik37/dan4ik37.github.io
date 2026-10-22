@@ -23,7 +23,7 @@
 //   состояние) — всем (плоский мир рисует 📱 над игроком). Чистая функция: D37Phone.handFor(открыт, путь, звонок).
 // Приложение: D37Phone.define(id, { render(el, arg, ctx) → функция уборки (необязательно), title }).
 (() => {
-  const VER = '13';   // 13 — «🏦 Банк» (денки «Живого города», js/games/mir-econ.js); 12 — msgview: ссылка «сайт//чужой.сайт» больше не считается своей (T-011); 11 — безопасность детей (ЛС, звонки с пропуском, «только читать» до 9): msgview, community, calls, phone-apps; 10 — настоящие адреса
+  const VER = '14';   // 14 — карточка человека в ленте — общая мини-карточка сайта (js/features/minicard.js, T-086), community.js; 13 — «🏦 Банк» (денки «Живого города», js/games/mir-econ.js); 12 — msgview: ссылка «сайт//чужой.сайт» больше не считается своей (T-011); 11 — безопасность детей (ЛС, звонки с пропуском, «только читать» до 9): msgview, community, calls, phone-apps; 10 — настоящие адреса
   // файлы приложений (грузятся при первом открытии); лента сообщений msgview.js — общая для чата, сообществ и ЛС
   const MODS = { mv: ['js/features/msgview.js'], apps: ['js/features/msgview.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/msgview.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/chatplayer.js'], wchat: ['js/features/worldchat.js'], econ: ['js/games/mir-econ.js'] };
   const APPS = [
@@ -546,6 +546,7 @@
   window.addEventListener('keydown', e => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (window.D37Settings?.isOpen?.()) return;   // поверх открыто окно ⚙️ — Esc его
+    if (window.D37Mini?.isOpen?.()) return;   // поверх открыта мини-карточка игрока — Esc её (js/features/minicard.js)
     const typing = !!e.target?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
     if (isOpen) {
       if (e.code === 'Escape') {

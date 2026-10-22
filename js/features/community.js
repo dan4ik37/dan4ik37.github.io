@@ -614,6 +614,8 @@
     if (fr && currentRoute() !== 'chat') { fr.style.display = 'none'; document.getElementById('chatTwitchHome')?.appendChild(fr); }
   });
 
+  // участник → общая мини-карточка игрока (js/features/minicard.js); нет её — профиль
+  const miniCard = el => { const uid = el.dataset.uid; if (window.D37Mini?.open) window.D37Mini.open(uid, { nick: el.dataset.nick, anchor: el }); else if (uid) location.hash = '#/profile/' + uid; };
   async function onDsClick(ev){
     const b = ev.target.closest('[data-ds]');
     const root = page?.root || ev.currentTarget;
@@ -621,7 +623,7 @@
     // телефон: нажал на название канала — открылись каналы (как ☰)
     if (!b && ev.target.closest('.ds-ttl') && matchMedia('(max-width: 860px)').matches) { root.classList.add('l-open'); return; }
     const mem = ev.target.closest('.ds-mem');
-    if (mem) { root.classList.remove('r-open'); if (mv && mvHost && root.contains(mvHost)) mv.userCard(mem.dataset.uid, mem.dataset.nick, mem, null); else location.hash = '#/profile/' + mem.dataset.uid; return; }
+    if (mem) { root.classList.remove('r-open'); if (mv && mvHost && root.contains(mvHost)) mv.userCard(mem.dataset.uid, mem.dataset.nick, mem, null); else miniCard(mem); return; }
     if (!b) return;
     const k = b.dataset.ds;
     if (k === 'left') root.classList.toggle('l-open');
@@ -681,7 +683,7 @@
           el.innerHTML = P.head(xsub ? xsub.title : sub === 'members' ? '👥 Участники' : sub === 'settings' ? '⚙️ Настройки' : '🚩 Жалобы') + '<div class="ph-body ds-ph"></div>';
           const b = el.querySelector('.ph-body');
           if (xsub) xsub.render(b, 'phone', srv, parts.slice(2));
-          else if (sub === 'members') { b.innerHTML = '<div class="ds-mlist"></div>'; membersRender(b.firstChild, srv); b.addEventListener('click', ev => { const m = ev.target.closest('.ds-mem'); if (m) location.hash = '#/profile/' + m.dataset.uid; }); }
+          else if (sub === 'members') { b.innerHTML = '<div class="ds-mlist"></div>'; membersRender(b.firstChild, srv); b.addEventListener('click', ev => { const m = ev.target.closest('.ds-mem'); if (m) miniCard(m); }); }
           else if (sub === 'settings') screenSettings(b, 'phone', srv);
           else screenReports(b, 'phone', srv);
           return;
