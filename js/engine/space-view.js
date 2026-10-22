@@ -166,6 +166,9 @@ void main(){
       uni.uSunW.value = kf;
       let n = 0;
       const cx = CAM[0], cy = CAM[1], cz = CAM[2], cr = sqrt(cx * cx + cy * cy + cz * cz), rA = P.SEAR + top;
+      // шар, ниже которого земля нарисована всегда (море или самое низкое дно): тело целиком за ним — не рисуем
+      // (Луна под горизонтом или за планетой из космоса — без лишнего вызова отрисовки; край диска не просвечивает у горизонта)
+      const rO = P.R + P.renderMin, sO = cr > rO ? rO / cr : 0, cO = sqrt(1 - sO * sO), tO = sO > 0 ? sqrt(cr * cr - rO * rO) : 0;
       for (let k = 0; k < SV.list.length && n < CAP; k++) {
         const e = SV.list[k];
         if (e.kind === 'sun') {
@@ -173,6 +176,11 @@ void main(){
           // луч на солнце задевает воздух или планету — солнце рисует атмосфера (или его не видно)
           const b = cx * e.d[0] + cy * e.d[1] + cz * e.d[2], c2 = cr * cr - rA * rA, disc = b * b - c2;
           if (cr <= rA || (disc > 0 && -b - sqrt(disc) > 0)) continue;
+        }
+        else if (sO > 0 && e.dist - e.b.R > tO) {
+          // диск тела целиком внутри диска планеты (угол до центра планеты + радиус тела < угловой радиус планеты) и тело дальше касательной
+          const cb = -(cx * e.d[0] + cy * e.d[1] + cz * e.d[2]) / cr, sr = Math.sin(min(e.rad, 1.2)), cs = sqrt(1 - sr * sr);
+          if (sO > sr && cb > cO * cs + sO * sr) continue;
         }
         P.dirToL(fr, e.d[0], e.d[1], e.d[2], L3);
         const dd = min(e.dist, far * .9), ang = e.kind === 'sun' ? e.rad * 6 : max(e.rad, 2.2 * pxK), rd = dd * Math.tan(min(ang, 1.2));
