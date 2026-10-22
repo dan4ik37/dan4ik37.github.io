@@ -134,7 +134,7 @@ void main(){
     R.scene.add(mesh);
     const SV = { S, obs, list: [], t: 0, ms: 0, cpu: 0, dead: false, stubs: !!o.stubs, F: { M: new Float64Array(9), sun: new Float64Array(3) },
       moon: { id: '', lit: 0, wax: false, elong: 0 } };
-    const CAM = new Float64Array(3), L3 = [0, 0, 0], COL = new Map();
+    const CAM = new Float64Array(3), L3 = [0, 0, 0], COL = new Map(), SKYO = { stubs: false, F: SV.F };   // SKYO — один объект на все кадры
     const colOf = b => { let c = COL.get(b); if (!c) { c = lin(b.isStar ? '#fff4e0' : (b.look && b.look.color) || '#cccccc'); COL.set(b, c); } return c; };
     const moonId = (obs.def.moons || []).find(x => typeof x === 'string' && S.byId.get(x));
     let ready = false;
@@ -145,7 +145,7 @@ void main(){
       SV.t = t; SV.ms = ms;
       const cam = R.camera;
       P.toBF(V.fr, cam.position.x, cam.position.y, cam.position.z, CAM);
-      S.sky(obs, t, ms, CAM, SV.list, { stubs: SV.stubs, F: SV.F });
+      SKYO.stubs = SV.stubs; S.sky(obs, t, ms, CAM, SV.list, SKYO);
       V.skyM = SV.F.M;
       const sun = SV.list[SV.list.length - 1];
       V.sunK = sun && sun.kind === 'sun' ? sun.light : 1;
@@ -280,7 +280,7 @@ void main(){
     el.append(top, body, tl, clk);
     host.appendChild(el);
     const ctx = cv.getContext('2d');
-    const M = { el, isOpen: false, sel: obs ? obs.id : 'sun' };
+    const M = { el, isOpen: false, sel: obs ? obs.id : 'sun', stats: { n: 0, ms: 0, max: 0 } };   // stats — время рисования карты (замеры)
     let raf = 0, last = 0, prev = 0, anim = false, W = 1, H = 1, DPR = 1, view = { x: 0, z: 0, s: 1e-8 }, goal = null, fol = 'home', evAt = -1e9, ev = null, infoAt = 0;
     const shift = d => { prev += d; };
     const tNow = () => (o.time ? o.time() : 0) + prev;
@@ -423,7 +423,7 @@ void main(){
       const dt = last ? min(.1, (ts - last) / 1000) : 0; last = ts;
       if (anim) prev += dt * 5000;
       const t = tNow();
-      try { draw(t); } catch (e) { console.warn('карта системы:', e); }
+      const d0 = now(); try { draw(t); } catch (e) { console.warn('карта системы:', e); } const dd = now() - d0; M.stats.n++; M.stats.ms += dd; if (dd > M.stats.max) M.stats.max = dd;
       if (ts - infoAt > 500) {
         infoAt = ts;
         info.textContent = infoText(t);

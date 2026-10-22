@@ -24,7 +24,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
 .pl-help[hidden]{display:none}
 .pl-tele{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:6;border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:.34rem .8rem;background:rgba(10,8,24,.72);color:#fff;font:800 .76rem Montserrat,sans-serif;cursor:pointer;min-height:36px}
 .pl-tele[hidden]{display:none}
-@media (max-width:640px){.pl-bar{left:10px;right:10px;max-width:none;justify-content:flex-start}.pl-bar button{padding:.3rem .55rem;font-size:.72rem}.pl-tele{bottom:150px}
+@media (max-width:640px){.pl-bar{left:10px;right:10px;max-width:none;justify-content:flex-start}.pl-bar button{padding:.3rem .55rem;font-size:.72rem}.pl-tele{bottom:150px}.pl-lbl{display:none}
 .pl-hud{top:58px;max-width:calc(100% - 20px);font-size:11px;padding:5px 8px}.pl-st{font-size:10px}}`;
   const css = () => { if (document.getElementById('pl-css')) return; const s = document.createElement('style'); s.id = 'pl-css'; s.textContent = CSS; document.head.appendChild(s); };
   const DEG = Math.PI / 180, U = 2.1 / 1.8, HOME_LL = [29, 81];
@@ -68,7 +68,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     } catch (e) { console.warn('планета: небо системы не запустилось', e); st.SV = null; }
     // управление
     const C = st.C = E.controls({});
-    const I = st.I = E.input(wrap, { controls: C, ignore: 'button, .pl-bar, .e-btn' });
+    const I = st.I = E.input(wrap, { controls: C, ignore: 'button, .pl-bar, .e-btn, .sm, .pl-tele' });
     const H = st.H = E.ui(wrap, C);
     // полёт: место и скорость — в системе планеты (double), взгляд — рысканье/тангаж от местного горизонта
     const r0 = P.SEAR + 300000;
@@ -90,7 +90,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     btn('🛰 Орбита', 'Подняться на орбиту', () => goOrbit(st));
     btn('⬇ Вниз', 'Сам спустится к земле', () => descend(st, 40));
     st.bTime = btn('⏩ ×1', 'Время быстрее (T)', () => cycleTime(st));
-    if (st.map) btn('🪐 Система', 'Карта системы: орбиты, фазы Луны, затмения (M)', () => st.map.toggle());
+    if (st.map) { const b = btn('🪐', 'Карта системы: орбиты, фазы Луны, затмения (M)', () => st.map.toggle()), s = document.createElement('span'); s.className = 'pl-lbl'; s.textContent = ' Система'; b.appendChild(s); }
     const tele = st.tele = document.createElement('button'); tele.type = 'button'; tele.className = 'pl-tele'; tele.hidden = true;
     tele.addEventListener('click', e => { e.stopPropagation(); untele(st); });
     wrap.appendChild(tele);
@@ -107,7 +107,6 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     st.loop = E.loop(dt => step(st, dt), dt => frame(st, dt));
     st.keyT = e => {
       if (e.repeat || e.target?.closest?.('input, textarea')) return;
-      if (e.code === 'KeyM' && st.map) { st.map.toggle(); return; }
       if (st.map?.isOpen) return;
       if (e.code === 'KeyT') cycleTime(st);
       if (e.code === 'KeyL') toggleLand(st);
@@ -130,6 +129,8 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     C.blocked = !!window.D37Settings?.isOpen?.();
     C.step(dt);
     st.off += dt * (st.timeK - 1);   // ускорение — своё смещение от часов мира (шагами по 1/60 с: одинаково на любом экране)
+    if (st.map && C.down('map')) st.map.toggle();   // M или Back на геймпаде (действие «Карта» controls.js)
+    if (st.map?.isOpen) return;   // карта закрывает вид — никуда не летим и не идём
     if (st.mode === 'fly') flyStep(st, dt);
     else {
       const Pl = st.Pl;
@@ -311,9 +312,11 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
   function cycleTime(st){ const L = [1, 30, 300]; st.timeK = L[(L.indexOf(st.timeK) + 1) % L.length]; st.bTime.textContent = '⏩ ×' + st.timeK; st.bTime.classList.toggle('on', st.timeK > 1); }
 
   // ═══ Небо системы: «👁 Посмотреть» (телескоп), слежение, «ты здесь» на карте ═══
+  // запись неба по id (без замыканий: зовётся каждый шаг, пока телескоп следит)
+  function skyEntry(st, id){ const L = st.SV ? st.SV.list : null; if (L) for (let k = 0; k < L.length; k++) if (L[k].b.id === id) return L[k]; return null; }
   // направление на тело (BF) → рысканье и тангаж от местного горизонта в точке полёта
   function aim(st, id){
-    const e = st.SV?.list.find(x => x.b.id === id); if (!e) return false;
+    const e = skyEntry(st, id); if (!e) return false;
     const P = st.P, F = st.fly, B = P.basis(F.pos, st.B9), d = e.d;
     const le = d[0] * B[0] + d[1] * B[1] + d[2] * B[2], lu = d[0] * B[3] + d[1] * B[4] + d[2] * B[5], ls = d[0] * B[6] + d[1] * B[7] + d[2] * B[8];
     F.pitch = clamp(Math.asin(clamp(lu, -1, 1)), -1.55, 1.55); F.yaw = Math.atan2(-le, -ls);
@@ -323,7 +326,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     if (!st.SV) return;
     if (st.mode !== 'fly') fly(st);
     st.fly.auto = null;
-    const e = st.SV.list.find(x => x.b.id === id);
+    const e = skyEntry(st, id);
     if (!e || !aim(st, id)) return;
     // телескоп: тело — на треть кадра (точка — увеличение ×25); следим, пока не повернёшь камеру сам
     const cam = st.R.camera, deg = e.rad * 360 / Math.PI;
@@ -379,7 +382,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     // t — секунды мира, которые показать (своё смещение от часов мира), k — ускорение
     time: (t, k) => { if (S) { if (t != null) { S.off = t - S.CL.t(); S.t = t; } if (k != null) S.timeK = k; } },
     world: () => { if (S) { S.off = 0; S.timeK = 1; } },
-    sky: () => S?.SV && { moon: { ...S.SV.moon }, sunK: S.V.sunK, cpu: S.SV.cpu, t: S.t, list: S.SV.list.map(e => { const B = S.P.basis(S.V.camBF, new Array(9)); return { id: e.b.id, kind: e.kind, lit: +e.lit.toFixed(3), rad: e.rad, light: +e.light.toFixed(3), flux: e.flux, d: [...e.d], up: +(e.d[0] * B[3] + e.d[1] * B[4] + e.d[2] * B[5]).toFixed(4) }; }) },
+    sky: () => S?.SV && { moon: { ...S.SV.moon }, sunK: S.V.sunK, cpu: S.SV.cpu, t: S.t, list: S.SV.list.map(e => { const B = S.P.basis(S.V.camBF, new Array(9)); const cl = Math.hypot(e.cen[0], e.cen[1], e.cen[2]) || 1; return { id: e.b.id, kind: e.kind, ll: e.kind === 'sun' ? null : [Math.asin(e.cen[1] / cl) * 180 / Math.PI, Math.atan2(-e.cen[2], e.cen[0]) * 180 / Math.PI], lit: +e.lit.toFixed(3), rad: e.rad, light: +e.light.toFixed(3), flux: e.flux, d: [...e.d], up: +(e.d[0] * B[3] + e.d[1] * B[4] + e.d[2] * B[5]).toFixed(4) }; }) },
     map: on => { if (S?.map) { if (on === undefined) S.map.toggle(); else if (on) S.map.open(); else S.map.close(); return S.map.isOpen; } },
     look: id => S && lookAt(S, id), untele: () => S && untele(S),
     stubs: on => { if (S?.SV) S.SV.stubs = !!on; },
