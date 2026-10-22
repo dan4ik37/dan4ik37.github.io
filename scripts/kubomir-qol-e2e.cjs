@@ -196,16 +196,18 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           }
           return 1; })()`.replace('${n}', String(n)), 120000);
         await cycle(3);   // прогрев (первые открытия создают своё один раз)
-        const c0 = await counts(), h0 = await heap();
+        const h0 = await heap(), c0 = await counts();   // сначала сборка мусора (heap), потом счёт: отцепленные узлы до сборки ещё живы
         await cycle(20);
-        const c1 = await counts(), h1 = await heap();
+        const h1 = await heap(), c1 = await counts();
         console.log('УТЕЧКИ: до', JSON.stringify(c0), h0, 'МБ, после 20 кругов', JSON.stringify(c1), h1, 'МБ');
         ok(c1.nodes - c0.nodes < 150 && c1.listeners - c0.listeners <= 4 && h1 - h0 < 3, '20 открытий / закрытий всех листов и окна вещей: узлы, слушатели и память не растут', { c0, c1, h0, h1 });
         // мир закрыть и открыть 5 раз: помощники снимают свои слушатели и слои
-        const r0 = await counts(), m0 = await heap();
-        for (let i = 0; i < 5; i++) await ev(`(async () => { const t = ${T}, S = t.state(), id = S.meta.id; await t.stop(); await new Promise(r => setTimeout(r, 300)); location.hash = '#/games/kubomir/play/' + id; for (let k = 0; k < 120; k++) { await new Promise(r => setTimeout(r, 500)); const s = t.state(); if (s && s.ready && s.X) break; } return !!t.state()?.X; })()`, 90000);
+        const m0 = await heap(), r0 = await counts();
+        let reopened = 0;
+        for (let i = 0; i < 5; i++) reopened += await ev(`(async () => { const t = ${T}, S = t.state(); if (!S) return 0; const id = S.meta.id; await t.stop(); await new Promise(r => setTimeout(r, 300)); t.play(id); for (let k = 0; k < 120; k++) { await new Promise(r => setTimeout(r, 500)); const s = t.state(); if (s && s.ready && s.X) break; } return t.state()?.X ? 1 : 0; })()`, 90000) || 0;
         await sleep(3000);
-        const r1 = await counts(), m1 = await heap();
+        const m1 = await heap(), r1 = await counts();
+        ok(reopened === 5, 'мир закрыт и открыт заново 5 раз', reopened);
         console.log('МИР 5 раз: до', JSON.stringify(r0), m0, 'МБ, после', JSON.stringify(r1), m1, 'МБ');
         ok(r1.listeners - r0.listeners <= 6 && m1 - m0 < 25, 'мир закрыть / открыть 5 раз — слушатели и память на месте', { r0, r1, m0, m1 });
       }

@@ -2674,5 +2674,5 @@
     swimDeep: P => swimDeep(P), swimDrawY: (st, a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt),
     // помощники (T-049, scripts/kubomir-qol-test.cjs): что пишется в сохранение и гостю, дом, пункты меню, «съесть» и ПКМ вещью
     metaSnap: st => metaSnap(st), guestData: st => guestData(st), homeOf: st => homeOf(st), xMenu: st => xMenu(st), xHooks: st => xHooks(st), eatNow: (st, it, which) => eat(st, it, which),
-    useHand: (st, hit, tap, s, which) => useHand(st, hit, tap, s, which), dropsOf: (st, b) => dropsOf(st, b), die: (st, why) => die(st, why) } };
+    useHand: (st, hit, tap, s, which) => useHand(st, hit, tap, s, which), dropsOf: (st, b) => dropsOf(st, b), die: (st, why) => die(st, why), play: id => playById(id) } };
 })();
