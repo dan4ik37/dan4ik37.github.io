@@ -324,8 +324,9 @@ async function online(useNet){
   ok(B.S.role === 'host' && Cc.S.role === 'guest', 'хозяин ушёл — хозяином стал следующий' + tag, [B.S.role, Cc.S.role]);
   const W2 = B.S.W;
   const nb = W2 && W2.owners[B.S.me], nc = W2 && Cc.S.me >= 0 ? W2.owners[Cc.S.me] : null;
-  ok(!bL || (nb && nb.alive && Math.abs(nb.L - bL) < bL * .25 + 15), 'новый хозяин — со своей длиной' + tag, [bL, nb && nb.L]);
-  ok(!cL || (nc && nc.alive && Math.abs(nc.L - cL) < cL * .3 + 15), 'гость прислал себя — длина сохранилась' + tag, [cL, nc && nc.L]);
+  // «жив» не требуем: за 4,5 с после смены хозяина боты могут случайно сбить червячка (так тест падал примерно раз из десяти) — важна длина
+  ok(!bL || (nb && Math.abs(nb.L - bL) < bL * .25 + 15), 'новый хозяин — со своей длиной' + tag, [bL, nb && nb.L]);
+  ok(!cL || (nc && Math.abs(nc.L - cL) < cL * .3 + 15), 'гость прислал себя — длина сохранилась' + tag, [cL, nc && nc.L]);
   for (let k = 0; k < 8; k++) { const D = client('kd' + k, 'Гоша'); D.S.online('w1'); await tick(1500); D.S.leave(); await tick(700); }
   await tick(2000);
   ok(W2 && humans(W2) === 2 && botsN(W2) === C.TOTAL - 2, 'после 8 приходов и уходов — 2 человека и боты' + tag, W2 && [humans(W2), botsN(W2)]);
