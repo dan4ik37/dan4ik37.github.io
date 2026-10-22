@@ -71,7 +71,8 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     // время года — тот же момент мира, что у солнца; дождь и снег вокруг камеры, свет планеты тускнеет под тучами. Сломалась — без неё
     try {
       const Cl = E.climate;
-      if (Cl && Cl.world && Cl.attach && !(window.D37Opt && window.D37Opt.planetWeather === false)) {
+      // T-075 на паузе: только с флагом weather (localStorage d37_planet_v2 = '1', D37E.planetView FLAGS)
+      if (V.flags && V.flags.weather && Cl && Cl.world && Cl.attach && !(window.D37Opt && window.D37Opt.planetWeather === false)) {
         const UPD = [0, 0, 0], WP = [0, 0, 0];
         const W0 = Cl.world({ seed: 'planet-' + P.def.seed, mode: 'calendar', climateAt: V.climateAt, lapse: -6.5 / 1166, seaY: 0, front: 4000,
           hourAt: () => { const c = V.camBF, l = Math.hypot(c[0], c[1], c[2]) || 1; UPD[0] = c[0] / l; UPD[1] = c[1] / l; UPD[2] = c[2] / l; return P.localHour(UPD, st.t); } });

@@ -379,6 +379,16 @@
   U.apB = U.apB || new Float32Array(4);
   U.apC = U.apC || new Float32Array(4);
   U.apD = U.apD || new Float32Array(4);
+  // T-075 на паузе: кусок дымки в тумане — только при localStorage d37_planet_v2 = '1' (читается один раз, при загрузке gfx.js);
+  // без него туман — ровно прежний кусок, E.aerialFog = false (planet-view.js дымку не ставит)
+  const AERIAL = (() => { try { return typeof localStorage !== 'undefined' && localStorage.getItem('d37_planet_v2') === '1'; } catch (e) { return false; } })();
+  E.aerialFog = AERIAL;
+  const AP_PARS = AERIAL ? `
+	uniform vec4 d37ApA;
+	uniform vec4 d37ApB;
+	uniform vec4 d37ApC;
+	uniform vec4 d37ApD;
+	float d37ApG( float x ){ return abs( x ) < 1e-3 ? 1.0 - 0.5 * x : ( 1.0 - exp( - x ) ) / x; }` : '';
 
   // ═══ Куски шейдеров three.js (один раз на всю страницу) ═══
   // Ветер (шейдеры-наборы, 16.10.2026): у материала с define D37_WAVE (R.wave / E.waveMaterial: 1 — трава, верх качается,
@@ -422,12 +432,7 @@
 	varying vec3 vD37Fog;
 	uniform vec4 d37FogA;
 	uniform vec4 d37FogB;
-	uniform vec4 d37FogC;
-	uniform vec4 d37ApA;
-	uniform vec4 d37ApB;
-	uniform vec4 d37ApC;
-	uniform vec4 d37ApD;
-	float d37ApG( float x ){ return abs( x ) < 1e-3 ? 1.0 - 0.5 * x : ( 1.0 - exp( - x ) ) / x; }
+	uniform vec4 d37FogC;${AP_PARS}
 	#ifdef FOG_EXP2
 		uniform float fogDensity;
 	#else
@@ -436,10 +441,10 @@
 	#endif
 #endif`;
   // туман: обычный (по расстоянию) + высотный (плотнее у земли, интеграл по лучу) + к солнцу — тёплый (как небо у солнца).
-  // Дымка атмосферы (d37ApA.w > 0, планета): та же, что у земли планеты — пропускание по лучу (Рэлей по каналам + Ми, плотность у
-  // камеры × средняя по высоте луча) и свет, рассеянный солнцем (фазы Рэлея и Ми к солнцу); «бесконечная толща» — тональной
-  // кривой, как и остальное после неё
-  const FOG_F = `#ifdef USE_FOG
+  // Дымка атмосферы (только с AERIAL; d37ApA.w > 0, планета): та же, что у земли планеты — пропускание по лучу (Рэлей по каналам
+  // + Ми, плотность у камеры × средняя по высоте луча) и свет, рассеянный солнцем (фазы Рэлея и Ми к солнцу); «бесконечная толща» —
+  // тональной кривой, как и остальное после неё
+  const AP_F = !AERIAL ? '' : `
 	if ( d37ApA.w > 0.0 ) {
 		vec3 d37Rel = vec3( dot( viewMatrix[ 0 ].xyz, vD37Fog ), dot( viewMatrix[ 1 ].xyz, vD37Fog ), dot( viewMatrix[ 2 ].xyz, vD37Fog ) );
 		float d37L = length( d37Rel ), d37C = dot( d37Rel, d37ApC.xyz ) / max( d37L, 1e-4 );
@@ -454,7 +459,8 @@
 			d37Inf = toneMapping( d37Inf );
 		#endif
 		gl_FragColor.rgb = gl_FragColor.rgb * d37Tv + d37Inf * ( 1.0 - d37Tv );
-	} else {
+	} else {`;
+  const FOG_F = `#ifdef USE_FOG${AP_F}
 	#ifdef FOG_EXP2
 		float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
 	#else
@@ -473,8 +479,8 @@
 			fogFactor = max( fogFactor, 1.0 - exp( - max( d37FogC.z * length( d37Rel ) * d37G, 0.0 ) ) );
 		}
 	}
-	gl_FragColor.rgb = mix( gl_FragColor.rgb, d37Fc, fogFactor );
-	}
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, d37Fc, fogFactor );${AERIAL ? `
+	}` : ''}
 #endif`;
   // Мягкие тени без шума и «ряби» (15.10.2026: на полу была рябь — шум поворота выборок по пикселям экрана ползал при
   // движении, на склонах к солнцу ядро затеняло само себя):
@@ -735,7 +741,7 @@ vec3 d37Leaf( vec3 c, float n, float kind ){
     for (const k of LIT) {
       const L = T.ShaderLib && T.ShaderLib[k]; if (!L || !L.uniforms) continue;
       L.uniforms.d37FogA = { value: U.fogA }; L.uniforms.d37FogB = { value: U.fogB }; L.uniforms.d37FogC = { value: U.fogC };
-      L.uniforms.d37ApA = { value: U.apA }; L.uniforms.d37ApB = { value: U.apB }; L.uniforms.d37ApC = { value: U.apC }; L.uniforms.d37ApD = { value: U.apD };
+      if (AERIAL) { L.uniforms.d37ApA = { value: U.apA }; L.uniforms.d37ApB = { value: U.apB }; L.uniforms.d37ApC = { value: U.apC }; L.uniforms.d37ApD = { value: U.apD }; }
       L.uniforms.d37Wind = { value: U.wind };
       if (k !== 'basic' && k !== 'matcap' && k !== 'points' && k !== 'sprite' && k !== 'dashed') L.uniforms.d37Sh = { value: U.sh };
       if (k === 'standard' || k === 'physical') L.uniforms.d37Rt = { value: U.rt };

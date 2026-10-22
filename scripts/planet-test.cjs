@@ -526,6 +526,17 @@ sec('LOD v2: поверхность родной — до бита (свёртк
   const mix = x => { h = Math.imul(h ^ (x & 255), 16777619) >>> 0; };
   for (const [f, L, i, j] of list) { const c = P.buildChunk(f, L, i, j, 32); for (const k of ['pos', 'nrm', 'col']) { const u8 = new Uint8Array(c[k].buffer, c[k].byteOffset, c[k].byteLength); for (let q = 0; q < u8.length; q++) mix(u8[q]); } }
   ok(h === 620557642, 'поверхность родной до бита (pos, nrm, col 9 кусков — как до T-075)', h);
+  // сборка «как раньше» (вид без LOD v2, флаги выкл): те же числа до бита, без формы родителя
+  {
+    let same = true, lite = true;
+    for (const [f, L, i, j] of list) {
+      const a = P.buildChunk(f, L, i, j, 32), b = P.buildChunk(f, L, i, j, 32, { lite: true });
+      for (const k of ['pos', 'nrm', 'col', 'centre']) { const x = a[k], y = b[k]; if (x.length !== y.length) same = false; else for (let q = 0; q < x.length; q++) if (!Object.is(x[q], y[q])) { same = false; break; } }
+      if (a.hmin !== b.hmin || a.hmax !== b.hmax || a.radius !== b.radius) same = false;
+      if (b.md || b.np || b.colp || b.err !== -1) lite = false;
+    }
+    ok(same && lite, 'сборка без формы родителя (o.lite, флаги T-075 выкл): позиции, нормали, цвет, центр, высоты — те же до бита', { same, lite });
+  }
   // форма родителя: чётные вершины — вершины родителя (позиция, нормаль, цвет — до бита / в пределах float32 центров); нечётные —
   // середина ребра или диагонали b–c родителя (сдвиг int16 — точнее 1/30000 наибольшего); err — наибольший сдвиг
   const N = 32, n1 = 33;

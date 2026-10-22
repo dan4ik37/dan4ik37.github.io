@@ -18,7 +18,8 @@
 // Движок (T-075, PL-4): солнце — через E.setSunProvider (gfx.js); глубина — два диапазона (R.depthSplit: ближний — человечки, AO,
 // отражения; дальний — земля и небо; post.js рисует оба); тени движка ложатся на землю у игрока (V.setShadows); дымка до вещей
 // движка — та же атмосфера (туман gfx.js: E.GFXU.apA…apD); погода — V.climateAt / V.weatherPos (по широте, js/engine/climate.js).
-// Откат одной строкой: D37E.planetView.FLAGS (lod2, morph, prefetch, split, shadows, aerial) — false.
+// T-075 НА ПАУЗЕ (22.10): всё это ВЫКЛ по умолчанию (FLAGS ниже; без флагов — вид как до T-075). Включить — localStorage
+// d37_planet_v2 = '1' (всё сразу) или o.flags; что сделано и как продолжить — docs/plans/planet.md «T-075 — paused».
 (() => {
   const E = window.D37E = window.D37E || {};
   const sqrt = Math.sqrt, max = Math.max, min = Math.min, abs = Math.abs;
@@ -37,8 +38,13 @@
     if (typeof E.setSunProvider === 'function') return E.setSunProvider(f);
     wrapSun(); SUNP.f = f; return () => { if (SUNP.f === f) SUNP.f = null; };
   };
-  // что включено (откат — false здесь или o.flags в D37E.planetView(R, P, { flags }))
-  const FLAGS = { lod2: true, morph: true, prefetch: true, split: true, shadows: true, aerial: true };
+  // что включено. T-075 на паузе: всё новое ВЫКЛ, пока нет замеров на профиле телефона. Без флагов — как до T-075: прежний выбор
+  // кусков и потоков, сборка без формы родителя, шейдер без перетекания и теней, небо и глубина — одним проходом, туман движка
+  // обычный, без погоды. Включить: localStorage d37_planet_v2 = '1' (всё сразу; читается при открытии вида, дымке нужна и
+  // перезагрузка — gfx.js E.aerialFog) или o.flags в D37E.planetView(R, P, { flags }); навсегда — true здесь
+  const FLAGS = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false };
+  const FLAGS_ON = { lod2: true, morph: true, prefetch: true, split: true, shadows: true, aerial: true, weather: true };
+  const v2on = () => { try { return typeof localStorage !== 'undefined' && localStorage.getItem('d37_planet_v2') === '1'; } catch (e) { return false; } };
 
   // ═══ GLSL: атмосфера (Рэлей + Ми, оптическая глубина к солнцу — приближение функции Чепмена, Шулер, GPU Pro 3;
   //     та же формула на JS — D37E.planet.chapman, сверка с численным интегралом — scripts/planet-test.cjs) ═══
@@ -101,19 +107,28 @@ float d37PhM( float c, float g ){ float g2 = g * g; return 0.1193662 * ( 1.0 - g
   // ── Поверхность: цвет вершины (sRGB) → линейный; солнце с затуханием в воздухе, свет неба по высоте солнца, вода с бликом,
   //    дымка до камеры (в вершине), пятно тени под игроком, тени движка у игрока (карта теней солнца движка) ──
   // Перетекание (CDLOD): k — 0 своя форма, 1 — форма родителя (сдвиг aMd × масштаб, нормаль и цвет родителя); k вершины — k куска,
-  // у края — k края (общий с соседом: швов нет), между — плавно на ширине uMk.w клеток. 8 varying — минимум WebGL1 (верх — во фрагменте)
+  // у края — k края (общий с соседом: швов нет), между — плавно на ширине uMk.w клеток. D37_MORPH — перетекание, D37_PSH — тени
+  // движка (флаги morph, shadows; без обоих — шейдер как до T-075). 8 varying — минимум WebGL1 (с тенями «верх» — во фрагменте)
   const TERRAIN_V = `#define NSAMP 3
 attribute vec4 aCol;
+#ifdef D37_MORPH
 attribute vec4 aMd;
 attribute vec4 aNp;
 attribute vec4 aCp;
-${ATMO}
-uniform vec3 uPlanetC;
 uniform vec4 uMk;
 uniform vec4 uMe;
+#endif
+${ATMO}
+uniform vec3 uPlanetC;
+#ifdef D37_PSH
 uniform mat4 uShM;
 uniform vec4 uShP;
-varying vec4 vCol; varying vec3 vN; varying vec3 vW; varying vec3 vInR; varying vec3 vInM; varying vec3 vExt; varying vec3 vSunT; varying vec4 vSh;
+varying vec4 vSh;
+#else
+varying vec3 vUp;
+#endif
+varying vec4 vCol; varying vec3 vN; varying vec3 vW; varying vec3 vInR; varying vec3 vInM; varying vec3 vExt; varying vec3 vSunT;
+#ifdef D37_MORPH
 float d37Mk(){
   float a = floor( aMd.w * 32767.0 + 0.5 ), b = floor( aNp.w * 127.0 + 0.5 ), N = uMk.z, W = uMk.w, k = uMk.x;
   k = mix( uMe.x, k, clamp( a / W, 0.0, 1.0 ) );
@@ -124,27 +139,44 @@ float d37Mk(){
   if ( a < 0.5 ) k = uMe.x; else if ( a > N - 0.5 ) k = uMe.y;
   return k;
 }
+#endif
 void main(){
+#ifdef D37_MORPH
   float k = d37Mk();
   vec3 p = position + aMd.xyz * ( uMk.y * k );
+#else
+  vec3 p = position;
+#endif
   vec4 w = modelMatrix * vec4( p, 1.0 );
   vW = w.xyz;
   vec3 pp = w.xyz - uPlanetC;
+#ifdef D37_MORPH
   vN = normalize( mat3( modelMatrix ) * normalize( mix( normal, aNp.xyz, k ) ) );
   vCol = mix( aCol, aCp, k );
+#else
+  vN = normalize( mat3( modelMatrix ) * normal );
+  vCol = aCol;
+#endif
+#ifndef D37_PSH
+  vUp = normalize( pp );
+#endif
   vec3 d = pp - uCamP; float dl = length( d );
   vec3 inR, inM, T; d37Atmo( uCamP, d / max( dl, 1e-6 ), dl, inR, inM, T );
   vInR = inR; vInM = inM; vExt = T;
   vSunT = d37SunT( pp );
+#ifdef D37_PSH
   vSh = uShM * vec4( w.xyz + vN * uShP.w, 1.0 );
+#endif
   gl_Position = projectionMatrix * modelViewMatrix * vec4( p, 1.0 );
 }`;
   // тени движка: карта теней солнца (упакованная глубина, как у three) — 4 выборки, у края коробки теней — плавно на нет;
   // сэмплер — highp (телефоны: иначе глубина читается половинной точностью — «Грабли»)
-  const TERRAIN_F = `#if __VERSION__ >= 300 || defined( GL_FRAGMENT_PRECISION_HIGH )
+  const TERRAIN_F = `#ifdef D37_PSH
+#if __VERSION__ >= 300 || defined( GL_FRAGMENT_PRECISION_HIGH )
 precision highp sampler2D;
 #endif
 #include <packing>
+#endif
 uniform vec3 uSunL;
 uniform vec3 uBetaR;
 uniform float uBetaM;
@@ -152,11 +184,17 @@ uniform vec4 uAtm3;
 uniform vec4 uLit;
 uniform vec4 uBlob;
 uniform float uTime;
+#ifdef D37_PSH
 uniform vec3 uPlanetC;
 uniform sampler2D uShMap;
 uniform vec4 uShP;
-varying vec4 vCol; varying vec3 vN; varying vec3 vW; varying vec3 vInR; varying vec3 vInM; varying vec3 vExt; varying vec3 vSunT; varying vec4 vSh;
+varying vec4 vSh;
+#else
+varying vec3 vUp;
+#endif
+varying vec4 vCol; varying vec3 vN; varying vec3 vW; varying vec3 vInR; varying vec3 vInM; varying vec3 vExt; varying vec3 vSunT;
 ${PHASE}
+#ifdef D37_PSH
 float d37Shadow(){
   if ( uShP.x <= 0.0 ) return 1.0;
   vec3 c = vSh.xyz / vSh.w;
@@ -168,6 +206,7 @@ float d37Shadow(){
   s += step( z, unpackRGBAToDepth( texture2D( uShMap, c.xy + vec2( 0.5, 0.5 ) * t ) ) );
   return mix( 1.0, s * 0.25, fade * uShP.x );
 }
+#endif
 float d37H( vec2 p ){ vec3 q = fract( vec3( p.xyx ) * 0.1031 ); q += dot( q, q.yzx + 33.33 ); return fract( ( q.x + q.y ) * q.z ); }
 float d37N( vec2 p ){ vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f ); return mix( mix( d37H( i ), d37H( i + vec2( 1.0, 0.0 ) ), f.x ), mix( d37H( i + vec2( 0.0, 1.0 ) ), d37H( i + vec2( 1.0, 1.0 ) ), f.x ), f.y ); }
 vec3 d37Amb( float mu ){
@@ -176,7 +215,9 @@ vec3 d37Amb( float mu ){
   return mix( night, day, k ) + dusk * kd * 0.5;
 }
 void main(){
+#ifdef D37_PSH
   vec3 vUp = normalize( vW - uPlanetC );   // «вверх» от центра планеты (не varying: их 8 — минимум WebGL1)
+#endif
   vec3 alb = vCol.rgb * vCol.rgb * 0.74;
   // мелкие пятна у камеры (камешки, трава, тень от неровностей): два слоя шума по координатам куска, вдали — гладко
   float cd = length( cameraPosition - vW ), nk = 1.0 - smoothstep( 15.0, 160.0, cd );
@@ -185,7 +226,11 @@ void main(){
   float a = vCol.a, wf = smoothstep( 0.494, 0.51, a ), water = clamp( ( a - 0.5 ) * 2.6, 0.0, 1.0 );
   vec3 N = normalize( vN ), L = uSunL, V = normalize( cameraPosition - vW );
   float mu = dot( vUp, L );
+#ifdef D37_PSH
   vec3 sun = uLit.x * vSunT * d37Shadow();
+#else
+  vec3 sun = uLit.x * vSunT;
+#endif
   vec3 amb = d37Amb( mu ) * uLit.y;
   vec3 col = vec3( 0.0 ), colW = vec3( 0.0 );
   if ( wf > 0.0 ) {
@@ -299,8 +344,9 @@ void main(){
   // ═══ Вид ═══
   E.planetView = function (R, P, o = {}){
     const T = R.T, PL = E.planet, D = P.def, q = R.q || 'mid', mob = !!E.isMobile?.(), low = q === 'low';
-    const F = { ...FLAGS, ...(o.flags || {}) };
+    const F = { ...FLAGS, ...(v2on() ? FLAGS_ON : {}), ...(o.flags || {}) };
     if (!F.lod2) F.morph = F.prefetch = false;
+    const BO = { lite: !F.lod2 };   // без LOD v2 — кусок собирается как раньше (без формы родителя и его точности — дешевле)
     const N = 32, K = o.K ?? (mob || low ? 1.0 : 1.25), maxL = o.maxL ?? 12;
     // LOD v2: экранная ошибка (пикселей CSS, телефон крупнее), перетекание (fade с, «осел» — k ≤ GATE), рядом с игроком — самый
     // мелкий уровень в пределах NEAR ед.; в видеокарту за кадр — не больше BUDGET кусков и BUDGET_B байт
@@ -314,8 +360,9 @@ void main(){
     R.scene.add(grp);
     const own = [];
     // слой 1 — небо (купол, оболочка, звёзды, тела неба): только дальний проход глубины; камера движка видит оба слоя
-    const camL1 = R.camera.layers.isEnabled(1);
-    R.camera.layers.enable(1);
+    // (без двух диапазонов глубины — всё на слое 0, как раньше)
+    const SKYL = F.split ? 1 : 0, camL1 = R.camera.layers.isEnabled(1);
+    if (F.split) R.camera.layers.enable(1);
 
     // ── Атмосфера: числа для шейдеров ──
     const A = D.atmo, Rg = P.SEAR;
@@ -334,8 +381,9 @@ void main(){
     // поверхность: свои числа — перетекание куска (на каждый кусок — перед его рисованием) и тени движка
     const TU = { ...U, uMk: { value: new T.Vector4(0, 0, N, 4) }, uMe: { value: new T.Vector4() }, uShM: { value: new T.Matrix4() }, uShMap: { value: null },
       uShP: { value: new T.Vector4(0, 0, 0, 0) } };
-    const terrainMat = new T.ShaderMaterial({ name: 'planet', uniforms: TU, vertexShader: TERRAIN_V, fragmentShader: TERRAIN_F, fog: false, lights: false });
-    terrainMat.customProgramCacheKey = () => 'd37planet2';
+    const terrainMat = new T.ShaderMaterial({ name: 'planet', uniforms: TU, vertexShader: TERRAIN_V, fragmentShader: TERRAIN_F, fog: false, lights: false,
+      defines: { D37_MORPH: F.morph ? 1 : false, D37_PSH: F.shadows ? 1 : false } });
+    terrainMat.customProgramCacheKey = () => 'd37planet2' + (F.morph ? 'm' : '') + (F.shadows ? 's' : '');
     own.push(terrainMat);
     // небо: купол (у камеры) и оболочка (вокруг планеты)
     const mkSky = mode => {
@@ -345,13 +393,13 @@ void main(){
       m.customProgramCacheKey = () => 'd37planetsky1';
       own.push(m); return m;
     };
-    const dome = new T.Mesh(domeGeo(T), mkSky(0)); dome.frustumCulled = false; dome.renderOrder = 901; own.push(dome.geometry); dome.layers.set(1);
+    const dome = new T.Mesh(domeGeo(T), mkSky(0)); dome.frustumCulled = false; dome.renderOrder = 901; own.push(dome.geometry); dome.layers.set(SKYL);
     dome.material.side = T.DoubleSide;   // купол вокруг камеры: каждый луч пересекает его один раз
-    const shell = new T.Mesh(new T.SphereGeometry(1, mob || low ? 96 : 160, mob || low ? 48 : 80), mkSky(1)); shell.frustumCulled = false; shell.renderOrder = 902; own.push(shell.geometry); shell.layers.set(1);
+    const shell = new T.Mesh(new T.SphereGeometry(1, mob || low ? 96 : 160, mob || low ? 48 : 80), mkSky(1)); shell.frustumCulled = false; shell.renderOrder = 902; own.push(shell.geometry); shell.layers.set(SKYL);
     shell.matrixAutoUpdate = false;
     if (A) { R.scene.add(dome); R.scene.add(shell); }
     // звёзды
-    const stars = makeStars(T, D.seed, mob ? 1400 : 2400); stars.renderOrder = 900; own.push(stars.geometry, stars.material); stars.matrixAutoUpdate = false; stars.layers.set(1);
+    const stars = makeStars(T, D.seed, mob ? 1400 : 2400); stars.renderOrder = 900; own.push(stars.geometry, stars.material); stars.matrixAutoUpdate = false; stars.layers.set(SKYL);
     R.scene.add(stars);
     // луны-«украшения» профиля v1 (rails 'visual'); луны-тела (id) и планеты рисует js/engine/space-view.js по орбитам системы
     const moons = [];
@@ -360,7 +408,7 @@ void main(){
       const u = { ...U, uTint: { value: new T.Color(m.tint) } };
       const mat = new T.ShaderMaterial({ name: 'planet-moon', uniforms: u, vertexShader: MOON_V, fragmentShader: MOON_F, fog: false, lights: false });
       mat.customProgramCacheKey = () => 'd37planetmoon1';
-      const mesh = new T.Mesh(new T.SphereGeometry(1, 40, 20), mat); mesh.frustumCulled = false; mesh.matrixAutoUpdate = false; mesh.layers.set(1);
+      const mesh = new T.Mesh(new T.SphereGeometry(1, 40, 20), mat); mesh.frustumCulled = false; mesh.matrixAutoUpdate = false; mesh.layers.set(SKYL);
       own.push(mat, mesh.geometry); R.scene.add(mesh);
       moons.push({ m, mesh, idx });
     });
@@ -387,8 +435,9 @@ void main(){
     let reqId = 0;
     const inflight = new Map();   // id → chunk
     const cores = navigator.hardwareConcurrency || 4;
-    // потоков: телефон — 2 при 6+ ядрах, компьютер — ядра − 2 (до 3); упал — новый (до 3 раз), его куски — снова в очередь
-    const wanted = o.workers ?? (mob ? (cores >= 6 ? 2 : 1) : clamp(cores - 2, 1, 3));
+    // потоков: телефон — 2 при 6+ ядрах, компьютер — ядра − 2 (до 3); без LOD v2 — как раньше (1, компьютер с 5+ ядрами — 2);
+    // упал — новый (до 3 раз), его куски — снова в очередь
+    const wanted = o.workers ?? (!F.lod2 ? (cores <= 4 || mob ? 1 : 2) : mob ? (cores >= 6 ? 2 : 1) : clamp(cores - 2, 1, 3));
     const url = o.url || 'js/engine/planet-worker.js?v=' + (typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1');
     function spawn(slot){
       const w = new Worker(url), W = { w, busy: 0, ok: false, dead: false, ids: new Set(), slot };
@@ -439,15 +488,18 @@ void main(){
       g.setAttribute('position', new T.BufferAttribute(d.pos, 3));
       g.setAttribute('normal', new T.BufferAttribute(d.nrm, 3, true));
       g.setAttribute('aCol', new T.BufferAttribute(d.col, 4, true));
-      g.setAttribute('aMd', new T.BufferAttribute(d.md, 4, true));   // сдвиг к форме родителя (int16) и столбец a
-      g.setAttribute('aNp', new T.BufferAttribute(d.np, 4, true));   // нормаль родителя (int8) и строка b
-      g.setAttribute('aCp', new T.BufferAttribute(d.colp, 4, true));
+      const mo = F.morph && !!d.md;   // перетекание выкл — без этих буферов (память видеокарты — как раньше)
+      if (mo) {
+        g.setAttribute('aMd', new T.BufferAttribute(d.md, 4, true));   // сдвиг к форме родителя (int16) и столбец a
+        g.setAttribute('aNp', new T.BufferAttribute(d.np, 4, true));   // нормаль родителя (int8) и строка b
+        g.setAttribute('aCp', new T.BufferAttribute(d.colp, 4, true));
+      }
       g.setIndex(IDX[0]);
       g.boundingSphere = new T.Sphere(new T.Vector3(0, 0, 0), d.radius);
       const m = new T.Mesh(g, terrainMat);
-      m.matrixAutoUpdate = false; m.userData.planet = true; m.userData.c = c; m.onBeforeRender = morphUp;
+      m.matrixAutoUpdate = false; m.userData.planet = true; m.userData.c = c; if (mo) m.onBeforeRender = morphUp;
       c.mesh = m; c.mask = 0; c.state = 3;
-      c.bytes = d.pos.byteLength + d.nrm.byteLength + d.col.byteLength + d.md.byteLength + d.np.byteLength + d.colp.byteLength;
+      c.bytes = d.pos.byteLength + d.nrm.byteLength + d.col.byteLength + (mo ? d.md.byteLength + d.np.byteLength + d.colp.byteLength : 0);
       placeMesh(c);
       if (c.n) { P.nodeRange(c.n, d.hmin, d.hmax); P.nodeErr(c.n, d.err); }
       const ms = now() - t0; ST.integ++; ST.integMs += ms; ST.integMax = max(ST.integMax, ms); ST.integKB += c.bytes / 1024;
@@ -472,11 +524,11 @@ void main(){
       c.data = null; c.state = 0; chunks.delete(c.key); ST.evicted++;
     }
     // сразу: 6 корневых кусков (на странице) — всегда есть чем закрыть
-    for (let f = 0; f < 6; f++) { const n = P.node(f, 0, 0, 0), c = chunkOf(n); c.data = P.buildChunk(f, 0, 0, 0, N); c.root = true; ST.mainBuilds++; integrate(c); }
+    for (let f = 0; f < 6; f++) { const n = P.node(f, 0, 0, 0), c = chunkOf(n); c.data = P.buildChunk(f, 0, 0, 0, N, BO); c.root = true; ST.mainBuilds++; integrate(c); }
 
     function send(W, c){
       const n = c.n; c.state = 2; const id = ++reqId; inflight.set(id, c); W.busy++; W.ids.add(id);
-      W.w.postMessage({ t: 'build', id, f: n.f, L: n.L, i: n.i, j: n.j, N });
+      W.w.postMessage({ t: 'build', id, f: n.f, L: n.L, i: n.i, j: n.j, N, lite: BO.lite });
     }
     function pump(t0){
       // в потоки — по важности: шаг (дети делимых, родители сливаемых), листья; если места хватает — заранее; не больше 2 у потока
@@ -495,16 +547,17 @@ void main(){
           const c = Q.shift();
           if (c.state !== 1) continue;
           const tb = now(), n = c.n;
-          c.data = P.buildChunk(n.f, n.L, n.i, n.j, N); c.state = 4; ST.mainBuilds++; ST.built++;
+          c.data = P.buildChunk(n.f, n.L, n.i, n.j, N, BO); c.state = 4; ST.mainBuilds++; ST.built++;
           const ms = now() - tb; ST.buildMs += ms; ST.buildMax = max(ST.buildMax, ms);
           P.nodeRange(n, c.data.hmin, c.data.hmax); P.nodeErr(n, c.data.err);
           ready.push(c);
           break;
         }
       }
-      // готовые данные → сетки, по бюджету кадра: не больше BUDGET кусков и BUDGET_B байт (загрузка в видеокарту — при рисовании)
+      // готовые данные → сетки, по бюджету кадра: не больше BUDGET кусков и BUDGET_B байт (загрузка в видеокарту — при рисовании);
+      // без LOD v2 — только BUDGET кусков, как раньше
       let k = 0, bytes = 0;
-      while (ready.length && k < BUDGET && (k === 0 || bytes < BUDGET_B) && now() - t0 < 4) {
+      while (ready.length && k < BUDGET && (!F.lod2 || ((k === 0 || bytes < BUDGET_B) && now() - t0 < 4))) {
         const c = ready.shift();
         if (c.state === 4 && chunks.get(c.key) === c) { bytes += integrate(c); k++; }
       }
@@ -690,8 +743,9 @@ void main(){
     // и вся постобработка — пока открыта планета, только на эту сессию (на её дальностях неверное «сломано» не должно выключить их
     // НАВСЕГДА); не собравшиеся шейдеры (наборы, свои куски) — как везде, навсегда
     const VOL = new Set(['ao', 'fol', 'rt', 'fg', 'dof', 'codes', 'test', 'post']);
+    // (без двух диапазонов — как раньше: AO и отражений на планете нет вовсе, tame ниже)
     const guardVolWas = R.guardVolatile;
-    R.guardVolatile = k => VOL.has(k);
+    if (F.split) R.guardVolatile = k => VOL.has(k);
 
     // ── Небо, свет, дальность — каждый кадр (перед рисованием) ──
     const SB = [0, 0, 0], ML = [0, 0, 0], MB = [0, 0, 0], UPD = [0, 0, 0];
@@ -783,7 +837,7 @@ void main(){
         TU.uShP.value.set(.85, sh.bias - .0004, 1 / sh.mapSize.x, max(.03, sh.normalBias));
       } else if (TU.uShP.value.x !== 0) { TU.uShP.value.x = 0; TU.uShMap.value = null; }
       // дымка до вещей движка (туман gfx.js): та же атмосфера у камеры — в общие числа E.GFXU.ap*
-      if (F.aerial && A && GU && GU.apA) aerial(sk);
+      if (F.aerial && E.aerialFog && A && GU && GU.apA) aerial(sk);   // E.aerialFog — кусок дымки в тумане есть (gfx.js)
     }
     // дымка «как у земли» для материалов движка (gfx.js FOG_F): σ рассеяния у камеры, пропускание до солнца, фаза Ми, сила
     function aerial(sk){
@@ -799,6 +853,7 @@ void main(){
     let warm = 2, shOn = false;
     // тени движка на земле: игра включает у земли (идёт пешком), выключает в полёте (коробка теней — у игрока)
     V.setShadows = on => {
+      if (!F.shadows) return;   // тени выкл (флаг) — как раньше: игра зовёт, ничего не меняется
       shOn = !!on;
       try { R.setLighting({ shadows: !!on && F.shadows }); } catch (e) {}
       const cam = R.camera; if (nearFar[0]) { cam.near = nearFar[0]; cam.far = nearFar[1]; cam.updateProjectionMatrix(); }
@@ -879,6 +934,7 @@ void main(){
 
   // куски шейдеров атмосферы — для неба системы (space-view.js): тела светят сквозь тот же воздух
   E.planetView.GLSL = { ATMO, PHASE };
+  E.planetView.FLAGS = FLAGS;   // что включено по умолчанию (T-075 на паузе — всё false; см. начало файла)
 
   // купол неба: кольца гуще у горизонта (там небо меняется сильнее всего)
   function domeGeo(T){

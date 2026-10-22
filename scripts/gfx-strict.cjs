@@ -7,7 +7,9 @@
 // lose — ещё и потеря контекста WebGL (как на телефоне, выгрузившем видеопамять): страж ничего не выключает, после возврата кадр рисуется
 // PAGE=planet — то же для скрытой «Планеты» (/play/planet, T-075): полёт вниз, посадка в полдень, тени движка на земле, два диапазона
 // глубины (AO на «высокой» — снова есть), все программы (поверхность с перетеканием и тенями, небо, звёзды, тела неба, туман движка с
-// дымкой атмосферы) собрались без предупреждений, страж ничего не выключил — ни навсегда, ни на сессию, самопроверка кадра прошла
+// дымкой атмосферы) собрались без предупреждений, страж ничего не выключил — ни навсегда, ни на сессию, самопроверка кадра прошла.
+// T-075 на паузе: новое включается флагом (localStorage d37_planet_v2 = '1') — проверка ставит его сама; PLANET_V2=0 — без флага
+// (как до T-075: один диапазон глубины, без теней на земле и дымки; общие проверки — те же)
 // (Chrome — переменная CHROME или стандартный путь Windows; временная папка — D37_TMP, иначе E:\claude-tmp, иначе системная)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
@@ -46,7 +48,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
   const ev = async (expr, ms = 60000) => { const r = await Promise.race([send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }), sleep(ms).then(() => ({ result: { value: null } }))]); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
   // «Планета» (T-075): спуск, посадка в полдень, проверки — как у мира + свои (два диапазона, тени, AO, туман-дымка)
   async function planet(){
-    const T = 'GAME_IMPL.planet._test';
+    const T = 'GAME_IMPL.planet._test', V2 = process.env.PLANET_V2 !== '0';
     await send('Page.navigate', { url: BASE + '/#/games/planet' });
     let up = false;
     for (let i = 0; i < 240 && !up; i++) { await sleep(500); try { up = await ev(`!!(window.GAME_IMPL?.planet?._test?.S?.V)`, 5000); } catch (e) {} }
@@ -88,10 +90,15 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     ok(!res.rep || !res.rep.log.length, 'самопроверка кадра прошла', res.rep);
     ok(res.frame.mean > 40 && res.frame.black < .25, 'кадр в полдень не чёрный', res.frame);
     ok(res.frame.sky > 70, 'небо над горизонтом в полдень светлое (верх кадра; дальний проход не стёрт ближним)', res.frame);
-    ok(res.split > 0, 'два диапазона глубины включены', res.split);
-    ok(res.q === 'low' || !res.post || !res.post.depthOK || (preset !== 'high' && preset !== 'ultra') || res.post.ao, 'AO снова работает на планете («высокая»)', res.post);
-    ok(res.q === 'low' || (res.shadow.cast && res.shadow.terrain > 0), 'тени движка ложатся на землю у игрока', res.shadow);
-    ok(res.aerial === 1, 'дымка атмосферы в тумане движка включена', res.aerial);
+    if (V2) {
+      ok(res.split > 0, 'два диапазона глубины включены', res.split);
+      ok(res.q === 'low' || !res.post || !res.post.depthOK || (preset !== 'high' && preset !== 'ultra') || res.post.ao, 'AO снова работает на планете («высокая»)', res.post);
+      ok(res.q === 'low' || (res.shadow.cast && res.shadow.terrain > 0), 'тени движка ложатся на землю у игрока', res.shadow);
+      ok(res.aerial === 1, 'дымка атмосферы в тумане движка включена', res.aerial);
+    } else {
+      ok(!res.split && !(res.shadow.terrain > 0) && res.aerial !== 1 && (!res.post || !res.post.ao), 'флаги T-075 выкл: как раньше — один диапазон глубины, без AO, теней на земле и дымки',
+        { split: res.split, shadow: res.shadow, aerial: res.aerial, post: res.post });
+    }
     ok(res.sunProv, 'солнце движка — через E.setSunProvider');
     const bad = logs.filter(l => /WebGLProgram|Shader Error|страж графики|exception/i.test(l));
     ok(!bad.length, 'в консоли — без ошибок шейдеров', bad.slice(0, 4));
@@ -103,6 +110,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     const base = preset === 'ultra' ? 'high' : preset;
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: preset, gfx: base, shaders: PACK, pack: PACK }) };
+    if (process.env.PAGE === 'planet' && process.env.PLANET_V2 !== '0') ls.d37_planet_v2 = '1';   // T-075: новое — флагом (на паузе выкл)
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}localStorage.removeItem('d37_gfx_guard');${preset === 'auto' ? `localStorage.removeItem('d37_gfx');` : `localStorage.setItem('d37_gfx',${JSON.stringify(base)});`}}catch(e){}` });
     if (process.env.PAGE === 'planet') await planet();
     else {

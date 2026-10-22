@@ -13,8 +13,9 @@
 //   M = N·2^L: одна и та же точка в соседних кусках (той же грани, другой грани, на уровень крупнее) даёт ОДНО и то же направление
 //   и высоту до бита — швов нет.
 //   P.select(cam, o, out) — какие куски нужны камере (cam — точка в системе планеты), P.balance — соседи отличаются не больше чем
-//   на уровень, P.stitchMask — у какого края сосед крупнее (сшивка), P.buildChunk(f, L, i, j, N) — сетка куска (типизированные
-//   массивы: в потоке и на странице одинаково), PL.indices(N, mask) — общие индексы сшивки.
+//   на уровень, P.stitchMask — у какого края сосед крупнее (сшивка), P.buildChunk(f, L, i, j, N, { lite }) — сетка куска
+//   (типизированные массивы: в потоке и на странице одинаково; lite — без формы родителя, как до T-075), PL.indices(N, mask) —
+//   общие индексы сшивки.
 //   Плоский кусок (как сейчас «Мир»): P.patch(dir) — своя система координат у якоря (x — восток, y — вверх, z — юг): P.toL / P.toBF,
 //   высота для физики P.patchHeight(fr, x, z) — по тому же треугольнику, что нарисован; вода P.patchWater(fr, x, z);
 //   P.rebaseMap(старый, новый) → { Q, t } — переезд якоря (позиции p' = Q p + t, скорости — Q).
@@ -800,8 +801,10 @@
     // середине ребра или диагонали b–c клетки родителя (так он нарисован). err — наибольший сдвиг (насколько кусок точнее
     // родителя, ед.): экранная ошибка выбора кусков. Сжатый до k = 1 кусок совпадает с родителем — смена уровня без скачка.
     const DIRS = [[1, 0], [0, 1], [-1, 1]];   // пара соседей нечётной вершины: по a (a нечётный), по b, по диагонали b–c
-    P.buildChunk = (f, L, i, j, N = 32) => {
-      const n1 = N + 1, RG = 2, g = N + 1 + 2 * RG, M = N * P2[L];   // кольцо 2: нормали родителя (шаг 2) у края
+    // o.lite — без формы родителя и его точности (вид без LOD v2, как до T-075): кольцо 1, md / np / colp — null, err −1;
+    // позиции, нормали, цвет — те же до бита (planet-test)
+    P.buildChunk = (f, L, i, j, N = 32, o) => {
+      const lite = !!(o && o.lite), n1 = N + 1, RG = lite ? 1 : 2, g = N + 1 + 2 * RG, M = N * P2[L];   // кольцо 2: нормали родителя (шаг 2) у края
       const HG = new Float64Array(g * g), DX = new Float64Array(g * g * 3), PX = new Float64Array(g * g * 3);
       const K3 = [0, 0, 0], d = [0, 0, 0];
       const gi0 = i * N, gj0 = j * N;
@@ -819,7 +822,8 @@
       // центр куска — центральная вершина (на нарисованной высоте)
       const cq = (N / 2 + RG) * g + (N / 2 + RG), C = new Float64Array([PX[cq * 3], PX[cq * 3 + 1], PX[cq * 3 + 2]]);
       const V = n1 * n1 + 4 * n1, pos = new Float32Array(V * 3), nrm = new Int8Array(V * 3), col = new Uint8Array(V * 4);
-      const md = new Int16Array(V * 4), np = new Int8Array(V * 4), colp = new Uint8Array(V * 4), NP = new Float64Array(n1 * n1 * 3), DP = new Float64Array(n1 * n1 * 3);
+      const md = lite ? null : new Int16Array(V * 4), np = lite ? null : new Int8Array(V * 4), colp = lite ? null : new Uint8Array(V * 4);
+      const NP = lite ? null : new Float64Array(n1 * n1 * 3), DP = lite ? null : new Float64Array(n1 * n1 * 3);
       let hmin = Infinity, hmax = -Infinity, rad = 0;
       const cc = [0, 0, 0];
       const skirt = 2 + .06 * (PI / 2) * R / P2[L];   // ≈ 6 % стороны куска
@@ -861,6 +865,7 @@
         const n = normal(q, 1, water, dx, dy, dz), nx = n[0], ny = n[1], nz = n[2], up = nx * dx + ny * dy + nz * dz;
         nrm[v * 3] = Math.round(nx * 127); nrm[v * 3 + 1] = Math.round(ny * 127); nrm[v * 3 + 2] = Math.round(nz * 127);
         colorAt(h, dx, dy, dz, wet, ice, up, col, v * 4);
+        if (lite) continue;   // без формы родителя
         // родитель в чётной вершине: та же точка решётки, нормаль с его шагом, цвет по ней (биты — как у него); у воды, льда и
         // ровного (оба «вверх» ≥ 0,95: скалы, пляж, снег от крутизны не зависят) цвет тот же — без второго landColor
         if (L && !(a & 1) && !(b & 1)) {
@@ -873,7 +878,8 @@
       }
       // нечётные вершины: форма родителя — середина ребра (по a или по b) или диагонали b–c его клетки
       let err = 0, ms = 0;
-      if (L) {
+      if (lite) err = -1;
+      else if (L) {
         for (let b = 0; b < n1; b++) for (let a = 0; a < n1; a++) {
           const v = b * n1 + a, oa = a & 1, ob = b & 1;
           if (!oa && !ob) continue;
@@ -907,8 +913,8 @@
         const dx = DX[gq * 3], dy = DX[gq * 3 + 1], dz = DX[gq * 3 + 2];
         pos[dst * 3] = pos[src * 3] - dx * skirt; pos[dst * 3 + 1] = pos[src * 3 + 1] - dy * skirt; pos[dst * 3 + 2] = pos[src * 3 + 2] - dz * skirt;
         nrm[dst * 3] = nrm[src * 3]; nrm[dst * 3 + 1] = nrm[src * 3 + 1]; nrm[dst * 3 + 2] = nrm[src * 3 + 2];
-        for (let c = 0; c < 4; c++) { col[dst * 4 + c] = col[src * 4 + c]; colp[dst * 4 + c] = colp[src * 4 + c]; }
-        for (let c = 0; c < 4; c++) { md[dst * 4 + c] = md[src * 4 + c]; np[dst * 4 + c] = np[src * 4 + c]; }
+        for (let c = 0; c < 4; c++) col[dst * 4 + c] = col[src * 4 + c];
+        if (!lite) for (let c = 0; c < 4; c++) { colp[dst * 4 + c] = colp[src * 4 + c]; md[dst * 4 + c] = md[src * 4 + c]; np[dst * 4 + c] = np[src * 4 + c]; }
       }
       return { f, L, i, j, N, key: key(f, L, i, j), centre: C, pos, nrm, col, md, np, colp, mscale: ms, err, hmin, hmax, radius: sqrt(rad) + skirt };
     };
