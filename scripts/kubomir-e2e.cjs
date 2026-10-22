@@ -11,7 +11,7 @@
 // KB_MODE=soak — 10 мин игры (KB_MIN — другое число минут): ходит, прыгает, плавает и лезет на стены, ставит и ломает блоки,
 //   погода и время суток меняются, телепорты, бой (меч, щит, лук) — ошибок и исключений в консоли нет, игрок ходит (ввод не заперт),
 //   память JS после сборки мусора — не растёт
-// KB_MODE=reopen — мир закрыть и открыть 8 раз: память JS после сборки мусора — не растёт
+// KB_MODE=reopen — мир закрыть и открыть 8 раз (KB_N — другое число): память JS после сборки мусора — не растёт
 // KB_MODE=combat — две руки и бой (T-012): снимки поз (от 1-го лица, спереди, сзади; фаза удара «заморожена»), зомби — нокаут
 //   мечом, лук — стрела вылетела; круги боя (KB_ROUNDS) — память JS не растёт, мобы не копятся; ошибок в консоли нет
 // KB_MODE=swim — плавание (T-019): озеро, стоит / держит «прыжок» / плывёт, день и ночь — где гладь относительно плеч и глаз, поза
@@ -269,7 +269,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         if (r?.err) { await sleep(1000); if ((res.soakErr = (res.soakErr || 0) + 1) > 5) { ok(false, 'шаг игры падает', r.err); break; } }
       }
       const h1 = await heap(), errs = logs.slice(ex0).filter(l => !/X3595|DevTools|favicon/i.test(l));
-      res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6) };
+      // мир «Обрушение» (KB_SUPPORT=1): сколько было пересчётов и обрушений — что прогон их правда задел
+      const sup = SUPPORT ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.sup, s = X?.stats; return s ? { mode: X.mode, solves: s.solves, avgMs: +(s.ms / Math.max(1, s.solves)).toFixed(2), maxMs: +s.maxMs.toFixed(1), groups: s.groups, cells: s.cells | 0, refused: s.refused } : null; })()`, 10000).catch(() => null) : undefined;
+      res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6), sup };
       console.log('ЗАМЕР soak', JSON.stringify(res.soak));
       ok(!errs.length, MIN + ' мин игры — без ошибок и исключений в консоли', errs.slice(0, 6));
       ok((res.moved | 0) >= (res.walk | 0) * .5, 'игрок ходил (ввод не заперт окном или меню) — в половине шагов и больше', { moved: res.moved | 0, of: res.walk | 0 });
@@ -577,7 +579,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     }
     if (MODE === 'reopen') {
       const hs = [];
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0, N = +process.env.KB_N || 8; i < N; i++) {
         await idle(); await new Promise(r => setTimeout(r, 2000));
         hs.push(await heap());
         await ev(`(async () => { await GAME_IMPL.kubomir._test.stop(); GAME_IMPL.kubomir._test.menu(); return true; })()`, 60000);
@@ -588,7 +590,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       }
       await idle(); await new Promise(r => setTimeout(r, 2000)); hs.push(await heap());
       res.reopen = hs; console.log('ЗАМЕР reopen, память JS после сборки мусора (МБ):', hs.join(' → '));
-      ok(hs.length >= 8 && hs[hs.length - 1] - hs[1] < 25, 'закрыть/открыть мир 8 раз — память не растёт', hs);
+      ok(hs.length >= 8 && hs[hs.length - 1] - hs[1] < 25, 'закрыть/открыть мир ' + (hs.length - 1) + ' раз — память не растёт', hs);
       return;
     }
   }
