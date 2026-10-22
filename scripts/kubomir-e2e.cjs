@@ -610,12 +610,12 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       console.log('ОГОНЬ лес и дом', JSON.stringify(res.fire0));
       ok(res.fire0 && res.fire0.spread && res.fire0.leaves > 1000, 'мир «Огонь распространяется»: лес и дом построены', res.fire0);
       const look = `S.rig.yaw = -Math.PI / 2 - .25; S.rig.fp = .18;`;
-      const meter = sec => `const cpu = [], dts = [], calls = []; let run = true;
+      const meter = sec => `const cpu = [], dts = [], calls = []; let run = true; const m0 = S.ST?.stats.mesh || 0, u0 = S.ST?.stats.uploads || 0;
         const tick = () => { if (!run) return; const st = S.R.stats; cpu.push(st.cpuFrame); dts.push(st.dt); calls.push(st.calls); requestAnimationFrame(tick); }; requestAnimationFrame(tick);
         await wait(${sec * 1000}); run = false;
         cpu.sort((a, b) => a - b); calls.sort((a, b) => a - b);
         const avg = a => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length);
-        const R = { frames: cpu.length, cpu: +avg(cpu).toFixed(2), p95: +cpu[Math.floor(cpu.length * .95)].toFixed(2), max: +cpu[cpu.length - 1].toFixed(2), fps: +(1000 / avg(dts)).toFixed(1), calls: calls[calls.length >> 1], callsMax: calls[calls.length - 1] };`;
+        const R = { frames: cpu.length, cpu: +avg(cpu).toFixed(2), p95: +cpu[Math.floor(cpu.length * .95)].toFixed(2), max: +cpu[cpu.length - 1].toFixed(2), fps: +(1000 / avg(dts)).toFixed(1), calls: calls[calls.length >> 1], callsMax: calls[calls.length - 1], meshPerSec: +(((S.ST?.stats.mesh || 0) - m0) / ${sec}).toFixed(1) };`;
       if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
       res.fireBefore = await ev(`(async () => { ${SETUP} ${look} await wait(1500); ${meter(12)} return R; })()`, 60000);
       console.log('ОГОНЬ без огня', JSON.stringify(res.fireBefore));
@@ -637,6 +637,13 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         return { off: { cpu: med(out.off, 'cpu'), p95: med(out.off, 'p95'), max: med(out.off, 'max'), calls: med(out.off, 'calls') }, on: { cpu: med(out.on, 'cpu'), p95: med(out.on, 'p95'), max: med(out.on, 'max'), calls: med(out.on, 'calls') }, burning: S.fire.F.n };
       })()`, 120000);
       console.log('ОГОНЬ пауза / идёт (медианы трёх)', JSON.stringify(res.fireAB));
+      res.fireMesh = await ev(`(async () => { ${SETUP} ${look} const out = { slow: [], fast: [] };
+        for (let r = 0; r < 3; r++) for (const ms of [280, 0]) { KubomirFire.MESH_MS = ms; await wait(600); ${meter(4)} out[ms ? 'slow' : 'fast'].push(R); }
+        KubomirFire.MESH_MS = 280;
+        const med = (a, k) => { const v = a.map(q => q[k]).sort((x, y) => x - y); return v[v.length >> 1]; };
+        return { slow: { cpu: med(out.slow, 'cpu'), p95: med(out.slow, 'p95'), meshPerSec: med(out.slow, 'meshPerSec') }, fast: { cpu: med(out.fast, 'cpu'), p95: med(out.fast, 'p95'), meshPerSec: med(out.fast, 'meshPerSec') }, burning: S.fire.F.n };
+      })()`, 120000);
+      console.log('ОГОНЬ сетка: раз в 280 мс / как обычно (медианы трёх)', JSON.stringify(res.fireMesh));
       if (process.env.KB_PROF) {   // где время ЦП в пожаре: функции по собственному времени (KB_PROF=1)
         const { profile: pf } = await send('Profiler.stop'), self = new Map(), byId = new Map(pf.nodes.map(n => [n.id, n]));
         const dt = pf.timeDeltas, sm = pf.samples; for (let i = 0; i < sm.length; i++) { const n = byId.get(sm[i]); const k = (n.callFrame.functionName || '(anon)') + ' ' + n.callFrame.url.split('/').pop() + ':' + (n.callFrame.lineNumber + 1); self.set(k, (self.get(k) || 0) + (dt[i] || 0)); }

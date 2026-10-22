@@ -18,6 +18,8 @@
 (() => {
   const VX = () => window.D37E.vox, FIR = () => window.D37E.fire;
   const KF = window.KubomirFire = window.KubomirFire || {};
+  KF.MESH_MS = 280;   // правки огня — чанк пересобирается не чаще раза в столько мс (0 — как обычные правки)
+  KF.ON = true;   // откат одной строкой: false — огня нет (блок «огонь» и огниво остаются, но не горят и не поджигают)
   KF.NOTE = 'Огонь перекидывается на соседние деревья, траву и деревянные постройки (по ветру — быстрее), дождь его гасит, лава и молния поджигают. Выкл — горит только то, что поджёг огнивом.';
   // по умолчанию при создании мира: «реализм» обрушения — вкл
   KF.defaultFor = support => support === 'real';
@@ -35,7 +37,7 @@
   KF.matOf = id => (tables()[id] | 0);
 
   KF.attach = st => {
-    const V = VX(), FI = FIR(); if (!V || !FI || !V.ID.fire) return null;
+    const V = VX(), FI = FIR(); if (!KF.ON || !V || !FI || !V.ID.fire) return null;
     tables();
     const W = st.W, guest = !!st.coopGuest, FIRE = V.ID.fire, CHAR = V.ID.charred_planks, MF = FI.MAT;
     const X = { stats: { blocks: 0, lava: 0, bolts: 0, burnt: 0, fell: 0, collapsed: 0, coal: 0 }, spread: KF.on(st.meta), F: null };
@@ -60,7 +62,17 @@
     // ── «огонь» рядом с горящим: сверху, иначе сбоку (с места по хешу — не всегда одна сторона), иначе снизу; aux — куда (1…6) ──
     const DIRS = [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0]];
     let busy = false;   // свои правки (onEdit их не считает «залили / закрыли огонь»)
-    const set = (x, y, z, v) => { busy = true; try { return W.set(x, y, z, v, { urgent: 0 }); } finally { busy = false; } };
+    // правки огня: чанк пересобирается не чаще ~3 раз в секунду (в большом пожаре сетка и её загрузка — главная цена; правки игрока — сразу)
+    const slowMesh = (cx, cz, t) => { const ms = KF.MESH_MS; if (!(ms > 0)) return; const c = W.chunk?.(cx, cz); if (c && !c.urgent && !(c.thr > t)) c.thr = t + ms; };
+    const set = (x, y, z, v) => {
+      busy = true;
+      try {
+        const r = W.set(x, y, z, v, { urgent: 0 });
+        const t = performance.now(), cx = x >> 4, cz = z >> 4, lx = x & 15, lz = z & 15;
+        slowMesh(cx, cz, t); if (lx === 0) slowMesh(cx - 1, cz, t); else if (lx === 15) slowMesh(cx + 1, cz, t); if (lz === 0) slowMesh(cx, cz - 1, t); else if (lz === 15) slowMesh(cx, cz + 1, t);
+        return r;
+      } finally { busy = false; }
+    };
     // pref — какая грань сначала (1…6: огниво — та, по которой ударил)
     function placeFlame(x, y, z, pref){
       for (let k = pref >= 1 && pref <= 6 ? -1 : 0; k < 6; k++) {

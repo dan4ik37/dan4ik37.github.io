@@ -13,8 +13,8 @@
 // события Fire.Ignited(part), Fire.Burnt(part), Fire.Extinguished(part). «■ Стоп» — мир как был.
 (() => {
   const E = window.D37E = window.D37E || {};
-  const FI = E.fire;
-  if (!FI) return;
+  const FI = E.fire, ON = true;   // откат одной строкой: ON = false — свойств и огня в студии нет
+  if (!FI || !ON) return;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // материал огня по материалу вида (scene.js MATS): горит то, что горит в жизни
   const BY_MAT = { wood: 'wood', planks: 'planks', fabric: 'cloth', grass: 'grass' };

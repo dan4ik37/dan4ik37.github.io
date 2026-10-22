@@ -17,6 +17,7 @@
 (() => {
   const FIR = () => window.D37E?.fire;
   const PF = window.PZFire = window.PZFire || {};
+  PF.ON = true;   // откат одной строкой: false — огня нет (огниво не поджигает, мир как без огня)
   PF.NOTE = 'Огонь перекидывается на деревья, траву и деревянные постройки (по ветру — быстрее), лава и брошенный факел поджигают, вода гасит. Выкл — горит только то, что поджёг огнивом.';
   PF.defaultFor = support => support === 'real';
   PF.on = W => W?.fire === 'spread';
@@ -44,7 +45,7 @@
   const CHAR_TINT = [255, 168, 120];
 
   PF.attach = (G, H) => {
-    const FI = FIR(); if (!FI || !G?.W) return null;
+    const FI = FIR(); if (!PF.ON || !FI || !G?.W) return null;
     const P = H.P, PZ = H.PZ, K = PZ.KINDS, TO = PZ.TOOLS, MF = FI.MAT;
     const WOODG = PZ.TILE.planks ? P.GROUP[PZ.TILE.planks.id] : 0, CHAR = PZ.TILE.charwood ? PZ.TILE.charwood.id : 0;
     // материал огня по номеру плитки (ваниль и моды: 1…254) и вид пламени по материалу
