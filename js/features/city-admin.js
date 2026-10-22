@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   if (window.D37CityAdm) return;
-  const sb = () => window.sbClient;
+  const sb = () => (typeof sbClient !== 'undefined' && sbClient) || null;   // let sbClient в chat.js — не свойство window
   const st = { tab: 'log', days: 30, log: null, twins: null, cfg: null, sum: null, busy: false, msg: '' };
   let root = null, body = null;
   const isAdmin = () => typeof currentRole !== 'undefined' && currentRole === 'admin';
