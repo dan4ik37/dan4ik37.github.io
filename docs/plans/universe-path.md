@@ -68,6 +68,26 @@ Principle: strict server checks only where cheating breaks the game for everyone
 6. **A separate anti-cheat service** (owner 22.10: «можно ещё античит сделать, который другая система проверяет, а не сам сервер»; board T-073): its own container (later its own small server), not the game server. It reads an append-only event journal (actions from the RPC layer, auditable inputs from rooms/regions via the T-045 «anti-cheat feed», economy statistics), re-simulates deterministic parts in its own time, keeps a risk score per account (hashed ids, no personal data) and acts softly: flag for the owner, more sampling, temporary limits, rollback requests — final bans by the owner/moderators. It never slows gameplay and can be updated independently; browser-side checks stay only as a first filter (they are easy to bypass).
 Owner of this design: T-045 (server), T-071 (regions on our server), T-058/T-060 (leaders and rules), T-037 (elections).
 
+## Owner decision 22.10.2026 (evening): more animal stages between the cell and the land; the sea is 3D underwater
+Owner: «так разве мы не должны пройти этап рыба и другое?» → chose «Ещё больше стадий» and «3D под водой». This overrides the
+single «Существо» stage of §1.1: the animal part of the path is now FIVE stages, each with its own body rules, all on the shared
+creature core (T-020 rig + T-057 editor + T-059 life core — needs, food, nest, generations, mind):
+
+| # | Stage | View | Where | Body and rules | Ends with |
+|---|---|---|---|---|---|
+| 1 | 🦠 Клетка (built, T-056) | 2D top-down | tide pool: Лужа → Риф → Глубина | parts for DNA, colony | C4 — the cell's plan (Пловец / Панцирник / Ползун) becomes the starting body of the sea stage; button «🌊 В море» |
+| 2 | 🐟 Море (fish) | 3D underwater, 3rd person | the real sea of the home planet near the lineage's homeland: shallows, reef, open sea, deep | swimming (fins, tail, jaws, eyes, armour, electric/poison organs), food chain, predators, schools with friends, depth zones need adaptations | «Лёгкие и лапы» → «🐸 На берег» |
+| 3 | 🐸 Берег (amphibian) | 3D, water + land | coasts, swamps, rivers | breath in water and air, legs from lobe-fins, eggs must stay near water, dries out away from it | «Яйцо в скорлупе» → «🦎 Вглубь суши» |
+| 4 | 🦎 Ящеры (reptiles) | 3D | inland: steppe, desert, forest | shell eggs on land, scales, cold-blooded (warm up in the sun — climate.js day/night/seasons matter), big forms possible | «Тёплая кровь» → choose 🐾 Звери or 🐦 Птицы |
+| 5 | 🐾 Звери / 🐦 Птицы (mammals / birds) | 3D | everywhere; birds fly | warm-blooded (fur / feathers, active at night and in cold), care for the young, packs and flocks; birds — wings and flight | «Пробуждение» → the Person and the tribe (§1.4) |
+
+Rules: everyone passes all stages (owner: «все с микроба»); each stage is playable and useful on its own (records, encyclopedia,
+cosmetics of the lineage — no coins for money, no paid speed-ups beyond the normal XP boost rule); the creature editor grows with
+the stages (new part groups unlock per stage); NPC wildlife of the planet uses the same species (players' designs become wildlife
+only after review, §2.5); kids — peaceful lands, knockout instead of death. Lengths (P, tune with sims): sea 2–3 h, shore 1–2 h,
+reptiles 2–3 h, mammals/birds 3–5 h to awakening. Order: T-020 (rig, after trees/fire) → T-057 (editor) → T-059a (life core) →
+T-092 Море → T-093 Берег → T-094 Ящеры → T-095 Звери и птицы (each after the previous) → awakening (T-059b) → tribe (T-060).
+
 ## 0. Decisions (one line each; the owner can change any of them)
 - **The path:** cell → creature → awakening → the Person: tribe (a settlement in era 0) → settlement eras → future and space. One account = one Person
   (the site avatar) + lineages («род»): 1 slot free, VIP or donor +1 (P). Extra slots are comfort, not power.
