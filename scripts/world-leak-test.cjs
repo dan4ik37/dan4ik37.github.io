@@ -87,6 +87,14 @@ ok(/E\.GFXU\?\.occRT\?\.dispose\(\)/.test(rDisp), 'render.js: R.dispose сним
 ok(/for \(const f of \[\.\.\.R\.preRender\]\) f\.dispose/.test(rDisp), 'render.js: R.dispose обходит копию R.preRender (dispose крючка убирает его из списка)');
 ok(/function openChannel\(shard\)/.test(mir) && !/async function join[\s\S]{0,2200}sbClient\.channel\(/.test(mir.slice(mir.indexOf('async function join'), mir.indexOf('function openChannel'))), 'mir.js: обработчики канала мира — в openChannel (без st закрытого мира)');
 ok(/W\.stopped = true/.test(war) && /if \(W\.stopped \|\|/.test(war) && /function relayChannel/.test(war), 'mir-war.js: остановленный бой не открывает канал заново, обработчики канала — через реле');
+// T-090: открытый мир рос на +10 МБ/с — подгрузка (4 раза в секунду) начинала зону заново, пока шли клетки/склейка/доделка (zs.it
+// уже null, zs.built ещё false): на медленном кадре без конца, и каждая копия (сетки, тела физики, предметы, BRK) оставалась.
+// Первая строка beginBuild — выход, если постройка уже начата на любом этапе (zs.grp или busy(zs)), а не только пока идёт zs.it
+{
+  const i = mz.indexOf('function beginBuild(zs)'), body = i > 0 ? mz.slice(i, mz.indexOf('\n    }', i)) : '';
+  const guard = (body.split('\n').map(l => l.trim()).find(l => /^if \(.*\) return;/.test(l)) || '');
+  ok(/\bzs\.grp\b|\bbusy\(zs\)/.test(guard), 'mir-zones.js: зона строится один раз — beginBuild не начинает заново, пока идут клетки/склейка/доделка', guard || '(нет beginBuild)');
+}
 
 // ═══ 4. Движок в node: после остановки модуль не держит мир (WeakRef + сборка мусора) ═══
 (async () => {
