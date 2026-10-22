@@ -25,6 +25,57 @@
     embers: { name: 'Угли', icon: '✨', rate: 10, life: [.9, 1.8], size: [.07, .14], color: '#ffb347', color2: '#ff3a12', speed: [1.4, 3.2], spread: .45, gravity: -.6, area: .35, shape: 0, blend: 'add', twinkle: 1, drift: .6 },
   };
   const MAX = 900;   // частиц в одном эмиттере
+  // случайное для картинки (не Math.random: его результат V8 «упаковывает» — мусор на каждый вызов): xorshift в типизированном массиве
+  const RSA = new Int32Array([0x2545f491]);
+  const fr = () => { let r = RSA[0]; r ^= r << 13; r ^= r >>> 17; r ^= r << 5; RSA[0] = r; return (r >>> 0) * 2.3283064365386963e-10; };
+  // ── Частицы эмиттера: рождение и движение (общие для всех эмиттеров; массивы — em.pos, em.vel, …) ──
+  function emSpawn(em, x, y, z){
+    if (em.n >= em.cap) return;
+    const i = em.n++, K = em.kind, s = em.sizeK, sp = K.spread, ar = K.area * (K.top ? 1 : s), pos = em.pos, vel = em.vel, tint = em.tint;
+    const a = fr() * Math.PI * 2, rr = K.top ? fr() * ar : Math.sqrt(fr()) * ar;
+    pos[i * 3] = x + Math.cos(a) * rr; pos[i * 3 + 1] = y + (K.top ? K.top * s * .5 + fr() * 2 : 0); pos[i * 3 + 2] = z + Math.sin(a) * rr;
+    const v = (K.speed[0] + fr() * (K.speed[1] - K.speed[0])) * (K.top ? 1 : Math.sqrt(s)), d = fr() * Math.PI * 2;
+    vel[i * 3] = Math.cos(d) * v * sp; vel[i * 3 + 1] = v * (1 - sp * .5); vel[i * 3 + 2] = Math.sin(d) * v * sp;
+    if (K.top) { vel[i * 3] = vel[i * 3 + 2] = 0; vel[i * 3 + 1] = v; }
+    em.age[i] = 0; em.life[i] = K.life[0] + fr() * (K.life[1] - K.life[0]); em.base[i] = (K.size[0] + fr() * (K.size[1] - K.size[0])) * s; em.ph[i] = fr() * 6.283; em.spin[i] = fr() * 6.283;
+    if (K.palette) { const ca = em.ca; ca.set(K.palette[(fr() * K.palette.length) | 0]); tint[i * 3] = ca.r; tint[i * 3 + 1] = ca.g; tint[i * 3 + 2] = ca.b; }
+    else { const m = fr() * .25, c1 = em.c1, c2 = em.c2; tint[i * 3] = c1[0] * (1 - m) + c2[0] * m; tint[i * 3 + 1] = c1[1] * (1 - m) + c2[1] * m; tint[i * 3 + 2] = c1[2] * (1 - m) + c2[2] * m; }
+  }
+  // движение и смерть (умершие меняются местами с последней — массив без дыр), размер, цвет и прозрачность за жизнь
+  function emMove(em, dt){
+    const K = em.kind, pos = em.pos, vel = em.vel, age = em.age, life = em.life, base = em.base, ph = em.ph, spin = em.spin, tint = em.tint, size = em.size, col = em.col, c2 = em.c2, wind = em.wind, mul = em.mul;
+    const grav = K.gravity, drag = K.drag || 0, drift = K.drift || 0, orbit = K.orbit || 0, alpha = K.alpha ?? 1, m0 = c2 && !K.palette ? 1 : 0, shrink = !!K.shrink, grow = !!K.grow, twinkle = !!K.twinkle, sq = K.shape === 1;
+    for (let i = 0; i < em.n; i++) {
+      age[i] += dt;
+      if (age[i] >= life[i]) {
+        const j = --em.n;
+        if (i !== j) {
+          for (let k = 0; k < 3; k++) { pos[i * 3 + k] = pos[j * 3 + k]; vel[i * 3 + k] = vel[j * 3 + k]; tint[i * 3 + k] = tint[j * 3 + k]; }
+          age[i] = age[j]; life[i] = life[j]; base[i] = base[j]; ph[i] = ph[j]; spin[i] = spin[j];
+        }
+        i--; continue;
+      }
+      const t = age[i] / life[i];
+      vel[i * 3 + 1] -= grav * dt;
+      if (drag) { const f = Math.max(0, 1 - drag * dt); vel[i * 3] *= f; vel[i * 3 + 2] *= f; if (vel[i * 3 + 1] < -3) vel[i * 3 + 1] = -3; }
+      let wx = 0, wz = 0;
+      if (drift) { wx = Math.sin(age[i] * 1.3 + ph[i]) * drift; wz = Math.cos(age[i] * 1.1 + ph[i]) * drift; }
+      if (orbit) { wx += Math.cos(age[i] * 3 + ph[i]) * orbit; wz += Math.sin(age[i] * 3 + ph[i]) * orbit; }
+      if (wind) { const k = t < .35 ? t * 2.2 : .77 + t * .3; wx += wind[0] * k; wz += wind[1] * k; }   // ветер сильнее уносит то, что уже поднялось
+      pos[i * 3] += (vel[i * 3] + wx) * dt; pos[i * 3 + 1] += vel[i * 3 + 1] * dt; pos[i * 3 + 2] += (vel[i * 3 + 2] + wz) * dt;
+      let sz = base[i];
+      if (shrink) sz *= 1 - t * .85; if (grow) sz *= .5 + t;
+      if (twinkle) sz *= .65 + .35 * Math.sin(age[i] * 14 + ph[i]);
+      size[i] = sz;
+      const fade = Math.min(1, t * 6) * (1 - t * t) * alpha, m = m0 ? t : 0;
+      col[i * 4] = tint[i * 3] * (1 - m) + c2[0] * m; col[i * 4 + 1] = tint[i * 3 + 1] * (1 - m) + c2[1] * m; col[i * 4 + 2] = tint[i * 3 + 2] * (1 - m) + c2[2] * m; col[i * 4 + 3] = fade;
+      if (mul) { col[i * 4] *= mul[0]; col[i * 4 + 1] *= mul[1]; col[i * 4 + 2] *= mul[2]; }
+      if (sq) spin[i] += dt * 4;
+    }
+    const geo = em.geo;
+    geo.setDrawRange(0, em.n);
+    if (em.n) { geo.attributes.position.needsUpdate = geo.attributes.aSize.needsUpdate = geo.attributes.aColor.needsUpdate = geo.attributes.aSpin.needsUpdate = true; }
+  }
 
   E.fx = function (R){
     const T = R.T, low = R.q === 'low', list = new Set();
@@ -85,59 +136,19 @@ void main(){
       };
       em.cap = Math.max(1, Math.min(MAX, o.cap | 0 || MAX));   // своё число частиц (дым пожара на телефоне — меньше: перерисовка экрана)
       em.set({});
-      function spawn(x, y, z){
-        if (em.n >= em.cap) return;
-        const i = em.n++, K = em.kind, s = em.sizeK, sp = K.spread, ar = K.area * (K.top ? 1 : s);
-        const a = Math.random() * Math.PI * 2, rr = K.top ? Math.random() * ar : Math.sqrt(Math.random()) * ar;
-        pos[i * 3] = x + Math.cos(a) * rr; pos[i * 3 + 1] = y + (K.top ? K.top * s * .5 + Math.random() * 2 : 0); pos[i * 3 + 2] = z + Math.sin(a) * rr;
-        const v = (K.speed[0] + Math.random() * (K.speed[1] - K.speed[0])) * (K.top ? 1 : Math.sqrt(s)), d = Math.random() * Math.PI * 2;   // без помощника rnd(): дробные аргументы — мусор
-        vel[i * 3] = Math.cos(d) * v * sp; vel[i * 3 + 1] = v * (1 - sp * .5); vel[i * 3 + 2] = Math.sin(d) * v * sp;
-        if (K.top) { vel[i * 3] = vel[i * 3 + 2] = 0; vel[i * 3 + 1] = v; }
-        age[i] = 0; life[i] = K.life[0] + Math.random() * (K.life[1] - K.life[0]); base[i] = (K.size[0] + Math.random() * (K.size[1] - K.size[0])) * s; ph[i] = Math.random() * 6.283; spin[i] = Math.random() * 6.283;
-        if (K.palette) { ca.set(K.palette[(Math.random() * K.palette.length) | 0]); tint[i * 3] = ca.r; tint[i * 3 + 1] = ca.g; tint[i * 3 + 2] = ca.b; }
-        else { const m = Math.random() * .25; for (let k = 0; k < 3; k++) tint[i * 3 + k] = em.c1[k] * (1 - m) + em.c2[k] * m; }
-      }
-      em.burst = n => { const p = atFn ? atFn() : at; if (!p) return; for (let k = 0; k < n; k++) spawn(p[0], p[1], p[2]); };
+      // частицы — в массивах самого эмиттера; рождение и движение — общие функции (emSpawn / emMove — одни на все эмиттеры:
+      // быстрее становятся оптимизированным кодом V8, без «упакованных» дробных чисел — мусора за кадр)
+      Object.assign(em, { pos, size, col, spin, vel, age, life, base, ph, tint, ca, geo });
+      em.burst = n => { const p = atFn ? atFn() : at; if (!p) return; for (let k = 0; k < n; k++) emSpawn(em, p[0], p[1], p[2]); };
       // родить прямо в точке (без em.set — тот пересобирает материал): пожар — дым и угли над каждым горящим
-      em.emitAt = (x, y, z, n = 1) => { for (let k = 0; k < n; k++) spawn(x, y, z); };
+      em.emitAt = (x, y, z, n = 1) => { for (let k = 0; k < n; k++) emSpawn(em, x, y, z); };
       em.wind = null;   // [x, z] — ветер (м/с): уносит частицы (дым пожара)
       em.mul = null;    // [r, g, b] — свет вокруг (ночью и в пещере дым темнее): множитель цвета
       em.step = dt => {
-        const K = em.kind, p = atFn ? atFn() : at;
-        if (em.enabled && p) { em.acc += em.rate * dt; let n = Math.min(60, em.acc | 0); em.acc -= n; while (n-- > 0) spawn(p[0], p[1], p[2]); }
+        const p = atFn ? atFn() : at;
+        if (em.enabled && p) { em.acc += em.rate * dt; let n = Math.min(60, em.acc | 0); em.acc -= n; while (n-- > 0) emSpawn(em, p[0], p[1], p[2]); }
         else em.acc = 0;
-        // движение и смерть (умершие меняются местами с последней — массив без дыр)
-        for (let i = 0; i < em.n; i++) {
-          age[i] += dt;
-          if (age[i] >= life[i]) {
-            const j = --em.n;
-            if (i !== j) {
-              for (let k = 0; k < 3; k++) { pos[i * 3 + k] = pos[j * 3 + k]; vel[i * 3 + k] = vel[j * 3 + k]; tint[i * 3 + k] = tint[j * 3 + k]; }
-              age[i] = age[j]; life[i] = life[j]; base[i] = base[j]; ph[i] = ph[j]; spin[i] = spin[j];
-            }
-            i--; continue;
-          }
-          const t = age[i] / life[i];
-          vel[i * 3 + 1] -= K.gravity * dt;
-          if (K.drag) { const f = Math.max(0, 1 - K.drag * dt); vel[i * 3] *= f; vel[i * 3 + 2] *= f; if (vel[i * 3 + 1] < -3) vel[i * 3 + 1] = -3; }
-          let wx = 0, wz = 0;
-          if (K.drift) { wx = Math.sin(age[i] * 1.3 + ph[i]) * K.drift; wz = Math.cos(age[i] * 1.1 + ph[i]) * K.drift; }
-          if (K.orbit) { wx += Math.cos(age[i] * 3 + ph[i]) * K.orbit; wz += Math.sin(age[i] * 3 + ph[i]) * K.orbit; }
-          if (em.wind) { const k = t < .35 ? t * 2.2 : .77 + t * .3; wx += em.wind[0] * k; wz += em.wind[1] * k; }   // ветер сильнее уносит то, что уже поднялось
-          pos[i * 3] += (vel[i * 3] + wx) * dt; pos[i * 3 + 1] += vel[i * 3 + 1] * dt; pos[i * 3 + 2] += (vel[i * 3 + 2] + wz) * dt;
-          // размер, цвет и прозрачность за жизнь
-          let sz = base[i];
-          if (K.shrink) sz *= 1 - t * .85; if (K.grow) sz *= .5 + t;
-          if (K.twinkle) sz *= .65 + .35 * Math.sin(age[i] * 14 + ph[i]);
-          size[i] = sz;
-          const fade = Math.min(1, t * 6) * (1 - t * t) * (K.alpha ?? 1);
-          const m = em.c2 && !K.palette ? t : 0;
-          col[i * 4] = tint[i * 3] * (1 - m) + em.c2[0] * m; col[i * 4 + 1] = tint[i * 3 + 1] * (1 - m) + em.c2[1] * m; col[i * 4 + 2] = tint[i * 3 + 2] * (1 - m) + em.c2[2] * m; col[i * 4 + 3] = fade;
-          if (em.mul) { col[i * 4] *= em.mul[0]; col[i * 4 + 1] *= em.mul[1]; col[i * 4 + 2] *= em.mul[2]; }
-          if (K.shape === 1) spin[i] += dt * 4;
-        }
-        geo.setDrawRange(0, em.n);
-        if (em.n) { geo.attributes.position.needsUpdate = geo.attributes.aSize.needsUpdate = geo.attributes.aColor.needsUpdate = geo.attributes.aSpin.needsUpdate = true; }
+        emMove(em, dt);
       };
       em.clear = () => { em.n = 0; geo.setDrawRange(0, 0); };
       em.dispose = () => { list.delete(em); R.scene.remove(pts); geo.dispose(); mat.dispose(); };
@@ -279,8 +290,10 @@ void main(){
         }
         // дым и угли: вероятность за кадр (картинка — случайность браузера можно)
         const top = y + fs * tall * 1.3;
-        if (smoke && smk > 0 && Math.random() < 1.3 * smk * heat * kS * dtF * (sz > 1.5 ? 1.6 : 1)) smoke.emitAt(x + (Math.random() - .5) * sz * .4, top, z + (Math.random() - .5) * sz * .4, 1);
-        if (embers && Math.random() < 1.6 * heat * kE * dtF) embers.emitAt(x + (Math.random() - .5) * sz * .5, y + fs * tall * .5, z + (Math.random() - .5) * sz * .5, 1);
+        // пул полон — не звать вовсе (иначе у «полного» эмиттера редкий путь рождения остаётся «холодным» и V8 то и дело выкидывает
+        // оптимизированный код — мусор каждый кадр)
+        if (smoke && smk > 0 && smoke.n < smoke.cap - 4 && fr() < 1.3 * smk * heat * kS * dtF * (sz > 1.5 ? 1.6 : 1)) emSpawn(smoke, x + (fr() - .5) * sz * .4, top, z + (fr() - .5) * sz * .4);
+        if (embers && embers.n < embers.cap - 4 && fr() < 1.6 * heat * kE * dtF) emSpawn(embers, x + (fr() - .5) * sz * .5, y + fs * tall * .5, z + (fr() - .5) * sz * .5);
         // кандидат в лампы: 16 самых близких
         if (NL) {
           const dx = x - camX, dy = y - camY, dz = z - camZ, d = dx * dx + dy * dy + dz * dz;
