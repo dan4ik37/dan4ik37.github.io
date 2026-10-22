@@ -2380,7 +2380,7 @@ js/features/games.js и хвост css/premium.css.
 - Новая комната — по-прежнему через GameRoom.channel; канал без presence — только «сосед» presence-канала (имя «<комната>-…»),
   иначе сторож его не увидит. Поменял протокол — server/rt/src/hub.js и js/core/rt.js вместе. Этап 2 (мир, online-users,
   звонки, набор текста, postgres_changes, облачные сохранения) — docs/SERVER.md, Part 2.
-- Тесты: rt-test (126; ws@8.21.3 + @supabase/supabase-js@2.117.2 в DEPS_DIR — в CI ставятся), rt-load-test (`--quick` в ci-run;
+- Тесты: rt-test (128; ws@8.21.3 + @supabase/supabase-js@2.117.2 в DEPS_DIR — в CI ставятся), rt-load-test (`--quick` в ci-run;
   без него — 1000 соединений, `--prio` на занятом компьютере), rt-e2e (--e2e: два Chrome, настоящий Supabase, сервер убит).
 
 ## Известные хвосты

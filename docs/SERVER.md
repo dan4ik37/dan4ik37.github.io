@@ -236,15 +236,16 @@ Server → client (`r` in room frames = global room number — identical bytes f
 Connections 4000 total, 64 per address (schools/CGNAT), 30 new per address burst + 1/s; 32 channels per connection; frame 256 KB
 (= Supabase Free); 120 msgs burst + 60/s and 1 MB burst + 256 KB/s per connection (drops; 400 drops in 10 s → kicked); 300
 subscribers and 200 presences per room; meta 4 KB; track 10 burst + 1/s per member; 20 000 rooms; memory: > 380 MB RSS — no new
-sockets/rooms, > 450 MB — /health ok:false (container 512 MB, `--max-old-space-size=320`); slow reader: > 1 MB buffered — drop,
-> 4 MB — disconnect; /turn 10 burst + 1/min per address, TTL 1 h; coturn: 12 allocations per user, 300 total, 96 KB/s per
+sockets/rooms and slow readers get nothing above 32 KB buffered, > 450 MB — /health ok:false and readers above 64 KB are
+disconnected (container 512 MB, `--max-old-space-size=320`); slow reader normally: > 1 MB buffered — drop, > 4 MB — disconnect;
+buffers of disconnected sessions ≤ 512 frames / 1 MB each and 64 MB together; /turn 10 burst + 1/min per address, TTL 1 h; coturn: 12 allocations per user, 300 total, 96 KB/s per
 session, 6 MB/s total, private/loopback/link-local (169.254.169.254)/CGNAT/doc/multicast peers denied (IPv4 + IPv6).
 
 ### Tests and numbers (22.10.2026, i5-12400F Windows, the machine at ~90–100 % CPU from other work)
 
-- `scripts/rt-test.cjs` — 126 checks, ~35 s: protocol, Phoenix shapes vs real supabase-js 2.117.2 (same file the site loads) and
+- `scripts/rt-test.cjs` — 128 checks, ~45 s: protocol, Phoenix shapes vs real supabase-js 2.117.2 (same file the site loads) and
   the presence algorithm vs `@supabase/phoenix` Presence on 2400 random steps, limits, fuzz (1500 random frames: 0 internal errors),
-  resume without loss both ways, JWT (7 bad tokens rejected), watcher (peek, move with `-r`, reconnect), room.js / table.js / IoKit
+  resume without loss both ways, a stalled reader (others get everything, server memory +<40 MB for 9 MB sent), JWT (7 bad tokens rejected), watcher (peek, move with `-r`, reconnect), room.js / table.js / IoKit
   through D37RT incl. `?rt=0` move, server killed mid-game, network blip (resumed), «16 KB» proxy, late throttling, slow probe,
   RT_URL empty (0 requests), TURN, 20 join/leave cycles (server 0 rooms/members, client 0 channels/refs, timers not growing).
 - `scripts/rt-load-test.cjs` (`--quick` in ci-run, optional) — 1000 connections, 100 rooms × 10, 10 msg/s each (`--prio`):
