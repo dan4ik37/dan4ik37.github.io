@@ -979,6 +979,7 @@
       return `<div class="pz-card" style="max-width:480px"><h2>🌍 Новый мир</h2>
         <div class="pz-field"><span>Название</span><input data-f="name" maxlength="32" value="Мир ${new Date().toLocaleDateString('ru')}"></div>
         <div class="pz-field"><span>Зерно (необязательно)</span><input data-f="seed" maxlength="40" placeholder="случайное"><small>Одно и то же зерно — один и тот же мир у всех. Можно слово: «денчик».</small></div>
+        ${window.PZSupport ? `<div class="pz-field"><span>Обрушение построек и пещер</span><select data-f="support"><option value="off">🧱 Выкл (как было)</option><option value="soft">🏚 Мягкое</option><option value="real">🏗 Реализм</option></select><small>${esc(window.PZSupport.NOTES.soft)} ${esc(window.PZSupport.NOTES.real)}</small></div>` : ''}
         ${usable.length ? `<h3>🧩 Моды в этом мире</h3>${usable.map(m => `<label class="pz-chk"><input type="checkbox" data-mod="${esc(m.id)}"> <b>${esc(m.name)}</b> <span class="pz-note">${esc(m.version || '')} · ${esc(m.author || '')}</span></label>`).join('')}` : '<p class="pz-note">Модов пока нет — их можно добавить в «🧩 Моды».</p>'}
         <div class="pz-row"><button type="button" class="pz-b pri" data-a="mkworld">Создать</button><button type="button" class="pz-b ghost" data-a="back">Отмена</button></div></div>`;
     }
@@ -1011,7 +1012,7 @@
         case 'mkchar': { const c = API.newCharRecord(menuEl.querySelector('[data-f="cname"]').value.trim() || 'Герой'); await API.put('chars', c); selChar = c.id; U.menu('start'); return; }
         case 'mkworld': {
           const mods = [...menuEl.querySelectorAll('[data-mod]:checked')].map(x => x.dataset.mod);
-          const wr = API.newWorldRecord(menuEl.querySelector('[data-f="name"]').value.trim() || 'Мой мир', menuEl.querySelector('[data-f="seed"]').value, mods);
+          const wr = API.newWorldRecord(menuEl.querySelector('[data-f="name"]').value.trim() || 'Мой мир', menuEl.querySelector('[data-f="seed"]').value, mods, menuEl.querySelector('[data-f="support"]')?.value);
           await API.put('worlds', wr); selWorld = wr.id; U.menu('start'); return;
         }
         case 'delchar': if (await ask('Удалить героя?', 'Его вещи и достижения пропадут (если не сохранил в файл).')) { await API.deleteChar(id); startMenu(); } return;
