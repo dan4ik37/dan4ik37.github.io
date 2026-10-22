@@ -626,9 +626,57 @@
       GV.x = g.px + rx * c + cx * s + ax * dot * (1 - c); GV.y = g.py + ry * c + cy * s; GV.z = g.pz + rz * c + cz * s + az * dot * (1 - c);
       return GV;
     }
+    // обрушение: сетка куска быстрее — геометрия блока одна на вид (кэш), у кубиков грани, закрытые соседним кубиком куска, не
+    // рисуются (кусок 100+ блоков: в разы меньше вершин, без сотни VR.itemGeo за кадр — раньше был рывок на телефоне)
+    const TPL = new Map();
+    function tplOf(name){
+      let t = TPL.get(name); if (t) return t;
+      const gq = VR.itemGeo(name, 15 << 12), a = gq.attributes;
+      t = { pos: a.position.array.slice(), vd: a.vd.array.slice(), cl: a.color.array.slice(), lt: a.lt.array.slice(), idx: Array.from(gq.index.array), nv: a.position.count, cube: !gq.userData.flat && a.position.count === 24 };
+      gq.dispose(); TPL.set(name, t);
+      return t;
+    }
+    const DIRS6 = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];   // порядок граней VR.itemGeo у кубика: +x −x +y −y +z −z
+    function dropGeo(cells, pivot){
+      const Vx = V(), n = cells.length / 4, Tt = Vx.T, key = (x, y, z) => ((x + 1048576) * 2097152 + (z + 1048576)) * 256 + y, op = new Set();
+      for (let i = 0; i < n; i++) if (Tt.opaque[cells[i * 4 + 3] & 0xfff] && Tt.shape[cells[i * 4 + 3] & 0xfff] === Vx.SHAPE.cube) op.add(key(cells[i * 4], cells[i * 4 + 1], cells[i * 4 + 2]));
+      const list = []; let nq = 0;
+      for (let i = 0; i < n; i++) {
+        const b = Vx.blocks[cells[i * 4 + 3] & 0xfff]; if (!b || !Vx.item(b.name)) continue;
+        const t = tplOf(b.name), x = cells[i * 4], y = cells[i * 4 + 1], z = cells[i * 4 + 2];
+        let mask = 0;
+        if (t.cube && op.has(key(x, y, z))) for (let d = 0; d < 6; d++) { const D = DIRS6[d]; if (op.has(key(x + D[0], y + D[1], z + D[2]))) mask |= 1 << d; }
+        const q = t.cube ? 6 - ((mask & 1) + (mask >> 1 & 1) + (mask >> 2 & 1) + (mask >> 3 & 1) + (mask >> 4 & 1) + (mask >> 5 & 1)) : t.nv / 4;
+        if (!q) continue;
+        list.push(t, x + .5 - pivot.x, y + .5 - pivot.y, z + .5 - pivot.z, mask); nq += q;
+      }
+      if (!nq) return null;
+      const nv = nq * 4, pos = new Float32Array(nv * 3), vd = new Uint16Array(nv * 4), cl = new Uint8Array(nv * 3), lt = new Uint8Array(nv * 4), idx = new Uint32Array(nq * 6);
+      let ov = 0, oi = 0;
+      for (let j = 0; j < list.length; j += 5) {
+        const t = list[j], dx = list[j + 1], dy = list[j + 2], dz = list[j + 3], mask = list[j + 4], qn = t.nv / 4;
+        for (let qi = 0; qi < qn; qi++) {
+          if (t.cube && (mask >> qi) & 1) continue;
+          for (let k = 0; k < 4; k++) {
+            const s = qi * 4 + k, o = ov + k;
+            pos[o * 3] = t.pos[s * 3] + dx; pos[o * 3 + 1] = t.pos[s * 3 + 1] + dy; pos[o * 3 + 2] = t.pos[s * 3 + 2] + dz;
+            vd[o * 4] = t.vd[s * 4]; vd[o * 4 + 1] = t.vd[s * 4 + 1]; vd[o * 4 + 2] = t.vd[s * 4 + 2]; vd[o * 4 + 3] = t.vd[s * 4 + 3];
+            cl[o * 3] = t.cl[s * 3]; cl[o * 3 + 1] = t.cl[s * 3 + 1]; cl[o * 3 + 2] = t.cl[s * 3 + 2];
+            lt[o * 4] = t.lt[s * 4]; lt[o * 4 + 1] = t.lt[s * 4 + 1]; lt[o * 4 + 2] = t.lt[s * 4 + 2]; lt[o * 4 + 3] = t.lt[s * 4 + 3];
+          }
+          idx[oi] = ov; idx[oi + 1] = ov + 1; idx[oi + 2] = ov + 2; idx[oi + 3] = ov; idx[oi + 4] = ov + 2; idx[oi + 5] = ov + 3;
+          ov += 4; oi += 6;
+        }
+      }
+      return { pos, vd, cl, lt, idx };
+    }
     X.fallGroup = (cells, pivot, dir, o = {}) => {
       if (groups.length >= (o.cap || 3) || !cells.length) return null;
       const Vx = V(), n = cells.length / 4;
+      if (o.drop) {   // обрушение — быстрая сетка
+        const A = dropGeo(cells, pivot); if (!A) return null;
+        return groupWith(cells, n, pivot, dir, o, A.pos, A.vd, A.cl, A.lt, A.idx);
+      }
       // склейка кубиков в одну сетку (координаты — от оси)
       const parts = []; let nv = 0, ni = 0;
       for (let i = 0; i < n; i++) {
@@ -646,6 +694,9 @@
         const ia = gq.index.array; for (let k = 0; k < ia.length; k++) idx[oi + k] = ia[k] + ov;
         ov += m; oi += ia.length; gq.dispose();
       }
+      return groupWith(cells, n, pivot, dir, o, pos, vd, cl, lt, idx);
+    };
+    function groupWith(cells, n, pivot, dir, o, pos, vd, cl, lt, idx){
       const geo = new T.BufferGeometry();
       geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('vd', new T.BufferAttribute(vd, 4)); geo.setAttribute('color', new T.BufferAttribute(cl, 3, true)); geo.setAttribute('lt', new T.BufferAttribute(lt, 4, false));
       geo.setIndex(new T.BufferAttribute(idx, 1)); geo.computeBoundingSphere();
@@ -666,7 +717,7 @@
       groups.push(g);
       S.AU?.play('kb_creak', { x: pivot.x - S.ox, y: pivot.y + 2, z: pivot.z - S.oz, vol: .7, rate: .9 + FR() * .2 });
       return g;
-    };
+    }
     const solidHit = (x, y, z) => { const v = W.raw(x, y, z); if (v < 0) return true; if (!(v > 0)) return false; const t = v & 0xfff, Tt = V().T; return Tt.solid[t] === 1 && Tt.shape[t] !== V().SHAPE.cross; };
     function groupsTick(dt){
       for (let gi = groups.length - 1; gi >= 0; gi--) {

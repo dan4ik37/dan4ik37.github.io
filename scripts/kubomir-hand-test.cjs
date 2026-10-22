@@ -883,6 +883,11 @@ function fakeWorld(sky, blk, walls = new Set()){
       let hang = 0, ground = 0; for (let x = 61; x <= 69; x++) { if (W.get(x, 14, 50) === ID.planks_oak) hang++; if (W.get(x, 10, 50) === ID.planks_oak) ground++; }
       ok(hang === 4 && ground === 5 && S12.sup.stats.groups === 1, 'легла и не держится — дальняя часть балки падает дальше и ложится на землю', { hang, ground, groups: S12.sup.stats.groups });
       X.dispose(); }
+    // сетка падающего куска: грани между кубиками куска не рисуются (3×3×3 досок — только наружные 54 квадрата)
+    { const W = mkSW(); const { X } = mkS(W, 'soft'); const cells = []; for (let x = 0; x < 3; x++) for (let y = 0; y < 3; y++) for (let z = 0; z < 3; z++) cells.push(60 + x, 20 + y, 60 + z, PL);
+      const g = X.fallGroup(cells, { x: 61.5, y: 20, z: 61.5 }, { x: 1, z: 0 }, { drop: true, cap: 8 });
+      ok(g && g.geo.attributes.position.count === 54 * 4 && g.geo.index.count === 54 * 6, 'сетка падающего куска 3×3×3: только наружные грани (54 квадрата вместо 162)', g && g.geo.attributes.position.count);
+      X.dispose(); }
     // факел на падающем — отпадает вещью
     { const W = mkSW(); build(W); W.set(52, 15, 50, V.cell(ID.torch, 0)); const { X, S12 } = mkS(W, 'soft');
       const code = S12.sup.code(50, 11, 50); W.set(50, 11, 50, 0); S12.sup.removed(50, 11, 50, code);

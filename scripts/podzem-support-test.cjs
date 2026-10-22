@@ -105,6 +105,42 @@ const sec = t => console.log('— ' + t);
     console.log(`  копание по плитке: в среднем ${n40.avg} мс, худший ${n40.max} мс (реализм, 40); зал 12: ${JSON.stringify(n12)}, 40: ${JSON.stringify(n40)}, мягкое 40: ${JSON.stringify(s40)}`);
   }
 
+  // ── 10 минут игры (в node — быстрее настоящего времени): ставим и ломаем вокруг героя, обрушения, своды; без ошибок ──
+  sec('10 минут случайной игры в мире «реализм» — без ошибок');
+  {
+    const MIN = process.argv.includes('--fast') ? 2 : 10, G = await world('real', 'обвалы');
+    await site(G, X0, Y0);
+    fill(X0 - 30, Y0 - 24, X0 + 30, Y0, 0); fill(X0 - 30, Y0 + 1, X0 + 30, Y0 + 12, STONE);
+    let errs = 0, act = 0, refused = 0; const rnd = globalThis.D37E.support.rng(77), BRICK = ID('brick');
+    const errs0 = globalThis.__pzErr = [];
+    const onErr = e => { errs++; if (errs < 4) console.log('  ошибка:', e && e.stack); };
+    const built = [];   // что поставили (рядом с ним — строим дальше: столбы, балки, навесы)
+    for (let s = 0; s < MIN * 60 * 4; s++) {   // 4 действия в секунду
+      try {
+        if (rnd() < .62) {   // поставить рядом с постройкой (или на пол), если удержится
+          let x, y;
+          if (built.length && rnd() < .8) { const b = built[Math.floor(rnd() * built.length)], d = Math.floor(rnd() * 4); x = b[0] + (d === 0 ? 1 : d === 1 ? -1 : 0); y = b[1] + (d === 2 ? 1 : d === 3 ? -1 : 0); }
+          else { x = X0 - 28 + Math.floor(rnd() * 56); y = Y0; }
+          const f = rnd() < .7 ? PLANKS : BRICK;
+          if (y > Y0 - 23 && y <= Y0 && !T.fgAt(x, y)) { if (G.sup.canPlace(f, x, y)) { placeAt(G, x, y, f); built.push([x, y]); } else refused++; }
+        } else if (built.length) {   // сломать свою (иногда — подпорку) или кусок стены зала
+          const i = Math.floor(rnd() * built.length), b = built[i];
+          if (T.fgAt(b[0], b[1])) T.breakTile(b[0], b[1], true);
+          built.splice(i, 1);
+          if (rnd() < .1) T.breakTile(X0 - 31 + Math.floor(rnd() * 3), Y0 - Math.floor(rnd() * 24), true);
+        }
+        act++;
+        if ((s & 3) === 3) await sim.frames(1);
+        if (built.length > 900) built.splice(0, 300);
+      } catch (e) { onErr(e); }
+    }
+    await sim.frames(5);
+    const st = G.sup.stats;
+    console.log(`  ${MIN} мин: действий ${act}, отказ «не удержится» ${refused}, пересчётов ${st.solves} (в среднем ${(st.ms / Math.max(1, st.solves)).toFixed(3)} мс, худший ${st.maxMs.toFixed(2)}), обрушений ${st.groups} (${st.cells} плиток)`);
+    ok(errs === 0 && errs0.length === 0, MIN + ' мин игры — без ошибок', errs);
+    ok(st.groups > 0 && refused > 0 && G.sup.groups.length === 0, 'были обрушения и отказы, всё упавшее легло', { groups: st.groups, refused, left: G.sup.groups.length });
+  }
+
   console.log(`\nПодземье, обрушение: ${pass} прошло, ${fail} не прошло`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

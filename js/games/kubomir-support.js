@@ -52,25 +52,33 @@
     const G = S.grid({ dims: 3, down: -1, max: 24576 });
     const BO = { r: 96, rn: 13, P };   // природное — на 13 шагов (свод держится вбок до 9 клеток + высота зала)
     // код клетки для ядра: 0 пусто, 1 опора, постройка / природное с материалом
+    // чанк — один раз на столбик соседних клеток (обход в ширину идёт рядом), без Math.floor: координаты — целые
+    let lc = null, lcx = 1e9, lcz = 1e9;
+    const H = V.H;
     const read = (x, y, z) => {
-      const v = W.raw(x, y, z);
-      if (v <= 0) return v < 0 ? 1 : 0;   // незагруженное — опора (не рушим то, чего не видим)
+      if (y < 0) return 1; if (y >= H) return 0;
+      const cx = x >> 4, cz = z >> 4;
+      if (cx !== lcx || cz !== lcz) { lc = W.chunk(cx, cz); lcx = cx; lcz = cz; }
+      const c = lc; if (!c || !c.gen) return 1;   // незагруженное — опора (не рушим то, чего не видим)
+      const i = ((x & 15) << 11) | ((z & 15) << 7) | y, v = c.ids ? c.ids[i] : W.raw(x, y, z);   // мир без массива клеток (проверки) — через raw
+      if (!v) return 0; if (v < 0) return 1;
       const t = v & 0xfff;
       if (t === BED) return 1;
       const m = MT[t]; if (m === undefined || m === 255) return 0;
-      const c = W.chunk(x >> 4, z >> 4), e = c && c.edits;
-      if (e && e.has(((x & 15) << 11) | ((z & 15) << 7) | y)) return (m << 2) | 2;
+      const e = c.edits;
+      if (e && e.has(i)) return (m << 2) | 2;
       return soft ? 1 : (NT[t] << 2) | 3;
     };
+    const fresh = () => { lc = null; lcx = lcz = 1e9; };   // перед каждым расчётом (чанки могли выгрузить)
     const X = { mode, P, G, stats: { solves: 0, ms: 0, maxMs: 0, groups: 0, cells: 0, refused: 0 }, matOf: KS.matOf };
-    X.code = (x, y, z) => read(x, y, z);
+    X.code = (x, y, z) => { fresh(); return read(x, y, z); };
     const SEEDS = [];
     const nowMs = () => performance.now();
     // ── поставить: удержится ли блок b в (x, y, z) → держание (‰) или −1 (не участвует — можно всегда) ──
     X.estimate = (x, y, z, b) => {
       const m = MT[b.id]; if (m === undefined || m === 255) return -1;
       SEEDS.length = 0; SEEDS.push(x, y, z, (m << 2) | 2);
-      G.build(SEEDS, read, BO);
+      fresh(); G.build(SEEDS, read, BO);
       return G.estimate(P);
     };
     X.canPlace = (x, y, z, b) => { const s = X.estimate(x, y, z, b); return s < 0 || s >= P.min[MT[b.id]]; };
@@ -95,18 +103,54 @@
       if (!code || (code & 3) < 2) return 0;
       const t0 = nowMs();
       SEEDS.length = 0; SEEDS.push(x, y, z, code);
-      G.build(SEEDS, read, BO);
+      fresh(); G.build(SEEDS, read, BO);
       const ng = G.collapse(P);
       const ms = nowMs() - t0;
       X.stats.solves++; X.stats.ms += ms; if (ms > X.stats.maxMs) X.stats.maxMs = ms;
       if (!ng) return 0;
       X.stats.groups += ng;
-      for (let k = 0; k < ng; k++) dropGroup(G.groups(k));
+      for (let k = 0; k < ng; k++) enqueue(G.groups(k), 0);
+      X.step();   // первое — сразу (в этом же такте), остальное — по бюджету шагов
       return ng;
     };
 
+    // ── замер без последствий: что упало бы, если убрать клетку (x, y, z) с кодом code (мир не трогаем) ──
+    X.dry = (x, y, z, code) => {
+      const t0 = nowMs();
+      SEEDS.length = 0; SEEDS.push(x, y, z, code);
+      fresh(); G.build(SEEDS, read, BO);
+      const ng = G.collapse(P);
+      return { ms: nowMs() - t0, nodes: G.g.n, groups: ng, fall: G.g.nf };
+    };
+    // ── очередь: большое обрушение — по частям (куски до PART клеток, снизу вверх), не больше BUDGET клеток за шаг игры (60/с):
+    // кадр не «встаёт» на секунды (дом из 2000 блоков — ~0,1–0,2 с частями); места для анимации нет — ждёт до 2 с, потом ложится сразу ──
+    const PART = 400, BUDGET = window.D37E?.isMobile?.() ? 260 : 520, Q = [];
+    X.queue = Q;
+    function enqueue(xyz, depth){
+      const n = xyz.length / 3;
+      if (n <= PART) { Q.push({ xyz, depth, wait: 0, y: minY(xyz) }); return; }
+      const bins = new Map();   // куски 8×8×8 — каждый падает сам (верх ложится на низ)
+      for (let i = 0; i < xyz.length; i += 3) {
+        const k = ((xyz[i] >> 3) + 4096) * 67108864 + ((xyz[i + 1] >> 3) + 64) * 524288 + ((xyz[i + 2] >> 3) + 4096);
+        let b = bins.get(k); if (!b) bins.set(k, b = []); b.push(xyz[i], xyz[i + 1], xyz[i + 2]);
+      }
+      for (const b of [...bins.keys()].sort((a, c) => a - c).map(k => bins.get(k))) Q.push({ xyz: b, depth, wait: 0, y: minY(b) });
+      Q.sort((a, c) => a.y - c.y);
+    }
+    const minY = a => { let m = 1e9; for (let i = 1; i < a.length; i += 3) if (a[i] < m) m = a[i]; return m; };
+    X.step = () => {
+      let budget = BUDGET;
+      while (Q.length && budget > 0) {
+        const job = Q[0], n = job.xyz.length / 3, free = (st.ents?.groups?.length ?? 99) < 8;
+        if (!free && n > 24 && job.wait++ < 120) break;   // анимаций и так много — подождать
+        Q.shift(); budget -= n;
+        dropGroup(job.xyz, job.depth, !free);
+      }
+    };
+
     // ── кусок падает: прицепленное отпадает вещами, клетки — из мира, кусок — целым вниз; лёг — блоками (куда нельзя — вещью) ──
-    function dropGroup(xyz, depth = 0){
+    function dropGroup(xyz, depth = 0, instant = false){
+      fresh();
       const n = xyz.length / 3, cells = [], nat = [];
       let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9, y0 = 1e9;
       for (let i = 0; i < n; i++) {
@@ -128,24 +172,25 @@
       const landed = [];   // где легли блоками: потом — держатся ли сами (лёг краем на столб — остальное свалится дальше)
       const onSettle = (v, x, y, z, i) => { if (settle(v, x, y, z, nat[i])) landed.push(x, y, z); };
       const onLanded = () => recheck(landed, depth + 1);
-      const g = cells.length / 4 <= 1200 ? st.ents?.fallGroup?.(cells, pivot, { x: 1, z: 0 }, { drop: true, cap: 8, onSettle, onLanded }) : null;
+      const nc = cells.length / 4;   // 1–3 блока — без сетки и анимации: осыпаются сразу (пыль), иначе — куском
+      const g = !instant && nc > 3 && nc <= PART ? st.ents?.fallGroup?.(cells, pivot, { x: 1, z: 0 }, { drop: true, cap: 8, onSettle, onLanded }) : null;
       if (g) return;
       // нет анимации (много сразу, нет сущностей) — ложится сразу
       const flat = []; for (let i = 0; i < cells.length; i += 4) flat.push(cells[i], cells[i + 1], cells[i + 2]);
       const F = S.drop(flat, { down: -1 });
       for (let k = 0; k < 4000 && !S.dropStep(F, 1 / 20, solidAt); k++);
       for (let i = 0; i < cells.length; i += 4) onSettle(cells[i + 3], cells[i], cells[i + 1] - F.off, cells[i + 2], i >> 2);
-      st.AU?.play('kb_thud', { x: pivot.x - st.ox, y: pivot.y - F.off + 1, z: pivot.z - st.oz, vol: .9, rate: .85 });
-      onLanded();
+      if (nc > 3 || (X.thudT = (X.thudT || 0) + 1) % 6 === 1) st.AU?.play('kb_thud', { x: pivot.x - st.ox, y: pivot.y - F.off + 1, z: pivot.z - st.oz, vol: nc > 3 ? .9 : .5, rate: .85 });
+      if (nc > 3) onLanded();   // упало 1–3 блока — проверять, держатся ли они, не нужно (лежат на том, на что упали)
     }
     // легли — держатся ли? (падение только добавляет блоки — чужое держание не уменьшается; не держатся только сами упавшие)
-    X.recheck = xyz => recheck(xyz, 1);
+    X.recheck = xyz => { recheck(xyz, 1); X.step(); };
     function recheck(xyz, d){
-      if (!xyz.length || d > 3) return;
-      SEEDS.length = 0;
+      if (!xyz.length || d > 2 || xyz.length > 3 * 1600) return;
+      SEEDS.length = 0; fresh();
       for (let i = 0; i < xyz.length; i += 3) { const c = read(xyz[i], xyz[i + 1], xyz[i + 2]); if ((c & 3) >= 2) SEEDS.push(xyz[i], xyz[i + 1], xyz[i + 2], c); }
       if (!SEEDS.length) return;
-      G.build(SEEDS, read, BO);
+      fresh(); G.build(SEEDS, read, BO);
       G.solve(P, false);
       const g = G.g, out = [];
       for (let i = 0; i < g.n; i++) if (g.seed[i] && g.sup[i] < P.min[g.mat[i]]) out.push(G.px[i], G.py[i], G.pz[i]);
@@ -160,7 +205,7 @@
           if (left.has(k)) { left.delete(k); part.push(nx, ny, nz); }
         }
         X.stats.groups++;
-        dropGroup(part, d);
+        enqueue(part, d);
       }
     }
     const solidAt = (x, y, z) => { const v = W.raw(x, y, z); if (v < 0) return true; if (!(v > 0)) return false; const t = v & 0xfff; return V.T.solid[t] === 1 && V.T.shape[t] !== V.SHAPE.cross; };

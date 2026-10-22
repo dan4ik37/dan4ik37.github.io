@@ -75,12 +75,18 @@
       }
     };
     // ── вернуть осыпавшееся можно, только если его опора уже на месте (иначе — повисло бы в воздухе) ──
+    // (destruct.js спрашивает каждый кадр, пока деталь ждёт, — ответ живёт 1 с: граф здания не строится каждый кадр)
+    const HC = new Map();
     M.hold = b => {
       const id = typeof b?.id === 'string' && b.id.startsWith('p:') ? b.id.slice(2) : null; if (!id) return false;
+      const c = HC.get(id); if (c && M.t - c.t < 1) return c.v;
       const p = rt.pieces?.get?.(id) || null, r = p && bld.get(p.b); if (!r || p.kind === 'floor') return false;
       const list = graph(r, p), i = list.indexOf(p); if (i < 0) return false;
       B.solve(P);
-      return B.g.sup[i] < P.min[B.g.mat[i]];
+      const v = B.g.sup[i] < P.min[B.g.mat[i]];
+      if (HC.size > 2000) HC.clear();
+      HC.set(id, { t: M.t, v });
+      return v;
     };
     M.dispose = () => { bld.clear(); M.q.length = 0; };
     M.buildings = () => bld.size;

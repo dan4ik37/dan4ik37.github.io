@@ -785,6 +785,7 @@
     // 20 раз в секунду: мобы, вода, печи, голод
     if (st.steps % 3 === 0) {
       st.ents?.tick(1 / 20);
+      st.sup?.step();   // обрушение: очередь падающих кусков (по бюджету шага; kubomir-support.js)
       if (!st.creative) survivalTick(st, 1 / 20);
       st.modRun?.tick(1 / 20);
     }
