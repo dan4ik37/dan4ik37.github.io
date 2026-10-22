@@ -122,3 +122,16 @@
 /* вид мэра (город сверху): кнопка выхода */
 .mz-ov{position:absolute;left:50%;top:14px;transform:translateX(-50%);pointer-events:auto;border:1.5px solid rgba(250,204,21,.8);background:rgba(12,10,28,.85);
   color:#fde68a;border-radius:12px;padding:.42rem .9rem;font-weight:800;font-size:.8rem;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+
+/* ── «Живой город» (T-032): денки 💵 — кошелёк (нажать — 🏦 Банк), щит работ (навык ★, зарплата, усталость), пробные ── */
+.mz-wallet .mz-wbank{pointer-events:auto;cursor:pointer;padding:.28rem .6rem;border-radius:10px;background:rgba(12,10,28,.84);border:1px solid rgba(74,222,128,.55);color:#fff;font-size:.78rem;font-weight:900;min-height:32px}
+.mz-wallet .mz-wbank:hover{background:rgba(22,101,52,.75)}
+.mz-wallet em{font-style:normal}
+.mz-stars{font-style:normal;color:#facc15;font-size:.72rem;letter-spacing:-.04em}
+.mz-job .mz-jobm{color:#a7f3d0;font-weight:700;margin-top:.12rem}
+.mz-job .mz-xpbar{display:block;height:4px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;position:relative;margin-top:.28rem;font-size:0}
+.mz-job .mz-xpbar::after{content:'';position:absolute;inset:0;width:var(--p);background:linear-gradient(90deg,#facc15,#4ade80)}
+.mz-job button[disabled]{opacity:.55;cursor:default}
+.mz-eco-note{margin:.15rem 0 .45rem;padding:.42rem .6rem;border-radius:10px;background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.32);font-size:.72rem;line-height:1.4}
+.mz-eco-sec{font-size:.68rem;font-weight:900;color:#c4b5fd;margin:.55rem 0 .25rem;text-transform:uppercase;letter-spacing:.04em}
+.mz-task .mz-left{color:#a5f3fc}

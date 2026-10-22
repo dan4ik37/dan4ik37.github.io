@@ -41,7 +41,7 @@
   // Профессии P1 (ph — фаза). cities — где работают (здания K_BLD / M_BLD), age — с какого возраста (метро и так 16+), min — секунд на
   // задание у «Ученика» (меньше нельзя: сервер скажет too_soon), wage — 💵 за задание (до множителей), site — двигает общую стройку
   const PROFS = {
-    cook: { n: 'Повар', e: '👨‍🍳', ph: 1, cities: { kids: ['k_bake'], metro: ['m_rest'] }, age: 0, kind: 'svc', modes: ['city'], min: 25, wage: 6, desc: 'Печёт булочки и готовит обеды' },
+    cook: { n: 'Повар', e: '👨‍🍳', ph: 1, cities: { kids: ['k_bake'], metro: ['m_rest'] }, age: 0, kind: 'svc', modes: ['city'], min: 20, wage: 6, desc: 'Печёт булочки и готовит обеды' },
     seller: { n: 'Продавец', e: '🛒', ph: 1, cities: { kids: ['k_ice'], metro: ['m_shop', 'm_bank'] }, age: 0, kind: 'svc', modes: ['city'], min: 15, wage: 5, desc: 'Обслуживает покупателей' },
     doctor: { n: 'Врач', e: '🩺', ph: 1, cities: { kids: ['k_hosp'], metro: ['m_hosp'] }, age: 0, kind: 'svc', modes: ['city'], min: 20, wage: 6, desc: 'Лечит жителей и питомцев' },
     fire: { n: 'Пожарный', e: '🚒', ph: 1, cities: { kids: ['k_fire'], metro: ['m_fire'] }, age: 0, kind: 'svc', modes: ['city'], min: 25, wage: 6, desc: 'Тушит пожары в городе' },
@@ -239,7 +239,8 @@
   function TaskRunner(o){
     const margin = o.margin ?? .35;
     const R = { st: 'idle', n: null, t0: 0, need: 0, steps: 0, i: 0, gt: 0, sends: 0, res: null };
-    R.begin = (n, t, need, steps) => { Object.assign(R, { st: 'run', n, t0: t, need, steps, i: 0, gt: Math.max(0, o.clock() - t), res: null }); };
+    // только что выдано — считаем с нуля (часы клиента могут спешить); выдано давно (перезагрузка) — уже прошло clock − t (минус 1 с запаса)
+    R.begin = (n, t, need, steps) => { const el = o.clock() - t; Object.assign(R, { st: 'run', n, t0: t, need, steps, i: 0, gt: el > 5 ? Math.max(0, el - 1) : 0, res: null }); };
     R.done = () => { if (R.st !== 'run') return false; R.i++; if (R.i >= R.steps) { R.st = 'wait'; return true; } return false; };
     R.ready = () => R.gt >= R.need + margin && o.clock() >= R.t0 + R.need + margin;
     R.left = () => Math.max(0, R.need + margin - R.gt, R.t0 + R.need + margin - o.clock());

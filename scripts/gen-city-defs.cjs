@@ -20,11 +20,13 @@ $$;
 -- gen:city-defs:end`;
 const file = path.join(ROOT, 'city.sql');
 const sql = fs.readFileSync(file, 'utf8');
+const eol = sql.includes('\r\n') ? '\r\n' : '\n';   // на Windows файл может прийти с CRLF — пишем тем же переводом строк
 const re = /-- gen:city-defs:begin[\s\S]*?-- gen:city-defs:end/;
 if (!re.test(sql)) { console.log('FAIL: в city.sql нет меток gen:city-defs'); process.exit(1); }
-const out = sql.replace(re, () => block);
+const out = sql.replace(re, () => block.replace(/\n/g, eol));
+const lf = t => t.replace(/\r\n/g, '\n');
 if (check) {
-  if (out !== sql) { console.log('FAIL: city.sql устарел — node scripts/gen-city-defs.cjs'); process.exit(1); }
+  if (lf(out) !== lf(sql)) { console.log('FAIL: city.sql устарел — node scripts/gen-city-defs.cjs'); process.exit(1); }
   console.log('city_defs0: актуален (' + json.length + ' байт)');
 } else {
   fs.writeFileSync(file, out);

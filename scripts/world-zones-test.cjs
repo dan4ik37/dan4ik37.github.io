@@ -7,7 +7,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = process.argv[2] || path.join(__dirname, '..');
 globalThis.window = globalThis;
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
-for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interior.js', 'js/engine/worldmap.js', 'js/engine/vehicle.js', 'js/engine/vehicle-ground.js', 'js/engine/vehicle-water.js', 'js/engine/vehicle-air.js', 'js/games/mir-zones.js', 'js/games/mir-city.js', 'js/games/mir-war.js', 'js/games/mir-veh.js']) load(f);
+for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interior.js', 'js/engine/worldmap.js', 'js/engine/vehicle.js', 'js/engine/vehicle-ground.js', 'js/engine/vehicle-water.js', 'js/engine/vehicle-air.js', 'js/games/mir-zones.js', 'js/games/mir-econ.js', 'js/games/mir-city.js', 'js/games/mir-war.js', 'js/games/mir-veh.js']) load(f);
 const MZ = globalThis.MirZones, MC = globalThis.MirCity, MW = globalThis.MirWar, E = globalThis.D37E;
 let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL', name, extra === undefined ? '' : JSON.stringify(extra)); } };
@@ -227,7 +227,7 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
 {
   const rnd = (s => () => (s = (s * 16807) % 2147483647) / 2147483647)(7);
   const all = { kids: MC.ROLES_K, metro: MC.ROLES_M };
-  const CARRY = ['bun', 'brick', 'pet', 'med', 'box', 'money', 'food', 'icecream', 'coffee'];
+  const CARRY = Object.keys(MC.CARRY || { bun: 1, brick: 1, pet: 1, med: 1, box: 1, money: 1, food: 1, icecream: 1, coffee: 1 });
   for (const [city, roles] of Object.entries(all)) {
     const spots = MC.spotsOf(city), Z = ZONES[city];
     for (const [role, R] of Object.entries(roles)) {
@@ -646,10 +646,12 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
     }
     ok(MCt.TAXI_STOPS.length >= 6, 'такси: остановок хватает');
   }
-  if (MCt.ROLES_M) {
-    const pays = Object.entries(MCt.ROLES_M).filter(([k, r]) => r.pay > 0).map(([k, r]) => r.pay);
-    ok(MCt.ROLES_M.taxi.pay >= Math.min(...pays) && MCt.ROLES_M.taxi.pay <= Math.max(...pays), 'таксист получает как другие работы города', pays);
-    ok(Object.values(MCt.ROLES_K).every(r => r.pay <= 5), 'детский город: плата — звёздочки (до 5 за задание)');
+  if (MCt.ROLES_M && globalThis.MirEcon) {   // «Живой город» (T-032): зарплата — каталог MirEcon (денки, сервер), не у ролей
+    const P = globalThis.MirEcon.PROFS, wages = Object.values(MCt.ROLES_M).filter(r => r.prof).map(r => P[r.prof].wage);
+    ok(P[MCt.ROLES_M.taxi.prof].wage >= Math.min(...wages) && P[MCt.ROLES_M.taxi.prof].wage <= Math.max(...wages), 'таксист получает как другие работы города', wages);
+    for (const [city, roles] of [['kids', MCt.ROLES_K], ['metro', MCt.ROLES_M]]) for (const [id, r] of Object.entries(roles))
+      ok(r.rp || r.soon || (P[r.prof] && (P[r.prof].cities[city] || []).includes(r.place)), `${city}/${id}: роль — профессия сервера в своём здании (или роль без денег)`, [r.prof, r.place]);
+    ok(Object.values(MCt.ROLES_K).every(r => !r.rp && !r.soon), 'детский город: все роли — настоящие работы (без «понарошку»)');
   }
   // тест-драйв: машина появляется на улице у автосалона, не в здании
   ok(!inB('metro', 182, 125, 2) && Math.min(...MZ.DEFS.metro.streets.flatMap(r => r.pts.slice(1).map((q, i) => MZ.segDist(182, 125, r.pts[i][0], r.pts[i][1], q[0], q[1]) - r.w / 2))) < 6, 'тест-драйв: машина — у дороги перед салоном, не в здании');
