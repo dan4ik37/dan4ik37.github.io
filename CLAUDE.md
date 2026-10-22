@@ -160,6 +160,8 @@
    denied for function; `/rest/v1/city_people?select=cash&limit=1` → 401, 42501 permission denied for table. До запуска в городах — «🧪 пробные
    денки» (в браузере) и «Банк города появится, когда сайт обновится». Числа — docs/CITY_ECONOMY.md, менять — «🏙️ Экономика города» (админ).
    PGlite: scripts/city-sql-test.mjs (134).
+16. `ugc.sql` — ЕЩЁ РАЗ (22.10.2026, T-019: облачные сохранения «Кубомира» — раздел «☁️» в конце файла; весь файл идемпотентен). Проверка гостем (PGRST202/PGRST205 = не применён): `/rpc/cloud_rule` {"p_key":"slots"} → 2; `/rpc/cloud_list` {"p_game":"kubomir"} → {"ok":false,"reason":"auth"}; `/rpc/cloud_usage` {} → 401 permission denied; `/rest/v1/cloud_saves?select=world&limit=0` → 200. До запуска: «Облако сейчас недоступно — миры сохраняются в браузере». Числа (2 мира × 2 МБ, VIP/Донатер 4 × 4 МБ) — предложение, решает владелец. PGlite: E:\claude-tmp\coop\test-cloud.mjs (64).
+Проверено с сервера 22.10 днём: ops.sql ПРИМЕНЁН (ops_err_admin → 42501); city.sql и ugc.sql (облако) — ещё нет.
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
@@ -1553,6 +1555,23 @@ js/features/games.js и хвост css/premium.css.
   voxel-tex.js, TOOL_PAL по материалу, обводка цветом материала), плоские вещи в VR.itemGeo выдавлены на 1/16 (бока по краю
   пикселей своим цветом через почти белый слой «снег»; факел и растения — две плоскости, как были). Мотыги в игре нет.
   Дальше по картинкам (блоки, мобы, 3D-инструменты) — docs/KUBOMIR_ART.md. Тесты: hand-test 230, voxel-test 210.
+- Вместе и облако (T-019, 22.10, GAMES_VER 124). Игра вместе до 8: js/games/coop.js (D37Coop.room — хозяин мира по подписи ECDSA,
+  код комнаты = 8 знаков SHA-256 ключа мира; WebRTC звездой через NetPlay; нет прямой связи 3,5 с — канал на пару через
+  GameRoom.channel: сначала «я тут», пока второй не ответит (иначе первые сообщения теряются), данные пачкой ≤ 3/с; надёжное
+  нумеруется, большое — кусками 16 КБ; присутствие — не больше 4 «вошёл/вышел» за 31 с со страницы) + js/games/kubomir-coop.js
+  (зерно + изменённые чанки по запросу гостя, правки гостей хозяин проверяет и рассылает, мобы и вещи — снимками, сундук/печь —
+  «по одному», вещи гостей — у хозяина в meta.coopPlayers). Ссылка /play/kubomir/<код>; хозяин вышел — комната закончилась; мир с
+  модами — без игры вместе. Пока мир гостя строится, его сеть всё равно идёт (update: st.net.step до ready — иначе чанки с правками
+  не спрашивались). Облако: js/core/cloud.js (хранилище — за D37Cloud.setBackend: Supabase сейчас, свой сервер потом) + ugc.sql «☁️»:
+  все числа — cloud_rule (2 мира × 2 МБ, VIP/Донатер 4 × 4 МБ, хранилище сайта занято 800 из 1024 МБ — новых сохранений нет),
+  cloud_usage — админу «☁️ Облако: X МБ из 1024» в панели. Отправляется, только если поменялась подпись V.store.sig (без картинки
+  мира); мир после 1 ч ≈ 3 КБ, 5 ч ≈ 9 КБ. Вода: плывёт — swimDeep, человечек рисуется «гладь у плеч» (swimDrawY), «прыжок» на
+  глубине — не выше 0,6 тела в воде; существа и вещи — код 0,5 в альфе (voxel-render FS_ACT), отражения (post.js) их пропускают;
+  мобы — плавучесть по виду (FLOAT), к берегу/цели по BFS, край до 1,25 над гладью, обход глубокой воды по суше, упёрлись — другой
+  путь, потом бросают погоню. Тесты: cloud-test, kubomir-move-test 81, hand-test; PGlite E:\claude-tmp\coop\test-cloud.mjs (64);
+  Chrome — node scripts/kubomir-coop-e2e.cjs basic|relay|leak|perf|perfv|soak|cloud (настоящий Supabase, одноразовые комнаты; cloud —
+  своё хранилище в странице), KB_MODE=swim node scripts/kubomir-e2e.cjs (плавание: гладь у плеч, снимки). Правки хозяин шлёт гостям
+  в rd + 4 чанка (поток гостя держит до rd + 3 — иначе край оставался старым).
 - Падающие деревья (16.10, GAMES_VER 104; как моды Timber / Fallen Trees): breakBlock (бревно) → ents.fellTree. Движок (voxel.js):
   V.component(W, seeds, { take, edge, max, depth }) — связный кусок по 6 соседям: opora (edge 1 → grounded), «чужое» (2 → touch),
   предел (больше — null), шаги от seeds; V.STABILITY / V.stabilityOf — запас прочности по материалу (данные на будущее, как в Valheim;
@@ -2420,6 +2439,24 @@ js/features/games.js и хвост css/premium.css.
   игрока в мире (UID_RE в mir.js / world.js), «сайт//чужой.сайт» как свой путь (чат, /forum), свойства и настройки миров «Студии 3D»
   (файл мира = произвольный JSON), строки от хозяина стола в картах и шахматах, ссылка рекламодателя в админке и виджет оплаты — только https.
   Файлы других агентов (kubomir*, podzem*, engine, mir-*, raid*) только прочитаны: там экранирование на месте, записи в списке — с пометкой.
+
+## Свой сервер для игр (T-045; docs/SERVER.md — шаги владельцу и протокол) — server/ на Oracle владельца, клиент js/core/rt.js (D37RT)
+- server/rt — Node 22 + ws 8.21.3 (без своих модулей), server/docker-compose.yml: rt (127.0.0.1:8787) + Caddy (Let's Encrypt
+  IP-сертификат, профиль shortlived, default_sni) + coturn 4.18, всё в сети хоста, у всех mem_limit/cpus; server/ на Vercel не
+  выкладывается (.vercelignore). Ставит владелец: sparse clone → `bash make-env.sh <IP>` (секреты — только server/.env на сервере)
+  → `docker compose up -d --build`. Агенты к серверу не подключаются.
+- RT_URL в config.js пустой (так сейчас) → D37RT.client() = null, всё как было. Задан → GameRoom.channel и IoKit.supaTransport
+  берут канал у D37RT (тот же API, что у канала supabase-js; presence — тем же алгоритмом), netplay — его TURN, calls.js — через
+  window.D37_TURN. Комната НЕ делится: сервер смотрит Supabase-канал каждой своей комнаты и, если там кто-то есть, переводит всю
+  комнату и её «<комната>-…» в Supabase ('mv'); проба 40 КБ на сокет ловит «16 КБ» провайдеров; сервер упал — через 5 с всё в
+  Supabase, presence на переезд «замирает» (игра не видит «соперник ушёл»). ?rt=0 — только Supabase в вкладке.
+- Новая комната — по-прежнему через GameRoom.channel; канал без presence — только «сосед» presence-канала (имя «<комната>-…»),
+  иначе сторож его не увидит. Поменял протокол — server/rt/src/hub.js и js/core/rt.js вместе. Этап 2 (мир, online-users,
+  звонки, набор текста, postgres_changes, облачные сохранения) — docs/SERVER.md, Part 2.
+- Журнал для античита (T-073 будет читать): server/rt/src/audit.js, выключен (AUDIT пусто); игра помечает свои «проверяемые» события
+  в канале: config: { audit: { events: ['in'] } } (только ходы/ввод — не чат и не имена). Формат и пределы — docs/SERVER.md «Anti-cheat feed».
+- Тесты: rt-test (144; ws@8.21.3 + @supabase/supabase-js@2.117.2 в DEPS_DIR — в CI ставятся), rt-load-test (`--quick` в ci-run;
+  без него — 1000 соединений, `--prio` на занятом компьютере), rt-e2e (--e2e: два Chrome, настоящий Supabase, сервер убит).
 
 ## Известные хвосты
 - AdSense: сайт в кабинете зарегистрирован как dan4ik37.github.io и отклонён («бесполезный контент»); главный адрес —

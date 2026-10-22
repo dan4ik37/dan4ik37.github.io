@@ -162,7 +162,7 @@ void main(){
   }
   vec2 h = s0 + ds * hi;
   float hd = texture2D(tDepth, h).x;
-  if (hd >= 0.99999 || hd < 0.012) { gl_FragColor = vec4(0.0); return; }   // небо — нечего отражать; рука «из глаз» (глубина у ближней плоскости) — не отражаем
+  if (hd >= 0.99999 || hd < 0.012 || abs(texture2D(tColor, h).a - 0.5) < 0.2) { gl_FragColor = vec4(0.0); return; }   // небо — нечего отражать; рука «из глаз» (глубина у ближней плоскости) и существа/вещи (код 0,5 — voxel-render.js FS_ACT) — не отражаем
   vec2 ed = min(h, 1.0 - h);
   float fade = smoothstep(0.0, 0.07, min(ed.x, ed.y)) * (1.0 - smoothstep(0.7, 1.0, hi)) * (1.0 - smoothstep(0.15, 0.65, r.z));
   vec3 rc = texture2D(tColor, h).rgb;

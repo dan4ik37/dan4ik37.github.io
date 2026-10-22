@@ -8,7 +8,7 @@
 //                          node scripts/ci-run.cjs --list          — что в списке и чего ему не хватает
 //                          node scripts/ci-run.cjs --e2e           — ещё и проверки в настоящем Chrome (нужны Chrome и интернет к jsDelivr)
 // Что нужно, кроме Node: пакеты three@0.149.0, @dimforge/rapier3d-compat@0.19.3, @electric-sql/pglite — НЕ в репозитории, ставятся рядом:
-//   npm install --prefix <папка> --no-save --ignore-scripts three@0.149.0 @dimforge/rapier3d-compat@0.19.3 @electric-sql/pglite@0.5.8
+//   npm install --prefix <папка> --no-save --ignore-scripts three@0.149.0 @dimforge/rapier3d-compat@0.19.3 @electric-sql/pglite@0.5.8 ws@8.21.3 @supabase/supabase-js@2.117.2
 //   и переменная DEPS_DIR=<папка> (или THREE_PATH / RAPIER_PATH / PGLITE_PATH отдельно). Нет пакета — проверки, которым он нужен,
 //   пропускаются с пометкой (в GitHub Actions CI_STRICT=1: пропуск = провал, чтобы проверки не отваливались тихо).
 // Выкладку Vercel эти проверки по умолчанию НЕ задерживают: push в main выкатывается сразу, красный крестик на коммите — сигнал разбираться
@@ -22,7 +22,7 @@ const flag = n => argv.includes('--' + n);
 const opt = n => { const i = argv.indexOf('--' + n); return i >= 0 ? argv[i + 1] : ''; };
 
 // ═══ Список: файл, аргументы, срок (с), нужен пакет, повтор, одна за раз, необязательная ═══
-//  needs: three | rapier | pglite | pwsh — без него проверка пропускается   soft: rapier — без него идёт урезанной, но в CI_STRICT это провал
+//  needs: three | rapier | pglite | pwsh | rt — без него проверка пропускается   soft: rapier — без него идёт урезанной, но в CI_STRICT это провал
 //  t — срок в секундах (по умолчанию 150)   retry — сколько раз повторить сразу при провале   serial — не вместе с другими (замеры времени)
 //  optional — провал только предупреждает   e2e — только с --e2e
 const TESTS = [
@@ -37,7 +37,7 @@ const TESTS = [
   { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },
   { f: 'physics-test.cjs', soft: 'rapier' }, { f: 'tiles-test.cjs' }, { f: 'mirplay-test.cjs' }, { f: 'kubomir-input-test.cjs' },
   { f: 'world-zones-test.cjs' }, { f: 'city-test.cjs' }, { f: 'city-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'city-sim.cjs', args: ['--days', '60', '--players', '20,100'], t: 180 },
-  { f: 'vehicle-test.cjs' }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' },
+  { f: 'vehicle-test.cjs' }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' }, { f: 'cloud-test.cjs' },
   { f: 'photo-test.cjs' },   // 🖼 фоторедактор: команды «d37 v1», «Мои материалы» (поддельная IndexedDB), проект .d37photo, связка раздела
   // языки скриптов ждут настоящие таймеры (по 5–60 мс): под нагрузкой других проверок опаздывают (так упала lang-cs-test) — идут по одной
   { f: 'lang-cs-test.cjs', serial: true }, { f: 'lang-java-test.cjs', serial: true }, { f: 'lang-lua-test.cjs', serial: true }, { f: 'lang-wasm-test.cjs', env: { D37_SKIP: 'cpp,rust' } },
@@ -45,6 +45,8 @@ const TESTS = [
   // игры: бот против бота (число партий уменьшено — в CI достаточно)
   { f: 'domino-test.cjs' }, { f: 'fillword-test.cjs' }, { f: 'balda-test.cjs', args: ['300'] }, { f: 'krokodil-test.cjs' },
   { f: 'kletochki-test.cjs' }, { f: 'chervyachki-test.cjs' },
+  // свой сервер реального времени (T-045): настоящий server/rt отдельным процессом + настоящий supabase-js — по одной (замеры и сроки)
+  { f: 'rt-test.cjs', needs: 'rt', t: 240, serial: true }, { f: 'rt-load-test.cjs', args: ['--quick'], needs: 'rt', t: 200, serial: true, optional: true },
   // нужен three@0.149.0
   { f: 'char-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'destruct-test.cjs', args: ['{THREE}'], needs: 'three' },
   { f: 'kubomir-hand-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'kubomir-move-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'kubomir-combat-test.cjs', args: ['{THREE}'], needs: 'three' },
@@ -56,6 +58,7 @@ const TESTS = [
   { f: 'menu-e2e.cjs', args: ['all'], env: { KB_WORLD: '0' }, e2e: true, t: 900 },   // T-043: одно меню ☰ (мир, Кубомир, Подземье), окно ⚙️ (Главное, поиск), геймпад, скорость, утечки
   { f: 'photo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },   // фоторедактор: все команды, кнопки, отмена (fabric.js с jsDelivr)
   { f: 'city-e2e.cjs', e2e: true, needs: 'pglite', t: 900 },   // «Живой город»: работа с сервера (city.sql в PGlite), банк, окно экономики, два игрока
+  { f: 'rt-e2e.cjs', e2e: true, needs: 'rt', t: 600 },   // свой сервер: два Chrome, io-игра и стол, сервер убит посреди партии → Supabase
 ];
 
 // ═══ Откуда брать пакеты ═══
@@ -65,10 +68,11 @@ const has = (base, rel) => { try { return fs.existsSync(path.join(base, rel)); }
 const D = {
   three: firstDir(process.env.THREE_PATH, deps && path.join(deps, 'node_modules/three')),
   rapier: [process.env.RAPIER_PATH, deps].find(p => p && has(p, 'node_modules/@dimforge/rapier3d-compat')) || '',   // physics-test без Rapier проходит урезанным (16 вместо 85 проверок)
+  rt: [process.env.RT_DEPS, deps].find(p => p && has(p, 'node_modules/ws/package.json') && has(p, 'node_modules/@supabase/supabase-js/dist/umd/supabase.js')) || '',   // T-045: ws@8.21.3 + supabase-js@2.117.2
   pglite: [process.env.PGLITE_PATH, deps].find(p => p && (has(p, 'node_modules/@electric-sql/pglite/package.json') || has(p, '@electric-sql/pglite/package.json') || (has(p, 'package.json') && fs.readFileSync(path.join(p, 'package.json'), 'utf8').includes('"@electric-sql/pglite"')))) || '',
 };
 D.pwsh = ['powershell.exe', 'pwsh'].some(exe => { const r = spawnSync(exe, ['-NoProfile', '-Command', '1'], { encoding: 'utf8' }); return !r.error && r.status === 0; }) ? 'есть' : '';
-const NEED_HINT = { three: 'three@0.149.0 (THREE_PATH или DEPS_DIR)', rapier: '@dimforge/rapier3d-compat@0.19.3 (RAPIER_PATH или DEPS_DIR)', pglite: '@electric-sql/pglite (PGLITE_PATH или DEPS_DIR)', pwsh: 'PowerShell (powershell.exe / pwsh)' };
+const NEED_HINT = { three: 'three@0.149.0 (THREE_PATH или DEPS_DIR)', rapier: '@dimforge/rapier3d-compat@0.19.3 (RAPIER_PATH или DEPS_DIR)', pglite: '@electric-sql/pglite (PGLITE_PATH или DEPS_DIR)', pwsh: 'PowerShell (powershell.exe / pwsh)', rt: 'ws@8.21.3 и @supabase/supabase-js@2.117.2 (DEPS_DIR или RT_DEPS)' };
 const STRICT = !!process.env.CI_STRICT;
 
 if (flag('list')) {
@@ -107,6 +111,7 @@ function runOne(t) {
     const env = { ...process.env, ...(t.env || {}), D37_TMP: TMP, TMP, TEMP: TMP };
     if (D.three) env.THREE_PATH = D.three;
     if (D.rapier) env.RAPIER_PATH = D.rapier;
+    if (D.rt) env.RT_DEPS = D.rt;
     if (D.pglite) { env.PGLITE_PATH = D.pglite; if (STRICT) env.OPS_SQL_REQUIRED = '1'; }
     const p = spawn(process.execPath, [path.join(__dirname, t.f), ...args], { cwd: ROOT, env });
     let out = '', killed = false;
@@ -141,7 +146,7 @@ async function exec(t, second) {
 (async () => {
   const t0 = Date.now();
   console.log(`Проверок: ${runnable.length} (пропущено: ${skipped.length}); одновременно: ${PAR}; Node ${process.version}; ${os.platform()} ${os.cpus().length} ЦП; временное: ${TMP}`);
-  for (const k of ['three', 'rapier', 'pglite', 'pwsh']) console.log(`  ${k.padEnd(7)} ${D[k] || 'нет'}`);
+  for (const k of ['three', 'rapier', 'pglite', 'pwsh', 'rt']) console.log(`  ${k.padEnd(7)} ${D[k] || 'нет'}`);
   fs.mkdirSync(TMP, { recursive: true });
   const parallel = runnable.filter(t => !t.serial), serial = runnable.filter(t => t.serial);
   let i = 0;
