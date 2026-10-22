@@ -7,6 +7,8 @@
 //   V.set(режим | { mode, dist, angle, free }, { smooth }) · V.update(dt, P, look, phys, C) — каждый кадр вместо rig.update
 //   · V.moveCam(C, P) → { yaw } для P.update (и «сбоку» гасит вперёд/назад) · V.afterMove(P) — «сбоку»: держим плоскость
 //   · V.cams = [{ id, pos, rot, fov, kind, zones: [[minx, miny, minz, maxx, maxy, maxz]] }] — камеры в мире · V.mode, V.cfg.
+//   · колесо/щипок до упора (rig.autoFirst, camera.js) — 1-е лицо и обратно «как было» (3-е или из-за плеча), если мир не
+//     задал ракурс жёстко; V.onMode(режим, why) — игре: прицел, мышь.
 // Чистые помощники (проверка в node): wish(mode, move, yaw), camYaw(rot), pickCam(cams, p, cur), MODES, cfg(c).
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
@@ -46,19 +48,34 @@
 
   function create(camera, rig, o = {}){
     const T = o.T;
-    const V = { mode: 'third', cfg: cfg('third'), cams: [], camId: null, plane: null, heldYaw: null, rig0: { dist: rig.dist, minD: rig.minD, maxD: rig.maxD, lift: rig.lift, mode: rig.mode } };
+    const V = { mode: 'third', cfg: cfg('third'), cams: [], camId: null, plane: null, heldYaw: null, base3: 'third', onMode: null,
+      rig0: { dist: rig.dist, minD: rig.minD, maxD: rig.maxD, lift: rig.lift, mode: rig.mode } };
     const tgt = { x: 0, y: 0, z: 0, ok: false }, last = { p: null, q: null, fov: 0 };
     let blend = null, d = V.cfg.dist;
     const pose = () => ({ p: camera.position.clone(), q: camera.quaternion.clone(), fov: camera.fov });
+    // приближение до упора → 1-е лицо (camera.js rig.autoFirst): можно, если игра разрешила (rig создан с autoFirst) и мир не
+    // задал ракурс жёстко (free) — только для видов на rig (3-е лицо, 1-е, из-за плеча)
+    const af0 = !!rig.autoFirst, onMode0 = rig.onMode;
+    const shoulderRig = () => Object.assign(rig, { minD: 2.4, maxD: 9, lift: 1.75 });
+    rig.onMode = (m, why) => {
+      if (why === 'zoom') {   // rig сам сменил вид колесом/щипком — ракурс за ним (отдалил от 1-го лица — «как было»: 3-е или из-за плеча)
+        V.mode = m === 'first' ? 'first' : V.base3;
+        V.cfg = { ...V.cfg, mode: V.mode };
+        if (V.mode === 'shoulder') shoulderRig(); else if (V.mode === 'third') Object.assign(rig, { minD: V.rig0.minD, maxD: V.rig0.maxD, lift: V.rig0.lift });
+      }
+      if (V.onMode) V.onMode(V.mode, why); else onMode0?.(m, why);
+    };
     V.set = (c, opt = {}) => {
       const n = cfg(c), was = V.mode;
       V.cfg = n; V.mode = n.mode; d = n.dist;
+      if (V.mode === 'third' || V.mode === 'shoulder') V.base3 = V.mode;
       if (opt.smooth !== false && last.p) blend = { from: { p: last.p.clone(), q: last.q.clone(), fov: last.fov }, t: 0, dur: opt.dur || .6 };
       // rig: 1-е лицо / 3-е / из-за плеча (ближе и выше)
       if (V.mode === 'first') rig.mode = 'first';
       else { rig.mode = 'third'; if (rig.mode === 'third' && was === 'first') rig.fp = 0; }
-      if (V.mode === 'shoulder') Object.assign(rig, { dist: (camera.aspect < 1 ? 6.4 : 4.4) * U / 1.17, minD: 2.4, maxD: 9, lift: 1.75 });   // телефон стоя — дальше, иначе спина на пол-экрана
+      if (V.mode === 'shoulder') Object.assign(shoulderRig(), { dist: (camera.aspect < 1 ? 6.4 : 4.4) * U / 1.17 });   // телефон стоя — дальше, иначе спина на пол-экрана
       else Object.assign(rig, { dist: V.rig0.dist, minD: V.rig0.minD, maxD: V.rig0.maxD, lift: V.rig0.lift });
+      rig.autoFirst = af0 && n.free && RIGM.has(V.mode);
       V.plane = null; V.heldYaw = null;
       return V.mode;
     };
@@ -129,7 +146,7 @@
       return true;
     };
     V.blending = () => !!blend;
-    V.reset = () => { Object.assign(rig, { dist: V.rig0.dist, minD: V.rig0.minD, maxD: V.rig0.maxD, lift: V.rig0.lift }); blend = null; tgt.ok = false; };
+    V.reset = () => { Object.assign(rig, { dist: V.rig0.dist, minD: V.rig0.minD, maxD: V.rig0.maxD, lift: V.rig0.lift, autoFirst: af0, onMode: onMode0 }); blend = null; tgt.ok = false; };
     return V;
   }
   E.views = { MODES, IDS, cfg, wish, camYaw, pickCam, create };

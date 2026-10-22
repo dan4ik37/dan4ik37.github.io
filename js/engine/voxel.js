@@ -497,8 +497,8 @@
   // b.hitX / hitZ / hitY — упёрся. Незагруженное — стена (не падаем в непрогруженный чанк).
   // ice — лёд времён года (V.iceTest) считается твёрдым: при падении на него сверху (стоять) и сбоку (стенка у края);
   // снизу (всплыл) — нет: подо льдом не запереть (прорубь делает игра), V.boxHits его тоже не считает (не «застрял в блоке»)
-  const solidBox = (W, x, y, z, out, ice) => {
-    const v = W.raw(x, y, z);
+  // v — уже прочитанная клетка (W.raw): moveBox читает столбец сам, без поиска чанка на каждую клетку
+  const solidV = (W, v, x, y, z, out, ice) => {
     if (v < 0) { out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 1; out[4] = 1; out[5] = 1; return true; }
     const t = v & TYPE;
     if (!V.T.solid[t]) {
@@ -509,46 +509,82 @@
     for (let i = 0; i < 6; i++) out[i] = bx[i];
     return true;
   };
+  const solidBox = (W, x, y, z, out, ice) => solidV(W, W.raw(x, y, z), x, y, z, out, ice);
   V.solidBox = solidBox;
   const BX = [0, 0, 0, 0, 0, 0];
-  V.moveBox = (W, b, dx, dy, dz) => {
+  // столбец (x, z) для moveBox: у настоящего мира (V.World со своим raw) чанк ищется один раз на столбец, клетка — как W.raw
+  // (ниже 0 — коренная порода, выше — воздух, нет чанка — −1, «стена»); любой другой мир (свой raw: проверки, моды) — его raw
+  const RAW = World.prototype.raw;
+  let colC = null, colI = 0, colW = null, colX = 0, colZ = 0;
+  const colAt = (W, x, z) => {
+    if (W.raw === RAW) { const c = W.chunk(x >> 4, z >> 4); colC = c && c.gen ? c : null; colI = ((x & 15) << 11) | ((z & 15) << 7); colW = null; }
+    else { colW = W; colX = x; colZ = z; }
+  };
+  const cellV = y => colW !== null ? colW.raw(colX, y, colZ) : y < 0 ? 7 : y >= H ? 0 : colC !== null ? colC.ids[colI | y] : -1;
+  // Сдвиг — через типизированный массив: V.moveBox маленькая (встраивается у вызывающего), большая часть — moveCore(W, b) без
+  // дробных аргументов (дробное в аргументе невстроенной функции V8 заворачивает в новый HeapNumber — по 16 байт на сдвиг)
+  const MD = new Float64Array(3);
+  V.moveBox = (W, b, dx, dy, dz) => { MD[0] = dx; MD[1] = dy; MD[2] = dz; return moveCore(W, b); };
+  function moveCore(W, b){
+    const dx = MD[0], dy = MD[1], dz = MD[2];
     const hw = b.w / 2, EPS = 1e-4, ice = !!V.iceTest;
     b.hitX = b.hitY = b.hitZ = false;
     // по y
     if (dy) {
-      const x0 = Math.floor(b.x - hw + EPS), x1 = Math.floor(b.x + hw - EPS), z0 = Math.floor(b.z - hw + EPS), z1 = Math.floor(b.z + hw - EPS);
+      const x0 = Math.floor(b.x - hw + EPS) | 0, x1 = Math.floor(b.x + hw - EPS) | 0, z0 = Math.floor(b.z - hw + EPS) | 0, z1 = Math.floor(b.z + hw - EPS) | 0;
       let ny = b.y + dy;
-      const ya = Math.floor(Math.min(b.y, ny) - 1), yb = Math.floor(Math.max(b.y + b.h, ny + b.h) + 1);
-      for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let y = ya; y <= yb; y++) {
-        if (!solidBox(W, x, y, z, BX, ice && dy < 0)) continue;
-        if (b.x + hw <= x + BX[0] + EPS || b.x - hw >= x + BX[3] - EPS || b.z + hw <= z + BX[2] + EPS || b.z - hw >= z + BX[5] - EPS) continue;
-        const top = y + BX[4], bot = y + BX[1];
-        if (dy < 0 && b.y >= top - EPS && ny < top) { ny = top; b.hitY = true; }
-        else if (dy > 0 && b.y + b.h <= bot + EPS && ny + b.h > bot) { ny = bot - b.h; b.hitY = true; }
+      const ya = Math.floor((b.y < ny ? b.y : ny) - 1) | 0, yb = Math.floor((dy > 0 ? ny : b.y) + b.h + 1) | 0, icy = ice && dy < 0;   // min/max — сравнением (Math.min/max в V8 без TurboFan — с «коробками»)
+      for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
+        colAt(W, x, z);
+        for (let y = ya; y <= yb; y++) {
+          if (!solidV(W, cellV(y), x, y, z, BX, icy)) continue;
+          if (b.x + hw <= x + BX[0] + EPS || b.x - hw >= x + BX[3] - EPS || b.z + hw <= z + BX[2] + EPS || b.z - hw >= z + BX[5] - EPS) continue;
+          const top = y + BX[4], bot = y + BX[1];
+          if (dy < 0 && b.y >= top - EPS && ny < top) { ny = top; b.hitY = true; }
+          else if (dy > 0 && b.y + b.h <= bot + EPS && ny + b.h > bot) { ny = bot - b.h; b.hitY = true; }
+        }
       }
       b.y = ny;
     }
-    // по x и z — по очереди (ax 0, потом 2; без массива на каждый вызов)
-    for (let ax = 0; ax <= 2; ax += 2) {
-      const d = ax === 0 ? dx : dz; if (!d) continue;
-      const y0 = Math.floor(b.y + EPS), y1 = Math.floor(b.y + b.h - EPS);
-      const p = ax === 0 ? b.x : b.z, q = ax === 0 ? b.z : b.x;
-      let np = p + d;
-      const pa = Math.floor(Math.min(p, np) - hw - 1), pb = Math.floor(Math.max(p, np) + hw + 1), q0 = Math.floor(q - hw + EPS), q1 = Math.floor(q + hw - EPS);
-      for (let a = pa; a <= pb; a++) for (let c = q0; c <= q1; c++) for (let y = y0; y <= y1; y++) {
-        const x = ax === 0 ? a : c, z = ax === 0 ? c : a;
-        if (!solidBox(W, x, y, z, BX, ice)) continue;
-        if (b.y + b.h <= y + BX[1] + EPS || b.y >= y + BX[4] - EPS) continue;
-        const qlo = (ax === 0 ? z + BX[2] : x + BX[0]), qhi = (ax === 0 ? z + BX[5] : x + BX[3]);
-        if (q + hw <= qlo + EPS || q - hw >= qhi - EPS) continue;
-        const lo = (ax === 0 ? x + BX[0] : z + BX[2]), hi = (ax === 0 ? x + BX[3] : z + BX[5]);
-        if (d > 0 && p + hw <= lo + EPS && np + hw > lo) { np = lo - hw; if (ax === 0) b.hitX = true; else b.hitZ = true; }
-        else if (d < 0 && p - hw >= hi - EPS && np - hw < hi) { np = hi + hw; if (ax === 0) b.hitX = true; else b.hitZ = true; }
+    // по x, потом по z — два прохода без общего цикла «по оси» (22.10.2026: тот цикл с выбором оси на каждом шаге и поиск
+    // чанка на каждую клетку — мусор и лишняя работа: ~0,25 КБ на вызов без TurboFan). Целые клетки — Math.floor(…) | 0
+    if (dx) {
+      const y0 = Math.floor(b.y + EPS) | 0, y1 = Math.floor(b.y + b.h - EPS) | 0, p = b.x, q = b.z;
+      let np = p + dx;
+      const pa = Math.floor((dx < 0 ? np : p) - hw - 1) | 0, pb = Math.floor((dx > 0 ? np : p) + hw + 1) | 0, q0 = Math.floor(q - hw + EPS) | 0, q1 = Math.floor(q + hw - EPS) | 0;
+      for (let x = pa; x <= pb; x++) for (let z = q0; z <= q1; z++) {
+        colAt(W, x, z);
+        for (let y = y0; y <= y1; y++) {
+          if (!solidV(W, cellV(y), x, y, z, BX, ice)) continue;
+          if (b.y + b.h <= y + BX[1] + EPS || b.y >= y + BX[4] - EPS) continue;
+          if (q + hw <= z + BX[2] + EPS || q - hw >= z + BX[5] - EPS) continue;
+          const lo = x + BX[0], hi = x + BX[3];
+          if (dx > 0 && p + hw <= lo + EPS && np + hw > lo) { np = lo - hw; b.hitX = true; }
+          else if (dx < 0 && p - hw >= hi - EPS && np - hw < hi) { np = hi + hw; b.hitX = true; }
+        }
       }
-      if (ax === 0) b.x = np; else b.z = np;
+      b.x = np;
     }
+    if (dz) {
+      const y0 = Math.floor(b.y + EPS) | 0, y1 = Math.floor(b.y + b.h - EPS) | 0, p = b.z, q = b.x;
+      let np = p + dz;
+      const pa = Math.floor((dz < 0 ? np : p) - hw - 1) | 0, pb = Math.floor((dz > 0 ? np : p) + hw + 1) | 0, q0 = Math.floor(q - hw + EPS) | 0, q1 = Math.floor(q + hw - EPS) | 0;
+      for (let z = pa; z <= pb; z++) for (let x = q0; x <= q1; x++) {
+        colAt(W, x, z);
+        for (let y = y0; y <= y1; y++) {
+          if (!solidV(W, cellV(y), x, y, z, BX, ice)) continue;
+          if (b.y + b.h <= y + BX[1] + EPS || b.y >= y + BX[4] - EPS) continue;
+          if (q + hw <= x + BX[0] + EPS || q - hw >= x + BX[3] - EPS) continue;
+          const lo = z + BX[2], hi = z + BX[5];
+          if (dz > 0 && p + hw <= lo + EPS && np + hw > lo) { np = lo - hw; b.hitZ = true; }
+          else if (dz < 0 && p - hw >= hi - EPS && np - hw < hi) { np = hi + hw; b.hitZ = true; }
+        }
+      }
+      b.z = np;
+    }
+    colC = null; colW = null;   // чанк и мир не держим (их могли выгрузить)
     return b;
-  };
+  }
   // Пересекается ли коробка с твёрдым (нельзя поставить блок туда, где стоит игрок; встать после приседа); ice — и лёд времён
   // года (есть ли опора под ногами — красться у края проруби); без него лёд не «застрял в блоке»
   V.boxHits = (W, x, y, z, w, h, ice) => {

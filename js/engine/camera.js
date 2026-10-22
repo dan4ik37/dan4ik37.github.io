@@ -4,21 +4,29 @@
 //  на бегу, «присед» камеры при приземлении (пружина), лёгкий наклон горизонта при шаге вбок, толчок (kick), тряска
 //  (shake), кувырок от 1-го лица — нырок через плечо
 // ═══════════════════════════════════════
-// rig = D37E.cameraRig(camera, { yaw, pitch, dist }); rig.follow(P) — сам слушает приземления игрока (player.js);
+// rig = D37E.cameraRig(camera, { yaw, pitch, dist, autoFirst }); rig.follow(P) — сам слушает приземления игрока (player.js);
 // каждый кадр: rig.update(dt, P (или точка {x, y, z}), look {dx, dy, zoom}, phys, C). rig.mode = 'third' | 'first'.
 // rig.motion — настройка «Покачивание камеры» 0…1 (localStorage d37_cam_motion), rig.sens — чувствительность.
 // rig.kick(сила) — кивок при ударе; rig.shake(градусы, секунды) — тряска мира. Камеру от 3-го лица останавливают только
-// тела с data.cam (стены домов), чтобы деревья и фонари не дёргали её.
+// тела с data.cam (стены домов), чтобы деревья и фонари не дёргали её. Снизу её держит земля под камерой (phys.groundAt):
+// в бункере, подвале, чаше пруда камера опускается вместе с полом (раньше — не ниже y 0,4: под землёй был вид сквозь потолок).
+// Как в Роблоксе (22.10.2026, владелец: «камеру при приближении автоматом не переводит на первое лицо?»): rig.autoFirst — от
+// 3-го лица колесо, щипок или крестовина (C.look.zoom) до упора и чуть дальше (порог с запасом: ~1 щелчок колеса за минимум)
+// → вид от 1-го лица; от 1-го лица отдалил — от 3-го, камера выезжает из головы. Переход — плавный (0,22 с), после
+// переключения 0,3 с колесо не переключает обратно (без дрожи на пороге). Настройка ⚙️ «Камера» → zoomFirst (D37Opt).
+// rig.setMode(режим, { why, blend }) — сменить вид (V, настройка, приближение); rig.onMode(режим, why) — игре: прицел, мышь.
 (() => {
   const E = window.D37E = window.D37E || {};
   const U = E.UNIT || 2.1 / 1.8, DEG = Math.PI / 180;
   const store = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : +v; } catch (e) { return d; } };
+  const ZK = .1, ZCOOL = .3, BLEND = .22;   // порог «дожать» (сумма ln приближения), тишина после переключения (с), переход (с)
 
   E.cameraRig = function (camera, o = {}){
     const rig = {
       mode: o.mode || 'third', yaw: o.yaw ?? 0, pitch: o.pitch ?? .6, fp: 0, dist: o.dist ?? 11, minD: o.minD ?? 3.2, maxD: o.maxD ?? 26,
       minP: .08, maxP: 1.38, maxLook: 85 * DEG, tx: o.x || 0, ty: 1.5, tz: o.z || 0, cur: o.dist ?? 11, lift: o.lift ?? 1.5,
       motion: E.clamp(store('d37_cam_motion', 1), 0, 1), sens: E.clamp(store('d37_cam_sens', 1), .2, 3), fovFirst: 72,
+      autoFirst: !!o.autoFirst, zoomFirst: true, onMode: null, floorY: 0,
     };
     // «Ощущение тела»
     const F = { t: 0, bobPh: 0, bobW: 0, dip: 0, dipV: 0, roll: 0, kick: 0, kickRoll: 0, shUntil: 0, shDur: 0, shStr: 0, shSeed: 0 };
@@ -40,7 +48,59 @@
       }
     };
     rig.follow = P => { const off = [P.on('land', e => rig.land(e.v))]; return () => off.forEach(f => f()); };
-    rig.toggle = () => { rig.mode = rig.mode === 'first' ? 'third' : 'first'; if (rig.mode === 'first') rig.fp = 0; return rig.mode; };
+
+    // ── Плавный переход между видами: поза камеры в момент смены → новая поза за BLEND с (объекты — свои, без мусора) ──
+    const canBlend = !!(camera.position?.clone && camera.quaternion?.clone);
+    const BL = canBlend ? { on: false, t: 0, dur: BLEND, p: camera.position.clone(), q: camera.quaternion.clone(), fov: 0, tp: camera.position.clone(), tq: camera.quaternion.clone() } : null;
+    function blendFrom(dur){ if (!BL || !(dur > 0)) return; BL.p.copy(camera.position); BL.q.copy(camera.quaternion); BL.fov = camera.fov; BL.t = 0; BL.dur = dur; BL.on = true; }
+    function blendApply(dt){
+      if (!BL || !BL.on) return;
+      BL.t += dt;
+      const k = Math.min(1, BL.t / BL.dur), s = k * k * (3 - 2 * k);
+      BL.tp.copy(camera.position); camera.position.copy(BL.p).lerp(BL.tp, s);
+      BL.tq.copy(camera.quaternion); camera.quaternion.copy(BL.q).slerp(BL.tq, s);
+      if (k >= 1) BL.on = false;
+    }
+    rig.blending = () => !!BL?.on;
+    // Сменить вид. why: 'zoom' (колесо/щипок до упора), 'key' (V), 'set' (игра, настройка); blend — секунды перехода (0 — сразу)
+    let zPush = 0, zCool = 0;
+    rig.setMode = (m, opt = {}) => {
+      m = m === 'first' ? 'first' : 'third';
+      if (m === rig.mode) return m;
+      const was = rig.mode, why = opt.why || 'set';
+      blendFrom(opt.blend ?? (why === 'zoom' ? BLEND : 0));
+      rig.mode = m;
+      if (m === 'first') rig.fp = why === 'zoom' ? E.clamp(rig.pitch, -rig.maxLook, rig.maxLook) : 0;   // приблизил — смотришь туда же
+      else if (was === 'first' && why === 'zoom') {   // отдалил от 1-го лица — камера выезжает из головы на чуть дальше минимума
+        rig.pitch = E.clamp(Math.max(rig.fp, .2), rig.minP, rig.maxP);
+        rig.dist = Math.min(rig.maxD, rig.minD * 1.35); rig.cur = Math.min(rig.dist, .5);
+      }
+      zPush = 0; zCool = ZCOOL;
+      try { rig.onMode?.(m, why); } catch (e) { console.error(e); }
+      return m;
+    };
+    rig.toggle = () => rig.setMode(rig.mode === 'first' ? 'third' : 'first', { why: 'key' });
+    // приближение (look.zoom: < 1 — ближе, > 1 — дальше): у минимума «дожать» → 1-е лицо; от 1-го лица дальше → 3-е
+    function zoomInput(zoom, isP, dt){
+      if (zCool > 0) { zCool -= dt; return; }
+      const can = rig.autoFirst && rig.zoomFirst !== false && isP;
+      if (rig.mode === 'first') {
+        if (!can) return;
+        if (zoom > 1) { zPush += Math.log(zoom); if (zPush >= ZK) rig.setMode('third', { why: 'zoom' }); }
+        else zPush = 0;
+        return;
+      }
+      const want = rig.dist * zoom;
+      if (zoom < 1 && can && want < rig.minD) {
+        // уже у минимума — копим «дожим» за край; не у минимума — сначала доезжаем до него (лишнее тоже в дожим)
+        zPush += Math.log(rig.minD / Math.max(1e-3, want)) - (rig.dist > rig.minD * 1.0001 ? Math.log(rig.dist / rig.minD) : 0);
+        rig.dist = rig.minD;
+        if (zPush >= ZK) rig.setMode('first', { why: 'zoom' });
+        return;
+      }
+      if (zoom > 1) zPush = 0;
+      rig.dist = E.clamp(want, rig.minD, rig.maxD);
+    }
 
     function shakeNow(){
       const left = F.shUntil - F.t;
@@ -49,27 +109,31 @@
       SHK.x = (E.noise(t, 1) - .5) * 2 * k; SHK.y = (E.noise(t, 2) - .5) * 2 * k * .6; SHK.z = (E.noise(t, 3) - .5) * 2 * k * .8;
       return SHK;
     }
+    // земля под точкой (физика мира: рельеф, дыры бункера и гавани); нет физики/рельефа — 0, как раньше
+    const floorAt = (phys, x, z) => { if (!phys || typeof phys.groundAt !== 'function') return 0; const g = phys.groundAt(x, z); return Number.isFinite(g) ? g : 0; };
 
     // настройки (окно ⚙️, js/core/settings.js → window.D37Opt): чувствительность, инверсия, покачивание, тряска, угол обзора
     rig.invY = false; rig.noShake = false; rig.fovAdd = 0;
     let optRev = -1;
-    const optSync = O => { optRev = O.rev; rig.sens = E.clamp(+O.sens || 1, .2, 3); rig.motion = E.clamp(O.motion ?? 1, 0, 1); rig.invY = !!O.invertY; rig.noShake = O.shake === false; rig.fovAdd = +O.fovAdd || 0; };
+    const optSync = O => { optRev = O.rev; rig.sens = E.clamp(+O.sens || 1, .2, 3); rig.motion = E.clamp(O.motion ?? 1, 0, 1); rig.invY = !!O.invertY; rig.noShake = O.shake === false; rig.fovAdd = +O.fovAdd || 0; rig.zoomFirst = O.zoomFirst !== false; };
     rig.update = (dt, P, look, phys, C) => {
       F.t += dt;
       const O = window.D37Opt; if (O && O.rev !== optRev) optSync(O);
-      const ch = P?.ch || P || CH0, isP = !!P?.ch, first = rig.mode === 'first', sy = isP ? P.stepOff || 0 : 0;   // sy — плавная ступенька
-      // поворот: мышь/палец + правый стик
+      const ch = P?.ch || P || CH0, isP = !!P?.ch, sy = isP ? P.stepOff || 0 : 0;   // sy — плавная ступенька
+      // поворот: мышь/палец + правый стик; приближение — может сменить вид (rig.autoFirst)
       if (look) {
+        if (look.zoom && look.zoom !== 1) zoomInput(look.zoom, isP, dt);
+        else if (zCool > 0) zCool -= dt;
         const ly = (look.dy || 0) * (rig.invY ? -1 : 1);
-        if (first) {
+        if (rig.mode === 'first') {
           rig.yaw -= (look.dx || 0) * .0045 * rig.sens;
           rig.fp = E.clamp(rig.fp + ly * .0045 * rig.sens, -rig.maxLook, rig.maxLook);
         } else {
           rig.yaw -= (look.dx || 0) * .0065 * rig.sens;
           rig.pitch = E.clamp(rig.pitch + ly * .0048 * rig.sens, rig.minP, rig.maxP);
-          if (look.zoom && look.zoom !== 1) rig.dist = E.clamp(rig.dist * look.zoom, rig.minD, rig.maxD);
         }
-      }
+      } else if (zCool > 0) zCool -= dt;
+      const first = rig.mode === 'first';
       // ── ощущение тела ──
       const hv = isP ? Math.hypot(ch.vx, ch.vz) : 0, onFoot = isP && P.mode === 'move' && ch.grounded;
       const running = isP && P.running && hv > 5 * U;
@@ -98,12 +162,15 @@
           if (hit) d = Math.max(1.4, hit.t - .4);
         }
         rig.cur = d < rig.cur ? E.damp(rig.cur, d, 30, dt) : E.damp(rig.cur, d, 5, dt);
-        const ty = rig.ty + F.dip * .9;
-        camera.position.set(rig.tx + dx * rig.cur, Math.max(.4, ty + dy * rig.cur + F.dip * .5), rig.tz + dz * rig.cur);
+        const ty = rig.ty + F.dip * .9, cx = rig.tx + dx * rig.cur, cz = rig.tz + dz * rig.cur;
+        // не ниже земли под камерой (+0,4): бункер, подвал, гавань — пол ниже 0, и камера опускается вместе с ним
+        const fy = rig.floorY = floorAt(phys, cx, cz) + .4;
+        camera.position.set(cx, Math.max(fy, ty + dy * rig.cur + F.dip * .5), cz);
         camera.lookAt(rig.tx, ty, rig.tz);
         if (F.roll || sh.z || F.kickRoll) camera.rotateZ((F.roll * .5 + sh.z + F.kickRoll) * DEG);
         if (F.kick || sh.x) camera.rotateX(-(F.kick + sh.x) * DEG);
         if (sh.y) camera.rotateY(sh.y * DEG);
+        blendApply(dt);
         return;
       }
       // ── от 1-го лица: глаза = рост капсулы − 0,2 м (ниже, присев и в кувырке) ──
@@ -120,6 +187,7 @@
         rollYaw = -dip * 12 * sideK;
       }
       camera.rotation.set(-rig.fp - (sh.x + flip + F.kick) * DEG, rig.yaw + (sh.y + rollYaw) * DEG, (F.roll + sh.z + shoulder + F.kickRoll) * DEG, 'YXZ');
+      blendApply(dt);
     };
     return rig;
   };

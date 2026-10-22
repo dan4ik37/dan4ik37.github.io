@@ -36,7 +36,8 @@ const PAGES = {
   invite:     ['invite-page'],   // 👥 пригласи друзей (js/features/invite.js; /invite/admin — проверка)
   ads:        ['ad-bottom','ads'],
   adv:        ['adv-page'],      // 📣 кабинет рекламодателя (js/features/adcab.js грузится при входе)
-  phone:      ['phone-page']     // телефон 📱 на странице (js/features/phone.js)
+  phone:      ['phone-page'],    // телефон 📱 на странице (js/features/phone.js)
+  photo:      ['photo-page']     // 🖼 фоторедактор (js/apps/apps.js грузит редактор при входе); страница для поиска — /tools/photo
 };
 const ALL_PAGE_IDS = Object.values(PAGES).flat();
 
@@ -204,6 +205,8 @@ const D37Route = (() => {
     ads: ['Реклама на сайте и канале dan4ik37', 'Реклама у стримера dan4ik37: медиакит канала и своя реклама на сайте.'],
     adv: ['Кабинет рекламодателя — dan4ik37', 'Кабинет рекламодателя сайта dan4ik37: кампании, показы и статистика.'],
     phone: ['Телефон — dan4ik37', 'Телефон сайта dan4ik37: сообщения, звонки, друзья и приложения.'],
+    photo: ['Фоторедактор онлайн — слои, обрезка, текст, фильтры | dan4ik37',
+      'Бесплатный фоторедактор в браузере: слои, обрезка под шортс и превью, коррекция, фильтры, надписи, кисть и ластик. Работает на телефоне, без регистрации.'],
   };
   const NOINDEX = new Set(['profile', 'invite', 'adv', 'phone', 'games']);
   // Что разделу показать поисковику: { title, description, canonical, noindex }
@@ -222,6 +225,7 @@ const D37Route = (() => {
       if (route === 'ideas') title = 'Идея для видео — dan4ik37';
     }
     if (route === 'ads') canon = '/reklama';
+    if (route === 'photo') { canon = '/tools/photo'; if (param) noindex = true; }   // для поиска — серверная страница /tools/photo
     return { title, description: m[1], canonical: SITE + canon, noindex };
   }
   let curMeta = {};
@@ -337,6 +341,7 @@ function finishShowPage(route, activeIds){
   if (route==='adv') window.D37AdDirect?.cabinet?.(param);                            // 📣 реклама за 💎
   if (route==='chat' && !gated && typeof renderChatPage==='function') renderChatPage(param);     // чат «как Дискорд»
   if (route==='phone' && typeof phoneRoute==='function') phoneRoute(route, param);      // телефон 📱 на странице
+  if (route==='photo') window.D37Apps?.open('photo', param);                           // 🖼 фоторедактор (js/apps/apps.js)
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным
   activeIds.forEach(id=>{

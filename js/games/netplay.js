@@ -11,7 +11,8 @@
 //   np.handle(msg) — отдать сообщение из комнаты: true, если оно сетевое (его разберёт np);
 //   np.offer() — начать соединение (зовёт хозяин, когда пришёл напарник);
 //   np.send(msg, fast) — fast: можно потерять (позиции), иначе гарантированно и по порядку;
-//   np.sendBin(arrayBuffer) — снимок мира (как fast); np.mode() — 'connecting' | 'p2p' | 'relay';
+//   np.sendBin(arrayBuffer) — снимок мира (как fast); np.sendRel(buf) — двоичное гарантированно (только напрямую: false —
+//   пусть шлёт через свою комнату, как js/games/coop.js), np.relBuf() — сколько байт ещё в очереди; np.mode() — 'connecting' | 'p2p' | 'relay';
 //   np.hz() — сколько снимков в секунду слать сейчас; np.close().
 (() => {
   const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
@@ -122,9 +123,16 @@
       if (!relayOk()) return;
       room.send({ type: 'np-bin', b: toB64(buf) });
     }
+    // Двоичное гарантированно и по порядку (канал rel) — только напрямую: false — нет связи (пусть вызывающий шлёт через свою
+    // комнату: js/games/coop.js); relBuf() — сколько ещё не ушло (байт) — чтобы не забивать канал
+    function sendRel(buf){
+      if (N.closed || !p2p(N.rel)) return false;
+      try { N.rel.send(buf); return true; } catch (e) { return false; }
+    }
+    const relBuf = () => (N.rel && N.rel.readyState === 'open' ? N.rel.bufferedAmount : 0);
     function close(){ N.closed = true; clearTimeout(N.timer); clearTimeout(N.retry); dropPc(); }
 
-    return { send, sendBin, handle, offer, close, mode: () => N.mode, hz: () => N.mode === 'p2p' ? 15 : 5 };
+    return { send, sendBin, sendRel, relBuf, handle, offer, close, mode: () => N.mode, hz: () => N.mode === 'p2p' ? 15 : 5 };
   }
 
   window.NetPlay = { start };

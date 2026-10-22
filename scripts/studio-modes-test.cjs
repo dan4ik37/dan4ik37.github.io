@@ -445,4 +445,99 @@ if (THREE) {
   ok(['side', 'top', 'iso', 'fixed', 'shoulder'].every(v => views.has(v)), 'заготовки показывают разные ракурсы', [...views]);
 }
 
+// ═══ Камера (camera.js, 22.10.2026): приближение до упора — от 1-го лица (как в Роблоксе), без дрожи на пороге; ракурс
+//     (views.js) идёт за ней; земля под камерой держит её и в бункере (пол ниже 0) ═══
+if (THREE) {
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/camera.js'), 'utf8'), { filename: 'camera.js' });
+  globalThis.D37Opt = { rev: 1, zoomFirst: true };
+  const P = () => ({ ch: { x: 0, y: 0, z: 0, vx: 0, vz: 0, h: 2.1, grounded: true }, mode: 'move', stepOff: 0 });
+  const mkRig = o => { const cam = new THREE.PerspectiveCamera(50, 16 / 9, .2, 800); cam.userData.fov0 = 50; const rig = E.cameraRig(cam, { yaw: Math.PI, pitch: .42, dist: 9.5, minD: 2.6, maxD: 22, ...o }); return { cam, rig }; };
+  const WHEEL = 1 / 1.12;   // щелчок колеса к себе (input.js)
+  const run = (rig, Pp, zooms, cb) => { const ev = []; rig.onMode = (m, why) => ev.push(m + ':' + why); for (const z of zooms) { rig.update(1 / 60, Pp, { dx: 0, dy: 0, zoom: z }, null, null); cb?.(); } return ev; };
+  {
+    const { rig } = mkRig({ autoFirst: true }), Pp = P();
+    const toMin = Array(12).fill(WHEEL);   // 9,5 → 2,6: 12 щелчков (последний упирается в минимум)
+    const ev1 = run(rig, Pp, toMin);
+    ok(rig.mode === 'third' && near(rig.dist, rig.minD), 'колесо до минимума — ещё 3-е лицо (у края — не переключает)', [rig.mode, rig.dist]);
+    const ev2 = run(rig, Pp, [WHEEL]);
+    ok(rig.mode === 'first' && ev2.join() === 'first:zoom' && !ev1.length, 'ещё щелчок за край — от 1-го лица (onMode: first, zoom)', [rig.mode, ev2]);
+    const evN = run(rig, Pp, [WHEEL, WHEEL, WHEEL, 1, 1]);
+    ok(rig.mode === 'first' && !evN.length, 'дальше к себе — так и остаётся от 1-го лица', evN);
+    // сразу «от себя» после переключения — 0,3 с тишины (колесо по инерции не дёргает туда-сюда)
+    const { rig: r2 } = mkRig({ autoFirst: true }), P2 = P();
+    run(r2, P2, [...toMin, WHEEL]);
+    const evQ = run(r2, P2, [1 / WHEEL]);
+    ok(r2.mode === 'first' && !evQ.length, 'сразу после переключения щелчок «от себя» не возвращает (0,3 с)', evQ);
+    const evW = run(r2, P2, [...Array(20).fill(1), 1 / WHEEL]);
+    ok(r2.mode === 'third' && evW.join() === 'third:zoom' && r2.dist > r2.minD * 1.2 && r2.cur < 1, 'потом «от себя» — от 3-го лица, камера выезжает из головы (на чуть дальше минимума)', [r2.mode, r2.dist, r2.cur]);
+    // гистерезис: обратно в 1-е лицо — только снова до минимума и за край (не первым же щелчком)
+    const evH = run(r2, P2, [...Array(20).fill(1), WHEEL]);
+    ok(r2.mode === 'third' && !evH.length, 'гистерезис: один щелчок к себе после отдаления — ещё 3-е лицо', evH);
+    // щипок: плавно по чуть-чуть — переключение ровно один раз, без мигания
+    const { rig: r3 } = mkRig({ autoFirst: true }), P3 = P();
+    const ev3 = run(r3, P3, Array(240).fill(.985));
+    ok(r3.mode === 'first' && ev3.length === 1, 'щипок «к себе» 4 с — одно переключение, без мигания', ev3);
+    // крестовина ↑ (C.look.zoom с шага управления) — тот же путь
+    const { rig: r4 } = mkRig({ autoFirst: true }), P4 = P();
+    const ev4 = run(r4, P4, Array(120).fill(Math.exp(-1.7 / 60)));
+    ok(r4.mode === 'first' && ev4.length === 1, 'крестовина ↑ держать — до упора и в 1-е лицо', ev4);
+  }
+  {
+    // где не переключает: игра не просила (Кубомир — свой F5), камера не за игроком (в машине), выключено в ⚙️
+    const { rig } = mkRig({}), Pp = P();
+    run(rig, Pp, Array(30).fill(WHEEL));
+    ok(rig.mode === 'third' && near(rig.dist, rig.minD), 'без autoFirst (игра не просила) — только до минимума, как раньше');
+    const { rig: rv } = mkRig({ autoFirst: true });
+    run(rv, { x: 0, y: 0, z: 0 }, Array(30).fill(WHEEL));
+    ok(rv.mode === 'third', 'камера за машиной (не игрок) — не переключает');
+    globalThis.D37Opt = { rev: 2, zoomFirst: false };
+    const { rig: ro } = mkRig({ autoFirst: true });
+    run(ro, P(), Array(30).fill(WHEEL));
+    ok(ro.mode === 'third' && ro.zoomFirst === false, '⚙️ «Приблизил до упора — от 1-го лица» выключено — не переключает');
+    globalThis.D37Opt = { rev: 3, zoomFirst: true };
+  }
+  {
+    // переход плавный: первый кадр после переключения — камера ещё у прежней позы, через 0,3 с — у глаз
+    const { cam, rig } = mkRig({ autoFirst: true }), Pp = P();
+    run(rig, Pp, Array(12).fill(WHEEL));
+    const before = cam.position.clone();
+    run(rig, Pp, [WHEEL]);
+    const mid = cam.position.clone(), eyeY = Pp.ch.y + Pp.ch.h - .2 * E.UNIT;
+    for (let i = 0; i < 20; i++) rig.update(1 / 60, Pp, { dx: 0, dy: 0, zoom: 1 }, null, null);
+    ok(rig.mode === 'first' && mid.distanceTo(before) < before.distanceTo(cam.position) * .5 && Math.abs(cam.position.y - eyeY) < .05, 'переход плавный: сначала у прежней позы, потом — у глаз', [mid.distanceTo(before), cam.position.y, eyeY]);
+  }
+  {
+    // ракурс студии идёт за камерой: 3-е → 1-е → обратно «как было» (из-за плеча); мир задал ракурс жёстко — не переключает
+    const cam = new THREE.PerspectiveCamera(50, 16 / 9, .2, 800), rig = E.cameraRig(cam, { yaw: Math.PI, pitch: .42, dist: 10, minD: 2.6, maxD: 24, autoFirst: true });
+    const V = VW.create(cam, rig, { T: THREE }), Pp = P(), modes = [];
+    V.onMode = (m, why) => modes.push(m + ':' + why);
+    V.set({ mode: 'shoulder', free: true }, { smooth: false });
+    for (let i = 0; i < 40; i++) V.update(1 / 60, Pp, { dx: 0, dy: 0, zoom: WHEEL }, null, null);
+    const m1 = V.mode;
+    for (let i = 0; i < 40; i++) V.update(1 / 60, Pp, { dx: 0, dy: 0, zoom: 1 / WHEEL }, null, null);
+    ok(m1 === 'first' && V.mode === 'shoulder' && rig.lift === 1.75 && modes.join() === 'first:zoom,shoulder:zoom', 'ракурс: из-за плеча → колесом в 1-е лицо → обратно из-за плеча', [m1, V.mode, modes]);
+    V.set({ mode: 'third', free: false }, { smooth: false });
+    for (let i = 0; i < 40; i++) V.update(1 / 60, Pp, { dx: 0, dy: 0, zoom: WHEEL }, null, null);
+    ok(V.mode === 'third' && rig.mode === 'third' && !rig.autoFirst, 'мир задал ракурс жёстко (free: false) — не переключает');
+    V.reset();
+    ok(rig.onMode === null && rig.autoFirst === true, 'сброс ракурса (стоп игры) — rig как был: свой onMode и autoFirst', [rig.onMode, rig.autoFirst]);
+  }
+  {
+    // земля под камерой: бункер (пол −5,4) — камера опускается к полу; без рельефа — как раньше (не ниже 0,4)
+    const PH = new E.Phys({ ground: 0 }), BK = { x0: -10, x1: 10, z0: -10, z1: 10, floor: -5.4 };
+    PH.terrain = { sample: (x, z) => x > BK.x0 && x < BK.x1 && z > BK.z0 && z < BK.z1 ? BK.floor : 0 };
+    const { cam, rig } = mkRig({ autoFirst: true }), Pp = P(); Pp.ch.y = BK.floor;
+    rig.pitch = rig.minP; rig.dist = 6; rig.cur = 6; rig.snap(0, BK.floor, 0);
+    for (let i = 0; i < 90; i++) rig.update(1 / 60, Pp, { dx: 0, dy: 0, zoom: 1 }, PH, null);
+    ok(cam.position.y < -3 && cam.position.y >= BK.floor + .4 - 1e-6, 'бункер (пол −5,4): камера от 3-го лица у пола, а не над землёй (раньше — не ниже 0,4)', cam.position.y);
+    const { cam: c2, rig: r2 } = mkRig({}), P2 = P(); P2.ch.y = BK.floor; r2.pitch = r2.minP; r2.dist = 6; r2.cur = 6; r2.snap(0, BK.floor, 0);
+    for (let i = 0; i < 90; i++) r2.update(1 / 60, P2, { dx: 0, dy: 0, zoom: 1 }, null, null);
+    ok(Math.abs(c2.position.y - .4) < 1e-6, 'без физики мира — как раньше (не ниже 0,4)', c2.position.y);
+    PH.terrain = { sample: () => 12 };   // склон выше игрока: камера над землёй склона, а не в нём
+    const { cam: c3, rig: r3 } = mkRig({}), P3 = P(); r3.pitch = r3.minP; r3.dist = 6; r3.cur = 6;
+    for (let i = 0; i < 90; i++) r3.update(1 / 60, P3, { dx: 0, dy: 0, zoom: 1 }, PH, null);
+    ok(c3.position.y >= 12.4 - 1e-6, 'земля выше камеры (склон) — камера над ней', c3.position.y);
+  }
+} else console.log('(камера: нет three.js — проверки камеры пропущены)');
+
 setTimeout(() => { console.log(`\n${pass} ок, ${fail} ошибок`); process.exitCode = fail ? 1 : 0; }, 80);
