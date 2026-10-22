@@ -47,7 +47,10 @@ const C = {
   MAX_CHANNELS: num('MAX_CHANNELS', 32, 1, 1000),        // channels per connection
   MAX_MSG: num('MAX_MSG', 256 * 1024, 1024, 4 * 1024 * 1024),   // = Supabase Free broadcast payload limit
   MSG_BURST: num('MSG_BURST', 120, 1, 1e6), MSG_PER_SEC: num('MSG_PER_SEC', 60, 1, 1e6),
-  BYTE_BURST: num('BYTE_BURST', 1024 * 1024, 1024, 1e9), BYTE_PER_SEC: num('BYTE_PER_SEC', 256 * 1024, 1024, 1e9),
+  BYTE_BURST: num('BYTE_BURST', 4 * 1024 * 1024, 1024, 1e9), BYTE_PER_SEC: num('BYTE_PER_SEC', 1024 * 1024, 1024, 1e9),
+  // what one connection may make the server SEND (frame × recipients): a Kubomir host relaying 46 KB bundles to 4 guests
+  // (~0.55 MB/s) fits, one person can't make a 300-member room a firehose
+  EGRESS_BURST: num('EGRESS_BURST', 8 * 1024 * 1024, 1024, 1e10), EGRESS_PER_SEC: num('EGRESS_PER_SEC', 2 * 1024 * 1024, 1024, 1e10),
   ABUSE_DROPS: num('ABUSE_DROPS', 400, 10, 1e9),         // dropped by rate limit within 10 s → disconnect
   MAX_ROOMS: num('MAX_ROOMS', 20000, 1, 1e7),
   MAX_ROOM_SUBS: num('MAX_ROOM_SUBS', 300, 2, 1e5),
@@ -66,6 +69,15 @@ const C = {
   PING_MS: num('PING_MS', 25000, 1000, 600000),           // protocol ping (browsers answer even in background tabs)
   PROBE_MAX: num('PROBE_MAX', 65536, 0, 1e6),
   ROOM_GC_MS: num('ROOM_GC_MS', 30000, 0, 3600e3),        // an empty room is kept (and watched) this long
+
+  // Anti-cheat feed (audit.js, docs/SERVER.md «Anti-cheat feed»): off unless AUDIT=file|http
+  AUDIT: str('AUDIT', ''),
+  AUDIT_DIR: str('AUDIT_DIR', '/audit'), AUDIT_FILE_MB: num('AUDIT_FILE_MB', 50, 1, 100000), AUDIT_FILES: num('AUDIT_FILES', 5, 1, 1000),
+  AUDIT_URL: str('AUDIT_URL', ''), AUDIT_TOKEN: str('AUDIT_TOKEN', ''), AUDIT_SALT: str('AUDIT_SALT', ''),
+  AUDIT_EVENTS: str('AUDIT_EVENTS', ''),   // server-side «auditable» events: room-pattern:event|event, comma separated
+  AUDIT_PER_SEC: num('AUDIT_PER_SEC', 2000, 1, 1e7), AUDIT_ROOM_PER_SEC: num('AUDIT_ROOM_PER_SEC', 100, 1, 1e7),
+  AUDIT_PAYLOAD: num('AUDIT_PAYLOAD', 2048, 0, 1e6), AUDIT_QUEUE: num('AUDIT_QUEUE', 20000, 100, 1e8),
+  AUDIT_STAT_MS: num('AUDIT_STAT_MS', 10000, 100, 3600e3),   // how often { ev: 'stat' } (gaps, drops) is written
 
   // TURN (coturn «use-auth-secret»): credentials are an HMAC of the shared secret — the secret never leaves the server
   TURN_SECRET: str('TURN_SECRET', ''),

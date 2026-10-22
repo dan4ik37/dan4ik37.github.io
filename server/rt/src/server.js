@@ -14,6 +14,7 @@ const { Hub, stats } = require('./hub');
 const { Watcher } = require('./sbwatch');
 const { Jwt } = require('./jwt');
 const { turnCreds } = require('./turn');
+const { makeAudit } = require('./audit');
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 function clientIp(req){
@@ -34,7 +35,8 @@ function start(){
   const T0 = Date.now();
   let hub = null;
   const watcher = C.WATCH ? new Watcher({ onForeign: name => hub && hub.onForeign(name) }) : null;
-  hub = new Hub({ watcher, jwt: new Jwt() });
+  const audit = C.AUDIT === 'http' && !C.AUDIT_URL ? null : makeAudit(C);
+  hub = new Hub({ watcher, jwt: new Jwt(), audit });
   const wss = new WebSocketServer({ noServer: true, maxPayload: C.MAX_MSG, perMessageDeflate: false, clientTracking: false });
   const ips = new Map(), turnB = new Map(), live = new Set();
   Object.assign(stats.drop, { origin: 0, full: 0, ip: 0, ipRate: 0, turnRate: 0 });
@@ -89,6 +91,7 @@ function start(){
       loopMs: { p50: +(loop.percentile(50) / 1e6).toFixed(2), p99: +(loop.percentile(99) / 1e6).toFixed(2), max: +(loop.max / 1e6).toFixed(1) },
       counts: hub.counts(), perSec: rates, stats, ipsTracked: ips.size,
       watcher: watcher ? watcher.status() : null,
+      audit: audit ? audit.stats() : null,
       maintenance: C.MAINTENANCE,
     };
   };
@@ -166,6 +169,7 @@ function start(){
     for (const t of [loadT, memT, pingT, sweepT]) clearInterval(t);
     loop.disable();
     if (watcher) watcher.close();
+    if (audit) audit.close();
     return new Promise(res => {
       server.close(() => res());
       setTimeout(() => { for (const ws of live) { try { ws.terminate(); } catch (e) {} } res(); }, 700).unref?.();
@@ -176,7 +180,7 @@ function start(){
     // big accept queue: after a restart every tab reconnects at once (the kernel caps it at net.core.somaxconn, 4096 on Ubuntu 24.04)
     server.listen({ port: C.PORT, host: C.LISTEN, backlog: 4096 }, () => {
       const port = server.address().port;
-      log('info', 'd37-rt listening', { port, watch: !!watcher, turn: !!(C.TURN_SECRET && C.TURN_HOST), maintenance: C.MAINTENANCE });
+      log('info', 'd37-rt listening', { port, watch: !!watcher, turn: !!(C.TURN_SECRET && C.TURN_HOST), maintenance: C.MAINTENANCE, audit: audit ? C.AUDIT : '' });
       resolve({ server, hub, watcher, port, close, health, metrics });
     });
   });

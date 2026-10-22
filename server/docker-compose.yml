@@ -29,6 +29,9 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    volumes:
+      # anti-cheat journal (only with AUDIT=file in .env; docs/SERVER.md «Anti-cheat feed»)
+      - rt_audit:/audit
     security_opt:
       - "no-new-privileges:true"
     cap_drop:
@@ -94,3 +97,4 @@ services:
 volumes:
   caddy_data: {}
   caddy_config: {}
+  rt_audit: {}

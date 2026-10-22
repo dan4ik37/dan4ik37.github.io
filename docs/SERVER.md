@@ -185,7 +185,7 @@ All three containers use `network_mode: host` (like the owner's Minecraft): no D
 passes them as `X-Forwarded-For` (rt trusts it only from loopback), rt listens on 127.0.0.1 only. Secrets: `server/.env`
 (make-env.sh, openssl, chmod 600, gitignored); coturn gets its secret through a config file written inside the container (not argv).
 
-Files: `server/rt/src/` — `server.js` (HTTP + upgrade + limits + timers), `hub.js` (rooms/presence/broadcast/resume),
+Files: `server/rt/src/` — `server.js` (HTTP + upgrade + limits + timers), `hub.js` (rooms/presence/broadcast/resume), `audit.js` (anti-cheat feed),
 `sbwatch.js` (Supabase watcher), `jwt.js` (JWKS ES256/RS256), `turn.js`, `config.js` (all env knobs), `cli.js`;
 `server/docker-compose.yml`, `server/Caddyfile`, `server/coturn/turnserver.conf` (only options verified against coturn 4.18.0
 source — an unknown option or a malformed `denied-peer-ip` stops coturn). Client: `js/core/rt.js` (D37RT). Hooks (stage 1):
@@ -234,7 +234,8 @@ Server → client (`r` in room frames = global room number — identical bytes f
 ### Limits (server/rt/src/config.js, env) — defaults
 
 Connections 4000 total, 64 per address (schools/CGNAT), 30 new per address burst + 1/s; 32 channels per connection; frame 256 KB
-(= Supabase Free); 120 msgs burst + 60/s and 1 MB burst + 256 KB/s per connection (drops; 400 drops in 10 s → kicked); 300
+(= Supabase Free); 120 msgs burst + 60/s and 4 MB burst + 1 MB/s in per connection, and what one connection makes the server
+send (frame × recipients) 8 MB burst + 2 MB/s — a «Кубомир» host relaying 46 KB bundles to 4 guests fits (drops; 400 drops in 10 s → kicked); 300
 subscribers and 200 presences per room; meta 4 KB; track 10 burst + 1/s per member; 20 000 rooms; memory: > 380 MB RSS — no new
 sockets/rooms and slow readers get nothing above 32 KB buffered, > 450 MB — /health ok:false and readers above 64 KB are
 disconnected (container 512 MB, `--max-old-space-size=320`); slow reader normally: > 1 MB buffered — drop, > 4 MB — disconnect;
@@ -243,7 +244,7 @@ session, 6 MB/s total, private/loopback/link-local (169.254.169.254)/CGNAT/doc/m
 
 ### Tests and numbers (22.10.2026, i5-12400F Windows, the machine at ~90–100 % CPU from other work)
 
-- `scripts/rt-test.cjs` — 129 checks, ~45 s: protocol, Phoenix shapes vs real supabase-js 2.117.2 (same file the site loads) and
+- `scripts/rt-test.cjs` — 144 checks, ~47 s: protocol, Phoenix shapes vs real supabase-js 2.117.2 (same file the site loads) and
   the presence algorithm vs `@supabase/phoenix` Presence on 2400 random steps, limits, fuzz (1500 random frames + 30 000-deep nesting:
   0 internal errors),
   resume without loss both ways, a stalled reader (others get everything, server memory +<40 MB for 9 MB sent), JWT (7 bad tokens rejected), watcher (peek, move with `-r`, reconnect), room.js / table.js / IoKit
@@ -257,14 +258,45 @@ session, 6 MB/s total, private/loopback/link-local (169.254.169.254)/CGNAT/doc/m
 - Soak, 12 min each: `rt-load-test.cjs --conns 300 --rooms 30 --rate 4 --soak 720` — 8395 room changes, 348 dropped sockets
   (all resumed), 833 k msgs sent / 8.28 M delivered, 0 errors, 0 internal, p50 16.5 / p99 35.8 ms, CPU 8–17 % of a core, heap
   9–32 MB and RSS 93–135 MB as a GC sawtooth (back to 93 MB twice — no growth), end: 300 conns / 300 members / 0 zombies.
-  `rt-test.cjs --soak 720` — 4 vm tabs with real supabase-js, game after game, the server killed every 2 min: 2042 games, 40 840 / 40 840
-  moves delivered, client heap 13–21 MB sawtooth (back to 14 after each GC), 0 channels / 0 server members at the end, timers 4 → 1
-  (idle sockets closed), 0 console errors.
+  `rt-test.cjs --soak 720` — 4 vm tabs with real supabase-js, game after game, the server killed **mid-game** every 2 min and back
+  after 10 s: 1557 games, 5 kills, 31 140 / 31 140 moves delivered (1436 rooms via the server, 1678 via the Supabase fallback),
+  client heap 13–33 MB as a GC sawtooth (back to ~15 after each GC), 0 channels / 0 server members at the end, timers 4 → 1
+  (idle sockets closed; it was 4 → 16 before the auth timer was tied to the socket), 0 console errors.
 - `scripts/rt-e2e.cjs` (`--e2e`) — 18 checks, ~35 s: two Chrome processes, real Supabase: «Клеточки» host + guest and a
   table.js table through the server; /turn from the page (CORS), `D37RT.ice()`, `window.D37_TURN`; server killed → both tabs on
   Supabase in 2.5–2.9 s, roles kept, no «Нет связи», guest keeps getting snapshots, table seats never dropped below 2, private
   message after the move delivered; `?rt=0`. Phone profile (CPU ×4): rt.js eval 0.15 ms, a room message 3.6 µs (supabase-js
   6.1 µs, ratio 0.66 measured interleaved), a presence diff in a 10-person room 23 µs.
+
+### Anti-cheat feed (hook for T-073; `server/rt/src/audit.js`, OFF by default)
+
+Owner (22.10): «античит, который другая система проверяет, а не сам сервер». The relay only **writes a journal**; a separate
+checker (T-073) reads it later and decides. The relay never waits for the checker; with `AUDIT` empty nothing is collected
+(one `if` per event). Enable in `server/.env`, then `docker compose up -d`:
+
+| env | meaning (default) |
+|---|---|
+| `AUDIT` | `''` off · `file` — rotating `audit.N.ndjson` in the `rt_audit` volume (`/audit`) · `http` — POST batches to `AUDIT_URL` |
+| `AUDIT_DIR`, `AUDIT_FILE_MB`, `AUDIT_FILES` | `/audit`, 50 MB per file, 5 files (`audit.0.ndjson` is the newest) |
+| `AUDIT_URL`, `AUDIT_TOKEN` | internal consumer, e.g. `http://127.0.0.1:9090/feed`; body NDJSON, `Authorization: Bearer AUDIT_TOKEN` |
+| `AUDIT_SALT` | salt of all hashes (set it — `openssl rand -hex 16` into .env — to correlate across restarts; else random per process) |
+| `AUDIT_EVENTS` | server-side «auditable» events: `room-pattern:event|event,…` (`*` wildcard), e.g. `kletochki-io-*:in,chess-duel-*:m` |
+| `AUDIT_PER_SEC`, `AUDIT_ROOM_PER_SEC` | caps: 2000 records/s overall, 100/s per room (beyond — dropped and counted) |
+| `AUDIT_PAYLOAD`, `AUDIT_QUEUE`, `AUDIT_STAT_MS` | 2048 bytes per recorded payload (bigger → `cut: 1`, no payload), 20 000 queued, `stat` every 10 s |
+
+A game marks its deterministic inputs as auditable in the channel config — `GameRoom.channel(name, { config: { …, audit:
+{ events: ['in'] } } })` (D37RT sends it in the join, ≤ 8 names); the room's set is the **union** over its members plus
+`AUDIT_EVENTS`, so a cheater who doesn't declare is still recorded. Never mark chat or anything carrying names/text.
+
+Records (one JSON object per line; `q` — sequence per process, `t` — ms epoch, `ch` — channel name, `r` — room number, `m` —
+member hash (salted SHA-256 of the presence key, 12 chars), `c` — session hash, `u` — verified-account hash):
+- `{ev:'join', ch, r, m, c, u?, pr}` · `{ev:'leave', ch, r, m, why:'leave'|'gone'|'move', sent}` · `{ev:'kick', ch, r, m, why}`
+- `{ev:'b', ch, r, m, e, n, p?, cut?}` — broadcast: event, frame bytes, payload (JSON text) only for auditable events
+- `{ev:'tr', ch, r, m, n, v?}` (presence size only — metas are never written) · `{ev:'ut', ch, r, m}` · `{ev:'mv', ch, r, n}`
+- `{ev:'stat', written, dropRate, dropRoom, dropQueue, cut, sinkErrors, …}` — deltas since the previous stat: the checker knows
+  where the journal has gaps. Delivery is best-effort, at-most-once; no addresses, no raw ids, no metas, no other payloads.
+Tested in rt-test («журнал»: hashes only, payload only for declared/server events, room cap with counted drops, HTTP sink with
+token, off by default). Cost at 500 conns × 10 msg/s with every message auditable: server CPU 45 → 54 % of a core, latency same.
 
 ### Stage 2 — mechanical swaps (not done in T-045)
 

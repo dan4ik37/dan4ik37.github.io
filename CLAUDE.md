@@ -2437,7 +2437,9 @@ js/features/games.js и хвост css/premium.css.
 - Новая комната — по-прежнему через GameRoom.channel; канал без presence — только «сосед» presence-канала (имя «<комната>-…»),
   иначе сторож его не увидит. Поменял протокол — server/rt/src/hub.js и js/core/rt.js вместе. Этап 2 (мир, online-users,
   звонки, набор текста, postgres_changes, облачные сохранения) — docs/SERVER.md, Part 2.
-- Тесты: rt-test (128; ws@8.21.3 + @supabase/supabase-js@2.117.2 в DEPS_DIR — в CI ставятся), rt-load-test (`--quick` в ci-run;
+- Журнал для античита (T-073 будет читать): server/rt/src/audit.js, выключен (AUDIT пусто); игра помечает свои «проверяемые» события
+  в канале: config: { audit: { events: ['in'] } } (только ходы/ввод — не чат и не имена). Формат и пределы — docs/SERVER.md «Anti-cheat feed».
+- Тесты: rt-test (144; ws@8.21.3 + @supabase/supabase-js@2.117.2 в DEPS_DIR — в CI ставятся), rt-load-test (`--quick` в ci-run;
   без него — 1000 соединений, `--prio` на занятом компьютере), rt-e2e (--e2e: два Chrome, настоящий Supabase, сервер убит).
 
 ## Известные хвосты

@@ -35,7 +35,7 @@ let finished = false;
 process.on('exit', () => { if (!finished) { console.log('FAIL тест не дошёл до конца'); process.exitCode = 1; } });
 
 // ═══ «Вкладка»: свой vm-контекст как в браузере (supabase-js, js/core/rt.js, игры) ═══
-const SRC = { rt: read('js/core/rt.js'), room: read('js/games/room.js'), table: read('js/games/table.js'), netplay: read('js/games/netplay.js'), iokit: read('js/games/iokit.js') };
+const SRC = { rt: read('js/core/rt.js'), room: read('js/games/room.js'), table: read('js/games/table.js'), netplay: read('js/games/netplay.js'), iokit: read('js/games/iokit.js'), coop: fs.existsSync(path.join(SITE, 'js/games/coop.js')) ? read('js/games/coop.js') : '' };
 const FAST = { PROBE_MS: 2500, HEALTH_MS: 2000, JOIN_MS: 3000, PING_MS: 400, DEAD_MS: 1500, FAIL_MS: 1500, FAIL_RESTART_MS: 2500, SETTLE_MS: 2500, IDLE_MS: 600, DOWN_MS: 1500, ACK_MS: 3000 };
 function storage(){ const m = new Map(); return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k), clear: () => m.clear(), get length(){ return m.size; } }; }
 class TabWS extends D.WS { constructor(url, protocols){ super(url, protocols || undefined, { origin: 'http://localhost:5500', perMessageDeflate: false }); } }
@@ -68,7 +68,7 @@ function makeTab(o = {}){
   vm.createContext(ctx);
   vm.runInContext(UMD, ctx, { filename: 'supabase.js' });
   ctx.sbClient = ctx.supabase.createClient(o.sbUrl, 'test-key', { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }, realtime: { vsn: '1.0.0', heartbeatIntervalMs: 5000 } });
-  for (const f of ['rt', 'room', 'table', 'netplay', 'iokit']) vm.runInContext(SRC[f], ctx, { filename: f + '.js' });
+  for (const f of ['rt', 'room', 'table', 'netplay', 'iokit', 'coop']) if (SRC[f]) vm.runInContext(SRC[f], ctx, { filename: f + '.js' });
   const T = { ctx, timers, errs, net, listeners, RT: ctx.D37RT, GR: ctx.GameRoom };
   T.close = async () => { try { for (const f of [...(listeners.get('pagehide') || [])]) f({ type: 'pagehide', persisted: false }); } catch (e) {} try { await ctx.sbClient.removeAllChannels(); } catch (e) {} try { ctx.D37RT._test.reset(); } catch (e) {} for (const t of timers) { clearTimeout(t); clearInterval(t); } timers.clear(); };
   cleanup.push(T.close);
@@ -340,7 +340,7 @@ async function resume(){
 
 // ═══ 4б. Медленный читатель (телефон «застрял»): серверу не копит память — сверх SLOW_DROP ему не шлёт, остальным доставка идёт ═══
 async function slowReader(){
-  const S = await K.startServer(D, { ADMIN_TOKEN: ADMIN, BYTE_BURST: String(64 * 1024 * 1024), BYTE_PER_SEC: String(64 * 1024 * 1024), MSG_BURST: '5000', MSG_PER_SEC: '5000', ROOM_GC_MS: '0' });
+  const S = await K.startServer(D, { ADMIN_TOKEN: ADMIN, BYTE_BURST: String(64 * 1024 * 1024), BYTE_PER_SEC: String(64 * 1024 * 1024), EGRESS_BURST: String(256 * 1024 * 1024), EGRESS_PER_SEC: String(256 * 1024 * 1024), MSG_BURST: '5000', MSG_PER_SEC: '5000', ROOM_GC_MS: '0' });
   cleanup.push(() => S.kill());
   const a = K.rawClient(D, S.ws, { keep: false }), slow = K.rawClient(D, S.ws, { keep: false }), c = K.rawClient(D, S.ws, { keep: false });
   for (const x of [a, slow, c]) { await x.hi(); x.send({ t: 'j', i: 1, c: 'slow-room' }); }
@@ -356,6 +356,67 @@ async function slowReader(){
   slow.ws._socket.resume();
   for (const x of [a, slow, c]) x.kill();
   await S.kill();
+}
+
+// ═══ 4в. Журнал для античита (audit.js; T-073 будет его читать): выключен по умолчанию; файл и HTTP; без личных данных ═══
+async function auditFeed(){
+  const dir = path.join(process.env.D37_TMP || 'E:/claude-tmp/t045', 'audit-' + crypto.randomBytes(4).toString('hex'));
+  const S = await K.startServer(D, { ADMIN_TOKEN: ADMIN, AUDIT: 'file', AUDIT_DIR: dir, AUDIT_SALT: 'test-salt', AUDIT_EVENTS: 'aud-*:in', AUDIT_ROOM_PER_SEC: '40', AUDIT_PER_SEC: '5000', AUDIT_STAT_MS: '700', ROOM_GC_MS: '0', MSG_BURST: '5000', MSG_PER_SEC: '5000' });
+  cleanup.push(() => S.kill());
+  const a = K.rawClient(D, S.ws, { xff: '198.51.100.77' }), b = K.rawClient(D, S.ws, { xff: '198.51.100.78' });
+  await a.hi(); await b.hi();
+  a.send({ t: 'j', i: 1, c: 'aud-room', k: 'user-secret-a', p: 1, a: ['mv'] });
+  b.send({ t: 'j', i: 1, c: 'aud-room', k: 'user-secret-b', p: 1 });
+  await a.wait(m => m.t === 'ps'); await b.wait(m => m.t === 'ps');
+  b.send({ t: 'tr', i: 1, m: { nick: 'СекретныйНик', t: 1 }, r: 1 });
+  b.send({ t: 'b', i: 1, e: 'in', p: { k: [1, 0, 1], tick: 7 } });
+  b.send({ t: 'b', i: 1, e: 'mv', p: { from: 'e2', to: 'e4' } });
+  b.send({ t: 'b', i: 1, e: 'chat', p: { text: 'личное сообщение' } });
+  b.send({ t: 'b', i: 1, e: 'in', p: { big: 'x'.repeat(5000) } });
+  b.send({ t: 'ut', i: 1, r: 2 });
+  await sleep(200);
+  for (let k = 0; k < 400; k++) b.send({ t: 'b', i: 1, e: 'chat', p: k });   // сверх предела комнаты — пропуски, но счёт пропусков пишется
+  await sleep(300);
+  b.send({ t: 'l', i: 1 });
+  await sleep(1800);
+  const file = path.join(dir, 'audit.0.ndjson');
+  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const recs = text.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return { bad: l }; } });
+  const by = ev => recs.filter(r => r.ev === ev);
+  const bs = by('b');
+  ok(recs.length > 5 && !recs.some(r => r.bad) && recs.every((r, i) => !i || r.q > recs[i - 1].q), `журнал: ${recs.length} строк JSON, номера по порядку`, recs.slice(0, 3));
+  ok(by('join').length === 2 && by('join').every(r => /^[\w-]{12}$/.test(r.m) && /^[\w-]{12}$/.test(r.c) && r.ch === 'aud-room'), 'журнал: вход — ключ и сеанс только хешами', by('join'));
+  ok(bs.find(r => r.e === 'in' && !r.cut)?.p === '{"k":[1,0,1],"tick":7}' && bs.find(r => r.e === 'mv')?.p === '{"from":"e2","to":"e4"}', 'журнал: содержимое — только у «проверяемых» событий (in — правило сервера, mv — объявил игрок комнаты)', bs.slice(0, 4));
+  ok(bs.filter(r => r.e === 'chat').every(r => r.p === undefined && r.n > 0) && bs.some(r => r.e === 'in' && r.cut === 1 && r.p === undefined), 'журнал: остальное — только тип и размер; большое «проверяемое» — без содержимого (cut)', bs.filter(r => r.e !== 'in').slice(0, 3));
+  ok(by('tr').length === 1 && by('tr')[0].n > 10 && by('ut').length === 1 && by('leave').some(r => r.why === 'leave'), 'журнал: presence — только размер (без ника), уход с причиной', [by('tr'), by('leave')]);
+  ok(!/user-secret|СекретныйНик|личное сообщение|198\.51\.100|127\.0\.0\.1/.test(text), 'журнал: ни ключей, ни ников, ни непроверяемых сообщений, ни адресов');
+  const stat = by('stat');
+  ok(bs.length < 120 && stat.some(r => r.dropRoom > 0), `журнал: предел на комнату держится (${bs.length} из 405 сообщений), пропуски посчитаны в stat`, stat.slice(-2));
+  const m = await S.metrics(ADMIN);
+  ok(m.audit && m.audit.kind === 'file' && m.audit.written >= recs.length && m.audit.written <= recs.length + 5 && m.audit.dropRoom > 0 && !m.audit.sinkErrors, 'журнал: счётчики в /metrics (записано, пропущено, ошибок приёмника нет)', m.audit);
+  a.close(); b.close();
+  await S.kill();
+  // HTTP-приёмник (второй сервис на том же компьютере): пачки NDJSON с ключом
+  const got = [];
+  const sink = http.createServer((req, res) => { let d = ''; req.on('data', c => d += c); req.on('end', () => { got.push({ auth: req.headers.authorization, type: req.headers['content-type'], lines: d.split('\n').filter(Boolean).length, body: d }); res.writeHead(204); res.end(); }); });
+  await new Promise(r => sink.listen(0, '127.0.0.1', r));
+  cleanup.push(() => new Promise(r => sink.close(() => r())));
+  const H = await K.startServer(D, { AUDIT: 'http', AUDIT_URL: 'http://127.0.0.1:' + sink.address().port + '/feed', AUDIT_TOKEN: 'feed-token', ROOM_GC_MS: '0' });
+  cleanup.push(() => H.kill());
+  const c = K.rawClient(D, H.ws); await c.hi();
+  c.send({ t: 'j', i: 1, c: 'http-room', k: 'k1', p: 1 });
+  await c.wait(m2 => m2.t === 'ps');
+  c.send({ t: 'b', i: 1, e: 'x', p: 1 });
+  await until(() => got.length > 0, 3000);
+  ok(got.length > 0 && got[0].auth === 'Bearer feed-token' && /ndjson/.test(got[0].type) && got[0].lines >= 1 && /"ev":"join"/.test(got[0].body), 'журнал → HTTP: пачки NDJSON с ключом приёмника', got[0]);
+  c.close();
+  await H.kill();
+  // выключен по умолчанию
+  const O = await K.startServer(D, { ADMIN_TOKEN: ADMIN });
+  cleanup.push(() => O.kill());
+  ok((await O.metrics(ADMIN)).audit === null, 'журнал выключен по умолчанию (AUDIT пустой)');
+  await O.kill();
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
 }
 
 // ═══ 5. Вход: JWT (ES256, открытые ключи JWKS) ═══
@@ -709,6 +770,30 @@ async function tableIo(P, S){
   ok(!!(await until(() => bins.length >= nb + 3, 4000)), 'IoKit: после переезда снимки идут', bins.length - nb);
   clearInterval(sendBins);
   pa.leave(); pb.leave(); pc.leave();
+  // «Играть вместе» (coop.js, «Кубомир»): хозяин мира и гость, надёжные пакеты 30 КБ (режутся по 16 КБ) через канал пары
+  // «<игра>-co-<код>-r<номер>»; гость с ?rt=0 — комната и каналы пары переезжают в Supabase, пакеты продолжают доходить
+  if (A.ctx.D37Coop) {
+    const coopT = [A, B].map(T => { T.ctx.__coopRelay = true; return T; });
+    const got2 = [], hostSeen = [];
+    const mkR = (T, key, host, tag) => T.ctx.D37Coop.room({ game: 'kubomir', code: 'ab12cd34', host, me: { key, nick: tag },
+      onHost: id => hostSeen.push([tag, id]), onMsg: (from, u8) => got2.push([tag, u8.length, u8[7]]), onError: r => got2.push([tag, 'err', r]) });
+    const rA = mkR(coopT[0], 'co-a', true, 'A');
+    await until(() => rA.joined, 5000);
+    const rB = mkR(coopT[1], 'co-b', false, 'B');
+    ok(!!(await until(() => rB.hostId === rA.me && rA.list.length === 2, 8000)), 'coop: гость нашёл хозяина мира через свой сервер', [rB.hostId, rA.list.length]);
+    const U8 = vm.runInContext('Uint8Array', A.ctx);   // свой Uint8Array у вкладки (coop.js проверяет instanceof)
+    const pkt = n => { const u = new U8(30000); u[0] = 5; u[7] = n; return u; };
+    rA.send(rB.me, pkt(1)); rA.flush();
+    ok(!!(await until(() => got2.some(g => g[0] === 'B' && g[1] === 30000 && g[2] === 1), 8000)), 'coop: надёжный пакет 30 КБ дошёл (канал пары, кусками по 16 КБ)', { got2, a: rA.stats?.(), b: rB.stats?.(), chA: A.RT.stats().chans, chB: B.RT.stats().chans, errA: A.errs.slice(0, 3), errB: B.errs.slice(0, 3) });
+    ok(A.RT.stats().chans.some(c => /^kubomir-co-ab12cd34-r[a-z0-9]+$/.test(c.name) && c.via === 'rt'), 'coop: канал пары — через свой сервер', A.RT.stats().chans);
+    const Cc = makeTab({ rtUrl: S.url, sbUrl: P.url, search: '?rt=0' });
+    Cc.ctx.__coopRelay = true;
+    const rC = mkR(Cc, 'co-c', false, 'C');
+    ok(!!(await until(() => viaAll(A, 'sb') && viaAll(B, 'sb') && rA.list.length === 3, 9000)), 'coop: гость в Supabase — комната и каналы пар переехали, у хозяина трое', [A.RT.stats().chans, rA.list.length]);
+    rA.send(rB.me, pkt(2)); rA.flush();
+    ok(!!(await until(() => got2.some(g => g[0] === 'B' && g[2] === 2), 8000)), 'coop: после переезда пакеты доходят');
+    rA.close(); rB.close(); rC.close();
+  }
   // TURN: D37RT.ice() и window.D37_TURN (calls.js)
   A.RT.prefetchTurn();
   ok(!!(await until(() => A.RT.ice().length === 2, 3000)), 'TURN: D37RT.ice() — STUN + TURN с /turn');
@@ -804,6 +889,7 @@ async function clientSoak(P, secs){
     await protocol();
     await resume();
     await slowReader();
+    await auditFeed();
     await jwt();
     await watcher(P);
     const P0 = await PH.start({ WS: D.WS, diffDelay: 0 });

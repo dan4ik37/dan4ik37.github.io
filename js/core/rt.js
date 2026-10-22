@@ -54,8 +54,9 @@
   const hasApi = () => typeof root.WebSocket === 'function' && typeof root.fetch === 'function';
   const enabled = () => !!baseUrl() && !forcedOff() && hasApi();
   const sb = () => { try { return typeof sbClient !== 'undefined' && sbClient ? sbClient : (root.sbClient || null); } catch (e) { return root.sbClient || null; } };
-  // Комната и её «соседи» (у io-игр канал «<комната>-r»): решение — одно на семью
-  const family = n => String(n).replace(/-r$/, '');
+  // Комната и её «соседи» — каналы пересылки (io-игры: «<комната>-r», «Игра вместе» coop.js: «<игра>-co-<код>-r<номер>»):
+  // решение — одно на семью
+  const family = n => String(n).replace(/-r$/, '').replace(/(-co-[a-z0-9]+)-r[a-z0-9]+$/, '$1');
   function hash32(s){ let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
   const inShare = n => { const k = share(); return k >= 1 || hash32(family(n)) / 4294967296 < k; };
 
@@ -361,7 +362,9 @@
       clearTimeout(N.idleT);
       clearTimeout(this.joinT);
       this.joinT = setTimeout(() => { if (this.via === 'rt' && !this.r && !this.dead) { this.joinT = 0; onLost('dead'); } }, JOIN_MS);
-      out({ t: 'j', i: this.i, c: this.name, k: this.key || undefined, s: this.self ? 1 : 0, p: this._hasPres() ? 1 : 0 });
+      // config.audit.events — какие события игры сервер может записать для античита (docs/SERVER.md «Anti-cheat feed»)
+      const aud = this.params.config?.audit?.events;
+      out({ t: 'j', i: this.i, c: this.name, k: this.key || undefined, s: this.self ? 1 : 0, p: this._hasPres() ? 1 : 0, a: Array.isArray(aud) ? aud.slice(0, 8) : undefined });
     }
     _joined(m){
       clearTimeout(this.joinT); this.joinT = 0;

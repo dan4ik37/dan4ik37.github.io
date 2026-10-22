@@ -17,7 +17,7 @@ const stats = {
   connsTotal: 0, resumes: 0, resumeMiss: 0, joins: 0, joinsSb: 0, leaves: 0, moves: 0, movedMembers: 0,
   msgIn: 0, msgOut: 0, bytesIn: 0, bytesOut: 0, presenceDiffs: 0, tracks: 0, auths: 0, authFail: 0, dupes: 0,
   malformed: 0, internal: 0, kicked: 0, zombieOverflow: 0, probes: 0,
-  drop: { rate: 0, track: 0, nochan: 0, slow: 0, slowKill: 0, zombie: 0 },
+  drop: { rate: 0, egress: 0, track: 0, nochan: 0, slow: 0, slowKill: 0, zombie: 0 },
 };
 
 // Probe payload (incompressible text, permessage-deflate is off anyway): one random string per process
@@ -31,6 +31,7 @@ class Conn {
     this.byI = new Map(); this.byRoom = new Map();
     this.msgB = new Bucket(C.MSG_BURST, C.MSG_PER_SEC);
     this.byteB = new Bucket(C.BYTE_BURST, C.BYTE_PER_SEC);
+    this.egressB = new Bucket(C.EGRESS_BURST, C.EGRESS_PER_SEC);
     this.authB = new Bucket(C.AUTH_BURST, C.AUTH_PER_SEC);
     this.drops = 0; this.dropsAt = 0; this.bad = 0; this.noResume = false;
     this.inSeq = 0;   // highest numbered message (q) processed — after a resume the tab re-sends only what we didn't get
@@ -86,10 +87,10 @@ class Room {
 const metaOut = (meta, ref, prev) => { const o = { phx_ref: ref }; if (prev) o.phx_ref_prev = prev; for (const k in meta) o[k] = meta[k]; return o; };
 
 class Hub {
-  constructor({ watcher = null, jwt = null } = {}){
+  constructor({ watcher = null, jwt = null, audit = null } = {}){
     this.rooms = new Map(); this.roomN = 0; this.connN = 0;
     this.conns = new Set(); this.sids = new Map(); this.moved = new Map();
-    this.watcher = watcher; this.jwt = jwt;
+    this.watcher = watcher; this.jwt = jwt; this.audit = audit;   // audit — журнал для античита (audit.js; null — выключен)
     this.mem = { soft: false, hard: false, rss: 0 };
     this.shuttingDown = false;
     this.stats = stats;
@@ -143,6 +144,7 @@ class Hub {
   }
   kick(conn, code, reason){
     stats.kicked++;
+    if (this.audit) for (const mem of conn.byI.values()) this.audit.rec(mem.room, { ev: 'kick', m: this.audit.hash(mem.key), why: reason });
     conn.noResume = true;
     const ws = conn.ws;
     if (ws) { try { ws.send(JSON.stringify({ t: 'bye', e: reason }), TEXT); ws.close(code, reason); } catch (e) { try { ws.terminate(); } catch (e2) {} } }
@@ -247,7 +249,7 @@ class Hub {
     let key = m.k;
     if (key == null || key === '') key = '';
     else if (typeof key !== 'string' || !keyOk(key)) return reply({ e: 'key' });
-    const req = { conn, i, key, self: !!m.s, pres: !!m.p };
+    const req = { conn, i, key, self: !!m.s, pres: !!m.p, audit: Array.isArray(m.a) ? m.a : null };
     if (this.sbHome(name)) { stats.joinsSb++; return reply({ home: 'sb' }); }
     let room = this.rooms.get(name);
     if (!room) {
@@ -270,6 +272,8 @@ class Hub {
     room.members.add(mem); conn.byI.set(i, mem); conn.byRoom.set(room.name, mem);
     if (room.gcT) { clearTimeout(room.gcT); room.gcT = null; }
     stats.joins++;
+    const A = this.audit;
+    if (A) { A.declare(room, req.audit); A.rec(room, { ev: 'join', m: A.hash(key), c: A.hash(conn.sid), u: conn.uid ? A.hash(conn.uid) : undefined, pr: req.pres ? 1 : 0 }); }
     reply({ r: room.no, home: 'rt', k: key });
     if (req.pres) conn.send({ t: 'ps', r: room.no, s: this.presenceState(room) });
   }
@@ -304,7 +308,8 @@ class Hub {
     for (const r of list) {
       stats.moves++;
       const frame = Buffer.from('{"t":"mv","r":' + r.no + '}');
-      for (const mem of [...r.members]) { stats.movedMembers++; mem.conn.out(frame); this.removeMember(mem, false); }
+      if (this.audit) this.audit.rec(r, { ev: 'mv', n: r.members.size });
+      for (const mem of [...r.members]) { stats.movedMembers++; mem.conn.out(frame); this.removeMember(mem, false, 'move'); }
       const pend = r === room ? pending : r.pending;
       if (pend) for (const q of pend) if (this.conns.has(q.conn)) { stats.joinsSb++; q.conn.send({ t: 'j', i: q.i, home: 'sb' }); }
       r.pending = null;
@@ -326,11 +331,12 @@ class Hub {
 
   onLeave(conn, m){
     const mem = conn.byI.get(m.i);
-    if (mem) { stats.leaves++; this.removeMember(mem, true); }
+    if (mem) { stats.leaves++; this.removeMember(mem, true, 'leave'); }
   }
-  removeMember(mem, diff){
+  removeMember(mem, diff, why){
     const room = mem.room, conn = mem.conn;
     if (!room.members.delete(mem)) return;
+    if (this.audit) this.audit.rec(room, { ev: 'leave', m: this.audit.hash(mem.key), why: why || (diff ? 'gone' : 'move'), sent: mem.sent || 0 });
     if (conn.byI.get(mem.i) === mem) conn.byI.delete(mem.i);
     if (conn.byRoom.get(room.name) === mem) conn.byRoom.delete(room.name);
     if (mem.meta) {
@@ -364,6 +370,10 @@ class Hub {
     let pj;
     try { pj = m.p === undefined ? 'null' : JSON.stringify(m.p); } catch (er) { return this.bad(conn, 'deep'); }   // absurd nesting
     const frame = Buffer.from('{"t":"b","r":' + room.no + ',"e":"' + e + '","p":' + pj + '}');
+    const n = room.members.size - (mem.self ? 0 : 1);
+    if (!conn.egressB.take(frame.length * n)) return this.drop(conn, 'egress', Date.now());
+    mem.sent = (mem.sent || 0) + 1;
+    if (this.audit) this.audit.rec(room, { ev: 'b', m: this.audit.hash(mem.key), e, n: frame.length }, pj);
     for (const o of room.members) if (o !== mem || o.self) o.conn.out(frame);
   }
 
@@ -390,6 +400,7 @@ class Hub {
     const old = mem.meta, oldRef = mem.ref;
     mem.meta = clean; mem.ref = newRef();
     if (!old) room.presN++;
+    if (this.audit) this.audit.rec(room, { ev: 'tr', m: this.audit.hash(mem.key), n: JSON.stringify(clean).length, v: clean._v ? 1 : undefined });
     const j = nullObj(); j[mem.key] = { metas: [metaOut(clean, mem.ref, old ? oldRef : null)] };
     let l = null;
     if (old) { l = nullObj(); l[mem.key] = { metas: [metaOut(old, oldRef)] }; }
@@ -401,6 +412,7 @@ class Hub {
       const room = mem.room;
       room.presN--;
       const l = nullObj(); l[mem.key] = { metas: [metaOut(mem.meta, mem.ref)] };
+      if (this.audit) this.audit.rec(room, { ev: 'ut', m: this.audit.hash(mem.key) });
       mem.meta = null; mem.ref = '';
       this.presDiff(room, null, l);
     }

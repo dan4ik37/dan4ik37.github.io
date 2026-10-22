@@ -137,7 +137,7 @@ async function main(){
   const ADMIN = EXT ? (argv[argv.indexOf('--admin') + 1] || '') : 'load-' + Math.random().toString(36).slice(2);
   const PH = require('./rt-phoenix.cjs');
   const P = EXT ? { close: async () => {}, ws: '' } : await PH.start({ WS: D.WS });
-  const S = EXT ? { ws: EXT.replace(/^http/, 'ws') + '/rt', metrics: async t => (await fetch(EXT + '/metrics', { headers: { Authorization: 'Bearer ' + t } })).json(), kill: async () => {} } : await K.startServer(D, { ADMIN_TOKEN: ADMIN, WATCH: '1', SB_WS: P.ws, MAX_CONNS: '20000', MAX_PER_IP: '20000', IP_BURST: '20000', IP_PER_SEC: '5000', LOG_LEVEL: 'warn', GRACE_MS: '4000' }, { nodeArgs: argv.includes('--prof') ? ['--cpu-prof', '--cpu-prof-dir=' + (process.env.RT_PROF_DIR || 'E:/claude-tmp/t045/prof')] : [] });
+  const S = EXT ? { ws: EXT.replace(/^http/, 'ws') + '/rt', metrics: async t => (await fetch(EXT + '/metrics', { headers: { Authorization: 'Bearer ' + t } })).json(), kill: async () => {} } : await K.startServer(D, { ADMIN_TOKEN: ADMIN, WATCH: '1', SB_WS: P.ws, MAX_CONNS: '20000', MAX_PER_IP: '20000', IP_BURST: '20000', IP_PER_SEC: '5000', LOG_LEVEL: 'warn', GRACE_MS: '4000', ...(argv.includes('--audit') ? { AUDIT: 'file', AUDIT_DIR: (process.env.D37_TMP || 'E:/claude-tmp/t045') + '/audit-load', AUDIT_EVENTS: 'load-room-*:m' } : {}) }, { nodeArgs: argv.includes('--prof') ? ['--cpu-prof', '--cpu-prof-dir=' + (process.env.RT_PROF_DIR || 'E:/claude-tmp/t045/prof')] : [] });
   const M = () => S.metrics(ADMIN);
   // --prio: на общем (занятом) компьютере — сервер и толпы выше прочих программ, иначе замер мерит чужую нагрузку
   const PRIO = argv.includes('--prio'), os = require('os');
