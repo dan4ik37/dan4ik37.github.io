@@ -109,7 +109,7 @@
       g.sound?.('click', { vol: .5, rate: .8 });
       const n = m.regions.length;
       g.toast?.('🗺 Лист карты: место зарисовано (' + n + (n === 1 ? ' место' : n < 5 ? ' места' : ' мест') + '). Атлас — компас и 8 листов на верстаке', true);
-      X.emit('use', 'map', Math.floor(P.x), Math.floor(P.y), Math.floor(P.z));
+      X.emit('use', 'map_blank', Math.floor(P.x), Math.floor(P.y), Math.floor(P.z));
       return true;
     };
     f.menu = () => X.on('map') ? [{ id: 'x:atlas', icon: '🗺', text: 'Атлас: точки' }] : [];

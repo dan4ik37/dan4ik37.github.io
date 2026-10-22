@@ -167,7 +167,7 @@
       swapOne(which, 'bucket');
       g.sound?.(it.liquid === 'lava' ? 'kb_pop' : 'kb_splash', { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5, vol: .6, rate: it.liquid === 'lava' ? .5 : 1 });
       if (it.liquid !== 'lava') st.ents?.splash?.(x + .5, y + .5, z + .5, .7);
-      X.emit('use', 'pour', x, y, z);
+      X.emit('use', it.name, x, y, z);
       return true;
     }
     // свиток возврата: домой; расходный (делать каждый раз); не сразу после удара

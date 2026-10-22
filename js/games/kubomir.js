@@ -2643,6 +2643,7 @@
       night: () => st.ents?.isNight ? st.ents.isNight() : (t => t < 5.6 || t > 18.8)(st.R?.lighting?.time ?? 12),
       hurtAgo: () => st.P.hurtGT == null ? 1e9 : (st.steps | 0) / 60 - st.P.hurtGT,   // секунд игры с последнего удара
       unlockNight: () => { if (st.nightSeen && !st.creative) unlock('night'); },   // проспал ночь, которая началась при тебе, — «Пережил ночь»
+      ach: () => ACH,   // достижения игры — глава «Достижения» Дорожной книги (те же id: награда сервера не меняется)
     };
   }
   function modHooks(){

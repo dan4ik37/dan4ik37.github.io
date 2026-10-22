@@ -382,3 +382,15 @@ body.high .kb-food .g{animation:kbGhost .9s ease-in-out infinite alternate}
 .kx-wpcol{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .kx-wc{width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.4);cursor:pointer}
 .kx-wpname{width:calc(100% - 4px);margin:4px 0 6px}
+/* T-049 📜 Дорожная книга (kubomir-quests.js → D37E.quests) */
+.kx-qrow{width:100%;text-align:left;color:inherit;font:inherit;cursor:pointer}
+.kx-qrow:hover{border-color:rgba(255,210,63,.6)}
+.kx-qrow.claimed{opacity:.6}
+.kx-qrow.done{border-color:rgba(134,239,172,.6);background:rgba(134,239,172,.08)}
+.kx-qrow.locked,.kx-qrow.hidden{opacity:.5}
+.kx-qst{flex:none;font-size:18px}
+.kx-qbig{display:grid;place-items:center;font-size:28px}
+.kx-qtask{display:flex;flex-direction:column;gap:4px;margin:6px 0;font-size:.86rem}
+.kx-qbar{height:8px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden}
+.kx-qbar i{display:block;height:100%;background:linear-gradient(90deg,#4ade80,#a3e635);border-radius:4px}
+.kx-qn{position:absolute;right:2px;bottom:0;font-size:11px;font-weight:900;text-shadow:1px 1px 0 #000,-1px -1px 0 #000}

@@ -116,6 +116,13 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           const woke = await ev(`(async () => { const S = ${T}.state(); await new Promise(r => setTimeout(r, 1500)); return { t: +S.R.lighting.time.toFixed(2), day: S.meta.day | 0, sleeping: !!S.X.feats.find(f => f.id === 'world').state().sleep, home: S.X.home() }; })()`);
           ok(woke && !woke.sleeping && woke.t >= 5.6 && woke.t < 6.5 && woke.day === bed.d0 + 1 && woke.home, P + ': утро следующего дня, дом — у лежанки', woke);
           await ev(`(() => { const S = ${T}.state(); S.R.lighting.time = 10; S.paused = true; return 1; })()`);
+          // 📜 Дорожная книга: глава, задание, следить
+          const qb = await ev(`(async () => { const S = ${T}.state(), F = S.X.feats.find(f => f.id === 'quests'); F._open(); await new Promise(r => setTimeout(r, 600)); return { open: S.X.isOpen(), stats: F.state().stats }; })()`);
+          ok(qb && qb.open && qb.stats.quests > 50, P + ': Дорожная книга открыта', qb);
+          await shot(P + '-quests');
+          await ev(`(async () => { const b = document.querySelector('[data-q="table"]') || document.querySelector('[data-q]'); b?.click(); await new Promise(r => setTimeout(r, 400)); document.querySelector('[data-pin]')?.click(); await new Promise(r => setTimeout(r, 400)); return 1; })()`);
+          await shot(P + '-quest-detail');
+          await ev(`(async () => { ${T}.state().X.closeSheet(); await new Promise(r => setTimeout(r, 900)); return 1; })()`); await shot(P + '-quest-track');
           if (phone) {
             await screen(390, 844, true); await shot('phone-portrait-hud');
             await ev(`(() => { ${T}.state().X.openAcc(); return 1; })()`); await sleep(700); await shot('phone-portrait-acc-sheet');

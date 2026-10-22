@@ -30,7 +30,7 @@
       flags.recipes = 1; g.take?.(which);
       g.sound?.('coin', { vol: .5, rate: .9 });
       g.toast?.('📖 Книга мастера прочитана: теперь видно ВСЕ рецепты — ' + (g.label?.('recipes') || 'R') + ', ☰ → 📖 или 📖 в окне вещей', true);
-      X.emit('quest', 'learn', 'recipes');
+      X.emit('use', 'master_book');
       open();
       return true;
     };

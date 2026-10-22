@@ -20,8 +20,8 @@ const store = {};
 globalThis.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
 const run = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
 for (const f of ['js/engine/core.js', 'js/engine/gfx.js', 'js/engine/voxel.js', 'js/engine/voxel-tex.js', 'js/engine/voxel-gen.js', 'js/engine/voxel-mesh.js', 'js/engine/voxel-render.js',
-  'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/player.js', 'js/engine/host.js', 'js/engine/accessories.js', 'js/engine/sheet.js', 'js/engine/info.js', 'js/engine/recipes.js', 'js/engine/sleep.js', 'js/engine/mapkit.js',
-  'js/games/kubomir-ents.js', 'js/games/kubomir-weather.js', 'js/games/kubomir-x.js', 'js/games/kubomir-info.js', 'js/games/kubomir-recipes.js', 'js/games/kubomir-world.js', 'js/games/kubomir-map.js', 'js/games/kubomir.js']) run(f);
+  'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/player.js', 'js/engine/host.js', 'js/engine/accessories.js', 'js/engine/sheet.js', 'js/engine/info.js', 'js/engine/recipes.js', 'js/engine/sleep.js', 'js/engine/mapkit.js', 'js/engine/quests.js',
+  'js/games/kubomir-ents.js', 'js/games/kubomir-weather.js', 'js/games/kubomir-x.js', 'js/games/kubomir-info.js', 'js/games/kubomir-recipes.js', 'js/games/kubomir-world.js', 'js/games/kubomir-map.js', 'js/games/kubomir-quests.js', 'js/games/kubomir.js']) run(f);
 const E = window.D37E, V = E.vox, ID = V.ID, KB = window.GAME_IMPL.kubomir._test, KX = window.KubomirX;
 
 // игрок и мир-заглушка для переходника помощников
@@ -547,6 +547,69 @@ function mkSt(o = {}){
     const P2 = mkPlayer(); P2.ext = E.host.cleanExt(JSON.parse(JSON.stringify(st.P.ext))); const S2 = mkSt({ P: P2 }); const X2 = KX.attach(S2.st, S2.g);
     ok(S2.st.P.ext.map.wp.length === 64 && S2.st.P.ext.map.regions.length === 2, 'после загрузки — 64 точки и 2 места', S2.st.P.ext.map.regions);
     ok(JSON.stringify(S2.st.P.ext).length < 32768, 'данные помощников ≤ 32 КБ (64 точки)', JSON.stringify(S2.st.P.ext).length); void X2;
+  }
+
+  // ═══ 9. Дорожная книга ═══
+  sec('Дорожная книга: проверка данных (монеты и XP — нельзя, круги), события, «есть в вещах», закрытые и скрытые, награды, глава → ячейка 💍');
+  {
+    const QE = E.quests;
+    // валидатор
+    const bad = QE.validate({ chapters: [{ id: 'c', quests: [
+      { id: 'a', tasks: [{ t: 'craft', item: 'stick', n: 1 }], rewards: [{ t: 'coins', n: 100 }, { t: 'item', id: 'xp', n: 5 }, { t: 'item', id: 'apple', n: 2 }] },
+      { id: 'b', needs: ['c2'], tasks: [{ t: 'craft', n: 1 }] }, { id: 'c2', needs: ['b'], tasks: [{ t: 'craft', n: 1 }] },
+      { id: 'd', tasks: [{ t: 'teleport' }] }, { id: 'a', tasks: [{ t: 'check' }] }, { id: 'e', needs: ['nope'], tasks: [{ t: 'check' }] } ] }] });
+    const qa = bad.data.chapters[0].quests;
+    ok(!bad.ok && qa.find(q => q.id === 'a').rewards.length === 1 && qa.find(q => q.id === 'a').rewards[0].id === 'apple', 'валидатор: монеты и «XP» выкинуты, вещь осталась', bad.errors);
+    ok(bad.errors.some(e => /по кругу/.test(e)) && !(qa.find(q => q.id === 'b').needs.length && qa.find(q => q.id === 'c2').needs.length), 'валидатор: зависимость по кругу разорвана');
+    ok(!qa.some(q => q.id === 'd') && qa.filter(q => q.id === 'a').length === 1 && qa.find(q => q.id === 'e').needs.length === 0, 'валидатор: неизвестная задача, повтор id, несуществующая зависимость — убраны');
+    ok(QE.validate(window.KubomirQuests.DATA).ok, 'задания «Кубомира» — без ошибок', QE.validate(window.KubomirQuests.DATA).errors);
+    // движок на потоке событий
+    const st0 = {}; let have = 0; const done = [];
+    const Q = QE.create({ state: st0, have: () => have, onDone: q => done.push(q.id), data: { chapters: [{ id: 'c', quests: [
+      { id: 'one', tasks: [{ t: 'break', block: '#log', n: 3 }] }, { id: 'two', needs: ['one'], tasks: [{ t: 'craft', item: 'stick', n: 8 }, { t: 'have', item: 'stick', n: 4 }], rewards: [{ t: 'item', id: 'apple', n: 2 }] },
+      { id: 'secret', hidden: true, needs: ['two'], tasks: [{ t: 'kill', mob: 'zombie', n: 1 }] } ] }] }, match: (k, id) => V.tagHas(k, id) });
+    ok(Q.status('one') === 'open' && Q.status('two') === 'locked' && Q.status('secret') === 'hidden', 'сначала: первое открыто, второе закрыто, тайное спрятано');
+    Q.event('craft', 'stick', 8); ok(Q.progress('two')[0][0] === 0, 'закрытое задание события не считает');
+    Q.event('break', 'log_oak'); Q.event('break', 'stone'); Q.event('break', 'log_birch'); Q.event('break', 'log_spruce');
+    ok(Q.status('one') === 'done' && done.join() === 'one' && Q.status('two') === 'open', '3 бревна (любые: группа #log), камень не в счёт — сделано, следующее открылось');
+    Q.event('craft', 'stick', 4); Q.event('craft', 'stick', 4); have = 3; Q.refresh();
+    ok(Q.status('two') === 'open' && Q.progress('two')[1][0] === 3, 'сделал 8 палок, в вещах 3 из 4 — ещё не готово');
+    have = 4; Q.refresh(); ok(Q.status('two') === 'done' && Q.status('secret') === 'open', 'в вещах 4 — готово, тайное открылось');
+    have = 0; Q.refresh(); ok(Q.status('two') === 'done', '«есть в вещах» не отнимается, когда потратил');
+    ok(JSON.stringify(Q.claim('two')) === '[{"t":"item","id":"apple","n":2}]' && Q.status('two') === 'claimed' && Q.claim('two') === null, 'награда — один раз');
+    // сохранение: тот же state — тот же прогресс
+    const Q2 = QE.create({ state: JSON.parse(JSON.stringify(st0)), data: Q.data });
+    ok(Q2.status('one') === 'done' && Q2.status('two') === 'claimed' && Q2.status('secret') === 'open', 'загрузка: всё как было');
+    // 1000 событий — быстро
+    let t0 = process.hrtime.bigint(); for (let i = 0; i < 1000; i++) Q.event('break', 'stone'); const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    ok(ms < 2, '1000 событий — меньше 2 мс', ms);
+    // «Кубомир»: глава «Достижения» = те же id, события из игры, награды вещами, глава «Помощники» → 7-я ячейка
+    const { st, g } = mkSt({ g: { ach: () => KB.ACH } }); Object.assign(st, { ready: true, steps: 100 }); st.meta.spawn = { x: 0, y: 60, z: 0 };
+    const X = st.X = KX.attach(st, g), FQ = X.feats.find(f => f.id === 'quests'), QK = X.quests;
+    const achCh = QK.data.chapters.find(c => c.id === 'ach');
+    ok(achCh && achCh.quests.length === KB.ACH.length && achCh.quests.every((q, i) => q.id === 'ach:' + KB.ACH[i][0]), 'глава «Достижения» — все ' + KB.ACH.length + ' достижений (те же id)');
+    ok(KB.xMenu({ X }).some(i => i.id === 'x:quests'), 'в меню ☰ — «Дорожная книга»');
+    st.P.inv[0] = { id: 'log_oak', n: 1 }; X.emit('pickup', 'log_oak', 1); X.update(.6);
+    ok(QK.status('log') === 'done', 'бревно в вещах — «Первое бревно» выполнено');
+    X.emit('craft', 'planks_birch', 4); ok(QK.status('planks') === 'done', 'сделал берёзовые доски — «Доски» (группа #planks)');
+    X.emit('ach', 'night'); ok(QK.status('ach:night') === 'done', 'достижение «ночь» — и задание главы «Достижения»');
+    // награда вещами: в сумку
+    const before = st.P.inv.filter(Boolean).length;
+    ok(FQ._claim('log') && st.P.inv.some(s => s && s.id === 'apple' && s.n === 2) && st.P.inv.filter(Boolean).length === before + 1, '«Забрать» — 2 яблока в сумку');
+    // глава «Помощники» целиком → 7-я ячейка аксессуаров (правило quest:chapter:helpers)
+    X.emit('ach', 'iron'); X.emit('ach', 'deep'); X.emit('ach', 'diamond');
+    ok(X.acc.open === 6, 'достижения — 6 ячеек', X.acc.open);
+    for (const q of QK.data.chapters.find(c => c.id === 'helpers').quests) { st.P.ext.quests.s[q.id] = { p: q.tasks.map(t => t.n), d: 1 }; for (const n of q.needs) st.P.ext.quests.s[n] = st.P.ext.quests.s[n] || { p: [], d: 1 }; }
+    X.refreshSlots();
+    ok(QK.chapterDone('helpers') && X.acc.open === 7 && X.acc.why(7).includes('босса'), 'глава «Помощники» пройдена — 7-я ячейка; 8-я — за босса', X.acc.open);
+    // закреплённое — строка на экране
+    const chips = []; X.hudChip = (id, ic, t) => chips.push([id, ic, t]); X.hudHide = id => chips.push([id, 'hide']);
+    QK.pin('table'); X.update(.6);
+    ok(chips.some(c => c[0] === 'quest' && /Верстак · 0\/1/.test(c[2])), '📌 следить — «📜 Верстак · 0/1» на экране', chips.slice(-2));
+    ok(JSON.stringify(st.P.ext.quests).length < 16384, 'данные заданий в сохранении — небольшие', JSON.stringify(st.P.ext.quests).length);
+    // далеко от начала мира / глубоко — по значению
+    Object.assign(st.P, { x: 520, z: 0, y: 25 }); st.P.ext.quests.s.log = { p: [1], d: 1, c: 1 }; st.P.ext.quests.s.stone_pick = { p: [1], d: 1 }; X.update(1.1); X.update(1.1);
+    ok(QK.status('far500') === 'done' && QK.status('caves') === 'done', 'ушёл на 520 блоков и ниже Y 30 — «Далеко от дома» и «В пещеры»');
   }
 
   console.log(`\nkubomir-qol-test: ${pass} ok, ${fail} fail`);

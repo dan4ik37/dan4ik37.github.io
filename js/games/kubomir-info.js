@@ -34,6 +34,9 @@
       for (const b of V.blocks) { const o = ORE[b.name]; if (o) oreV[b.id] = o[0]; else if (/(^|[:_])ore(_|$)/.test(b.name)) oreV[b.id] = 2; }
     };
     f.dispose = () => { hud?.dispose(); hud = null; st.foodGhost = 0; };
+    // строка на экране для других помощников (Дорожная книга: «📜 Верстак · 0/1»)
+    X.hudChip = (id, ic, t, order) => hud?.chip(id, ic, t, order);
+    X.hudHide = id => hud?.hide(id);
     // ── каждый кадр: еда (дёшево), видимость, полоса компаса; 10 раз в секунду — строки и карточка ──
     f.hud = dt => {
       if (!hud) return;

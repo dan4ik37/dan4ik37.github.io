@@ -15,14 +15,15 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const FEATS = [];
   // Ячейки аксессуаров: 2 сразу, дальше — развитием (достижения этого игрока; босс — когда появятся боссы). Данные — правим тут
-  const ACC_MAX = 7;
+  const ACC_MAX = 8;
   const ACC_RULES = [
     { n: 2, why: 'С начала' },
     { n: 3, req: 'ach:night', why: 'Переживи первую ночь (достижение «Пережил ночь»)' },
     { n: 4, req: 'ach:iron', why: 'Выплавь железо (достижение «Железный век»)' },
     { n: 5, req: 'ach:deep', why: 'Спустись ниже 12-го уровня (достижение «Глубоко копаешь»)' },
     { n: 6, req: 'ach:diamond', why: 'Добудь алмаз (достижение «Алмазы!»)' },
-    { n: 7, req: 'boss:1', why: 'Победи первого босса (боссы скоро появятся)' },
+    { n: 7, req: 'quest:chapter:helpers', why: 'Пройди главу «Помощники» Дорожной книги (📜)' },
+    { n: 8, req: 'boss:1', why: 'Победи первого босса (боссы скоро появятся)' },
   ];
   window.KubomirX = { feature: f => { FEATS.push(f); }, attach, ACC_MAX, ACC_RULES, FEATS };
 
@@ -96,10 +97,11 @@
     };
     X.hud = dt => H.hud(dt);
     // ПКМ по своему блоку / своей вещью: первый помощник, который взял, — сделал
-    X.useBlock = (hit, b) => { for (const f of X.feats) { if (f.dead || !f.useBlock) continue; try { if (f.useBlock(hit, b)) { H.emit('use', b.name, hit.x, hit.y, hit.z); return true; } } catch (e) { H.fail(f, e); } } return false; };
+    // (событие 'use' шлёт сам помощник — только когда действие удалось: «уже зарисовано» и т. п. — не считается)
+    X.useBlock = (hit, b) => { for (const f of X.feats) { if (f.dead || !f.useBlock) continue; try { if (f.useBlock(hit, b)) return true; } catch (e) { H.fail(f, e); } } return false; };
     X.useItem = (s, it, which, hit) => {
       if (A.isAcc(s.id) && !it.place) return X.equip(s, () => g.take?.(which));   // аксессуар в руке — надеть
-      for (const f of X.feats) { if (f.dead || !f.useItem) continue; try { if (f.useItem(s, it, which, hit)) { H.emit('use', s.id, hit ? hit.x : 0, hit ? hit.y : 0, hit ? hit.z : 0); return true; } } catch (e) { H.fail(f, e); } }
+      for (const f of X.feats) { if (f.dead || !f.useItem) continue; try { if (f.useItem(s, it, which, hit)) return true; } catch (e) { H.fail(f, e); } }
       return false;
     };
     X.home = () => { for (const f of X.feats) if (!f.dead && f.home) { try { const h = f.home(); if (h) return h; } catch (e) {} } return null; };
