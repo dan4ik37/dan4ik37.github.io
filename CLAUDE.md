@@ -69,6 +69,7 @@
   поставщик проверки 18+. Код для них — выключенным по умолчанию, места под тексты юриста.
 
 ## Ожидает запуска владельцем (обновлять этот список!)
+Проверено с сервера 22.10 утром: ПРИМЕНЕНЫ premium.sql (donor_levels, donor_me mode off, «Аноним» зарезервирован), age.sql + community.sql (kid_contact → auth, kidsafe_on → true, call_check → null, age_public_kids → 42501), games-more.sql (kletochki 4, chervyachki_online 6, quest_rule w_xp 5 / w_pts 40, weekly_quests, season_state), coins.sql (coin_run_cap kletochki/chervyachki 10). НЕ применён только ops.sql (п. 14). bases.sql / raids.sql — после слияния военных баз (T-013).
 1–3. Экономика 15.10.2026 (docs/ECONOMY.md) — СТРОГО по порядку: 1) `games-more.sql` (ещё раз) — проверка
    `/rpc/game_win_xp` {"p_game":"horde"} → 10 (20 — старая версия), {"p_game":"fillword_daily"} → 6 (новые игры), {"p_game":"podzem_boss1"} → 6 («Подземье»), {"p_game":"kubomir"} → 4 («Кубомир»); 2) `coins.sql` (ещё раз) — `/rpc/coin_rule` {"p_key":"daily"} → 20
    (PGRST202 — не применён), `/rpc/coin_level_item` {"p_item":"skin:pet:owl"} → 20, `/rpc/coin_run_cap` {"p_game":"fillword"} → 15, {"p_game":"podzem"} → 20, {"p_game":"kubomir"} → 15;
@@ -92,10 +93,12 @@
    применён); `/rpc/ref_public` гостем {"p_code":"zzzzzz"} → {"ok":false,"reason":"not_found"}. До запуска: ссылка — старая ?ref=<ник>,
    «награды появятся, когда сайт обновится». Перезапустил referrals.sql, xp.sql или notifications.sql — потом снова referrals2.sql.
    PGlite: 168 (pg/test-referrals2.mjs).
-7–8. Набеги (15.10.2026): 7) `bases.sql` — ЗАПУСТИТЬ ЕЩЁ РАЗ (оборона, казарма, отряды в base_defs; проверка: `/rpc/base_defs` содержит
-   "cannon" и "u"); 8) `raids.sql` — новый, после bases.sql и premium.sql (проверка: `/rpc/raid_state` гостем → {"ok":false,"reason":"auth"},
-   PGRST202 = не применён; `/rpc/raid_settle` гостем → отказ в правах). До запуска — только обучение и дружеские бои; оборона и казарма —
-   пробные в браузере. PGlite: test-raids.mjs (105), test-bases.mjs (77).
+7–8. Военные базы и набеги (T-013, 22.10.2026; можно давать владельцу): 7) `bases.sql` — ЕЩЁ РАЗ (район мирный, оборона/казарма/армия
+   района → кирпичи на том же участке; военные базы war_*). Проверка: `/rpc/war_state` гостем → {"ok":false,"reason":"auth"} (PGRST202 = не
+   применён), `/rpc/war_sector` {"p_sector":0} → {"ok":true,…,"bases":[]}; 8) `raids.sql` — ПОСЛЕ bases.sql и premium.sql (набеги на базы):
+   `/rpc/raid_state` гостем → {"ok":false,"reason":"auth"}, `/rpc/raid_top` {"p_kind":"all"} → [], `/rpc/raid_settle` гостем → отказ в правах.
+   До запуска: базу не основать («откроются, когда сайт обновится»), «Набеги» — учебный и дружеский бой. PGlite (E:\claude-tmp\bases\pg):
+   test-bases.mjs (104), test-raids.mjs (114).
 9. ПРИМЕНЁН 22.10.2026 (проверено с сервера: cm_modlog → rights, cm_automod_get → can false, chat_channels.archived/category_id → 200, cm_layout → 42501; старое — cm_roles private, cm_events ok, cm_invite_info null, news mods_only) — `community.sql` (ЕЩЁ РАЗ, 21.10.2026) — теперь ВЕСЬ SQL чата и сообществ в одном файле: community2.sql и community3.sql в него
    СЛИТЫ (части 2 и 3; отдельных файлов больше нет, оба уже были применены) + новая часть 4: папки и порядок каналов, тема, архив, «кто
    пишет», модерация с причиной (предупреждение, тайм-аут, удалить N последних, кик, бан), журнал модерации, автомодерация, уведомления
@@ -135,6 +138,28 @@
    `/rpc/call_check` {"p_code":"abcdefgh","p_pass":"x","p_pub":"y"} → null, `/rpc/call_pass` {"p_code":"abcdefgh","p_pub":"x"} → 401
    (community.sql ч. 5). До запуска: звонки — как раньше (без пропуска), ники на /forum — как раньше, до 9 — «только читать» только в
    браузере. PGlite: E:\claude-tmp\kidsafe\test-kidsafe.mjs (441), test-community-ks.mjs (1034), test-donor.mjs (94).
+13. `games-more.sql` — ЕЩЁ РАЗ (22.10.2026, T-015/T-024): задания недели, бесплатный сезонный путь, награды новогоднего задания
+   (таблицы weekly_claims, season_progress, season_owned, season_frame, advent_log; триггеры на game_log и xp_ledger). Идемпотентно;
+   нужны применённые games.sql, coins.sql, economy.sql, progression.sql, notifications.sql (всё есть). Вместе с п. 11 — один запуск
+   games-more.sql, потом coins.sql. Проверка гостем (PGRST202 = не применён): `/rpc/quest_rule` {"p_key":"w_pts"} → 40;
+   `/rpc/weekly_quests` → {"auth":false,"list":[…6 заданий…],…}; `/rpc/season_state` → {"auth":false,"no":0,"theme":"oct",…} (с 1 ноября —
+   "no":1,"theme":"nov"); `/rest/v1/season_progress?select=pts&limit=0` → 200 (400 «does not exist» — не применён); `/rpc/advent_claim`
+   {"p_day":1} → 401 (только вошедшим). До запуска карточек сезона и заданий недели нет (скрыты), новогоднее задание — без наград.
+   PGlite: E:\claude-tmp\quests\test-quests.mjs (на чистой базе дважды — 117, поверх файлов из main с данными — 119, EXPLAIN — 10).
+14. `ops.sql` (НОВЫЙ, 22.10.2026, T-016; от других файлов не зависит) — мониторинг ошибок сайта: ops_err, ops_err_day, ops_quota,
+   ops_err_ingest (только сервер), ops_err_admin / ops_err_act (только админ). Проверка гостем (PGRST202 = не применён):
+   `/rpc/ops_err_admin` {"p_days":7} и `/rpc/ops_err_ingest` {"p_items":[]} → 401, 42501 permission denied for function;
+   `/rest/v1/ops_err?select=k&limit=1` → 401, 42501 permission denied for table. До запуска сайт работает как раньше: браузеры шлют отчёты на
+   /api/diag, сервер тихо отвечает «молчи» (stop), окно «🩺 Ошибки сайта» пишет «выполни ops.sql». PGlite: scripts/ops-sql-test.mjs (73).
+   Ещё владельцу (не SQL): копии базы на ПК — docs/BACKUPS.md (строка подключения, pg_dump, расписание; ключи и пароль вводит только он).
+15. `city.sql` (НОВЫЙ, 22.10.2026, T-032 «Живой город» P1; нужны profiles, banned_nicks, age.sql — всё применено; от остальных не зависит) —
+   денки 💵 в городах «Мира Денчика»: city_cfg, city_bank, cities, city_people, city_ledger, city_contrib, city_marks, city_days;
+   city_defs / city_public (всем), city_state / city_act / city_admin (вошедшим). Проверка гостем (PGRST202 = не применён):
+   `/rpc/city_defs` → {"v":1,…,"profs":{…},"rate":{"min":10,"days":1},…}; `/rpc/city_public` {"p_city":"kids"} → {"ok":true,"city":"kids",
+   "treasury":5000,…,"rate":100} (в день запуска; со следующего дня + эмиссия); `/rpc/city_state` {} и `/rpc/city_act` {"p_act":"job"} → 401, 42501 permission
+   denied for function; `/rest/v1/city_people?select=cash&limit=1` → 401, 42501 permission denied for table. До запуска в городах — «🧪 пробные
+   денки» (в браузере) и «Банк города появится, когда сайт обновится». Числа — docs/CITY_ECONOMY.md, менять — «🏙️ Экономика города» (админ).
+   PGlite: scripts/city-sql-test.mjs (134).
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
@@ -152,7 +177,8 @@ chat_channels news, cm_events, cm_catalog), games-more.sql (game_win_xp mirwar �
 кроме bases.sql / raids.sql (их ещё не давали — набеги переезжают в военные базы, п. 31). Чат: последнее сообщение всё ещё 20.09 —
 владелец должен написать одно сообщение в #общий, проверить запросом messages order=created_at.desc.
 Раньше (13:05 UTC): 1–8 ещё НЕ применены (game_win_xp(horde) = 20, остальные — PGRST202). 7–8 (bases.sql,
-raids.sql) — давать владельцу только после того, как агент набегов закончит переделку (3D, большие базы): файлы ещё меняются.
+raids.sql) — давать владельцу только после того, как агент набегов закончит переделку (3D, большие базы): файлы ещё меняются
+(22.10: переделка в военные базы готова — T-013, см. п. 7–8 выше).
 age.sql применён 15.10.2026 (проверено: my_age_group гостем → reason auth, ugc_games/unity_games.age_rating → 200). Владелец: «остальные
 поменять пока не могу» — напоминать 1–4 списком. premium.sql, coins.sql (части тела), community.sql применены 15.10.2026 (проверено с сервера: premium_state гостем → reason auth,
 premium_credit гостем → 42501, coin_price(skin:pack:robot) = 700, coin_price(skin:hat:gemcrown) = null (только за 💎),
@@ -441,6 +467,9 @@ js/features/games.js и хвост css/premium.css.
     авиация, танки, флот, ракеты…; всё не изучить — у каждой базы своё лицо). Страны в войнах нанимают базы как ЧВК (docs/NATIONS.md).
     Делает агент набегов (на паузе) — после того, как агент мира разметит участки баз в зоне (8–16 больших участков, побережье,
     нейтральные точки). Черновик «большие участки 32×32 в районе» переносится в зону.
+    ЭТАП 1 СДЕЛАН 22.10 (T-013): базы, состав и звания, оборона/казарма/армия на базе, набеги на базы, гараж/вертолётная площадка/
+    ангар/причал (хранение и выезд техники), бункер с подвалом; оборона района → кирпичи. Дальше (очередь): набег в 3D (п. 17),
+    дерево технологий и доктрины, доход как в тайконе, наёмники, брошенные базы, войны стран (docs/NATIONS.md).
 32. СОСТОЯНИЕ вечер 15.10 (владелец перезагружает ПК): в main и на сайте (GAMES_VER 88) — «Кубомир» 2, «Подземье» 2 + shade2d,
     страж графики + наборы шейдеров, Java в студии (этап 1), исправления: крыша (зона «внутри» ниже крыши) и «бежит сам» (sendStop,
     остановка чужого без вестей 4 с, lostpointercapture, visibilitychange). Ветки на паузе (продолжать — SendMessage агенту или
@@ -509,9 +538,9 @@ js/features/games.js и хвост css/premium.css.
     Новый год (14.01), Китайский (лунный; Корея, Вьетнам), Наурыз 21–23 марта («у нас в Казахстане он весной» — главный для
     нашей аудитории: «Наурыз құтты болсын!»), Сонгкран, Рош ха-Шана, исламский (только поздравление), эфиопский. «Будет висеть
     постоянно задание новогоднее» — с 1 декабря до Нового года всегда видна карточка: отсчёт и задание дня (как адвент-календарь);
-    прогресс пока в браузере, награды с сервера (SQL, как daily_quest) — следующим шагом. Праздники выключаются в ⚙️.
+    прогресс в браузере, награды с сервера — СДЕЛАНО 22.10 (T-024, games-more.sql advent_claim). Праздники выключаются в ⚙️.
     ЯДРО СДЕЛАНО 16.10 (GAMES_VER 105) — раздел «🌦 Погода, времена года и праздники (движок)» ниже; «Мир Денчика» ПОДКЛЮЧЁН 16.10
-    (GAMES_VER 106, «Мир Денчика» 3D → «Погода»); после 21.10 — персонажи «как в Симс» (C.exposure уже есть) и advent.sql (§9).
+    (GAMES_VER 106, «Мир Денчика» 3D → «Погода»); после 21.10 — персонажи «как в Симс» (C.exposure уже есть); награды задания (§9) — в games-more.sql.
 37. Физика и стихии В ДВИЖКЕ (владелец 16.10: «квадратики с физикой; деревья как в модах — реалистичные стволы; освещение,
     пламя, волны, чтобы влияли на транспорт, цунами, торнадо»; «физику обрушения, держания — для наших пресетов во всех
     движках»; «сами деревья нужно улучшить»; «и можно будет применять в разных играх»). План и порядок — docs/PHYSICS_PLAN.md:
@@ -563,6 +592,8 @@ js/features/games.js и хвост css/premium.css.
 - В скриптах правок `s.replace(a, b)` со строкой b — знаки доллара в b особые (двойной доллар, доллар+апостроф, доллар+&):
   так испортился SQL и задублировался кусок файла. Только `s.replace(a, () => b)` или Edit.
 - `el.style.display = ''` стирает инлайновый `display:grid` из разметки — возвращать явное значение ('grid').
+- `classList.add/remove` пишут атрибут class даже без перемены: если MutationObserver смотрит на class этого же места — вечный
+  цикл каждый кадр (так было с пилюлей меню в fx.js, ≈ 1 мс на кадр в играх на телефоне). Только `classList.toggle(имя, вкл)`.
 - Горячие клавиши сайта (`hotkeys.js`) перехватывают стрелки/цифры — у всего, что слушает клавиатуру, учитывать.
 - Онлайн-комнаты: служебное поле отправителя `_by` (у данных свои `from`); первый presence-sync сообщать;
   новый человек в комнате → хозяин начинает новую партию; «победа» при уходе соперника на 1–2 ходу — без XP.
@@ -631,6 +662,20 @@ js/features/games.js и хвост css/premium.css.
 - Проверить, что выкатилось: открыть нужный файл по прямой ссылке (например `/css/premium.css`) и найти свежую правку.
 - SQL из `*.sql` сам не применяется — его запускают руками в Supabase SQL Editor. Новые миграции — отдельными
   файлами (как `referrals.sql`, `streaks-achievements.sql`), идемпотентными (`create or replace`, `if not exists`).
+- **Мониторинг, автопроверки, копии (T-016, подробно — docs/OPS.md, для владельца — docs/BACKUPS.md).** Ошибки у посетителей:
+  исходник ОДИН — `api/_lib/errlog.js` (этап 1 в `<head>`: блок между метками errlog:begin/end в index.html и `ERR_HEAD` в page.js; этап 2 —
+  `js/core/errlog.js`). После ЛЮБОЙ правки errlog.js: `node scripts/make-errlog.mjs` (файл и блок генерируются; errlog-test и CI ругаются,
+  если устарели). Отчёты → `POST /api/diag` (api/_lib/routes/diag.js, лимиты, 10 функций из 12) → `ops.sql` → «🩺 Ошибки сайта» в панели
+  админа (js/features/ops-admin.js, грузится по кнопке). Ни ников, id, почты, токенов, адресов с запросом, IP: **в тексте
+  `throw new Error`, `Promise.reject`, `d37Err('где', e)` данных игрока быть не должно** (очистка не поймает свободный текст). Рекламу,
+  Метрику, расширения, «Script error.» этап 1 отсеивает сам. Автопроверки: `node scripts/ci-run.cjs` (локально; `DEPS_DIR` с three,
+  Rapier, PGlite — см. шапку скрипта) = то, что GitHub Actions гоняет на push в main и PR (`.github/workflows/tests.yml`, Windows,
+  ~2 мин); Vercel выкладку НЕ ждёт (по умолчанию) — красный крестик на коммите = разобраться; задержку можно включить в панели Vercel
+  (Deployment Checks → GitHub, по документации Vercel — для всех проектов с GitHub, на Hobby не проверено; решает владелец, docs/OPS.md).
+  Новая проверка — строка в `TESTS` ci-run.cjs (ops-test следит, чтобы новые *-test.cjs не забывали).
+  Тест, который копирует `api/` выборочно, ломается при новом `import` в page.js — копируй всё `api/`. Копии базы: `scripts/backup-db.ps1`
+  → `E:\backups\dan4ik37\ГГГГ-ММ-ДД.sql.gz` (только ПК владельца; репозиторий ОТКРЫТЫЙ — дампы в Actions и в git НИКОГДА; `backup.env` в
+  .gitignore; проверено подменным pg_dump, на живой базе агенты не запускают).
 
 ## Локальный запуск
 `python scripts/serve.py 5500` в корне → `http://localhost:5500/` (как `python -m http.server`, но с заголовками и переадресациями
@@ -1012,7 +1057,8 @@ js/features/games.js и хвост css/premium.css.
   ref lvN; кто уже выше — получит при следующем XP). Ник — `nick_fx()` (золото 40+, радуга 60+ или секреты) → secrets.js
   `.nick-gold`/`.nick-rainbow`. Друзья: 15 → +5 каждые 5 уровней с 15-го до 40-го (45); VIP 50/70/100; персонал без лимита (RLS на
   `friendships`). Уровень 10: титул (`user_titles`, RPC `set_title`; титул роли/VIP — только пока роль/VIP есть, `nick_extras`).
-  Время (economy-sim): обычный игрок (30–45 мин/день) — 10 ур. за ~2 мес, 30 — ~21 мес, 50 — ~5 лет.
+  Время (economy-sim; с 22.10 — с заданиями недели и сезоном): обычный игрок (30–45 мин/день) — 10 ур. за ~53 дня, 30 — ~19 мес,
+  50 — ~4,7 года.
 - VIP-уровень = max(донатный, за уровень): `vip_tier_of()` (её зовут has_perks, закреп, messages.vip_tier); `profiles_public` отдаёт
   эффективные `is_vip`/`vip_until` и `vip_tier` — клиент `getVipTier()` берёт `vip_tier`. VIP за уровень нельзя писать в profiles:
   триггер `protect_profile_columns` откатывает is_vip в клиентской сессии. Невидимка — с Silver VIP (`can_be_invisible`).
@@ -1045,6 +1091,16 @@ js/features/games.js и хвост css/premium.css.
   победы в `%_duel` и `%_online` во всех играх.
 - Задание дня: `daily_quest_code()` (12 заданий по кругу от даты по МСК), прогресс — по `game_log` (пишет game_result,
   хранится 14 дней), награда 50 XP — `claim_daily_quest()` (source `daily`, ref = дата). Тексты — `DAILY_QUESTS` в games.js.
+- Задания недели и бесплатный сезонный путь (T-015, 22.10.2026; games-more.sql — конец файла; docs/ECONOMY.md §10): 6 заданий недели
+  (пн 00:00 МСК; weekly_quest_codes — место s недели w: вариант (w + s) mod k, без случайности), прогресс — сервер (weekly_quest_stats:
+  game_log, xp_ledger 'daily'/'watch', user_visits — по индексам), claim_weekly_quest → XP и 🪙 'weekly' + ⭐. Сезон = месяц МСК
+  (quest_rule s_months; № 1 — ноябрь 2026, октябрь — пробный № 0); ⭐ — триггеры trg_season_on_game_win (первые 10 побед в день) и
+  trg_season_on_daily_quest + задания недели; season_claim — награды лестницы (🪙, вещь темы → coin_wallet.items, рамка и титулы →
+  season_owned), за прошлые сезоны тоже; титул — season_title_set (user_titles 'ss:ГГГГ-ММ:1|2'; achTitleDef в achievements.js — для
+  ников и профиля), рамка — season_frame_set / season_frames (xp.js applyLevelFrame, .lv-frame-ss[data-ss]). Витрина — quest_hub()
+  (renderQuests в «Играх», renderProfileQuests на своём профиле; подсказка после партий — questAfterGame, не чаще раза в 45 с). Платного
+  пути нет (season_paid_on → false). Числа: quest_rule ↔ QUEST_NUM, season_ladder ↔ SEASON_LADDER, season_themes ↔ SEASON_THEMES,
+  weekly_quest_pool ↔ WEEKLY_QUESTS (порядок важен) — economy-test раздел 7; проверка с датой — *_at (только сервер).
 - «Поддержать стрим / Позвать друга» — плашка `gamesSupport()` в games.js после победы или рекорда (не чаще раза
   в 10 мин, максимум 3 за визит); ссылка «позвать» ведёт на SEO-страницу `/games/<id>`.
 - «📣 Вызов» (кнопка в шапке игры, `gamesChallenge()`) — ссылка `/games/<id>?s=<рекорд>&n=<ник>`: api/game.js
@@ -1101,6 +1157,8 @@ js/features/games.js и хвост css/premium.css.
 - Вещи только за 💎 (6-е поле в PARTS): skin:hat:gemcrown 150, skin:back:gemwings 300, skin:trail:gems 100 — продаёт #/shop
   (premium_spend → coin_wallet.items); D37Char.price → цена в 💎, gemsOf(item) > 0; D37Coins.buy → 'gems', coins_buy — отказ, char_save
   надевает купленное (coin_gems_item). Новая такая вещь — PARTS + каталог магазина (premium.sql, premium.js, api/_lib/premium.js) + gen-skin-sql.
+- Вещи-награды (8-е поле PARTS): 1 — за друзей (referrals2.sql), 2 — сезонный путь (вещь темы), 3 — новогоднее задание (⛄): цены нет
+  (gen-skin-sql пропускает), сервер кладёт в coin_wallet.items, char_save надевает выданное; подписи — D37Char.grantOf (charedit, wardrobe).
 - Надетое: coin_wallet.look (char_save проверяет владение; VIP-части — coin_vip_item; части пакета — по пакету), гостю — d37_char. Цены
   частей и пакетов, списки VIP и 💎, слоты char_save в coins.sql генерирует `node scripts/gen-skin-sql.mjs` из PARTS/PACKS (504 цены; тест
   PGlite сверяет цены, свои цвета, VIP, пакеты, 💎). Пока coins.sql в базе старый: saveLook (coins.js) сохраняет то, что сервер понимает
@@ -1524,6 +1582,34 @@ js/features/games.js и хвост css/premium.css.
   реальному времени (снегопад 0,7: заметно за ~2,3 мин, бело за ~16; при +5° тает за ~6 мин), meta.snow; лёд по зонам.
   Тесты: kubomir-move-test 73, voxel-test 215, hand-test 259, render-test 371; scripts/kubomir-e2e.cjs — снимки «до/после»
   (SITE_DIR=старая копия), KB_MODE=perf (телефон, ЦП ×4), soak (10 мин игры), reopen (мир 8 раз).
+- Две руки и бой (T-012, 22.10, GAMES_VER 116; docs/COMBAT.md §5; ядро — D37E.combat, раздел «Движок»). Левая рука — ячейка P.off
+  (meta.player.off; выпадает при нокауте); F / крестовина ↑ / 🔄 / ячейка у панели — поменять руки. Хват — item.grip: лук 'two' (вещь
+  левой убрана — hands().offStow), щит 'off'. ПКМ: правая главнее (открыть, поставить, съесть — со щитом в левой строить можно),
+  правой нечего — левая (щит — блок, факел/блок — поставить, еда — съесть). Лук — держать ПКМ / LT / 🛡 (K 'offuse'), стрелы —
+  ents X.shoot. Удар — CB.attack → дуга по коробкам мобов в combatStep (сквозь стены нет — луч), полоска перезарядки .kb-cool. Мобы:
+  CB.init в X.spawn (MOBS[].cb); X.damage(…, res) — отброс и сбитый замах только по итогу боя; удар моба → mobHit (блок / отбив →
+  m.stag). Поза человечка — H.pose ДО A.update → a.hold → слой world3d; от 1-го лица правая рука — копия armL. hurt — неуязвимость
+  по шагам игры (P.hurtGT). player.js — в списке скриптов «Кубомира» (без него паркур не работал, если «Кубомир» открыт первым).
+  Тесты: kubomir-combat-test (33), hand-test 271, input-test 89, char-test 5309; KB_MODE=combat — снимки поз, бой, лук, круги боя
+  (память). В проверках «захват мыши» S.I.locked = true снимать вместе с S.wasLocked — иначе игра открывает меню паузы и ввод
+  заперт до конца прогона (soak теперь проверяет, что игрок ходил).
+- Вода (T-044, 22.10, GAMES_VER 121; владелец: «и что за вода?» — ядовито-синяя гладь с косыми полосами, у берега не видно дна, ночью
+  «пластик»). Сетка (voxel-mesh.js): у граней воды над u, v (младшие 5 бит) — глубина под гладью у 4 углов грани (трети блока, до
+  10⅓; блок у глади — 0 в среднее, вода под льдом/постройкой — считается), в vd.w биты 6…9 — «берег» у углов (пена); бок и низ —
+  сколько воды за гранью (до 8). Шейдер (voxel-render.js, не в простом режиме): толща — приглушённый цвет биома (чем зеленее — тем
+  мутнее: σ 0,3…1,6 на блок, у мутной меньше пены), её освещает свет кубиков (тень, небо, факелы, пещера); дно гаснет как exp(−σ·глубина / cos
+  преломлённого луча), глубина — билинейно по углам; волны — карта нормалей uWN 128² с мип-уровнями (без муара), два слоя,
+  повёрнутых целыми коэффициентами (период делит 16 — сдвиг начала координат не дёргает; скорость кратна 0,001 — нет скачка на
+  1000 с), вдали и вскользь — спокойнее; небо — модель неба движка (R.sky: зенит, горизонт, заря) по Френелю; блик — d37dl
+  (направленный свет three с тенью: только у воды копится в lights_fragment_begin), Токсвиг с допуском 8 бит; пена — биты берега ×
+  высота волн (A карты); итог — предумноженный цвет и покрытие 1 − (1 − F)·T. Лёд: крючок kubomir-weather.js ставит d37IceK (и ищет
+  строку сдвига текстуры воды — менять вместе). VR.U.uWP: сила волн / блеск / пена / яркость рисунка; «низкая» — один слой без пены
+  (нет D37_WQ2). Цвета воды биомов — TINTS в voxel-gen.js. Простой режим (VR.goSafe) — рисунок воды × цвет биома, как раньше
+  (рисунок теперь без полос). Тесты: hand-test 280 (раздел «вода»), voxel-test 222 (глубины и берег у углов, бок, лава как было);
+  kubomir-e2e KB_MODE=water — снимки E:\claude-tmp\water\shots, листы sheet-*.jpg (KB_WATER=pool — только бассейн, perf — пары
+  замеров с водой и без; KB_PHONE=1). Замер (медианы 4 пар, машина под нагрузкой): ЦП кадра и вызовы — как было (ПК 4,1 / 3,9 мс;
+  телефон ×4 «средняя» 17,5 / 16,5 мс), цена воды на видеокарте (кадр − кадр без сеток воды): ПК 0,1–0,65 мс (было 0,4–0,9),
+  профиль телефона 0,55–1,45 (было 0,4–1,25); сетка чанка-океана 2,2 мс — как было.
 
 ## «Клеточки» и «Червячки» — io-игры (js/games/iokit.js, kletochki.js, chervyachki.js; агент 22.10.2026, T-009)
 - Владелец 21.10: «на многих основах потом можно делать похожие игры — агарио, снейкио». «Клеточки» (как agar.io: ешь, расти,
@@ -1595,6 +1681,15 @@ js/features/games.js и хвост css/premium.css.
   «присесть» — нырнуть (до дна или 3 м), Пробел у берега — выпрыгнуть; события splash/swim (звуки), поза swim/dive (world3d
   animate). Студия: вода ландшафта. Звуки-петли окружения (synth.js): A.loop(amb_fire | amb_rain | amb_wind | amb_water | amb_magic,
   { x, y, z, vol }) — громкость и сторона пересчитываются в A.listener; в «Студии 3D» в игре — у эффектов и у воды.
+- Бой — js/engine/combat.js (D37E.combat, T-012; docs/COMBAT.md §3): без Three.js, шаг фиксированный, без мусора за шаг. Данные —
+  KINDS (оружие: grip one/two/off, hold, cool, reach, dmg, kb, moves, chain, block, bow) и MOVES (axis h/v/t, wind/act/rec). Боец —
+  CB.fighter / CB.init(свой объект; у мобов поля прямо в мобе). Шаг: equip → guard → bow → step; attack по нажатию (во время удара —
+  запомнит 0,2 с); попадания — sweepBegin(глаз, взгляд) → sweepHit(коробка, id) → hit → applyHp; без бойца (зверь, стрела) — receive.
+  Урон × (0,2 + 0,8·заряд²), серия при заряде ≥ 0,8, размах по нескольким — только полный заряд; щит: отбив 0,2 с с подъёма (не чаще
+  0,7 с) → ударивший оглушён 1 с; топор выбивает щит на 2,5 с. CB.pose → { r, l, m, mh, v, g, d, p }, CB.pack — одно 32-битное число
+  (для сети). Номера HOLDS / MOTIONS — те же в world3d.js (только дописывать в конец). world3d: слой рук o.hold (actors: a.hold) —
+  без него позы как были; главная вещь — в суставах armL (у человечка armL — ПРАВАЯ рука, названия — для смотрящего спереди).
+  Тест: node scripts/combat-test.cjs (80; 30/60/144 кадра, без мусора).
 - Тесты: `node scripts/engine-test.cjs` (128 проверок: управление, бег/выносливость, прыжок, кувырок, паркур, лестница,
   стройка, вещи, звуки, клин, ландшафт, скрипты). Меняешь цифры движка — прогони.
 - Графика (render.js, владелец 12.10.2026: «мир слабенький — свет, тени»): ACES, солнце с тенями (коробка теней ездит за
@@ -1636,8 +1731,9 @@ js/features/games.js и хвост css/premium.css.
 - js/core/celebrate.js (D37Celebrate, на всех страницах): холст салюта (z 100250), поздравления, отсчёт, конфетти/фонарики/лепестки/
   капли по стилю праздника, свой маленький звук (или synth fw_launch / fw_boom / fw_crackle); «🎄 Новогоднее задание» — карточка
   .cel-adv (в играх свёрнута до значка, убрать нельзя) и полоса .cel-ban на главной, 31 задание ADVENT (события d37:game из
-  games.js report, переходы #/…, свой d37:chatmsg, d37:advent { kind }), прогресс d37_advent, крючок onAdventDone (SQL — потом,
-  docs/SEASONS.md §9). ⚙️ «🌦 Погода» (ключи wxFx, wxAmt, holidays): эффекты, частицы, «Салют и поздравления».
+  games.js report, переходы #/…, свой d37:chatmsg, d37:advent { kind }), прогресс d37_advent; награда за день — с сервера (T-024,
+  advent_claim в games-more.sql: проверенное — 10 🪙 + 5 XP, иначе 5 🪙; 20 дней — ⛄ «Снеговик»; на карточке «⛄ N/20»; сделанное без
+  входа забирается после входа — srvSync), крючок onAdventDone (docs/SEASONS.md §9). ⚙️ «🌦 Погода» (ключи wxFx, wxAmt, holidays): эффекты, частицы, «Салют и поздравления».
 - «Студия 3D»: js/games/studio3d-weather.js — «🌦 Погода» (SC.settings.weather: mode, days, season, weather, climate, seed — в мире,
   у гостей блоком world), Weather.* в скриптах (script.js WS/Weather; Lua, C#, Java): State, Season, Temperature, FeelsLike, Wind,
   Rain, Snow, Today, события Changed(state, season) и Holiday(id, text), Weather.Set(state) — у хозяина на время игры (гостям 'wx').
@@ -1774,6 +1870,21 @@ js/features/games.js и хвост css/premium.css.
   глубже колена или в машине — плиты нет. Листва карты (worldmap.js: кроны, ели — needles, земля — grass) и трава площади — leaf.
   Замер (headless, площадь): ПК 1280×720 high — ЦП 2,8–3,0 мс, вызовов 235 → 235–238, кадр погоды 0,02–0,07 мс; телефон ×4 mid —
   22–23 мс (в пределах разброса), вызовов +1, погода 0,2–0,4 мс. Вдвоём и на настоящем телефоне не проверено.
+
+## «Живой город» P1 — денки 💵 и смены (T-032, 22.10.2026; docs/CITY_ECONOMY.md, план docs/plans/universe-step1.md)
+- Числа — ОДИН каталог js/games/mir-econ.js (MirEcon: CITIES, PROFS, GOODS, SKILL, CAPS, BUFF, BANK, RATE, SITE, KEEP, CFGK); SERVER →
+  city_defs0() в city.sql — только `node scripts/gen-city-defs.cjs` (--check — в CI). Админ меняет без кода: «🏙️ Экономика города» (CFGK).
+- Правила дважды: MirEcon.Rules (клиент, пробный режим, city-sim) = city_act / city_settle_ (решает сервер) — меняешь одно, меняй другое
+  (city-sql-test гоняет 520 одинаковых ходов). Зарплата в сотых (frac), ставка города (бедная казна — всем ниже, до rate.min), A7 — по браузерам.
+- Клиент: MirEcon.api (server | trial — гость или нет city.sql: d37_city_trial, в аккаунт не переносится), TaskRunner — «сдать работу» по
+  шагам логики 1/60 с (не раньше минимального времени; 30/60/144 FPS — одинаково), 📱 «🏦 Банк» (phone.js MODS.econ), окно админа
+  js/features/city-admin.js (D37CityAdm; openCityEconomy в role-management.js). Город — cityMod в js/games/mir-city.js (роль → prof@place,
+  roleFor / rememberRole); mir-zones.js не менялся (еда — действие 'food:<вид>': 'eat:' перехватывает mir-zones).
+- Сеть: Realtime почти не тратится — только 'z' {k:'cty'} при смене этапа стройки (≤ 1 в минуту); city_public — раз в 2 мин с p_rev
+  (без изменений — {same:true}); city_act ≈ 1,5–3 в минуту, пока работаешь.
+- Тесты: city-test, city-sql-test.mjs (PGlite), city-sim.cjs (пороги P1; --write — таблицы в docs/CITY_ECONOMY.md), world-zones-test,
+  city-e2e.cjs (Chrome + city.sql в PGlite за мостом /__rpc, сеть к Supabase закрыта; режимы perf / soak / errs; второй игрок — свой
+  процесс Chrome: вторая вкладка headless «в фоне», requestAnimationFrame стоит).
 
 ## «Игра поверх мира» (js/games/mir-play.js, MirPlay; агент 15.10.2026) — партия из «Мира Денчика» окном поверх мира
 - Владелец 15.10: «чтобы мир не вылетал, когда начинаешь партию, — возвращала обратно». Стол (отсчёт, «▶ Начать», «🤖 С ботом»),
@@ -2108,24 +2219,54 @@ js/features/games.js и хвост css/premium.css.
 - Без входа или без bases.sql — пробный участок в localStorage d37_base; после входа переносится в аккаунт (уровни до 2, 🧱 до 500).
   Сеть: 'base' в канале mir-N + перечитка раз в 90 с; улица — поле bs в presence (с другой улицы на участках не видно).
 - mir.js — 9 «крючков» с пометкой «район участков»; нет mir-base.js — мир как раньше. Подключение: mir-base.js перед mir.js.
-  Отрисовка: постройки участка склеены в 2–4 сетки, дальше 125 ед. — спрятаны. Тесты: node scripts/base-test.cjs (388) + PGlite
-  test-bases.mjs (76); в браузере — GAME_IMPL.world._test.state().base. Набегов на базы пока нет.
+  Отрисовка: постройки участка склеены в 2–4 сетки, дальше 125 ед. — спрятаны. Тесты: node scripts/base-test.cjs (1244, вместе с
+  военными базами) + PGlite E:\claude-tmp\bases\pg\test-bases.mjs (104); в браузере — GAME_IMPL.world._test.state().base.
+- Район МИРНЫЙ (T-013, 22.10): обороны, казармы и армии здесь нет (вышка — смотровая, до 3 ур.). Перенос — DO-блок bases.sql: оборона,
+  казарма и армия черновика набегов → кирпичи на том же участке (цена построенных уровней и отрядов); повторный запуск ничего не находит.
+  Кирпичи района можно дарить в казну своей военной базы (war_act 'give', до 1000 в день).
 
-## «Набеги» (#/games/raid, js/games/raid.js + raid-sim.js + raids.sql; агент 15.10.2026) — как Clash of Clans за участки «Мира Денчика»
-- План, все числа, баланс, защита от читов, кристаллы — docs/RAIDS.md. Каталог (оборона: вышка/пушка/мортира/бомба/воздушная мина,
-  казарма, отряды UNITS — боец, лучник, танк, подрывник, летун, лекарь, герой HERO — свой персонаж D37Sprite iso8 с «💥 Удар», RAID —
-  добыча/кубки/щиты/лиги) — js/games/mir-base.js = base_defs() в bases.sql (пересобрать: node scripts/gen-base-defs.cjs; тесты сверяют).
-- Бой — api/_lib/raid-sim.js (целые числа, шаг 1/20 с, 3 мин, разведка 30 с); браузеру — копия js/games/raid-sim.js (НЕ править руками:
+## Военные базы (Боевая зона, 12+; js/games/mir-base.js startWar + mir-war.js + bases.sql war_*; T-013, 22.10.2026)
+- 12 участков на сектор (mir-war.js PLOTS), номера 1…1200 (сектор = (id − 1) / 12, переключатель на щите); участок 32×32 клетки по 1,6,
+  открытая часть по штабу WAR.ring 16 · 20 · 24 · 28 · 32 (квадрат в середине), клетки у въезда WAR.block заняты всегда.
+- База: главарь / офицеры / бойцы (war_members; приглашение — код 8 знаков, ссылка /play/raid/join/<код> через D37Ref.wrap), имя —
+  NAMES (16 готовых) + номер 1…99, цвет COLORS; людей по штабу 6…20. Строят и тренируют главарь и офицеры; в набег — они же или все
+  (war_set {raid: 'soldier'}; ещё war_set: name, color, code — новый код приглашения). Выйти — war_leave (главарь последним; после выхода 10 мин нельзя вступить/основать — war_cool).
+- Каталог WDEFS / UNITS / HERO / RAID / VEH = war_defs() (node scripts/gen-base-defs.cjs; --check). Ходы — WRules.act = war_act (place,
+  move, remove, upgrade, finish, collect, gift, give, train, untrain, unarm, tfinish, vbuy, vsell). Возраст 12+ — и сервер (war_age_ok).
+- Техника базы (гараж, вертолётная площадка, ангар, причал) — покупка из казны в постройку, выезд через тест-драйв мира (30 мин, только
+  зона). Бункер — подвал под базой (рельеф зоны опущен, CELLAR в mir-zones.js): внутри вид от 1-го лица (camera.js не опускает камеру
+  3-го лица ниже y 0,4), 2 лампы, лестница наверх. Клавиша B в зоне — стройка/меню базы. Событие d37:base — «база поменялась».
+- Виды баз (скорость, правка 22.10): подробный вид — ближе 55 м до участка (дальше 75 — простой: без мелочи < 0,35 м, меньше граней,
+  без теней); тела физики — только ближе 35 м (дальше 50 — убраны; стены — одно тело на прямой отрезок, wallRunsLocal); вид строится
+  генератором viewGen по кусочку (бюджет кадра: телефон 3 мс, база под ногами ×2, своя после хода ×3 — rebuildOwn), старый виден до
+  замены. Детали — записи M.rec (без THREE.Mesh), склейка M.mergeGen пишет float32 / int8 / uint16 (21 байт на вершину), нижние грани на
+  земле не пишет, пустые группы убирает, корень вида неподвижен (matrixWorldAutoUpdate = false). Новая деталь в WDRAW — через P(g, o)
+  как раньше; userData.dyn — только в районе (у баз корень вида заморожен).
+- Проверки: W._test (fill(th) — 12 полных баз, me(), enterBunker/leaveBunker, job / lod / phys, lodRange(a, b), budget(мс));
+  MirBase.fillLayout(th, зерно) — база «по максимуму».
+- Боевая зона, панель оружия (mir-war.js, css/mir-zones.css; владелец 22.10: «нижняя панель ни за что не отвечает»): на телефоне стоя
+  очки лежали поверх ячеек 2–5 и ловили нажатия → очки вверху справа и без нажатий (pointer-events: none), панель и жизни — над кнопками
+  телефона, если те заходят под панель (layoutHud меряет .e-btn → класс .mz-up и --mzb; раз в 2 с и на resize). Проверка —
+  node scripts/war-hud-e2e.cjs (Chrome: 6 экранов, касание и мышь, ячейки целиком свободны, нажатие → это оружие; в ci-run — с --e2e).
+
+## «Набеги» (#/games/raid, js/games/raid.js + raid-sim.js + raids.sql; агент 15.10.2026, на военные базы — T-013 22.10) — как Clash of Clans
+- План, все числа, баланс, защита от читов, кристаллы — docs/RAIDS.md. Нападают и защищаются ВОЕННЫЕ БАЗЫ (раздел выше): армия, казна,
+  кубки, щит, лиги, поход и сундук — у базы (raid_base), у человека — дневные счётчики, учебка, облики армии (raid_profile). Отряды
+  UNITS — боец, лучник, танк, подрывник, летун, лекарь; герой HERO — свой персонаж D37Sprite iso8 с «💥 Удар» (сила — по штабу).
+- Бой — api/_lib/raid-sim.js (VER 2: целые числа, шаг 1/20 с, 3 мин, разведка 30 с; карта — открытая часть базы + полоса высадки,
+  B.MAP 20…36; путь — куча чисел, не больше 8 расчётов за шаг); браузеру — копия js/games/raid-sim.js (НЕ править руками:
   node scripts/make-raid-sim.mjs, потом поднять GAMES_VER). Тот же код считает сервер: POST /api/raid (api/_lib/routes/raid.js в
   api/pages.js) → raid_load → RaidSim.run → raid_settle (только service_role). Клиент шлёт только ввод {t,u,x,z}; итог в браузере —
-  картинка. Звёзды: 50 % / ратуша / 100 %. Добыча — только кирпичи (склад 20 % незащищённых, шахты 35 %), лимиты в день и на пару.
-  Щит 8/12 ч после 2/3★, новички — 3 дня. Двойники (хеши IP/устройства) друг другу не попадаются.
-- raids.sql: raid_start (снимок, замок, зерно, жетон HMAC), raid_go, raid_cancel, raid_state, raid_replay (по id — любому), raid_top,
-  raid_buy (💎 через premium_add: щиты 24/48 ч (раз в 7 дней), облики базы/армии, вторая казарма, ускорения — НЕ победы), raid_skin,
-  raid_chest. Ссылки «🤝 Позвать друга штурмовать мою базу» (#/games/raid/friendly/<участок>) и «🔗 Поделиться повтором»
-  (#/games/raid/replay/<id>) — через D37Ref.wrap. Строить оборону — в мире (d37:mb → стройка, вкладка «🛡️ Оборона»). Возраст 12+.
-- Тесты: node scripts/raid-test.cjs [--fast] (152), base-test (817), PGlite test-raids.mjs (105); Chrome — node scripts/raid-e2e.cjs
-  http://localhost:5559 (сервер подменён внутри проверки).
+  картинка. Звёзды: 50 % / штаб / 100 %. Добыча — кирпичи в казну, лимиты в день и на пару. Двойники (хеши IP/устройства) не встречаются.
+  Рисунок 2.5D: земля и целые стены — одной картинкой (перерисовка при сдвиге/приближении/упавшей стене); постройки — картинками
+  (drawB / makeSpr: одна на вид, уровень, размер и состояние; ствол пушки — поверх; за краем экрана — не рисуются); новая постройка в
+  paintB — то, что меняется каждый кадр, рисовать отдельно (как barrel), иначе застынет в картинке.
+- raids.sql: raid_start, raid_go, raid_cancel, raid_state, raid_replay, raid_top, raid_buy (💎 через premium_add: щит базы 24/48 ч раз в
+  7 дней, облики базы/армии, ускорение тренировки — НЕ сила; второй казармы за 💎 НЕТ — она со штаба 3), raid_skin, raid_chest;
+  🔔 о нападении — всему составу. Ссылки: дружеский бой /play/raid/friendly/<база> (без ловушек — war_sector их не отдаёт), повтор
+  /play/raid/replay/<id>, вступить /play/raid/join/<код> — через D37Ref.wrap. Строить — в мире (d37:mb 'build' / 'wb'). Возраст 12+.
+- Тесты: node scripts/raid-test.cjs [--fast] (169), base-test (1244), PGlite E:\claude-tmp\bases\pg\test-raids.mjs (114); Chrome —
+  node scripts/raid-e2e.cjs http://localhost:<порт> [pc|phone] (serve.py; сервер подменён внутри; TMP/TEMP и SHOTS — на диск E).
 
 ## «Мир Денчика» 2D (#/games/world при 🗺️, js/games/world.js + world.sql) — старый плоский мир (запасной)
 - Кнопка «🌍 Мир» в шапке и в нижнем меню телефона (вместо Shorts). Карта 2400×1600 рисуется кодом (buildMap, зерно 37):
@@ -2227,6 +2368,26 @@ js/features/games.js и хвост css/premium.css.
   игры не заводят sbClient.channel мимо GameRoom.channel); Chrome — `node scripts/room-net-e2e.cjs [A|B|C]` (A: 12 игр, sbClient
   прячется на 1,5–3 с; B: 20 входов/выходов на настоящем Supabase; C: приложение без интернета). Известный хвост: ник/ключ в комнате
   берутся при входе (`currentProfile` может ещё не загрузиться у вошедшего, открывшего ссылку в новой вкладке → «Гость NNN»).
+
+## Защита от кода в чужом тексте (XSS; T-011, 22.10.2026)
+- Правило: чужое (ники, чат, форум, названия сообществ/миров/игр, события, реакции, строки от соперника по сети, параметры адреса, файлы миров и
+  модов) попадает в HTML только через `esc()` / `jsAttr()` (js/core/utils.js; на сервере `esc` из api/_lib/yt.js) или `textContent`. `esc` НЕ
+  защищает: ссылку (`javascript:` после него остаётся — нужен путь «/…» / «#/…» или проверка https://), `onclick="f('${esc(x)}')"` (нужен
+  `jsAttr`), `style="…"`, имя тега/атрибута, код внутри `<script>` (там знак «<» экранируют, как в JSON-LD api/_lib/page.js).
+- Проверка — `node scripts/xss-test.cjs` (~30–90 с; в ci-run): scripts/xss-scan.cjs разбирает ВСЕ js/api/studio (acorn из самого Node, сам
+  перезапускается с --expose-internals) и ищет вставки, которые нельзя доказать безопасными (не число, не константа, не esc/jsAttr, не
+  проверенная ссылка). Прочитанные вручную лежат в scripts/xss-allowlist.json (файл + функция + вид + выражение → причина из `claims`);
+  новая находка без записи ломает проверку. Дальше в том же тесте: злые строки через ленту чата, события, аватары, реакции, GameRoom.clean и
+  17 серверных страниц с подменённой базой; места, откуда сервер отдаёт тело ответа (res.send/end), — только известные формы.
+- Нашёл находку: сначала поправь код (`esc`). Только если значение на деле число / константа / id из базы / уже проверено —
+  `node scripts/xss-scan.cjs --add <причина> "заметка"` (после чтения кода вокруг!); `--prune` убирает устаревшие записи. В onclick, ссылке,
+  стиле, неукороченном атрибуте причины ограничены (xss-test: «peer-clean» там не годится).
+- Строки от других игроков по сети (хозяин стола, соперник, напарник) `GameRoom.clean` (room.js) очищает от знаков < > & " ' и обратной кавычки при получении:
+  room.js, table.js (все три пути), netplay.js, «Крокодил» fromHost. Свой новый транспорт — тоже через clean (или esc в каждом выводе).
+- Исправлено 22.10: реакции на сообщения (любой вошедший писал в message_reactions.emoji разметку, renderEmoji выводил её как есть), uid чужого
+  игрока в мире (UID_RE в mir.js / world.js), «сайт//чужой.сайт» как свой путь (чат, /forum), свойства и настройки миров «Студии 3D»
+  (файл мира = произвольный JSON), строки от хозяина стола в картах и шахматах, ссылка рекламодателя в админке и виджет оплаты — только https.
+  Файлы других агентов (kubomir*, podzem*, engine, mir-*, raid*) только прочитаны: там экранирование на месте, записи в списке — с пометкой.
 
 ## Известные хвосты
 - AdSense: сайт в кабинете зарегистрирован как dan4ik37.github.io и отклонён («бесполезный контент»); главный адрес —

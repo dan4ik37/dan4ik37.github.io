@@ -89,7 +89,7 @@
 .mz-wpn button{min-width:44px;height:44px;border-radius:12px;border:2px solid rgba(255,255,255,.25);background:rgba(12,10,28,.72);color:#fff;font-size:1.25rem;cursor:pointer;position:relative}
 .mz-wpn button.on{border-color:#facc15;background:rgba(250,204,21,.25)}
 .mz-wpn button small{position:absolute;right:3px;bottom:1px;font-size:.55rem;font-weight:900}
-.mz-score{position:absolute;right:10px;top:58px;min-width:150px;padding:.45rem .6rem;border-radius:12px;background:rgba(12,10,28,.82);border:1px solid rgba(255,255,255,.14);font-size:.72rem;pointer-events:auto}
+.mz-score{position:absolute;right:10px;top:58px;min-width:150px;padding:.45rem .6rem;border-radius:12px;background:rgba(12,10,28,.82);border:1px solid rgba(255,255,255,.14);font-size:.72rem;pointer-events:none}
 .mz-score b{display:block;font-size:.78rem;margin-bottom:.2rem}
 .mz-score .r{color:#fca5a5}.mz-score .bl{color:#93c5fd}
 .mz-score ol{margin:.1rem 0 0;padding-left:1.1rem}
@@ -101,7 +101,16 @@
 .mz-hitfx.on{opacity:1;transition:none}
 .mz-cross{position:absolute;left:50%;top:46%;width:22px;height:22px;margin:-11px 0 0 -11px;border:2px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
 .mz-cross.hit{border-color:#facc15}
-@media (max-width:640px){.mz-score{top:auto;bottom:160px;right:8px;min-width:120px;font-size:.66rem}.mz-feed{top:auto;bottom:250px}.mz-hp{bottom:150px}.mz-wpn{bottom:168px}}
+/* телефон стоя: очки — в правом верхнем углу (снизу они закрывали ячейки 2–5 панели оружия — «нижняя панель ни за что не отвечает»);
+   очки нажатия не ловят. Кнопки телефона заходят под панель оружия (телефон стоя, планшет) — панель и жизни над ними (.mz-up: высота
+   кнопок меряется — mir-war.js layoutHud, --mzb) */
+@media (max-width:640px){
+  .mz-score{top:8px;right:8px;min-width:0;max-width:min(56vw,230px);padding:.3rem .45rem;font-size:.62rem}
+  .mz-score b{font-size:.68rem}
+  .mz-feed{top:96px;right:8px}
+}
+.mz-war.mz-up .mz-wpn{bottom:var(--mzb,186px)}
+.mz-war.mz-up .mz-hp{bottom:calc(var(--mzb,186px) + 50px)}
 /* лифт 🛗 (небоскрёбы, ТЦ, отель, телебашня, паркинг) */
 .mz-lift{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:6px}
 .mz-lift button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:inherit;font:700 13px Montserrat,sans-serif;cursor:pointer;text-align:left;min-height:44px}
@@ -122,3 +131,16 @@
 /* вид мэра (город сверху): кнопка выхода */
 .mz-ov{position:absolute;left:50%;top:14px;transform:translateX(-50%);pointer-events:auto;border:1.5px solid rgba(250,204,21,.8);background:rgba(12,10,28,.85);
   color:#fde68a;border-radius:12px;padding:.42rem .9rem;font-weight:800;font-size:.8rem;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+
+/* ── «Живой город» (T-032): денки 💵 — кошелёк (нажать — 🏦 Банк), щит работ (навык ★, зарплата, усталость), пробные ── */
+.mz-wallet .mz-wbank{pointer-events:auto;cursor:pointer;padding:.28rem .6rem;border-radius:10px;background:rgba(12,10,28,.84);border:1px solid rgba(74,222,128,.55);color:#fff;font-size:.78rem;font-weight:900;min-height:32px}
+.mz-wallet .mz-wbank:hover{background:rgba(22,101,52,.75)}
+.mz-wallet em{font-style:normal}
+.mz-stars{font-style:normal;color:#facc15;font-size:.72rem;letter-spacing:-.04em}
+.mz-job .mz-jobm{color:#a7f3d0;font-weight:700;margin-top:.12rem}
+.mz-job .mz-xpbar{display:block;height:4px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;position:relative;margin-top:.28rem;font-size:0}
+.mz-job .mz-xpbar::after{content:'';position:absolute;inset:0;width:var(--p);background:linear-gradient(90deg,#facc15,#4ade80)}
+.mz-job button[disabled]{opacity:.55;cursor:default}
+.mz-eco-note{margin:.15rem 0 .45rem;padding:.42rem .6rem;border-radius:10px;background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.32);font-size:.72rem;line-height:1.4}
+.mz-eco-sec{font-size:.68rem;font-weight:900;color:#c4b5fd;margin:.55rem 0 .25rem;text-transform:uppercase;letter-spacing:.04em}
+.mz-task .mz-left{color:#a5f3fc}

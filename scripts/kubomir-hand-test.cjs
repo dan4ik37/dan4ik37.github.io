@@ -124,6 +124,27 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(/#ifdef D37_WAVE\s*\nif \( d37f > 0\.5 && d37f < 1\.5 \)/.test(sh.vertexShader) && /#undef D37_WAVE\s*#endif\s*#include <project_vertex>/.test(sh.vertexShader), k + ': качание — под D37_WAVE набора, кусок ветра движка (для моделей без масштаба) снят');
     ok(incOk(sh.fragmentShader) && incOk(sh.vertexShader), k + ': #include — своей строкой');
   }
+  {   // вода (T-044): глубина и берег из сетки, волны картой нормалей, блик — свет three с тенью; простой режим — без этого
+    const m = VR.mats.water, sh = shaderOf('lambert'); m.onBeforeCompile(sh);
+    const fs = sh.fragmentShader, vs = sh.vertexShader;
+    ok(VR.waterLight && fs.includes('d37dl += directLight.color;\n\t\tRE_Direct( directLight, geometry, material, reflectedLight );') && fs.indexOf('vec3 d37dl') < fs.indexOf('d37dl += '), 'вода: блик — солнце/луна с тенью копятся перед RE_Direct (объявлено раньше)');
+    ok(/vec2 d37wq[\s\S]*#include <alphamap_fragment>/.test(fs) && fs.indexOf('float d37dep') < fs.indexOf('#include <emissivemap_fragment>'), 'вода: толща и глубина — до света (перед alphamap, раньше крючка льда)');
+    ok(vs.includes('vUvL.xy = mod( vd.xy, 32.0 ) / 16.0;') && vs.includes('vWD = vec4(') && /varying vec4 vWD;[\s\S]*varying float vWS;/.test(vs) && /varying vec4 vWD;[\s\S]*varying float vWS;/.test(fs), 'вода: u, v — младшие 5 бит, глубины углов и берег — в varying (в обоих шейдерах)');
+    ok(fs.includes('d37uv.xy += vec2( uTime * 0.03, uTime * 0.05 );') && fs.includes('float d37IceK = 0.0;'), 'вода: строка для крючка льда на месте, d37IceK объявлен');
+    ok(sh.uniforms.uWN.value?.isDataTexture && sh.uniforms.uWN.value.image.width === 128 && sh.uniforms.uWN.value.generateMipmaps && sh.uniforms.uWN.value.wrapS === T.RepeatWrapping && sh.uniforms.uWN.value.minFilter === T.LinearMipmapLinearFilter, 'вода: карта нормалей 128² с мип-уровнями, повторяется');
+    ok(!!m.defines.D37_WQ2 && VR.U.uWP.value.z > 0 && VR.U.uWP.value.w > .3 && VR.U.uWP.value.w < 1, 'вода «высокая»: два слоя волн, пена, средняя яркость рисунка', VR.U.uWP.value);
+    // карта нормалей: шов повторения — без скачка (целые частоты), наклоны в меру
+    const wd = sh.uniforms.uWN.value.image.data, N = 128, nx = (x, y) => wd[((y % N) * N + (x % N)) * 4] / 127.5 - 1;
+    let seam = 0, mx = 0; for (let i = 0; i < N; i++) { seam = Math.max(seam, Math.abs(nx(N - 1, i) - nx(0, i)), Math.abs(nx(i, N - 1) - nx(i, 0))); mx = Math.max(mx, Math.abs(nx(i, i))); }
+    ok(seam < .25 && mx > .2 && mx < .9, 'карта нормалей: без шва на краю, наклоны в меру', { seam: +seam.toFixed(3), mx: +mx.toFixed(3) });
+    // NaN-страховки: нормализуем только ненулевое, деление — на max
+    ok(fs.includes('inversesqrt( max( dot( d37Hs, d37Hs ), 1e-8 ) )') && fs.includes('/ max( d37al, 0.004 )') && !/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/.test(fs.replace(/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/g, (s, a, b) => +a < +b ? '' : s)), 'вода: без NaN (половинный вектор, деление на покрытие), smoothstep — края по возрастанию');
+    // простой режим: те же u, v (младшие 5 бит), без глубин, карты нормалей и блика
+    const VRs = V.renderer(Object.assign({}, R, { scene: new T.Scene(), wave: null }), { safe: true }), shs = shaderOf('lambert');
+    VRs.mats.water.onBeforeCompile(shs);
+    ok(shs.vertexShader.includes('vUvL.xy = mod( vd.xy, 32.0 ) / 16.0;') && !shs.vertexShader.includes('vWD') && !shs.fragmentShader.includes('vWD') && !shs.fragmentShader.includes('uWN') && !shs.fragmentShader.includes('d37dl +='), 'простой режим воды: u, v из младших бит, без новых кусков');
+    VRs.dispose();
+  }
   const wk = waved.map(([m, o]) => [Object.keys(VR.mats).find(k => VR.mats[k] === m), o.kind]);
   ok(wk.length === 2 && wk.some(w => w[0] === 'foliage' && w[1] === 'leaves') && wk.some(w => w[0] === 'cutout' && w[1] === 'leaves'), 'R.wave — листва и трава (слои foliage, cutout)', wk);
   ok(VR.mats.foliage.userData.wave && VR.mats.foliage.userData.wave.kind === 2, 'метка ветра движка на материале (E.waveMaterial)');
@@ -228,6 +249,67 @@ function fakeWorld(sky, blk, walls = new Set()){
   H.dispose();
   ok(!orig.userData.d37ent || orig !== actor.ch.armR.children[0].material, 'закрыли мир — человечку вернулись его материалы');
   let left = 0; R.camera.traverse(o => { if (o.isMesh) left++; }); ok(left === 0, 'закрыли мир — у камеры ничего не осталось', left);
+
+  // ═══ 3б. Две руки (бой, D37E.combat): левая от 1-го лица (щит, факел, еда, лук), вещи у человечка — в своих кистях,
+  //    поза человечку — слоем world3d (a.hold). Человечек как у world3d: armL — его правая рука, armR — левая ═══
+  sec('две руки: левая от 1-го лица, щит поднят, лук, вещи у человечка, поза — слоем world3d');
+  {
+    run('js/engine/combat.js');
+    const CBc = window.D37E.combat;
+    window.World3D = Object.assign(window.World3D || {}, { HOLDS: CBc.HOLDS, MOTIONS: CBc.MOTIONS });
+    const mkCh2 = () => {
+      const c = mkCh(), armL = new T.Group(), elbowL = new T.Group(), handL = new T.Group();
+      c.root.add(armL); armL.position.set(-.3, 1.3, 0); armL.userData.La = .6;
+      armL.add(new T.Mesh(new T.BoxGeometry(.1, .3, .1), new T.MeshToonMaterial({ color: '#cc3366' })));
+      elbowL.position.set(0, -.3, 0); armL.add(elbowL); elbowL.add(new T.Mesh(new T.BoxGeometry(.1, .3, .1), new T.MeshToonMaterial({ color: '#f0c0a0' })));
+      handL.position.set(0, -.3, 0); elbowL.add(handL);
+      return Object.assign(c, { armL, elbowL, handL });
+    };
+    const ch2 = mkCh2(), actor2 = { key: 'me', x: 2.5, y: 5, z: 2.5, ch: ch2, hidden: true, hold: null };
+    const A2 = { list: new Map([['me', actor2]]), get: k => A2.list.get(k) };
+    const P2 = { x: 2.5, y: 5, z: 2.5, sneak: false, dead: false, inv: new Array(36).fill(null), off: { id: 'shield', n: 1 }, sel: 0 };
+    P2.inv[0] = { id: 'sword_iron', n: 1 }; P2.inv[1] = { id: 'bow', n: 1 };
+    const F2 = CBc.fighter({ invT: .5, poise: 3 });
+    const st2 = { R, VR, W: cave, P: P2, A: A2, ox: 0, oz: 0, camMode: 0, hudHidden: false, eat: null, rig: { yaw: 0, fp: 0, feel: { bobPh: 0, bobW: 0 }, motion: 1 }, F: F2,
+      hands: { mainS: P2.inv[0], offS: P2.off, mainW: CBc.weapon({ kind: 'sword', dmg: 6 }), offW: CBc.weapon('shield'), two: false, offStow: false, mainOff: false } };
+    CBc.equip(F2, st2.hands.mainW, st2.hands.offW);
+    const H2 = window.KubomirHand.create(st2);
+    const tick2 = n => { for (let i = 0; i < n; i++) { H2.pose(1 / 60, 0); H2.frame(1 / 60, i / 60); } };
+    tick2(3);
+    let s2 = H2.state();
+    ok(s2.item === 'sword_iron' && s2.off === 'shield' && s2.fp && s2.fpL && s2.armL, 'меч в правой, щит в левой — от 1-го лица видны обе руки', s2);
+    ok(s2.fist[0] > .15 && s2.fistL && s2.fistL[0] < -.15 && s2.fistL[1] < s2.fist[1], 'левая — слева внизу (щит), правая — справа', { R: s2.fist, L: s2.fistL });
+    let fpMats2 = 0; R.camera.traverse(o => { if (o.isMesh && o.material?.userData?.d37ent?.fp) fpMats2++; });
+    ok(fpMats2 >= 5, 'обе руки — копии рук человечка с материалами «из глаз» (2 + 3 части)', fpMats2);
+    ok(H2.tpItem && H2.tpItem.parent === ch2.handL && H2.tpOff && H2.tpOff.parent === ch2.handR, 'у человечка: меч — в его правой кисти (handL), щит — в левой (handR)');
+    ok(s2.layer && actor2.hold && actor2.hold.r === CBc.HO.sword && actor2.hold.l === CBc.HO.shield, 'поза человечку — слоем world3d: что в руках (номера CB.HOLDS)', actor2.hold);
+    // щит поднят: левый кулак — выше и к середине
+    const L0 = s2.fistL.slice();
+    F2.guard = 1; tick2(2); s2 = H2.state();
+    ok(s2.fistL[1] > L0[1] + .1 && s2.fistL[0] > L0[0] + .1 && actor2.hold.g === 1, 'щит поднят — левая рука выше и к середине, человечку — g = 1', { L0, L: s2.fistL });
+    F2.guard = 0;
+    // удар мечом: правая — по движению боя (замах — вверх и вправо, удар — к середине)
+    CBc.attack(F2, null); for (let i = 0; i < 4; i++) CBc.step(F2, 1 / 60); tick2(1); const fw = H2.state().fist;
+    for (let i = 0; i < 9; i++) CBc.step(F2, 1 / 60); tick2(1); const fh = H2.state().fist;
+    ok(actor2.hold.m === CBc.MO.slash && fw[1] > L0[1] && fh[0] < fw[0] - .2, 'рубка от 1-го лица: замах справа вверху, удар — к середине; человечку — движение slash', { fw, fh, m: actor2.hold.m });
+    for (let i = 0; i < 30; i++) CBc.step(F2, 1 / 60);
+    // еда в левой: левая рука ко рту, правая на месте
+    P2.off = { id: 'apple', n: 1 }; st2.hands.offS = P2.off; st2.hands.offW = CBc.weapon('food'); CBc.equip(F2, st2.hands.mainW, st2.hands.offW);
+    tick2(20); const Lb = H2.state().fistL;
+    st2.eat = { t: .5, need: 1.6, hand: 'off' }; tick2(30); s2 = H2.state();
+    ok(s2.off === 'apple' && s2.fistL[0] > Lb[0] + .15 && actor2.hold.m === CBc.MO.eat && actor2.hold.mh === 1, 'ест левой — левая рука ко рту, человечку — движение eat левой', { Lb, L: s2.fistL, hold: actor2.hold });
+    st2.eat = null; tick2(30);
+    // лук — двумя руками: в правой ничего, лук — в левой; натянул — правая к лицу
+    P2.sel = 1; Object.assign(st2.hands, { mainS: P2.inv[1], offS: null, mainW: CBc.weapon('bow'), offW: null, two: true, offStow: true });
+    CBc.equip(F2, st2.hands.mainW, null); tick2(20); s2 = H2.state();
+    const fr0 = s2.fist;
+    ok(s2.item === null || s2.item === '' ? true : false, 'лук — правая пустая (держит тетиву)', s2.item);
+    ok(s2.off === 'bow' && s2.fpL && H2.tpOff?.parent === ch2.handR, 'лук — в левой (и у человечка — в его левой кисти)', s2);
+    CBc.bow(F2, true); for (let i = 0; i < 70; i++) { CBc.bow(F2, true); CBc.step(F2, 1 / 60); } tick2(2); s2 = H2.state();
+    ok(s2.fist[2] > fr0[2] + .15 && actor2.hold.d >= 1 && actor2.hold.r === CBc.HO.bow && actor2.hold.l === CBc.HO.bow, 'натянул — правая к лицу (ближе к камере), человечку — d = 1, лук двумя руками', { fr0, f: s2.fist, hold: actor2.hold });
+    H2.dispose();
+    let left2 = 0; R.camera.traverse(o => { if (o.isMesh) left2++; }); ok(left2 === 0 && actor2.hold === null, 'закрыли мир — у камеры пусто, поза человечку снята', left2);
+  }
 
   // ═══ 4. Мобы — через один «вид» ═══
   sec('мобы: вид — одна функция, свет — как у кубиков');

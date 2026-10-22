@@ -14,6 +14,7 @@
 // Телефон 📱 (как в ГТА, world3d.js): a.phone = '' | 'use' | 'call' | 'play' | 'photo' (или код 0…4) — достанет, будет держать,
 // уберёт сам; звуки (шорох кармана, касание экрана, щелчок камеры) — здесь, у человечка. От 1-го лица (a.hidden и a.fp = rig
 // камеры) — кисть с телефоном у камеры, внизу экрана (покачивание — по настройке «Покачивание камеры»).
+// Руки и предметы (бой, D37E.combat): a.hold = { r, l, m, mh, v, g, d, p } (CB.pose / CB.unpack) — слой поз world3d.js; null — без него.
 (() => {
   const E = window.D37E = window.D37E || {};
   const LOD_FAR = 30, LOD_NEAR = 24, LOOK_R = 5, CAM_R = 14, ME_R = 8;
@@ -45,8 +46,8 @@
       remove(key);
       const a = { key, x: o.x || 0, y: o.y || 0, z: o.z || 0, yaw: o.yaw || 0, moving: false, speed: 0, air: false, crouch: 0, sit: false, seatY: null, sitY: 0,
         roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, hidden: false, fade: 1, lastTrail: 0, ch: null, sig: '',
-        lod: 0, lookAt: null, lk: null, lkT: Math.random() * .3, lt: { x: 0, y: 0, z: 0 }, phone: '', fp: null, vm: null, bob: { ph: 0, w: 0, k: 1 },
-        ao: { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, look: null, phone: '' } };
+        lod: 0, lookAt: null, lk: null, lkT: Math.random() * .3, lt: { x: 0, y: 0, z: 0 }, phone: '', hold: null, fp: null, vm: null, bob: { ph: 0, w: 0, k: 1 },
+        ao: { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, look: null, phone: '', hold: null } };
       setLook(a, look);
       list.set(key, a); sync();
       return a;
@@ -110,7 +111,7 @@
           const o = a.ao;
           o.rate = a.speed < .3 ? 10.5 : 5 + a.speed; o.air = a.air; o.sit = a.sit; o.crouch = a.crouch;
           o.roll = a.roll; o.rollBack = a.rollBack; o.hang = a.hang; o.ladder = a.ladder; o.climbPh = a.climbPh; o.pk = a.pk; o.pkK = a.pkK;
-          o.swim = a.swim; o.dive = a.dive; o.phone = a.phone;
+          o.swim = a.swim; o.dive = a.dive; o.phone = a.phone; o.hold = a.hold;
           o.look = far ? null : lookTarget(a, cam, me, t);
           K.animate(ch, a.moving && !a.sit, far ? dt * 3 : dt, t, o);
           const ps = ch.phS;

@@ -199,3 +199,27 @@ body.high .kb-lockhint{animation:kbHint 1.8s ease-in-out infinite}
   .kb-tip{font-size:12.5px;max-width:calc(100% - 20px);padding:6px 8px}
   .kb-log{bottom:calc(var(--kb-s) + 96px)}
 }
+/* ── две руки и бой (docs/COMBAT.md): ячейка левой руки слева от панели, перезарядка удара под прицелом, вспышка отбива ── */
+.kb-hrow{position:relative;display:flex;justify-content:center}
+.kb-oslot{position:absolute;right:calc(100% + 10px);bottom:4px;width:var(--kb-s);height:var(--kb-s);border-radius:8px;background:linear-gradient(180deg,rgba(28,32,48,.72),rgba(10,12,20,.82));border:2px solid rgba(255,255,255,.18);box-sizing:border-box;pointer-events:auto;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35);touch-action:none}
+.kb-oslot[hidden]{display:none}
+.kb-oslot i{position:absolute;inset:4px;background:center/contain no-repeat;image-rendering:pixelated;filter:drop-shadow(0 2px 1px rgba(0,0,0,.45))}
+.kb-oslot b{position:absolute;right:3px;bottom:1px;font-size:13px;font-weight:900;text-shadow:1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000}
+.kb-oslot u{position:absolute;left:10%;bottom:3px;height:3px;border-radius:2px;display:block;box-shadow:0 0 0 1px rgba(0,0,0,.55)}
+.kb-oslot.stow{opacity:.42}
+.kb-oslot::before{content:'🫲';position:absolute;left:50%;top:-15px;transform:translateX(-50%);font-size:11px;opacity:.85}
+@media (max-width:640px){.kb-oslot{right:auto;left:2px;bottom:calc(100% + 40px)}}
+.kb-cool{position:absolute;left:50%;top:calc(50% + 13px);width:24px;height:5px;margin-left:-12px;border-radius:3px;background:rgba(0,0,0,.45);overflow:hidden;pointer-events:none;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+.kb-cool[hidden]{display:none}
+.kb-cool i{position:absolute;left:0;top:0;bottom:0;width:calc(var(--k,0) * 1%);background:#cfd6e6;border-radius:3px}
+.kb-cool.full i{background:#fff}
+.kb-cool.gold i{background:var(--kb-gold)}
+.kb-wrap.kb-touchtap .kb-cool{top:auto;bottom:calc(max(10px,env(safe-area-inset-bottom)) + var(--kb-s) + 58px);width:40px;margin-left:-20px}
+.kb-parry{position:absolute;left:50%;top:50%;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:3px solid rgba(255,230,140,.9);opacity:0;pointer-events:none;box-shadow:0 0 24px rgba(255,220,120,.6),inset 0 0 18px rgba(255,220,120,.4)}
+.kb-parry.on{animation:kbParry .35s ease-out}
+@keyframes kbParry{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(1.5)}}
+.kb-hotwrap{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-end;gap:10px;margin-top:4px}
+.kb-hotwrap .kb-hotrow{margin-top:0}
+.kb-offwrap{display:flex;flex-direction:column;align-items:center;gap:2px}
+.kb-offwrap small{font-size:.65rem;color:#aab3d6}
+.kb-slot.offs{border-color:rgba(255,210,63,.35)}

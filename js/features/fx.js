@@ -73,8 +73,8 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') setOpen(false); });
     panel.addEventListener('click', () => setOpen(false));
 
-    // Классы — только toggle(…, вкл): add/remove без изменений всё равно пишут атрибут class, наблюдатель ниже это видит и
-    // снова зовёт placeIndicator — выходил вечный цикл на каждый кадр (на всех страницах; найдено 22.10 замером фоторедактора)
+    // Классы — только toggle(…, вкл): add/remove пишут атрибут class даже без перемены, а MutationObserver ниже смотрит на class
+    // внутри links (там и сама пилюля) → было вечное «поменял → снова поставить» на каждом кадре (≈ 1 мс на кадр в играх на телефоне)
     function placeIndicator() {
       const desktop = window.innerWidth > 1180;
       let target = $('a.active-route', links);

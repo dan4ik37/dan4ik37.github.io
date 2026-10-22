@@ -1,6 +1,7 @@
 // api/_lib/page.js — общий HTML-шаблон серверных страниц (/v/<id>, /games, /games/<id>):
 // шапка, подвал, мета-теги, JSON-LD, AdSense и стили. Своё у страницы — body, script и css.
 import { esc } from './yt.js';
+import { ERR_HEAD } from './errlog.js';   // мониторинг ошибок сайта, этап 1 (docs/OPS.md): ~1 КБ в <head>, ничего не делает, пока нет ошибок
 
 export const YT_CHANNEL = 'https://www.youtube.com/@Dan4ik37Yt';
 // Возраст (js/core/age.js): несовершеннолетнему ролики 18+ спрятаны с первого кадра (d37-h18), возраст не указан — 18+ под
@@ -83,6 +84,7 @@ ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
 ${AGE_HEAD}
 ${REF_HEAD}
+${ERR_HEAD}
 ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>`}
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>

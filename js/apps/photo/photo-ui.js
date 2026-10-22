@@ -390,7 +390,7 @@
       // ушёл из редактора с несохранённой работой — она в черновике: «Продолжить» первым
       E.findDraft().then(m => {
         const d = s.querySelector('.pe-draft'); if (!m || !d || s.hidden) return;
-        d.innerHTML = `<button type="button" class="pe-big pe-acc" data-a="draft" data-id="${esc(m.id)}">${m.thumb ? `<img src="${esc(m.thumb)}" alt="">` : '<i>↩</i>'}<span>Продолжить: ${esc(String(m.name || '').replace(/^Черновик: /, ''))}<small>черновик · ${esc(ago(m.updated))} · ${m.w}×${m.h}</small></span></button><button type="button" class="pe-mini" data-a="draftDel" title="Удалить черновик" aria-label="Удалить черновик">✕</button>`;
+        d.innerHTML = `<button type="button" class="pe-big pe-acc" data-a="draft" data-id="${esc(m.id)}">${m.thumb ? `<img src="${esc(m.thumb)}" alt="">` : '<i>↩</i>'}<span>Продолжить: ${esc(String(m.name || '').replace(/^Черновик: /, ''))}<small>черновик · ${esc(ago(m.updated))} · ${m.w | 0}×${m.h | 0}</small></span></button><button type="button" class="pe-mini" data-a="draftDel" title="Удалить черновик" aria-label="Удалить черновик">✕</button>`;
         d.hidden = false;
       });
       s.innerHTML = `<div class="pe-card"><b>🖼 Фоторедактор</b><div class="pe-draft" hidden></div><p>Открой фото или начни с пустого холста. Работает без входа; фото не уходят на сервер.</p>
@@ -480,7 +480,7 @@
         const u = await root.D37Assets.usage().catch(() => null);
         box.querySelector('.pe-usage').textContent = u ? `Занято: ${MB(u.bytes)} из ${MB(u.cap)} · всё хранится только в этом браузере` : '';
         box.querySelector('.pe-assets').innerHTML = list.length ? `<ul>${list.map(m => { const pj = m.type === 'project'; return `<li data-asset="${esc(m.id)}"><span class="pe-ath">${m.thumb ? `<img src="${esc(m.thumb)}" alt="">` : (pj ? '📦' : '🖼')}</span>
-          <span class="pe-an"><b>${esc(m.name)}</b><small>${pj ? '📦 проект со слоями · ' : ''}${m.w}×${m.h} · ${MB(m.size)}${m.tool && !pj ? ' · ' + esc(m.tool) : ''}</small></span>
+          <span class="pe-an"><b>${esc(m.name)}</b><small>${pj ? '📦 проект со слоями · ' : ''}${m.w | 0}×${m.h | 0} · ${MB(m.size)}${m.tool && !pj ? ' · ' + esc(m.tool) : ''}</small></span>
           <button type="button" class="pe-mini" data-use="open">Открыть</button>${pj ? '' : '<button type="button" class="pe-mini" data-use="place">Слоем</button>'}<button type="button" class="pe-mini pe-danger" data-use="del" aria-label="Удалить">🗑</button></li>`; }).join('')}</ul>`
           : '<p class="pe-hint">Пока пусто. Нажми «📤 Сохранить → В «Мои материалы»», и картинку можно будет взять в других инструментах сайта.</p>';
       }

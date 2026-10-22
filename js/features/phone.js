@@ -15,7 +15,7 @@
 //   activity(), shot(), where(), players(), tp(x, z, yaw), toFriend(uid) → true/false, shard(n?) }) → off() при выходе.
 //   Пока телефон открыт — pause(true): игра держит C.blocked (как при окне ⚙️), мышь отпущена; Esc и P забирает телефон.
 // Пути: '' (домашний), msgs, msgs/<uid>, friends, calls, calls/<код> (войти в звонок), incall, comm, comm/<id>[/<канал>|…],
-//   comm/join/<код>, camera, map, game (мини-игра «Птичка»), notif, settings. Ссылка #/phone/<путь>; приглашение #/c/<код> → #/chat/join/<код>.
+//   comm/join/<код>, camera, map, game (мини-игра «Птичка»), notif, bank (денки «Живого города»), settings. Ссылка #/phone/<путь>; приглашение #/c/<код> → #/chat/join/<код>.
 // Телефон в руке персонажа (как в ГТА, world3d.js): hooks.hand(состояние) — '' (убран), use (смотрит в экран), call (у уха —
 //   звонок 1 на 1, и с закрытым телефоном), play (мини-игра), photo (камера); вернула true — игра показывает это 3D-человечком:
 //   тогда экран телефона выезжает, когда телефон уже в руке (~0,33 с), а закрывается — сначала экран, потом персонаж убирает
@@ -23,9 +23,9 @@
 //   состояние) — всем (плоский мир рисует 📱 над игроком). Чистая функция: D37Phone.handFor(открыт, путь, звонок).
 // Приложение: D37Phone.define(id, { render(el, arg, ctx) → функция уборки (необязательно), title }).
 (() => {
-  const VER = '11';   // 11 — безопасность детей (ЛС, звонки с пропуском, «только читать» до 9): msgview, community, calls, phone-apps; 10 — настоящие адреса
+  const VER = '13';   // 13 — «🏦 Банк» (денки «Живого города», js/games/mir-econ.js); 12 — msgview: ссылка «сайт//чужой.сайт» больше не считается своей (T-011); 11 — безопасность детей (ЛС, звонки с пропуском, «только читать» до 9): msgview, community, calls, phone-apps; 10 — настоящие адреса
   // файлы приложений (грузятся при первом открытии); лента сообщений msgview.js — общая для чата, сообществ и ЛС
-  const MODS = { mv: ['js/features/msgview.js'], apps: ['js/features/msgview.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/msgview.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/chatplayer.js'], wchat: ['js/features/worldchat.js'] };
+  const MODS = { mv: ['js/features/msgview.js'], apps: ['js/features/msgview.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/msgview.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/chatplayer.js'], wchat: ['js/features/worldchat.js'], econ: ['js/games/mir-econ.js'] };
   const APPS = [
     { id: 'msgs', ic: '💬', t: 'Сообщения', bg: '#22c55e,#15803d', mod: 'apps', b: 'msgs' },
     { id: 'calls', ic: '📞', t: 'Звонки', bg: '#34d399,#059669', mod: 'calls', b: 'calls' },
@@ -35,6 +35,7 @@
     { id: 'map', ic: '🗺️', t: 'Карта', bg: '#4ade80,#0d9488', mod: 'apps' },
     { id: 'game', ic: '🐤', t: 'Птичка', bg: '#fde047,#f97316', mod: 'apps' },
     { id: 'notif', ic: '🔔', t: 'Уведомления', bg: '#fbbf24,#ea580c', mod: 'apps', b: 'notif' },
+    { id: 'bank', ic: '🏦', t: 'Банк', bg: '#34d399,#047857', mod: 'econ' },   // денки «Живого города» (mir-econ.js сам задаёт приложение)
     { id: 'settings', ic: '⚙️', t: 'Настройки', bg: '#a1a1aa,#3f3f46' },
   ];
   const LINKS = [

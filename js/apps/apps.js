@@ -60,7 +60,10 @@
       await Promise.all([css('css/photo.css'), Promise.all(PHOTO.map(script))]);
     } catch (e) {
       ad && ad.done();
-      if (my === opening) host.innerHTML = `<div class="pe-loading"><b>⚠️ Фоторедактор не загрузился</b><span>${String(e.message || e).replace(/[<>&]/g, '')}. Проверь интернет и обнови страницу.</span></div>`;
+      if (my === opening) {
+        host.innerHTML = '<div class="pe-loading"><b>⚠️ Фоторедактор не загрузился</b><span></span></div>';
+        host.querySelector('span').textContent = String(e.message || e) + '. Проверь интернет и обнови страницу.';   // текст — не разметка
+      }
       return;
     }
     ad && ad.done();

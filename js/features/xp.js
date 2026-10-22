@@ -49,7 +49,7 @@ const LEVEL_REWARDS = [
   [90,  '🌌', 'След «Галактика» · +1000 🪙', { coins: 1000, part: 'trail:galaxy' }],
   [100, '💎', 'Бриллиантовая рамка · значок «Бессмертный» · 🔸 VIP на месяц', { vip: 30, badge: 'level_100' }],
 ];
-const XP_SOURCE_LABEL = { visit: 'Визиты', streak: 'Стрик', watch: 'Просмотры', chat: 'Чат', forum_thread: 'Темы', forum_post: 'Ответы', idea: 'Идеи', idea_done: 'Идея снята', referral: 'Друзья', ach: 'Ачивки', donation: 'Донаты', game: 'Игры', daily: 'Задание дня', secret: 'Секреты' };
+const XP_SOURCE_LABEL = { visit: 'Визиты', streak: 'Стрик', watch: 'Просмотры', chat: 'Чат', forum_thread: 'Темы', forum_post: 'Ответы', idea: 'Идеи', idea_done: 'Идея снята', referral: 'Друзья', ach: 'Ачивки', donation: 'Донаты', game: 'Игры', daily: 'Задание дня', weekly: 'Задания недели', advent: 'Новогоднее задание', secret: 'Секреты' };
 const XP_TIERS = [30, 20, 10, 5]; // рамки ника по порогам уровня
 
 let xpAvailable = null; // null — ещё не проверяли
@@ -96,7 +96,7 @@ async function xpFillBadges(){
     el.textContent = 'Lv ' + lv;
     el.className = 'lv-badge' + xpTierClass(lv);
     el.title = 'Уровень ' + lv;
-    const d = typeof ACH_BY_CODE !== 'undefined' && ACH_BY_CODE[xpTitleCache.get(uid)];
+    const d = typeof achTitleDef === 'function' && achTitleDef(xpTitleCache.get(uid));   // ачивка или титул сезона
     if (d) el.insertAdjacentHTML('afterend', `<span class="nick-title" title="Титул">${d.icon} ${esc(d.title)}</span>`);
   });
 }
@@ -126,10 +126,14 @@ const FRAME_LEVELS = [100, 50, 30, 15, 5];
 function avatarFrameClass(level){ const lv = FRAME_LEVELS.find(x => level >= x); return lv ? 'lv-frame-' + lv : ''; }
 async function applyLevelFrame(el, uid){
   if (!el) return;
-  el.classList.remove(...FRAME_LEVELS.map(x => 'lv-frame-' + x), 'lv-frame-ref');
-  const [ex, amb] = await Promise.all([xpGetExtras(uid), window.D37Ref?.hasFrame?.(uid) || false]);
-  // «Посол» (5 друзей по ссылке дошли до 5 уровня, js/core/ref.js; выключается на странице приглашений) — вместо рамки уровня
-  const cls = amb ? 'lv-frame-ref' : ex && avatarFrameClass(ex.level);
+  el.classList.remove(...FRAME_LEVELS.map(x => 'lv-frame-' + x), 'lv-frame-ref', 'lv-frame-ss');
+  delete el.dataset.ss;
+  const [ex, amb, ss] = await Promise.all([xpGetExtras(uid), window.D37Ref?.hasFrame?.(uid) || false,
+    typeof seasonFrameOf === 'function' ? seasonFrameOf(uid) : null]);
+  // «Посол» (5 друзей по ссылке дошли до 5 уровня, js/core/ref.js; выключается на странице приглашений) — вместо рамки уровня;
+  // рамка сезона (надел сам: «Игры» → сезон → «Мои награды сезонов», games.js) — тоже вместо рамки уровня
+  const cls = amb ? 'lv-frame-ref' : ss ? 'lv-frame-ss' : ex && avatarFrameClass(ex.level);
+  if (cls === 'lv-frame-ss') el.dataset.ss = ss;
   if (cls) el.classList.add(cls);
 }
 
@@ -168,7 +172,7 @@ async function renderProfileXp(uid, isOwn){
   document.getElementById('pxToday').textContent = isOwn ? `Сегодня: +${data.today} XP` : '';
   const week = Object.entries(data.week || {}).sort((a, b) => b[1] - a[1]);
   document.getElementById('pxWeek').innerHTML = week.length
-    ? '<span class="xp-week-t">За неделю:</span>' + week.map(([k, v]) => `<span class="xp-chip">${XP_SOURCE_LABEL[k] || k} <b>+${v}</b></span>`).join('')
+    ? '<span class="xp-week-t">За неделю:</span>' + week.map(([k, v]) => `<span class="xp-chip">${esc(XP_SOURCE_LABEL[k] || k)} <b>+${v}</b></span>`).join('')
     : '';
   const rules = document.getElementById('pxRules');
   if (rules && !rules.innerHTML) rules.innerHTML = XP_RULES.map(([i, t, d]) => `<div class="xp-rule"><span>${i}</span><div><b>${t}</b><small>${d}</small></div></div>`).join('');

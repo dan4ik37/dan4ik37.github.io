@@ -1,0 +1,54 @@
+# Проверки сайта на каждый push в main и на каждый pull request (T-016, docs/OPS.md).
+# Что делает: ставит Node 24 и три пакета для проверок (three@0.149.0, Rapier, PGlite — вне репозитория), запускает `node scripts/ci-run.cjs`
+# (около 55 быстрых проверок без браузера: разбор всех файлов, адреса и страницы, вход, возраст, платежи, игры, движок, мониторинг ошибок,
+# SQL ops.sql, скрипт резервных копий). Итог — зелёная галочка / красный крестик у коммита и сводка на странице запуска.
+# Важно:
+#  • По умолчанию Vercel выкладывает push в main сразу и этих проверок НЕ ждёт — красный крестик означает «разберись» (откат — прежний
+#    коммит). Чтобы Vercel держал выкладку до зелёного результата, есть его «Deployment Checks» (Project → Settings → Build and Deployment →
+#    Deployment Checks → GitHub → задание «Site tests (Windows, Node 24)»); без решения владельца не включено, подробности — docs/OPS.md.
+#    Имя задания ниже (name: Site tests …) — это «паспорт» проверки для Vercel: переименуешь — придётся выбрать заново.
+#  • Репозиторий ОТКРЫТЫЙ: журналы и файлы запусков видит любой. Поэтому здесь нет секретов, а резервные копии базы НИКОГДА не
+#    делаются и не выкладываются через Actions (копии — на компьютере владельца: docs/BACKUPS.md).
+#  • Windows, а не Linux, потому что все проверки писались и проходят на Windows (владелец, ПК агентов); Chrome-проверки (--e2e) здесь не
+#    запускаются. Лимит — 15 минут на запуск (сейчас около 2–6).
+name: Проверки сайта
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  tests:
+    name: Site tests (Windows, Node 24)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI_STRICT: '1'
+      CI_PAR: '3'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Поставить пакеты для проверок (вне репозитория)
+        run: |
+          mkdir -p "$RUNNER_TEMP/deps" "$RUNNER_TEMP/d37-tmp"
+          npm install --prefix "$RUNNER_TEMP/deps" --no-save --no-audit --no-fund --ignore-scripts three@0.149.0 @dimforge/rapier3d-compat@0.19.3 @electric-sql/pglite@0.5.8
+          echo "DEPS_DIR=$RUNNER_TEMP/deps" >> "$GITHUB_ENV"
+          echo "D37_TMP=$RUNNER_TEMP/d37-tmp" >> "$GITHUB_ENV"
+      - name: Проверки сайта
+        run: node scripts/ci-run.cjs

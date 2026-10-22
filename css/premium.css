@@ -1909,6 +1909,64 @@ body.low .wd-tile.rev,body.low .wd-row.shake{animation:none}
 .dq-done{font-size:.74rem;color:#22c55e;font-weight:700;white-space:nowrap}
 @media(max-width:560px){.dq{flex-wrap:wrap}.dq-btn,.dq-done{margin-left:auto}}
 
+/* Сезонный путь и задания недели (js/features/games.js → renderQuests, renderProfileQuests; games-more.sql). --sc — цвет темы сезона */
+.sq{--sc:#ffd166;margin-bottom:1.2rem;padding:1rem 1.1rem;border-radius:16px;background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(155,109,255,.07));
+  border:1px solid rgba(255,255,255,.12);border-color:color-mix(in srgb,var(--sc) 45%,transparent);min-width:0}
+.sq[hidden]{display:none}
+.sq.sq-w{--sc:#7dd3fc}
+.sq-in{margin-bottom:.7rem;padding:.75rem .85rem}
+.sq-h{display:flex;align-items:center;gap:.75rem}
+.sq-ic{font-size:1.7rem;line-height:1}
+.sq-t{display:flex;flex-direction:column;gap:.12rem;flex:1;min-width:0}
+.sq-t b{font-size:.7rem;letter-spacing:1px;text-transform:uppercase;color:var(--sc)}
+.sq-t small,.sq-sub{font-size:.66rem;color:var(--muted)}
+.sq-sub{margin-top:.35rem}
+.sq-sub a,.sq-how a,.sq-more a{color:var(--sc)}
+.sq-lv{font-size:.72rem;color:var(--muted);white-space:nowrap}
+.sq-lv b{font-size:1.05rem;color:var(--text)}
+.sq-bar,.sq-pb{display:block;height:8px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:.6rem}
+.sq-bar i,.sq-pb i{display:block;height:100%;border-radius:inherit;background:var(--sc);min-width:2px}
+.sq-path{display:flex;gap:.35rem;overflow-x:auto;overscroll-behavior-x:contain;padding:.6rem 0 .35rem;margin-top:.2rem;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.22) transparent}
+.sq-path::-webkit-scrollbar{height:5px}.sq-path::-webkit-scrollbar-track{background:transparent}.sq-path::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:9px}
+@media(pointer:coarse){.sq-path{scrollbar-width:none}.sq-path::-webkit-scrollbar{display:none}}
+.sq-c{flex:0 0 auto;width:46px;display:flex;flex-direction:column;align-items:center;gap:.05rem;padding:.3rem 0;border-radius:10px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);opacity:.6;font-size:1.05rem;line-height:1.2}
+.sq-c::before{content:attr(data-lv);font-size:.56rem;line-height:1.4;color:var(--muted)}
+.sq-c small{font-size:.58rem;color:#ffd166;font-weight:700}
+.sq-c.big{border-color:rgba(255,255,255,.2)}
+.sq-c.ready{opacity:1;border-color:var(--sc);box-shadow:0 0 0 1px var(--sc) inset}
+.sq-c.got{opacity:1;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.45)}
+.sq-c.got::before{content:attr(data-lv) ' ✓';color:#22c55e}
+.sq-f{display:flex;flex-wrap:wrap;align-items:flex-start;gap:.5rem;margin-top:.55rem}
+.sq-how{flex:1 1 100%;font-size:.7rem;color:var(--muted)}
+.sq-how summary{cursor:pointer;color:var(--text);font-weight:700;padding:.2rem 0}
+.sq-how ul{margin:.3rem 0 0 1.1rem;padding:0;display:grid;gap:.2rem}
+.sq-picks{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;margin:.45rem 0}
+.sq-picks span{flex:1 1 100%;font-size:.66rem}
+.sq-pick{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.04);color:var(--text);border-radius:99px;padding:.35rem .7rem;
+  font:600 .7rem 'Montserrat',sans-serif;cursor:pointer;min-height:32px}
+.sq-pick.on{border-color:var(--sc);background:rgba(255,255,255,.1)}
+.sq-list{list-style:none;margin:.65rem 0 0;padding:0;display:grid;gap:.45rem}
+.sq-q{display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem;border-radius:12px;background:rgba(255,255,255,.035)}
+.sq-q.ready{background:rgba(255,209,102,.1)}
+.sq-q.ok{opacity:.7}
+.sq-qi{font-size:1.2rem;width:1.6rem;text-align:center}
+.sq-qb{flex:1;min-width:0;font-size:.74rem;display:flex;flex-direction:column;gap:.15rem}
+.sq-qb .sq-pb{margin-top:.15rem;height:6px}
+.sq-qb small{font-size:.62rem;color:var(--muted)}
+.sq-more{text-align:right}
+@media(max-width:560px){.sq{padding:.85rem .8rem}.sq-q{flex-wrap:wrap}.sq-q .dq-btn,.sq-q .dq-done{margin-left:auto}.sq-c{width:42px}}
+/* Рамка сезона на аватаре (надевает игрок; data-ss — тема, season_themes в games-more.sql) — вместо рамки уровня, как «Посол» */
+.lv-frame-ss{position:relative;outline:3px solid var(--ssc,#ffd166);outline-offset:5px;filter:drop-shadow(0 0 9px rgba(255,255,255,.22))}
+.lv-frame-ss::after{content:var(--sse,'🏆');position:absolute;right:-6px;bottom:-6px;font-size:1.05rem;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+.profile-avatar-glow.lv-frame-ss{outline-color:var(--ssc,#ffd166)!important}
+.lv-frame-ss[data-ss="jan"]{--ssc:#7dd3fc;--sse:'🐧'}.lv-frame-ss[data-ss="feb"]{--ssc:#93c5fd;--sse:'🧊'}
+.lv-frame-ss[data-ss="mar"]{--ssc:#f472b6;--sse:'🌷'}.lv-frame-ss[data-ss="apr"]{--ssc:#38bdf8;--sse:'💧'}
+.lv-frame-ss[data-ss="may"]{--ssc:#facc15;--sse:'🐝'}.lv-frame-ss[data-ss="jun"]{--ssc:#4ade80;--sse:'🍉'}
+.lv-frame-ss[data-ss="jul"]{--ssc:#22d3ee;--sse:'🐢'}.lv-frame-ss[data-ss="aug"]{--ssc:#a78bfa;--sse:'🌠'}
+.lv-frame-ss[data-ss="sep"]{--ssc:#fb923c;--sse:'📚'}.lv-frame-ss[data-ss="oct"]{--ssc:#f97316;--sse:'🎃'}
+.lv-frame-ss[data-ss="nov"]{--ssc:#d97706;--sse:'☂️'}.lv-frame-ss[data-ss="dec"]{--ssc:#ef4444;--sse:'🎁'}
+
 /* ⚔️ Соревнование (js/games/versus.js) */
 .vs-bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.6rem;margin-bottom:.8rem;padding:.7rem .9rem;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--border)}
 .vs-side{display:flex;flex-direction:column;align-items:center;gap:.1rem;min-width:0}

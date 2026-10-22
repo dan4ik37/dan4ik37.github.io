@@ -319,7 +319,7 @@
     }
     const turnName = names[P.turn];
     const practiceTag = practice ? '<span class="gk-prac" title="Были отмены ходов — победа без XP и рекорда">🎓 тренировка</span>' : '';
-    let statusTxt = over ? (over.result === 'draw' ? `🤝 Ничья: ${over.why}` : `🏆 ${over.why === 'мат' ? 'Мат!' : ''} Победили ${over.result === 'w' ? 'белые' : 'чёрные'} (${esc(names[over.result])})`) + practiceTag
+    let statusTxt = over ? (over.result === 'draw' ? `🤝 Ничья: ${esc(over.why)}` : `🏆 ${over.why === 'мат' ? 'Мат!' : ''} Победили ${over.result === 'w' ? 'белые' : 'чёрные'} (${esc(names[over.result])})`) + practiceTag
       : pend ? `Ход ${esc(san(P, pend))} — подтверди: «✅ Сходить» или нажми клетку ещё раз`
       : sentMv ? '⏳ Ход отправлен…'
       : `${inCheck(P, P.turn) ? '⚠️ Шах! ' : ''}${myTurn() ? (vs === 'duo' ? `Ходят ${P.turn === 'w' ? 'белые' : 'чёрные'}` : '🟢 Твой ход') : `⏳ Ходит ${esc(turnName)}…`}`;
@@ -338,7 +338,7 @@
         <div class="ch-board${flip ? ' flip' : ''}">${cells.join('')}</div>
         <div class="ch-pl"><b>${esc(names[flip ? 'b' : 'w'])}</b><span class="ch-lost">${lost(flip ? capB : capW, flip ? 'b' : 'w')}</span></div>
         <div class="un-status">${statusTxt}</div>
-        <div class="ch-moves">${hist.map((s, i) => i % 2 ? `${s} ` : `<b>${i / 2 + 1}.</b> ${s} `).join('')}</div>
+        <div class="ch-moves">${hist.map((s, i) => i % 2 ? `${esc(s)} ` : `<b>${i / 2 + 1}.</b> ${esc(s)} `).join('')}</div>
         <div class="un-acts">${acts}</div>
         ${pendingPromo ? `<div class="ch-promo"><div>Во что превратить пешку?</div><div>${'qrbn'.split('').map(q => `<button type="button" data-act="promo:${q}" aria-label="${NAME[q]}">${piece(q, P.turn === 'w' ? 'w' : 'b')}</button>`).join('')}</div><button type="button" class="un-btn ch-promo-back" data-act="unpromo">← Назад — другой ход</button></div>` : ''}
       </div>`;

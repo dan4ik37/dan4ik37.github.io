@@ -6,7 +6,8 @@
 // Раз в секунду: C.tick → фаза праздника: 'pre' — отсчёт (только Новый год: последние 10 с), 'burst' — салют (первые минуты),
 // 'day' — открыл сайт в праздник — поздравление один раз за день. Торжественные (стиль calm) — только поздравление.
 // API: D37Celebrate.show(id | праздник, { big }), fireworks(n, стиль), confetti(n, стиль), countdown(сек), stop(), decor(id) →
-// крючки украшений; onAdventDone(день, задание) — крючок награды (сейчас только браузер; SQL — потом, docs/SEASONS.md §9).
+// крючки украшений; onAdventDone(день, задание) — крючок для своих дел; награду за день забирает сам (advent_claim в games-more.sql:
+// раз за день, проверка на сервере; 20 дней — ⛄; ADVENT ↔ advent_task, scripts/economy-test.cjs сверяет; docs/SEASONS.md §9).
 // Холст поверх всего (z 100250: выше полного экрана игр и «Студии 3D», ниже окон ⚙️ и телефона), нажатия проходят сквозь.
 // «Экономный» режим и prefers-reduced-motion — меньше частиц, без вспышек. ⚙️ «Праздники» выкл — ни салюта, ни поздравлений.
 // Новогоднее задание: карточка .cel-adv (над HUD игры; свернуть можно, убрать нельзя), на главной — полоса .cel-ban; задание
@@ -102,6 +103,7 @@ html.gs-full .cel-adv{--cel-top:8px}
 .cel-adv-t{margin:5px 0}.cel-adv.ok .cel-adv-t{color:#7cf29c}
 .cel-adv-f{display:flex;align-items:center;gap:6px;min-height:18px}.cel-adv-f i{display:block;height:6px;border-radius:3px;background:linear-gradient(90deg,#4cc9f0,#7cf29c);min-width:4px;max-width:150px;flex:none}.cel-adv-f small{opacity:.8}
 .cel-adv-w{margin-left:auto;border:0;background:#ffd23f;color:#1b1b2f;border-radius:8px;padding:2px 8px;font-weight:800;cursor:pointer}
+.cel-adv-s{margin-left:auto;white-space:nowrap;color:#ffd23f}.cel-adv-w+.cel-adv-s{margin-left:0}
 .cel-adv.done{pointer-events:none;display:flex;flex-direction:column}
 body.cel-ban-on .cel-adv{display:none}
 .cel-ban{margin:10px auto 0;max-width:1100px;width:calc(100% - 32px);box-sizing:border-box;padding:10px 16px;border-radius:14px;background:linear-gradient(90deg,rgba(76,201,240,.18),rgba(199,125,255,.18));border:1px solid rgba(147,197,253,.35);display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline}
@@ -278,6 +280,7 @@ body.cel-ban-on .cel-adv{display:none}
     subH = C().on('holiday', onHoliday);
     second();
     timer = setInterval(second, 1000);
+    setTimeout(srvSync, 4000);   // декабрь: награды за сделанное без входа (после входа — ещё раз, d37:auth)
   }
 
   // ═══ Новогоднее задание ═══
@@ -289,9 +292,69 @@ body.cel-ban-on .cel-adv{display:none}
     adv.done[day] = Date.now(); lsSet('d37_advent', adv);
     confetti(70, 'light'); snd('crackle', .3);
     toast(`🎁 Задание дня выполнено! ${Object.keys(adv.done).length} из 31`);
+    srvClaim(day, true);   // награда с сервера (вошёл); гостю — подсказка войти
     try { API.onAdventDone?.(day, ADVENT[day - 1], how); } catch (e) {}
     advRender(true);
   }
+  // ═══ Награды с сервера (games-more.sql: advent_claim / advent_state; T-024). Раз за каждый день; день задания — местный, сервер
+  //     принимает соседний день по МСК. Что сервер видит (сыграл, победил, игра, чат) — полная награда, остальное — маленькая;
+  //     20 дней из 31 — ⛄ «Снеговик» (питомец навсегда) и монеты. Прогресс в браузере (d37_advent) — как был: сделанное без входа
+  //     (сегодня и вчера) заберётся после входа (srvSync) ═══
+  const sbc = () => { try { return typeof sbClient !== 'undefined' && sbClient && typeof currentUser !== 'undefined' && currentUser ? sbClient : null; } catch (e) { return null; } };   // eslint-disable-line no-undef
+  const noFn = e => e && (e.code === 'PGRST202' || /Could not find the function/i.test(e.message || ''));
+  let srv = null, srvOff = false, srvBusy = null, srvGuestHint = false;   // srv: { uid, year, days: Set, total, big, need }
+  function srvLoad(force){
+    const sb = sbc();
+    if (!sb || srvOff) return Promise.resolve(null);
+    const uid = currentUser.id;   // eslint-disable-line no-undef
+    if (srv && !force && srv.uid === uid) return Promise.resolve(srv);
+    if (srvBusy) return srvBusy;
+    srvBusy = (async () => {
+      try {
+        const { data, error } = await sb.rpc('advent_state');
+        if (error) { if (noFn(error)) srvOff = true; return null; }
+        srv = data?.on && data.auth ? { uid, year: data.year, days: new Set((data.days || []).map(x => x.d)), total: data.total || 0, big: !!data.big, need: data.need || 20 } : null;
+        return srv;
+      } catch (e) { return null; } finally { srvBusy = null; }
+    })();
+    return srvBusy;
+  }
+  const CLAIM_MSG = { new: '🎄 Новогодние награды — со второго дня в аккаунте' };
+  async function srvClaim(day, fresh){
+    const sb = sbc();
+    if (!sb) { if (fresh && !srvGuestHint) { srvGuestHint = true; setTimeout(() => toast('🔑 Войди — и за новогоднее задание будут монеты и ⛄'), 2900); } return null; }
+    if (srvOff) return null;
+    const s = await srvLoad();
+    if (s && s.days.has(day)) return null;
+    try {
+      const { data, error } = await sb.rpc('advent_claim', { p_day: day });
+      if (error) { if (noFn(error)) srvOff = true; return null; }
+      if (data?.ok) {
+        if (srv) { srv.days.add(day); srv.total = data.total; if (data.big) srv.big = true; }
+        const msg = data.big ? `⛄ ${data.total} дней — «Снеговик» твой! За день: +${data.coins} 🪙${data.xp ? ` · +${data.xp} XP` : ''}`
+          : `🎁 Награда за день ${day}: +${data.coins} 🪙${data.xp ? ` · +${data.xp} XP` : ''}`;
+        setTimeout(() => toast(msg), fresh ? 2900 : 0);
+        try { root.D37Coins?.sync?.(); } catch (e) {}
+        advRender(true);
+      } else if (data?.reason === 'claimed') { if (srv) srv.days.add(day); }
+      else if (fresh && CLAIM_MSG[data?.reason]) setTimeout(() => toast(CLAIM_MSG[data.reason]), 2900);
+      return data;
+    } catch (e) { return null; }
+  }
+  // при входе и при открытии сайта: забрать сделанное без входа или не дошедшее (сегодня и вчера по местному)
+  async function srvSync(){
+    const c = C();
+    if (!c || !sbc() || srvOff) return;
+    const A = c.advent(Date.now());
+    if (!A) return;
+    if (!adv || adv.y !== A.year) adv = advLoad(A.year);
+    const s = await srvLoad(true);
+    if (!s) return;
+    for (const d of [A.day - 1, A.day]) if (d >= 1 && adv.done[d] && !s.days.has(d)) await srvClaim(d, false);
+    advRender(true);
+  }
+  const srvLine = () => !sbc() ? '<small class="cel-adv-s">🔑 войди — награды</small>'
+    : srv ? `<small class="cel-adv-s" title="Дней с наградой; ${srv.need} — питомец «Снеговик»">${srv.big ? '⛄ ✓' : `⛄ ${Math.min(srv.total, srv.need)}/${srv.need}`}</small>` : '';
   // проверка «сделано ли» по событию
   function advCheck(ev, d = {}){
     const c = C(); if (!c) return;
@@ -339,7 +402,7 @@ body.cel-ban-on .cel-adv{display:none}
       ? `<button type="button" class="cel-adv-pill" data-a="col" title="Новогоднее задание — развернуть">🎄 <span data-left>${left}</span>${done ? ' ✓' : ''}</button>`
       : `<div class="cel-adv-h"><b>🎄 До Нового года</b><span data-left>${left}</span><button type="button" class="cel-adv-c" data-a="col" aria-label="Свернуть">▾</button></div>
         <div class="cel-adv-t">${done ? '✅' : t.icon} <span>День ${A.day}: ${esc(t.text)}</span></div>
-        <div class="cel-adv-f"><i style="width:${Math.round(n / 31 * 100)}%"></i><small>${n} из 31</small>${t.kind === 'wish' && !done ? '<button type="button" class="cel-adv-w" data-a="wish">✨ Загадал!</button>' : ''}</div>`;
+        <div class="cel-adv-f"><i style="width:${Math.round(n / 31 * 100)}%"></i><small>${n} из 31</small>${t.kind === 'wish' && !done ? '<button type="button" class="cel-adv-w" data-a="wish">✨ Загадал!</button>' : ''}${srvLine()}</div>`;
   }
   function advTick(now){
     const c = C(); if (!c) return;
@@ -352,6 +415,8 @@ body.cel-ban-on .cel-adv{display:none}
     root.addEventListener('d37:route', () => { advCheck('route', { hash: (root.D37Route ? root.D37Route.hash() : root.location?.hash) || '' }); setTimeout(() => { try { banner(Date.now(), C()?.holidays(Date.now()) || []); } catch (e) {} }, 60); });
     root.addEventListener('d37:chatmsg', e => { const m = e.detail || {}; try { if (typeof currentUser !== 'undefined' && currentUser && m.uid === currentUser.id) advCheck('chat'); } catch (er) {} });   // eslint-disable-line no-undef
     root.addEventListener('d37:advent', e => advCheck('kind', e.detail || {}));
+    // вошёл / вышел — награды с сервера заново (вне декабря srvSync ничего не спрашивает)
+    root.addEventListener('d37:auth', () => { srv = null; setTimeout(srvSync, 1500); });
   }
 
   // ═══ Полоса на главной: праздник сегодня / новогоднее задание ═══
@@ -405,7 +470,7 @@ body.cel-ban-on .cel-adv{display:none}
   const API = root.D37Celebrate = {
     show, fireworks, confetti, countdown, greet, stop(){ auto = null; rockets.length = 0; P.n = 0; card?.remove(); card = null; count?.remove(); count = null; },
     decor: id => (C()?.HOLIDAYS.find(h => h.id === id)?.decor || []).slice(),
-    ADVENT, advent: () => adv, adventCheck: advCheck, onAdventDone: null, toast,
+    ADVENT, advent: () => adv, adventCheck: advCheck, onAdventDone: null, toast, adventServer: () => srv, adventSync: srvSync,
     _test: { STYLE, P, rockets, second, advRender, banner, fmtLeft },
   };
   settingsTab();

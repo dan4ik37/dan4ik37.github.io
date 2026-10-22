@@ -7,7 +7,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = process.argv[2] || path.join(__dirname, '..');
 globalThis.window = globalThis;
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
-for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interior.js', 'js/engine/worldmap.js', 'js/engine/vehicle.js', 'js/engine/vehicle-ground.js', 'js/engine/vehicle-water.js', 'js/engine/vehicle-air.js', 'js/games/mir-zones.js', 'js/games/mir-city.js', 'js/games/mir-war.js', 'js/games/mir-veh.js']) load(f);
+for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interior.js', 'js/engine/worldmap.js', 'js/engine/vehicle.js', 'js/engine/vehicle-ground.js', 'js/engine/vehicle-water.js', 'js/engine/vehicle-air.js', 'js/games/mir-zones.js', 'js/games/mir-econ.js', 'js/games/mir-city.js', 'js/games/mir-war.js', 'js/games/mir-veh.js']) load(f);
 const MZ = globalThis.MirZones, MC = globalThis.MirCity, MW = globalThis.MirWar, E = globalThis.D37E;
 let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL', name, extra === undefined ? '' : JSON.stringify(extra)); } };
@@ -227,7 +227,7 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
 {
   const rnd = (s => () => (s = (s * 16807) % 2147483647) / 2147483647)(7);
   const all = { kids: MC.ROLES_K, metro: MC.ROLES_M };
-  const CARRY = ['bun', 'brick', 'pet', 'med', 'box', 'money', 'food', 'icecream', 'coffee'];
+  const CARRY = Object.keys(MC.CARRY || { bun: 1, brick: 1, pet: 1, med: 1, box: 1, money: 1, food: 1, icecream: 1, coffee: 1 });
   for (const [city, roles] of Object.entries(all)) {
     const spots = MC.spotsOf(city), Z = ZONES[city];
     for (const [role, R] of Object.entries(roles)) {
@@ -553,15 +553,24 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   for (const Z of ZLIST) ok(inRect(C, Math.max(Z.x0, SEA.x1), Z.z0) && inRect(C, Z.x1, Z.z1), `площадка мира включает зону ${Z.id}`);
   ok(inRect(C, RESERVE.x0, RESERVE.z0) && inRect(C, RESERVE.x1, RESERVE.z1), 'площадка мира включает место района участков');
   ok(C.x0 === SEA.x1, 'запад площадки — набережная гавани', [C.x0, SEA.x1]);
-  // внутри — ровно 0 (как было), кроме гавани, бункера и канала
-  const rnd = E.rng(99);
+  // внутри — ровно 0 (как было), кроме гавани, бункера, канала и подвалов военных баз (когда боевая зона построена — CELLAR.on)
+  const rnd = E.rng(99), inCellar = (x, z) => !!MZ.CELLAR?.on && MZ.CELLAR.list.some(c => inRect(c, x, z));
   let flat = true, bad = null;
   for (let k = 0; k < 3000; k++) {
     const x = C.x0 + rnd() * (C.x1 - C.x0), z = C.z0 + rnd() * (C.z1 - C.z0);
-    if (inRect(SEA, x, z) || inRect(BUNKER, x, z) || inRect(MZ.CANAL, x, z)) continue;
+    if (inRect(SEA, x, z) || inRect(BUNKER, x, z) || inRect(MZ.CANAL, x, z) || inCellar(x, z)) continue;
     const h = MZ.terrain(x, z); if (h !== 0) { flat = false; bad = [x, z, h]; break; }
   }
-  ok(flat, 'площадка мира ровная: 0 везде, кроме гавани, бункера и канала', bad);
+  ok(flat, 'площадка мира ровная: 0 везде, кроме гавани, бункера, канала и подвалов баз', bad);
+  // подвалы военных баз: 12 штук, внутри участков, пол ниже земли — только пока лежат плиты (зона построена)
+  if (MZ.CELLAR && MW?.PLOTS) {
+    ok(MZ.CELLAR.list.length === MW.PLOTS.length && MZ.CELLAR.list.every((c, i) => c === MW.PLOTS[i].cellar), 'подвалы баз — те, что у участков (mir-war.js PLOTS)');
+    const c0 = MZ.CELLAR.list[0], mx = (c0.x0 + c0.x1) / 2, mz = (c0.z0 + c0.z1) / 2, was = MZ.CELLAR.on;
+    MZ.CELLAR.on = false; const off = MZ.terrain(mx, mz);
+    MZ.CELLAR.on = true; const on = MZ.terrain(mx, mz);
+    MZ.CELLAR.on = was;
+    ok(off === 0 && on === c0.floor, 'подвал базы: без плиты — ровная земля, с плитой — пол подвала', [off, on]);
+  }
   ok(MZ.terrain((SEA.x0 + SEA.x1) / 2, (SEA.z0 + SEA.z1) / 2) === SEA.floor && MZ.water((SEA.x0 + SEA.x1) / 2, 280) === SEA.wl, 'гавань: дно и вода как были');
   ok(MZ.terrain((BUNKER.x0 + BUNKER.x1) / 2, (BUNKER.z0 + BUNKER.z1) / 2) === BUNKER.floor, 'бункер: пол как был');
   // гавань открыта в океан: от неё на запад — вода до края карты
@@ -646,10 +655,12 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
     }
     ok(MCt.TAXI_STOPS.length >= 6, 'такси: остановок хватает');
   }
-  if (MCt.ROLES_M) {
-    const pays = Object.entries(MCt.ROLES_M).filter(([k, r]) => r.pay > 0).map(([k, r]) => r.pay);
-    ok(MCt.ROLES_M.taxi.pay >= Math.min(...pays) && MCt.ROLES_M.taxi.pay <= Math.max(...pays), 'таксист получает как другие работы города', pays);
-    ok(Object.values(MCt.ROLES_K).every(r => r.pay <= 5), 'детский город: плата — звёздочки (до 5 за задание)');
+  if (MCt.ROLES_M && globalThis.MirEcon) {   // «Живой город» (T-032): зарплата — каталог MirEcon (денки, сервер), не у ролей
+    const P = globalThis.MirEcon.PROFS, wages = Object.values(MCt.ROLES_M).filter(r => r.prof).map(r => P[r.prof].wage);
+    ok(P[MCt.ROLES_M.taxi.prof].wage >= Math.min(...wages) && P[MCt.ROLES_M.taxi.prof].wage <= Math.max(...wages), 'таксист получает как другие работы города', wages);
+    for (const [city, roles] of [['kids', MCt.ROLES_K], ['metro', MCt.ROLES_M]]) for (const [id, r] of Object.entries(roles))
+      ok(r.rp || r.soon || (P[r.prof] && (P[r.prof].cities[city] || []).includes(r.place)), `${city}/${id}: роль — профессия сервера в своём здании (или роль без денег)`, [r.prof, r.place]);
+    ok(Object.values(MCt.ROLES_K).every(r => !r.rp && !r.soon), 'детский город: все роли — настоящие работы (без «понарошку»)');
   }
   // тест-драйв: машина появляется на улице у автосалона, не в здании
   ok(!inB('metro', 182, 125, 2) && Math.min(...MZ.DEFS.metro.streets.flatMap(r => r.pts.slice(1).map((q, i) => MZ.segDist(182, 125, r.pts[i][0], r.pts[i][1], q[0], q[1]) - r.w / 2))) < 6, 'тест-драйв: машина — у дороги перед салоном, не в здании');

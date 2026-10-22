@@ -1036,7 +1036,7 @@
             let b = L.src && L.src.rev === L.pxRev ? L.src.blob : null;
             const mime = b ? L.src.mime : 'image/png';
             if (!b) b = await encodePng(L.canvas);
-            if (!b || !b.size) throw userErr('Не получилось сохранить слой «' + L.name + '»');
+            if (!b || !b.size) throw userErr('Не получилось сохранить слой №' + (layers.length + 1));   // без имени слоя: в нём может быть текст игрока
             Object.assign(o, { adj: s.adj, preset: s.preset, cw: L.canvas.width, ch: L.canvas.height, mime, part: parts.length });
             parts.push(b);
           }

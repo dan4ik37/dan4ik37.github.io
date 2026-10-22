@@ -10,7 +10,7 @@
 const NOTIF_ICON = {
   forum_reply: '💬', mention: '@', friend_request: '🤝', friend_accept: '🤝',
   idea_planned: '💡', idea_done: '🎬', idea_rejected: '💭', idea_votes: '🔥', referral: '🔗',
-  level_up: '⬆️', level_reward: '🎁',
+  level_up: '⬆️', level_reward: '🎁', season: '🏆', advent: '⛄',   // сезонный путь, новогоднее задание (games-more.sql)
   ref_join: '🎉', ref_reward: '🎁', ref_hold: '⏳', ref_bonus: '💎',   // 👥 приглашения (referrals2.sql)
   raid: '⚔️',   // набеги: «на тебя напали» / «отбился» (raids.sql)
   cm_event: '📅', cm_mention: '@', cm_reply: '↩️', cm_report: '🚩', cm_mod: '🛡', cm_boost: '🚀'   // сообщества (community.sql, community.sql)
@@ -145,7 +145,7 @@ async function openNotif(n){
   if (vid && typeof openVid === 'function') openVid(vid[1], (n.body || '').replace(/^«|»$/g, ''), '', '');
   else if (link.startsWith('#')) location.hash = link;
   else if (link.startsWith('/') && !link.startsWith('//') && window.D37Route) D37Route.go(link);   // свой адрес: раздел — без перезагрузки, серверная страница — переходом
-  else if (link) location.href = link;
+  else if (/^https:\/\//i.test(link)) location.href = link;   // чужой/опасный адрес (javascript:, data:) не открываем (T-011)
 }
 
 async function markAllNotifsRead(){
