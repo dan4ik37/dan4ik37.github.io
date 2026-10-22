@@ -11,7 +11,7 @@ Units: engine units **u** (1 m = `E.UNIT` = 1.1667 u). **(M)** = measured by the
 3. Под игроком держится «плоский кусок» (ровно как сейчас в «Мире»), он сам переезжает за игроком — ходьба, прыжки, машины, стройка и погода работают без переделки.
 4. День и ночь — от вращения планеты (у каждого места своё время), времена года — по твоему календарю (зима — декабрь–февраль, ноябрь — осень).
 5. Небо считается «как в жизни» (рассеяние света в воздухе), но дёшево — видно и с орбиты (голубой ореол, луна, звёзды), и с земли, без экранов загрузки.
-6. Образец — скрытая страница /play/planet: с орбиты летишь вниз, садишься и бежишь своим персонажем. На слабом телефоне: 2–8 мс на кадр, до 70 вызовов, 10 минут полёта без ошибок.
+6. Образец — скрытая страница /play/planet: с орбиты летишь вниз, садишься и бежишь своим персонажем. На слабом телефоне: 2–4 мс на кадр, до 73 вызовов, без рывков; 10 минут полёта — без ошибок.
 7. Предлагаю родную планету радиусом ≈ 110 км (облёт на реактивном самолёте ≈ 20 мин, круг по орбите ≈ 8 мин); нынешняя карта «Мира» станет одним краем этой планеты, города останутся.
 8. «Кубомир» — планеты из кубиков как новый тип мира (6 граней-сеток; обычный бесконечный мир остаётся); «Подземье» — мир по кругу + другие планеты на ракете.
 9. Космос — потом: ракета, спутник (после него заработает GPS в телефоне, в пещерах — ретрансляторы), Луна.
@@ -55,15 +55,15 @@ where today's phone fog is (430–640 u). Moons and other planets: 16 000–64 0
 cost almost nothing more to render; they cost travel time.
 
 ### 1.4 Phone budgets (targets for v1 and what the proof measured, §12)
-| Item | Target, phone (412 × 915, ×4 CPU, «средняя») | Proof (M) | Target, PC (high) |
+| Item | Target, phone (412 × 915, ×4 CPU, «средняя») | Proof, phone (M) | Target / proof, PC (1280 × 720, high) |
 |---|---|---|---|
-| Terrain draw calls | ≤ 60 | 17 orbit · 36 avg / 55 max descending · 31–70 on the ground | ≤ 120 |
-| Whole frame CPU (logic + render) | ≤ 16 ms | 1.5 orbit · 2.3 descending · 3.9–7.5 on the ground (p95 2.4–6.2) | ≤ 4 ms |
-| Planet update on the page (selection amortised, queue, integration) | ≤ 1.5 ms | avg 0.03–0.3 ms; selection 1.2–1.7 ms avg, 4–13 ms max (≤ 8 per second) | ≤ 0.5 ms |
-| New chunks integrated per frame | ≤ 2 | 2 (avg 0.13–0.18 ms each) | ≤ 4 |
-| Chunk build in a Worker | ≤ 15 ms | 3.0–3.3 ms avg on PC cores (Chrome does not slow Workers) → ≈ 12–13 ms on a phone | ≤ 4 ms |
-| Chunk cache (GPU + JS copy) | ≤ 260 chunks ≈ 7 MB | 240–255 chunks ≈ 5.4–5.8 MB | ≤ 480 ≈ 13 MB |
-| Memory over a 10-min flight | flat | JS heap 22 → 25 MB, nodes pruned, 0 errors | flat |
+| Draw calls (whole frame; the character ≈ 18, sky + moon + stars 3) | ≤ 60 terrain | 17 orbit · 36 avg / 55 max descending · 64–73 on the ground | ≤ 120 / 21 · 66 · 122–140 |
+| Whole frame CPU (logic + render) | ≤ 16 ms | 1.6 orbit · 2.4 descending · 4.0 on the ground (p95 2.6–6.3, max 26); 0 frames > 50 ms | ≤ 4 ms / 0.3–1.3 (max 3) |
+| Planet update on the page | ≤ 1.5 ms | 0.02–0.14 ms avg (p95 ≤ 0.9); selection 1.2–1.3 ms avg, ≤ 6.4 ms max, ≤ 8 per second | ≤ 0.5 / 0.003–0.03; selection 0.3 |
+| New chunks integrated per frame | ≤ 2 | 2 (0.14–0.17 ms avg each) | ≤ 4 / 4 (0.02 ms) |
+| Chunk build in a Worker | ≤ 15 ms | 2.9–3.1 ms avg, 9 ms max on a PC core (Chrome does not slow Workers) → ≈ 12 ms on a phone | ≤ 4 ms / 3.1–3.4 avg |
+| Chunk cache (GPU + JS copy) | ≤ 260 chunks ≈ 7 MB | 238–254 chunks ≈ 5.4–5.8 MB | ≤ 480 / 436–476 ≈ 9.9–10.8 MB |
+| Memory over a 10-min flight | flat | 0 errors; JS heap 22.1 → 25.6 MB after GC (node objects, pruned); 20-min run in §12 | flat |
 
 ## 2. Module map and API
 
@@ -136,7 +136,7 @@ Later: `PL.orbit` (on-rails Kepler, PL-9), `PL.galaxy(seed)` (stars as data), `P
 - Normals: central differences on the chunk lattice with one extra ring computed beyond the face edge (warp extrapolated), so neighbours agree.
 
 ### 4.2 Selection, balance, stitching, culling (pure, tested in node)
-- Split when `distance(camera, node centre at its sampled height) − half-diagonal < K × node size`, `K` = 1.4 PC / 1.0 phone, merge back at × 1.15
+- Split when `distance(camera, node centre at its sampled height) − half-diagonal < K × node size`, `K` = 1.25 PC / 1.0 phone, merge back at × 1.15
   (hysteresis); max level 12 (3 u spacing, like `worldmap.js` 4 u). Selection runs at most 8 times per second and only if the camera moved more
   than `max(2, 0.05 × height above ground)` or new chunks arrived.
 - Node objects keep links to parent, children and neighbours (no table lookups in the hot path) and are pruned when unused (the node count
@@ -299,30 +299,30 @@ PlanetProfile; air/vacuum, `g`).
 - **Scope**: the Мир adapter must not stall Living City work (T-032…): M1 adds a view around the map without changing city files.
 
 ## 12. Proof (Part B): what was built and the numbers
-**Built** (commits on branch `worktree-agent-a580b564af45ca9d2`): `js/engine/planet.js` (≈ 700 lines), `js/engine/planet-worker.js`,
+**Built** (branch `worktree-agent-a580b564af45ca9d2`): `js/engine/planet.js` (≈ 700 lines), `js/engine/planet-worker.js`,
 `js/engine/planet-view.js` (≈ 650 lines), `js/games/planet-demo.js` (hidden page `/play/planet`: orbit start over a desert coast at 29° N 81° E,
 «⬇ Вниз» auto-descent, «🛬 Сесть» / «✈ Взлететь», «🛰 Орбита», time ×1/×30/×300, phone joystick and buttons, HUD with altitude, speed, place, local
 time, chunks, draw calls, FPS, CPU), `scripts/planet-test.cjs` (83 checks, in `ci-run`), `scripts/planet-perf.cjs` (Chrome: `perf`, `soak N`,
-`reopen N`); `games.js` — one `GAMES_HIDDEN` entry, `GAMES_VER` 121.
+`reopen N`); `games.js` — one `GAMES_HIDDEN` entry, `GAMES_VER` 121; a CLAUDE.md note. Shaders checked on ANGLE D3D11 and SwiftShader.
 
 **Numbers — node** (PC core): height 1.9–2.8 µs; chunk 32 × 32 (with normals ring and skirts) 3.2–4.6 ms; selection + 2:1 + masks at ground level
 0.4–0.9 ms; physics ground sample 0.7–1.5 µs; precision 10 000 km out 1.3e-5 u vs 0.72 u naive; cube-face area ratio 1.41; Chapman error ≤ 12.6 %.
 
-**Numbers — Chrome, phone profile** (412 × 915 × 2, CPU ×4, «средняя», `planet-perf.cjs perf`; the machine was shared with other agents, so the
-long-frame counts are noisy):
-| Stage | FPS (desktop GPU) | CPU per frame avg / p95 / max | Frames > 50 ms | Draw calls avg / max | Triangles | Planet update avg / p95 / max |
+**Numbers — Chrome, phone profile** (412 × 915 × 2, CPU ×4, «средняя», `node scripts/planet-perf.cjs perf`, final code; FPS is on the desktop GPU):
+| Stage | FPS | CPU per frame avg / p95 / max | Frames > 50 ms | Draw calls avg / max | Triangles | Planet update avg / p95 / max |
 |---|---|---|---|---|---|---|
-| Orbit (5 s) | 128 | 1.5 / 2.4 / 6 ms | 0 | 17 / 27 | 22 k | 0.03 / 0.2 / 2.7 ms |
-| Auto descent orbit → ground (≈ 40 s) | 123 | 2.3 / 3.7 / 54 ms | 2 | 36 / 55 | 62 k | 0.13 / 0.8 / 4.3 ms |
-| Standing on the ground (6 s) | 103 | 3.9 / 6.1 / 19 ms | 0 | 64 / 64 | 103 k | 0.02 / 0.2 / 0.2 ms |
-| Running 20 s (new chunks, a rebase) | 54–110 | 5.2–7.5 / 19.7 / 184 ms | 3–42 (runs differ) | 65 / 70 | 105 k | 0.15–0.29 / 1.4 / 13 ms |
-| Fresh descent elsewhere (30 s) | 97 | 3.5 / 6.2 / 31 ms | 4 | 44 / 57 | 77 k | 0.15 / 0.8 / 6.7 ms |
-Chunks: 216–338 shown (PC), 189–226 (phone); built in the Worker 3.0–3.3 ms avg / 17 ms max (unthrottled); integration 0.13–0.18 ms avg;
-selection 1.2–1.7 ms avg / 4–13 ms max; chunk data 5.4–5.8 MB for ≈ 240 cached chunks; whole-page JS heap 22–28 MB.
-**Soak** (10 min, `soak 10`: orbit → descent → landing → running → time ×300 → orbit, 8 places around the planet, ×4 CPU): 0 errors, 0 console
-warnings, ≈ 6 250 chunks built, 25 rebases, JS heap 22.1 → 25.3 MB after GC (nodes are pruned; growth ≈ 0.25 MB per minute traced to node
-objects, bounded by the prune). **Reopen** ×20: Worker count back to 0 after each close, no errors; heap after GC 40–50 MB (site caches, plateau).
-Screenshots: `E:\claude-tmp\t051\shots` (`1-orbit` … `7-time`, `phone-*`).
+| Orbit (5 s) | 128 | 1.6 / 2.6 / 9.7 ms | 0 | 17 / 27 | 22 k | 0.02 / 0.2 / 0.5 ms |
+| Auto descent orbit → ground (≈ 40 s) | 121 | 2.4 / 4.2 / 10.7 ms | 0 | 36 / 55 | 61 k | 0.14 / 0.9 / 6.8 ms |
+| Standing on the ground (6 s) | 99 | 4.0 / 6.3 / 25.8 ms | 0 | 64 / 64 | 103 k | 0.02 / 0.2 / 0.4 ms |
+| Running 20 s (new chunks, a region rebase) | 96 | 4.0 / 6.1 / 16.3 ms | 0 | 65 / 73 | 105 k | 0.09 / 0.3 / 3.1 ms |
+| Fresh descent elsewhere (30 s) | 119 | 2.6 / 4.4 / 16.1 ms | 0 | 42 / 57 | 74 k | 0.10 / 0.5 / 3.4 ms |
+Chunks: 189–226 shown, 238–254 cached (5.4–5.8 MB); Worker build 2.9–3.1 ms avg / 9 ms max (unthrottled, ≈ ×4 on a phone); integration
+0.14–0.17 ms avg; selection 1.2–1.3 ms avg / 6.4 ms max; whole-page JS heap 22–30 MB. Runs made while other agents loaded the machine showed
+3–42 frames > 50 ms in the running stage; quiet runs show none. **PC** (1280 × 720, high, `PC=1`): 0.3–1.3 ms CPU, 21 → 66 → 122–140 draw calls.
+**Soak** (`soak 10`: orbit → descent → landing → running → time ×300 → orbit at 8 places, ×4 CPU, run twice): 0 errors, 0 console warnings,
+≈ 6 250 chunks built, 25 rebases, JS heap after GC 22.1 → 25.6 MB (LOD node objects; the node count is pruned and oscillates 2 600–4 000).
+**Reopen** ×20: the Worker is gone after each close, no errors, heap after GC plateaus at 40–50 MB (site caches).
+Screenshots: `E:\claude-tmp\t051\shots` (`1-orbit` … `7-time`, `phone-*`), SwiftShader — `shots-ss`.
 
 **Not done in the proof** (on purpose): geomorphing (pops are visible during a fast descent), props/trees/rocks, caves, edits and saving, engine
 shadows on terrain, clouds, wave geometry, any game adapter (Мир/Кубомир/Подземье/Студия), rockets/orbits/network; the flight is a free camera, not a
