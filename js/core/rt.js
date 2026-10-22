@@ -143,7 +143,7 @@
   }
   function closeWs(code){
     const ws = N.ws; N.ws = null;
-    clearTimeout(N.probeT); clearInterval(N.pingT); N.pingT = 0; N.pingAt = 0;
+    clearTimeout(N.probeT); clearInterval(N.pingT); N.pingT = 0; N.pingAt = 0; clearTimeout(N.authT); N.authT = 0;
     if (ws) { ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null; try { ws.close(code || 1000); } catch (e) {} }
   }
   const raw = o => { try { N.ws?.send(JSON.stringify(o)); } catch (e) {} };

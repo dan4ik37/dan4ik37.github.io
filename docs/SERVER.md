@@ -243,8 +243,9 @@ session, 6 MB/s total, private/loopback/link-local (169.254.169.254)/CGNAT/doc/m
 
 ### Tests and numbers (22.10.2026, i5-12400F Windows, the machine at ~90–100 % CPU from other work)
 
-- `scripts/rt-test.cjs` — 128 checks, ~45 s: protocol, Phoenix shapes vs real supabase-js 2.117.2 (same file the site loads) and
-  the presence algorithm vs `@supabase/phoenix` Presence on 2400 random steps, limits, fuzz (1500 random frames: 0 internal errors),
+- `scripts/rt-test.cjs` — 129 checks, ~45 s: protocol, Phoenix shapes vs real supabase-js 2.117.2 (same file the site loads) and
+  the presence algorithm vs `@supabase/phoenix` Presence on 2400 random steps, limits, fuzz (1500 random frames + 30 000-deep nesting:
+  0 internal errors),
   resume without loss both ways, a stalled reader (others get everything, server memory +<40 MB for 9 MB sent), JWT (7 bad tokens rejected), watcher (peek, move with `-r`, reconnect), room.js / table.js / IoKit
   through D37RT incl. `?rt=0` move, server killed mid-game, network blip (resumed), «16 KB» proxy, late throttling, slow probe,
   RT_URL empty (0 requests), TURN, 20 join/leave cycles (server 0 rooms/members, client 0 channels/refs, timers not growing).
@@ -253,6 +254,12 @@ session, 6 MB/s total, private/loopback/link-local (169.254.169.254)/CGNAT/doc/m
   delivery p50 38 ms / p90 84 / p99 128 / max 150 ms, delivered 100 %, RSS 70 → 92 MB with 1000 idle sockets (≈ 22 MB per 1000),
   150 MB busy; reconnect storm 500 with resume — all back in 0.1 s, 500 fresh — all back in 0.9 s (152 needed one retry).
   Before the per-tick cork (one write per socket per loop turn) writev took ~45 % of the time and p99 was seconds.
+- Soak, 12 min each: `rt-load-test.cjs --conns 300 --rooms 30 --rate 4 --soak 720` — 8395 room changes, 348 dropped sockets
+  (all resumed), 833 k msgs sent / 8.28 M delivered, 0 errors, 0 internal, p50 16.5 / p99 35.8 ms, CPU 8–17 % of a core, heap
+  9–32 MB and RSS 93–135 MB as a GC sawtooth (back to 93 MB twice — no growth), end: 300 conns / 300 members / 0 zombies.
+  `rt-test.cjs --soak 720` — 4 vm tabs with real supabase-js, game after game, the server killed every 2 min: 2042 games, 40 840 / 40 840
+  moves delivered, client heap 13–21 MB sawtooth (back to 14 after each GC), 0 channels / 0 server members at the end, timers 4 → 1
+  (idle sockets closed), 0 console errors.
 - `scripts/rt-e2e.cjs` (`--e2e`) — 18 checks, ~35 s: two Chrome processes, real Supabase: «Клеточки» host + guest and a
   table.js table through the server; /turn from the page (CORS), `D37RT.ice()`, `window.D37_TURN`; server killed → both tabs on
   Supabase in 2.5–2.9 s, roles kept, no «Нет связи», guest keeps getting snapshots, table seats never dropped below 2, private

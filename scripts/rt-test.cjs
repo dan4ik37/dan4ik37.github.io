@@ -46,9 +46,9 @@ function makeTab(o = {}){
   const listeners = new Map();
   const ctx = {
     console: { log(){}, info(){}, debug(){}, warn: (...a) => { if (!/falling back to REST|heartbeat/i.test(a.join(' '))) errs.push('warn ' + a.map(String).join(' ').slice(0, 200)); }, error: (...a) => errs.push(a.map(x => (x && x.stack) || String(x)).join(' ').slice(0, 300)) },
-    setTimeout: (f, ms, ...a) => { const t = setTimeout(() => { timers.delete(t); f(...a); }, ms); timers.add(t); return t; },
+    setTimeout: (f, ms, ...a) => { const t = setTimeout(() => { timers.delete(t); f(...a); }, ms); if (process.env.TIMER_DEBUG) t.d37 = (new Error().stack || '').split(String.fromCharCode(10)).slice(2, 5).join(' | ') + ' ms=' + ms; timers.add(t); return t; },
     clearTimeout: t => { if (t) { timers.delete(t); clearTimeout(t); } },
-    setInterval: (f, ms, ...a) => { const t = setInterval(f, ms, ...a); timers.add(t); return t; },
+    setInterval: (f, ms, ...a) => { const t = setInterval(f, ms, ...a); if (process.env.TIMER_DEBUG) t.d37 = 'interval ' + (new Error().stack || '').split(String.fromCharCode(10)).slice(2, 5).join(' | ') + ' ms=' + ms; timers.add(t); return t; },
     clearInterval: t => { if (t) { timers.delete(t); clearInterval(t); } },
     queueMicrotask, structuredClone, URL, URLSearchParams, TextEncoder, TextDecoder, AbortController, Headers, Request, Response, Blob, btoa, atob,
     crypto: globalThis.crypto, performance,
@@ -753,24 +753,30 @@ async function clientSoak(P, secs){
   cleanup.push(() => S.kill());
   const tabs = [0, 1, 2, 3].map(() => makeTab({ rtUrl: S.url, sbUrl: P.url }));
   const t0 = Date.now();
-  let rounds = 0, got = 0, want = 0, kills = 0, lastKill = t0, base = null, stuck = 0;
+  let rounds = 0, got = 0, want = 0, kills = 0, lastKill = t0, base = null, stuck = 0, back = null;
   const snaps = [], via = { rt: 0, sb: 0 };
   while (Date.now() - t0 < secs * 1000) {
     const ds = [[0, 1], [2, 3]].map(([x, y], k) => [duel(tabs[x], 'sk' + rounds + 'p' + k, 'a'), duel(tabs[y], 'sk' + rounds + 'p' + k, 'b')]);
     if (!(await until(() => ds.every(([a, b]) => a.room.opp && b.room.opp), 9000))) stuck++;
-    for (const [x, y] of [[0, 1], [2, 3]]) for (const c of tabs[x].RT.stats().chans) via[c.via === 'rt' ? 'rt' : 'sb']++;
+    // раз в 2 минуты сервер падает ПОСРЕДИ партии (ходы ниже уже идут через запасной путь) и возвращается через 10 с
+    if (!back && Date.now() - lastKill > (+process.env.SOAK_KILL_MS || 120000)) {
+      await S.kill(); kills++; lastKill = Date.now();
+      back = sleep(10000).then(async () => { S = await K.startServer(D, env); cleanup.push(() => S.kill()); back = null; });
+    }
     for (const [a, b] of ds) { for (let i = 0; i < 5; i++) { a.room.send({ x: i }); b.room.send({ x: 'b' + i }); } want += 10; }
-    await until(() => ds.every(([a, b]) => a.msgs().length >= 5 && b.msgs().length >= 5), 5000);
+    await until(() => ds.every(([a, b]) => a.msgs().length >= 5 && b.msgs().length >= 5), 12000);
+    for (const [x] of [[0, 1], [2, 3]]) for (const c of tabs[x].RT.stats().chans) via[c.via === 'rt' ? 'rt' : 'sb']++;
     for (const [a, b] of ds) got += Math.min(5, a.msgs().length) + Math.min(5, b.msgs().length);
     for (const [a, b] of ds) { a.room.leave(); b.room.leave(); }
     rounds++;
     if (rounds === 5) base = tabs.map(t => t.timers.size);
     if (rounds % 25 === 0) snaps.push({ s: Math.round((Date.now() - t0) / 1000), heapMb: Math.round(process.memoryUsage().heapUsed / 1048576), timers: tabs.map(t => t.timers.size).join('/'), regs: tabs.map(t => t.RT._test.reg.size).join('/') });
-    if (Date.now() - lastKill > 120000) { await S.kill(); kills++; await sleep(10000); S = await K.startServer(D, env); cleanup.push(() => S.kill()); lastKill = Date.now(); }
     await sleep(250);
   }
-  await sleep(2500);
+  if (back) await back;
+  await sleep(12000);   // временные таймеры supabase-js (ожидание ответа на push — 10 с) истекают сами
   const errs = tabs.flatMap(t => t.errs);
+  if (process.env.TIMER_DEBUG) for (const t of tabs[0].timers) console.log('TIMER', t.d37);
   const regs = tabs.map(t => t.RT._test.reg.size), timers = tabs.map(t => t.timers.size);
   const j = await S.metrics(ADMIN).catch(() => null);
   console.log(JSON.stringify({ secs, rounds, kills, stuck, delivered: `${got}/${want}`, via, snaps, regs, timers, base, server: j && j.counts, errs: errs.slice(0, 5) }));
