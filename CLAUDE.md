@@ -143,6 +143,12 @@
    "no":1,"theme":"nov"); `/rest/v1/season_progress?select=pts&limit=0` → 200 (400 «does not exist» — не применён); `/rpc/advent_claim`
    {"p_day":1} → 401 (только вошедшим). До запуска карточек сезона и заданий недели нет (скрыты), новогоднее задание — без наград.
    PGlite: E:\claude-tmp\quests\test-quests.mjs (на чистой базе дважды — 117, поверх файлов из main с данными — 119, EXPLAIN — 10).
+14. `ops.sql` (НОВЫЙ, 22.10.2026, T-016; от других файлов не зависит) — мониторинг ошибок сайта: ops_err, ops_err_day, ops_quota,
+   ops_err_ingest (только сервер), ops_err_admin / ops_err_act (только админ). Проверка гостем (PGRST202 = не применён):
+   `/rpc/ops_err_admin` {"p_days":7} и `/rpc/ops_err_ingest` {"p_items":[]} → 401, 42501 permission denied for function;
+   `/rest/v1/ops_err?select=k&limit=1` → 401, 42501 permission denied for table. До запуска сайт работает как раньше: браузеры шлют отчёты на
+   /api/diag, сервер тихо отвечает «молчи» (stop), окно «🩺 Ошибки сайта» пишет «выполни ops.sql». PGlite: scripts/ops-sql-test.mjs (73).
+   Ещё владельцу (не SQL): копии базы на ПК — docs/BACKUPS.md (строка подключения, pg_dump, расписание; ключи и пароль вводит только он).
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
@@ -639,6 +645,20 @@ js/features/games.js и хвост css/premium.css.
 - Проверить, что выкатилось: открыть нужный файл по прямой ссылке (например `/css/premium.css`) и найти свежую правку.
 - SQL из `*.sql` сам не применяется — его запускают руками в Supabase SQL Editor. Новые миграции — отдельными
   файлами (как `referrals.sql`, `streaks-achievements.sql`), идемпотентными (`create or replace`, `if not exists`).
+- **Мониторинг, автопроверки, копии (T-016, подробно — docs/OPS.md, для владельца — docs/BACKUPS.md).** Ошибки у посетителей:
+  исходник ОДИН — `api/_lib/errlog.js` (этап 1 в `<head>`: блок между метками errlog:begin/end в index.html и `ERR_HEAD` в page.js; этап 2 —
+  `js/core/errlog.js`). После ЛЮБОЙ правки errlog.js: `node scripts/make-errlog.mjs` (файл и блок генерируются; errlog-test и CI ругаются,
+  если устарели). Отчёты → `POST /api/diag` (api/_lib/routes/diag.js, лимиты, 10 функций из 12) → `ops.sql` → «🩺 Ошибки сайта» в панели
+  админа (js/features/ops-admin.js, грузится по кнопке). Ни ников, id, почты, токенов, адресов с запросом, IP: **в тексте
+  `throw new Error`, `Promise.reject`, `d37Err('где', e)` данных игрока быть не должно** (очистка не поймает свободный текст). Рекламу,
+  Метрику, расширения, «Script error.» этап 1 отсеивает сам. Автопроверки: `node scripts/ci-run.cjs` (локально; `DEPS_DIR` с three,
+  Rapier, PGlite — см. шапку скрипта) = то, что GitHub Actions гоняет на push в main и PR (`.github/workflows/tests.yml`, Windows,
+  ~2 мин); Vercel выкладку НЕ ждёт (по умолчанию) — красный крестик на коммите = разобраться; задержку можно включить в панели Vercel
+  (Deployment Checks → GitHub, по документации Vercel — для всех проектов с GitHub, на Hobby не проверено; решает владелец, docs/OPS.md).
+  Новая проверка — строка в `TESTS` ci-run.cjs (ops-test следит, чтобы новые *-test.cjs не забывали).
+  Тест, который копирует `api/` выборочно, ломается при новом `import` в page.js — копируй всё `api/`. Копии базы: `scripts/backup-db.ps1`
+  → `E:\backups\dan4ik37\ГГГГ-ММ-ДД.sql.gz` (только ПК владельца; репозиторий ОТКРЫТЫЙ — дампы в Actions и в git НИКОГДА; `backup.env` в
+  .gitignore; проверено подменным pg_dump, на живой базе агенты не запускают).
 
 ## Локальный запуск
 `python scripts/serve.py 5500` в корне → `http://localhost:5500/` (как `python -m http.server`, но с заголовками и переадресациями

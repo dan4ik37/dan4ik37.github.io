@@ -460,7 +460,7 @@ function miniEl(){
     await clock.advance(300);
     ok(prv.some(p => p[0] === 'B' && p[1].type === 'hand' && p[1].cards.join() === 'r5,g7'), `table ${delay / 1000} с: личное сообщение (шифр) дошло`, prv);
     const wire = sbA.log.filter(e => e[1] && e[1].type === '_pm');
-    ok(wire.length === 1 && wire[0][1].ct && !JSON.stringify(wire[0][1]).includes('r5'), `table ${delay / 1000} с: в сети — шифр, не открытый текст`, wire);
+    ok(wire.length === 1 && wire[0][1].ct && !JSON.stringify(wire[0][1]).includes('"cards"') && !JSON.stringify(wire[0][1]).includes('"r5"'), `table ${delay / 1000} с: в сети — шифр, не открытый текст`, wire);
     ok(!logA.some(e => e[0] === 'err') && !logB.some(e => e[0] === 'err'), `table ${delay / 1000} с: ошибок нет`);
     tA.leave(); tB.leave();
     await clock.advance(20000);

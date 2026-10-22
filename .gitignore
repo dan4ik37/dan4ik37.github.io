@@ -20,3 +20,14 @@ apps/android/*/*.gradle
 apps/android/*/gradle.properties
 apps/android/*/manifest-checksum.txt
 apps/android/*/store_icon.png
+# Резервные копии базы и настройки к ним (docs/BACKUPS.md, scripts/backup-db.ps1) — НЕ в репозиторий (он открытый!): в копиях почты и хеши
+# паролей людей, в backup.env — пароль базы. Папка копий лежит вне репозитория (E:\backups\dan4ik37), это — страховка на случай ошибки.
+backup.env
+*.env
+.env
+.env.*
+backups/
+*.sql.gz
+*.sql.gz.tmp
+*.sql.tmp
+*.dump

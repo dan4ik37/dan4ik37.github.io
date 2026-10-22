@@ -44,10 +44,11 @@ function headers(extra) {
   return { apikey: key(), Authorization: 'Bearer ' + key(), 'Content-Type': 'application/json', ...extra };
 }
 
-export async function sbRpc(fn, args) {
+// opts — { timeoutMs, retries } для timedFetch (по умолчанию 8 с и один повтор); мониторинг ошибок ждёт не дольше 4 с и не повторяет
+export async function sbRpc(fn, args, opts) {
   const r = await timedFetch(`${baseUrl()}/rest/v1/rpc/${fn}`, {
     method: 'POST', headers: headers(), body: JSON.stringify(args || {}),
-  });
+  }, opts);
   const txt = await r.text();
   if (!r.ok) throw new Error(`rpc ${fn}: HTTP ${r.status} ${txt.slice(0, 200)}`);
   return txt ? JSON.parse(txt) : null;
