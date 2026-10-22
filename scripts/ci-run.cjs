@@ -44,6 +44,7 @@ const TESTS = [
   { f: 'lang-cs-test.cjs', serial: true }, { f: 'lang-java-test.cjs', serial: true }, { f: 'lang-lua-test.cjs', serial: true }, { f: 'lang-wasm-test.cjs', env: { D37_SKIP: 'cpp,rust' } },
   { f: 'studio-support-test.cjs', serial: true },   // T-022a: прочность в «Студии 3D»; Support.* в JS / Lua / C# / Java — ждёт настоящие таймеры
   { f: 'voxel-test.cjs', serial: true, retry: 2 },
+  { f: 'trees-test.cjs', args: ['--fast'], retry: 1 },   // T-022b: движок деревьев — по зерну одинаково, породы, связность, сетка, генератор «Кубомира» v1/v2 как было, v3
   // игры: бот против бота (число партий уменьшено — в CI достаточно)
   { f: 'domino-test.cjs' }, { f: 'fillword-test.cjs' }, { f: 'balda-test.cjs', args: ['300'] }, { f: 'krokodil-test.cjs' },
   { f: 'kletochki-test.cjs' }, { f: 'chervyachki-test.cjs' },

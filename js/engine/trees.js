@@ -171,7 +171,7 @@
           blob(x, y + R * .2, z, R, R * flat, R, S.leaf === 'needles' ? 1 : 0, tone());
           if (S.form === 'willow' && S.hang) {   // пряди ивы: с края облака вниз
             const nh = 3 + floor(r() * 3);
-            for (let h = 0; h < nh; h++) { const a = r() * TAU, rr = R * (.55 + .4 * r()); hang.push(x + sin(a) * rr, y - R * .3, z + cos(a) * rr, between(r, S.hang) * gk, tone()); }
+            for (let h = 0; h < nh; h++) { const a = r() * TAU, rr = R * (.3 + .42 * r()); hang.push(x + sin(a) * rr, y - R * .12, z + cos(a) * rr, between(r, S.hang) * gk + R * .2, tone()); }   // из глубины облака — прядь держится за крону
           }
         }
         const tp = trunk[nT], tr = blobR() * (S.form === 'birch' ? .9 : S.form === 'tropical' ? 1.35 : 1.05);
@@ -277,7 +277,7 @@
     const segs = S.segs, cone = S.form === 'cone';
     // ── ветви и ствол (ствол — не ниже земли; веточки мутовок ели — только хвоя, как у настоящей: снаружи веток не видно) ──
     for (let s = 0; s < segs.length; s += 11) {
-      const ax = segs[s] + off, ay = segs[s + 1], az = segs[s + 2], bx = segs[s + 3] + off, by = segs[s + 4], bz = segs[s + 5];
+      const ax = segs[s] + off, ay = segs[s + 1], az = segs[s + 2] + off, bx = segs[s + 3] + off, by = segs[s + 4], bz = segs[s + 5] + off;
       const ra = segs[s + 6], rb = segs[s + 7], depth = segs[s + 8], kind = segs[s + 9];
       if (cone && depth >= 2) continue;
       const y0 = kind === 0 ? 0 : -GOY;
@@ -301,7 +301,7 @@
     // ── крона: облака (эллипсоиды) с рваным краем; юбки хвои — конусы; пряди — столбики вниз ──
     const bl = S.blobs, sd = S.seed;
     for (let b = 0; b < bl.length; b += 8) {
-      const cx = bl[b] + off, cy = bl[b + 1], cz = bl[b + 2], rx = bl[b + 3], ry = bl[b + 4], rz = bl[b + 5], kind = bl[b + 6];
+      const cx = bl[b] + off, cy = bl[b + 1], cz = bl[b + 2] + off, rx = bl[b + 3], ry = bl[b + 4], rz = bl[b + 5], kind = bl[b + 6];
       if (kind === 2) {   // конус: основание на cy, вершина на cy + ry
         for (let y = floor(cy); y <= floor(cy + ry); y++) {
           const f = (y + .5 - cy) / ry; if (f < 0 || f > 1) continue;
@@ -320,7 +320,7 @@
     }
     const hg = S.hang;
     for (let h = 0; h < hg.length; h += 5) {
-      const x = floor(hg[h] + off), z = floor(hg[h + 2]), y0 = floor(hg[h + 1]), n = Math.max(1, Math.round(hg[h + 3]));
+      const x = floor(hg[h] + off), z = floor(hg[h + 2] + off), y0 = floor(hg[h + 1]), n = Math.max(1, Math.round(hg[h + 3]));
       for (let k = 0; k < n; k++) put(x, y0 - k, z, 0, 0);
     }
     // в список (и почистить буфер)

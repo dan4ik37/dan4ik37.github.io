@@ -845,15 +845,40 @@
     };
     X.fellAt = X.fellTree;
     const SAPLING_OF = n => n === 'leaves_jungle' ? 'sapling_jungle' : 'sapling_' + n.slice(7);
+    // Листва падающего куска — своя: та, что ближе (шагами по листве) к брёвнам этого куска, чем к чужим брёвнам рядом (у соседнего
+    // дерева крона не «раздевается»), не дальше 8 шагов (у ели-великана юбки широкие, у ивы пряди длинные). Обход — сразу от всех
+    // брёвен рядом (свои — первыми: ничья — наша). → { cells: брёвна куска и листва [x, y, z, значение, …], n } или null (больше 2400)
+    function ownLeaves(C){
+      const Vx = V(), SK = Vx.supportKey, b = C.box, P = 7, lab = new Map(), q = [], cells = C.cells.slice();
+      let n = C.n;
+      for (let i = 0; i < C.cells.length; i += 4) { lab.set(SK(C.cells[i], C.cells[i + 1], C.cells[i + 2]), 1); q.push(C.cells[i], C.cells[i + 1], C.cells[i + 2], 1, 0); }
+      for (let x = b[0] - P; x <= b[3] + P; x++) for (let z = b[2] - P; z <= b[5] + P; z++) for (let y = Math.max(0, b[1] - 2); y <= Math.min(Vx.H - 1, b[4] + P); y++) {
+        const v = W.raw(x, y, z); if (!(v > 0) || !LOGF[v & 0xfff]) continue;
+        const k = SK(x, y, z); if (lab.has(k)) continue;
+        lab.set(k, 2); q.push(x, y, z, 2, 0);
+      }
+      for (let h = 0; h < q.length; h += 5) {
+        const x = q[h], y = q[h + 1], z = q[h + 2], L = q[h + 3], d = q[h + 4];
+        if (d >= 8) continue;
+        for (let i = 0; i < 6; i++) {
+          const nx = x + (i === 0 ? 1 : i === 1 ? -1 : 0), ny = y + (i === 2 ? 1 : i === 3 ? -1 : 0), nz = z + (i === 4 ? 1 : i === 5 ? -1 : 0), k = SK(nx, ny, nz);
+          if (lab.has(k)) continue;
+          const v = W.raw(nx, ny, nz); if (!(v > 0) || !LEAFF[v & 0xfff]) continue;
+          lab.set(k, L); q.push(nx, ny, nz, L, d + 1);
+          if (L === 1) { cells.push(nx, ny, nz, v); if (++n > 2400) return null; }
+        }
+      }
+      return { cells, n };
+    }
     function fellFrom(x, y, z, sx, sy, sz, P, side){
       const Vx = V(), Tt = Vx.T, up = W.raw(sx, sy, sz);
       if (!(up > 0) || !LOGF[up & 0xfff]) return null;
       const soft = t => !Tt.solid[t] || LEAFF[t] || Tt.liquid[t] || Tt.shape[t] === Vx.SHAPE.cross || Tt.shape[t] === Vx.SHAPE.torch;
       const C = Vx.component(W, [[sx, sy, sz]], { take: v => LOGF[v & 0xfff] === 1, edge: v => (v < 0 ? 2 : v === 0 || soft(v & 0xfff) ? 0 : 2), max: 480 });
       if (!C || C.touch || C.grounded) return null;
-      let thin = 0; const inC = new Set(), seeds = [];
-      for (let i = 0; i < C.cells.length; i += 4) { inC.add(Vx.supportKey(C.cells[i], C.cells[i + 1], C.cells[i + 2])); seeds.push([C.cells[i], C.cells[i + 1], C.cells[i + 2]]); if (THINF[C.cells[i + 3] & 0xfff]) thin++; }
-      const Lf = Vx.component(W, seeds, { take: (v, a, b, c) => LEAFF[v & 0xfff] === 1 || (LOGF[v & 0xfff] === 1 && inC.has(Vx.supportKey(a, b, c))), depth: 5, max: 2400 });
+      let thin = 0;
+      for (let i = 0; i < C.cells.length; i += 4) if (THINF[C.cells[i + 3] & 0xfff]) thin++;
+      const Lf = ownLeaves(C);
       if (!Lf) return null;
       const leaves = Lf.n - C.n;
       if (leaves < 3 && thin < 2) return null;   // голый столб из брёвен — не дерево (сухое дерево узнаётся по тонким веткам)
