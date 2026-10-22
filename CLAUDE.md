@@ -1988,7 +1988,7 @@ js/features/games.js и хвост css/premium.css.
   только боевая зона, событие {k:'fire', x, y, z, r, s, t}, догорело — DS.breakId без рассылки. «Студия 3D» (studio3d-fire.js):
   свойства burn / fire (SAVE), onfire (NET_EXTRA; 9 — вечный), Fire.* в JS / Lua / C# / Java.
 - Откат одной строкой: KubomirFire.ON, PZFire.ON, MirFire.ON, ON в studio3d-fire.js. Проверки: fire-test, podzem-fire-test,
-  mir-fire-test, studio-fire-test, kubomir-hand-test §13; Chrome — kubomir-e2e KB_MODE=fire (KB_FIRE=1 — soak / reopen),
+  mir-fire-test, studio-fire-test, kubomir-hand-test §13; Chrome — kubomir-e2e KB_MODE=fire / firecycle (KB_FIRE=1 — soak / reopen),
   podzem-fire-e2e [perf|look|reopen|soak], studio-fire-e2e, world-perf … fire.
 
 ## Полный экран, «⚙️ Настройки», поворот телефона (js/core/fullscreen.js, js/core/settings.js; агент 15.10.2026)
