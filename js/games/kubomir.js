@@ -276,7 +276,7 @@
     const r = await cloudRows(true);
     if (view !== 'menu' || !sc.isConnected) return;
     if (!r) { bar.textContent = '☁️ Облако сейчас недоступно — миры сохраняются в браузере.'; return; }
-    bar.innerHTML = `<span>☁️ Облако: ${r.used} из ${r.slots} мест · мир до ${C.fmtSize(r.max_bytes || C.RULES.maxBytes)}${r.plus ? ' ✨' : ''}</span>` + (r.full ? '<span class="kb-cfull">☁️ Облако переполнено — сохранение в браузере работает</span>' : '');
+    bar.innerHTML = `<span>☁️ Облако: ${esc(r.used)} из ${esc(r.slots)} мест · мир до ${esc(C.fmtSize(r.max_bytes || C.RULES.maxBytes))}${r.plus ? ' ✨' : ''}</span>` + (r.full ? '<span class="kb-cfull">☁️ Облако переполнено — сохранение в браузере работает</span>' : '');
     cloudAdmin(bar);
     const local = new Set(list.map(w => w.id));
     for (const w of list) {
@@ -290,7 +290,7 @@
     if (!extra.length) { box?.remove(); return; }
     if (!box) { box = document.createElement('div'); box.className = 'kb-cloudonly'; host.insertAdjacentElement('afterend', box); }
     box.innerHTML = `<h4>☁️ В облаке — с других устройств</h4>` + extra.map(x => `<div class="kb-world" data-cw="${esc(x.world)}"><div class="kb-thumb"><span>☁️</span></div>
-        <div class="kb-wi"><b>${esc(x.name || 'Мир')}</b><small>${C.deviceName(x.device)} · ${new Date(x.at).toLocaleString('ru', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${C.fmtSize(x.bytes)} · в игре ${C.fmtTime(x.gt)}</small></div>
+        <div class="kb-wi"><b>${esc(x.name || 'Мир')}</b><small>${esc(C.deviceName(x.device))} · ${esc(new Date(x.at).toLocaleString('ru', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }))} · ${esc(C.fmtSize(x.bytes))} · в игре ${esc(C.fmtTime(x.gt))}</small></div>
         <div class="kb-wb"><button type="button" class="kb-btn primary" data-c="get">⬇ Скачать</button><button type="button" class="kb-btn danger" data-c="del" title="Удалить из облака">🗑</button></div></div>`).join('');
     box.onclick = async e => {
       const b = e.target.closest('[data-c]'), cw = e.target.closest('[data-cw]'); if (!b || !cw) return;
@@ -417,8 +417,8 @@
       const dt = t => new Date(t).toLocaleString('ru', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
       sc.innerHTML = `<div class="kb-menu kb-choice"><h3>☁️ Какую версию оставить?</h3>
         <p class="kb-note">Мир «${esc(w.name)}» меняли и здесь, и на другом устройстве. Оставь одну — другая заменится ею.</p>
-        <div class="kb-chs"><button type="button" class="kb-ch${newer === 'local' ? ' best' : ''}" data-p="local"><b>💻 Эту — из этого браузера</b><small>в игре ${C.fmtTime(lt)} · ${dt(w.played || Date.now())}</small>${newer === 'local' ? '<i>новее по игровому времени</i>' : ''}</button>
-          <button type="button" class="kb-ch${newer === 'cloud' ? ' best' : ''}" data-p="cloud"><b>☁️ Из облака — ${esc(C.deviceName(row.device))}</b><small>в игре ${C.fmtTime(ct)} · ${dt(row.at)}</small>${newer === 'cloud' ? '<i>новее по игровому времени</i>' : ''}</button></div>
+        <div class="kb-chs"><button type="button" class="kb-ch${newer === 'local' ? ' best' : ''}" data-p="local"><b>💻 Эту — из этого браузера</b><small>в игре ${esc(C.fmtTime(lt))} · ${esc(dt(w.played || Date.now()))}</small>${newer === 'local' ? '<i>новее по игровому времени</i>' : ''}</button>
+          <button type="button" class="kb-ch${newer === 'cloud' ? ' best' : ''}" data-p="cloud"><b>☁️ Из облака — ${esc(C.deviceName(row.device))}</b><small>в игре ${esc(C.fmtTime(ct))} · ${esc(dt(row.at))}</small>${newer === 'cloud' ? '<i>новее по игровому времени</i>' : ''}</button></div>
         <p class="kb-note">Не уверен? Сначала нажми «📤» у мира в меню — сохрани файл этой версии.</p>
         <div class="kb-mbtns"><button type="button" class="kb-btn" data-p="">← Назад</button></div></div>`;
       sc.querySelector('.kb-choice').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (!b) return; res(b.dataset.p || null); });
@@ -2183,7 +2183,7 @@
       box.innerHTML = `<div class="kb-panel kb-coop"><div class="kb-ph"><b>👥 ${guest ? 'Мир друга' : 'Играть вместе'}</b><button type="button" class="kb-x" data-c="x" aria-label="Закрыть">✕</button></div>
         ${N ? `${guest ? `<p class="kb-note">Мир у хозяина: он сохраняет мир и твои вещи. Связь: ${modeTxt(N.mode())}.</p>` : `<p class="kb-note">Отправь ссылку друзьям — зайдут в этот мир (до ${window.KubomirCoop.MAX - 1} человек). Ссылка работает, пока ты в мире; их вещи — их, мир сохраняешь ты.</p>
           <div class="ct-link kb-clink"><input readonly value="${esc(link)}"><button type="button" class="kb-btn" data-c="copy">📋 Копировать</button>${navigator.share ? '<button type="button" class="kb-btn" data-c="share">📤</button>' : ''}</div>`}
-          <div class="kb-plist">${list.map(p => `<div class="kb-pl"><span>${p.host ? '👑' : p.me ? '🙂' : '👤'} ${esc(p.nick)}${p.me ? ' (ты)' : ''}${p.ko ? ' · 💫' : ''}</span><small>${p.mode ? modeTxt(p.mode) : ''}</small>${!guest && !p.me ? `<button type="button" class="kb-btn danger" data-k="${p.pid}" title="Выгнать из мира (до новой ссылки не вернётся)">👢</button>` : ''}</div>`).join('')}</div>
+          <div class="kb-plist">${list.map(p => `<div class="kb-pl"><span>${p.host ? '👑' : p.me ? '🙂' : '👤'} ${esc(p.nick)}${p.me ? ' (ты)' : ''}${p.ko ? ' · 💫' : ''}</span><small>${p.mode ? modeTxt(p.mode) : ''}</small>${!guest && !p.me ? `<button type="button" class="kb-btn danger" data-k="${esc(p.pid)}" title="Выгнать из мира (до новой ссылки не вернётся)">👢</button>` : ''}</div>`).join('')}</div>
           <div class="kb-mbtns">${guest ? '<button type="button" class="kb-btn danger" data-c="leave">🚪 Выйти из мира друга</button>' : '<button type="button" class="kb-btn" data-c="new" title="Старая ссылка перестанет работать, все выйдут">🔄 Новая ссылка</button><button type="button" class="kb-btn danger" data-c="stop">⛔ Закрыть мир для друзей</button>'}</div>`
         : '<p class="kb-note">Мир закрыт для друзей.</p>'}</div>`;
     };

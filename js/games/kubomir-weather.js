@@ -144,6 +144,7 @@ if ( d37IZ > 0.0 ) {
   }
   float d37ik = d37IZ * smoothstep( 0.5, 0.9, vLt.x ) * ( 1.0 - d37h );
   diffuseColor = vec4( mix( diffuseColor.rgb, d37ic, d37ik ), mix( diffuseColor.a, 0.97, d37ik ) );
+  d37IceK = d37ik;   // шейдер воды (voxel-render.js): подо льдом — без волн, пены и прозрачности по глубине
 }
 #endif
 #include <emissivemap_fragment>`);

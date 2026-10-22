@@ -7,64 +7,82 @@
 // строгий у всех, кто внутри. Взрослый: работы с зарплатой — полицейский, кассир банка, продавец, повар, врач, судья, бизнесмен,
 // таксист (с машинами), грабитель (полиция ловит: розыск ⭐, тюрьма, залог); банк, бизнес, автосалон, суд. Без 18+, без
 // алкоголя/наркотиков и без азартных игр (AdSense).
-// Деньги городов — свои, только для игры в городе: ⭐ звёздочки (детский) и 💵 кэш (взрослый), в браузере (localStorage). Настоящие
-// монеты 🪙 — понемногу за работу: MirZones.payTask → D37Coins.run('rp') (сервер режет: coin_run_cap('rp') = 10, 600 в день).
-// Работа: щит «🧰 Работа» → роль (форма над человечком у всех — поле zx.r) → задания по шагам: метка над целью, «[E] …» (держать),
-// в руках — что несёшь (zx.a = 'carry'). Дома: «Сделать своим» (на время визита, zx.hs) — кровать, диван, кухня.
-// Сеть: только zx в 'st' и редкие 'z' (арест, лечение игрока) — всё проверяет тот, кого касается (хоста в мире нет).
+// Деньги — ДЕНКИ 💵 «Живого города» (22.10.2026, T-032; js/games/mir-econ.js + city.sql): один кошелёк на оба города, на сервере;
+// гость или пока city.sql не выполнен — «🧪 пробные» в этом браузере (MirEcon.api.mode). Работа: щит «🧰 Работа» → роль (форма над
+// человечком у всех — поле zx.r) = профессия сервера (prof) в здании (place) → city_act('job') выдаёт номер задания → шаги задания
+// (метка над целью, «[E] …» держать, в руках — что несёшь, zx.a = 'carry'; цели — от номера: после перезагрузки то же задание) →
+// TaskRunner сдаёт работу (city_act('task')), не раньше минимального времени — зарплата, навык ★, усталость и лимиты решает сервер.
+// Роли без денег (РП): грабитель, судья, семья, питомцы; «бизнесмен» — скоро (P7). Монеты 🪙 за работу — как раньше:
+// MirZones.payTask → D37Coins.run('rp') (сервер режет: coin_run_cap('rp') = 10, 600 в день). Еда в магазинах — за денки, бонус к зарплате.
+// Общая стройка: этап — от сервера (city_public: site), у всех одинаковый; сменился — строитель шлёт 'z' {k:'cty'} (не чаще раза в минуту).
+// Сеть: только zx в 'st' и редкие 'z' (арест, лечение игрока, город) — всё проверяет тот, кого касается (хоста в мире нет).
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const MZ = root.MirZones; if (!MZ) return;
-  const PI = Math.PI, esc = MZ.esc;
+  const PI = Math.PI;
+  // свои экранировщик и числа (не MZ.esc / MirEcon.fmt) — scripts/xss-scan.cjs видит, что в разметку попадает безопасное
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const num = v => Number(v) || 0;
+  const fmtN = n => Math.floor(Number(n) || 0).toLocaleString('ru-RU');
+  const fmt100 = n => { const v = Math.floor(Number(n) || 0); return Math.floor(v / 100).toString() + (v % 100 ? ',' + (v % 100).toString().padStart(2, '0') : ''); };
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const now = () => (root.performance ? root.performance.now() : Date.now());
 
-  // ═══ Деньги города (в браузере): kids — ⭐, metro — 💵 ═══
-  const WALLET = { kids: { key: 'd37_mir_kids', icon: '⭐', name: 'звёздочек', start: 5 }, metro: { key: 'd37_mir_metro', icon: '💵', name: 'кэша', start: 100 } };
-  function wallet(city){
-    const W = WALLET[city];
-    let s = null;
-    try { s = JSON.parse(root.localStorage?.getItem(W.key) || 'null'); } catch (e) {}
-    if (!s || typeof s !== 'object') s = {};
-    s.cash = Number.isFinite(s.cash) ? Math.max(0, Math.min(1e7, Math.floor(s.cash))) : W.start;
-    s.bank = Number.isFinite(s.bank) ? Math.max(0, Math.min(1e7, Math.floor(s.bank))) : 0;
-    s.inv = s.inv && typeof s.inv === 'object' ? s.inv : {};
-    s.biz = Array.isArray(s.biz) ? s.biz.filter(b => typeof b === 'string').slice(0, 3) : [];
-    return s;
-  }
-  const walletSave = (city, s) => { try { root.localStorage?.setItem(WALLET[city].key, JSON.stringify(s)); } catch (e) {} };
-
-  // ═══ Роли (работы): значок, форма (шапка и жилет), город, оплата за задание ═══
+  // ═══ Роли (форма у всех — zx.r): prof + place — профессия сервера (MirEcon.PROFS) и здание; rp — роль без денег; soon — скоро ═══
   const ROLES_K = {
-    baker: { icon: '🥐', name: 'Пекарь', hat: 'chef', vest: '#f8fafc', pay: 3, desc: 'Замеси тесто, испеки булочки и отнеси их жителям.' },
-    fireman: { icon: '🚒', name: 'Пожарный', hat: 'fire', vest: '#dc2626', stripe: 1, pay: 3, desc: 'В городе загорается мусорный бак или костёр — потуши его!' },
-    doctor: { icon: '🩺', name: 'Врач', hat: 'doc', vest: '#f8fafc', pay: 3, desc: 'Осмотри пациента, принеси лекарство — и он здоров. Можно лечить и игроков.' },
-    vet: { icon: '🐾', name: 'Ветеринар', hat: 'vet', vest: '#16a34a', pay: 3, desc: 'Найди приболевшего питомца и вылечи его в клинике.' },
-    builder: { icon: '👷', name: 'Строитель', hat: 'hard', vest: '#f97316', stripe: 1, pay: 3, desc: 'Носи кирпичи на стройку — дом растёт на глазах.' },
-    icecream: { icon: '🍦', name: 'Продавец мороженого', hat: 'chefPink', vest: '#f9a8d4', pay: 2, desc: 'Обслужи покупателей у окошка киоска.' },
+    baker: { icon: '🥐', name: 'Пекарь', hat: 'chef', vest: '#f8fafc', prof: 'cook', place: 'k_bake', desc: 'Возьми муку, замеси тесто, испеки булочки и отнеси жителю.' },
+    icecream: { icon: '🍦', name: 'Продавец мороженого', hat: 'chefPink', vest: '#f9a8d4', prof: 'seller', place: 'k_ice', desc: 'Набери мороженое и отдай покупателю у окошка.' },
+    doctor: { icon: '🩺', name: 'Врач', hat: 'doc', vest: '#f8fafc', prof: 'doctor', place: 'k_hosp', desc: 'Осмотри пациентов и дай лекарство — и они здоровы. Можно лечить и игроков.' },
+    vet: { icon: '🐾', name: 'Ветеринар', hat: 'vet', vest: '#16a34a', prof: 'doctor', place: 'k_hosp', desc: 'Найди приболевшего питомца и вылечи его в клинике.' },
+    fireman: { icon: '🚒', name: 'Пожарный', hat: 'fire', vest: '#dc2626', stripe: 1, prof: 'fire', place: 'k_fire', desc: 'В городке загорается мусорный бак или костёр — потуши его!' },
+    builder: { icon: '👷', name: 'Строитель', hat: 'hard', vest: '#f97316', stripe: 1, prof: 'builder', place: 'k_site', desc: 'Носи кирпичи на стройку — общий дом растёт у всех на глазах.' },
+    teacher: { icon: '📚', name: 'Учитель', hat: 'none', vest: '#7c3aed', prof: 'teacher', place: 'k_school', desc: 'Напиши тему на доске, проверь тетради учеников и объясни урок.' },
+    mech: { icon: '🔧', name: 'Механик', hat: 'cap', vest: '#2563eb', prof: 'mech', place: 'k_play', desc: 'Возьми инструменты и почини качели, горку, карусель.' },
   };
   const ROLES_M = {
-    police: { icon: '👮', name: 'Полицейский', hat: 'police', vest: '#1e3a8a', pay: 40, desc: 'Патрулируй улицы, лови грабителей и отвози их в участок.' },
-    robber: { icon: '🦹', name: 'Грабитель', hat: 'robber', vest: '#111827', stripe: 2, pay: 0, desc: 'Ограбь кассу или банк — и не попадись полиции! Пойманного ждёт тюрьма.' },
-    cashier: { icon: '🏦', name: 'Кассир банка', hat: 'visor', vest: '#166534', pay: 35, desc: 'Обслуживай клиентов банка у окошка.' },
-    seller: { icon: '🛒', name: 'Продавец', hat: 'cap', vest: '#dc2626', pay: 30, desc: 'Работай на кассе супермаркета.' },
-    cook: { icon: '👨‍🍳', name: 'Повар', hat: 'chef', vest: '#f8fafc', pay: 35, desc: 'Готовь заказы в ресторане и подавай гостям.' },
-    medic: { icon: '🚑', name: 'Врач', hat: 'doc', vest: '#f8fafc', pay: 45, desc: 'Лечи пациентов в больнице. Больница — место, где все поправляются.' },
-    judge: { icon: '⚖️', name: 'Судья', hat: 'judge', vest: '#111827', pay: 50, desc: 'Рассматривай дела в суде и выноси приговоры.' },
-    biz: { icon: '💼', name: 'Бизнесмен', hat: 'none', vest: '#334155', pay: 30, desc: 'Купи свой бизнес — он приносит 💵, пока ты в городе. Закупай товар.' },
-    taxi: { icon: '🚕', name: 'Таксист', hat: 'taxi', vest: '#facc15', pay: 40, desc: 'Вози пассажиров по городу на такси.', car: true },
+    police: { icon: '👮', name: 'Полицейский', hat: 'police', vest: '#1e3a8a', prof: 'police', place: 'm_police', desc: 'Патрулируй улицы, лови грабителей и отвози их в участок.' },
+    robber: { icon: '🦹', name: 'Грабитель', hat: 'robber', vest: '#111827', stripe: 2, rp: 1, desc: 'Роль понарошку: ограбь кассу — и не попадись полиции! Денег не даёт.' },
+    cashier: { icon: '🏦', name: 'Кассир банка', hat: 'visor', vest: '#166534', prof: 'seller', place: 'm_bank', desc: 'Прими заявку, принеси деньги из хранилища и выдай клиенту.' },
+    seller: { icon: '🛒', name: 'Продавец', hat: 'cap', vest: '#dc2626', prof: 'seller', place: 'm_shop', desc: 'Возьми товар с полки и пробей на кассе супермаркета.' },
+    cook: { icon: '👨‍🍳', name: 'Повар', hat: 'chef', vest: '#f8fafc', prof: 'cook', place: 'm_rest', desc: 'Готовь заказы в ресторане и подавай гостям.' },
+    medic: { icon: '🚑', name: 'Врач', hat: 'doc', vest: '#f8fafc', prof: 'doctor', place: 'm_hosp', desc: 'Лечи пациентов в больнице. Больница — место, где все поправляются.' },
+    fire_m: { icon: '🚒', name: 'Пожарный', hat: 'fire', vest: '#dc2626', stripe: 1, prof: 'fire', place: 'm_fire', desc: 'Пожар в Большом городе — бери шланг и туши!' },
+    builder_m: { icon: '👷', name: 'Строитель', hat: 'hard', vest: '#f97316', stripe: 1, prof: 'builder', place: 'm_lot1', desc: 'Стройка у пожарной части: носи кирпичи — дом растёт у всех.' },
+    scientist: { icon: '🔬', name: 'Учёный', hat: 'none', vest: '#e2e8f0', prof: 'teacher', place: 'm_city3', desc: 'Возьми пробы в сквере «Сити» и изучи их в лаборатории на площади.' },
+    mech_m: { icon: '🔧', name: 'Механик', hat: 'cap', vest: '#1d4ed8', prof: 'mech', place: 'm_gas', desc: 'Чини машины на заправке.' },
+    taxi: { icon: '🚕', name: 'Таксист', hat: 'taxi', vest: '#facc15', prof: 'driver', place: 'm_taxi', desc: 'Вози пассажиров по городу на такси.', car: true },
+    judge: { icon: '⚖️', name: 'Судья', hat: 'judge', vest: '#111827', rp: 1, desc: 'Роль понарошку: рассматривай дела в суде и выноси приговоры.' },
+    biz: { icon: '💼', name: 'Бизнесмен', hat: 'none', vest: '#334155', soon: 1, desc: 'Свой бизнес — скоро: аренда помещения, товар, выручка.' },
   };
+  // что несёт в руках (zx.w) — значок над человечком
+  const CARRY = { bun: '🥐', brick: '🧱', pet: '🐶', med: '💊', box: '📦', money: '💰', food: '🍲', icecream: '🍦', coffee: '☕', flour: '🌾', tools: '🧰', book: '📓', sample: '🧪' };
 
   // ═══ Точки заданий (одно место: постройка ставит рядом предметы, задания ведут сюда) — [x, y, z] ═══
   const SPOTS = {
     k_teacher: [132, 1.2, -61.2], k_tramp: [168, .6, -48], k_bed0: [194, .8, -61.5], k_bed1: [198, .8, -61.5], k_bed2: [202, .8, -61.5], k_med: [192.6, 1.2, -54],
     k_vettable: [212, 1.3, -58], k_hose: [242.8, 1.2, -50], k_oven: [121.2, 1.2, 2.2], k_dough: [134, 1.1, 1.7], k_icewin: [148, 1.2, -10.2], k_icecounter: [148, 1.2, -7.8],
     k_bricks: [197.4, 1, 19.6], k_site: [205, 1, 24],
+    k_flour: [135.2, 1, -1.5], k_freezer: [146, 1.1, -4.4], k_board: [128.5, 1.4, -63.4], k_desk0: [124, 1, -57.1], k_desk1: [129, 1, -57.1], k_desk2: [135, 1, -57.1], k_desk3: [140, 1, -57.1],
+    k_tools: [147.6, 1, -34], k_atm: [279, 1.2, -46.6],
     m_fount: [182, 1, 146], m_desk: [110, 1.2, 146.6], m_judge: [116, 1.4, 177.4], m_defend: [109, 1.2, 183.2], m_dock: [113.8, 1.2, 241.6], m_teller: [246, 1.2, 149.6],
     m_client: [246, 1.2, 148.6], m_vault: [246, 1.2, 158.4], m_bed0: [238, .8, 179.4], m_bed1: [242, .8, 179.4], m_bed2: [250, .8, 179.4], m_bed3: [254, .8, 179.4],
     m_meds: [236.6, 1.2, 187], m_dealer: [182, 1.2, 116], m_till: [99, 1.2, 228], m_buyer: [99, 1.2, 227], m_stove: [130, 1.2, 240.4], m_fridge: [137.2, 1.2, 241],
     m_biz_coffee: [166, 1.2, 230.6], m_biz_flowers: [182, 1.2, 230.6], m_biz_wash: [198, 1.2, 230.6],
+    m_shelf0: [100, 1, 236.8], m_shelf1: [105, 1, 236.8], m_shelf2: [110, 1, 236.8], m_hose: [310.1, 1.2, 108], m_bricks: [321.4, 1, 117.2], m_site: [329, 1, 111],
+    m_tools: [125.2, 1, 111], m_pump0: [111, 1, 115.4], m_pump1: [119, 1, 115.4], m_sample0: [298, 1, 182.2], m_sample1: [301.5, 1, 191.5], m_sample2: [294.5, 1, 191.5],
+    m_lab0: [293.5, 1, 141.7], m_lab1: [302.5, 1, 141.7],
   };
+  // где чинит механик (детская площадка) и где горит в Большом городе — на тротуарах, не в зданиях (city-test проверяет)
+  const K_FIX = [[166, -61.4, 'качели'], [159.4, -64.2, 'горку'], [161, -43.2, 'карусель'], [168, -45.2, 'батут'], [163.6, -48, 'песочницу']];
+  const M_FIRES = [[166, 135.5], [232, 124.5], [258, 210.5], [190, 199.5], [144, 180], [286, 240], [221, 160], [170, 279.5]];
+  // экономика города (js/games/mir-econ.js): нет файла — работы без денег не запускаются (подсказка), остальное как было
+  const ECON = () => root.MirEcon || null;
+  // еда в кармане → 🎬 «Действия» (id 'food:…', не 'eat:' — то зоны мира сразу играют без сервера)
+  function foodActs(){
+    const E = ECON(); if (!E) return [];
+    return Object.entries(E.api.st?.food || {}).filter(([k, n]) => n > 0 && E.GOODS[k])
+      .map(([k, n]) => ({ id: 'food:' + k, icon: E.GOODS[k].e, name: `${k === 'coffee' || k === 'juice' ? 'Выпить' : 'Съесть'} (${n})`, hint: `+${E.D.goods[k]?.buff?.[0] || 0} % к зарплате` }));
+  }
   const spotsOf = city => { const o = {}; for (const [id, p] of Object.entries(SPOTS)) if (id[0] === city[0]) o[id] = { x: p[0], y: p[1], z: p[2] }; return o; };
 
   // ═══ «Солнечный городок» (детский, 0+): x 110…250, z −80…40 ═══
@@ -121,13 +139,13 @@
     vehicles: [152, 157, 162].map((x, i) => ({ id: 'k_kart' + (i + 1), def: 'kart', x, z: -33.5, yaw: 0, area: 'kids' })),   // рядом, носом к улице (не друг в друга)
     ground: [[200, -24, 180, 8, '#5b6270'], [180, -20, 8, 120, '#5b6270'], [117, -24, 14, 28, '#e7dcc2']],
     actions: rt => {
-      const W = wallet('kids'), L = [
+      const L = [
         { id: 'wave', icon: '👋', name: 'Помахать' }, { id: 'dance', icon: '💃', name: 'Танцевать' }, { id: 'clap', icon: '👏', name: 'Хлопать' },
         { id: 'sit', icon: '🪑', name: 'Сесть' }, { id: 'sleep', icon: '😴', name: 'Спать', hint: 'У кровати: в домах и в больнице' },
         { id: 'call', icon: '📞', name: 'Позвонить маме' }, { id: 'photo', icon: '📸', name: 'Сфоткать' },
       ];
-      for (const k of ['icecream', 'bun', 'apple']) if ((W.inv[k] || 0) > 0) L.push({ id: 'eat:' + k, icon: rt.FOOD[k], name: `Съесть (${W.inv[k]})` });
-      if (rt.zx.pt) L.push({ id: 'k_pet', icon: (PETS[rt.zx.pt] || ['🐾'])[0], name: 'Погладить питомца' }, { id: 'k_feed', icon: '🦴', name: 'Покормить (⭐1)' });
+      L.push(...foodActs());
+      if (rt.zx.pt) L.push({ id: 'k_pet', icon: (PETS[rt.zx.pt] || ['🐾'])[0], name: 'Погладить питомца' }, { id: 'k_feed', icon: '🦴', name: 'Покормить' });
       L.push({ id: 'me', icon: '💬', name: '/me действие' });
       return L;
     },
@@ -170,7 +188,7 @@
     { id: 'm_h2', type: 'apartment', name: 'Дом у канала', x: 258, z: 236, w: 14, d: 14, h: 38.4, wall: '#c4b5fd', style: 'brick' },
     // новые кварталы
     { id: 'm_fire', type: 'public', sub: 'fire', name: 'Пожарная часть', x: 300, z: 113, w: 26, d: 16, h: 6.4, wall: '#fca5a5' },
-    { id: 'm_lot1', type: 'lot', name: 'Свободный участок у пожарной части', x: 327, z: 113, w: 20, d: 14, h: 0 },
+    { id: 'm_lot1', type: 'lot', sub: 'site', name: 'Стройка у пожарной части', x: 327, z: 113, w: 20, d: 14, h: 0 },
     { id: 'm_city1', type: 'office', name: 'Сити-1', x: 298.4, z: 160, w: 22.4, d: 22.4, h: 92.8, style: 'glass', enter: true },
     { id: 'm_city2', type: 'office', name: 'Сити-2', x: 326.4, z: 150, w: 19.2, d: 22.4, h: 70.4, style: 'dark' },
     { id: 'm_city3', type: 'office', name: 'Бизнес-центр «37»', x: 326.4, z: 186, w: 19.2, d: 22.4, h: 48, style: 'office' },
@@ -231,12 +249,12 @@
     skyline: [[182, 316, 6, 6, '#e5e7eb', 96, 6.4], [182, 316, 18, 18, '#cbd5e1', 104, 96], [182, 316, 1.4, 1.4, '#e5e7eb', 140, 104], [312, 300, 19.2, 16, '#0f172a', 140.8, 118.4, 'dark'], [298.4, 160, 16, 16, '#1e3a8a', 108.8, 92.8, 'glass']],
     ground: [[215, 130, 250, 8, '#5b6270'], [215, 205, 250, 8, '#5b6270'], [215, 274, 250, 8, '#5b6270'], [150, 225, 8, 250, '#5b6270'], [215, 225, 8, 250, '#5b6270'], [280, 156, 8, 112, '#5b6270']],
     actions: rt => {
-      const W = wallet('metro'), L = [
+      const L = [
         { id: 'wave', icon: '👋', name: 'Помахать' }, { id: 'dance', icon: '💃', name: 'Танцевать' }, { id: 'clap', icon: '👏', name: 'Аплодировать' },
         { id: 'sit', icon: '🪑', name: 'Сесть' }, { id: 'sleep', icon: '😴', name: 'Спать', hint: 'У кровати: в квартирах и в больнице' },
         { id: 'call', icon: '📞', name: 'Позвонить' }, { id: 'photo', icon: '📸', name: 'Сфоткать' },
       ];
-      for (const k of ['coffee', 'burger', 'pizza', 'soup', 'apple', 'juice']) if ((W.inv[k] || 0) > 0) L.push({ id: 'eat:' + k, icon: rt.FOOD[k] || '🍽️', name: `${k === 'coffee' || k === 'juice' ? 'Выпить' : 'Съесть'} (${W.inv[k]})` });
+      L.push(...foodActs());
       if (rt.zx.r === 'robber' && rt.zx.wn) L.push({ id: 'm_hide', icon: '🫣', name: 'Спрятать лицо' });
       L.push({ id: 'me', icon: '💬', name: '/me действие' });
       return L;
@@ -244,7 +262,7 @@
     *build(K){ yield* buildMetro(K); },
     start: (rt, K) => cityMod(rt, K, 'metro'),
   });
-  MZ.FOOD_EXTRA = { coffee: '☕', burger: '🍔', soup: '🍲', juice: '🧃' };
+  MZ.FOOD_EXTRA = { coffee: '☕', burger: '🍔', soup: '🍲', juice: '🧃', pie: '🥧' };
 
   // ═══ ПОСТРОЙКА: Солнечный городок ═══
   function* buildKids(K){
@@ -314,6 +332,7 @@
     for (let i = 0; i < 4; i++) { const a = i * PI / 2; yield; K.seat(161 + Math.cos(a) * 1.7, .5, -40 + Math.sin(a) * 1.7, -a, { name: 'Сесть на карусель' }); yield; }
     for (const [x, z, yaw] of [[151.5, -42, PI / 2], [151.5, -52, PI / 2], [170.5, -60, -PI / 2]]) K.bench(x, z, yaw); yield;
     for (const [x, z] of [[151, -70], [171, -70], [151, -38], [171, -36]]) K.tree(x, z, .9, 1); yield;
+    K.box(146.6, 0, -34, .9, .55, .5, '#dc2626', { solid: true }); yield; K.part({ s: 'box', x: 146.6, y: .62, z: -34, w: .5, h: .08, d: .12, c: '#111827' }); yield; spot('k_tools'); yield;   // ящик механика
     K.npc({ id: 'k_kid1', name: '🧒 Миша', x: 162, z: -52, yaw: 0, seed: 'misha7', act: 'wander', radius: 6, say: ['Давай кататься с горки! 🛝', 'На батуте можно прыгать высоко-высоко!'] }); yield;
     yield;
     // ── Больница и ветклиника ──
@@ -352,17 +371,19 @@
     K.part({ s: 'box', x: 121.2, y: 1, z: 2.78, w: 1.4, h: .8, d: .04, c: '#ff8a3d', m: 'glow' }); yield;
     spot('k_oven'); yield;
     K.table(134, 2.6, 2.4, 1.2, '#d6a77a'); yield; spot('k_dough'); yield;
+    K.box(136.2, .12, -1.5, .8, .9, .7, '#e7e5e4', { solid: true }); yield; K.part({ s: 'box', x: 136.2, y: 1.1, z: -.6, w: .7, h: .5, d: .5, c: '#d6d3d1' }); yield; spot('k_flour'); yield;   // мука
     K.part({ s: 'ball', x: 134, y: .95, z: 2.6, r: .35, c: '#fef3c7', sy: .5, seg: 12 }); yield;
     for (const [x, z] of [[123, -7.2], [133, -7.2]]) { K.table(x, z, .9, .9, '#f8fafc', .75); yield; K.chair(x - .9, z, PI / 2); yield; K.chair(x + .9, z, -PI / 2); yield; }
     K.npc({ id: 'k_baker', name: '👨‍🍳 Пекарь Булкин', x: 128, z: -2.4, yaw: 180, seed: 'bulkin', say: ['Свежие булочки! 🥐 Всего ⭐1', 'Хочешь печь сам? Стань пекарем на щите «Работа»', 'Тесто любит, когда его месят с любовью'] }); yield;
-    K.item({ x: 128, y: 1.2, z: -5.6, r: 1.2, prompt: () => '🥐 Купить булочку (⭐1)', act: () => K.rt.city?.kids?.buy('bun', 1) }); yield;
+    K.item({ x: 128, y: 1.2, z: -5.6, r: 1.2, prompt: () => '🥐 Пекарня: купить булочку или пирог', act: () => K.rt.city?.kids?.shop('k_bake') }); yield;
     // ── Киоск мороженого ──
     K.building({ id: 'k_ice', x: 148, z: -6, w: 9, d: 7, h: 3.2, wall: '#fbcfe8', trim: '#db2777', roofC: KB('k_ice').roof, floor: '#fce7f3', interior: true,
       doors: [{ side: 'e', at: 1, w: 2 }], windows: [{ side: 'n', at: 0, w: 4, h: 1.2 }], sign: '🍦 Мороженое', signBg: '#db2777' }); yield;
     K.counter(148, -8.6, 4.6, .8, '#f9a8d4', '#ffffff'); yield;
     spot('k_icewin'); yield; spot('k_icecounter'); yield;
+    K.box(146, .12, -3.4, 1.8, 1, .9, '#e0f2fe', { solid: true }); yield; K.part({ s: 'box', x: 146, y: 1.14, z: -3.4, w: 1.7, h: .04, d: .8, m: K.M.glass }); yield; spot('k_freezer'); yield;   // морозильник
     K.npc({ id: 'k_icelady', name: '🍦 Мороженщица', x: 147, z: -7.4, yaw: 180, seed: 'morozh', say: ['Мороженое! Пломбир, шоколадное, клубничное 🍦', 'Всего одна звёздочка ⭐'] }); yield;
-    K.item({ x: 148, y: 1.2, z: -10.4, r: 1.2, prompt: () => '🍦 Купить мороженое (⭐1)', act: () => K.rt.city?.kids?.buy('icecream', 1) }); yield;
+    K.item({ x: 148, y: 1.2, z: -10.4, r: 1.2, prompt: () => '🍦 Купить мороженое', act: () => K.rt.city?.kids?.shop('k_ice') }); yield;
     yield;
     // ── Зоомагазин ──
     K.chunk('pets'); yield;
@@ -428,6 +449,8 @@
       for (const [s, yaw] of [[1, 0], [-1, PI]]) { rp({ s: 'cyl', y: B.h + 3.6, z: -3 + s * 2.52, r: 1.4, h: .1, rx: PI / 2, c: '#f8fafc', seg: 20 }); yield; rp({ s: 'box', y: B.h + 3.9, z: -3 + s * 2.6, w: .12, h: .8, d: .04, c: '#111827' }); yield; rp({ s: 'box', x: .25, y: B.h + 3.6, z: -3 + s * 2.6, w: .6, h: .1, d: .04, c: '#111827', yaw }); yield; }
       K.counter(B.x, B.z - 2, 7, 1, '#b45309', '#fde68a'); yield;
       mayorOffice(K, B.x - 8, B.z - 5, 'kids'); yield;
+      K.box(279, 0, -45.6, .9, 1.9, .6, '#334155', { solid: true }); yield; K.part({ s: 'box', x: 279, y: 1.3, z: -45.92, w: .6, h: .4, d: .02, c: '#22d3ee', m: 'glow' }); yield;   // банкомат
+      K.item({ x: 279, y: 1.2, z: -46.6, r: 1, prompt: () => '🏦 Банк: денки, зарплаты и навыки', act: () => K.rt.city?.kids?.bankPanel() }); yield;
       for (const [x, c] of [[B.x - 11, '#facc15'], [B.x + 11, '#60a5fa']]) { K.cyl(x, 0, B.z + B.d / 2 + 2, .06, 4.5, '#d6d3d1'); yield; K.part({ s: 'box', x: x + .55, y: 4, z: B.z + B.d / 2 + 2, w: 1.1, h: .7, d: .03, c }); yield; }
       K.npc({ id: 'k_mayor', name: '🎩 Мэр городка', x: B.x, z: B.z - 3.2, yaw: 0, seed: 'kidmayor', say: ['Добро пожаловать в ратушу! 🏛️', 'Скоро в городке пройдут выборы мэра 🗳️', 'На свободных участках что-нибудь построим вместе!'] }); yield;
       const F = KB('k_flats'); yield;
@@ -546,7 +569,7 @@
     for (let i = 0; i < 6; i++) K.part({ s: 'box', x: 243 + (i % 3) * .7, y: .32 + Math.floor(i / 3) * .25, z: 160.4, w: .6, h: .22, d: .3, c: '#facc15', metal: .8, rough: .3 }); yield;
     spot('m_vault'); yield;
     K.box(237.2, 0, 141.6, .9, 1.9, .6, '#334155', { solid: true }); yield; K.part({ s: 'box', x: 237.2, y: 1.3, z: 141.28, w: .6, h: .4, d: .02, c: '#22d3ee', m: 'glow' }); yield;
-    K.item({ x: 237.2, y: 1.2, z: 140.6, r: 1, prompt: () => '🏧 Банкомат: положить / снять', act: () => K.rt.city?.metro?.bankPanel() }); yield;
+    K.item({ x: 237.2, y: 1.2, z: 140.6, r: 1, prompt: () => '🏧 Банк: денки, зарплаты и навыки', act: () => K.rt.city?.metro?.bankPanel() }); yield;
     K.npc({ id: 'm_teller', name: '🏦 Кассир Анна', x: 246, z: 153, yaw: 180, seed: 'kassir', say: ['Добро пожаловать в банк! 🏦', 'Положить или снять кэш — в банкомате у входа', 'Хотите работать у нас? Вакансии — в мэрии'] }); yield;
     yield;
     // ── Больница ──
@@ -574,6 +597,8 @@
     K.part({ s: 'box', x: 115, y: 4.6, z: 113, w: 16, h: .4, d: 9, c: roofOf('m_gas') }); yield;
     K.label.sign('⛽ Заправка', 115, 4.6, 117.55, 6, .5, 0, { bg: '#b91c1c', w: 512, h: 64 }); yield;
     for (const x of [111, 119]) { K.box(x, 0, 113, .8, 1.6, .6, '#f8fafc', { solid: true }); yield; K.part({ s: 'box', x, y: 1.3, z: 112.68, w: .5, h: .3, d: .02, c: '#22c55e', m: 'glow' }); yield; }
+    K.box(126.2, 0, 111, 1, .6, .55, '#dc2626', { solid: true }); yield; K.part({ s: 'box', x: 126.2, y: .68, z: 111, w: .55, h: .08, d: .12, c: '#111827' }); yield; spot('m_tools'); yield;   // ящик механика
+    spot('m_pump0'); yield; spot('m_pump1'); yield;
     K.part({ s: 'box', x: 115, y: .03, z: 113, w: 20, h: .02, d: 12, m: M.concrete }); yield;
     yield;
     // ── Супермаркет и ресторан ──
@@ -584,7 +609,8 @@
     K.counter(99, 229, 3, 1, '#15803d', '#dcfce7'); yield; spot('m_till'); yield; spot('m_buyer'); yield;
     K.box(115, .12, 242, 2, 2, 1, '#94a3b8', { solid: true }); yield; spot('m_dock'); yield;
     K.npc({ id: 'm_shopper', name: '🧑 Покупатель', x: 104, z: 236, yaw: 0, seed: 'pokup2', act: 'wander', radius: 4, say: ['Где тут свежий хлеб? 🍞'] }); yield;
-    K.item({ x: 99, y: 1.2, z: 227.6, r: 1.2, prompt: () => '🛒 Купить продукты', act: () => K.rt.city?.metro?.shop('market') }); yield;
+    K.item({ x: 99, y: 1.2, z: 227.6, r: 1.2, prompt: () => '🛒 Купить продукты', act: () => K.rt.city?.metro?.shop('m_shop') }); yield;
+    for (let i = 0; i < 3; i++) { spot('m_shelf' + i); yield; }
     K.building({ id: 'm_rest', x: 131, z: 234, w: 16, d: 18, h: 4.6, wall: '#fee2e2', trim: '#b91c1c', roofC: roofOf('m_rest'), floor: '#c8956a',
       doors: [{ side: 'n', at: 0, w: 2.8 }], windows: [{ side: 'n', at: -5, w: 2.6 }, { side: 'n', at: 5, w: 2.6 }, { side: 'e', at: 2, w: 3 }], sign: '🍝 Ресторан «Вкусно»', signBg: '#b91c1c' }); yield;
     for (const [x, z] of [[127, 229], [135, 229], [127, 234], [135, 234]]) { K.table(x, z, 1.1, 1.1, '#f8fafc', .76); yield; K.chair(x - 1, z, PI / 2, '#7f1d1d'); yield; K.chair(x + 1, z, -PI / 2, '#7f1d1d'); yield; }
@@ -592,7 +618,7 @@
     spot('m_stove'); yield; spot('m_fridge'); yield;
     K.box(137.6, .12, 241.8, 1, 2.2, .9, '#e2e8f0', { solid: true }); yield;
     K.npc({ id: 'm_chef', name: '👨‍🍳 Шеф Марко', x: 133, z: 240.4, yaw: 180, seed: 'marko5', say: ['Паста, пицца, суп — всё свежее! 🍝', 'Поваром можно стать в мэрии'] }); yield;
-    K.item({ x: 131, y: 1.2, z: 227.4, r: 1.2, prompt: () => '🍝 Заказать еду', act: () => K.rt.city?.metro?.shop('rest') }); yield;
+    K.item({ x: 131, y: 1.2, z: 227.4, r: 1.2, prompt: () => '🍝 Заказать еду', act: () => K.rt.city?.metro?.shop('m_rest') }); yield;
     yield;
     // ── Бизнес-центр: три киоска (купить бизнес) ──
     K.chunk('biz'); yield;
@@ -633,9 +659,10 @@
       K.building({ id: 'm_fire', x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, wall: B.wall, trim: '#991b1b', roofC: B.roof, floor: '#9ca3af', floorType: 'concrete', floorM: M.concrete,
         doors: [{ side: 's', at: -7, w: 6, h: 4.2 }, { side: 's', at: 2, w: 6, h: 4.2 }, { side: 's', at: 9.5, w: 2.4 }], windows: [{ side: 'e', at: 0, w: 4 }, { side: 'w', at: 0, w: 4 }, { side: 'n', at: -6, w: 3 }, { side: 'n', at: 6, w: 3 }], sign: '🚒 Пожарная часть', signBg: '#991b1b' }); yield;
       fireTruck(K, B.x - 7, B.z - 1, 0); yield; fireTruck(K, B.x + 2, B.z - 1, 0); yield;
+      spot('m_hose'); yield;
       K.box(B.x + 11, .12, B.z - 5, .3, 2, 2, '#9ca3af', { solid: true }); yield; K.part({ s: 'torus', x: B.x + 10.8, y: 1.3, z: B.z - 5, r: .5, t: .1, yaw: PI / 2, c: '#facc15' }); yield;
       K.npc({ id: 'm_fireman', name: '🚒 Пожарный Сергей', x: B.x + 9, z: B.z + 3, yaw: 180, seed: 'sergey9', say: ['Пожарная часть Большого города! 🚒', 'Скоро и здесь можно будет работать пожарным'] }); yield;
-      lotSign(K, MB('m_lot1')); yield;
+      yield* siteYard(K, MB('m_lot1'), 'm'); yield;
     }
     yield;
     // ── «Сити»: три небоскрёба (в «Сити-1» — холл, лифт на 10 и 20 этаж и на крышу с вертолётной площадкой) ──
@@ -649,11 +676,16 @@
       // площадь «Сити» и сквер с фонтаном
       K.part({ s: 'box', x: 298, y: .03, z: 141, w: 22, h: .03, d: 12, m: M.plaza }); yield;
       K.board(298, 2.4, 136.2, 5, 1.6, PI, '🏙️ «Сити» — деловой квартал', { bg: '#1e3a8a' }); yield; K.box(298, 0, 136.4, .16, 1.6, .16, '#334155', { solid: true }); yield;
+      // лаборатория учёных под открытым небом: два стола с микроскопами
+      for (const x of [293.5, 302.5]) { K.table(x, 140.5, 1.8, .9, '#e2e8f0'); yield; K.part({ s: 'cyl', x: x - .3, y: 1.02, z: 140.5, r: .12, h: .36, c: '#334155' }); yield; K.part({ s: 'box', x: x + .4, y: .9, z: 140.5, w: .5, h: .08, d: .35, c: '#bae6fd' }); yield; }
+      K.label.sign('🔬 Лаборатория «37»', 298, 2.1, 139.2, 4, .7, PI, { bg: '#0f766e', w: 512, h: 90 }); yield;
+      spot('m_lab0'); yield; spot('m_lab1'); yield;
       for (const x of [290, 306]) K.bench(x, 143, PI); yield;
       K.part({ s: 'box', x: 298, y: .03, z: 186, w: 22, h: .03, d: 26, m: M.walk }); yield;
       K.cyl(298, 0, 186, 2.8, .5, '#d6d3d1', { solid: true, seg: 20 }); yield; K.part({ s: 'cyl', x: 298, y: .3, z: 186, r: 2.5, h: .4, seg: 20, m: K.R.water('#38bdf8', { key: 'mzcityfount', fixedColor: true }) }); yield;
       for (const [x, z] of [[290, 178], [306, 178], [290, 194], [306, 194]]) K.tree(x, z, .9, 2); yield;
       for (const [x, z, yaw] of [[293, 186, PI / 2], [303, 186, -PI / 2]]) K.bench(x, z, yaw); yield;
+      for (let i = 0; i < 3; i++) { spot('m_sample' + i); yield; }
     }
     yield;
     // ── Дома с магазинами внизу (аптека, книжный, спортзал) — фасады ──
@@ -854,6 +886,18 @@
     K.flush(); yield;
     K.done = true; yield;
   }
+  // стройка Большого города (строитель, общий этап — от сервера): земля, забор с проходом с юга, кирпичи, кран, щит, прораб
+  function* siteYard(K, B){
+    const { x, z, w, d } = B, M = K.M, spot = id => K.spots[id]; yield;
+    K.part({ s: 'box', x, y: .03, z, w, h: .03, d, m: M.dirt }); yield;
+    const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2; yield;
+    for (const [a1, b1, a2, b2] of [[x0, z0, x1, z0], [x0, z0, x0, z1], [x1, z0, x1, z1], [x0, z1, x - 3, z1], [x + 3, z1, x1, z1]]) K.prefab('fence', { x1: a1, z1: b1, x2: a2, z2: b2, c: '#f59e0b' }); yield;
+    for (let i = 0; i < 9; i++) K.part({ s: 'box', x: 320.6 + (i % 3) * .5, y: .15 + Math.floor(i / 3) * .3, z: 116, w: .45, h: .28, d: .9, c: '#c2410c' }); yield;
+    spot('m_bricks'); yield; spot('m_site'); yield;
+    K.cyl(335, 0, 108.4, .3, 14, '#facc15', { solid: true }); yield; K.part({ s: 'box', x: 331, y: 14, z: 108.4, w: 10, h: .4, d: .4, c: '#facc15' }); yield; K.part({ s: 'cyl', x: 328, y: 12, z: 108.4, r: .02, h: 4, c: '#374151' }); yield;
+    K.board(x - 6, 1.9, z1 + .3, 3.4, 1.3, PI, '🏗️ Стройка', { bg: '#c2410c' }); yield; K.box(x - 6, 0, z1 + .5, .14, 1.2, .14, '#57534e', { solid: true }); yield;
+    K.npc({ id: 'm_foreman', name: '👷 Прораб Степан', x: 322.5, z: 110, yaw: 90, seed: 'prorabm', say: ['Каска — обязательно! ⛑️', 'Носи кирпичи — дом растёт у всех на глазах', 'Строителем можно стать в мэрии'] }); yield;
+  }
   // табличка «Свободный участок» (будущий «градостроитель»: здесь можно будет строить) — забор, земля, щит
   function lotSign(K, B){
     const { x, z, w, d } = B, M = K.M;
@@ -894,7 +938,7 @@
     // фуд-корт: стойки у западной стены, столики под атриумом
     for (const [k, c] of ['#b91c1c', '#ca8a04', '#15803d'].entries()) K.counter(x0 - w / 2 + 1.6, z0 - 6 + k * 6, 1.2, 4, c, '#fef3c7', 0);
     for (const [x, z] of [[x0 - 5, z0 - 3], [x0, z0 - 3], [x0 + 5, z0 - 3], [x0 - 5, z0 + 1], [x0, z0 + 1]]) { K.table(x, z, 1.1, 1.1, '#f8fafc', .76); K.chair(x - 1, z, PI / 2, '#0f766e'); K.chair(x + 1, z, -PI / 2, '#0f766e'); }
-    K.item({ x: x0 - w / 2 + 3, y: 1.2, z: z0, r: 1.6, prompt: () => '🍔 Фуд-корт: купить еду', act: () => K.rt.city?.metro?.shop('food') });
+    K.item({ x: x0 - w / 2 + 3, y: 1.2, z: z0, r: 1.6, prompt: () => '🍔 Фуд-корт: купить еду', act: () => K.rt.city?.metro?.shop('m_mall') });
   }
   function mallFloor2(K, x0, z0, w, d, hx0, hx1, hz0, hz1){
     // кино: экран у западной стены, ряды кресел (можно сесть)
@@ -910,7 +954,7 @@
     // кафе: стойка и столики у северной стены
     K.counter(x0 + 6, z0 - d / 2 + 1.6, 6, 1, '#92400e', '#fde68a');
     for (const x of [x0 - 2, x0 + 2, x0 + 10]) { K.table(x, z0 - d / 2 + 5, 1.1, 1.1, '#f8fafc', .76); K.chair(x - 1, z0 - d / 2 + 5, PI / 2, '#92400e'); K.chair(x + 1, z0 - d / 2 + 5, -PI / 2, '#92400e'); }
-    K.item({ x: x0 + 6, y: 1.2, z: z0 - d / 2 + 2.8, r: 1.4, prompt: () => '☕ Кафе: заказать', act: () => K.rt.city?.metro?.shop('rest') });
+    K.item({ x: x0 + 6, y: 1.2, z: z0 - d / 2 + 2.8, r: 1.4, prompt: () => '☕ Кафе: заказать', act: () => K.rt.city?.metro?.shop('m_mall') });
   }
   // лодочка (пока стоит у стенки канала)
   function boatSmall(K, x, y, z, c){
@@ -931,37 +975,75 @@
   const TAXI_STOPS = [[182, 134, 'площадь у мэрии'], [246, 134, 'банк'], [120, 134, 'полиция'], [280, 180, 'небоскрёбы «Сити»'], [215, 184, 'больница'],
     [230, 209, 'аптека'], [150, 240, 'ресторан у канала'], [247, 278, 'Гранд Отель'], [150, 300, 'ЖК «Солнечный»'], [313, 209, 'торговый центр']];
   // ═══ Задания по ролям (чистая функция — проверяется в node): шаги { text, at (точка), hold (с), act (поза), carry, icon, … } ═══
+  // r — случайность: у работ сервера — от номера задания (MirEcon.rng(n)): после перезагрузки — те же цели
+  const shuffle = (a, r) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   function taskList(role, city, spots, r = Math.random, biz = []){
     const SP = id => spots[id], P3 = (x, z, y = 1) => ({ x, y, z }), pick = a => a[Math.floor(r() * a.length)];
+    const two = n => { const a = Math.floor(r() * n); let b = Math.floor(r() * n); if (b === a) b = (a + 1) % n; return [a, b]; };
     switch (role) {
       case 'baker': { const c = pick(K_CUST); return [
-        { text: 'Замеси тесто', at: SP('k_dough'), hold: 2, act: 'cook', icon: '🥣' },
+        { text: 'Возьми муку на складе', at: SP('k_flour'), hold: 1, icon: '🌾' },
+        { text: 'Замеси тесто', at: SP('k_dough'), hold: 2, act: 'cook', icon: '🥣', carry: 'flour' },
         { text: 'Испеки булочки в печи', at: SP('k_oven'), hold: 3, act: 'cook', icon: '🔥', fx: 'oven' },
         { text: 'Отнеси булочки жителю', at: P3(c[0], c[1]), carry: 'bun', icon: '🙋', cust: true, done: 'Спасибо, вкусно!' }]; }
-      case 'fireman': { const f = pick(K_FIRES); return [
-        { text: 'Возьми шланг в пожарной части', at: SP('k_hose'), hold: 1, icon: '🧯' },
-        { text: 'Пожар! Беги и потуши его (держи E)', at: P3(f[0], f[1]), hold: 3.2, act: 'hose', icon: '🔥', fire: true, done: 'Огонь потушен! 🚒' }]; }
-      case 'doctor': case 'medic': { const i = Math.floor(r() * (city === 'kids' ? 3 : 4)), bed = SP((city === 'kids' ? 'k_bed' : 'm_bed') + i); return [
-        { text: 'Осмотри пациента', at: bed, hold: 2, act: 'heal', icon: '🤒', patient: true },
-        { text: 'Возьми лекарство в шкафу', at: SP(city === 'kids' ? 'k_med' : 'm_meds'), hold: 1, icon: '💊', carry: 'med' },
-        { text: 'Дай лекарство пациенту', at: bed, hold: 1.5, act: 'heal', icon: '🤒', patient: true, done: 'Пациент здоров! ✨' }]; }
+      case 'icecream': { const L = []; for (let i = 0; i < 3; i++) L.push(
+        { text: `Набери мороженое (${i + 1}/3)`, at: SP('k_freezer'), hold: 2.5, act: 'cook', icon: '🍨' },
+        { text: `Отдай мороженое покупателю (${i + 1}/3)`, at: SP('k_icecounter'), hold: 1, icon: '🙋', carry: 'icecream', cust2: SP('k_icewin'), done: i === 2 ? 'Все покупатели довольны! 🍦' : '' }); return L; }
+      case 'fireman': case 'fire_m': { const f = pick(city === 'kids' ? K_FIRES : M_FIRES), h = SP(city === 'kids' ? 'k_hose' : 'm_hose'); return [
+        { text: 'Возьми шланг в пожарной части', at: h, hold: 1, icon: '🧯' },
+        { text: 'Пожар! Беги и потуши его (держи E)', at: P3(f[0], f[1]), hold: 3.2, act: 'hose', icon: '🔥', fire: true },
+        { text: 'Верни шланг в пожарную часть', at: h, hold: .8, icon: '🧯', done: 'Огонь потушен! 🚒' }]; }
+      case 'doctor': case 'medic': { const kids = city === 'kids', med = SP(kids ? 'k_med' : 'm_meds'), L = [];
+        two(kids ? 3 : 4).forEach((i, k) => { const bed = SP((kids ? 'k_bed' : 'm_bed') + i); L.push(
+          { text: `Осмотри пациента (${k + 1}/2)`, at: bed, hold: 2.5, act: 'heal', icon: '🤒', patient: true },
+          { text: `Возьми лекарство в шкафу (${k + 1}/2)`, at: med, hold: 1.2, icon: '💊' },
+          { text: `Дай лекарство пациенту (${k + 1}/2)`, at: bed, hold: 1.5, act: 'heal', icon: '🤒', carry: 'med', patient: true, done: k ? 'Пациенты здоровы! ✨' : '' }); });
+        return L; }
       case 'vet': { const p = pick(K_PETS); return [
         { text: 'Найди приболевшего питомца', at: P3(p[0], p[1], .5), hold: 1, icon: '🐶', sick: true },
         { text: 'Отнеси питомца в ветклинику', at: SP('k_vettable'), hold: 2.5, act: 'heal', icon: '🩹', carry: 'pet', done: 'Питомец здоров и весел! 🐾' }]; }
-      case 'builder': { const L = []; for (let i = 0; i < 3; i++) L.push({ text: `Возьми кирпичи (${i + 1}/3)`, at: SP('k_bricks'), hold: .8, icon: '🧱' }, { text: `Положи кирпичи на стройку (${i + 1}/3)`, at: SP('k_site'), hold: 1, act: 'fix', icon: '🏗️', carry: 'brick', site: i === 2 }); return L; }
-      case 'icecream': { const L = []; for (let i = 0; i < 3; i++) L.push({ text: `Обслужи покупателя (${i + 1}/3)`, at: SP('k_icecounter'), hold: 1.5, icon: '🙋', act: 'cook', cust2: SP('k_icewin') }); return L; }
+      case 'builder': case 'builder_m': { const kids = city === 'kids', b = SP(kids ? 'k_bricks' : 'm_bricks'), s = SP(kids ? 'k_site' : 'm_site'), L = [];
+        for (let i = 0; i < 4; i++) L.push({ text: `Возьми кирпичи (${i + 1}/4)`, at: b, hold: 1, icon: '🧱' },
+          { text: `Положи кирпичи на стройку (${i + 1}/4)`, at: s, hold: 1.2, act: 'fix', icon: '🏗️', carry: 'brick', done: i === 3 ? 'Стройка растёт! 🏗️' : '' });
+        return L; }
+      case 'teacher': { const L = [{ text: 'Напиши тему урока на доске', at: SP('k_board'), hold: 2.5, act: 'fix', icon: '✏️' }];
+        shuffle([0, 1, 2, 3], r).forEach((i, k) => { const d = SP('k_desk' + i); L.push({ text: `Проверь тетрадь ученика (${k + 1}/4)`, at: d, hold: 1.5, act: 'heal', icon: '📓', cust2: d && P3(d.x, d.z + 1.9, .6), custE: '🧒' }); });
+        L.push({ text: 'Объясни ответы у доски', at: SP('k_board'), hold: 2, act: 'fix', icon: '👩‍🏫', done: 'Урок окончен — все поняли! 📚' });
+        return L; }
+      case 'scientist': { const [a, b] = two(3); return [
+        { text: 'Возьми пробу воздуха в сквере «Сити» (1/2)', at: SP('m_sample' + a), hold: 2, act: 'heal', icon: '🧪' },
+        { text: 'Возьми вторую пробу (2/2)', at: SP('m_sample' + b), hold: 2, act: 'heal', icon: '🧪', carry: 'sample' },
+        { text: 'Изучи пробы под микроскопом на площади «Сити»', at: SP('m_lab0'), hold: 3, act: 'cook', icon: '🔬', carry: 'sample' },
+        { text: 'Запиши открытие в журнал', at: SP('m_lab1'), hold: 1.5, act: 'cook', icon: '📒', done: 'Открытие! Город гордится тобой 🔬' }]; }
+      case 'mech': { const [a, b] = two(K_FIX.length), t = SP('k_tools'); return [
+        { text: 'Возьми ящик с инструментами', at: t, hold: 1, icon: '🧰' },
+        { text: `Почини ${K_FIX[a][2]} (держи E)`, at: P3(K_FIX[a][0], K_FIX[a][1]), hold: 3, act: 'fix', icon: '🔧', carry: 'tools' },
+        { text: `Почини ${K_FIX[b][2]} (держи E)`, at: P3(K_FIX[b][0], K_FIX[b][1]), hold: 3, act: 'fix', icon: '🔧', carry: 'tools' },
+        { text: 'Верни инструменты на место', at: t, hold: .8, icon: '🧰', carry: 'tools', done: 'Площадка как новая! 🔧' }]; }
+      case 'mech_m': { const [a, b] = two(2), t = SP('m_tools'); return [
+        { text: 'Возьми инструменты', at: t, hold: 1, icon: '🧰' },
+        { text: 'Почини машину у колонки (держи E)', at: SP('m_pump' + a), hold: 3, act: 'fix', icon: '🔧', carry: 'tools', cust: true, custE: '🚗' },
+        { text: 'Почини вторую машину (держи E)', at: SP('m_pump' + b), hold: 3, act: 'fix', icon: '🔧', carry: 'tools', cust: true, custE: '🚙' },
+        { text: 'Верни инструменты', at: t, hold: .8, icon: '🧰', carry: 'tools', done: 'Машины как новые! 🔧' }]; }
       case 'police': {
-        if (r() < .5) { const L = [[130, 125], [205, 140], [232, 200], [160, 212], [100, 200]].sort(() => r() - .5).slice(0, 3); return L.map((p, i) => ({ text: `Патруль: дойди до точки ${i + 1}/3`, at: P3(p[0], p[1]), icon: '🚨', walk: true })); }
+        if (r() < .5) { const L = shuffle([[130, 125], [205, 140], [232, 200], [160, 212], [100, 200]], r).slice(0, 3); return L.map((p, i) => ({ text: `Патруль: дойди до точки ${i + 1}/3`, at: P3(p[0], p[1]), icon: '🚨', walk: true })); }
         const s = pick([[99, 227, 'в супермаркете'], [166, 224, 'у кофейни'], [131, 226, 'у ресторана']]);
         return [{ text: `Ограбление ${s[2]}! Задержи грабителя (держи E)`, at: P3(s[0], s[1]), hold: 1.6, icon: '🦹', robber: true, done: 'Грабитель задержан! 👮' }]; }
       case 'robber': { const o = r() < .25 ? ['Взломай хранилище банка! (держи E)', 'm_vault', 6] : r() < .5 ? ['Ограбь кассу кофейни (держи E)', 'm_biz_coffee', 3] : ['Ограбь кассу супермаркета (держи E)', 'm_till', 3];
         return [{ text: o[0], at: SP(o[1]), hold: o[2], icon: '💰', rob: 1 }]; }
-      case 'cashier': { const L = []; for (let i = 0; i < 3; i++) L.push({ text: `Обслужи клиента банка (${i + 1}/3)`, at: SP('m_teller'), hold: 1.5, icon: '🙋', act: 'cook', cust2: SP('m_client') }); return L; }
-      case 'seller': { const L = []; for (let i = 0; i < 3; i++) L.push({ text: `Пробей покупки (${i + 1}/3)`, at: SP('m_till'), hold: 1.5, icon: '🛒', act: 'cook', cust2: SP('m_buyer') }); return L; }
-      case 'cook': { const t = pick([[127, 229], [135, 229], [127, 234], [135, 234]]); return [
-        { text: 'Возьми продукты из холодильника', at: SP('m_fridge'), hold: 1, icon: '🥩' },
-        { text: 'Приготовь блюдо на плите', at: SP('m_stove'), hold: 3, act: 'cook', icon: '🍳', carry: 'food' },
-        { text: 'Подай блюдо гостю', at: P3(t[0], t[1]), hold: .8, icon: '🙋', carry: 'food', cust: true, done: 'Гость доволен! ⭐⭐⭐⭐⭐' }]; }
+      case 'cashier': { const L = []; for (let i = 0; i < 2; i++) L.push(
+        { text: `Прими заявку клиента (${i + 1}/2)`, at: SP('m_teller'), hold: 1.2, icon: '🙋', act: 'cook', cust2: SP('m_client') },
+        { text: `Возьми деньги в хранилище (${i + 1}/2)`, at: SP('m_vault'), hold: 1.5, icon: '💰' },
+        { text: `Выдай деньги клиенту (${i + 1}/2)`, at: SP('m_teller'), hold: 1, icon: '🙋', act: 'cook', carry: 'money', cust2: SP('m_client'), done: i ? 'Клиенты довольны! 🏦' : '' }); return L; }
+      case 'seller': { const L = []; for (let i = 0; i < 3; i++) L.push(
+        { text: `Возьми товар с полки (${i + 1}/3)`, at: SP('m_shelf' + Math.floor(r() * 3)), hold: 1, icon: '📦' },
+        { text: `Пробей покупку на кассе (${i + 1}/3)`, at: SP('m_till'), hold: 1.8, icon: '🛒', act: 'cook', carry: 'box', cust2: SP('m_buyer'), done: i === 2 ? 'Очередь пуста — отлично! 🛒' : '' }); return L; }
+      case 'cook': { const T4 = [[127, 229], [135, 229], [127, 234], [135, 234]], L = [];
+        two(4).forEach((t, k) => L.push(
+          { text: `Возьми продукты из холодильника (${k + 1}/2)`, at: SP('m_fridge'), hold: 1, icon: '🥩' },
+          { text: `Приготовь блюдо на плите (${k + 1}/2)`, at: SP('m_stove'), hold: 3, act: 'cook', icon: '🍳', carry: 'food' },
+          { text: `Подай блюдо гостю (${k + 1}/2)`, at: P3(T4[t][0], T4[t][1]), hold: .8, icon: '🙋', carry: 'food', cust: true, done: k ? 'Гости довольны! ⭐⭐⭐⭐⭐' : '' }));
+        return L; }
       case 'judge': return [{ text: 'Подсудимый ждёт: займи место судьи', at: SP('m_judge'), hold: 1.5, icon: '⚖️', trial: true }];
       case 'biz': { if (!biz.length) return [{ text: 'Купи бизнес в бизнес-центре (киоски на юге)', at: P3(182, 224), icon: '💼', walk: true, nobiz: true }];
         const b = pick(biz); return [{ text: 'Закупи товар на складе супермаркета', at: SP('m_dock'), hold: 1.2, icon: '📦' }, { text: 'Привези товар в свой бизнес', at: SP('m_biz_' + b), hold: 1.2, icon: '💼', carry: 'box', done: 'Полки полные — продажи растут! 📈' }]; }
@@ -975,22 +1057,48 @@
     }
     return null;
   }
+  // какую роль показать для работы сервера (врач и ветеринар — одна профессия в одном здании: запомненный выбор)
+  function roleFor(job, city){
+    const R = city === 'kids' ? ROLES_K : ROLES_M;
+    let mem = null; try { mem = JSON.parse(root.localStorage?.getItem('d37_city_role') || 'null'); } catch (e) {}
+    const want = mem && mem[job.prof + '@' + job.place];
+    if (want && R[want] && R[want].prof === job.prof && R[want].place === job.place) return want;
+    return Object.keys(R).find(id => R[id].prof === job.prof && R[id].place === job.place) || null;
+  }
+  function rememberRole(id, R0){
+    try { const m = JSON.parse(root.localStorage?.getItem('d37_city_role') || '{}') || {}; m[R0.prof + '@' + R0.place] = id; root.localStorage?.setItem('d37_city_role', JSON.stringify(m)); } catch (e) {}
+  }
+  // этап общей стройки: 0 — пусто, 1 — фундамент, 2–3 — стены, 4 — крыша (детали склеены в одну сетку)
+  function siteParts(n){
+    const L = [];
+    if (n >= 1) L.push({ s: 'box', y: .25, w: 8, h: .5, d: 6, c: '#9ca3af' });
+    if (n >= 2) for (const [x, z, w, d] of [[0, -3, 8, .4], [0, 3, 8, .4], [-4, 0, .4, 6], [4, 0, .4, 6]]) L.push({ s: 'box', x, z, y: .5 + (n >= 3 ? 1.2 : .6), w, h: n >= 3 ? 2.4 : 1.2, d, c: '#c2410c' });
+    if (n >= 4) L.push({ s: 'box', y: 3.2, w: 8.6, h: .3, d: 6.6, c: '#7c2d12' });
+    return L;
+  }
 
   // ═══ ИГРА В ГОРОДЕ: щиты, роли, задания, магазины, дома, полиция и грабители ═══
   function cityMod(rt, K, city){
-    const S = rt.S, R = rt.R, T = rt.T, ph = rt.ph, X = rt.X, Z = MZ.ZONES[city];
-    const ROLES = city === 'kids' ? ROLES_K : ROLES_M, W0 = WALLET[city];
+    const S = rt.S, R = rt.R, T = rt.T, X = rt.X, Z = MZ.ZONES[city];
+    const ROLES = city === 'kids' ? ROLES_K : ROLES_M;
     const H = rt.H, toast = rt.toast;
+    const E = ECON(), A = E ? E.api : null;
     rt.city = rt.city || {};
-    rt.CARRY = Object.assign(rt.CARRY || {}, { bun: '🥐', brick: '🧱', pet: '🐶', med: '💊', box: '📦', money: '💰', food: '🍲', icecream: '🍦', coffee: '☕' });
+    rt.CARRY = Object.assign(rt.CARRY || {}, CARRY);
     Object.assign(rt.FOOD, MZ.FOOD_EXTRA);
-    const C = { city, K, job: null, step: 0, task: null, marker: null, fires: [], cust: null, pet: null, petT: 0, wantedT: 0, prisonT: 0, bizT: 0, holdOn: false };
-    const W = () => wallet(city);
-    const earn = (n, why) => { const s = W(); s.cash += n; walletSave(city, s); drawWallet(); if (n) toast(`${W0.icon} +${n}${why ? ' — ' + why : ''}`, true); };
-    const spend = n => { const s = W(); if (s.cash < n) { toast(`Не хватает ${W0.name}: нужно ${W0.icon}${n}`, false); return false; } s.cash -= n; walletSave(city, s); drawWallet(); return true; };
-    // кошелёк города — слева сверху, пока ты в городе
+    const C = { city, K, job: null, step: 0, task: null, srv: false, fin: null, fires: [], cust: null, wantedT: 0, prisonT: 0, here: false, pubT: 0, ctyT: 0, leftT: 0, siteN: null, stopped: false };
+    const fmt = fmtN;
+    // «сдать работу»: не раньше минимального времени задания (MirEcon.TaskRunner, шаги логики 1/60 с)
+    C.run = E ? E.TaskRunner({ clock: () => A.clock(), send: n => A.act('task', { n }), after: r => { if (!C.stopped) onTask(r); } }) : null;
+    // кошелёк — слева сверху, пока ты в городе (💵 — открыть 🏦 Банк)
     const wEl = document.createElement('div'); wEl.className = 'mz-wallet'; wEl.hidden = true; rt.hud.appendChild(wEl);
-    function drawWallet(){ const s = W(); wEl.innerHTML = `<span>${W0.icon} ${s.cash.toLocaleString('ru')}</span>${city === 'metro' && s.bank ? `<span>🏦 ${s.bank.toLocaleString('ru')}</span>` : ''}${rt.zx.r && ROLES[rt.zx.r] ? `<span>${ROLES[rt.zx.r].icon} ${esc(ROLES[rt.zx.r].name)}</span>` : ''}`; }
+    function drawWallet(){
+      const R0 = ROLES[rt.zx.r];
+      if (!A) { wEl.innerHTML = R0 ? `<span>${R0.icon} ${esc(R0.name)}</span>` : ''; return; }
+      const st = A.st, sk = R0?.prof ? E.ui.skill(A.D, st, R0.prof) : null, bf = num(E.Rules.buffP(A.D, st, A.clock())), rr = num(E.ui.rate(A.D, city, A.pub[city]));
+      C.rateShown = rr;
+      wEl.innerHTML = `<button type="button" class="mz-wbank" data-mz="c:${city}:bank" title="🏦 Банк: денки, зарплаты, навыки">💵 ${fmt(st.cash)}${A.mode === 'server' ? '' : ' <em title="пробные — только в этом браузере">🧪</em>'}</button>${R0 ? `<span>${R0.icon} ${esc(R0.name)}${sk ? ` <em class="mz-stars">${'★'.repeat(sk.L + 1)}</em>` : ''}</span>` : ''}${bf ? `<span>🍽 +${bf} %</span>` : ''}${rr < 100 ? `<span title="Казна города бедная — зарплаты у всех ниже">📉 ставка ${rr} %</span>` : ''}`;
+    }
     const inCity = () => MZ.inRect(Z, S.P.ch.x, S.P.ch.z, 2);
     // ── метка цели задания: светящееся кольцо + значок (один объект на город) ──
     const mk = new T.Group(); mk.visible = false; R.scene.add(mk);
@@ -1006,24 +1114,57 @@
       jobItem = X.add({ x: p.x, y: (p.y ?? 1) + .2, z: p.z, r: 1.3, hold: hold || 0, prompt: () => prompt, act: () => act() });
     }
     const SP = id => K.spots[id];
-    const tasksFor = role => taskList(role, city, K.spots, Math.random, W().biz);
-    // ── работа: начать, шаг, конец ──
-    function setJob(role){
+    const tasksFor = (role, r) => taskList(role, city, K.spots, r || Math.random, []);
+    // ── работа: выбрать (сервер выдаёт номер задания), шаг, сдать ──
+    async function setJob(role, quiet){
       if (role && !ROLES[role]) return;
+      const R0 = role ? ROLES[role] : null;
+      if (R0?.soon) { toast(`${R0.icon} ${R0.name} — скоро: свой бизнес появится в городе позже`); return; }
+      if (R0?.car && !root.D37E?.vehicle) { toast(`${R0.icon} ${R0.name}: такси поедет, когда в мире появятся машины — скоро!`); return; }
       endTask(true);
-      C.job = role || null;
-      rt.setZX({ r: role || null, a: null, w: null });
-      drawWallet();
-      if (!role) { toast('Ты свободен — без работы'); return; }
-      const R0 = ROLES[role];
-      if (R0.car && !root.D37E?.vehicle) { toast(`${R0.icon} ${R0.name}: такси поедет, когда в мире появятся машины — скоро!`); return; }
-      toast(`${R0.icon} Ты — ${R0.name}! ${R0.desc}`, true);
+      const was = C.job;
+      if (!role) {
+        C.job = null; rt.setZX({ r: null, a: null, w: null }); drawWallet();
+        if (A && was && ROLES[was]?.prof && A.st.job) A.act('quit');
+        if (!quiet) toast('Ты свободен — без работы');
+        return;
+      }
+      if (R0.rp) {   // роль без денег — сразу (и работу сервера, если была, — закончить)
+        if (A && A.st.job) A.act('quit');
+        C.job = role; rt.setZX({ r: role, a: null, w: null }); drawWallet();
+        toast(`${R0.icon} Ты — ${R0.name}! ${R0.desc}`, true);
+        setTimeout(() => { if (C.job === role && !C.task) nextTask(); }, 900);
+        return;
+      }
+      if (!A) { toast('Работа заработает, когда сайт обновится'); return; }
+      C.pend = true;
+      const r = await A.act('job', { city, prof: R0.prof, mode: 'city', place: R0.place });
+      C.pend = false;
+      if (C.stopped) return;
+      if (!r.ok) { toast(E.why(r), false); rt.sfx('buzz'); drawWallet(); return; }
+      rememberRole(role, R0);
+      C.job = role; rt.setZX({ r: role, a: null, w: null }); drawWallet();
+      toast(r.got?.grant ? `🎁 Подарок новичку: +${r.got.grant} 💵! ${R0.icon} Ты — ${R0.name}` : `${R0.icon} Ты — ${R0.name}! ${R0.desc}`, true);
       setTimeout(() => { if (C.job === role && !C.task) nextTask(); }, 900);
     }
+    // вернулся (перезагрузка, другая вкладка) — продолжаем ту же работу с тем же заданием
+    function resume(){
+      if (!A || C.job || C.pend || C.stopped) return;
+      const J = A.st.job; if (!J || J.city !== city) return;
+      const role = roleFor(J, city); if (!role) return;
+      C.job = role; rt.setZX({ r: role, a: null, w: null }); drawWallet();
+      toast(`${ROLES[role].icon} Продолжаем работу: ${ROLES[role].name}`, true);
+      nextTask();
+    }
     function nextTask(){
-      if (!C.job) return;
-      const L = tasksFor(C.job); if (!L || !L.length) return;
-      C.task = L; C.step = 0;
+      if (!C.job || C.task || C.stopped) return;
+      const R0 = ROLES[C.job];
+      if (R0.rp) { const L = tasksFor(C.job); if (!L?.length) return; C.task = L; C.step = 0; C.srv = false; showStep(); return; }
+      const J = A?.st.job;
+      if (!J || J.city !== city || J.prof !== R0.prof || J.place !== R0.place) { setJob(null, true); return; }
+      const L = tasksFor(C.job, E.rng(J.n)); if (!L?.length) return;
+      C.task = L; C.step = 0; C.srv = true; C.fin = null;
+      C.run.begin(J.n, J.t, E.Rules.minS(A.D, R0.prof, E.Rules.lvl(A.D, A.st.skills[R0.prof] | 0)), L.length);
       showStep();
     }
     function showStep(){
@@ -1031,10 +1172,11 @@
       if (!st) return;
       if (st.carry && C.step > 0) rt.setZX({ a: 'carry', w: st.carry }); else if (!st.carry) rt.setZX({ a: rt.zx.a === 'carry' ? null : rt.zx.a, w: rt.zx.a === 'carry' ? null : rt.zx.w });
       if (st.fire) startFire(st.at);
-      if (st.patient) patient(st.at, true);
+      patient(st.at, !!st.patient);
       if (st.sick) sickPet(st.at, true);
-      if (st.cust || st.cust2 || st.robber) customer(st.cust2 || st.at, st.robber ? '🦹' : '🙋');
+      if (st.cust || st.cust2 || st.robber) customer(st.cust2 || st.at, st.robber ? '🦹' : st.custE || '🙋');
       else if (st.drive && C.step > 0) { customer(null); toast('🚕 Пассажир в машине — вези!', true); }   // такси: пассажир сел
+      else customer(null);
       if (st.trial) customer(SP('m_defend'), '🦹');
       if (st.walk || st.drive) setTarget(st.at, st.icon, null, 0, () => {});   // дойти / доехать — шаг засчитается сам
       else setTarget(st.at, st.icon, `${st.icon} ${st.text}`, st.hold, () => stepDone());
@@ -1045,28 +1187,61 @@
       rt.sfx('click');
       if (st.fx === 'oven') burst(st.at, 'sparkles', '#ffb347');
       if (st.fire) stopFire(true);
-      if (st.sick) { sickPet(null); }
-      if (st.site) siteGrow();
+      if (st.sick) sickPet(null);
       if (st.rob) return robDone(st);
       if (st.trial) return trialPanel();
       if (st.nobiz) { endTask(); return; }
       C.step++;
+      if (C.srv) C.run.done();
       if (C.step >= C.task.length) return taskDone(st);
       showStep();
     }
-    async function taskDone(last){
+    function taskDone(last){
       const role = C.job, R0 = ROLES[role] || {};
-      endTask();
-      if (last?.done) toast(last.done, true);
-      burst(S.P.ch, 'confetti');
-      if (R0.pay) earn(R0.pay, R0.name);
-      await rt.payTask(R0.name);
-      setTimeout(() => { if (C.job === role && !C.task) nextTask(); }, 2600);
+      if (!C.srv) {   // роль без денег: только 🪙 за работу (как раньше)
+        endTask();
+        if (last?.done) toast(last.done, true);
+        burst(S.P.ch, 'confetti');
+        rt.payTask(R0.name);
+        setTimeout(() => { if (C.job === role && !C.task) nextTask(); }, 2600);
+        return;
+      }
+      C.fin = last || {};   // шаги сделаны — TaskRunner сдаст работу, когда пройдёт минимальное время задания
+      clearMarks(); setTarget(null);
+      if (rt.zx.a === 'carry') rt.setZX({ a: null, w: null });
+      drawTask();
+    }
+    function onTask(r){
+      const role = C.job, R0 = ROLES[role] || {};
+      if (!C.task || !C.srv) return;
+      if (r.ok) {
+        const fin = C.fin;
+        endTask();
+        burst(S.P.ch, 'confetti');
+        const g = r.got || {}, sk = E.ui.skill(A.D, A.st, R0.prof);
+        toast(`${fin?.done ? fin.done + ' ' : ''}+${g.net} 💵${g.rate < 100 ? ` (ставка города ${g.rate} %)` : ''} · ${R0.name} ${'★'.repeat(sk.L + 1)}${sk.next ? ` ${sk.xp}/${sk.next}` : ''}`, true);
+        if (g.up) setTimeout(() => toast(`🎉 Новый уровень: ${E.ui.lvlName(g.lvl)} — зарплата выше!`, true), 1200);
+        if (g.tired && !C.tiredHint) { C.tiredHint = true; setTimeout(() => toast('😮‍💨 Устал от этой работы: дальше — половина зарплаты. Смени профессию!'), 2400); }
+        rt.sfx('coin');
+        rt.payTask(R0.name);
+        if (r.c) onPub(r.c, true);
+        C.netN = 0;
+        setTimeout(() => { if (C.job === role && !C.task) nextTask(); }, 2600);
+        return;
+      }
+      if (r.reason === 'too_soon') { C.run.retry((r.wait || 1) + .3); return; }
+      if (r.reason === 'net' && (C.netN = (C.netN || 0) + 1) <= 5) { C.run.retry(3); if (C.netN === 1) toast('📡 Нет связи — сдадим работу ещё раз'); return; }
+      C.netN = 0;
+      if (r.reason === 'nonce') { toast(E.why(r)); endTask(true); A.init(true).then(() => { if (!C.stopped && C.job === role && !C.task) nextTask(); }); return; }
+      toast(E.why(r), false); rt.sfx('buzz');
+      endTask(true);
+      setJob(null, true);
     }
     function endTask(quiet){
       if (C.fireOn) stopFire(false);
-      patient(null); sickPet(null); customer(null);
-      C.task = null; C.step = 0;
+      clearMarks();
+      C.task = null; C.step = 0; C.fin = null;
+      C.run?.stop();
       setTarget(null);
       if (rt.zx.a === 'carry' || rt.zx.a === 'hose' || rt.zx.a === 'heal' || rt.zx.a === 'fix' || rt.zx.a === 'cook') rt.setZX({ a: null, w: null });
       drawTask();
@@ -1076,7 +1251,9 @@
       if (!C.task || !inCity()) { if (el.dataset.city === city) { el.hidden = true; el.dataset.city = ''; } return; }
       const st = C.task[C.step], R0 = ROLES[C.job];
       el.dataset.city = city; el.hidden = false;
-      el.innerHTML = `<span>${R0.icon} <b>${esc(R0.name)}:</b> ${esc(st.text)}</span><span class="mz-dist"></span><button type="button" data-mz="c:${city}:quit">Уйти с работы</button>`;
+      const txt = st ? esc(st.text) : C.run?.st === 'sent' ? 'сдаём работу…' : '⏳ работа готова — сдаём через <b class="mz-left"></b>';
+      el.innerHTML = `<span>${R0.icon} <b>${esc(R0.name)}:</b> ${txt}</span><span class="mz-dist"></span><button type="button" data-mz="c:${city}:quit">Уйти с работы</button>`;
+      C.leftT = 0; C.distEl = null; C.distK = NaN;
     }
     // ── пожар (пожарный): огонь + дым + треск; тушишь — водяные пузыри ──
     const FX = S.FX;
@@ -1094,7 +1271,7 @@
       try { C.fireLoop?.stop?.(); } catch (e) {}
       C.fireLoop = null;
       if (C.fireMesh) { R.scene.remove(C.fireMesh); C.fireMesh = null; }
-      if (win && C.task) { const p = C.task[C.step].at; burst(p, 'bubbles', '#bae6fd'); }
+      if (win && C.task) { const p = C.task[C.step]?.at; if (p) burst(p, 'bubbles', '#bae6fd'); }
     }
     function burst(p, kind, color){
       if (!FX || !p) return;
@@ -1102,7 +1279,7 @@
       e.burst?.(kind === 'confetti' ? 40 : 26);
       setTimeout(() => { try { e.dispose(); } catch (er) {} }, 3500);
     }
-    // ── значки-«люди» для заданий (пациент на кровати, покупатель, питомец, грабитель) — спрайты, без лишних человечков ──
+    // ── значки-«люди» для заданий (пациент на кровати, покупатель, питомец, ученик, машина) — спрайты, без лишних человечков ──
     const marks = {};
     function sprite(slot, p, e, h = 1.4, s = 1){
       let sp = marks[slot];
@@ -1113,22 +1290,35 @@
     const patient = (p, on) => sprite('pat', on ? p : null, '🤒', .25, 1.1);
     const sickPet = (p, on) => sprite('pet', on ? p : null, '🤕', .1, .9);
     const customer = (p, e) => sprite('cust', p, e || '🙋', .4, 1.2);
-    // ── стройка растёт (у каждого своя стадия — подсказка, сколько построил) ──
-    const site = K.spots.k_site ? new T.Group() : null;
-    if (site) { site.position.set(205, 0, 24); R.scene.add(site); }
-    function siteGrow(){
-      if (!site) return;
-      C.siteN = ((C.siteN || 0) + 1) % 5;
+    const clearMarks = () => { patient(null); sickPet(null); customer(null); };
+    // ── общая стройка: этап — от сервера (у всех одинаковый); склеено в одну сетку ──
+    const siteAt = city === 'kids' ? SP('k_site') : SP('m_site');
+    const site = siteAt ? new T.Group() : null;
+    if (site) { site.position.set(siteAt.x, 0, siteAt.z); R.scene.add(site); }
+    function siteDraw(n){
+      if (!site || n === C.siteN) return;
+      C.siteN = n;
+      for (const m of site.children) if (m.userData.mzOwn) m.geometry.dispose();
       site.clear();
-      const n = C.siteN;
-      if (n >= 1) R.part(site, { s: 'box', y: .25, w: 8, h: .5, d: 6, c: '#9ca3af' });
-      if (n >= 2) for (const [x, z, w, d] of [[0, -3, 8, .4], [0, 3, 8, .4], [-4, 0, .4, 6], [4, 0, .4, 6]]) R.part(site, { s: 'box', x, z, y: .5 + (n >= 3 ? 1.2 : .6), w, h: n >= 3 ? 2.4 : 1.2, d, c: '#c2410c' });
-      if (n >= 4) R.part(site, { s: 'box', y: 3.2, w: 8.6, h: .3, d: 6.6, c: '#7c2d12' });
-      R.shadowsOn?.(site);
-      toast(n === 0 ? '🏠 Дом достроен! Начинаем новый' : `🏗️ Стройка: этап ${n} из 4`, true);
+      for (const p of siteParts(n)) R.part(site, p);
+      if (site.children.length) MZ.merge(R, site, { ao: false });
+      R.shadowsOn?.(site); R.shadowDirty?.();
+    }
+    function onPub(p, mine){
+      if (!p || p.city !== city) return;
+      C.hire = p.hire !== false && !p.frozen;
+      if (A && C.here && E.ui.rate(A.D, city, p) !== C.rateShown) drawWallet();   // ставка города поменялась — показать
+      if (p.stage == null) return;
+      const old = C.siteN;
+      siteDraw(p.stage);
+      if (mine && old != null && p.stage !== old) {
+        const t = now(); if (t - C.ctyT > 60e3) { C.ctyT = t; rt.send({ k: 'cty', c: city, r: p.rev | 0 }); }   // другим — перечитать город (не чаще раза в минуту)
+        toast(p.stage === 0 ? '🏠 Дом достроен! Начинаем новый' : `🏗️ Стройка: этап ${p.stage} из ${A.D.site.stages - 1}`, true);
+      }
     }
     // ── пожарный: распылитель, пока держишь E у огня ──
     let sprayE = null;
+    const WORK_POSE = ['cook', 'heal', 'fix'];
     function sprayTick(){
       const st = C.task?.[C.step], holding = !!(st?.fire && X.cur === jobItem && X.progress > 0);
       if (holding && !sprayE && FX) { const p = st.at; sprayE = FX.emitter({ kind: 'fountain', at: [p.x, .3, p.z], rate: 1.4, size: 1.2, color: '#e0f2fe', color2: '#7dd3fc' }); rt.setZX({ a: 'hose' }); }
@@ -1136,56 +1326,77 @@
       // во время удержания у плиты/кровати — поза работы
       const act = st && X.cur === jobItem && X.progress > 0 ? st.act : null;
       if (act && act !== 'hose' && rt.zx.a !== act) rt.setZX({ a: act });
-      else if (!act && st && rt.zx.a && ['cook', 'heal', 'fix'].includes(rt.zx.a)) rt.setZX({ a: st.carry && C.step > 0 ? 'carry' : null, w: st.carry && C.step > 0 ? st.carry : null });
+      else if (!act && st && rt.zx.a && WORK_POSE.includes(rt.zx.a)) rt.setZX({ a: st.carry && C.step > 0 ? 'carry' : null, w: st.carry && C.step > 0 ? st.carry : null });
     }
-    // ═══ Окна: работа, семья, питомцы, магазины, банк, бизнес, дома ═══
+    // ═══ Окна: работа, семья, питомцы, магазины, банк, дома ═══
+    const w1 = v => (Math.round(v * 10) / 10).toLocaleString('ru-RU');
     function jobBoard(){
-      const s = W(), cur = rt.zx.r;
-      const rows = Object.entries(ROLES).map(([id, r]) => `<div class="mz-job${cur === id ? ' on' : ''}"><i>${r.icon}</i><div><b>${esc(r.name)}</b><small>${esc(r.desc)}${r.pay ? ` · ${W0.icon}${r.pay} за задание + немного 🪙` : ''}</small></div>${cur === id ? `<button type="button" data-mz="c:${city}:job:">Уволиться</button>` : `<button type="button" class="ct-start" data-mz="c:${city}:job:${id}">${r.car && !root.D37E?.vehicle ? 'Скоро' : 'Работать'}</button>`}</div>`).join('');
-      H.panel(`<span class="wld-pe">🧰</span><b>Работа · ${esc(Z.name)}</b>`, `<div class="mz-cash"><span>${W0.icon} ${s.cash.toLocaleString('ru')}</span><span>🪙 за работу сегодня: ${MZ.payState().got}/${MZ.PAY.day}</span></div><div class="mz-jobs">${rows}</div>`);
+      const cur = rt.zx.r, D = A?.D, st = A?.st, now0 = A ? A.clock() : 0, pc = A?.pub[city];
+      if (A) A.pubGet(city).then(p => { onPub(p); });
+      const hire = !pc || (pc.hire !== false && !pc.frozen), cRate = A ? num(E.ui.rate(D, city, pc)) : 100;
+      const rows = [], rp = [];
+      for (const [id, r] of Object.entries(ROLES)) {
+        const btn = cur === id ? `<button type="button" data-mz="c:${city}:job:">Уволиться</button>` : (r.car && !root.D37E?.vehicle) || r.soon ? '<button type="button" disabled>Скоро</button>' : `<button type="button" class="ct-start" data-mz="c:${city}:job:${id}">${r.rp ? 'Играть' : 'Работать'}</button>`;
+        if (r.rp || r.soon || !A) { rp.push(`<div class="mz-job${cur === id ? ' on' : ''}"><i>${r.icon}</i><div><b>${esc(r.name)}</b><small>${esc(r.desc)}</small></div>${btn}</div>`); continue; }
+        const P = D.profs[r.prof]; if (!P || !(P.cities[city] || []).includes(r.place)) continue;
+        const sk = E.ui.skill(D, st, r.prof), min = num(E.Rules.minS(D, r.prof, sk.L)), tired = sk.today >= D.caps.full, out = sk.today >= D.caps.half;
+        rows.push(`<div class="mz-job${cur === id ? ' on' : ''}"><i>${r.icon}</i><div><b>${esc(r.name)} <em class="mz-stars">${'★'.repeat(sk.L + 1)}</em></b><small>${esc(r.desc)}</small>`
+          + `<small class="mz-jobm">≈ ${w1(E.ui.wageNow(D, st, r.prof, city, now0, pc))} 💵 за задание · от ${min} с · ${esc(sk.name)}${sk.next ? ` ${num(sk.xp)}/${num(sk.next)}` : ''}${sk.today ? ` · сегодня ${num(sk.today)}` : ''}${out ? ' · 😴 на сегодня всё' : tired ? ' · 😮‍💨 половина зарплаты' : ''}</small>`
+          + `<i class="mz-xpbar" style="--p:${num(sk.pct)}%"></i></div>${btn}</div>`);
+      }
+      const note = A ? E.ui.trialNote() : 'Работы с зарплатой появятся, когда сайт обновится.';
+      const wd = A && st.day === E.Rules.day(now0) ? st.wd : 0;
+      H.panel(`<span class="wld-pe">🧰</span><b>Работа · ${esc(Z.name)}</b>`,
+        `${note ? `<p class="mz-eco-note">${esc(note)}</p>` : ''}<div class="mz-cash">${A ? `<span>💵 ${fmt(st.cash)}</span><span>${hire ? (cRate < 100 ? `🏙️ Город нанимает · казна бедная: ставка ${cRate} %` : '🏙️ Город нанимает') : pc?.frozen ? '⏸ Город на паузе' : '🔒 Касса пуста — завтра'}</span><span>Сегодня: ${fmt100(wd)} из ${fmt(D.caps.wageDay)} 💵</span>` : ''}<span>🪙 за работу: ${MZ.payState().got}/${MZ.PAY.day}</span></div>`
+        + `<div class="mz-jobs">${rows.join('')}</div>${rp.length ? `<div class="mz-eco-sec">🎭 Роли без зарплаты</div><div class="mz-jobs">${rp.join('')}</div>` : ''}`
+        + (A ? '<p><small>Зарплата — денки 💵 (один кошелёк на оба города). Навык ★ растёт с каждым заданием — платят больше. После 40 заданий одной работы — половина зарплаты, после 60 — смени работу. Еда в магазинах даёт бонус к зарплате.</small></p>' : ''));
     }
     function familyBoard(){
       const cur = rt.zx.f;
       H.panel('<span class="wld-pe">👪</span><b>Семья — кто ты сегодня?</b>', `<p>Роль видна всем над твоим ником. Играйте семьёй: дома, в парке, в школе!</p><div class="wld-acts">${Object.entries(MZ.FAMILY).map(([id, f]) => `<button type="button"${cur === id ? ' class="ct-start"' : ''} data-mz="c:kids:fam:${id}">${f[0]} ${esc(f[1])}</button>`).join('')}<button type="button" data-mz="c:kids:fam:">Без роли</button></div>`);
     }
     function petShop(){
-      const s = W();
-      H.panel('<span class="wld-pe">🐾</span><b>Зоомагазин</b>', `<p>Питомец ходит за тобой, пока ты в мире, — его видят все. Корм — ⭐1.</p><div class="mz-cash"><span>⭐ ${s.cash}</span></div><div class="wld-acts">${Object.entries(PETS).map(([id, p]) => `<button type="button"${rt.zx.pt === id ? ' class="ct-start"' : ''} data-mz="c:kids:pet:${id}">${p[0]} ${esc(p[1])}</button>`).join('')}${rt.zx.pt ? '<button type="button" data-mz="c:kids:pet:">Отпустить домой</button>' : ''}</div>`);
+      H.panel('<span class="wld-pe">🐾</span><b>Зоомагазин</b>', `<p>Питомец ходит за тобой, пока ты в мире, — его видят все. Взять и покормить — бесплатно.</p><div class="wld-acts">${Object.entries(PETS).map(([id, p]) => `<button type="button"${rt.zx.pt === id ? ' class="ct-start"' : ''} data-mz="c:kids:pet:${id}">${p[0]} ${esc(p[1])}</button>`).join('')}${rt.zx.pt ? '<button type="button" data-mz="c:kids:pet:">Отпустить домой</button>' : ''}</div>`);
     }
-    const SHOPS = { kids: { icecream: ['🍦 Мороженое', 1], bun: ['🥐 Булочка', 1], apple: ['🍎 Яблоко', 1] },
-      market: { apple: ['🍎 Яблоко', 5], juice: ['🧃 Сок', 6], burger: ['🍔 Бургер', 12] }, rest: { pizza: ['🍕 Пицца', 15], soup: ['🍲 Суп', 12], coffee: ['☕ Кофе', 8] },
-      food: { burger: ['🍔 Бургер', 10], pizza: ['🍕 Пицца', 13], juice: ['🧃 Сок', 5], coffee: ['☕ Кофе', 7] } };
-    const SHOP_T = { market: ['🛒', 'Супермаркет'], rest: ['🍝', 'Ресторан «Вкусно»'], food: ['🍔', 'Фуд-корт ТЦ «Галерея»'] };
-    function shop(kind){
-      const L = SHOPS[kind], s = W();
-      H.panel(`<span class="wld-pe">${(SHOP_T[kind] || SHOP_T.market)[0]}</span><b>${(SHOP_T[kind] || SHOP_T.market)[1]}</b>`, `<div class="mz-cash"><span>💵 ${s.cash}</span></div><div class="wld-acts">${Object.entries(L).map(([id, [n, p]]) => `<button type="button" data-mz="c:metro:buy:${id}:${p}">${n} — 💵${p}</button>`).join('')}</div><p><small>Купленное — в 🎬 «Действия»: съесть или выпить.</small></p>`);
+    // ── магазины еды (денки; цена и бонус — каталог MirEcon, решает сервер) ──
+    const SHOP_T = { k_bake: ['🥐', 'Пекарня «Булочка»'], k_ice: ['🍦', 'Мороженое'], m_shop: ['🛒', 'Супермаркет'], m_rest: ['🍝', 'Ресторан «Вкусно»'], m_mall: ['🍔', 'ТЦ «Галерея»: еда'] };
+    function shop(place){
+      if (!A) { toast('Магазины заработают, когда сайт обновится'); return; }
+      const D = A.D, items = D.cities[city]?.shops?.[place] || [], st = A.st, T0 = SHOP_T[place] || ['🛍️', 'Магазин'];
+      const bf = num(E.Rules.buffP(D, st, A.clock())), note = E.ui.trialNote();
+      const pocket = Object.entries(st.food || {}).map(([k, n]) => `${esc(E.GOODS[k]?.e || '🍽')}×${num(n)}`).join(' ');
+      C.shopOpen = place;
+      H.panel(`<span class="wld-pe">${T0[0]}</span><b>${esc(T0[1])}</b>`, `${note ? `<p class="mz-eco-note">${esc(note)}</p>` : ''}<div class="mz-cash"><span>💵 ${fmt(st.cash)}</span>${bf ? `<span>🍽 сыт: +${bf} %</span>` : ''}${pocket ? `<span>🎒 ${pocket}</span>` : ''}</div>`
+        + `<div class="wld-acts">${items.map(it => { const G = E.GOODS[it] || {}, g = D.goods[it] || {}; return `<button type="button" data-mz="c:${city}:buy:${esc(place)}:${esc(it)}">${esc(G.e || '🍽')} ${esc(G.n || it)} — 💵${num(E.Rules.price(D, it))} <small>+${num(g.buff?.[0])} % · ${num(g.buff?.[1])} мин</small></button>`; }).join('')}</div>`
+        + `<p><small>Еда — в карман; съесть — 🎬 «Действия»: зарплата выше (бонусы складываются до +${num(D.buff.max)} %).</small></p>`);
     }
-    function buy(item, price){
-      if (!spend(price)) return;
-      const s = W(); s.inv[item] = Math.min(99, (s.inv[item] || 0) + 1); walletSave(city, s);
-      toast(`${rt.FOOD[item] || '🛍️'} Куплено! Съесть — 🎬 «Действия»`, true);
+    async function buy(place, item){
+      if (!A) return;
+      const r = await A.act('buy', { city, place, item, qty: 1 });
+      if (C.stopped) return;
+      if (!r.ok) { toast(E.why(r), false); rt.sfx('buzz'); return; }
+      toast(`${E.GOODS[item]?.e || '🛍️'} Куплено за 💵${r.got.cost}${r.got.grant ? ` (🎁 +${r.got.grant} 💵 подарок новичку)` : ''}. Съесть — 🎬 «Действия»`, true);
       rt.sfx('coin');
+      drawWallet();
+      if (C.shopOpen === place && !S.q('.wld-panel').hidden) shop(place);
     }
-    function eatItem(item){
-      const s = W(); if (!(s.inv[item] > 0)) return false;
-      s.inv[item]--; walletSave(city, s);
-      rt.eat(item);
-      return true;
+    async function eatFood(item){
+      if (!A) return;
+      const r = await A.act('eat', { item });
+      if (C.stopped) return;
+      if (!r.ok) { toast(E.why(r), false); return; }
+      rt.eat(item);   // поза «ест» — видят все
+      toast(`${E.GOODS[item]?.e || '🍽'} Вкусно! +${r.got.p} % к зарплате — ещё ${Math.max(1, Math.round((r.got.u - A.clock()) / 60))} мин`, true);
+      drawWallet();
     }
+    // банк: 📱 «🏦 Банк» (баланс, сегодня, навыки, история); без телефона — коротко здесь
     function bankPanel(){
-      const s = W();
-      H.panel('<span class="wld-pe">🏦</span><b>Банкомат</b>', `<p>Кэш в кармане грабитель может забрать только у кассы, а в банке он в безопасности.</p><div class="mz-cash"><span>💵 в кармане: ${s.cash}</span><span>🏦 в банке: ${s.bank}</span></div><div class="wld-acts"><button type="button" data-mz="c:metro:dep:100">Положить 100</button><button type="button" data-mz="c:metro:dep:all">Положить всё</button><button type="button" data-mz="c:metro:wd:100">Снять 100</button><button type="button" data-mz="c:metro:wd:all">Снять всё</button></div>`);
+      if (root.D37Phone?.open) { H.closePops(); root.D37Phone.open('bank'); return; }
+      const st = A?.st;
+      H.panel('<span class="wld-pe">🏦</span><b>Банк</b>', A ? `<div class="mz-cash"><span>💵 ${fmt(st.cash)}</span></div>${E.ui.trialNote() ? `<p class="mz-eco-note">${esc(E.ui.trialNote())}</p>` : ''}` : '<p>Банк появится, когда сайт обновится.</p>');
     }
-    const BIZ = { coffee: 300, flowers: 400, wash: 500 };
-    const bizPrompt = (id, name) => (W().biz.includes(id) ? `${name}: твой бизнес — собрать выручку` : `${name}: купить бизнес (💵${BIZ[id]})`);
-    function bizAct(id, name){
-      const s = W();
-      if (s.biz.includes(id)) { const n = Math.floor(C.bizCash || 0); C.bizCash = 0; earn(n, 'выручка'); if (!n) toast('Выручки пока нет — она копится, пока ты в городе'); return; }
-      if (s.biz.length >= 3) { toast('Хватит бизнесов 🙂'); return; }
-      if (!spend(BIZ[id])) return;
-      const s2 = W(); s2.biz.push(id); walletSave(city, s2);
-      toast(`💼 ${name} — теперь твой бизнес! Выручка копится, пока ты в городе`, true);
-    }
+    const bizPrompt = (id, name) => `${name}: свой бизнес — скоро`;
+    function bizAct(id, name){ H.panel('<span class="wld-pe">💼</span><b>' + esc(name) + '</b>', '<p>Свой бизнес — скоро: аренда помещения, закупка товара и выручка по времени. Пока можно работать в городе за денки 💵 — щит «🧰 Работа» в мэрии.</p>'); }
     // автосалон: тест-драйв (машина появится у салона на 5 минут — видна всем; покупка — позже, гаражи на сервере)
     function dealer(){
       const ok = !!root.D37E?.vehicle && !!rt.veh?.testDrive;
@@ -1193,7 +1404,7 @@
         ? `<p>Выбери машину для тест-драйва — она появится у салона на 5 минут. Покатайся по проспектам, мостам и эстакаде!</p><div class="wld-acts">${[['sedan', '🚗 Седан (синий)'], ['sedan_red', '🚗 Седан (красный)']].filter(([d]) => root.D37E.vehicle.get(d)).map(([d, t]) => `<button type="button" class="ct-start" data-mz="c:${city}:drive:${d}">${t}</button>`).join('')}</div><p><small>Купить свою машину и гараж — скоро.</small></p>`
         : '<p>Машины скоро можно будет водить по дорогам мира! Пока — посмотри модели в зале. 🚗</p>');
     }
-    // ── урок в школе (детский) ──
+    // ── урок в школе (детский; ученик): правильные ответы — немного 🪙 (денек за урок нет — их дают работы) ──
     function quiz(){
       const [qn, opts, ok] = pick(QUIZ), order = opts.map((o, i) => i).sort(() => Math.random() - .5);
       C.quizOk = ok;
@@ -1201,7 +1412,7 @@
     }
     function answer(i){
       H.closePops();
-      if (+i === C.quizOk) { earn(1, 'правильный ответ'); rt.sfx('coin'); H.emote?.('🎉'); if ((C.quizN = (C.quizN || 0) + 1) % 3 === 0) rt.payTask('урок'); }
+      if (+i === C.quizOk) { toast('🎉 Правильно!', true); rt.sfx('coin'); H.emote?.('🎉'); if ((C.quizN = (C.quizN || 0) + 1) % 3 === 0) rt.payTask('урок'); }
       else toast('Почти! Попробуй ещё раз 🙂');
     }
     // ── дома: «сделать своим» на время визита (zx.hs), чужой — «занят» ──
@@ -1214,14 +1425,13 @@
       rt.setZX({ hs: id }); toast('🏠 Это твой дом, пока ты в мире! Кровать — поспать, кухня — приготовить обед', true);
     }
     function cookHome(){ rt.setZX({ a: 'cook' }); setTimeout(() => { if (rt.zx.a === 'cook') { rt.setZX({ a: null }); rt.eat(pick(['soup', 'pizza', 'apple'])); } }, 2200); }
-    // ── грабитель: касса/банк → розыск ⭐, полиция ловит (игроки и патрульные) ──
+    // ── грабитель (роль понарошку): касса/банк → розыск ⭐, полиция ловит (игроки и патрульные); денег не даёт ──
     function robDone(st){
-      const big = st.at === SP('m_vault'), loot = big ? 300 : 80;
+      const big = st.at === SP('m_vault');
       endTask();
-      C.loot = (C.loot || 0) + loot;
       C.wantedT = big ? 120 : 60;
       rt.setZX({ wn: big ? 2 : 1 });
-      toast(`💰 +💵${loot} в мешке! Тебя ищет полиция ⭐ — продержись ${C.wantedT} с`, true);
+      toast(`💰 Мешок с «добычей» (понарошку)! Тебя ищет полиция ⭐ — продержись ${C.wantedT} с`, true);
       S.H?.toast?.('🚨 Сигнализация!');
       rt.sfx('buzz', { vol: .6 });
     }
@@ -1233,15 +1443,15 @@
       for (const o of K.npcs) if (/👮/.test(o.name || '')) { const e = S.NPC?.list.get(o.id), a = e && S.NPC.A.get(e.key); if (a && Math.hypot(a.x - S.P.ch.x, a.z - S.P.ch.z) < 5) near = true; }
       C.copNear = near ? (C.copNear || 0) + dt : 0;
       if (C.copNear > 2) { arrested(null); return; }
-      if (C.wantedT <= 0) { rt.setZX({ wn: null }); earn(C.loot || 0, 'ушёл от погони'); C.loot = 0; toast('😮‍💨 Розыск снят — оторвался!'); rt.payTask('удачное дело'); }
+      if (C.wantedT <= 0) { rt.setZX({ wn: null }); toast('😮‍💨 Розыск снят — оторвался!'); rt.payTask('удачное дело'); }
     }
     function arrested(byKey){
       const cell = pick(K.cells || [{ x: 112, z: 158 }]);
-      C.loot = 0; C.wantedT = 0;
+      C.wantedT = 0;
       rt.setZX({ wn: null, pr: 1 });
       C.prisonT = 45;
       rt.place(cell.x, cell.z, PI);
-      toast('🚔 Тебя задержали! 45 с в камере (или залог 💵100 — 🎬)', false);
+      toast('🚔 Тебя задержали! 45 с в камере — подумай о своём поведении', false);
       if (byKey) rt.send({ k: 'arrested', by: byKey });
     }
     function prisonTick(dt){
@@ -1264,105 +1474,120 @@
         if (kind && !it) {
           it = kind === 'arrest'
             ? X.add({ x: p.ch.x, y: p.ch.y + 1.2, z: p.ch.z, r: 1, hold: 1.5, prompt: () => `👮 Задержать: ${p.nick}`, act: () => { rt.send({ k: 'arrest', to: p.key }); toast(`👮 Задерживаем ${p.nick}…`); } })
-            : X.add({ x: p.ch.x, y: p.ch.y + 1.2, z: p.ch.z, r: 1, hold: 1.5, prompt: () => (Date.now() - (healedAt.get(p.key) || 0) < 20e3 ? null : `✨ Полечить: ${p.nick}`), act: () => { healedAt.set(p.key, Date.now()); rt.send({ k: 'heal', to: p.key }); burst(p.ch, 'magic'); earn(1, 'забота о пациенте'); } });
+            : X.add({ x: p.ch.x, y: p.ch.y + 1.2, z: p.ch.z, r: 1, hold: 1.5, prompt: () => (Date.now() - (healedAt.get(p.key) || 0) < 20e3 ? null : `✨ Полечить: ${p.nick}`), act: () => { healedAt.set(p.key, Date.now()); rt.send({ k: 'heal', to: p.key }); burst(p.ch, 'magic'); toast('✨ Забота о пациенте — спасибо!', true); } });
           it.kind = kind; arrestItems.set(p.key, it);
         }
         if (it) { it.x = p.ch.x; it.y = p.ch.y + 1.2; it.z = p.ch.z; }
       }
       for (const [k, it] of arrestItems) if (!S.players.has(k)) { X.remove(it); arrestItems.delete(k); }
     }
-    // ── суд: подсудимый → приговор ──
+    // ── суд (роль понарошку): подсудимый → приговор ──
     function trialPanel(){
       endTask();
       H.panel('<span class="wld-pe">⚖️</span><b>Дело №' + (100 + Math.floor(Math.random() * 900)) + '</b>', `<p>Подсудимый: ${pick(['перешёл дорогу на красный', 'шумел ночью', 'не вернул книгу в библиотеку', 'ограбил киоск с мороженым', 'парковался на газоне'])}. Ваше решение?</p><div class="wld-acts"><button type="button" data-mz="c:metro:verdict:free">Оправдать</button><button type="button" data-mz="c:metro:verdict:fine">Штраф</button><button type="button" data-mz="c:metro:verdict:jail">30 суток метлой подметать улицы</button></div>`);
     }
-    // ── питомец рядом с хозяином (свой и чужие — по zx.pt) ──
-    const petS = new Map();
-    function petsFrame(dt, t){
-      const all = [[S.key, rt.zx.pt, S.A.get(S.key)], ...[...S.players.values()].map(p => [p.key, p.zx?.pt, S.A.get(p.key)])];
-      const seen = new Set();
-      for (const [key, pt, a] of all) {
-        if (!pt || !PETS[pt] || !a || !a.ch?.root.visible) continue;
-        seen.add(key);
-        let s = petS.get(key);
-        if (!s) { s = { sp: new T.Sprite(rt.spriteMat(PETS[pt][0])), x: a.x, z: a.z }; s.sp.scale.setScalar(.8); R.scene.add(s.sp); petS.set(key, s); }
-        s.sp.material = rt.spriteMat(PETS[pt][0]);
-        const yaw = a.ch.yaw, tx = a.x - Math.sin(yaw) * 1.1 - Math.cos(yaw) * .8, tz = a.z - Math.cos(yaw) * 1.1 + Math.sin(yaw) * .8;
-        s.x += (tx - s.x) * Math.min(1, dt * 4); s.z += (tz - s.z) * Math.min(1, dt * 4);
-        const hop = Math.abs(Math.sin(t * 8 + key.length)) * (Math.hypot(tx - s.x, tz - s.z) > .3 ? .25 : .04);
-        s.sp.position.set(s.x, a.y + .45 + hop, s.z);
-      }
-      for (const [k, s] of petS) if (!seen.has(k)) { R.scene.remove(s.sp); petS.delete(k); }
+    // ── питомец рядом с хозяином (свой и чужие — по zx.pt). Рисует ОДИН город (первый построенный; был двойной — по спрайту в каждом
+    // городе на одном месте), без мусора за кадр: отметка кадра вместо нового Set и массивов ──
+    const petS = new Map(); let petStamp = 0;
+    function petOne(key, pt, a, dt, t){
+      if (!pt || !PETS[pt] || !a || !a.ch?.root.visible) return;
+      let s = petS.get(key);
+      if (!s) { s = { sp: new T.Sprite(rt.spriteMat(PETS[pt][0])), x: a.x, z: a.z, pt: '', seen: 0 }; s.sp.scale.setScalar(.8); R.scene.add(s.sp); petS.set(key, s); }
+      if (s.pt !== pt) { s.pt = pt; s.sp.material = rt.spriteMat(PETS[pt][0]); }
+      s.seen = petStamp;
+      const yaw = a.ch.yaw, tx = a.x - Math.sin(yaw) * 1.1 - Math.cos(yaw) * .8, tz = a.z - Math.cos(yaw) * 1.1 + Math.sin(yaw) * .8;
+      s.x += (tx - s.x) * Math.min(1, dt * 4); s.z += (tz - s.z) * Math.min(1, dt * 4);
+      const hop = Math.abs(Math.sin(t * 8 + key.length)) * (Math.hypot(tx - s.x, tz - s.z) > .3 ? .25 : .04);
+      s.sp.position.set(s.x, a.y + .45 + hop, s.z);
     }
+    function petsFrame(dt, t){
+      if (rt.petsBy && rt.petsBy !== city) return;
+      rt.petsBy = city; petStamp++;
+      petOne(S.key, rt.zx.pt, S.A.get(S.key), dt, t);
+      for (const p of S.players.values()) petOne(p.key, p.zx?.pt, S.A.get(p.key), dt, t);
+      if (petS.size) petS.forEach(petGone);
+    }
+    function petGone(s, k){ if (s.seen !== petStamp) { R.scene.remove(s.sp); petS.delete(k); } }
     // ── щелчки по кнопкам окон ──
     function click(a){
       if (!a.startsWith('c:' + city + ':')) return false;
       const [, , cmd, v, v2] = a.split(':');
       if (cmd === 'quit') { setJob(null); H.closePops(); return true; }
       if (cmd === 'job') { H.closePops(); setJob(v || null); return true; }
+      if (cmd === 'bank') { bankPanel(); return true; }
+      if (cmd === 'buy') { buy(v, v2); return true; }
       if (cmd === 'drive') { H.closePops(); rt.veh?.testDrive?.(v, { x: 182, z: 125, yaw: PI / 2, zone: city }); return true; }
       if (cmd === 'fam') { H.closePops(); rt.setZX({ f: v || null }); toast(v ? `${MZ.FAMILY[v][0]} Ты — ${MZ.FAMILY[v][1]}!` : 'Без роли в семье', true); return true; }
       if (cmd === 'pet') {
         H.closePops();
         if (!v) { rt.setZX({ pt: null }); toast('🐾 Питомец ушёл домой'); return true; }
-        if (!rt.zx.pt && W().cash < 2) { toast('Питомец стоит ⭐2 — поработай немного!', false); return true; }
-        if (!rt.zx.pt && !spend(2)) return true;
         rt.setZX({ pt: v }); toast(`${PETS[v][0]} ${PETS[v][1]} теперь с тобой!`, true); rt.sfx('pickup'); return true;
       }
       if (cmd === 'ans') { answer(v); return true; }
-      if (cmd === 'buy') { buy(v, +v2); return true; }
-      if (cmd === 'dep' || cmd === 'wd') {
-        const s = W(), n = v === 'all' ? (cmd === 'dep' ? s.cash : s.bank) : 100;
-        if (cmd === 'dep') { const m = Math.min(n, s.cash); s.cash -= m; s.bank += m; } else { const m = Math.min(n, s.bank); s.bank -= m; s.cash += m; }
-        walletSave(city, s); drawWallet(); bankPanel(); rt.sfx('coin'); return true;
-      }
-      if (cmd === 'verdict') { H.closePops(); toast({ free: '⚖️ Оправдан! Зал аплодирует 👏', fine: '⚖️ Штраф выписан', jail: '⚖️ Приговор: подметать улицы 🧹' }[v], true); taskDone({ done: '' }); return true; }
+      if (cmd === 'verdict') { H.closePops(); toast({ free: '⚖️ Оправдан! Зал аплодирует 👏', fine: '⚖️ Штраф выписан (понарошку)', jail: '⚖️ Приговор: подметать улицы 🧹' }[v], true); taskDone({ done: '' }); return true; }
       return false;
     }
     // ── действия 🎬 своего города ──
     function act(id){
-      if (id.startsWith('eat:')) return eatItem(id.slice(4)) || (toast('Сначала купи 🙂'), true);
+      if (id.startsWith('food:')) { eatFood(id.slice(5)); return true; }
       if (id === 'k_pet') { H.emote?.('❤️'); burst(S.P.ch, 'sparkles', '#fda4af'); return true; }
-      if (id === 'k_feed') { if (spend(1)) { toast(`${(PETS[rt.zx.pt] || ['🐾'])[0]} Ням-ням! Питомец доволен`, true); burst(S.P.ch, 'confetti'); } return true; }
+      if (id === 'k_feed') { toast(`${(PETS[rt.zx.pt] || ['🐾'])[0]} Ням-ням! Питомец доволен`, true); burst(S.P.ch, 'confetti'); return true; }
       if (id === 'm_hide') { toast('🫣 Ты натянул шапку на глаза… полиция всё равно ищет'); return true; }
-      if (id === 'm_bail') { if (rt.zx.pr && spend(100)) { C.prisonT = 0; } return true; }
       return false;
     }
-    // ── сеть: арест / задержан ──
+    // ── сеть: арест / задержан, город изменился ──
     function onMsg(p, d){
       if (d.t !== 'z') return false;
+      if (d.k === 'cty') { if (d.c === city && A && !(A.pub[city]?.rev >= (d.r | 0))) A.pubGet(city, true).then(q => onPub(q)); return d.c === city; }
       if (d.k === 'arrest' && d.to === S.key && city === 'metro') {
         // меня задерживают: я в розыске, он — полицейский и рядом
         const ok = rt.zx.wn && p.zx?.r === 'police' && Math.hypot(p.ch.x - S.P.ch.x, p.ch.z - S.P.ch.z) < 5 && MZ.inRect(Z, S.P.ch.x, S.P.ch.z, 4);
         if (ok) arrested(p.key);
         return true;
       }
-      if (d.k === 'arrested' && d.by === S.key && city === 'metro' && rt.zx.r === 'police') { earn(60, `задержан ${p.nick}`); rt.payTask('задержание'); return true; }
+      if (d.k === 'arrested' && d.by === S.key && city === 'metro' && rt.zx.r === 'police') { toast(`👮 Задержан ${p.nick}!`, true); rt.payTask('задержание'); return true; }
       if (d.k === 'heal' && d.to === S.key) { if (p.zx?.r === 'doctor' || p.zx?.r === 'medic') { toast(`✨ ${p.nick} тебя полечил — ты как новенький!`, true); burst(S.P.ch, 'magic'); } return true; }
       return false;
     }
+    // ── состояние денег: перерисовать, продолжить работу, бросить чужую (работу взяли в другом городе / вкладке) ──
+    const offState = A ? A.on('state', () => {
+      if (C.stopped) return;
+      drawWallet();
+      const R0 = ROLES[C.job], J = A.st.job;
+      if (R0?.prof && !C.pend && (!J || J.city !== city || J.prof !== R0.prof || J.place !== R0.place)) {
+        endTask(true); C.job = null;
+        if (MZ.ROLES[rt.zx.r]?.zone === city) rt.setZX({ r: null, a: null, w: null });
+      }
+      if (!C.job) resume();
+    }) : null;
+    const offPub = A ? A.on('pub', p => { if (!C.stopped) onPub(p); }) : null;
     // ── шаг и кадр ──
-    let tagT = 0;
     const mod = {
       update(dt){
         const here = inCity();
-        if (here !== C.here) { C.here = here; wEl.hidden = !here; if (here) drawWallet(); drawTask(); }
+        if (here !== C.here) { C.here = here; wEl.hidden = !here; if (here) { drawWallet(); C.pubT = 0; } drawTask(); }
+        if (here && A) { C.pubT -= dt; if (C.pubT <= 0) { C.pubT = 120; A.pubGet(city).then(p => { if (!C.stopped) onPub(p); }); } }   // город раз в 2 мин (без изменений — {same})
         if (C.task) {
+          C.run?.update(dt);
           sprayTick();
-          // метка — расстояние
-          const st = C.task[C.step], el = rt.q('.mz-task .mz-dist');
+          // метка — расстояние; работа готова — сколько ждать сдачи (подпись пишется, только когда поменялась: шаг логики — 60 раз в секунду)
+          let el = C.distEl; if (!el || !el.isConnected) { el = C.distEl = rt.q('.mz-task .mz-dist'); C.distK = NaN; }
+          const st = C.task[C.step];
           if (st?.at && el) {
             const d = Math.hypot(st.at.x - S.P.ch.x, st.at.z - S.P.ch.z), me = rt.veh?.me, inCar = !!st.drive && me?.seat === 0 && me.v.def.id === st.drive;
             const slow = inCar && Math.abs(me.v.spd || 0) < 3;   // такси: пассажир садится и выходит, только когда машина стоит
-            el.textContent = st.any ? (inCar ? '✅' : '') : d > 3 ? Math.round(d / 1.17) + ' м' : inCar && !slow ? '🛑 остановись' : '✋ здесь';
+            const k = st.any ? (inCar ? -1 : -2) : d > 3 ? Math.round(d / 1.17) : inCar && !slow ? -3 : -4;
+            if (k !== C.distK) { C.distK = k; el.textContent = k === -1 ? '✅' : k === -2 ? '' : k === -3 ? '🛑 остановись' : k === -4 ? '✋ здесь' : k + ' м'; }
             if ((st.walk && d < 2.5) || (inCar && (st.any || (d < 7 && slow)))) stepDone();   // такси: доехал и остановился (за рулём такси) — засчитано
+          } else if (!st && C.srv && (C.leftT -= dt) <= 0) {
+            C.leftT = .25;
+            const L = rt.q('.mz-task .mz-left'); if (L) L.textContent = Math.max(1, Math.ceil(C.run.left())) + ' с';
+            else if (C.run.st === 'sent' && !rt.q('.mz-task').hidden && !/сдаём работу…/.test(rt.q('.mz-task').textContent)) drawTask();
           }
         }
         if (city === 'kids' && here && K.spots.k_tramp) { const t0 = K.spots.k_tramp, ch = S.P.ch; if (Math.hypot(ch.x - t0.x, ch.z - t0.z) < 1.9 && ch.grounded && ch.y > .5 && S.P.mode === 'move') { S.P.push(0, 15, 0); rt.sfx('jump', { vol: .5, rate: 1.4 }); } }
         if (city === 'metro') { wantedTick(dt); prisonTick(dt); }
         arrestTick();
-        if (city === 'metro' && here && W().biz.length) { C.bizCash = Math.min(500, (C.bizCash || 0) + dt * W().biz.length * 10 / 60); }
-        tagT -= dt;
       },
       frame(dt, t){
         mk.rotation.y += dt * 1.5; iconS.position.y = 2.6 + Math.sin(t * 3) * .15;
@@ -1383,16 +1608,23 @@
       click, act, onMsg,
       esc(){ return false; },
       shown(on){ if (!on && C.fireOn) stopFire(false); },
-      stop(){ endTask(true); mk.parent?.remove(mk); for (const s of petS.values()) R.scene.remove(s.sp); for (const sp of Object.values(marks)) R.scene.remove(sp); if (site) R.scene.remove(site); for (const it of arrestItems.values()) X.remove(it); wEl.remove(); },
+      stop(){
+        C.stopped = true; offState?.(); offPub?.();
+        if (rt.petsBy === city) rt.petsBy = null;
+        endTask(true); mk.parent?.remove(mk); for (const s of petS.values()) R.scene.remove(s.sp); for (const sp of Object.values(marks)) R.scene.remove(sp);
+        if (site) { for (const m of site.children) if (m.userData.mzOwn) m.geometry.dispose(); R.scene.remove(site); }
+        for (const it of arrestItems.values()) X.remove(it); wEl.remove();
+      },
       // для проверки
-      _: { C, setJob, nextTask, stepDone, tasksFor, wallet: W, arrested },
+      _: { C, setJob, nextTask, stepDone, tasksFor, arrested, onPub, siteDraw },
     };
-    rt.city[city] = { jobBoard, familyBoard, petShop, buy, shop, bankPanel, bizPrompt, bizAct, dealer, quiz, housePrompt, houseAct, cookHome, mod };
-    // свой залог в 🎬 — когда сидишь
-    const acts0 = MZ.DEFS[city].actions;
-    MZ.DEFS[city].actions = r => { const L = acts0(r); if (city === 'metro' && r.zx.pr) L.unshift({ id: 'm_bail', icon: '💵', name: 'Залог 💵100' }); return L; };
+    rt.city[city] = { jobBoard, familyBoard, petShop, shop, buy, bankPanel, bizPrompt, bizAct, dealer, quiz, housePrompt, houseAct, cookHome, mod };
+    // начало: стройка — из сервера (или пробная), деньги и работа — как в прошлый раз
+    if (A) {
+      A.init().then(() => { if (C.stopped) return; drawWallet(); resume(); return A.pubGet(city); }).then(p => { if (!C.stopped && p) onPub(p); }, () => {});
+    } else siteDraw(0);
     return mod;
   }
 
-  root.MirCity = { taskList, SPOTS, spotsOf, ROLES_K, ROLES_M, PETS, QUIZ, WALLET, wallet, K_FIRES, K_CUST, K_PETS, K_BLD, M_BLD, TAXI_STOPS };
+  root.MirCity = { taskList, SPOTS, spotsOf, ROLES_K, ROLES_M, CARRY, PETS, QUIZ, K_FIRES, K_CUST, K_PETS, K_FIX, M_FIRES, K_BLD, M_BLD, TAXI_STOPS, roleFor, siteParts, shuffle };
 })();

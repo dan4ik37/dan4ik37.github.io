@@ -111,6 +111,12 @@ vec3 d37N( float i ) {
   if ( i < 5.5 ) return vec3( 0.0, 0.0, -1.0 );
   return vec3( 0.0, 1.0, 0.0 );
 }`;
+  // вода (не в простом режиме): глубина у 4 углов грани (блоки) и биты «берег» — из сетки (voxel-mesh.js), смешиваются в пикселе
+  const VS_WHEAD = `
+#ifdef D37_WATER
+varying vec4 vWD;
+varying float vWS;
+#endif`;
   const VS_NORMAL = `
 vec3 objectNormal = d37N( floor( vd.z / 4096.0 ) );`;
   // «вид из глаз» (рука, вещь в руке): глубина — в первом проценте диапазона (ближе любой стены), порядок внутри сохраняется;
@@ -148,6 +154,10 @@ vAo = mod( d37w, 4.0 ) / 3.0;
 vEm = mod( floor( d37w / 4.0 ), 16.0 ) / 15.0;
 #ifdef D37_WATER
 vWp = d37wp.xyz;
+vUvL.xy = mod( vd.xy, 32.0 ) / 16.0;${simple ? '' : `
+vec2 d37q = floor( vd.xy / 32.0 );
+vWD = vec4( mod( d37q.x, 32.0 ), floor( d37q.x / 32.0 ), mod( d37q.y, 32.0 ), floor( d37q.y / 32.0 ) ) / 3.0;
+vWS = mod( floor( d37w / 64.0 ), 16.0 );`}
 #endif
 #ifdef D37_WAVE
 if ( d37f > 0.5 && d37f < 1.5 ) {
@@ -227,9 +237,13 @@ vec4 d37Tex( vec3 p ) {
   vec2 f = clamp( fract( p.xy ) * uTS, 0.5, uTS - 0.5 );
   return texture2D( uTex, ( tile * uTS + f ) / ( uAtlasN * uTS ) );
 }`;
+  // (строку сдвига текстуры воды ищет крючок льда kubomir-weather.js — менять вместе с ним; d37IceK — сколько льда, его ставит
+  // тот же крючок; d37dl — солнце/луна с тенью, его копит свет three: кусок lights_fragment_begin воды)
   const FS_MAP = `
 vec3 d37uv = vUvL;
 #ifdef D37_WATER
+float d37IceK = 0.0;
+vec3 d37dl = vec3( 0.0 );
 d37uv.xy += vec2( uTime * 0.03, uTime * 0.05 );
 #endif
 vec4 d37c = d37Tex( d37uv );
@@ -256,7 +270,7 @@ gl_FragColor = vec4( gl_FragColor.rgb, ( uBloomK > 0.0 && vEm > 0.01 ) ? 1.0 + v
 #endif`;
   // существа и вещи (человечки, мобы, вещи в мире и в руках) — код 0,5 в альфе буфера сцены, пока рисуется кадр с отражениями
   // (E.GFXU.rt[1] = 1, post.js): отражения в экране (вода, лёд) их не показывают — «призрак» человечка под гладью читался как
-  // «он под водой» (жалоба владельца 22.10). Светящееся (альфа > 1 — свечение) не трогаем. Небо и блоки отражаются как были
+  // «он под водой» (жалоба владельца 22.10, T-019). Светящееся (альфа > 1 — свечение) не трогаем. Небо и блоки отражаются как были
   const FS_ACT = `
 #ifdef OPAQUE
 gl_FragColor = vec4( gl_FragColor.rgb, ( uD37Act.y > 0.5 && gl_FragColor.a <= 1.0001 ) ? 0.5 : gl_FragColor.a );
@@ -265,20 +279,101 @@ gl_FragColor = vec4( gl_FragColor.rgb, ( uD37Act.y > 0.5 && gl_FragColor.a <= 1.
   // вырезное по альфе (листва, трава, цветы, факелы, стекло) — код травы движка (E.FOLIAGE_GLSL после output_fragment, uniform
   // d37Rt = E.GFXU.rt): AO и контактные тени его не учитывают — без тёмных пятен вокруг травинок; флаг ставит движок (post.js)
   const foliageGLSL = () => typeof E.FOLIAGE_GLSL === 'string' && E.GFXU?.rt ? E.FOLIAGE_GLSL : '';
-  // вода: рябь по мировым координатам → блик солнца/луны и небо под острым углом (френель)
+  // ── Вода (T-044, 22.10.2026; владелец: «и что за вода?» — плоская ядовито-синяя гладь с косыми полосами, у берега не видно дна,
+  // ночью «пластик»). Только не в простом режиме (простой — текстура × цвет биома, как раньше).
+  // Цвет: толща воды — цвет биома (сетка: океан глубокий синий, река светлее, болото зеленовато-бурое; чем зеленее — тем мутнее),
+  // приглушённый; её освещает тот же свет, что кубики (солнце с тенью, небо, факелы, в пещере темно) — ночью вода тёмная, не неон.
+  // Прозрачность: глубина под гладью (сетка: 4 угла грани, билинейно) по пути преломлённого луча — у берега видно дно, глубже —
+  // темнее и мутнее (как туман цветом воды). Волны: карта нормалей uWN (128², мип-уровни — вдали волны сами гаснут, без «муара»)
+  // двумя слоями под углом к осям; вдали и под острым углом — ещё спокойнее. Отражение: небо по Френелю — модель неба движка
+  // (зенит → горизонт, с погодой — как у купола; вдали вода сама уходит в туман «Кубомира»: биом, непогода, пещера), заря у
+  // солнца, свет факелов; в пещере (свет неба 0) неба в воде нет; блик солнца/луны — по d37dl (свет three с тенью: в тени дерева блика нет),
+  // шире вдали (Токсвиг). Пена — у берега (биты сетки) с разрывами по высоте волн, мягко. Лёд (крючок kubomir-weather.js,
+  // d37IceK) — без волн, пены и прозрачности. Итог — «предумноженный» цвет и покрытие: дно за водой гаснет ровно на (1 − F)·T.
+  // uWP: x — сила волн, y — блеск (степень), z — пена, w — средняя яркость текстуры воды (лёгкий рисунок вблизи).
+  // Числа без NaN: нормализуем только ненулевое, pow — от неотрицательного, деление — на max(…).
+  const FS_WHEAD = `
+#ifdef D37_WATER
+varying vec4 vWD;
+varying float vWS;
+uniform sampler2D uWN;
+uniform vec3 uZenC;
+uniform vec3 uHorC;
+uniform vec3 uSunW;
+uniform vec3 uGlow;
+uniform vec4 uWP;
+#endif`;
+  // до света: толща воды (цвет биома), глубина в пикселе, мутность
+  const FS_WCOL = `
+#ifdef D37_WATER
+vec2 d37wq = clamp( vUvL.xy, 0.0, 1.0 );
+float d37dep = mix( mix( vWD.x, vWD.y, d37wq.x ), mix( vWD.z, vWD.w, d37wq.x ), d37wq.y );
+vec3 d37wt = vColor * vColor;
+float d37wl = dot( d37wt, vec3( 0.2126, 0.7152, 0.0722 ) );
+float d37mk = 1.0 - smoothstep( 0.4, 0.62, d37wt.b / max( d37wt.r + d37wt.g + d37wt.b, 0.001 ) );
+float d37dist = length( vViewPosition );
+float d37tx = ( dot( d37c.rgb, vec3( 0.3333 ) ) - uWP.w ) * ( 1.0 - smoothstep( 4.0, 14.0, d37dist ) );
+diffuseColor = vec4( max( mix( vec3( d37wl ), d37wt, mix( 0.7, 0.85, d37mk ) ) * mix( 0.18, 0.5, d37mk ), vec3( 0.003 ) ) * ( 1.0 + 0.5 * d37tx ), diffuseColor.a );
+#endif
+#include <alphamap_fragment>`;
+  // после света: волны, отражение, блик, прозрачность по глубине, пена
   const FS_WATER = `
 #ifdef D37_WATER
 {
   vec3 d37V = normalize( vViewPosition );
-  float d37a = uTime * 1.3;
-  vec3 d37pw = vec3( sin( vWp.x * 1.7 + d37a ) * 0.06 + sin( vWp.z * 2.3 - d37a * 1.3 ) * 0.04, 0.0, cos( vWp.z * 1.9 + d37a * 0.9 ) * 0.06 + cos( vWp.x * 2.9 - d37a * 1.1 ) * 0.04 );
-  vec3 d37n = normalize( normal + ( viewMatrix * vec4( d37pw, 0.0 ) ).xyz );
-  float d37fr = pow( 1.0 - max( dot( d37n, d37V ), 0.0 ), 4.0 );
-  vec3 d37r = reflect( -d37V, d37n );
-  float d37sp = pow( max( dot( d37r, uSunV ), 0.0 ), 90.0 );
-  reflectedLight.indirectDiffuse = mix( reflectedLight.indirectDiffuse, uSkyC * vLt.x, d37fr * 0.55 );
-  totalEmissiveRadiance += uSunC * d37sp * vLt.x;
-  diffuseColor.a = min( 1.0, diffuseColor.a + d37fr * 0.3 );
+  vec3 d37up = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
+  float d37fl = smoothstep( 0.5, 0.9, dot( geometryNormal, d37up ) );
+  float d37cv = clamp( dot( geometryNormal, d37V ), 0.0, 1.0 );
+  float d37wk = uWP.x * d37fl * ( 1.0 - d37IceK ) * mix( 1.0, 0.3, smoothstep( 10.0, 64.0, d37dist ) ) * ( 0.25 + 0.75 * smoothstep( 0.05, 0.5, d37cv ) );
+  vec2 d37p = vWp.xz;
+  vec4 d37ta = texture2D( uWN, vec2( 2.0 * d37p.x + d37p.y, 2.0 * d37p.y - d37p.x ) * 0.0625 + uTime * vec2( 0.011, 0.007 ) );
+  vec3 d37na = d37ta.xyz * 2.0 - 1.0;
+  vec2 d37g = vec2( 2.0 * d37na.x - d37na.y, d37na.x + 2.0 * d37na.y ) * 0.4472;
+  float d37len = length( d37na );
+  float d37hh = d37ta.w;
+#ifdef D37_WQ2
+  vec4 d37tb = texture2D( uWN, vec2( 4.0 * d37p.x - 3.0 * d37p.y, 3.0 * d37p.x + 4.0 * d37p.y ) * 0.0625 + uTime * vec2( -0.019, 0.023 ) );
+  vec3 d37nb = d37tb.xyz * 2.0 - 1.0;
+  d37g = d37g * 0.8 + vec2( 4.0 * d37nb.x + 3.0 * d37nb.y, 4.0 * d37nb.y - 3.0 * d37nb.x ) * 0.11;
+  d37len = min( d37len, length( d37nb ) );
+  d37hh = d37hh * 0.55 + d37tb.w * 0.45;
+#endif
+  vec3 d37nw = normalize( vec3( d37g.x * d37wk, 1.0, d37g.y * d37wk ) );
+  vec3 d37n = normalize( mix( geometryNormal, ( viewMatrix * vec4( d37nw, 0.0 ) ).xyz, d37fl ) );
+  // отражение неба по Френелю (вода: F0 = 0,02)
+  float d37ci = clamp( dot( d37n, d37V ), 0.0, 1.0 );
+  float d37F = ( 0.02 + 0.98 * pow( 1.0 - d37ci, 5.0 ) ) * ( 1.0 - 0.3 * d37mk );   // мутная (болото) — тусклее
+  vec3 d37rw = ( vec4( reflect( - d37V, d37n ), 0.0 ) * viewMatrix ).xyz;
+  vec3 d37refl = ( mix( uHorC, uZenC, pow( clamp( d37rw.y, 0.0, 1.0 ), 0.55 ) ) + uGlow * pow( max( dot( d37rw, uSunW ), 0.0 ), 6.0 ) ) * vLt.x + vLt.yzw * 0.2;
+  // блик солнца (ночью — луны): свет three с тенью (d37dl, со множителем π старого света three), шире там, где волны мельче пикселя
+  vec3 d37L = normalize( ( viewMatrix * vec4( uSunW, 0.0 ) ).xyz );
+  vec3 d37Hs = d37L + d37V;
+  vec3 d37H = d37Hs * inversesqrt( max( dot( d37Hs, d37Hs ), 1e-8 ) );
+  float d37pw = max( uWP.y / ( 1.0 + uWP.y * clamp( 1.0 - d37len - 0.006, 0.0, 1.0 ) ), 8.0 );   // Токсвиг; ±0,006 — 8 бит текстуры, не волны
+  float d37fh = 0.02 + 0.98 * pow( 1.0 - clamp( dot( d37H, d37V ), 0.0, 1.0 ), 5.0 );
+  float d37sp = pow( max( dot( d37n, d37H ), 0.0 ), d37pw ) * ( d37pw + 8.0 ) * 0.0398 * d37fh * 0.3183 * step( 0.0, dot( geometryNormal, d37L ) );
+  vec3 d37gl = d37dl * ( d37sp * vLt.x * ( 1.0 - 0.7 * d37IceK ) );
+  // дно: свет гаснет по пути преломлённого луча; лёд — непрозрачный
+  float d37ct = sqrt( max( 1.0 - ( 1.0 - d37cv * d37cv ) * 0.5653, 0.0 ) );
+  float d37T = mix( exp( - mix( 0.3, 1.6, d37mk ) * d37dep / max( d37ct, 0.25 ) ), 0.03, d37IceK );
+  // пена у берега (биты углов грани → билинейно), рваная по высоте волн, чуть «дышит»
+  float d37k = floor( vWS + 0.5 );
+  vec4 d37sb = vec4( mod( d37k, 2.0 ), mod( floor( d37k * 0.5 ), 2.0 ), mod( floor( d37k * 0.25 ), 2.0 ), floor( d37k * 0.125 ) );
+  float d37sh = mix( mix( d37sb.x, d37sb.y, d37wq.x ), mix( d37sb.z, d37sb.w, d37wq.x ), d37wq.y );
+  float d37fo = smoothstep( 0.6, 1.0, d37sh + ( d37hh - 0.5 ) * 0.8 + 0.08 * sin( uTime * 1.25664 + d37hh * 6.2832 ) ) * d37fl * ( 1.0 - d37IceK ) * uWP.z
+    * ( 1.0 - 0.7 * d37sb.x * d37sb.y * d37sb.z * d37sb.w ) * ( 1.0 - 0.6 * d37mk );   // канал в блок, лужица, болото — пены меньше
+  // предумноженный цвет и покрытие (свет толщи — что посчитал Ламберт с нашим светом; облучённость — для пены)
+  vec3 d37in = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;
+  vec3 d37pm = d37F * d37refl + ( 1.0 - d37F ) * ( 1.0 - d37T ) * d37in;
+  float d37al = 1.0 - ( 1.0 - d37F ) * d37T;
+  d37pm = mix( d37pm, d37in / max( diffuseColor.rgb, vec3( 0.003 ) ) * 0.8, d37fo );
+  d37al = mix( d37al, 1.0, d37fo );
+  d37pm += d37gl;
+  d37al = clamp( d37al + dot( d37gl, vec3( 0.2126, 0.7152, 0.0722 ) ), 0.0, 1.0 );
+  reflectedLight.directDiffuse = vec3( 0.0 );
+  reflectedLight.indirectDiffuse = d37pm / max( d37al, 0.004 );
+  totalEmissiveRadiance = vec3( 0.0 );
+  diffuseColor = vec4( diffuseColor.rgb, d37al );
 }
 #endif`;
   // существа (Ламберт / мультяшный / Фонг world3d, коробки мобов): тот же свет, что у кубиков, но одним значением на всё
@@ -352,14 +447,53 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
         ntex.wrapS = ntex.wrapT = T.RepeatWrapping; ntex.anisotropy = aniso(); ntex.needsUpdate = true;
       }
       U.uNTex.value = ntex;
+      // вода: средняя яркость её рисунка (линейная, как читает шейдер) — рисунок вблизи лишь чуть светлее/темнее толщи
+      const wi = V.texIdx?.get('water'), wd = wi != null ? all[wi] : null;
+      if (wd) { let s = 0; for (let i = 0; i < wd.length; i += 4) s += (Math.pow(wd[i] / 255, 2.2) + Math.pow(wd[i + 1] / 255, 2.2) + Math.pow(wd[i + 2] / 255, 2.2)) / 3; U.uWP.value.w = s / (wd.length / 4); }
     }
+    // Волны воды — карта нормалей 128² (RGB — нормаль, A — высота: пена рвётся по гребням): сумма 20 волн с целыми частотами
+    // (повторяется без шва), направления вразброс; производные — точные. Мип-уровни (усреднённые нормали короче — по ним блик
+    // вдали шире) — сами
+    function waterNormals(){
+      const N = 128, d = new Uint8Array(N * N * 4), rnd = V.rng(0x77a7e5), W = [], used = new Set();
+      while (W.length < 20) {
+        const kx = Math.round((rnd() * 2 - 1) * 7), ky = Math.round((rnd() * 2 - 1) * 7), r2 = kx * kx + ky * ky;
+        if (r2 < 2 || r2 > 49 || used.has(kx * 16 + ky) || used.has(-kx * 16 - ky)) continue;
+        used.add(kx * 16 + ky);
+        W.push([kx, ky, rnd() * 6.2832, Math.pow(r2, -.75) * (.75 + .5 * rnd())]);
+      }
+      const h = new Float32Array(N * N), gx = new Float32Array(N * N), gy = new Float32Array(N * N);
+      let lo = 1e9, hi = -1e9, g2 = 0;
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        let s = 0, dx = 0, dy = 0;
+        for (const [kx, ky, p, a] of W) { const ph = 6.283185 * (kx * x + ky * y) / N + p, c = Math.cos(ph); s += a * Math.sin(ph); dx += a * kx * c; dy += a * ky * c; }
+        const i = y * N + x; h[i] = s; gx[i] = dx; gy[i] = dy; g2 += dx * dx + dy * dy;
+        if (s < lo) lo = s; if (s > hi) hi = s;
+      }
+      const k = .4 / Math.sqrt(g2 / (N * N));   // средний наклон волн ≈ 0,4
+      for (let i = 0; i < N * N; i++) {
+        const tx = -gx[i] * k, ty = -gy[i] * k, il = 1 / Math.hypot(tx, ty, 1), o = i * 4;
+        d[o] = Math.round((tx * il * .5 + .5) * 255); d[o + 1] = Math.round((ty * il * .5 + .5) * 255); d[o + 2] = Math.round((il * .5 + .5) * 255);
+        d[o + 3] = Math.round((h[i] - lo) / (hi - lo) * 255);
+      }
+      const t = new T.DataTexture(d, N, N, T.RGBAFormat, T.UnsignedByteType);
+      t.wrapS = t.wrapT = T.RepeatWrapping; t.magFilter = T.LinearFilter; t.minFilter = T.LinearMipmapLinearFilter; t.generateMipmaps = true;
+      t.anisotropy = aniso(); t.needsUpdate = true;
+      return t;
+    }
+    const WQ = R.q === 'low' ? 0 : 1;   // «низкая»: один слой волн, без пены
     const U = { uTex: { value: null }, uAtlasN: { value: 1 }, uTS: { value: V.TEX || 16 }, uNTex: { value: null }, uNStr: { value: .75 }, uTime: { value: 0 }, uFlick: { value: 1 }, uMinAmb: { value: .055 }, uBlockK: { value: 1.7 }, uEmK: { value: 1.25 },
       uDay: { value: 1 }, uBloomK: { value: 0 }, uSway: { value: 1 }, uD37Wind: { value: E.GFXU?.wind || new Float32Array([0, 0, .8, .6]) },
       uSunV: { value: new T.Vector3(0, 1, 0) }, uSunC: { value: new T.Color(0, 0, 0) }, uSkyC: { value: new T.Color(.5, .6, .8) },
+      // вода: карта нормалей, небо (зенит, горизонт — модель неба движка с погодой), направление на солнце/луну (мир), свечение у
+      // солнца на заре; uWP — сила волн, блеск, пена, средняя яркость рисунка воды
+      uWN: { value: null }, uZenC: { value: new T.Color(.2, .38, .78) }, uHorC: { value: new T.Color(.62, .72, .86) }, uSunW: { value: new T.Vector3(0, 1, 0) },
+      uGlow: { value: new T.Color(0, 0, 0) }, uWP: { value: new T.Vector4(WQ ? .42 : .36, 900, WQ ? .5 : 0, .8) },
       // погода по климатическим зонам (кусок D37_CLIM движка, D37_VOXZ): x — снег в «всегда зима», y, z — мокрое и лужи в «зимы
       // нет» (снега там нет), w — 1: зоны учитываются (0 — всё как обычная зона; ставит игра)
       d37ClZ: { value: new Float32Array([0, 0, 0, 0]) } };
     VR.U = U;
+    U.uWN.value = waterNormals();
     // ── материалы ──
     // Для «паков» шейдеров движка (своих правок этого файла им не нужно): у каждой сетки V.LAYERS свой материал VR.mats[слой]
     // с метками material.userData.d37vox = { layer, cutout, foliage, water, glass, emissive: 'vertex' } и defines D37_VOX,
@@ -374,6 +508,11 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     // лампы движка (точечные) — до солнца в куске lights_fragment_begin: запомнить их вклад (d37pt), чтобы «свет неба» их не гасил
     const LFB = String(T.ShaderChunk.lights_fragment_begin || ''), SPOT = '#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )';
     const LFB2 = LFB.includes(SPOT) ? LFB.replace(SPOT, 'd37pt = reflectedLight.directDiffuse;\n' + SPOT) : '';
+    // вода: солнце/луна уже с тенью — копим цвет направленного света перед RE_Direct (блик в тени дерева гаснет); не нашли места
+    // (другой three) — блика нет, остальное работает
+    const DL_A = 'getDirectionalLightInfo( directionalLight, geometry, directLight );', DL_B = 'RE_Direct( directLight, geometry, material, reflectedLight );';
+    const LFBW = (() => { const a = LFB2.indexOf(DL_A), b = a < 0 ? -1 : LFB2.indexOf(DL_B, a); return b < 0 ? '' : LFB2.slice(0, b) + 'd37dl += directLight.color;\n\t\t' + LFB2.slice(b); })();
+    VR.waterLight = !!LFBW;
     const LAYERS = V.LAYERS || ['solid', 'cutout', 'water', 'foliage', 'glass'];
     const shaderHooks = new Map();   // слой | '*' → [{ id, fn }]
     const hookKey = kind => [...(shaderHooks.get(kind) || []), ...(shaderHooks.get('*') || [])].map(h => h.id).join(',');
@@ -396,16 +535,17 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
         if (ACT) sh.uniforms.uD37Act = { value: E.GFXU?.rt || ACT0 };
         // #include — только с новой строки (иначе шейдер не собирается)
         sh.vertexShader = sh.vertexShader
-          .replace('#include <common>', '#include <common>\n' + VS_HEAD)
+          .replace('#include <common>', '#include <common>\n' + VS_HEAD + (simple ? '' : VS_WHEAD))
           .replace('#include <beginnormal_vertex>', VS_NORMAL)
           .replace('#include <begin_vertex>', VS_BEGIN(simple))
           .replace('#include <project_vertex>', VS_FP);
         let fs = sh.fragmentShader
-          .replace('#include <common>', '#include <common>\n' + FS_COMMON + (FOL ? '\nuniform vec4 d37Rt;' : '') + (ACT ? '\nuniform vec4 uD37Act;' : '') + (gl2 ? FS_TEX2 : FS_TEX1))
+          .replace('#include <common>', '#include <common>\n' + FS_COMMON + (simple ? '' : FS_WHEAD) + (FOL ? '\nuniform vec4 d37Rt;' : '') + (ACT ? '\nuniform vec4 uD37Act;' : '') + (gl2 ? FS_TEX2 : FS_TEX1))
           .replace('#include <map_fragment>', FS_MAP)
           .replace('#include <color_fragment>', FS_COLOR)
           .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + FS_LIGHT + (simple ? '' : FS_WATER));
-        if (LFB2 && !simple) fs = fs.replace('#include <lights_fragment_begin>', LFB2);
+        if (!simple && kind === 'water') fs = fs.replace('#include <alphamap_fragment>', FS_WCOL);
+        if (LFB2 && !simple) fs = fs.replace('#include <lights_fragment_begin>', kind === 'water' && LFBW ? LFBW : LFB2);
         if (!simple) fs = fs.replace('#include <normal_fragment_maps>', FS_NMAP);
         if (FOL) fs = fs.replace('#include <output_fragment>', '#include <output_fragment>\n' + FOL);
         if (!simple) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n' + FS_BLOOM + (ACT ? FS_ACT : ''));
@@ -416,7 +556,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
           try { h.fn(sh, { layer: kind, gl2, material: m, fp: !!m.defines?.D37_FP }); } catch (e) { sh.vertexShader = v0; sh.fragmentShader = f0; console.warn('Кубомир: кусок шейдера «' + h.id + '» —', e); }
         }
       };
-      m.customProgramCacheKey = () => 'd37vox5-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '') + (m.defines?.D37_FP ? 'f' : '') + (m.defines?.D37_ACT ? 'a' : '') + (FOL ? 'F' : '') + (simple ? '' : hookKey(kind));
+      m.customProgramCacheKey = () => 'd37vox6-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '') + (m.defines?.D37_FP ? 'f' : '') + (m.defines?.D37_ACT ? 'a' : '') + (FOL ? 'F' : '') + (simple ? '' : hookKey(kind));
       return m;
     }
     const LAYER_OPTS = {
@@ -435,6 +575,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       if (fp) m.defines.D37_FP = 1;
       if (act) m.defines.D37_ACT = 1;
       if (nmapOn() && k !== 'water') m.defines.D37_NMAP = 1;   // рельеф текстур — на «высокой» (WebGL2)
+      if (k === 'water' && WQ) m.defines.D37_WQ2 = 1;   // вода: второй слой волн и пена (кроме «низкой»)
       m.userData.d37vox = { layer: k, cutout: !!opt.alphaTest, foliage: k === 'foliage', water: k === 'water', glass: k === 'glass', emissive: 'vertex', fp: !!fp };
       return m;
     };
@@ -777,7 +918,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       if (VR.safe) return;
       VR.safe = true; gl2 = false;
       const old = mats, oldD = depthMats, oldF = fpMats, oldA = actMats;
-      mats = VR.mats = makeMats(); depthMats = {}; fpMats = {}; actMats = {};
+      mats = VR.mats = makeMats(); depthMats = {}; fpMats = {};
       buildTextures();
       crackMat.fragmentShader = crackFS1; crackMat.needsUpdate = true;
       for (const c of VR.chunks) for (const k of LAYERS) { const m = c.vis?.[k]; if (m) { m.material = ownMats[k] || mats[k]; m.customDepthMaterial = depthMat(k); } }
@@ -807,6 +948,14 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       if (R.sunDir && cam) { sv.copy(R.sunDir).transformDirection(cam.matrixWorldInverse); U.uSunV.value.copy(sv); }
       if (R.sun) { const k = Math.min(1.6, R.sun.intensity * .55); U.uSunC.value.copy(R.sun.color).multiplyScalar(R.sun.castShadow || R.sun.intensity > .05 ? k : 0); }
       if (R.sky?.hor) { const s = R.sky, zc = s.zen || s.hor; U.uSkyC.value.setRGB(s.hor[0] * .6 + zc[0] * .4, s.hor[1] * .6 + zc[1] * .4, s.hor[2] * .6 + zc[2] * .4); }
+      // вода: небо для отражения — та же модель неба движка (с погодой и цветом тумана мира), что у купола; заря — свечение у солнца
+      const M = R.sky;
+      if (M?.hor) {
+        U.uHorC.value.setRGB(M.hor[0], M.hor[1], M.hor[2]); if (M.zen) U.uZenC.value.setRGB(M.zen[0], M.zen[1], M.zen[2]);
+        const g = M.glow, dk = M.dusk, dq = M.dusk01 || 0;
+        if (g && dk) U.uGlow.value.setRGB(g[0] * .5 + dk[0] * dq * .6, g[1] * .5 + dk[1] * dq * .6, g[2] * .5 + dk[2] * dq * .6);
+      }
+      if (R.sunDir) U.uSunW.value.copy(R.sunDir);
       U.uDay.value = 1 - Math.max(0, Math.min(1, R.night || 0));
       U.uBloomK.value = R.q === 'high' && R.post ? .7 : 0;
       if (!VR.safe && checkN < 240) { checkN++; if ((checkN & 7) === 0 && LAYERS.some(k => failed(mats[k]))) goSafe(); }
@@ -819,7 +968,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       for (const m of Object.values(depthMats)) m.dispose();
       for (const m of Object.values(fpMats)) m.dispose();
       for (const m of Object.values(actMats)) m.dispose();
-      tex?.dispose(); ntex?.dispose(); selGeo.dispose(); sel.material.dispose(); crack.geometry.dispose(); crackMat.dispose();
+      tex?.dispose(); ntex?.dispose(); U.uWN.value?.dispose(); selGeo.dispose(); sel.material.dispose(); crack.geometry.dispose(); crackMat.dispose();
       R.scene.remove(sel); R.scene.remove(crack);
       if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); } ghostMat?.dispose();
       if (prev) R.scene.remove(prev); for (const g of prevGeo.values()) g.dispose(); prevGeo.clear(); prevMat.dispose();

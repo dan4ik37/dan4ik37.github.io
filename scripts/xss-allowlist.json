@@ -1,0 +1,7066 @@
+{
+ "version": 1,
+ "about": "Проверенные вручную находки scripts/xss-scan.cjs (T-011). Группа = файл + функция + вид; xs — выражения; c — причина из claims. Новая находка без записи ломает scripts/xss-test.cjs: либо экранируй (esc), либо добавь сюда с причиной.",
+ "claims": {
+  "const": "константа разработчика (значок, подпись, цвет, список, адрес) — не чужой текст",
+  "num-local": "число из состояния этой игры/страницы или статистики этого браузера (счётчик, очки, уровень, размер)",
+  "num-db": "число с сервера (int/bigint в базе, результат RPC или правил из SQL): разметка в число не попадёт",
+  "id-db": "номер/uuid записи из базы (bigint identity или uuid: форум, идеи, друзья, заявки, уведомления, сообщества, auth.users) — не текст игрока; ключи официальных каналов создаёт только персонал",
+  "id-server": "текстовый номер, который выдаёт сам сервер (игры игроков, заказ, реклама, повтор): игрок его не выбирает",
+  "id-yt": "номер ролика YouTube (11 знаков [A-Za-z0-9_-]) из снимка/API YouTube",
+  "yt-data": "данные ролика из снимка/API YouTube (число просмотров, дата, картинка): игроки их не вводят",
+  "enum": "значение из закрытого списка (check/enum в SQL или таблица в коде)",
+  "sql-checked": "значение проверяет база (check/регулярка в SQL), например цвет роли ^#[0-9a-f]{6}$",
+  "regex": "значение уже проверено/вырезано регулярным выражением (только безопасные знаки), раньше по коду",
+  "esc-up": "уже экранировано выше по цепочке или собрано через esc/jsAttr (анализатор не видит, что поле — готовый html)",
+  "html-helper": "разметка из функции сайта, которая сама экранирует вставки (её тело разбирает этот же тест)",
+  "html-arg": "разметку передаёт вызывающий; все вызовы проверены: только константы и esc()",
+  "peer-clean": "значение от другого игрока: GameRoom.clean (room.js, table.js, netplay.js, krokodil fromHost) заменяет < > & \" ' ` ещё при получении; здесь текст или атрибут в кавычках",
+  "admin": "пишет только админ (site_config, панель администратора)",
+  "server-url": "адрес выдаёт наш сервер (api/*)",
+  "url-checked": "адрес проверен перед использованием (https, свой путь, начало «#/» или регулярка)",
+  "dom-rt": "значение из data-атрибута или поля, которое код сам записал (с esc), — вернулось обратно",
+  "sandbox": "чужой код выполняется в песочнице (iframe sandbox + CSP без сети / Worker) — так задумано",
+  "img-src": "адрес картинки (blob:/data:/подписанная ссылка хранилища): javascript: в img.src не выполняется",
+  "self-made": "адрес сделан самим браузером (canvas.toDataURL, URL.createObjectURL), игрок его не вводит",
+  "not-html": "не HTML и не ссылка (JS-код, GLSL, текст для буфера, дженерики Java, свойство объекта): анализатор принял за разметку"
+ },
+ "helpers": [],
+ "groups": [
+  {
+   "f": "api/_lib/errlog.js",
+   "fn": "<top>",
+   "k": "markup:raw",
+   "c": "not-html",
+   "n": "исходник скрипта ловца ошибок: toString() своих функций (константа файла), данных игроков нет; errlog-test сверяет блок в index.html",
+   "xs": [
+    "ERR_JS",
+    "lfSrc(errCore)",
+    "lfSrc(errLog)"
+   ]
+  },
+  {
+   "f": "api/_lib/page.js",
+   "fn": "page",
+   "k": "markup:raw",
+   "c": "html-arg",
+   "n": "script передают routes: JSON.stringify(константы) и playerJs(id по регулярному выражению)",
+   "xs": [
+    "script"
+   ]
+  },
+  {
+   "f": "api/_lib/page.js",
+   "fn": "page",
+   "k": "markup:raw",
+   "c": "regex",
+   "n": "spa проверен регулярным выражением /^[\\w/-]+$/ в условии выше",
+   "xs": [
+    "JSON.stringify('/' + spa)"
+   ]
+  },
+  {
+   "f": "api/_lib/page.js",
+   "fn": "page",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "canonical = SITE + путь страницы (id проверены регулярными выражениями в routes/*)",
+   "xs": [
+    "esc(url)"
+   ]
+  },
+  {
+   "f": "api/_lib/pay.js",
+   "fn": "freedomReply",
+   "k": "markup:text",
+   "c": "const",
+   "n": "md5-подпись, посчитанная здесь же (hex)",
+   "xs": [
+    "r.pg_sig"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/fonts.js",
+   "fn": "rowHtml",
+   "k": "markup:attr",
+   "c": "const",
+   "xs": [
+    "r.id"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
+   "fn": "card",
+   "k": "markup:text",
+   "c": "enum",
+   "n": "статусы идей из таблицы ST",
+   "xs": [
+    "stOf(i.st).join(' ')"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
+   "fn": "card",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "forum_threads/forum_posts/ideas.id — bigint identity",
+   "xs": [
+    "i.id"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
+   "fn": "forumPage",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "forum_threads/forum_posts/ideas.id — bigint identity",
+   "xs": [
+    "t.id"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
+   "fn": "ideaPage",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "forum_threads/forum_posts/ideas.id — bigint identity",
+   "xs": [
+    "r.id"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
+   "fn": "post",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "forum_threads/forum_posts/ideas.id — bigint identity",
+   "xs": [
+    "p.id"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
+   "fn": "publicText",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "own[] — только dan4ik37.vercel.app/путь (OWN, без //) — T-011",
+   "xs": [
+    "esc(own[+i])"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
+   "fn": "threadPage",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "forum_threads/forum_posts/ideas.id — bigint identity",
+   "xs": [
+    "first.id"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
+   "fn": "threadPage",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "forum_threads/forum_posts/ideas.id — bigint identity",
+   "xs": [
+    "t.id"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/history.js",
+   "fn": "handler",
+   "k": "markup:text",
+   "c": "yt-data",
+   "n": "годы из дат роликов канала",
+   "xs": [
+    "y"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/history.js",
+   "fn": "handler",
+   "k": "markup:url",
+   "c": "const",
+   "n": "slug из topics.js",
+   "xs": [
+    "t.slug"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/history.js",
+   "fn": "handler",
+   "k": "markup:url",
+   "c": "yt-data",
+   "n": "годы из дат роликов канала",
+   "xs": [
+    "y"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/invite.js",
+   "fn": "handler",
+   "k": "markup:url",
+   "c": "regex",
+   "n": "код проверен /^[a-z0-9]{6,12}$/ в начале handler",
+   "xs": [
+    "join"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/legal.js",
+   "fn": "handler",
+   "k": "markup:text",
+   "c": "const",
+   "n": "тексты /terms /refund /contacts — константы в файле",
+   "xs": [
+    "p.body"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/nick.js",
+   "fn": "opt",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "ключи словарей генератора ников",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/quiz.js",
+   "fn": "handler",
+   "k": "markup:url",
+   "c": "const",
+   "xs": [
+    "topic.slug"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/reklama.js",
+   "fn": "handler",
+   "k": "markup:url",
+   "c": "const",
+   "xs": [
+    "t.slug"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/topic.js",
+   "fn": "topicPage",
+   "k": "markup:url",
+   "c": "const",
+   "n": "slug темы + номер страницы",
+   "xs": [
+    "href(p + 1)",
+    "href(p - 1)"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/typing.js",
+   "fn": "handler",
+   "k": "markup:raw",
+   "c": "const",
+   "n": "тексты для набора — константы файла",
+   "xs": [
+    "JSON.stringify(TEXTS.map(plain))"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/ugc.js",
+   "fn": "gamePage",
+   "k": "markup:url",
+   "c": "regex",
+   "n": "id игры проверен /^[0-9a-f]{8}$/ в начале gamePage",
+   "xs": [
+    "playUrl"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/videos.js",
+   "fn": "handler",
+   "k": "markup:attr",
+   "c": "yt-data",
+   "n": "годы и номера страниц архива",
+   "xs": [
+    "y"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/videos.js",
+   "fn": "handler",
+   "k": "markup:text",
+   "c": "yt-data",
+   "n": "годы и номера страниц архива",
+   "xs": [
+    "y"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/videos.js",
+   "fn": "handler",
+   "k": "markup:url",
+   "c": "const",
+   "xs": [
+    "t.slug"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/videos.js",
+   "fn": "handler",
+   "k": "markup:url",
+   "c": "yt-data",
+   "n": "годы и номера страниц архива",
+   "xs": [
+    "href(info.page)",
+    "href(p + 1)",
+    "href(p - 1)"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/videos.js",
+   "fn": "handler",
+   "k": "markup:url",
+   "c": "yt-data",
+   "n": "годы и номера страниц архива",
+   "xs": [
+    "y"
+   ]
+  },
+  {
+   "f": "api/sitemap.js",
+   "fn": "handler",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "url(): <loc> из тех же номеров",
+   "xs": [
+    "urls.join('\\n')"
+   ]
+  },
+  {
+   "f": "api/sitemap.js",
+   "fn": "url",
+   "k": "markup:text",
+   "c": "id-db",
+   "n": "адреса /v/<id ролика YouTube>, /forum/<номер>, /ideas/<номер>, /topic/<slug из topics.js>",
+   "xs": [
+    "loc"
+   ]
+  },
+  {
+   "f": "api/video.js",
+   "fn": "linkify",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "linkify: текст уже прошёл esc() и только потом ссылки http(s)://… оборачиваются в <a>",
+   "xs": [
+    "u.length > 60 ? u.slice(0, 57) + '…' : u"
+   ]
+  },
+  {
+   "f": "api/video.js",
+   "fn": "linkify",
+   "k": "markup:url",
+   "c": "esc-up",
+   "n": "linkify: текст уже прошёл esc() и только потом ссылки http(s)://… оборачиваются в <a>",
+   "xs": [
+    "u"
+   ]
+  },
+  {
+   "f": "api/video.js",
+   "fn": "playerJs",
+   "k": "markup:raw",
+   "c": "regex",
+   "n": "id проверен VIDEO_ID_RE (11 знаков [A-Za-z0-9_-]) в начале handler",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "js/core/ad-direct.js",
+   "fn": "billboard",
+   "k": "sink:src [im]",
+   "c": "img-src",
+   "n": "подписанная ссылка хранилища ads",
+   "xs": [
+    "src"
+   ]
+  },
+  {
+   "f": "js/core/ad-direct.js",
+   "fn": "render",
+   "k": "markup:attr",
+   "c": "enum",
+   "n": "класс формата (card/banner/rail/board) и kind креатива — check в ads.sql",
+   "xs": [
+    "cr.kind",
+    "g"
+   ]
+  },
+  {
+   "f": "js/core/ad-places.js",
+   "fn": "afterRound",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "s.rounds"
+   ]
+  },
+  {
+   "f": "js/core/age.js",
+   "fn": "settingsRow",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "год рождения из d37_age / user_age",
+   "xs": [
+    "y"
+   ]
+  },
+  {
+   "f": "js/core/age.js",
+   "fn": "ugcSelect",
+   "k": "markup:attrs",
+   "c": "html-arg",
+   "n": "атрибут передают вызывающие: data-age-rate, data-s3p-age — константы",
+   "xs": [
+    "o.attr ? ' ' + o.attr : ''"
+   ]
+  },
+  {
+   "f": "js/core/celebrate.js",
+   "fn": "advRender",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "A.day"
+   ]
+  },
+  {
+   "f": "js/core/celebrate.js",
+   "fn": "banner",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "A.day"
+   ]
+  },
+  {
+   "f": "js/core/celebrate.js",
+   "fn": "render",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "amt"
+   ]
+  },
+  {
+   "f": "js/core/celebrate.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "const",
+   "n": "значки и названия праздников/погоды из таблиц climate.js",
+   "xs": [
+    "cal.icon",
+    "nx ? ` Ближайший праздник: ${nx.h.icon} ${esc(nx.h.name)}${nxD > 0 ? `",
+    "st ? ` · ${c.STATE_ICONS[st.state] || ''} ${esc(c.STATE_NAMES[st.state"
+   ]
+  },
+  {
+   "f": "js/core/celebrate.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "amt"
+   ]
+  },
+  {
+   "f": "js/core/celebrate.js",
+   "fn": "srvLine",
+   "k": "markup:attr",
+   "c": "num-db",
+   "n": "счётчики новогодних наград с сервера",
+   "xs": [
+    "srv.need"
+   ]
+  },
+  {
+   "f": "js/core/celebrate.js",
+   "fn": "srvLine",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "счётчики новогодних наград с сервера",
+   "xs": [
+    "srv.big ? '⛄ ✓' : `⛄ ${Math.min(srv.total, srv.need)}/${srv.need}`"
+   ]
+  },
+  {
+   "f": "js/core/fullscreen.js",
+   "fn": "btn",
+   "k": "markup:attr",
+   "c": "html-arg",
+   "n": "вызывают horde/kubomir/mir/mir-play/studio3d с постоянными селекторами и подписями; lbl — тот же o.label, прочитанный из data-gs-label",
+   "xs": [
+    "o.cls || ''",
+    "o.label",
+    "sel"
+   ]
+  },
+  {
+   "f": "js/core/fullscreen.js",
+   "fn": "btn",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "вызывают horde/kubomir/mir/mir-play/studio3d с постоянными селекторами и подписями; lbl — тот же o.label, прочитанный из data-gs-label",
+   "xs": [
+    "on ? 'Обычный экран' : o.label"
+   ]
+  },
+  {
+   "f": "js/core/fullscreen.js",
+   "fn": "rotBtn",
+   "k": "markup:attr",
+   "c": "html-arg",
+   "n": "вызывают horde/kubomir/mir/mir-play/studio3d с постоянными селекторами и подписями; lbl — тот же o.label, прочитанный из data-gs-label",
+   "xs": [
+    "o.cls || ''"
+   ]
+  },
+  {
+   "f": "js/core/fullscreen.js",
+   "fn": "setBtn",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "вызывают horde/kubomir/mir/mir-play/studio3d с постоянными селекторами и подписями; lbl — тот же o.label, прочитанный из data-gs-label",
+   "xs": [
+    "on ? 'Обычный экран' : lbl"
+   ]
+  },
+  {
+   "f": "js/core/gfx-settings.js",
+   "fn": "range",
+   "k": "markup:text",
+   "c": "const",
+   "n": "подписи и форматы чисел из таблиц настроек",
+   "xs": [
+    "FMT[k] ? FMT[k](val(k)) : val(k)"
+   ]
+  },
+  {
+   "f": "js/core/gfx-settings.js",
+   "fn": "row",
+   "k": "markup:text",
+   "c": "const",
+   "n": "подписи и форматы чисел из таблиц настроек",
+   "xs": [
+    "hint"
+   ]
+  },
+  {
+   "f": "js/core/premium.js",
+   "fn": "loadScript",
+   "k": "sink:src [s]",
+   "c": "url-checked",
+   "n": "loadScript теперь принимает только https://…; pay() переходит только на https://",
+   "xs": [
+    "src"
+   ]
+  },
+  {
+   "f": "js/core/premium.js",
+   "fn": "pay",
+   "k": "sink:href [location]",
+   "c": "url-checked",
+   "n": "loadScript теперь принимает только https://…; pay() переходит только на https://",
+   "xs": [
+    "p.url"
+   ]
+  },
+  {
+   "f": "js/core/qr.js",
+   "fn": "svg",
+   "k": "markup:attr",
+   "c": "num-local",
+   "n": "размер QR-матрицы",
+   "xs": [
+    "n"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "draw",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "D37Settings.menu зовут kubomir/mir/podzem-ui: константы и esc()",
+   "xs": [
+    "it.icon || ''",
+    "it.text",
+    "o.sub",
+    "o.title || 'Меню'"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "fov",
+   "k": "markup:text",
+   "c": "const",
+   "n": "вкладки и действия регистрирует код сайта; значения — числа настроек",
+   "xs": [
+    "v",
+    "v + 22"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "k",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "вкладки и действия регистрирует код сайта; значения — числа настроек",
+   "xs": [
+    "a.id"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "keysHtml",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "вкладки и действия регистрирует код сайта; значения — числа настроек",
+   "xs": [
+    "a.id"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "onInput",
+   "k": "sink:innerHTML",
+   "c": "num-local",
+   "xs": [
+    "FMT[k] ? FMT[k](get(k)) : String(get(k))"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "range",
+   "k": "markup:text",
+   "c": "const",
+   "n": "вкладки и действия регистрирует код сайта; значения — числа настроек",
+   "xs": [
+    "FMT[k] ? FMT[k](get(k)) : get(k)"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "renderAll",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "вкладки и действия регистрирует код сайта; значения — числа настроек",
+   "xs": [
+    "t.id"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "renderAll",
+   "k": "markup:text",
+   "c": "const",
+   "n": "вкладки и действия регистрирует код сайта; значения — числа настроек",
+   "xs": [
+    "t.icon"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "renderBody",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "t.render() вкладок настроек строит html из констант, чисел и esc()",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "row",
+   "k": "markup:text",
+   "c": "const",
+   "n": "вкладки и действия регистрирует код сайта; значения — числа настроек",
+   "xs": [
+    "hint"
+   ]
+  },
+  {
+   "f": "js/engine/lang-cs.js",
+   "fn": "boot",
+   "k": "sink:new Function",
+   "c": "not-html",
+   "n": "проба номера строки: константа",
+   "xs": [
+    "new Function('$', '$.e = new Error(\"p\");\\n//# sourceURL=d37cs-0.js')"
+   ]
+  },
+  {
+   "f": "js/engine/lang-cs.js",
+   "fn": "startC",
+   "k": "sink:new Function",
+   "c": "sandbox",
+   "n": "переведённый C#-скрипт игрока выполняется в песочнице (iframe sandbox + Worker, CSP без сети)",
+   "xs": [
+    "new Function('$', C.js + '\\n//# sourceURL=d37cs-' + id + '.js')"
+   ]
+  },
+  {
+   "f": "js/engine/lang-java.js",
+   "fn": "boot",
+   "k": "sink:new Function",
+   "c": "not-html",
+   "n": "проба номера строки: константа",
+   "xs": [
+    "new Function('$', '$.e = new Error(\"p\");\\n//# sourceURL=d37java-0.js')"
+   ]
+  },
+  {
+   "f": "js/engine/lang-java.js",
+   "fn": "collectorX",
+   "k": "markup:tagname",
+   "c": "not-html",
+   "n": "это строка с дженериком Java (Map<Boolean,…>), а не разметка",
+   "xs": [
+    "d.t || 'Object'",
+    "et"
+   ]
+  },
+  {
+   "f": "js/engine/lang-java.js",
+   "fn": "startC",
+   "k": "sink:new Function",
+   "c": "sandbox",
+   "n": "переведённый Java-скрипт игрока выполняется в песочнице",
+   "xs": [
+    "new Function('$', C.js + '\\n//# sourceURL=d37java-' + id + '.js')"
+   ]
+  },
+  {
+   "f": "js/engine/lang-lua.js",
+   "fn": "compile",
+   "k": "sink:new Function",
+   "c": "sandbox",
+   "n": "переведённый Lua-скрипт игрока выполняется в песочнице",
+   "xs": [
+    "new Function('$R', '$E', '$CN', '$CTX', '$SITES', '\"use strict\";' + HE"
+   ]
+  },
+  {
+   "f": "js/engine/lang-wasm.js",
+   "fn": "onmessage",
+   "k": "sink:import() [import(CDN + 'gen/bundle.js')]",
+   "c": "const",
+   "n": "CDN-адрес сборщика и своя страница studio/rust.html",
+   "xs": [
+    "CDN + 'gen/bundle.js'"
+   ]
+  },
+  {
+   "f": "js/engine/lang-wasm.js",
+   "fn": "rustFrame",
+   "k": "sink:src [el]",
+   "c": "const",
+   "n": "CDN-адрес сборщика и своя страница studio/rust.html",
+   "xs": [
+    "ROOT + RUST_PAGE"
+   ]
+  },
+  {
+   "f": "js/engine/rigid.js",
+   "fn": "load",
+   "k": "sink:import() [import(src || E.rigid.URL)]",
+   "c": "const",
+   "n": "адрес Rapier на jsDelivr",
+   "xs": [
+    "src || E.rigid.URL"
+   ]
+  },
+  {
+   "f": "js/engine/script.js",
+   "fn": "onmessage",
+   "k": "sink:new Function",
+   "c": "not-html",
+   "n": "проба номера строки: константа",
+   "xs": [
+    "new Function('throw new Error(\"x\")')"
+   ]
+  },
+  {
+   "f": "js/engine/script.js",
+   "fn": "onmessage",
+   "k": "sink:new Function",
+   "c": "sandbox",
+   "n": "скрипты игрока: Worker внутри iframe sandbox=\"allow-scripts\" с CSP без сети",
+   "xs": [
+    "new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Co"
+   ]
+  },
+  {
+   "f": "js/engine/script.js",
+   "fn": "start",
+   "k": "sink:srcdoc",
+   "c": "sandbox",
+   "n": "скрипты игрока: Worker внутри iframe sandbox=\"allow-scripts\" с CSP без сети",
+   "xs": [
+    "frameHtml()"
+   ]
+  },
+  {
+   "f": "js/engine/synth.js",
+   "fn": "tick",
+   "k": "sink:src [h]",
+   "c": "not-html",
+   "n": "h.src — источник звука WebAudio, не адрес",
+   "xs": [
+    "ctx.createBufferSource()"
+   ]
+  },
+  {
+   "f": "js/engine/ui.js",
+   "fn": "buttons",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "H.buttons([{icon,label}]) зовут mir, mir-war, mir-veh, studio3d(-play): значки и подписи — константы",
+   "xs": [
+    "b.icon",
+    "b.label || ''"
+   ]
+  },
+  {
+   "f": "js/engine/voxel-mods.js",
+   "fn": "iframeBox",
+   "k": "sink:srcdoc",
+   "c": "sandbox",
+   "n": "моды игрока: Worker внутри iframe sandbox + CSP без сети",
+   "xs": [
+    "frameHtml()"
+   ]
+  },
+  {
+   "f": "js/engine/voxel-mods.js",
+   "fn": "onmessage",
+   "k": "sink:new Function",
+   "c": "not-html",
+   "n": "проба номера строки: константа",
+   "xs": [
+    "new Function('throw new Error(\"x\")')"
+   ]
+  },
+  {
+   "f": "js/engine/voxel-mods.js",
+   "fn": "onmessage",
+   "k": "sink:new Function",
+   "c": "sandbox",
+   "n": "моды игрока: Worker внутри iframe sandbox + CSP без сети",
+   "xs": [
+    "new Function('mod', 'world', 'fx', 'npc', 'commands', 'player', 'game'"
+   ]
+  },
+  {
+   "f": "js/engine/voxel-stream.js",
+   "fn": "streamer",
+   "k": "sink:new Worker [Worker]",
+   "c": "const",
+   "n": "адрес своего файла Worker",
+   "xs": [
+    "o.url"
+   ]
+  },
+  {
+   "f": "js/features/achievements.js",
+   "fn": "achBadgeHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "значки и XP из ACHIEVEMENT_DEFS",
+   "xs": [
+    "d.icon",
+    "d.xp"
+   ]
+  },
+  {
+   "f": "js/features/achievements.js",
+   "fn": "renderTitlePicker",
+   "k": "markup:text",
+   "c": "const",
+   "n": "значки и XP из ACHIEVEMENT_DEFS",
+   "xs": [
+    "ss.icon"
+   ]
+  },
+  {
+   "f": "js/features/achievements.js",
+   "fn": "renderTitlePicker",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "lv"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "act",
+   "k": "markup:attr",
+   "c": "num-db",
+   "n": "числа из ad_prices() и кампании (age_rating — check в ads.sql)",
+   "xs": [
+    "day ? 1 : cfg().min_topup"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "admin",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "числа из ad_prices() и кампании (age_rating — check в ads.sql)",
+   "xs": [
+    "n"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "admin",
+   "k": "sink:src [im]",
+   "c": "img-src",
+   "n": "blob:/подписанная ссылка хранилища ads",
+   "xs": [
+    "u"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "adminItem",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "ключи и размеры форматов из таблицы KIND / f.kinds",
+   "xs": [
+    "dh",
+    "dw"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "adminItem",
+   "k": "markup:style",
+   "c": "const",
+   "n": "ключи и размеры форматов из таблицы KIND / f.kinds",
+   "xs": [
+    "dh",
+    "dw"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "adminItem",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "теперь ссылка рекламодателя в админке — только https://… (иначе «#»); ads.sql ad_url_ok тоже",
+   "xs": [
+    "/^https:\\/\\//i.test(x.url || '') ? esc(x.url) : '#'"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "campaign",
+   "k": "sink:src [cr]",
+   "c": "img-src",
+   "n": "blob:/подписанная ссылка хранилища ads",
+   "xs": [
+    "await D().img?.(cr.image) || ''"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "crBlock",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "ключи и размеры форматов из таблицы KIND / f.kinds",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "editor",
+   "k": "markup:attr",
+   "c": "num-db",
+   "n": "числа из ad_prices() и кампании (age_rating — check в ads.sql)",
+   "xs": [
+    "cfg().max_days || 30",
+    "cfg().min_budget"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "editor",
+   "k": "sink:src [E.cr[cr.kind]]",
+   "c": "img-src",
+   "n": "blob:/подписанная ссылка хранилища ads",
+   "xs": [
+    "u"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "howBlock",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "числа из ad_prices() и кампании (age_rating — check в ads.sql)",
+   "xs": [
+    "c.dedup_min || 30",
+    "c.freq_day || 6"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "loadBitmap",
+   "k": "sink:src [im]",
+   "c": "img-src",
+   "n": "blob:/подписанная ссылка хранилища ads",
+   "xs": [
+    "src"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "preview",
+   "k": "markup:attr",
+   "c": "enum",
+   "n": "группа формата: card/banner/rail/board",
+   "xs": [
+    "g"
+   ]
+  },
+  {
+   "f": "js/features/adcab.js",
+   "fn": "preview",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "числа из ad_prices() и кампании (age_rating — check в ads.sql)",
+   "xs": [
+    "c.age_rating",
+    "c.age_rating != null ? ` ${c.age_rating}+` : ''"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "draw",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "channelsHtml собирает названия через e()",
+   "xs": [
+    "channelsHtml('phone', srv, null)"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "draw",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров сообществ, каналов и событий",
+   "xs": [
+    "link('phone', srv.id, 'members')"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "headHtml",
+   "k": "markup:style",
+   "c": "enum",
+   "n": "баннер буста — только из таблицы X.BANNERS",
+   "xs": [
+    "bg"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "headHtml",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "server(): icon: e(d.c.icon) — экранировано при сборке; у официального — константа",
+   "xs": [
+    "srv.icon"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "headHtml",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров сообществ, каналов и событий",
+   "xs": [
+    "link(mode, OFF_ID, 'reports')",
+    "link(mode, OFF_ID, 'settings')",
+    "link(mode, srv.id, 'boost')",
+    "link(mode, srv.id, 'reports')",
+    "link(mode, srv.id, 'settings')"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "item",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "ment > 9 ? '9+' : ment"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "item",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров сообществ, каналов и событий",
+   "xs": [
+    "href"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "load",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "c.members"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "load",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров сообществ, каналов и событий",
+   "xs": [
+    "link(mode, c.id)"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "membersRender",
+   "k": "markup:style",
+   "c": "sql-checked",
+   "n": "цвет роли: community.sql проверяет ^#[0-9a-f]{6}$",
+   "xs": [
+    "e(r.color)"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "membersRender",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "on.guests",
+    "on.total || 0",
+    "srv.c?.members || 0"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "nickOf",
+   "k": "markup:style",
+   "c": "sql-checked",
+   "n": "цвет роли: community.sql проверяет ^#[0-9a-f]{6}$",
+   "xs": [
+    "e(u.top.color)"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "paintSide",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "channelsHtml собирает названия через e()",
+   "xs": [
+    "srv ? channelsHtml(mode, srv, chId) : ''"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "railHtml",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров сообществ, каналов и событий",
+   "xs": [
+    "special(mode, 'find')",
+    "special(mode, 'new')"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "refreshSide",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "channelsHtml собирает названия через e()",
+   "xs": [
+    "channelsHtml('page', page.srv, page.ch?.id)"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "row",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "ment"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "row",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров сообществ, каналов и событий",
+   "xs": [
+    "link(mode, srv.id, c.id)"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenCreate",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "community2.js: всё через e()",
+   "xs": [
+    "DS.x?.metaHtml?.() || ''"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenFind",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров сообществ, каналов и событий",
+   "xs": [
+    "special(mode, 'new')"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenJoin",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "community2.js: всё через e()",
+   "xs": [
+    "c.age ? ' · ' + (window.D37Age?.badge ? window.D37Age.badge(c.age) : e"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenJoin",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "c.members"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenJoin",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров сообществ, каналов и событий",
+   "xs": [
+    "link(mode, c.id)"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenOfficialSettings",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "community2.js: всё через e()",
+   "xs": [
+    "DS.x?.officialMore?.(srv, mode) || ''"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenReports",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "r.n"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenSettings",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров сообществ, каналов и событий",
+   "xs": [
+    "c.id"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenSettings",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "community2.js: всё через e()",
+   "xs": [
+    "DS.x?.metaHtml?.(srv.id) || ''",
+    "DS.x?.settingsMore?.(srv, mode) || ''"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "setTop",
+   "k": "sink:innerHTML",
+   "c": "html-arg",
+   "n": "setTop зовут с константой, xs.title или e(имя)",
+   "xs": [
+    "title"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "ccard",
+   "k": "markup:style",
+   "c": "enum",
+   "n": "баннеры буста — только из таблицы X.BANNERS",
+   "xs": [
+    "bg"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "ccard",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "значок возраста D37Age.badge (число) / settingsMore",
+   "xs": [
+    "ag ? ' · ' + ageBadge(ag) : ''"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "ccard",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
+   "xs": [
+    "DS.link(mode, c.id)"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "chanTop",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
+   "xs": [
+    "DS.link(mode, srv.id, 'events')"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "chip",
+   "k": "markup:style",
+   "c": "sql-checked",
+   "n": "цвет роли: ^#[0-9a-f]{6}$",
+   "xs": [
+    "e(x.color)"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "evForm",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
+   "xs": [
+    "DS.link(mode, srv.id, 'events')"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "evItem",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "значок возраста D37Age.badge (число) / settingsMore",
+   "xs": [
+    "ev.age ? ' · ' + ageBadge(ev.age) : ''"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "evItem",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
+   "xs": [
+    "DS.link(mode, ev.community || DS.OFF_ID, 'events/edit/' + ev.id)"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "evItem",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
+   "xs": [
+    "evHref(mode, ev.id)"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "evItem",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "MV.evPlace: «#/…» или https://www.twitch.tv/…",
+   "xs": [
+    "e(pl.href)"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "find",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
+   "xs": [
+    "DS.special(mode, 'new')"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "load",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "X.ccard() — карточки через e()",
+   "xs": [
+    "html || `<div class=\"ds-dim\">Ничего не нашли${st.q || st.cat ? '' : '"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "officialMore",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
+   "xs": [
+    "DS.link(mode, DS.OFF_ID, 'channels')",
+    "DS.link(mode, DS.OFF_ID, 'reports')"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "render",
+   "k": "markup:attr",
+   "c": "enum",
+   "n": "баннеры буста — только из таблицы X.BANNERS",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "render",
+   "k": "markup:style",
+   "c": "enum",
+   "n": "баннеры буста — только из таблицы X.BANNERS",
+   "xs": [
+    "X.BANNERS[k]",
+    "b.boost && X.BANNERS[b.banner] || 'linear-gradient(135deg,#ec4899,#8b5"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "render",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
+   "xs": [
+    "DS.link(mode, DS.OFF_ID, 'events')",
+    "DS.link(mode, srv.id, 'events/new')",
+    "DS.link(mode, srv.id, 'reports' + (k === 'rep' ? '' : '/' + k))",
+    "DS.link(mode, srv.id, 'settings')",
+    "DS.link(mode, srvId)"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "repTab",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "задержка канала и число жалоб",
+   "xs": [
+    "r.n"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "repTab",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
+   "xs": [
+    "DS.link(mode, r.cid)"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "setHtml",
+   "k": "markup:attr",
+   "c": "num-db",
+   "n": "задержка канала и число жалоб",
+   "xs": [
+    "s"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "setHtml",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "задержка канала и число жалоб",
+   "xs": [
+    "s ? '🐢 раз в ' + (s >= 60 ? s / 60 + ' мин' : s + ' с') : 'без задерж"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "settingsMore",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "значок возраста D37Age.badge (число) / settingsMore",
+   "xs": [
+    "more0 ? more0(srv, mode) : ''"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "settingsMore",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
+   "xs": [
+    "DS.link(mode, srv.id, 'boost')",
+    "DS.link(mode, srv.id, 'channels')",
+    "DS.link(mode, srv.id, 'reports')",
+    "DS.link(mode, srv.id, 'roles')"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "sheet",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "sheet(): вызывающие передают константы и e()",
+   "xs": [
+    "body",
+    "title"
+   ]
+  },
+  {
+   "f": "js/features/custom-emoji.js",
+   "fn": "renderCustomEmojiList",
+   "k": "markup:attr",
+   "c": "id-db",
+   "xs": [
+    "e.id"
+   ]
+  },
+  {
+   "f": "js/features/custom-emoji.js",
+   "fn": "renderMessageText",
+   "k": "markup:attr",
+   "c": "regex",
+   "n": "ник из @-упоминания вырезан регулярным выражением [a-zA-Zа-яА-Я0-9_]{1,24}",
+   "xs": [
+    "nick"
+   ]
+  },
+  {
+   "f": "js/features/custom-emoji.js",
+   "fn": "renderMessageText",
+   "k": "markup:text",
+   "c": "regex",
+   "n": "ник из @-упоминания вырезан регулярным выражением [a-zA-Zа-яА-Я0-9_]{1,24}",
+   "xs": [
+    "nick"
+   ]
+  },
+  {
+   "f": "js/features/donation-claims.js",
+   "fn": "renderAdminDonationClaims",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "donation_claims.id и vip_donation_log.donation_id — bigint; user_id — uuid",
+   "xs": [
+    "c.id"
+   ]
+  },
+  {
+   "f": "js/features/donation-claims.js",
+   "fn": "renderAdminDonationClaims",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "donation_claims.id и vip_donation_log.donation_id — bigint; user_id — uuid",
+   "xs": [
+    "c.id",
+    "esc(c.user_id)",
+    "esc(h.user_id)",
+    "h.donation_id",
+    "x.donation_id"
+   ]
+  },
+  {
+   "f": "js/features/donation-claims.js",
+   "fn": "renderAdminDonationClaims",
+   "k": "markup:text",
+   "c": "id-db",
+   "n": "donation_claims.id и vip_donation_log.donation_id — bigint; user_id — uuid",
+   "xs": [
+    "h.donation_id",
+    "x.donation_id"
+   ]
+  },
+  {
+   "f": "js/features/donation-claims.js",
+   "fn": "renderAdminDonationClaims",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "c.candidates"
+   ]
+  },
+  {
+   "f": "js/features/donation-claims.js",
+   "fn": "renderAdminDonationClaimsOld",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "donation_claims.id и vip_donation_log.donation_id — bigint; user_id — uuid",
+   "xs": [
+    "c.id"
+   ]
+  },
+  {
+   "f": "js/features/donation-claims.js",
+   "fn": "renderAdminDonationClaimsOld",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "donation_claims.id и vip_donation_log.donation_id — bigint; user_id — uuid",
+   "xs": [
+    "c.id"
+   ]
+  },
+  {
+   "f": "js/features/donation-claims.js",
+   "fn": "renderAdminDonationClaimsOld",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "c.candidates"
+   ]
+  },
+  {
+   "f": "js/features/forum.js",
+   "fn": "loadForumThread",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "forum_threads.id / forum_posts.id — bigint identity",
+   "xs": [
+    "p.id"
+   ]
+  },
+  {
+   "f": "js/features/forum.js",
+   "fn": "loadForumThread",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "forum_threads.id / forum_posts.id — bigint identity",
+   "xs": [
+    "p.id",
+    "thread.id"
+   ]
+  },
+  {
+   "f": "js/features/forum.js",
+   "fn": "loadForumThreads",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "postsCount"
+   ]
+  },
+  {
+   "f": "js/features/forum.js",
+   "fn": "loadForumThreads",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "forum_threads.id / forum_posts.id — bigint identity",
+   "xs": [
+    "t.id"
+   ]
+  },
+  {
+   "f": "js/features/friends.js",
+   "fn": "renderFriendsPanel",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "uuid профиля",
+   "xs": [
+    "f.id"
+   ]
+  },
+  {
+   "f": "js/features/friends.js",
+   "fn": "renderFriendsPanel",
+   "k": "markup:style",
+   "c": "url-checked",
+   "n": "safeImgUrl() — только https://хост/путь или data:image/…;base64",
+   "xs": [
+    "avatarStyle"
+   ]
+  },
+  {
+   "f": "js/features/fx.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "время эфира из расписания админа",
+   "xs": [
+    "pad(s.h)",
+    "pad(s.m)"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "gamesLoadScript",
+   "k": "sink:src [s]",
+   "c": "const",
+   "n": "таблицы игр, сезонов и наград в коде",
+   "xs": [
+    "src + '?v=' + GAMES_VER"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "openGame",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge: число + esc(title)",
+   "xs": [
+    "window.D37Age && g.age ? ' ' + D37Age.badge(g.age, { title: g.ageWhy |"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "renderDuelTop",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "сезон, задания недели, статистика, онлайн — числа",
+   "xs": [
+    "r.played",
+    "r.wins"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "renderGamesHub",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge: число + esc(title)",
+   "xs": [
+    "window.D37Age ? D37Age.badge(g.age, { title: g.ageWhy || 'Без ограниче"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "renderGamesHub",
+   "k": "markup:url",
+   "c": "const",
+   "n": "таблицы игр, сезонов и наград в коде",
+   "xs": [
+    "g.href ? D37Route.href(g.href) : '/play/' + g.id"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "renderProfileGameStats",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "сезон, задания недели, статистика, онлайн — числа",
+   "xs": [
+    "r.p",
+    "r.w"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "renderProfileQuests",
+   "k": "markup:style",
+   "c": "const",
+   "n": "таблицы игр, сезонов и наград в коде",
+   "xs": [
+    "t ? t.color : '#ffd166'"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "renderTodayOnline",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "сезон, задания недели, статистика, онлайн — числа",
+   "xs": [
+    "n"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "seasonHtml",
+   "k": "markup:attr",
+   "c": "num-db",
+   "n": "сезон, задания недели, статистика, онлайн — числа",
+   "xs": [
+    "into",
+    "per"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "seasonHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы игр, сезонов и наград в коде",
+   "xs": [
+    "seasonRewardIcon(e, t)",
+    "t.icon"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "seasonHtml",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "сезон, задания недели, статистика, онлайн — числа",
+   "xs": [
+    "lv >= top ? `⭐ ${pts} — весь путь пройден!` : `⭐ ${pts} · до ${lv + 1}",
+    "per"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "seasonHtml",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "сезон, задания недели, статистика, онлайн — числа",
+   "xs": [
+    "top"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "seasonMineHtml",
+   "k": "markup:on",
+   "c": "enum",
+   "n": "коды титулов, рамок и заданий недели — из таблиц/SQL (enum)",
+   "xs": [
+    "esc(o.code)",
+    "t.id"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "seasonMineHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы игр, сезонов и наград в коде",
+   "xs": [
+    "d.icon",
+    "t.icon"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "weeklyHtml",
+   "k": "markup:on",
+   "c": "enum",
+   "n": "коды титулов, рамок и заданий недели — из таблиц/SQL (enum)",
+   "xs": [
+    "q.code"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "weeklyHtml",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "сезон, задания недели, статистика, онлайн — числа",
+   "xs": [
+    "q.n",
+    "w.coins",
+    "w.pts",
+    "w.xp"
+   ]
+  },
+  {
+   "f": "js/features/games.js",
+   "fn": "whatsNewHtml",
+   "k": "markup:url",
+   "c": "const",
+   "n": "таблицы игр, сезонов и наград в коде",
+   "xs": [
+    "D37Route.href(h)"
+   ]
+  },
+  {
+   "f": "js/features/ideas.js",
+   "fn": "ideaCardHtml",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "ideas.id — bigint identity",
+   "xs": [
+    "r.id"
+   ]
+  },
+  {
+   "f": "js/features/ideas.js",
+   "fn": "ideaCardHtml",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "ideas.id — bigint identity",
+   "xs": [
+    "r.id"
+   ]
+  },
+  {
+   "f": "js/features/ideas.js",
+   "fn": "ideaCardHtml",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "v.label"
+   ]
+  },
+  {
+   "f": "js/features/ideas.js",
+   "fn": "ideaCardHtml",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "r.votes"
+   ]
+  },
+  {
+   "f": "js/features/ideas.js",
+   "fn": "ideaCardHtml",
+   "k": "markup:url",
+   "c": "id-db",
+   "n": "ideas.id — bigint identity",
+   "xs": [
+    "r.id"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "<top>",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
+   "xs": [
+    "L.w.lv"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "authLine",
+   "k": "sink:innerHTML",
+   "c": "esc-up",
+   "n": "аватар: esc + кавычки убраны; строка приглашения: esc(info.nick) + числа",
+   "xs": [
+    "`🎁 ${info?.nick ? `Тебя пригласил(а) <b>${esc(info.nick)}</b>` : 'Теб"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "banner",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
+   "xs": [
+    "L.w.lv"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "drawQr",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "qr.js рисует svg из чисел",
+   "xs": [
+    "window.D37QR.svg(link, { px: 5, margin: 3 })"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "invitedCard",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
+   "xs": [
+    "L?.w.lv || 3",
+    "lv",
+    "need"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "linkCard",
+   "k": "markup:attr",
+   "c": "num-local",
+   "n": "флаг «QR открыт»",
+   "xs": [
+    "ST.qr"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "listCard",
+   "k": "markup:style",
+   "c": "esc-up",
+   "n": "аватар: esc + кавычки убраны; строка приглашения: esc(info.nick) + числа",
+   "xs": [
+    "esc(String(f.av).replace(/'/g, ''))"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "onclick",
+   "k": "sink:window.open [window]",
+   "c": "url-checked",
+   "n": "ссылки t.me / vk.com / wa.me с encodeURIComponent",
+   "xs": [
+    "R().shareUrls(link, text)[a]"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "page",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
+   "xs": [
+    "L?.w.lv || 3",
+    "gift(x)",
+    "x.lv"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "progressCard",
+   "k": "markup:text",
+   "c": "const",
+   "n": "значок ступени из таблицы наград",
+   "xs": [
+    "done ? '✅' : t.frame ? '🖼️' : (partName(t.part).split(' ')[0] || '🎁'"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "progressCard",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
+   "xs": [
+    "R().RULES.months",
+    "R().RULES.pct",
+    "done ? 'получено' : `${have} из ${t.n}`"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "progressCard",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
+   "xs": [
+    "friends(left)",
+    "friends(t.n)",
+    "next.lv",
+    "t.lv"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "rules",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
+   "xs": [
+    "L ? L.m.map(x => `${x.lv} уровень — ${gift(x)}`).join(', ') : ''",
+    "L ? L.t.map(t => `${friends(t.n)} до ${t.lv} уровня — ${t.text}`).join",
+    "r.claimDays",
+    "r.dayCap",
+    "r.keepDays",
+    "r.months",
+    "r.pct"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "showTop",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
+   "xs": [
+    "x.rank <= 3 ? ['🥇', '🥈', '🥉'][x.rank - 1] : x.rank"
+   ]
+  },
+  {
+   "f": "js/features/invite.js",
+   "fn": "statsCard",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
+   "xs": [
+    "R().RULES.dayCap",
+    "e.held",
+    "friends(s.week)"
+   ]
+  },
+  {
+   "f": "js/features/leaderboard.js",
+   "fn": "lbLogin",
+   "k": "sink:href [window.location]",
+   "c": "server-url",
+   "n": "auth_url отдаёт наш /api/donations (вход DonationAlerts)",
+   "xs": [
+    "body.auth_url"
+   ]
+  },
+  {
+   "f": "js/features/leaderboard.js",
+   "fn": "loadGoalFromDA",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "status"
+   ]
+  },
+  {
+   "f": "js/features/leaderboard.js",
+   "fn": "onclick",
+   "k": "sink:href [window.location]",
+   "c": "server-url",
+   "n": "auth_url отдаёт наш /api/donations (вход DonationAlerts)",
+   "xs": [
+    "authUrl || `/api/donations`"
+   ]
+  },
+  {
+   "f": "js/features/leaderboard.js",
+   "fn": "renderChatTop",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "cnt"
+   ]
+  },
+  {
+   "f": "js/features/leaderboard.js",
+   "fn": "renderLbHtml",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "d.count"
+   ]
+  },
+  {
+   "f": "js/features/leaderboard.js",
+   "fn": "renderVipSyncStatus",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "st.total_credited || 0"
+   ]
+  },
+  {
+   "f": "js/features/lfg.js",
+   "fn": "findGameMatches",
+   "k": "markup:on",
+   "c": "id-db",
+   "xs": [
+    "u.id"
+   ]
+  },
+  {
+   "f": "js/features/lfg.js",
+   "fn": "findGameMatches",
+   "k": "markup:style",
+   "c": "url-checked",
+   "n": "safeImgUrl()",
+   "xs": [
+    "avatarStyle"
+   ]
+  },
+  {
+   "f": "js/features/lfg.js",
+   "fn": "renderLfgCard",
+   "k": "markup:attr",
+   "c": "id-db",
+   "xs": [
+    "p.id"
+   ]
+  },
+  {
+   "f": "js/features/lfg.js",
+   "fn": "renderLfgCard",
+   "k": "markup:on",
+   "c": "id-db",
+   "xs": [
+    "p.author_id",
+    "p.id"
+   ]
+  },
+  {
+   "f": "js/features/lfg.js",
+   "fn": "renderLfgCard",
+   "k": "markup:style",
+   "c": "url-checked",
+   "n": "safeImgUrl()",
+   "xs": [
+    "avatarStyle"
+   ]
+  },
+  {
+   "f": "js/features/lfg.js",
+   "fn": "renderLfgCard",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "check 1..9 в lfg",
+   "xs": [
+    "p.players_needed"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "ask",
+   "k": "markup:attr",
+   "c": "html-arg",
+   "n": "ask(): вызывающие передают константы и e(ник)",
+   "xs": [
+    "cls || ''"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "ask",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы GAMES / VIP / набор реакций / подписи модерации",
+   "xs": [
+    "t"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "ask",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "ask(): вызывающие передают константы и e(ник)",
+   "xs": [
+    "text"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "badgeHtml",
+   "k": "markup:style",
+   "c": "const",
+   "n": "таблицы GAMES / VIP / набор реакций / подписи модерации",
+   "xs": [
+    "st.vip.rgb"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "badgeHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы GAMES / VIP / набор реакций / подписи модерации",
+   "xs": [
+    "st.vip.key.toUpperCase()"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "cardHtml",
+   "k": "markup:style",
+   "c": "const",
+   "n": "таблицы GAMES / VIP / набор реакций / подписи модерации",
+   "xs": [
+    "e(g.color || '#7c3aed')"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "cardHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы GAMES / VIP / набор реакций / подписи модерации",
+   "xs": [
+    "g.icon"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "cardHtml",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "e(i.about) внутри; members — число",
+   "xs": [
+    "i ? `${i.members} ${P.plural(i.members, 'участник', 'участника', 'учас"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "cardHtml",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "sitePath: только свои пути (не //), карточки — «#/…» или GAMES.href",
+   "xs": [
+    "e(href)"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "countReacts",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "число реакций",
+   "xs": [
+    "n"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "html",
+   "k": "markup:style",
+   "c": "regex",
+   "n": "authorStyle: цвета проверены регулярным выражением",
+   "xs": [
+    "color"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "html",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "MV.rich экранирует всё (fuzz в xss-test); P.avatar — esc + safeImgUrl",
+   "xs": [
+    "first ? ava : `<time class=\"mv-t2\" title=\"${e(P.when(m.at))}\">${P.hm(m",
+    "r.html"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "loadAuthors",
+   "k": "sink:outerHTML",
+   "c": "html-helper",
+   "n": "MV.rich экранирует всё (fuzz в xss-test); P.avatar — esc + safeImgUrl",
+   "xs": [
+    "P.avatar(p, p.nick, opt.compact ? 32 : 38).replace('class=\"ph-ava\"', `"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "mount",
+   "k": "sink:{innerHTML}",
+   "c": "html-helper",
+   "n": "MV.rich экранирует всё (fuzz в xss-test); P.avatar — esc + safeImgUrl",
+   "xs": [
+    "MV.rich(m?.text || '', myNick(), { kid: kidView() }).html"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "openMenu",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы GAMES / VIP / набор реакций / подписи модерации",
+   "xs": [
+    "t",
+    "x"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "openPanel",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы GAMES / VIP / набор реакций / подписи модерации",
+   "xs": [
+    "s"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "rich",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "sitePath: только свои пути (не //), карточки — «#/…» или GAMES.href",
+   "xs": [
+    "e(hrefOf(path))"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "userCard",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы GAMES / VIP / набор реакций / подписи модерации",
+   "xs": [
+    "t"
+   ]
+  },
+  {
+   "f": "js/features/notifications.js",
+   "fn": "notifRender",
+   "k": "markup:attr",
+   "c": "id-db",
+   "xs": [
+    "n.id"
+   ]
+  },
+  {
+   "f": "js/features/notifications.js",
+   "fn": "openNotif",
+   "k": "sink:href [location]",
+   "c": "url-checked",
+   "n": "только https://… (проверка строкой выше)",
+   "xs": [
+    "link"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "age",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "таблицы игр и зон мира; x — суффикс класса кнопки",
+   "xs": [
+    "p.age"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "age",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы игр и зон мира; x — суффикс класса кнопки",
+   "xs": [
+    "p.age"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "draw",
+   "k": "markup:attr",
+   "c": "id-db",
+   "xs": [
+    "n.id"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "draw",
+   "k": "markup:attr",
+   "c": "self-made",
+   "n": "снимок: blob:/data: из canvas; t — метка времени",
+   "xs": [
+    "last.t"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "draw",
+   "k": "markup:url",
+   "c": "self-made",
+   "n": "снимок: blob:/data: из canvas; t — метка времени",
+   "xs": [
+    "last.url"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "draw",
+   "k": "markup:urllow",
+   "c": "self-made",
+   "n": "снимок: blob:/data: из canvas; t — метка времени",
+   "xs": [
+    "last.url"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "galleryHtml",
+   "k": "markup:urllow",
+   "c": "self-made",
+   "n": "снимок: blob:/data: из canvas; t — метка времени",
+   "xs": [
+    "s.url"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "gameInvite",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "таблицы игр и зон мира; x — суффикс класса кнопки",
+   "xs": [
+    "g.id"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "gameInvite",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы игр и зон мира; x — суффикс класса кнопки",
+   "xs": [
+    "g.icon"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "mapZones",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы игр и зон мира; x — суффикс класса кнопки",
+   "xs": [
+    "p.icon"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "c.unread"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "row",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "таблицы игр и зон мира; x — суффикс класса кнопки",
+   "xs": [
+    "x"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "ask",
+   "k": "markup:attr",
+   "c": "html-arg",
+   "n": "P.head/P.sheet/P.ask/P.soon: вызывающие передают константы и e()",
+   "xs": [
+    "b.cls || ''"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "ask",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "P.head/P.sheet/P.ask/P.soon: вызывающие передают константы и e()",
+   "xs": [
+    "b.t",
+    "text"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "avatar",
+   "k": "markup:style",
+   "c": "num-local",
+   "xs": [
+    "size"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "avatar",
+   "k": "markup:style",
+   "c": "url-checked",
+   "n": "фон: safeImgUrl(avatar_url) или градиент из числа; rgb — константа ROLE_RGB / VIP",
+   "xs": [
+    "bg"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "head",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "P.head/P.sheet/P.ask/P.soon: вызывающие передают константы и e()",
+   "xs": [
+    "right",
+    "title"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "loadFile",
+   "k": "sink:src [s]",
+   "c": "const",
+   "n": "файлы приложений телефона из MODS",
+   "xs": [
+    "src + '?v=' + VER"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "nick",
+   "k": "markup:style",
+   "c": "url-checked",
+   "n": "фон: safeImgUrl(avatar_url) или градиент из числа; rgb — константа ROLE_RGB / VIP",
+   "xs": [
+    "rgb"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "seg",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "seg(): значения переключателя из таблицы",
+   "xs": [
+    "v"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "seg",
+   "k": "markup:text",
+   "c": "const",
+   "n": "seg(): значения переключателя из таблицы",
+   "xs": [
+    "t"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "sheet",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "P.head/P.sheet/P.ask/P.soon: вызывающие передают константы и e()",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/features/phone.js",
+   "fn": "soon",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "P.head/P.sheet/P.ask/P.soon: вызывающие передают константы и e()",
+   "xs": [
+    "what"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "openDonationLog",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "счётчики и суммы донатов",
+   "xs": [
+    "row.amount ?? '?'",
+    "row.reward === 'status' ? `💛 статус${row.excluded ? ' (не в счёт)' :"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "openMiniProfile",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "сначала профиль читается по id (uuid-колонка): не uuid — ошибка 22P02 и возврат; viewer_id — uuid",
+   "xs": [
+    "userId"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "openMiniProfile",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "кнопки из констант; ник — через jsAttr",
+   "xs": [
+    "buttons[status] || ''"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "proceedToVipDonate",
+   "k": "sink:window.open [window]",
+   "c": "url-checked",
+   "n": "адрес — константа https://…, amount только в запросе",
+   "xs": [
+    "amount ? `${DA_DONATE_URL}?amount=${amount}` : DA_DONATE_URL"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderNickWithVip",
+   "k": "markup:style",
+   "c": "const",
+   "n": "таблицы VIP-уровней и донатеров в коде",
+   "xs": [
+    "color",
+    "st.rgb",
+    "tier.rgb"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderNickWithVip",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы VIP-уровней и донатеров в коде",
+   "xs": [
+    "tier.key.toUpperCase()"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderProfileGuests",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "сначала профиль читается по id (uuid-колонка): не uuid — ошибка 22P02 и возврат; viewer_id — uuid",
+   "xs": [
+    "v.viewer_id"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderProfileGuests",
+   "k": "markup:style",
+   "c": "url-checked",
+   "n": "safeImgUrl()",
+   "xs": [
+    "avatarStyle"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderProfileGuests",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "счётчики и суммы донатов",
+   "xs": [
+    "count",
+    "limit"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderProfilePage",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "сначала профиль читается по id (uuid-колонка): не uuid — ошибка 22P02 и возврат; viewer_id — uuid",
+   "xs": [
+    "targetId"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderProfilePage",
+   "k": "markup:on",
+   "c": "regex",
+   "n": "safeId = id без знаков, кроме [0-9a-f-]",
+   "xs": [
+    "safeId"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderProfilePage",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "кнопки из констант; ник — через jsAttr",
+   "xs": [
+    "buttons[status] || ''"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderStaffVipPanel",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы VIP-уровней и донатеров в коде",
+   "xs": [
+    "tier ? tier.label : 'не активен'"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderVipPerksPanel",
+   "k": "markup:style",
+   "c": "const",
+   "n": "таблицы VIP-уровней и донатеров в коде",
+   "xs": [
+    "vt.rgb"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderVipPerksPanel",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы VIP-уровней и донатеров в коде",
+   "xs": [
+    "st.icon",
+    "stickerCountFor(tier.stickerSets)",
+    "tier.guestsLimit",
+    "tier.pinMin",
+    "vt.icon"
+   ]
+  },
+  {
+   "f": "js/features/profile.js",
+   "fn": "renderVipPromo",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы VIP-уровней и донатеров в коде",
+   "xs": [
+    "tierPerkLine(t)"
+   ]
+  },
+  {
+   "f": "js/features/reactions.js",
+   "fn": "renderReactionsFor",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "nicks.size"
+   ]
+  },
+  {
+   "f": "js/features/reactions.js",
+   "fn": "renderReactionsFor",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "messages.id — bigint",
+   "xs": [
+    "msgId"
+   ]
+  },
+  {
+   "f": "js/features/reactions.js",
+   "fn": "renderReactionsFor",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "nicks.size"
+   ]
+  },
+  {
+   "f": "js/features/role-management.js",
+   "fn": "searchUsersByNick",
+   "k": "markup:attr",
+   "c": "id-db",
+   "xs": [
+    "u.id"
+   ]
+  },
+  {
+   "f": "js/features/role-management.js",
+   "fn": "searchUsersByNick",
+   "k": "markup:on",
+   "c": "id-db",
+   "xs": [
+    "u.id"
+   ]
+  },
+  {
+   "f": "js/features/schedule.js",
+   "fn": "renderScheduleAdminRows",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "DAY_FULL[day.d][0].toUpperCase()+DAY_FULL[day.d].slice(1)"
+   ]
+  },
+  {
+   "f": "js/features/shop.js",
+   "fn": "shopAdminFind",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "id пакетов/позиций каталога (premium_packs/items), заказы D37-… выдаёт сервер, user_id — uuid",
+   "xs": [
+    "u.user_id"
+   ]
+  },
+  {
+   "f": "js/features/shop.js",
+   "fn": "shopAdminLoad",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "id пакетов/позиций каталога (premium_packs/items), заказы D37-… выдаёт сервер, user_id — uuid",
+   "xs": [
+    "esc(o.id)"
+   ]
+  },
+  {
+   "f": "js/features/shop.js",
+   "fn": "shopBuy",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "id пакетов/позиций каталога (premium_packs/items), заказы D37-… выдаёт сервер, user_id — uuid",
+   "xs": [
+    "p.id"
+   ]
+  },
+  {
+   "f": "js/features/shop.js",
+   "fn": "shopIncome",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "pct",
+    "t.count"
+   ]
+  },
+  {
+   "f": "js/features/shop.js",
+   "fn": "shopKaspi",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "id пакетов/позиций каталога (premium_packs/items), заказы D37-… выдаёт сервер, user_id — uuid",
+   "xs": [
+    "esc(res.order)"
+   ]
+  },
+  {
+   "f": "js/features/shop.js",
+   "fn": "shopKaspi",
+   "k": "markup:url",
+   "c": "server-url",
+   "n": "ссылку Kaspi Pay берёт наш api/pay.js из env",
+   "xs": [
+    "esc(res.pay.link)"
+   ]
+  },
+  {
+   "f": "js/features/shop.js",
+   "fn": "shopRender",
+   "k": "markup:on",
+   "c": "id-db",
+   "n": "id пакетов/позиций каталога (premium_packs/items), заказы D37-… выдаёт сервер, user_id — uuid",
+   "xs": [
+    "it.id",
+    "p.id"
+   ]
+  },
+  {
+   "f": "js/features/shop.js",
+   "fn": "shopRender",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "vip"
+   ]
+  },
+  {
+   "f": "js/features/shorts.js",
+   "fn": "activateShort",
+   "k": "markup:url",
+   "c": "id-yt",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "js/features/shorts.js",
+   "fn": "renderShortsFeed",
+   "k": "markup:attr",
+   "c": "id-yt",
+   "xs": [
+    "v.id"
+   ]
+  },
+  {
+   "f": "js/features/shorts.js",
+   "fn": "renderShortsFeed",
+   "k": "markup:on",
+   "c": "id-yt",
+   "xs": [
+    "v.id"
+   ]
+  },
+  {
+   "f": "js/features/shorts.js",
+   "fn": "renderShortsFeed",
+   "k": "markup:text",
+   "c": "yt-data",
+   "xs": [
+    "v.date ? ' · ' + v.date : ''",
+    "v.views ? '👁 ' + v.views : ''"
+   ]
+  },
+  {
+   "f": "js/features/shorts.js",
+   "fn": "renderShortsFeed",
+   "k": "markup:url",
+   "c": "id-yt",
+   "xs": [
+    "v.id"
+   ]
+  },
+  {
+   "f": "js/features/shorts.js",
+   "fn": "renderShortsFeed",
+   "k": "markup:urllow",
+   "c": "id-yt",
+   "xs": [
+    "v.id"
+   ]
+  },
+  {
+   "f": "js/features/shorts.js",
+   "fn": "renderShortsRow",
+   "k": "markup:on",
+   "c": "id-yt",
+   "xs": [
+    "v.id"
+   ]
+  },
+  {
+   "f": "js/features/shorts.js",
+   "fn": "renderShortsRow",
+   "k": "markup:text",
+   "c": "yt-data",
+   "xs": [
+    "v.views"
+   ]
+  },
+  {
+   "f": "js/features/shorts.js",
+   "fn": "renderShortsRow",
+   "k": "markup:url",
+   "c": "id-yt",
+   "xs": [
+    "v.id"
+   ]
+  },
+  {
+   "f": "js/features/shorts.js",
+   "fn": "renderShortsRow",
+   "k": "markup:urllow",
+   "c": "id-yt",
+   "xs": [
+    "v.id"
+   ]
+  },
+  {
+   "f": "js/features/social-login.js",
+   "fn": "btnHtml",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "P.list — vk/yandex/telegram/google… из api/_lib/social.js",
+   "xs": [
+    "p"
+   ]
+  },
+  {
+   "f": "js/features/xp.js",
+   "fn": "renderProfileXp",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "v"
+   ]
+  },
+  {
+   "f": "js/features/xp.js",
+   "fn": "renderXpTop",
+   "k": "markup:attr",
+   "c": "const",
+   "xs": [
+    "xpTierClass(r.level)"
+   ]
+  },
+  {
+   "f": "js/features/xp.js",
+   "fn": "renderXpTop",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "r.level",
+    "r.xp"
+   ]
+  },
+  {
+   "f": "js/features/xp.js",
+   "fn": "xpFillBadges",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "d.icon"
+   ]
+  },
+  {
+   "f": "js/features/youtube.js",
+   "fn": "renderFeatured",
+   "k": "sink:src [img]",
+   "c": "yt-data",
+   "n": "картинка ролика с i.ytimg.com",
+   "xs": [
+    "v.thumb||`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`"
+   ]
+  },
+  {
+   "f": "js/features/youtube.js",
+   "fn": "renderVids",
+   "k": "markup:text",
+   "c": "html-helper",
+   "xs": [
+    "va>=16?D37Age.badge(va):''"
+   ]
+  },
+  {
+   "f": "js/games/arena.js",
+   "fn": "finish",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "Wd.score[0]",
+    "Wd.score[1]"
+   ]
+  },
+  {
+   "f": "js/games/arena.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "const",
+   "n": "названия уровней сложности из таблицы LEVELS",
+   "xs": [
+    "L.label"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "build",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "буквы экранной клавиатуры",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "build",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "i"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "build",
+   "k": "markup:text",
+   "c": "const",
+   "n": "буквы экранной клавиатуры",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "const",
+   "n": "названия уровней сложности из таблицы LEVELS",
+   "xs": [
+    "v.name"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.best",
+    "st.plays",
+    "st.wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "onError",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "константная разметка room.js",
+   "xs": [
+    "root.GameRoom.errorHtml"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "onFull",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "константная разметка room.js",
+   "xs": [
+    "root.GameRoom.fullHtml('balda')"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "online",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "константная разметка room.js",
+   "xs": [
+    "root.GameRoom.errorHtml"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "G.passes ? ` · пропусков подряд: ${G.passes}/${MAX_PASSES}` : ''",
+    "hints"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "render",
+   "k": "sink:innerHTML",
+   "c": "peer-clean",
+   "n": "буква клетки от соперника (G.b[i]) приходит через GameRoom.clean; ники — E(); GameKit.turn",
+   "xs": [
+    "html",
+    "th"
+   ]
+  },
+  {
+   "f": "js/games/catch.js",
+   "fn": "gameOver",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.caught"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "cards",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "slot"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "palette",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "hexOf(slot)",
+    "slot"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "palette",
+   "k": "markup:style",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "hexOf(slot)",
+    "swatchStyle(id, v)",
+    "swatchStyle(p?.id, p?.v)"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "EMOS()[0]"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "renderParts",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "shs"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "slider",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "slot"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "tag",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "b.lvl",
+    "g.title"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "tag",
+   "k": "markup:text",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "b.lvl",
+    "g.icon",
+    "g.short"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "tryBar",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "x.slots.join(',')"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "tryBar",
+   "k": "markup:text",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "W()?.level?.() ? ` (у тебя ${W().level()})` : ' — войди в аккаунт'",
+    "g.how",
+    "g.icon",
+    "lvlItems.map(x => `${esc(x.name)} — с ${x.lvl} уровня`).join(', ')",
+    "x.gems ? '💎 ' + num(x.gems) : x.lvl ? '🔒 ур. ' + x.lvl : x.ref ? gra"
+   ]
+  },
+  {
+   "f": "js/games/charedit.js",
+   "fn": "tryBar",
+   "k": "markup:url",
+   "c": "const",
+   "n": "части персонажа, награды и подписи из PARTS/GRANTS в avatar.js; цвета — hex из палитры",
+   "xs": [
+    "g.href"
+   ]
+  },
+  {
+   "f": "js/games/checkers.js",
+   "fn": "draw",
+   "k": "markup:attr",
+   "c": "enum",
+   "n": "w/b",
+   "xs": [
+    "colorOf(p)"
+   ]
+  },
+  {
+   "f": "js/games/checkers.js",
+   "fn": "renderSetup",
+   "k": "markup:text",
+   "c": "const",
+   "n": "названия уровней сложности из таблицы LEVELS",
+   "xs": [
+    "l.label"
+   ]
+  },
+  {
+   "f": "js/games/checkers.js",
+   "fn": "renderSetup",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.plays || 0",
+    "st.wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/chervyachki.js",
+   "fn": "hud",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "iokit.js: menuHtml/lbHtml/connHtml/errHtml экранируют имена через escH",
+   "xs": [
+    "K.lbHtml(list)"
+   ]
+  },
+  {
+   "f": "js/games/chervyachki.js",
+   "fn": "showOv",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "iokit.js: menuHtml/lbHtml/connHtml/errHtml экранируют имена через escH",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/games/chess.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "const",
+   "n": "названия уровней сложности из таблицы LEVELS",
+   "xs": [
+    "L.label"
+   ]
+  },
+  {
+   "f": "js/games/chess.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "api.local().plays",
+    "api.local().wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/chess.js",
+   "fn": "render",
+   "k": "markup:attr",
+   "c": "const",
+   "xs": [
+    "sq(i)"
+   ]
+  },
+  {
+   "f": "js/games/chess.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "'abcdefgh'[c]"
+   ]
+  },
+  {
+   "f": "js/games/cities.js",
+   "fn": "duelLobbyWaiting",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "буква/число из своих словарей и настроек",
+   "xs": [
+    "cfg.timer ? cfg.timer + ' с на ход' : 'без таймера'"
+   ]
+  },
+  {
+   "f": "js/games/cities.js",
+   "fn": "opt",
+   "k": "markup:text",
+   "c": "const",
+   "n": "названия уровней сложности из таблицы LEVELS",
+   "xs": [
+    "label"
+   ]
+  },
+  {
+   "f": "js/games/cities.js",
+   "fn": "playerMove",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "буква/число из своих словарей и настроек",
+   "xs": [
+    "L.toUpperCase()",
+    "city.first.toUpperCase()"
+   ]
+  },
+  {
+   "f": "js/games/cities.js",
+   "fn": "renderSetup",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.best || 0",
+    "st.plays || 0",
+    "st.wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/cities.js",
+   "fn": "yourTurn",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "буква/число из своих словарей и настроек",
+   "xs": [
+    "L",
+    "remaining(S.letter)"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "joinTable",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "table.js lobbyHtml экранирует ники и ссылку; room.js — константная разметка",
+   "xs": [
+    "root.GameRoom.errorHtml"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "lobby",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "table.js lobbyHtml экранирует ники и ссылку; room.js — константная разметка",
+   "xs": [
+    "root.TableRoom.lobbyHtml((window.D37Route ? D37Route.abs('#/games/domi"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.best",
+    "st.plays",
+    "st.wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "peer-clean",
+   "n": "состояние стола приходит от хозяина (GameRoom.clean при получении), числа; ники — E()",
+   "xs": [
+    "opts.target"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "onError",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "table.js lobbyHtml экранирует ники и ссылку; room.js — константная разметка",
+   "xs": [
+    "root.GameRoom.errorHtml"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "onFull",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "table.js lobbyHtml экранирует ники и ссылку; room.js — константная разметка",
+   "xs": [
+    "root.GameRoom.fullHtml('domino')"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "render",
+   "k": "markup:attr",
+   "c": "peer-clean",
+   "n": "состояние стола приходит от хозяина (GameRoom.clean при получении), числа; ники — E()",
+   "xs": [
+    "TILES[t].join(' и ')",
+    "t"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "peer-clean",
+   "n": "состояние стола приходит от хозяина (GameRoom.clean при получении), числа; ники — E()",
+   "xs": [
+    "P.bazar",
+    "P.res.sums[i]",
+    "P.round ? ` · раунд ${P.round}` : ''",
+    "P.sc[i]",
+    "P.sc[me]",
+    "P.sc[o.i]",
+    "P.sleep ? ` (${P.sleep} спят)` : ''",
+    "P.target",
+    "mine ? (P.must >= 0 ? `Твой ход: начни с ${TILES[P.must].join('–')}` :",
+    "o.n"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "render",
+   "k": "markup:urllow",
+   "c": "peer-clean",
+   "n": "состояние стола приходит от хозяина (GameRoom.clean при получении), числа; ники — E()",
+   "xs": [
+    "root.D37Char.img(o.look, 56)"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "render",
+   "k": "sink:innerHTML",
+   "c": "peer-clean",
+   "n": "состояние стола приходит от хозяина (GameRoom.clean при получении), числа; ники — E()",
+   "xs": [
+    "(root.GameKit ? root.GameKit.turn(mine, status, P.over || P.rover) : s"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "tileSvg",
+   "k": "markup:attr",
+   "c": "peer-clean",
+   "n": "состояние стола приходит от хозяина (GameRoom.clean при получении), числа; ники — E()",
+   "xs": [
+    "o.act",
+    "o.cls ? ' ' + o.cls : ''",
+    "r.x + .18",
+    "r.x + 1",
+    "r.x + pad",
+    "r.y + .18",
+    "r.y + 1",
+    "r.y + pad"
+   ]
+  },
+  {
+   "f": "js/games/durak.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.plays",
+    "st.wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/emoji.js",
+   "fn": "finish",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "G.right",
+    "G.score"
+   ]
+  },
+  {
+   "f": "js/games/emoji.js",
+   "fn": "next",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "варианты ответов из своего списка",
+   "xs": [
+    "n.replace(/\"/g, '&quot;')"
+   ]
+  },
+  {
+   "f": "js/games/emoji.js",
+   "fn": "next",
+   "k": "markup:text",
+   "c": "const",
+   "n": "варианты ответов из своего списка",
+   "xs": [
+    "n"
+   ]
+  },
+  {
+   "f": "js/games/emoji.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "api.local().best ? api.local().best + ' очков' : '—'"
+   ]
+  },
+  {
+   "f": "js/games/fillword.js",
+   "fn": "board",
+   "k": "markup:style",
+   "c": "num-local",
+   "xs": [
+    "P.h",
+    "P.w"
+   ]
+  },
+  {
+   "f": "js/games/fillword.js",
+   "fn": "board",
+   "k": "markup:text",
+   "c": "const",
+   "n": "буквы поля из словаря",
+   "xs": [
+    "ch.toUpperCase()"
+   ]
+  },
+  {
+   "f": "js/games/fillword.js",
+   "fn": "board",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "daily ? `День #${dayNo()} · ${P.w}×${P.h}` : duel ? `${P.w}×${P.h}` :",
+    "o.lv || load(PROG, { lv: 1 }).lv || 1"
+   ]
+  },
+  {
+   "f": "js/games/fillword.js",
+   "fn": "finish",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "S.hints"
+   ]
+  },
+  {
+   "f": "js/games/fillword.js",
+   "fn": "msg",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "msg(): вызывающие передают константы и esc()",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/games/fillword.js",
+   "fn": "offer",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "price"
+   ]
+  },
+  {
+   "f": "js/games/fillword.js",
+   "fn": "open",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "d.day",
+    "d.hints",
+    "load(PROG, { lv: 1 }).lv || 1"
+   ]
+  },
+  {
+   "f": "js/games/fillword.js",
+   "fn": "paint",
+   "k": "markup:text",
+   "c": "const",
+   "n": "буквы поля из словаря",
+   "xs": [
+    "j === 0 && hinted ? ch.toUpperCase() : ''"
+   ]
+  },
+  {
+   "f": "js/games/g2048.js",
+   "fn": "draw",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "v || ''"
+   ]
+  },
+  {
+   "f": "js/games/gamekit.js",
+   "fn": "ask",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "GameKit.ask: icon — константа, text — escH() если не html; GameKit.turn(mine, html): вызывающие экранируют ники (E/esc)",
+   "xs": [
+    "o.html ? o.text : escH(o.text)",
+    "o.icon"
+   ]
+  },
+  {
+   "f": "js/games/gamekit.js",
+   "fn": "turn",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "GameKit.ask: icon — константа, text — escH() если не html; GameKit.turn(mine, html): вызывающие экранируют ники (E/esc)",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/games/guess-video.js",
+   "fn": "nextRound",
+   "k": "markup:attr",
+   "c": "id-yt",
+   "xs": [
+    "o.id"
+   ]
+  },
+  {
+   "f": "js/games/guess-video.js",
+   "fn": "onEnd",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "correct",
+    "points"
+   ]
+  },
+  {
+   "f": "js/games/guess-video.js",
+   "fn": "renderIntro",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.best || 0",
+    "st.plays || 0"
+   ]
+  },
+  {
+   "f": "js/games/guess-video.js",
+   "fn": "soloFinish",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "correct",
+    "points"
+   ]
+  },
+  {
+   "f": "js/games/horde.js",
+   "fn": "build",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "кнопка D37Full: постоянный селектор",
+   "xs": [
+    "window.D37Full ? window.D37Full.btn('#gamesStage', { cls: 'hd-btn' })"
+   ]
+  },
+  {
+   "f": "js/games/horde.js",
+   "fn": "buildHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "карточки оружия и пассивок из таблиц; id героя из data-act",
+   "xs": [
+    "l"
+   ]
+  },
+  {
+   "f": "js/games/horde.js",
+   "fn": "buildHtml",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "w.evo ? '⭐' : w.lvl"
+   ]
+  },
+  {
+   "f": "js/games/horde.js",
+   "fn": "coopFinish",
+   "k": "markup:text",
+   "c": "const",
+   "n": "карточки оружия и пассивок из таблиц; id героя из data-act",
+   "xs": [
+    "lv"
+   ]
+  },
+  {
+   "f": "js/games/horde.js",
+   "fn": "finish",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "G.level"
+   ]
+  },
+  {
+   "f": "js/games/horde.js",
+   "fn": "heroInfo",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "карточки оружия и пассивок из таблиц; id героя из data-act",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "js/games/horde.js",
+   "fn": "levelUp",
+   "k": "markup:text",
+   "c": "const",
+   "n": "карточки оружия и пассивок из таблиц; id героя из data-act",
+   "xs": [
+    "f.tag"
+   ]
+  },
+  {
+   "f": "js/games/horde.js",
+   "fn": "pause",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "G.level"
+   ]
+  },
+  {
+   "f": "js/games/horde.js",
+   "fn": "showLevelCards",
+   "k": "markup:text",
+   "c": "const",
+   "n": "карточки оружия и пассивок из таблиц; id героя из data-act",
+   "xs": [
+    "f.tag",
+    "n"
+   ]
+  },
+  {
+   "f": "js/games/iokit.js",
+   "fn": "menuHtml",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "k",
+    "k + 1"
+   ]
+  },
+  {
+   "f": "js/games/kletochki.js",
+   "fn": "hud",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "iokit.js: menuHtml/lbHtml/connHtml/errHtml экранируют имена через escH",
+   "xs": [
+    "K.lbHtml(list)"
+   ]
+  },
+  {
+   "f": "js/games/kletochki.js",
+   "fn": "showOv",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "iokit.js: menuHtml/lbHtml/connHtml/errHtml экранируют имена через escH",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/games/krokodil.js",
+   "fn": "avatar",
+   "k": "markup:urllow",
+   "c": "peer-clean",
+   "n": "fromHost() пропускает всё от хозяина через GameRoom.clean; число своих слов",
+   "xs": [
+    "root.D37Char.img(look, 48)"
+   ]
+  },
+  {
+   "f": "js/games/krokodil.js",
+   "fn": "botFinal",
+   "k": "markup:text",
+   "c": "peer-clean",
+   "n": "fromHost() пропускает всё от хозяина через GameRoom.clean; число своих слов",
+   "xs": [
+    "BOT.got"
+   ]
+  },
+  {
+   "f": "js/games/krokodil.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "st.plays"
+   ]
+  },
+  {
+   "f": "js/games/krokodil.js",
+   "fn": "onRoomError",
+   "k": "sink:innerHTML",
+   "c": "const",
+   "n": "константная разметка ошибки комнаты",
+   "xs": [
+    "msg"
+   ]
+  },
+  {
+   "f": "js/games/krokodil.js",
+   "fn": "renderBoard",
+   "k": "markup:text",
+   "c": "peer-clean",
+   "n": "fromHost() пропускает всё от хозяина через GameRoom.clean; число своих слов",
+   "xs": [
+    "S.votes ? `${S.votes}/${Math.max(2, Math.ceil(Math.max(1, ON.R.players"
+   ]
+  },
+  {
+   "f": "js/games/krokodil.js",
+   "fn": "renderLobby",
+   "k": "markup:text",
+   "c": "peer-clean",
+   "n": "fromHost() пропускает всё от хозяина через GameRoom.clean; число своих слов",
+   "xs": [
+    "set.own"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-mc.js",
+   "fn": "packUi",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента «Кубомира»: head/html собраны из esc(имя файла/мода/постройки) и чисел",
+   "xs": [
+    "head"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-mc.js",
+   "fn": "repHtml",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента «Кубомира»: head/html собраны из esc(имя файла/мода/постройки) и чисел",
+   "xs": [
+    "head",
+    "rep.approx",
+    "rep.flow",
+    "rep.mcBlocks.size",
+    "rep.thin",
+    "un.slice(0, 24).map(([n, c]) => esc(n) + (c ? ' ×' + c : '')).join(',"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-mc.js",
+   "fn": "reportPack",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента «Кубомира»: head/html собраны из esc(имя файла/мода/постройки) и чисел",
+   "xs": [
+    "un.slice(0, 16).map(([c, n]) => esc(c) + ' ×' + n).join(', ')"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-mc.js",
+   "fn": "show",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента «Кубомира»: head/html собраны из esc(имя файла/мода/постройки) и чисел",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-mc.js",
+   "fn": "worldUi",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента «Кубомира»: head/html собраны из esc(имя файла/мода/постройки) и чисел",
+   "xs": [
+    "H()"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-mods.js",
+   "fn": "draw",
+   "k": "markup:urllow",
+   "c": "self-made",
+   "n": "blob:-адреса текстур мода",
+   "xs": [
+    "u"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-mods.js",
+   "fn": "loadJs",
+   "k": "sink:src [s]",
+   "c": "const",
+   "n": "файлы языков модов с нашего сайта",
+   "xs": [
+    "src + '?v=' + (window.GAMES_VER || '')"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-mods.js",
+   "fn": "modCard",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "число ошибок мода",
+   "xs": [
+    "st0"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-ui.js",
+   "fn": "renderCursor",
+   "k": "markup:style",
+   "c": "const",
+   "n": "data:/blob: значок вещи, число стопки",
+   "xs": [
+    "V().iconURL(s.id, 40)"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-ui.js",
+   "fn": "renderCursor",
+   "k": "markup:text",
+   "c": "const",
+   "n": "data:/blob: значок вещи, число стопки",
+   "xs": [
+    "s.n"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-ui.js",
+   "fn": "slot",
+   "k": "markup:style",
+   "c": "const",
+   "n": "data:/blob: значок вещи, число стопки",
+   "xs": [
+    "V().iconURL(s.id, 40)"
+   ]
+  },
+  {
+   "f": "js/games/kubomir-ui.js",
+   "fn": "slot",
+   "k": "markup:text",
+   "c": "const",
+   "n": "data:/blob: значок вещи, число стопки",
+   "xs": [
+    "s.n"
+   ]
+  },
+  {
+   "f": "js/games/kubomir.js",
+   "fn": "hudBuild",
+   "k": "markup:attr",
+   "c": "num-local",
+   "n": "отладочная панель F3: числа и названия биомов",
+   "xs": [
+    "i"
+   ]
+  },
+  {
+   "f": "js/games/kubomir.js",
+   "fn": "hudUpdate",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "отладочная панель F3: числа и названия биомов",
+   "xs": [
+    "V.lB(L)",
+    "V.lG(L)",
+    "V.lR(L)",
+    "V.lSky(L)",
+    "c ? V.BIOMES[c.b] : '—'",
+    "opts.rd",
+    "r.meshes",
+    "r.poolFree",
+    "rs.calls",
+    "s.chunks",
+    "s.gen",
+    "s.jobs",
+    "s.mesh",
+    "s.pend",
+    "st.WX.biome"
+   ]
+  },
+  {
+   "f": "js/games/kubomir.js",
+   "fn": "mount",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "кнопки D37Full и таблица клавиш",
+   "xs": [
+    "FS ? FS.rotBtn('#gamesStage') + FS.btn('#gamesStage', { esc: false, cl"
+   ]
+  },
+  {
+   "f": "js/games/kubomir.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "кнопки D37Full и таблица клавиш",
+   "xs": [
+    "K ? K.keysHtml(K.capId) : '<p class=\"gs-note\">Клавиши «Кубомира» можно"
+   ]
+  },
+  {
+   "f": "js/games/ludo.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.plays",
+    "st.wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/mahjong.js",
+   "fn": "createBoard",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "G.n"
+   ]
+  },
+  {
+   "f": "js/games/mahjong.js",
+   "fn": "gameOver",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "G.n"
+   ]
+  },
+  {
+   "f": "js/games/mahjong.js",
+   "fn": "levelDone",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "G.n",
+    "next"
+   ]
+  },
+  {
+   "f": "js/games/mahjong.js",
+   "fn": "offer",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "картинки фишек и действия hint/shuffle",
+   "xs": [
+    "what"
+   ]
+  },
+  {
+   "f": "js/games/mahjong.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "const",
+   "n": "картинки фишек и действия hint/shuffle",
+   "xs": [
+    "G.faces[t.f]"
+   ]
+  },
+  {
+   "f": "js/games/mahjong.js",
+   "fn": "timeUp",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "G.done",
+    "G.pairs"
+   ]
+  },
+  {
+   "f": "js/games/memory.js",
+   "fn": "finish",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "M.moves"
+   ]
+  },
+  {
+   "f": "js/games/memory.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "const",
+   "n": "эмодзи карточек",
+   "xs": [
+    "ic"
+   ]
+  },
+  {
+   "f": "js/games/memory.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "best || '—'"
+   ]
+  },
+  {
+   "f": "js/games/miner.js",
+   "fn": "createBoard",
+   "k": "markup:text",
+   "c": "const",
+   "n": "названия уровней сложности из таблицы LEVELS",
+   "xs": [
+    "v.name"
+   ]
+  },
+  {
+   "f": "js/games/miner.js",
+   "fn": "createBoard",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "G.m"
+   ]
+  },
+  {
+   "f": "js/games/miner.js",
+   "fn": "finish",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "G.opened"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "btn",
+   "k": "markup:attr",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "s"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "btn",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "s + 1"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "draw",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
+   "xs": [
+    "D0.e"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "infoPanel",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "infoPanel",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "файл агента баз: uid — user_id (uuid) из war_state/war_sector; id базы — число",
+   "xs": [
+    "i.uid"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "infoPanel",
+   "k": "markup:style",
+   "c": "const",
+   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
+   "xs": [
+    "i.color"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "infoPanel",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "i.layout.find(e => e.k === 'th')?.l || 1",
+    "i.n || 1"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "openMenu",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "W.sector + 1",
+    "me.local ? '' : ' · 👍 ' + (me.likes || 0)",
+    "me.plot"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "ownerPanel",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "файл агента баз: uid — user_id (uuid) из war_state/war_sector; id базы — число",
+   "xs": [
+    "i.uid"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "ownerPanel",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "i.layout.find(e => e.k === 'th')?.l || 1",
+    "i.likes || 0",
+    "i.plot"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "renderCat",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента баз: названия вкладок и ключи каталога DEFS/FURN",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "renderCat",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
+   "xs": [
+    "lock ? '🔒 ' + lock : price"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "renderCat",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "cnt"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "renderSel",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента баз: head и lines собраны из значков, чисел и esc(D.n/D.info)",
+   "xs": [
+    "head",
+    "lines.join('<br>')"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "renderSel",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "cap ? ' (' + cap + ')' : ''"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "renderSel",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "nl"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "row",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "файл агента баз: uid — user_id (uuid) из war_state/war_sector; id базы — число",
+   "xs": [
+    "m.uid"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "sectorPanel",
+   "k": "markup:attr",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "s"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "sectorPanel",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "s + 1"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "signAct",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
+   "xs": [
+    "plot"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "signAct",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
+   "xs": [
+    "plot"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "vehPanel",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "vehPanel",
+   "k": "markup:attr",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "it ? it.i : 0",
+    "v ? v.j : -1"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "vehPanel",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
+   "xs": [
+    "VD(id).icon"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "vehPanel",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "V.lv > lv ? ` (${D0.n.toLowerCase()} ${V.lv} ур.)` : ''"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "vehPanel",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "me.veh[id]",
+    "slots",
+    "used"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "bankPanel",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "файл агента мира: деньги города и цены — числа",
+   "xs": [
+    "s.bank",
+    "s.cash"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "drawTask",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента мира: названия — esc()",
+   "xs": [
+    "esc(R0.name)",
+    "esc(st.text)"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "drawWallet",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента мира: названия — esc()",
+   "xs": [
+    "esc(ROLES[rt.zx.r].name)"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "familyBoard",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "familyBoard",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
+   "xs": [
+    "f[0]"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "familyBoard",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента мира: названия — esc()",
+   "xs": [
+    "esc(f[1])"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "jobBoard",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "jobBoard",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
+   "xs": [
+    "r.icon"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "jobBoard",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента мира: названия — esc()",
+   "xs": [
+    "esc(Z.name)",
+    "esc(r.desc)",
+    "esc(r.name)"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "jobBoard",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "файл агента мира: деньги города и цены — числа",
+   "xs": [
+    "MZ.PAY.day",
+    "MZ.payState().got"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "jobBoard",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "файл агента мира: деньги города и цены — числа",
+   "xs": [
+    "r.pay ? ` · ${W0.icon}${r.pay} за задание + немного 🪙` : ''"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "petShop",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
+   "xs": [
+    "p[0]"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "petShop",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента мира: названия — esc()",
+   "xs": [
+    "esc(p[1])"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "petShop",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "файл агента мира: деньги города и цены — числа",
+   "xs": [
+    "s.cash"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "quiz",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента мира: названия — esc()",
+   "xs": [
+    "esc(opts[i])",
+    "esc(qn)"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "shop",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "shop",
+   "k": "markup:attr",
+   "c": "num-local",
+   "n": "файл агента мира: деньги города и цены — числа",
+   "xs": [
+    "p"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "shop",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "файл агента мира: деньги города и цены — числа",
+   "xs": [
+    "n",
+    "p",
+    "s.cash"
+   ]
+  },
+  {
+   "f": "js/games/mir-city.js",
+   "fn": "trialPanel",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
+   "xs": [
+    "pick(['перешёл дорогу на красный', 'шумел ночью', 'не вернул книгу в б"
+   ]
+  },
+  {
+   "f": "js/games/mir-econ.js",
+   "fn": "bankApp",
+   "k": "markup:text",
+   "c": "const",
+   "n": "D37Phone.head вставляет заголовок как есть — здесь константа «🏦 Банк»",
+   "xs": [
+    "P.head('🏦 Банк')"
+   ]
+  },
+  {
+   "f": "js/games/mir-play.js",
+   "fn": "build",
+   "k": "sink:insertAdjacentHTML",
+   "c": "html-arg",
+   "n": "кнопки D37Full",
+   "xs": [
+    "F.rotBtn('#gamesStage') + F.btn('#gamesStage', { esc: false, cls: 'gs-"
+   ]
+  },
+  {
+   "f": "js/games/mir-promo.js",
+   "fn": "open",
+   "k": "markup:text",
+   "c": "admin",
+   "n": "щиты: свои промо и спонсор из site_config ad_sponsor (пишет админ); href — esc()",
+   "xs": [
+    "p.ic || '📣'"
+   ]
+  },
+  {
+   "f": "js/games/mir-promo.js",
+   "fn": "open",
+   "k": "markup:url",
+   "c": "admin",
+   "n": "щиты: свои промо и спонсор из site_config ad_sponsor (пишет админ); href — esc()",
+   "xs": [
+    "esc(p.href)"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "board",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: значки режимов и точек",
+   "xs": [
+    "m[0]"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "board",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента мира: ники/названия — esc()",
+   "xs": [
+    "esc(M0[1])",
+    "esc(m[1])"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "drawScore",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: значки режимов и точек",
+   "xs": [
+    "W.pts.map(p => `🚩${p.id}${p.own === 1 ? '🟥' : p.own === 2 ? '🟦' : '"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "drawScore",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента мира: ники/названия — esc()",
+   "xs": [
+    "esc(M0[1])",
+    "esc(nickOf(k))"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "drawScore",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "файл агента мира: счёт боя — числа",
+   "xs": [
+    "W.deaths",
+    "W.kills"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "drawScore",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "файл агента мира: счёт боя — числа",
+   "xs": [
+    "W.robotKills ? ` · 🤖 ${W.robotKills}` : ''",
+    "W.teams[1]",
+    "W.teams[2]"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "drawScore",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "файл агента мира: счёт боя — числа",
+   "xs": [
+    "n"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "plotInfo",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента мира: ники/названия — esc()",
+   "xs": [
+    "esc(P.code)",
+    "esc(P.name)"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "warMod",
+   "k": "markup:attr",
+   "c": "esc-up",
+   "n": "файл агента мира: ники/названия — esc()",
+   "xs": [
+    "esc(WEAPONS[w].name)"
+   ]
+  },
+  {
+   "f": "js/games/mir-zones.js",
+   "fn": "banner",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: таблицы зон и действий",
+   "xs": [
+    "icon"
+   ]
+  },
+  {
+   "f": "js/games/mir-zones.js",
+   "fn": "openMap",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента мира: таблицы зон и действий",
+   "xs": [
+    "p.age"
+   ]
+  },
+  {
+   "f": "js/games/mir-zones.js",
+   "fn": "openMap",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: таблицы зон и действий",
+   "xs": [
+    "p.age",
+    "p.icon"
+   ]
+  },
+  {
+   "f": "js/games/mir-zones.js",
+   "fn": "showGate",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: таблицы зон и действий",
+   "xs": [
+    "Z.age",
+    "Z.icon"
+   ]
+  },
+  {
+   "f": "js/games/mir-zones.js",
+   "fn": "toggleActs",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента мира: таблицы зон и действий",
+   "xs": [
+    "a.id"
+   ]
+  },
+  {
+   "f": "js/games/mir-zones.js",
+   "fn": "toggleActs",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: таблицы зон и действий",
+   "xs": [
+    "a.icon"
+   ]
+  },
+  {
+   "f": "js/games/mir.js",
+   "fn": "badges",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы игр/столов; level — число",
+   "xs": [
+    "v.level"
+   ]
+  },
+  {
+   "f": "js/games/mir.js",
+   "fn": "inviteMenu",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "таблицы игр/столов; level — число",
+   "xs": [
+    "g.id"
+   ]
+  },
+  {
+   "f": "js/games/mir.js",
+   "fn": "inviteMenu",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы игр/столов; level — число",
+   "xs": [
+    "g.icon"
+   ]
+  },
+  {
+   "f": "js/games/mir.js",
+   "fn": "mount",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "panel(head, body): все вызовы в mir*.js проверены — константы, числа и esc(); кнопки D37Full",
+   "xs": [
+    "FS ? FS.rotBtn('#gamesStage') + FS.btn('#gamesStage', { esc: false, cl"
+   ]
+  },
+  {
+   "f": "js/games/mir.js",
+   "fn": "openCard",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "uid — uuid: mkRemote пропускает только вид uuid (UID_RE, T-011)",
+   "xs": [
+    "S.me.uid",
+    "p.uid"
+   ]
+  },
+  {
+   "f": "js/games/mir.js",
+   "fn": "panel",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "panel(head, body): все вызовы в mir*.js проверены — константы, числа и esc(); кнопки D37Full",
+   "xs": [
+    "body",
+    "head"
+   ]
+  },
+  {
+   "f": "js/games/mir.js",
+   "fn": "renderTablePanel",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы игр/столов; level — число",
+   "xs": [
+    "gi.icon",
+    "tb.n"
+   ]
+  },
+  {
+   "f": "js/games/mir.js",
+   "fn": "showInvite",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы игр/столов; level — число",
+   "xs": [
+    "gi.icon"
+   ]
+  },
+  {
+   "f": "js/games/nardy.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.plays",
+    "st.wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/nardy.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "peer-clean",
+   "n": "состояние стола от хозяина (GameRoom.clean), число",
+   "xs": [
+    "P.off[p]"
+   ]
+  },
+  {
+   "f": "js/games/podzem-mods.js",
+   "fn": "boot",
+   "k": "sink:srcdoc",
+   "c": "sandbox",
+   "n": "моды игрока: Worker внутри iframe sandbox + CSP без сети",
+   "xs": [
+    "frameHtml()"
+   ]
+  },
+  {
+   "f": "js/games/podzem-mods.js",
+   "fn": "loadImg",
+   "k": "sink:src [im]",
+   "c": "img-src",
+   "n": "картинки мода: data:/blob:",
+   "xs": [
+    "src"
+   ]
+  },
+  {
+   "f": "js/games/podzem-mods.js",
+   "fn": "onmessage",
+   "k": "sink:new Function",
+   "c": "not-html",
+   "n": "проба номера строки: константа",
+   "xs": [
+    "new Function('throw new Error(\"x\")')"
+   ]
+  },
+  {
+   "f": "js/games/podzem-mods.js",
+   "fn": "onmessage",
+   "k": "sink:new Function",
+   "c": "sandbox",
+   "n": "моды игрока: Worker внутри iframe sandbox + CSP без сети",
+   "xs": [
+    "new Function('mod', 'world', 'fx', 'npc', 'commands', 'player', 'game'"
+   ]
+  },
+  {
+   "f": "js/games/podzem-mods.js",
+   "fn": "renderMenu",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "число ошибок мода",
+   "xs": [
+    "i ? (i.off ? ' · ⛔ выключен' : i.errors ? ` · ошибок: ${i.errors}` : '"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "achHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "цели, подписи кнопки (useLabel), достижения ACH — константы; title группы рецептов: станции мода проверены белым списком workbench/furnace/anvil (podzem-mods.js)",
+   "xs": [
+    "ic"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "craftHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "цели, подписи кнопки (useLabel), достижения ACH — константы; title группы рецептов: станции мода проверены белым списком workbench/furnace/anvil (podzem-mods.js)",
+   "xs": [
+    "title"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "detailHtml",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа стопок, рецептов, здоровья",
+   "xs": [
+    "hand.n > 1 ? ' ×' + hand.n : ''",
+    "s.n > 1 ? ' ×' + s.n : ''"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "grid",
+   "k": "markup:attr",
+   "c": "esc-up",
+   "n": "aria-label — esc(nameOf()); sub — esc(имя мира) внутри; newWorldHtml — esc() на именах модов",
+   "xs": [
+    "s ? esc(nameOf(s.id)) + (s.n > 1 ? ' ×' + s.n : '') : 'Пусто'"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "grid",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа стопок, рецептов, здоровья",
+   "xs": [
+    "s.n"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "hud",
+   "k": "markup:attr",
+   "c": "esc-up",
+   "n": "aria-label — esc(nameOf()); sub — esc(имя мира) внутри; newWorldHtml — esc() на именах модов",
+   "xs": [
+    "s ? esc(nameOf(s.id)) + (s.n > 1 ? ' ×' + s.n : '') : 'Пусто'"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "hud",
+   "k": "markup:text",
+   "c": "const",
+   "n": "цели, подписи кнопки (useLabel), достижения ACH — константы; title группы рецептов: станции мода проверены белым списком workbench/furnace/anvil (podzem-mods.js)",
+   "xs": [
+    "gl.icon"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "hud",
+   "k": "markup:text",
+   "c": "const",
+   "n": "цели, подписи кнопки (useLabel), достижения ACH — константы; title группы рецептов: станции мода проверены белым списком workbench/furnace/anvil (podzem-mods.js)",
+   "xs": [
+    "ul[0]",
+    "ul[1]"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "hud",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа стопок, рецептов, здоровья",
+   "xs": [
+    "gl.i + 1"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "hud",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа стопок, рецептов, здоровья",
+   "xs": [
+    "gl.n",
+    "s.n"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "menu",
+   "k": "sink:innerHTML",
+   "c": "esc-up",
+   "n": "aria-label — esc(nameOf()); sub — esc(имя мира) внутри; newWorldHtml — esc() на именах модов",
+   "xs": [
+    "await newWorldHtml()"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "pauseOpen",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "aria-label — esc(nameOf()); sub — esc(имя мира) внутри; newWorldHtml — esc() на именах модов",
+   "xs": [
+    "sub"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "recipeRow",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа стопок, рецептов, здоровья",
+   "xs": [
+    "API.count(id)",
+    "n",
+    "r.n > 1 ? ' ×' + r.n : ''"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "showHand",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа стопок, рецептов, здоровья",
+   "xs": [
+    "hand.n"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "showTip",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа стопок, рецептов, здоровья",
+   "xs": [
+    "s.n > 1 ? ' ×' + s.n : ''"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "startMenu",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа стопок, рецептов, здоровья",
+   "xs": [
+    "c.maxHp",
+    "w.day || 1",
+    "w.maxDepth || 0"
+   ]
+  },
+  {
+   "f": "js/games/pool.js",
+   "fn": "hud",
+   "k": "markup:text",
+   "c": "const",
+   "n": "S.msg считают обе стороны по одному и тому же удару — тексты из кода игры, не от соперника",
+   "xs": [
+    "n"
+   ]
+  },
+  {
+   "f": "js/games/pool.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "const",
+   "n": "названия уровней сложности из таблицы LEVELS",
+   "xs": [
+    "L.label"
+   ]
+  },
+  {
+   "f": "js/games/pool.js",
+   "fn": "over",
+   "k": "markup:text",
+   "c": "const",
+   "n": "S.msg считают обе стороны по одному и тому же удару — тексты из кода игры, не от соперника",
+   "xs": [
+    "S.msg"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "enterBattle",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "u"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "enterBattle",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "U[u].e"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "enterBattle",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента набегов: title собран из esc(ник) и чисел; ники в журнале — esc()",
+   "xs": [
+    "title"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "enterBattle",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "bt.B.left[u]"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "fill",
+   "k": "markup:style",
+   "c": "const",
+   "n": "файл агента набегов: цвет — из таблицы COLORS, значки лиг и обликов — таблицы кода",
+   "xs": [
+    "MBx.COLORS[x.color] || 'inherit'"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "fill",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "MBx.LEAGUES[x.league]?.[1] || ''",
+    "f(x)"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "item",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "item",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "e",
+    "n",
+    "owned.has(id) ? '✓ есть' : `💎 ${g}`",
+    "txt"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "renderTrain",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "renderTrain",
+   "k": "markup:attr",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "qEnd"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "renderTrain",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "U[g.u].e"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "renderTrain",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "bl ? bl + ' ур.' : ''",
+    "cap",
+    "have",
+    "stat",
+    "u.cost",
+    "u.e",
+    "u.hp",
+    "u.lv",
+    "u.sp",
+    "used"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showCamp",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "Rr.campTh[i]"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showHelp",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "Rr.shield.newbie",
+    "Rr.shield.s2",
+    "Rr.shield.s3"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showHub",
+   "k": "markup:attr",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "qEnd",
+    "st.shield"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showHub",
+   "k": "markup:style",
+   "c": "const",
+   "n": "файл агента набегов: цвет — из таблицы COLORS, значки лиг и обликов — таблицы кода",
+   "xs": [
+    "MBx.COLORS[b.color] || '#ef4444'"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showHub",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "L[0]",
+    "L[1]",
+    "MBx.UNITS[u]?.e || '?'"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showHub",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: цвет — из таблицы COLORS, значки лиг и обликов — таблицы кода",
+   "xs": [
+    "R0 ? ' · ' + R0.e : ''",
+    "b.skin && MBx.SKINS[b.skin] ? ` · ${MBx.SKINS[b.skin].e} ${MBx.SKINS[b"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showHub",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "cap || '—'"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showHub",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "MBx.WRules.th(b)",
+    "R().chestWins",
+    "R().day.battles"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showHub",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "st ? ` ${Object.values(st.camp || {}).reduce((s, v) => s + v, 0)}★` :",
+    "st.day.battles",
+    "st.week.stars",
+    "st.week.wins",
+    "used",
+    "v"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showJoin",
+   "k": "markup:style",
+   "c": "const",
+   "n": "файл агента набегов: цвет — из таблицы COLORS, значки лиг и обликов — таблицы кода",
+   "xs": [
+    "color"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showJoin",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: цвет — из таблицы COLORS, значки лиг и обликов — таблицы кода",
+   "xs": [
+    "lg[1]"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showJoin",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "info.n",
+    "info.th"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showLog",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента набегов: ник и название базы — esc(); название базы — NAMES + номер",
+   "xs": [
+    "tab === 'in' ? esc(x.nick) + (bn(x.base) ? ' («' + esc(bn(x.base)) + '"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showLog",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "S.st.stats.def_lost",
+    "S.st.stats.def_won"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showLog",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "x.pct",
+    "x.tr ? ` · 🏆 ${x.tr > 0 ? '+' : ''}${x.tr}` : ''"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showResult",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "st"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showResult",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "r.pct",
+    "srv.tr"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showShop",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "st?.army_skin === k ? '' : k"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showShop",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "файл агента набегов: цвет — из таблицы COLORS, значки лиг и обликов — таблицы кода",
+   "xs": [
+    "st?.skin === k ? '' : k"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showTop",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "e",
+    "n"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showTop",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "Rr.bonus[i]",
+    "Rr.chestWins"
+   ]
+  },
+  {
+   "f": "js/games/reaction.js",
+   "fn": "drawTries",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "t"
+   ]
+  },
+  {
+   "f": "js/games/room.js",
+   "fn": "fullHtml",
+   "k": "markup:url",
+   "c": "const",
+   "n": "fullHtml(game): id игры передают игры сами (константа в их файле)",
+   "xs": [
+    "game"
+   ]
+  },
+  {
+   "f": "js/games/room.js",
+   "fn": "lobby",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "lobby(text): вызывающие передают константы",
+   "xs": [
+    "text || 'Подключаемся к комнате…'"
+   ]
+  },
+  {
+   "f": "js/games/sea.js",
+   "fn": "boardHtml",
+   "k": "markup:attr",
+   "c": "const",
+   "xs": [
+    "LETTERS[c]"
+   ]
+  },
+  {
+   "f": "js/games/sea.js",
+   "fn": "boardHtml",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "LETTERS[c]"
+   ]
+  },
+  {
+   "f": "js/games/sea.js",
+   "fn": "paintSetup",
+   "k": "markup:attr",
+   "c": "const",
+   "xs": [
+    "l"
+   ]
+  },
+  {
+   "f": "js/games/sea.js",
+   "fn": "paintSetup",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "need[l]"
+   ]
+  },
+  {
+   "f": "js/games/sea.js",
+   "fn": "renderSetup",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.plays || 0",
+    "st.wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/sea.js",
+   "fn": "status",
+   "k": "sink:innerHTML",
+   "c": "esc-up",
+   "n": "status(text): все вызовы — константы и esc(ник)",
+   "xs": [
+    "text"
+   ]
+  },
+  {
+   "f": "js/games/snake.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "best"
+   ]
+  },
+  {
+   "f": "js/games/solitaire.js",
+   "fn": "askNew",
+   "k": "markup:attr",
+   "c": "const",
+   "xs": [
+    "go"
+   ]
+  },
+  {
+   "f": "js/games/solitaire.js",
+   "fn": "cardEl",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "SUITS[c.s]",
+    "c.r >= 10 ? RANKS[c.r] : SUITS[c.s]"
+   ]
+  },
+  {
+   "f": "js/games/solitaire.js",
+   "fn": "createTable",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "S.num"
+   ]
+  },
+  {
+   "f": "js/games/solitaire.js",
+   "fn": "finish",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "S.found ? S.found.reduce((a, f) => a + f.length, 0) : 0",
+    "S.moves"
+   ]
+  },
+  {
+   "f": "js/games/sprite-view.js",
+   "fn": "chips",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "списки стилей и анимаций char2d",
+   "xs": [
+    "a"
+   ]
+  },
+  {
+   "f": "js/games/sprite-view.js",
+   "fn": "demoMount",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "списки стилей и анимаций char2d",
+   "xs": [
+    "s"
+   ]
+  },
+  {
+   "f": "js/games/sprite-view.js",
+   "fn": "show",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "списки стилей и анимаций char2d",
+   "xs": [
+    "s"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "aiPrompt",
+   "k": "markup:text",
+   "c": "not-html",
+   "n": "текст задания для ИИ — идёт в буфер обмена, не в HTML",
+   "xs": [
+    "idea || 'придумай сам весёлую аркаду'"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "cardHtml",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge/ugc.select: числа",
+   "xs": [
+    "ageB(g)"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "editor",
+   "k": "markup:text",
+   "c": "const",
+   "n": "параметры шаблонов STUDIO_TPL (константы кода); значение v после clean() шаблона",
+   "xs": [
+    "t ? t.icon + ' ' + esc(t.name) : '💻 Свой код'"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "mine",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge/ugc.select: числа",
+   "xs": [
+    "ageB(g)"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "moderation",
+   "k": "markup:text",
+   "c": "enum",
+   "n": "статусы игры: draft/link/review/public/hidden/banned (check в ugc.sql)",
+   "xs": [
+    "(STATUS[g.status] || STATUS.draft).join(' ')"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "moderation",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge/ugc.select: числа",
+   "xs": [
+    "AU().select(g.age_rating, { staff: true, attr: 'data-age-rate' })",
+    "ageB(g)"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "moderation",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "g.reports ? ` · ⚠️ жалоб: ${g.reports}` : ''"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "paramsHtml",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "параметры шаблонов STUDIO_TPL (константы кода); значение v после clean() шаблона",
+   "xs": [
+    "p.k",
+    "p.max ?? 10",
+    "p.max || 40",
+    "p.min ?? 1",
+    "p.step || 1",
+    "v"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "paramsHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "параметры шаблонов STUDIO_TPL (константы кода); значение v после clean() шаблона",
+   "xs": [
+    "p.max || 6",
+    "v"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "play",
+   "k": "markup:text",
+   "c": "enum",
+   "n": "статусы игры: draft/link/review/public/hidden/banned (check в ugc.sql)",
+   "xs": [
+    "(STATUS[g.status] || STATUS.draft).join(' ')"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "play",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge/ugc.select: числа",
+   "xs": [
+    "g.srv ? ageB(g) : ''"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "sandbox",
+   "k": "sink:srcdoc",
+   "c": "sandbox",
+   "n": "srcdoc песочницы игры игрока (sandbox + CSP без сети)",
+   "xs": [
+    "h"
+   ]
+  },
+  {
+   "f": "js/games/studio.js",
+   "fn": "statusLine",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.ugc.select: числа",
+   "xs": [
+    "AU().select(g.age_rating ?? g.age_pick, { staff: isStaff(), attr: 'dat"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-gfx.js",
+   "fn": "render",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "пресеты и оценки E.WORLD_PRESETS/E.GRADES",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-gfx.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "const",
+   "n": "пресеты и оценки E.WORLD_PRESETS/E.GRADES",
+   "xs": [
+    "p.icon"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-gfx.js",
+   "fn": "rng",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "fmt(val)"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-modes.js",
+   "fn": "help",
+   "k": "markup:text",
+   "c": "const",
+   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
+   "xs": [
+    "D.icon"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-modes.js",
+   "fn": "menuHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
+   "xs": [
+    "t.icon"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-modes.js",
+   "fn": "menuHtml",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "menuHtml/propsHtml(расширение студии): html передаёт ядро студии, оно экранирует (renderProps/openMenu)",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-modes.js",
+   "fn": "openPanel",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
+   "xs": [
+    "P.max",
+    "P.min",
+    "P.step",
+    "id",
+    "k",
+    "v"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-modes.js",
+   "fn": "openPanel",
+   "k": "markup:text",
+   "c": "const",
+   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
+   "xs": [
+    "D.icon",
+    "M2.icon",
+    "P.label",
+    "i",
+    "t"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-modes.js",
+   "fn": "propsHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
+   "xs": [
+    "D ? D.icon + ' ' + esc(D.name) : 'нет — просто мир'"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-modes.js",
+   "fn": "propsHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
+   "xs": [
+    "t ? MD().TEAMS[t][0] + ' ' + MD().TEAMS[t][1] : 'Для всех'"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-modes.js",
+   "fn": "propsHtml",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "menuHtml/propsHtml(расширение студии): html передаёт ядро студии, оно экранирует (renderProps/openMenu)",
+   "xs": [
+    "h"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-modes.js",
+   "fn": "v3",
+   "k": "markup:text",
+   "c": "const",
+   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
+   "xs": [
+    "'XYZ'[i]"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-pad.js",
+   "fn": "drawRadial",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "it.i"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-play.js",
+   "fn": "drawHud",
+   "k": "markup:style",
+   "c": "const",
+   "n": "команды TEAM(k) — таблица modes.js",
+   "xs": [
+    "TEAM(k)[2]"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-play.js",
+   "fn": "drawHud",
+   "k": "markup:text",
+   "c": "const",
+   "n": "команды TEAM(k) — таблица modes.js",
+   "xs": [
+    "D.icon || '🎮'",
+    "TEAM(k)[0]",
+    "p.tm && TEAM(p.tm) ? TEAM(p.tm)[0] + ' ' : ''"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-tools.js",
+   "fn": "num",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "v"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-touch.js",
+   "fn": "menuHtml",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "таблицы SC.MATS/PREFABS",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-touch.js",
+   "fn": "menuHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы SC.MATS/PREFABS",
+   "xs": [
+    "i",
+    "n"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-touch.js",
+   "fn": "menuHtml",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "menuHtml(расширение студии): html передаёт ядро студии",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-touch.js",
+   "fn": "paintSheet",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "таблицы SC.MATS/PREFABS",
+   "xs": [
+    "k",
+    "n"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-touch.js",
+   "fn": "paintSheet",
+   "k": "markup:attr",
+   "c": "regex",
+   "n": "цвет — только ^#[0-9a-f]{6}$",
+   "xs": [
+    "/^#[0-9a-f]{6}$/i.test(o.color || '') ? o.color : '#888888'"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-touch.js",
+   "fn": "paintSheet",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы SC.MATS/PREFABS",
+   "xs": [
+    "i",
+    "n"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-touch.js",
+   "fn": "snapLabel",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "шаг сетки и угла",
+   "xs": [
+    "r ? r + '°' : ''",
+    "s ? String(s).replace('.', ',') : '—'"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-ui.js",
+   "fn": "drawHints",
+   "k": "sink:innerHTML",
+   "c": "html-arg",
+   "n": "sheet()/drawHints(): вызывающие передают константы и esc()",
+   "xs": [
+    "text"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-ui.js",
+   "fn": "sheet",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "sheet()/drawHints(): вызывающие передают константы и esc()",
+   "xs": [
+    "o.html || ''",
+    "o.title || ''"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-weather.js",
+   "fn": "opt",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "C.SEASONS/STATES/…_ICONS/…_NAMES из climate.js",
+   "xs": [
+    "v"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-weather.js",
+   "fn": "opt",
+   "k": "markup:text",
+   "c": "const",
+   "n": "C.SEASONS/STATES/…_ICONS/…_NAMES из climate.js",
+   "xs": [
+    "t"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-weather.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "const",
+   "n": "C.SEASONS/STATES/…_ICONS/…_NAMES из climate.js",
+   "xs": [
+    "nowLine()"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-weather.js",
+   "fn": "toggle",
+   "k": "sink:innerHTML",
+   "c": "const",
+   "n": "C.SEASONS/STATES/…_ICONS/…_NAMES из climate.js",
+   "xs": [
+    "nowLine()"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "act",
+   "k": "sink:window.open [window]",
+   "c": "url-checked",
+   "n": "своя ссылка комнаты",
+   "xs": [
+    "mpLink(mp)"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "compileScript",
+   "k": "sink:src [o]",
+   "c": "not-html",
+   "n": "o.src — исходный текст скрипта, не адрес",
+   "xs": [
+    "ed.q('.s3-ta').value"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "doPublish",
+   "k": "markup:url",
+   "c": "server-url",
+   "n": "ссылка /g/<id> после ugc_save",
+   "xs": [
+    "esc(ed.pubLink)"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "fillLangUI",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "таблицы SC.SHAPES/MATS/PREFABS, NPC LOOKS/ACTS, fx KINDS, языки — константы кода",
+   "xs": [
+    "l.id"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "fillLangUI",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы SC.SHAPES/MATS/PREFABS, NPC LOOKS/ACTS, fx KINDS, языки — константы кода",
+   "xs": [
+    "l.icon"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "mount",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы SC.SHAPES/MATS/PREFABS, NPC LOOKS/ACTS, fx KINDS, языки — константы кода",
+   "xs": [
+    "window.D37Full ? window.D37Full.btn('.s3', { esc: false }) : ''"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "openMenu",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "таблицы SC.SHAPES/MATS/PREFABS, NPC LOOKS/ACTS, fx KINDS, языки — константы кода",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "openMenu",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы SC.SHAPES/MATS/PREFABS, NPC LOOKS/ACTS, fx KINDS, языки — константы кода",
+   "xs": [
+    "K.icon",
+    "K.name",
+    "i",
+    "n",
+    "p.icon",
+    "p.name"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "openMenu",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "x.n"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "openMenu",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "меню частей: константы; возрастной выбор: числа",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "openPublish",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "меню частей: константы; возрастной выбор: числа",
+   "xs": [
+    "D37Age.ugc.select(ed.pubAge ?? ed.SC.settings?.age ?? 12, { staff: isS"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "renderPInfo",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "row.likes || 0"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "renderProps",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "таблицы SC.SHAPES/MATS/PREFABS, NPC LOOKS/ACTS, fx KINDS, языки — константы кода",
+   "xs": [
+    "k",
+    "l.id",
+    "n"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "renderProps",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "ed.G.rsnap || 1"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "renderProps",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы SC.SHAPES/MATS/PREFABS, NPC LOOKS/ACTS, fx KINDS, языки — константы кода",
+   "xs": [
+    "i",
+    "l.icon",
+    "n",
+    "x.icon",
+    "x.name"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "renderProps",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "свойства объекта: всё из мира экранировано esc() (T-011); расширения студии строят через esc()",
+   "xs": [
+    "extReduce('propsHtml', `<p class=\"s3-note\">Ничего не выбрано. Нажми на",
+    "extReduce('propsHtml', h, o)"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "setLang",
+   "k": "sink:src [o]",
+   "c": "not-html",
+   "n": "o.src — исходный текст скрипта, не адрес",
+   "xs": [
+    "o.code || ''"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "v3",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "step"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "v3",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы SC.SHAPES/MATS/PREFABS, NPC LOOKS/ACTS, fx KINDS, языки — константы кода",
+   "xs": [
+    "'XYZ'[i]"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "walk",
+   "k": "markup:text",
+   "c": "const",
+   "n": "таблицы SC.SHAPES/MATS/PREFABS, NPC LOOKS/ACTS, fx KINDS, языки — константы кода",
+   "xs": [
+    "ICON(o)"
+   ]
+  },
+  {
+   "f": "js/games/sudoku.js",
+   "fn": "createBoard",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "i"
+   ]
+  },
+  {
+   "f": "js/games/sudoku.js",
+   "fn": "createBoard",
+   "k": "markup:text",
+   "c": "const",
+   "n": "названия уровней сложности из таблицы LEVELS",
+   "xs": [
+    "v.name"
+   ]
+  },
+  {
+   "f": "js/games/sudoku.js",
+   "fn": "dailyDoneHtml",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "d.day",
+    "d.won ? `Время ${mmss(d.sec)} · ошибок: ${d.mistakes} · ${num(d.score)"
+   ]
+  },
+  {
+   "f": "js/games/sudoku.js",
+   "fn": "finish",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "daily ? 'mode:lv:' + (o.lv || 2) : 'again'"
+   ]
+  },
+  {
+   "f": "js/games/sudoku.js",
+   "fn": "finish",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "S.mistakes"
+   ]
+  },
+  {
+   "f": "js/games/sudoku.js",
+   "fn": "offer",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "what"
+   ]
+  },
+  {
+   "f": "js/games/sudoku.js",
+   "fn": "open",
+   "k": "markup:text",
+   "c": "const",
+   "n": "названия уровней сложности из таблицы LEVELS",
+   "xs": [
+    "v.name"
+   ]
+  },
+  {
+   "f": "js/games/sudoku.js",
+   "fn": "paint",
+   "k": "sink:innerHTML",
+   "c": "const",
+   "n": "цифры доски 1–9 и пометки",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/games/td.js",
+   "fn": "finish",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "S.lives",
+    "S.wave"
+   ]
+  },
+  {
+   "f": "js/games/td.js",
+   "fn": "offerContinue",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "S.wave"
+   ]
+  },
+  {
+   "f": "js/games/td.js",
+   "fn": "renderBar",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "S.lives",
+    "S.speed",
+    "S.wave",
+    "S.wave + 1"
+   ]
+  },
+  {
+   "f": "js/games/td.js",
+   "fn": "renderPanel",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "t.lvl"
+   ]
+  },
+  {
+   "f": "js/games/tictactoe.js",
+   "fn": "renderSetup",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "st.plays || 0",
+    "st.wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/tictactoe.js",
+   "fn": "start",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "i",
+    "i + 1"
+   ]
+  },
+  {
+   "f": "js/games/unity-host.js",
+   "fn": "cardHtml",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge/ugc.select: числа",
+   "xs": [
+    "ageB(g)"
+   ]
+  },
+  {
+   "f": "js/games/unity-host.js",
+   "fn": "mine",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge/ugc.select: числа",
+   "xs": [
+    "ageB(g)"
+   ]
+  },
+  {
+   "f": "js/games/unity-host.js",
+   "fn": "moderation",
+   "k": "markup:text",
+   "c": "enum",
+   "xs": [
+    "(STATUS[g.status] || STATUS.draft).join(' ')"
+   ]
+  },
+  {
+   "f": "js/games/unity-host.js",
+   "fn": "moderation",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge/ugc.select: числа",
+   "xs": [
+    "AU().select(g.age_rating, { staff: true, attr: 'data-age-rate' })",
+    "ageB(g)"
+   ]
+  },
+  {
+   "f": "js/games/unity-host.js",
+   "fn": "moderation",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "g.reports ? ` · ⚠️ жалоб: ${g.reports}` : ''"
+   ]
+  },
+  {
+   "f": "js/games/unity-host.js",
+   "fn": "play",
+   "k": "markup:text",
+   "c": "enum",
+   "xs": [
+    "(STATUS[g.status] || STATUS.draft).join(' ')"
+   ]
+  },
+  {
+   "f": "js/games/unity-host.js",
+   "fn": "play",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge/ugc.select: числа",
+   "xs": [
+    "g.srv ? ageB(g) : ''"
+   ]
+  },
+  {
+   "f": "js/games/unity-host.js",
+   "fn": "roomUi",
+   "k": "markup:text",
+   "c": "num-db",
+   "xs": [
+    "R.max"
+   ]
+  },
+  {
+   "f": "js/games/unity-host.js",
+   "fn": "session",
+   "k": "sink:src [f]",
+   "c": "url-checked",
+   "n": "unity_url/normUrl: только https и чужой адрес; iframe sandbox",
+   "xs": [
+    "g.url"
+   ]
+  },
+  {
+   "f": "js/games/unity-host.js",
+   "fn": "statusLine",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.ugc.select: числа",
+   "xs": [
+    "AU().select(g.age_rating ?? g.age_pick, { staff: isStaff(), attr: 'dat"
+   ]
+  },
+  {
+   "f": "js/games/uno.js",
+   "fn": "cardHtml",
+   "k": "markup:attr",
+   "c": "peer-clean",
+   "n": "цвет карты от хозяина: GameRoom.clean + в классе кавычки не пройдут",
+   "xs": [
+    "col ? 'c-' + col : 'c-w'"
+   ]
+  },
+  {
+   "f": "js/games/uno.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
+   "xs": [
+    "best"
+   ]
+  },
+  {
+   "f": "js/games/wardrobe.js",
+   "fn": "grid",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "части персонажа из PARTS, награды из GRANTS",
+   "xs": [
+    "g.title",
+    "name"
+   ]
+  },
+  {
+   "f": "js/games/wardrobe.js",
+   "fn": "grid",
+   "k": "markup:text",
+   "c": "const",
+   "n": "части персонажа из PARTS, награды из GRANTS",
+   "xs": [
+    "g.icon",
+    "g.short",
+    "name"
+   ]
+  },
+  {
+   "f": "js/games/wardrobe.js",
+   "fn": "render",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "части персонажа из PARTS, награды из GRANTS",
+   "xs": [
+    "s"
+   ]
+  },
+  {
+   "f": "js/games/wardrobe.js",
+   "fn": "tryBar",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "части персонажа из PARTS, награды из GRANTS",
+   "xs": [
+    "p.id",
+    "s"
+   ]
+  },
+  {
+   "f": "js/games/wardrobe.js",
+   "fn": "tryBar",
+   "k": "markup:text",
+   "c": "const",
+   "n": "части персонажа из PARTS, награды из GRANTS",
+   "xs": [
+    "g.how",
+    "g.title.split(' — ')[0].toLowerCase()",
+    "lv ? ` (у тебя ${lv})` : ''",
+    "p.lvl",
+    "p.name"
+   ]
+  },
+  {
+   "f": "js/games/wardrobe.js",
+   "fn": "tryBar",
+   "k": "markup:url",
+   "c": "const",
+   "n": "части персонажа из PARTS, награды из GRANTS",
+   "xs": [
+    "g.href"
+   ]
+  },
+  {
+   "f": "js/games/words.js",
+   "fn": "render",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "клавиши и буквы слов дня из словаря",
+   "xs": [
+    "k",
+    "k === '⏎' ? 'Ввод' : k === '⌫' ? 'Стереть' : k"
+   ]
+  },
+  {
+   "f": "js/games/words.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "const",
+   "n": "клавиши и буквы слов дня из словаря",
+   "xs": [
+    "k === '⏎' ? 'ВВОД' : k"
+   ]
+  },
+  {
+   "f": "js/games/words.js",
+   "fn": "showEnd",
+   "k": "markup:text",
+   "c": "const",
+   "n": "клавиши и буквы слов дня из словаря",
+   "xs": [
+    "W.word.toUpperCase()",
+    "c"
+   ]
+  },
+  {
+   "f": "js/games/words.js",
+   "fn": "showEnd",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "st.best",
+    "st.played",
+    "st.streak"
+   ]
+  },
+  {
+   "f": "js/games/words.js",
+   "fn": "showHint",
+   "k": "markup:text",
+   "c": "const",
+   "n": "клавиши и буквы слов дня из словаря",
+   "xs": [
+    "h.ch.toUpperCase()",
+    "h.i + 1"
+   ]
+  },
+  {
+   "f": "js/games/world.js",
+   "fn": "badges",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "v.level"
+   ]
+  },
+  {
+   "f": "js/games/world.js",
+   "fn": "inviteMenu",
+   "k": "markup:attr",
+   "c": "const",
+   "xs": [
+    "g.id"
+   ]
+  },
+  {
+   "f": "js/games/world.js",
+   "fn": "inviteMenu",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "g.icon"
+   ]
+  },
+  {
+   "f": "js/games/world.js",
+   "fn": "openCard",
+   "k": "markup:attr",
+   "c": "id-db",
+   "n": "uid — uuid: mkPlayer пропускает только вид uuid (UID_RE, T-011)",
+   "xs": [
+    "S.me.uid",
+    "p.uid"
+   ]
+  },
+  {
+   "f": "js/games/world.js",
+   "fn": "openPortal",
+   "k": "markup:attr",
+   "c": "const",
+   "xs": [
+    "g.id"
+   ]
+  },
+  {
+   "f": "js/games/world.js",
+   "fn": "openPortal",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "g.icon",
+    "pt.e"
+   ]
+  },
+  {
+   "f": "js/games/world.js",
+   "fn": "showInvite",
+   "k": "markup:text",
+   "c": "const",
+   "xs": [
+    "gi.icon"
+   ]
+  },
+  {
+   "f": "js/ui/hotkeys.js",
+   "fn": "itemHtml",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "пункты поиска: страницы сайта (SITE_PAGES), игры (GAMES), ролики /v/<id> — адреса «#/…», «/…»; заголовки групп — константы",
+   "xs": [
+    "it.kind"
+   ]
+  },
+  {
+   "f": "js/ui/hotkeys.js",
+   "fn": "itemHtml",
+   "k": "markup:url",
+   "c": "const",
+   "n": "пункты поиска: страницы сайта (SITE_PAGES), игры (GAMES), ролики /v/<id> — адреса «#/…», «/…»; заголовки групп — константы",
+   "xs": [
+    "esc(it.href[0]==='#' && it.href[1]==='/' ? D37Route.href(it.href) : it"
+   ]
+  },
+  {
+   "f": "js/ui/hotkeys.js",
+   "fn": "renderCmdPaletteList",
+   "k": "markup:text",
+   "c": "const",
+   "n": "пункты поиска: страницы сайта (SITE_PAGES), игры (GAMES), ролики /v/<id> — адреса «#/…», «/…»; заголовки групп — константы",
+   "xs": [
+    "title"
+   ]
+  },
+  {
+   "f": "js/ui/modal.js",
+   "fn": "openVid",
+   "k": "markup:url",
+   "c": "dom-rt",
+   "n": "id ролика YouTube из data-vid, который сайт сам записал (или из регулярного выражения)",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "js/ui/modal.js",
+   "fn": "openVid",
+   "k": "sink:insertAdjacentHTML",
+   "c": "html-helper",
+   "xs": [
+    "D37Age.badge(va.age, { title: va.why }) + ' '"
+   ]
+  },
+  {
+   "f": "js/ui/router.js",
+   "fn": "meta",
+   "k": "sink:setAttribute(href) [c]",
+   "c": "const",
+   "n": "canonical из таблицы маршрутов",
+   "xs": [
+    "o.canonical"
+   ]
+  },
+  {
+   "f": "js/ui/tabs-nav.js",
+   "fn": "playSelected",
+   "k": "markup:url",
+   "c": "dom-rt",
+   "n": "id ролика YouTube из data-vid",
+   "xs": [
+    "id"
+   ]
+  },
+  {
+   "f": "studio/rust-build.js",
+   "fn": "onmessage",
+   "k": "sink:import() [import(THREADS)]",
+   "c": "const",
+   "n": "адреса библиотек jsDelivr и Worker-ы, которые выдаёт сама библиотека потоков",
+   "xs": [
+    "THREADS"
+   ]
+  },
+  {
+   "f": "studio/rust-build.js",
+   "fn": "run",
+   "k": "sink:new Worker [Worker]",
+   "c": "const",
+   "n": "адреса библиотек jsDelivr и Worker-ы, которые выдаёт сама библиотека потоков",
+   "xs": [
+    "t.workerUrl"
+   ]
+  }
+ ]
+}

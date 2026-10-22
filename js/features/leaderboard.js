@@ -155,7 +155,7 @@ function renderLbHtml(data, tab) {
         <div class="lb-rank r${i+1}">${rank}</div>
         <div class="lb-avatar" style="background:${col}">${ini}</div>
         <div class="lb-info"><div class="lb-name">${esc(d.username)}${dn}</div><div class="lb-sub">${d.anon ? 'анонимные донаты · ' : ''}${d.count} ${typeof pluralRu === 'function' ? pluralRu(d.count, 'донат', 'доната', 'донатов') : 'дон.'}</div></div>
-        <div class="lb-amount">${Math.round(d.total).toLocaleString('ru')} ${d.currency}</div>
+        <div class="lb-amount">${Math.round(d.total).toLocaleString('ru')} ${esc(d.currency)}</div>
       </div>`;
     }).join('')}</div>`;
   } else if (tab === 'recent') {
@@ -170,7 +170,7 @@ function renderLbHtml(data, tab) {
           <div class="lb-name">${esc(d.username||'Аноним')}</div>
           <div class="lb-sub">${d.message?esc(d.message.slice(0,40))+(d.message.length>40?'…':''):date}</div>
         </div>
-        <div class="lb-amount">${Math.round(d.amount).toLocaleString('ru')} ${d.currency}</div>
+        <div class="lb-amount">${Math.round(d.amount).toLocaleString('ru')} ${esc(d.currency)}</div>
       </div>`;
     }).join('')}</div>`;
   } else {

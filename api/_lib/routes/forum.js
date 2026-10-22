@@ -51,7 +51,7 @@ const HIDE = [
   /скинь\s*(?:фот\p{L}*|селфи)|где\s*(?:ты\s*)?жив[её]шь|(?:твой|дай|скажи|напиши)\s*(?:адрес|номер)/giu,
   /@[\p{L}\p{N}_.]{3,}/gu,
 ];
-const OWN = /^(?:https?:\/\/)?(?:www\.)?dan4ik37\.vercel\.app(\/[^\s<>"']*)?$/i;
+const OWN = /^(?:https?:\/\/)?(?:www\.)?dan4ik37\.vercel\.app(\/(?![\/\\])[^\s<>"']*)?$/i;   // «…app//чужой.сайт» — не путь на сайте, а ссылка наружу (//host)
 const LINK = /^(?:(?:https?:\/\/|www\.)\S+|[a-z0-9-]{2,}\.(?:ru|com|net|org|io|gg|me|xyz|su|ly|cc|top|link|рф|kz|by|ua|tv|app|dev)(?:\/\S*)?)$/i;
 // → { text: чистый текст (для JSON-LD и описаний), html: экранированный HTML (свои ссылки — ссылками, переносы строк — <br>) }
 export function publicText(raw, max = 5000){

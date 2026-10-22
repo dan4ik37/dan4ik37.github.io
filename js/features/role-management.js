@@ -133,3 +133,16 @@ function openSiteErrors() {
   s.onerror = () => alert('Не загрузился js/features/ops-admin.js — обнови страницу.');
   document.head.appendChild(s);
 }
+
+// 🏙️ «Экономика города» («Живой город», T-032, docs/CITY_ECONOMY.md): журнал денек по дням, настройки чисел без кода, проверка —
+// js/features/city-admin.js грузится при первом открытии. Данные — RPC city_admin из city.sql (читать — admin и moderator, менять — admin)
+function openCityEconomy() {
+  if (currentRole !== 'admin' && currentRole !== 'moderator') return;
+  if (window.D37CityAdm) return window.D37CityAdm.open();
+  const s = document.createElement('script');
+  s.src = 'js/features/city-admin.js?v=' + (typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1');
+  s.onload = () => window.D37CityAdm && window.D37CityAdm.open();
+  s.onerror = () => alert('Не загрузился js/features/city-admin.js — обнови страницу.');
+  document.head.appendChild(s);
+}
+window.openCityEconomy = openCityEconomy;

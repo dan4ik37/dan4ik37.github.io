@@ -30,7 +30,7 @@
   let seenSig = '';
   function style(){ if (document.getElementById('s3g-css')) return; const s = document.createElement('style'); s.id = 's3g-css'; s.textContent = CSS; document.head.appendChild(s); }
   // ── поля: [ключ, подпись, min, max, шаг, формат] ──
-  const rng = (k, label, min, max, step, val, fmt = v => (+v).toFixed(2)) => `<label>${label} <b data-o="${k}">${fmt(val)}</b><input type="range" min="${min}" max="${max}" step="${step}" value="${val}" data-k="${k}"></label>`;
+  const rng = (k, label, min, max, step, val, fmt = v => (+v).toFixed(2)) => `<label>${label} <b data-o="${k}">${fmt(val)}</b><input type="range" min="${min}" max="${max}" step="${step}" value="${esc(val)}" data-k="${k}"></label>`;
   const chk = (k, label, on) => `<label class="s3g-chk"><input type="checkbox" data-k="${k}"${on ? ' checked' : ''}> ${label}</label>`;
   const FMT = { time: fmtT, fogEnd: v => String(Math.round(v)), cycle: v => +v ? Math.round(v) + ' мин' : 'нет', 'fog.height': v => (+v).toFixed(1) };
   function render(){
@@ -51,7 +51,7 @@
       <h4>Туман</h4>
       ${rng('fogEnd', 'Видно на', 40, 800, 10, L.fogEnd, FMT.fogEnd)}${rng('fog.density', 'Туман у земли', 0, 1, .01, G.fog.density)}
       ${rng('fog.height', 'Высота тумана', -20, 60, .5, G.fog.height, FMT['fog.height'])}${rng('fog.sun', 'Свечение к солнцу', 0, 1, .01, G.fog.sun)}
-      <div class="s3g-row">Цвет тумана <input type="color" data-k="fog.color" value="${G.fog.color || '#9fb4cc'}"><button type="button" class="s3g-auto" data-a="fog.auto">${G.fog.color ? 'авто' : '✓ авто (небо)'}</button></div>
+      <div class="s3g-row">Цвет тумана <input type="color" data-k="fog.color" value="${esc(G.fog.color || '#9fb4cc')}"><button type="button" class="s3g-auto" data-a="fog.auto">${G.fog.color ? 'авто' : '✓ авто (небо)'}</button></div>
       <h4>Свет</h4>
       ${rng('brightness', 'Солнце', 0, 2.5, .05, L.brightness)}${rng('ambient', 'Свет неба', 0, 2.5, .05, L.ambient)}${rng('exposure', 'Экспозиция', -1, 1, .05, G.exposure)}
       ${chk('shadows', 'Тени', L.shadows !== false)}${rng('shadow.soft', 'Мягкость теней', 0, 1, .01, G.shadow.soft)}
@@ -59,7 +59,7 @@
       <label>Цветокоррекция<select data-k="grade">${grades}</select></label>
       ${rng('bloom', 'Свечение (неон, солнце)', 0, 2.5, .05, G.bloom)}
       <h4>Вода</h4>
-      <div class="s3g-row">Цвет <input type="color" data-k="water.color" value="${G.water.color || '#3aa6dc'}"><button type="button" class="s3g-auto" data-a="water.auto">${G.water.color ? 'обычный' : '✓ обычный'}</button></div>
+      <div class="s3g-row">Цвет <input type="color" data-k="water.color" value="${esc(G.water.color || '#3aa6dc')}"><button type="button" class="s3g-auto" data-a="water.auto">${G.water.color ? 'обычный' : '✓ обычный'}</button></div>
       ${rng('water.clarity', 'Прозрачность', 0, 1, .01, G.water.clarity)}${rng('water.foam', 'Пена у берега', 0, 1, .01, G.water.foam)}
       <h4>Трассировка лучей</h4>
       ${rng('rt.refl', '🪞 Отражения в воде, стекле, металле', 0, 2, .05, G.rt?.refl ?? 1)}${rng('rt.wet', '🌧 Мокрые поверхности (пол блестит)', 0, 1, .01, G.rt?.wet ?? 0)}

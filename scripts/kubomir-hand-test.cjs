@@ -124,6 +124,27 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(/#ifdef D37_WAVE\s*\nif \( d37f > 0\.5 && d37f < 1\.5 \)/.test(sh.vertexShader) && /#undef D37_WAVE\s*#endif\s*#include <project_vertex>/.test(sh.vertexShader), k + ': качание — под D37_WAVE набора, кусок ветра движка (для моделей без масштаба) снят');
     ok(incOk(sh.fragmentShader) && incOk(sh.vertexShader), k + ': #include — своей строкой');
   }
+  {   // вода (T-044): глубина и берег из сетки, волны картой нормалей, блик — свет three с тенью; простой режим — без этого
+    const m = VR.mats.water, sh = shaderOf('lambert'); m.onBeforeCompile(sh);
+    const fs = sh.fragmentShader, vs = sh.vertexShader;
+    ok(VR.waterLight && fs.includes('d37dl += directLight.color;\n\t\tRE_Direct( directLight, geometry, material, reflectedLight );') && fs.indexOf('vec3 d37dl') < fs.indexOf('d37dl += '), 'вода: блик — солнце/луна с тенью копятся перед RE_Direct (объявлено раньше)');
+    ok(/vec2 d37wq[\s\S]*#include <alphamap_fragment>/.test(fs) && fs.indexOf('float d37dep') < fs.indexOf('#include <emissivemap_fragment>'), 'вода: толща и глубина — до света (перед alphamap, раньше крючка льда)');
+    ok(vs.includes('vUvL.xy = mod( vd.xy, 32.0 ) / 16.0;') && vs.includes('vWD = vec4(') && /varying vec4 vWD;[\s\S]*varying float vWS;/.test(vs) && /varying vec4 vWD;[\s\S]*varying float vWS;/.test(fs), 'вода: u, v — младшие 5 бит, глубины углов и берег — в varying (в обоих шейдерах)');
+    ok(fs.includes('d37uv.xy += vec2( uTime * 0.03, uTime * 0.05 );') && fs.includes('float d37IceK = 0.0;'), 'вода: строка для крючка льда на месте, d37IceK объявлен');
+    ok(sh.uniforms.uWN.value?.isDataTexture && sh.uniforms.uWN.value.image.width === 128 && sh.uniforms.uWN.value.generateMipmaps && sh.uniforms.uWN.value.wrapS === T.RepeatWrapping && sh.uniforms.uWN.value.minFilter === T.LinearMipmapLinearFilter, 'вода: карта нормалей 128² с мип-уровнями, повторяется');
+    ok(!!m.defines.D37_WQ2 && VR.U.uWP.value.z > 0 && VR.U.uWP.value.w > .3 && VR.U.uWP.value.w < 1, 'вода «высокая»: два слоя волн, пена, средняя яркость рисунка', VR.U.uWP.value);
+    // карта нормалей: шов повторения — без скачка (целые частоты), наклоны в меру
+    const wd = sh.uniforms.uWN.value.image.data, N = 128, nx = (x, y) => wd[((y % N) * N + (x % N)) * 4] / 127.5 - 1;
+    let seam = 0, mx = 0; for (let i = 0; i < N; i++) { seam = Math.max(seam, Math.abs(nx(N - 1, i) - nx(0, i)), Math.abs(nx(i, N - 1) - nx(i, 0))); mx = Math.max(mx, Math.abs(nx(i, i))); }
+    ok(seam < .25 && mx > .2 && mx < .9, 'карта нормалей: без шва на краю, наклоны в меру', { seam: +seam.toFixed(3), mx: +mx.toFixed(3) });
+    // NaN-страховки: нормализуем только ненулевое, деление — на max
+    ok(fs.includes('inversesqrt( max( dot( d37Hs, d37Hs ), 1e-8 ) )') && fs.includes('/ max( d37al, 0.004 )') && !/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/.test(fs.replace(/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/g, (s, a, b) => +a < +b ? '' : s)), 'вода: без NaN (половинный вектор, деление на покрытие), smoothstep — края по возрастанию');
+    // простой режим: те же u, v (младшие 5 бит), без глубин, карты нормалей и блика
+    const VRs = V.renderer(Object.assign({}, R, { scene: new T.Scene(), wave: null }), { safe: true }), shs = shaderOf('lambert');
+    VRs.mats.water.onBeforeCompile(shs);
+    ok(shs.vertexShader.includes('vUvL.xy = mod( vd.xy, 32.0 ) / 16.0;') && !shs.vertexShader.includes('vWD') && !shs.fragmentShader.includes('vWD') && !shs.fragmentShader.includes('uWN') && !shs.fragmentShader.includes('d37dl +='), 'простой режим воды: u, v из младших бит, без новых кусков');
+    VRs.dispose();
+  }
   const wk = waved.map(([m, o]) => [Object.keys(VR.mats).find(k => VR.mats[k] === m), o.kind]);
   ok(wk.length === 2 && wk.some(w => w[0] === 'foliage' && w[1] === 'leaves') && wk.some(w => w[0] === 'cutout' && w[1] === 'leaves'), 'R.wave — листва и трава (слои foliage, cutout)', wk);
   ok(VR.mats.foliage.userData.wave && VR.mats.foliage.userData.wave.kind === 2, 'метка ветра движка на материале (E.waveMaterial)');
