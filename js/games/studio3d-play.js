@@ -181,8 +181,8 @@
     const D = E.modes.MODES[v.m] || {}, extra = M ? 0 : (performance.now() - st.viewAt) / 1000, left = leftOf(v, extra), me = meIn(v);
     if (!el) { el = document.createElement('div'); el.className = 's3x-mhud'; hud.appendChild(el); }
     const ph = v.ph === 'wait' ? '⏳ Ждём игроков' : v.ph === 'count' ? 'Приготовься' : v.ph === 'end' ? 'Итоги раунда' : v.ph === 'over' ? 'Конец игры' : '';
-    const teams = v.c.teams ? `<span class="s3x-teams">${[1, 2, 3, 4].slice(0, v.c.teams).map(k => `<span style="background:${TEAM(k)[2]}55">${TEAM(k)[0]} ${v.ts[k] | 0}${v.c.goal ? '/' + v.c.goal : ''}</span>`).join('')}</span>` : '';
-    const html = `<span class="m">${D.icon || '🎮'} ${esc(D.name || '')}${ph ? ' · ' + ph : ''}</span>${v.c.rounds > 1 ? `<span class="r">Раунд ${v.r || 1}/${v.c.rounds}</span>` : ''}${teams}${left >= 0 ? `<span class="t">⏱ ${fmt(left)}</span>` : ''}`;
+    const teams = v.c.teams ? `<span class="s3x-teams">${[1, 2, 3, 4].slice(0, v.c.teams).map(k => `<span style="background:${TEAM(k)[2]}55">${TEAM(k)[0]} ${v.ts[k] | 0}${esc(v.c.goal ? '/' + v.c.goal : '')}</span>`).join('')}</span>` : '';
+    const html = `<span class="m">${D.icon || '🎮'} ${esc(D.name || '')}${ph ? ' · ' + ph : ''}</span>${v.c.rounds > 1 ? `<span class="r">Раунд ${esc(v.r || 1)}/${esc(v.c.rounds)}</span>` : ''}${teams}${left >= 0 ? `<span class="t">⏱ ${fmt(left)}</span>` : ''}`;
     if (el.innerHTML !== html) el.innerHTML = html;
     // моя строка
     let mine = hud.querySelector('.s3x-mine'); if (!mine) { mine = document.createElement('div'); mine.className = 's3x-mine'; hud.appendChild(mine); }
@@ -227,9 +227,9 @@
       if (!w || w.dataset.k !== key) {
         w?.remove(); w = document.createElement('div'); w.className = 's3x-win'; w.dataset.k = key; viewEl.appendChild(w);
         const live = !!M, last = v.ph === 'over';
-        const rows = v.ps.slice(0, 8).map((p, i) => `<tr class="${p.id === myId() ? 'me' : ''}"><td>${i + 1}. ${p.tm && TEAM(p.tm) ? TEAM(p.tm)[0] + ' ' : ''}${esc(p.n)}</td><td>${esc(unit(p))}${v.c.rounds > 1 ? ` · 🏆${p.w}` : ''}</td></tr>`).join('');
+        const rows = v.ps.slice(0, 8).map((p, i) => `<tr class="${p.id === myId() ? 'me' : ''}"><td>${i + 1}. ${p.tm && TEAM(p.tm) ? TEAM(p.tm)[0] + ' ' : ''}${esc(p.n)}</td><td>${esc(unit(p))}${esc(v.c.rounds > 1 ? ` · 🏆${p.w}` : '')}</td></tr>`).join('');
         const lastR = !last && v.r >= v.c.rounds;
-        w.innerHTML = `<div><h3>${esc(v.w?.text || (last ? 'Конец игры' : 'Раунд окончен'))}</h3><p>${last ? (v.c.rounds > 1 ? `Сыграно раундов: ${v.c.rounds}` : 'Игра окончена') : lastR ? (v.c.rounds > 1 ? 'Это был последний раунд' : 'Раунд окончен') : `Раунд ${v.r} из ${v.c.rounds} · следующий сейчас начнётся`}</p><table>${rows}</table>`
+        w.innerHTML = `<div><h3>${esc(v.w?.text || (last ? 'Конец игры' : 'Раунд окончен'))}</h3><p>${esc(last ? (v.c.rounds > 1 ? `Сыграно раундов: ${v.c.rounds}` : 'Игра окончена') : lastR ? (v.c.rounds > 1 ? 'Это был последний раунд' : 'Раунд окончен') : `Раунд ${v.r} из ${v.c.rounds} · следующий сейчас начнётся`)}</p><table>${rows}</table>`
           + `<div class="s3x-row">${live && last ? '<button type="button" class="s3-play" data-w="again">🔁 Ещё раз</button>' : ''}${live && !last ? `<button type="button" data-w="next">▶ ${lastR ? 'К итогам' : 'Дальше'}</button>` : ''}${!live && last ? '<p>Ждём, когда хозяин начнёт заново…</p>' : ''}<button type="button" data-w="hide" title="Спрятать">✕</button></div></div>`;
         w.addEventListener('click', ev => { const k = ev.target.closest('[data-w]')?.dataset.w; if (!k) return; if (k === 'hide') w.hidden = true; else if (k === 'again' && M) { M.start(); broadcast(true); } else if (k === 'next' && M && M.phase === 'end') { M.t = 99; } });
       }

@@ -172,7 +172,7 @@ async function renderProfileXp(uid, isOwn){
   document.getElementById('pxToday').textContent = isOwn ? `Сегодня: +${data.today} XP` : '';
   const week = Object.entries(data.week || {}).sort((a, b) => b[1] - a[1]);
   document.getElementById('pxWeek').innerHTML = week.length
-    ? '<span class="xp-week-t">За неделю:</span>' + week.map(([k, v]) => `<span class="xp-chip">${XP_SOURCE_LABEL[k] || k} <b>+${v}</b></span>`).join('')
+    ? '<span class="xp-week-t">За неделю:</span>' + week.map(([k, v]) => `<span class="xp-chip">${esc(XP_SOURCE_LABEL[k] || k)} <b>+${v}</b></span>`).join('')
     : '';
   const rules = document.getElementById('pxRules');
   if (rules && !rules.innerHTML) rules.innerHTML = XP_RULES.map(([i, t, d]) => `<div class="xp-rule"><span>${i}</span><div><b>${t}</b><small>${d}</small></div></div>`).join('');

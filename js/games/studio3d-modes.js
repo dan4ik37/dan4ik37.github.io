@@ -88,7 +88,7 @@
       const P = MD().PARAMS[k];
       if (P.list) return `<label>${P.label}<select data-g="${k}">${P.list.filter(([v]) => mode !== 'teams' || v >= 2).map(([v, t]) => `<option value="${v}"${c[k] === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
       const val = c[k], txt = val === 0 && P.zero ? P.zero : val + (P.unit ? ' ' + P.unit : '');
-      return `<label>${P.label}: <b>${esc(txt)}</b><input type="range" min="${P.min}" max="${P.max}" step="${P.step}" value="${val}" data-g="${k}"></label>`;
+      return `<label>${P.label}: <b>${esc(txt)}</b><input type="range" min="${P.min}" max="${P.max}" step="${P.step}" value="${esc(val)}" data-g="${k}"></label>`;
     }).join('');
     const need = mode === 'none' ? [] : needs(mode);
     const html = `<div class="s3x-modes">${MD().LIST.map(id => { const M2 = MD().MODES[id]; return `<button type="button" class="s3x-mode${id === mode ? ' on' : ''}" data-mode="${id}" title="${esc(M2.desc)}"><i>${M2.icon}</i>${esc(M2.name)}</button>`; }).join('')}</div>`
@@ -98,7 +98,7 @@
       + `<div class="s3x-sec">🎥 Ракурс камеры для игроков</div><div class="s3x-modes">${VW().MODES.map(([id, n, i, d]) => `<button type="button" class="s3x-mode${id === cam.mode ? ' on' : ''}" data-cam="${id}" title="${esc(d)}"><i>${i}</i>${esc(n)}</button>`).join('')}</div>`
       + `<p class="s3x-desc">${esc(VW().MODES.find(m => m[0] === cam.mode)?.[3] || '')}</p>`
       + (['third', 'first', 'shoulder'].includes(cam.mode) ? `<label class="s3-chk"><input type="checkbox" data-c="free"${cam.free ? ' checked' : ''}> Игрок может переключать вид (V)</label>` : '')
-      + (['top', 'iso', 'side'].includes(cam.mode) ? `<div class="s3x-par"><label>Расстояние камеры: <b>${cam.dist}</b><input type="range" min="8" max="70" step="1" value="${cam.dist}" data-c="dist"></label>${cam.mode === 'top' ? `<label>Наклон: <b>${cam.angle}°</b><input type="range" min="35" max="89" step="1" value="${cam.angle}" data-c="angle"></label>` : ''}</div>` : '')
+      + (['top', 'iso', 'side'].includes(cam.mode) ? `<div class="s3x-par"><label>Расстояние камеры: <b>${esc(cam.dist)}</b><input type="range" min="8" max="70" step="1" value="${esc(cam.dist)}" data-c="dist"></label>${cam.mode === 'top' ? `<label>Наклон: <b>${esc(cam.angle)}°</b><input type="range" min="35" max="89" step="1" value="${esc(cam.angle)}" data-c="angle"></label>` : ''}</div>` : '')
       + `<div class="s3x-row"><button type="button" class="s3-play" data-go="play">▶ Проверить</button><button type="button" data-go="test" title="Вторая вкладка или друг — по ссылке">👥 Вдвоём</button><button type="button" data-go="help">❓ Как сделать свой режим</button></div>`;
     const sh = E.s3ui?.sheet('mode', { title: '🎮 Режим игры и ракурс', html, cls: 's3x-wide' }); if (!sh) return;
     sh.addEventListener('click', ev => {
@@ -335,7 +335,7 @@ script.Parent.Touched.Connect((hit, player) => {
         const v3 = (k, lbl) => `<div class="s3-lbl">${lbl}</div><div class="s3-v3">${[0, 1, 2].map(i => `<label>${'XYZ'[i]}<input type="number" step="${k === 'rot' ? 5 : .5}" value="${+(+o[k][i]).toFixed(2)}" data-p="${k}:${i}"></label>`).join('')}</div>`;
         x += `<p class="s3-note">🎥 Камера для ракурса «📹 Камеры в мире». Розовые детали внутри неё (в Проводнике) — зоны: игрок в зоне — включается эта камера.</p>`
           + v3('pos', 'Где стоит') + v3('rot', 'Куда смотрит (°)')
-          + `<label class="s3-lbl">Угол обзора <b>${o.fov || 50}</b><input type="range" min="20" max="100" step="1" value="${o.fov || 50}" data-p="fov"></label>`
+          + `<label class="s3-lbl">Угол обзора <b>${esc(o.fov || 50)}</b><input type="range" min="20" max="100" step="1" value="${esc(o.fov || 50)}" data-p="fov"></label>`
           + `<label class="s3-lbl">Как снимает<select data-p="kind"><option value="fixed"${o.kind !== 'track' ? ' selected' : ''}>📌 Смотрит, куда поставили</option><option value="track"${o.kind === 'track' ? ' selected' : ''}>👀 Следит за игроком</option></select></label>`
           + `<div class="s3-grid3"><button type="button" data-a="s3g:camfromview" title="Поставить камеру туда, откуда смотришь сейчас">📷 По виду</button><button type="button" data-a="s3g:camview" title="Посмотреть глазами камеры">👁 Глазами</button><button type="button" data-a="s3g:camzone" title="Добавить зону">➕ Зона</button></div>`;
       }
