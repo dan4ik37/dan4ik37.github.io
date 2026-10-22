@@ -698,10 +698,11 @@
     // не влезает столбцом — плитки в 2 столбца, не влезает и так (а места хватает) — в 3; ⬆⬇⬅➡ ходят по плиткам (keydown ниже)
     const fit = () => {
       const box = el.isConnected && el.querySelector('.gs-menu-box'); if (!box) return;
-      box.classList.remove('gs-mg', 'gs-mg3');
+      box.classList.remove('gs-mg', 'gs-mg3', 'gs-mgc');
       if (box.querySelectorAll('.gs-menu-it').length < 6 || box.scrollHeight <= box.clientHeight + 1) return;
       box.classList.add('gs-mg');
-      if (box.scrollHeight > box.clientHeight + 1 && el.clientWidth >= 640) box.classList.add('gs-mg3');
+      if (box.scrollHeight <= box.clientHeight + 1) return;
+      box.classList.add(el.clientWidth >= 640 ? 'gs-mg3' : 'gs-mgc');   // узко (телефон стоя) — те же 2 столбца, но плотнее
     };
     const draw = () => {
       const f = doc.activeElement && el.contains(doc.activeElement) ? doc.activeElement.getAttribute('data-mi') : null;   // фокус — на тот же пункт

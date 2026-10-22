@@ -3930,6 +3930,9 @@ html.gs-set-open,html.gs-set-open body{overflow:hidden}
 .gs-menu-box.gs-mg .gs-menu-head{margin-bottom:.1rem}
 .gs-menu-box.gs-mg .gs-menu-it{min-height:42px;padding:.5rem .75rem;font-size:.86rem}
 .gs-menu-box.gs-mg .gs-menu-sec{margin:.25rem .3rem 0}
+.gs-menu-box.gs-mgc{gap:5px;padding:.6rem}
+.gs-menu-box.gs-mgc .gs-menu-head b{font-size:1rem}
+.gs-menu-box.gs-mgc .gs-menu-it{min-height:40px!important;padding:.35rem .55rem;gap:.45rem;font-size:.76rem;line-height:1.15}
 /* палец: пункты крупнее; без размытия (3D под меню рисуется каждый кадр) */
 @media (pointer:coarse){
   .gs-menu{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(6,5,14,.72)}
