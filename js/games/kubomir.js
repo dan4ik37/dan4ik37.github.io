@@ -69,10 +69,12 @@
     if (m) playById(m[1]); else if (cm) joinCoop(cm[1]); else showMenu();
     window.addEventListener('pagehide', onHide);
     document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('keydown', onEscKey, true); window.addEventListener('keyup', onEscKey, true); window.addEventListener('blur', onEscKey);
   }
   function unmount(){
     window.removeEventListener('pagehide', onHide);
     document.removeEventListener('visibilitychange', onVis);
+    window.removeEventListener('keydown', onEscKey, true); window.removeEventListener('keyup', onEscKey, true); window.removeEventListener('blur', onEscKey);
     if (S) { journalNow(); stopWorld({ quick: true, cloud: true }); }   // ушёл со страницы игры (вкладка жива) — копия в облако в фоне
     if (coopG) { coopG.leave(); coopG = null; }
     el = null; api = null;
@@ -771,6 +773,10 @@
     saveAll(st).catch(() => {});
   }
   function onHide(){ journalNow(); }
+  // Esc нажат сейчас (сам по себе, мимо управления: окно при закрытии сбрасывает управление — C.reset_state) — захват мыши после
+  // закрытия окна клавишей Esc ждёт, пока её отпустят (escClosed)
+  let escHeld = false, escAt = -1e9;
+  function onEscKey(e){ if (e.type === 'blur') escHeld = false; else if (e.key === 'Escape' || e.code === 'Escape') { escHeld = e.type === 'keydown'; if (escHeld) escAt = now(); } }
   function onVis(){ if (document.visibilityState === 'hidden') journalNow(); }
 
   // ═══ Правка блока: сетки, сохранение, сущности, моды ═══
@@ -793,10 +799,27 @@
     // мир ещё строится — сеть всё равно идёт: гость спрашивает у хозяина чанки с правками (без них вокруг не достроится)
     if (!st.ready) { st.net?.step(dt); if (st.ST.readyAt(P.x, P.z) && spawnReady(st)) { st.ready = true; placeSafe(st); } return; }
     st.steps++;
-    // Esc: окно → закрыть; иначе меню
-    if (C.down('pause') && !window.D37Settings?.isOpen?.()) { if (chatting) chatClose(); else if (st.X?.escape()) { /* ── KX:esc ── закрыли лист помощника */ } else if (uiOpen) st.ui.close(); else if (st.modWin) { if (st.modWin.close) st.modWin.close(); else st.modWin.querySelector('[data-x]')?.click(); } else if (menu) closeMenu(); else openMenu(); }
-    // E — вещи (и закрыть окно вещей той же клавишей, как в Майнкрафте)
-    if (K.downRaw('inventory') && !menu && !chatting && !window.D37Settings?.isOpen?.()) { if (uiOpen) st.ui.close(); else st.ui?.open('inv'); }
+    // Esc: окно → закрыть; иначе меню. T-096a (владелец 22.10: «выход из инвентаря тяжёлый — после Esc меню открывается, а не
+    // закрывается»): окна, которые сами ловят Esc (лист помощника, ⚙️), закрываются ещё в событии клавиши — раньше шага игры, и
+    // шаг видел «Esc без окон» → меню (или закрывал ещё и меню под ⚙️). Теперь: такое окно было открыто на прошлом шаге, а сейчас
+    // закрыто — этот Esc уже потрачен (st.selfEsc). Закрыли окно вещей Esc — мышь захватываем, когда Esc отпустят (escClosed)
+    const settingsOpen = !!window.D37Settings?.isOpen?.(), sheetOpen = !!st.X?.isOpen();
+    if (C.down('pause') && !settingsOpen) {
+      if (st.selfEsc && !sheetOpen) escClosed(st);   // лист / ⚙️ закрылись этим же Esc сами
+      else if (sheetOpen && globalThis.document?.activeElement?.closest?.('.d37sh')) { /* фокус в листе — он сам сделал «назад» (sheet.js) */ }
+      else if (chatting) chatClose();
+      else if (st.X?.escape()) escClosed(st);   // ── KX:esc ── закрыли лист помощника
+      else if (uiOpen) { st.ui.close({ esc: true }); escClosed(st); }
+      else if (st.modWin) { if (st.modWin.close) st.modWin.close(); else st.modWin.querySelector('[data-x]')?.click(); escClosed(st); }
+      else if (menu) closeMenu();
+      else openMenu();
+    }
+    st.selfEsc = settingsOpen || !!st.X?.isOpen();
+    // E — вещи (и закрыть окно вещей той же клавишей, как в Майнкрафте); лист помощника — тоже закрыть
+    if (K.downRaw('inventory') && !st.menu && !st.modWin && !chatting && !settingsOpen) {
+      if (sheetOpen) { st.X.closeSheet(); if (!st.I.touch) st.I.lock?.(); }
+      else if (uiOpen) st.ui.close(); else st.ui?.open('inv');
+    }
     if (K.down('camera')) cycleCam();
     if (K.down('hud')) hideHud(!st.hudHidden);
     if (K.down('debug')) { st.dbg = !st.dbg; st.hudEl.querySelector('.kb-dbg').hidden = !st.dbg; }
@@ -1866,7 +1889,14 @@
     // ранили — крен камеры: быстро в сторону удара, плавно обратно (0,5 с)
     if (st.roll) { const r = st.roll, q = (r.t += dt); if (q > .5) st.roll = null; else R.camera.rotateZ(r.a * (q < .06 ? Math.sin(q / .06 * PI / 2) : (1 - (q - .06) / .44) ** 2) * PI / 180); }
     I.wantLock = !I.touch && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.();
-    if (st.wasLocked && !I.locked && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.()) openMenu();
+    // Esc закрыл окно (escClosed): захват мыши — когда Esc отпустили (T-096a). Окно, которое закрылось само по своему Esc
+    // (лист помощника с фокусом в поиске — управление клавишу не видит), — тоже
+    const ovNow = !!(st.ui?.isOpen() || st.modWin || st.X?.isOpen());   // меню паузы — нет: после него Esc браузер захват не даёт
+    if (st.ovWas && !ovNow && !I.touch && !st.menu && (escHeld || now() - escAt < 300)) st.escRelock = true;
+    st.ovWas = ovNow;
+    if (st.escRelock && !escHeld) { st.escRelock = false; if (I.wantLock && !I.locked) { I.lock?.(); st.lockGrace = .4; } }
+    if (st.lockGrace > 0) st.lockGrace -= dt;
+    if (st.wasLocked && !I.locked && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.() && !(st.lockGrace > 0) && !st.escRelock) openMenu();
     const padNow = !!st.K?.padLast;
     if (st.wasLocked !== I.locked || st.padWas !== padNow) { st.padWas = padNow; crossUpdate(st); }   // мышь отпущена — прицел прячем (иначе «кружок» висит посреди экрана)
     st.wasLocked = I.locked;
@@ -2471,6 +2501,10 @@
     });
   }
   function closeMenu(){ S?.menu?.close(); }
+  // Esc закрыл окно (вещи, сундук, лист помощника, моды): мышь — захватить снова, но только когда Esc отпустят (frame: escRelock).
+  // Захват сразу, пока Esc ещё нажат, браузер (Chrome) отпускает «по Esc» на отпускании клавиши — и игра видела «отпустили мышь
+  // без окон» → меню паузы. lockGrace — 0,6 с после захвата: мышь отпустилась — подсказка «нажми на мир», не меню
+  function escClosed(st){ if (!st.I?.touch) st.escRelock = true; }
   // пункты помощников в меню ☰ (у каждого помощника — свой: menu: [{ id: 'x:…', icon, text }], pick(id)) — геймпад и телефон без клавиш
   function xMenu(st){ const X = st.X; if (!X) return []; const out = [{ id: 'x:acc', icon: '💍', text: 'Помощники (аксессуары)' }]; for (const f of X.feats) if (!f.dead && f.menu) try { out.push(...f.menu()); } catch (e) {} return out; }
   async function menuPick(id){
