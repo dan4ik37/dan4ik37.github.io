@@ -260,3 +260,20 @@
 - Тесты: trees-test (42), kubomir-hand-test (деревья), destruct-test, worldmap-test; Chrome — scripts/trees-e2e.cjs (kb-shots, kb-gallery, kb-perf,
   kb-reopen, kb-soak, mir-shots, mir-perf, mir-replant, mir-soak, mir-tank, studio, pz-shots, pz-perf — шумный: подгрузка чанков; SITE_DIR —
   копия «до»), world-reopen-e2e с REOPEN_FOREST=1 (каждый круг в лесу); «Подземье» с деревьями в node — podzem-sim { pre: ['js/engine/trees.js'] }.
+
+## ⛰ Terrain core T1 — D37E.terra (T-111, W1, 29.10.2026; plan E:\d37-core\spec\PLAN.md; crate E:\d37-terrain)
+- Source of truth: Rust crate `E:\d37-terrain` (derived from the owner's native_core: same formulas, seeds, 32³ blocks, edits
+  `[x, y, z, r, mode]`). f64 with IEEE basic ops only → `js/engine/terra.wasm` (53 KB), the DLL and the JS port
+  `js/engine/terra-core.js` are BIT-IDENTICAL; `scripts/terra-golden.txt` (Rust `cargo run --bin golden`) is checked by
+  `node scripts/terra-test.cjs` (CI). Change a formula → change src/lib.rs AND terra-core.js in the same order of operations, then
+  `build.ps1 -Site <site>` (copies wasm + golden). Output is chunk-local (positions relative to cx*32, cy*32, cz*32).
+- Files: terra-core.js (core + wasm loader), terra-worker.js (wasm in workers, self-test, JS fallback on load error or trap, messages
+  before init are queued, buffer pool), terra.js (rings, column probes `t1_column`, ≤ 2 jobs per worker, edits quantized to 1/64 m and
+  applied in order, affected blocks rebuilt first, `ground()` from the density field — cave floors, `ray()`), terra-mesh.js (pooled
+  geometries, one shared index buffer — detach it before `dispose()`, sRGB→linear vertex colours in the vertex shader, anchor),
+  js/games/terra-demo.js (hidden /play/terra; `D37E.terra.ON` — rollback; `localStorage d37_terra_wasm = '0'` forces the JS core).
+  Units: core = meters; the game converts with U = E.UNIT; the floating anchor (multiple of 32 m) moves only in the logic step.
+- Pitfalls: a URL handed to a worker must be absolute and resolved against `document.baseURI` (real addresses /play/… + `<base href="/">`;
+  `location.href` gave /play/js/… → 404 → silent JS fallback). Chrome CPU throttling does NOT slow workers (worker ms = desktop).
+- Tests: terra-test (golden, edit re-mesh, worker protocol in worker_threads, wasm vs JS timing); Chrome:
+  `node scripts/terra-e2e.cjs perf | leak [N] | soak [min] | shots` (PC=1 — desktop).
