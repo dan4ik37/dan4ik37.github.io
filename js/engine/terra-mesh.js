@@ -101,6 +101,7 @@
         n++;
       }
       ST.lastFrameMs = now() - t0;
+      if (n && shadows) R.shadowDirty?.();   // a dig, a fill or a streamed block casts its shadow now, not after the 1.5 s idle refresh
       return n;
     };
     TM.setAnchor = (ax, az) => {

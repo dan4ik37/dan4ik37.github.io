@@ -269,11 +269,23 @@
   `build.ps1 -Site <site>` (copies wasm + golden). Output is chunk-local (positions relative to cx*32, cy*32, cz*32).
 - Files: terra-core.js (core + wasm loader), terra-worker.js (wasm in workers, self-test, JS fallback on load error or trap, messages
   before init are queued, buffer pool), terra.js (rings, column probes `t1_column`, ≤ 2 jobs per worker, edits quantized to 1/64 m and
-  applied in order, affected blocks rebuilt first, `ground()` from the density field — cave floors, `ray()`), terra-mesh.js (pooled
+  applied in order, affected blocks rebuilt first, `ground()` / `blocked()` from the shown mesh — cave floors, `ray()`), terra-mesh.js (pooled
   geometries, one shared index buffer — detach it before `dispose()`, sRGB→linear vertex colours in the vertex shader, anchor),
   js/games/terra-demo.js (hidden /play/terra; `D37E.terra.ON` — rollback; `localStorage d37_terra_wasm = '0'` forces the JS core).
   Units: core = meters; the game converts with U = E.UNIT; the floating anchor (multiple of 32 m) moves only in the logic step.
+- Physics = the SHOWN mesh (review fix 29.10): at TS.recycle (terra-mesh showed the block) the block's triangles become its physics
+  (Uint16 copy packed by the worker after the mesh: buffer = q·104 B, T1.physPack; xz index 34×34 built on first query). TS.ground =
+  highest floor under yRef+1.1 on the vertical line; facing by parity from the open sky (column hmax + fills) — per-quad normals are
+  unreliable on near-vertical faces. Block not shown yet → the old density path (TS.densityGround). |ground − mesh| ≤ 7 mm (was up
+  to 0.4 m at craters, 8.3 m at river banks). Phys hooks, opt-in (other games unchanged): ph.terrain.col (terrain hits are grippable),
+  .blocked(x, z, y0, y1, r) (stand/mantle room), .normal(x, y, z, out, dx, dy, dz) (field normal; horizontal rays → the face 0.3 m
+  lower). Parkour then works on steep faces (river banks); dig/fill spheres at 1 m Surface Nets are ≤ ~55° cones — no ledge there.
+- Edits are bucketed by 32 m cell (EB): TS.ray / TS.solid / column probes read one cell's edits (sign-exact; 5040 edits: 0.21 ms per ray
+  vs 1.4 ms over all edits). TS.density stays the core's exact point density (all edits).
 - Pitfalls: a URL handed to a worker must be absolute and resolved against `document.baseURI` (real addresses /play/… + `<base href="/">`;
   `location.href` gave /play/js/… → 404 → silent JS fallback). Chrome CPU throttling does NOT slow workers (worker ms = desktop).
-- Tests: terra-test (golden, edit re-mesh, worker protocol in worker_threads, wasm vs JS timing); Chrome:
-  `node scripts/terra-e2e.cjs perf | leak [N] | soak [min] | shots` (PC=1 — desktop).
+  A stalled terra.wasm download → JS core after 6 s (init `wasmMs`). terra-e2e leak FAILS on heap +6 MB (LEAK_MB), live workers,
+  changed three.js counts or console errors (heap = least of 3 GC'd samples — one sample right after a close was noisy ±28 MB).
+- Tests: terra-test (golden, edit re-mesh, worker protocol in worker_threads incl. stalled wasm, ground == drawn mesh at craters /
+  fills / banks, parkour hooks, edit buckets, wasm vs JS timing); Chrome: `node scripts/terra-e2e.cjs perf | leak [N] | soak [min] |
+  shots` (PC=1 — desktop). C# (Unity) binding + managed port + tests: E:\d37-terrain\csharp, contract E:\d37-terrain\spec\API.md.

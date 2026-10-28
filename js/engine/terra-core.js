@@ -457,6 +457,8 @@
     core.out = () => { views(); return core._out; };
     core.colInfo = (s, cx, cz) => { const r = x.t1_column(b, s | 0, cx | 0, cz | 0); views(); return r; };
     core.height = (s, xx, z) => x.t1_height(s | 0, xx, z);
+    // k: 0 temperature01, 1 moisture01, 2 cave entrance, 3 biome (wasm built before 2026-10-29 has no t1_climate → NaN)
+    core.climate = x.t1_climate ? (s, xx, z, k) => x.t1_climate(s | 0, xx, z, k | 0) : () => NaN;
     core.density = (s, xx, y, z, n) => x.t1_density(b, s | 0, xx, y, z, n | 0);
     core.dispose = () => { if (core.b) { x.t1_free(core.b); core.b = 0; } };
     views();
@@ -481,8 +483,12 @@
     return hx(h3) + hx(h2) + hx(h1) + hx(h0);
   }
 
+  // the physics copy of a block (terra.js): local positions as Uint16 ((v + 1) · 1927, 0.52 mm) right after the mesh in the block
+  // buffer — pos f32 q·48 B | nrm q·16 | col q·16 | phys u16 q·24 = q·104 B; made in the worker, the page only copies it (memcpy)
+  const PHYS_Q = 1927, BLOCK_BYTES = 104;
+  function physPack(pos, q, ab){ const d = new Uint16Array(ab, q * 80, q * 12); for (let i = 0; i < q * 12; i++) d[i] = Math.round((pos[i] + 1) * PHYS_Q); }
   const T1 = { B, S, C, ABI, CAVE_MIN_Y, DEFAULT_CAP, js: cap => new JsCore(cap), wasm, height, density, biome, entrance, temperature01, moisture01,
-    touches, meshHash, sinp, hash2, hash3 };
+    touches, meshHash, sinp, hash2, hash3, PHYS_Q, BLOCK_BYTES, physPack };
   if (typeof module !== 'undefined' && module.exports) module.exports = T1;
   const E = root.D37E = root.D37E || {};
   E.terraCore = T1;
