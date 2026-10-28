@@ -47,7 +47,7 @@
       st: { built: 0, empty: 0, buildMs: 0, buildMax: 0, colMs: 0, cols: 0, sent: 0, stale: 0, errors: 0, fallbacks: 0, kind: '', edits: 0,
         respawns: 0, local: 0, maxQueue: 0, trunc: 0, quads: 0 },
     };
-    TS.keep = TS.radius + 2;
+    TS.keep = TS.radius + 1;   // hysteresis ring: blocks stay until 1 block beyond the radius (R+2 kept 2.3× the needed columns at R = 4)
     // ── edits (meters, order kept) ──
     let ed = new Float64Array(5 * 256), ne = 0;
     // ── workers ──

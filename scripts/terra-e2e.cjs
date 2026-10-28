@@ -95,7 +95,8 @@ const summary = f => {
       await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; 23078PND5G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l' });
       await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     }
-    const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q }), d37_gfx: Q };
+    const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q, ...JSON.parse(process.env.SETTINGS || '{}') }),   // SETTINGS='{"ao":false}' — extra ⚙️ keys
+    d37_gfx: Q };
     const setLs = async extra => send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries({ ...ls, ...extra }).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}}catch(e){}` });
     const ready = async () => { let ok = false; for (let i = 0; i < 160 && !ok; i++) { await sleep(250); try { ok = await ev(`!!(${T}.S?.TS)`, 5000); } catch (e) {} } if (!ok) throw new Error('terra page did not open'); };
     const open = async () => { await send('Page.navigate', { url: BASE + '/#/games/terra' }); await ready(); await ev(SAMPLER); };

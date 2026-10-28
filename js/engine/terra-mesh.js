@@ -40,7 +40,7 @@
     // capacity classes: multiples of 384 quads up to 6144, then of 2048 (≤ 30 KB / 160 KB slack per block instead of up to 2×)
     const capOf = q => (q <= 6144 ? Math.max(384, Math.ceil(q / 384) * 384) : Math.ceil(q / 2048) * 2048);
     let spare = 0;
-    const SPARE = o.spare ?? 48;   // spare geometries kept for reuse (all classes together)
+    const SPARE = o.spare ?? (E.isMobile?.() ? 24 : 48);   // spare geometries kept for reuse (all classes together)
     function make(cap){
       const g = new T.BufferGeometry();
       const pos = new T.BufferAttribute(new Float32Array(cap * 12), 3), nrm = new T.BufferAttribute(new Int8Array(cap * 16), 4, true), col = new T.BufferAttribute(new Uint8Array(cap * 16), 4, true);

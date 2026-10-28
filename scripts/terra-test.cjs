@@ -92,6 +92,40 @@ const GOLDEN_EDITS = [10, 5, -20, 6, 0, 10, 14, -20, 4, 1, -300, -10, 400, 9, 0]
     check(qj === qw && hj === hw, 'dig+fill: JS == wasm');
   }
 
+  // ── physics from the density field (terra.js without workers → page builder): cave floor, dig lowers the ground, ray ──
+  {
+    const TS = TE.create({ seed: 1337, workers: 0 });
+    let cave = null;
+    for (let x = -600; x < 600 && !cave; x += 7) for (let z = -600; z < 600 && !cave; z += 11) {
+      const h = T1.height(1337, x, z);
+      if (h < 8) continue;
+      for (let y = Math.floor(h) - 5; y > -26; y--) {
+        const d0 = T1.density(1337, x, y, z, null, 0), d1 = T1.density(1337, x, y - 1, z, null, 0);
+        if (d0 <= 0 && d1 > 0 && T1.density(1337, x, y + 2, z, null, 0) <= 0) { cave = { x, z, h, y, floor: y - 1 + d1 / (d1 - d0) }; break; }
+      }
+    }
+    check(!!cave, 'found a cave under the surface');
+    if (cave) {
+      const g = TS.ground(cave.x, cave.z, cave.y + 0.2);
+      check(Math.abs(g - cave.floor) < 1e-9 && g < cave.h - 2, `cave floor ${g.toFixed(2)} (surface ${cave.h.toFixed(2)})`);
+      check(Math.abs(TS.ground(cave.x, cave.z, cave.h + 1) - cave.h) < 0.6, 'on the surface above the cave');
+    }
+    const x = 40, z = -25, h = T1.height(1337, x, z), g0 = TS.ground(x, z, h + 0.5);
+    check(Math.abs(g0 - h) < 0.6, `ground ≈ height (${g0.toFixed(2)} vs ${h.toFixed(2)})`);
+    const hit = TS.ray(x, h + 20, z, 0, -1, 0, 60);
+    check(hit && Math.abs(hit.y - h) < 0.6, 'ray down hits the surface');
+    const n = TS.dig(x, h, z, 3);
+    check(n >= 1 && TS.editCount() === 1, 'dig: affected blocks ' + n);
+    const g1 = TS.ground(x, z, h + 0.5);
+    check(g1 < h - 2.5, `dig lowers the ground: ${g0.toFixed(2)} → ${g1.toFixed(2)}`);
+    TS.fill(x, g1, z, 3);
+    check(TS.ground(x, z, g1 + 0.5) > g1 + 2, 'fill raises it again');
+    // the page builder (no workers) streams a ring too
+    for (let i = 0; i < 600 && TS.stats().built < 6; i++) { TS.update(x, h, z); await new Promise(r => setTimeout(r, 4)); }
+    check(TS.stats().built >= 6 && TS.stats().local > 0, 'no workers → built on the page: ' + TS.stats().built);
+    TS.dispose();
+  }
+
   // ── chunk-local: the same block built by a fresh core and by a core that built far blocks first — identical ──
   {
     const A = await T1.wasm(fs.readFileSync(path.join(ROOT, 'js/engine/terra.wasm')), 4000);
