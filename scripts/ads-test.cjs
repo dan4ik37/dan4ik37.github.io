@@ -810,7 +810,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'd37-ads-'));
   fs.mkdirSync(path.join(tmp, 'api/_lib/routes'), { recursive: true });
   fs.writeFileSync(path.join(tmp, 'package.json'), '{"type":"module"}');
-  for (const f of ['yt.js', 'page.js', 'errlog.js', 'topics.js', 'age.js', 'uploads-snapshot.js', 'routes/videos.js']) fs.copyFileSync(path.join(SITE, 'api/_lib', f), path.join(tmp, 'api/_lib', f));
+  for (const f of ['yt.js', 'page.js', 'errlog.js', 'topics.js', 'age.js', 'uploads-snapshot.js', 'video-details.js', 'routes/videos.js']) fs.copyFileSync(path.join(SITE, 'api/_lib', f), path.join(tmp, 'api/_lib', f));
   globalThis.fetch = async () => { throw new Error('нет сети'); };   // свежих роликов нет — только снимок
   try {
     const { page } = await import(pathToFileURL(path.join(tmp, 'api/_lib/page.js')).href);
@@ -826,7 +826,9 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
     ok(r1.code === 200 && n1 === 7 && /class="d37-feed" data-ad="feed_videos" data-ad-lazy hidden/.test(r1.html), '/videos: 240 роликов — 7 карточек «Реклама» (каждая 30-я, не последней), грузятся у экрана', n1);
     let gp = 0;
     for (let p = 2; p <= 12 && !gp; p++) { const r = await run(p); if (!/adsbygoogle\.js/.test(r.html)) { gp = p; ok(!/data-ad=/.test(r.html), `/videos?p=${p} (есть ролики про кейсы) — ни одного места рекламы`); } }
-    ok(gp > 0, 'нашлась страница архива с роликами про кейсы');
+    const { HIDE_GAMBLING } = await import(pathToFileURL(path.join(tmp, 'api/_lib/yt.js')).href);
+    if (HIDE_GAMBLING) ok(!gp, 'роликов про кейсы на сайте нет (28.10.2026) — все страницы архива с рекламой');
+    else ok(gp > 0, 'нашлась страница архива с роликами про кейсы');
   } catch (e) { ok(false, 'серверные страницы', String(e && e.stack || e)); }
   fs.rmSync(tmp, { recursive: true, force: true });
   // крючки: что и где подключено (если кто-то случайно удалит строку при слиянии)

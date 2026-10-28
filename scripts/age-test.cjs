@@ -554,25 +554,34 @@ const YEAR = 2026, NOW = Date.UTC(2026, 9, 15, 9, 0, 0);
       const { SNAPSHOT } = await imp('api/_lib/uploads-snapshot.js');
       const lines = SNAPSHOT.split('\n').map(l => l.split('\t'));
       const gam = lines.find(l => /ggdrop/i.test(l[2]));
+      const yt = await imp('api/_lib/yt.js');
       const { default: video } = await imp('api/video.js');
       let r = res(); await video({ query: { id: gam[0] } }, r);
-      ok(r.code === 200 && /<main class="wrap" data-age-page="18"/.test(r.html) && /age-b18/.test(r.html), '/v/<кейсы>: data-age-page="18" и значок 18+');
+      if (yt.HIDE_GAMBLING) {
+        // 28.10.2026: ролики про кейсы и депозит сайт не показывает вовсе (AdSense: «нарушения правил»)
+        ok(r.code === 404 && /noindex/.test(r.html) && !/ggdrop/i.test(r.html), '/v/<кейсы>: 404, noindex, без названия ролика');
+        r = res(); await video({ query: { id: lines.find(l => !yt.hiddenVideo(l[0], l[2]))[0] } }, r);
+        ok(r.code === 200, '/v/<обычный>: 200');
+      } else ok(r.code === 200 && /<main class="wrap" data-age-page="18"/.test(r.html) && /age-b18/.test(r.html), '/v/<кейсы>: data-age-page="18" и значок 18+');
       ok(r.html.includes(pg.AGE_HEAD) && /<script src="\/js\/core\/age\.js"><\/script>\s*<script src="\/js\/core\/ads-core\.js">/.test(r.html), '/v/<id>: ранняя метка и age.js (до рекламы)');
       ok(/class="age-mark"[^>]*>12\+<\/span>/.test(r.html), 'серверные страницы: метка сайта 12+ в подвале');
       ok(!/birth|d37_age.*=/.test(r.html.replace(pg.AGE_HEAD, '')), 'страница не знает возраста посетителя');
       const { default: videos } = await imp('api/_lib/routes/videos.js');
-      let found = 0;
+      let found = 0, gAny = 0;
       for (let p = 1; p <= 25 && !found; p++) {
         r = res(); await videos({ query: { p: String(p) } }, r);
         const g18 = (r.html.match(/<a class="card"[^>]*data-age="18"/g) || []).length;
         const gTitles = (r.html.match(/<a class="card" href="\/v\/[^"]+"[^>]*>[\s\S]*?<\/a>/g) || []).filter(x => /ggdrop|ггдроп|case\s*battle|кейс\s*батл|казино|casino|депозит/i.test(x)).length;
+        gAny += gTitles;
         if (g18) { found = p; ok(g18 >= gTitles && g18 > 0, `/videos?p=${p}: ролики про кейсы — data-age="18" (несовершеннолетнему спрятаны)`, { g18, gTitles }); }
       }
-      ok(found > 0, 'в архиве нашлась страница с роликами 18+');
+      if (yt.HIDE_GAMBLING) ok(!found && !gAny, 'архив /videos (25 страниц): роликов про кейсы нет', { found, gAny });
+      else ok(found > 0, 'в архиве нашлась страница с роликами 18+');
       const { default: ids } = await imp('api/_lib/routes/ids.js');
       r = res(); await ids({ query: {} }, r);
       const d = JSON.parse(r.html);
-      ok(d.g && d.g.length % 11 === 0 && d.g.length > 11 * 100 && d.ids.includes(d.g.slice(0, 11)), '/api/ids: g — ролики 18+ («Удиви меня» несовершеннолетнему их не выберет)');
+      if (yt.HIDE_GAMBLING) ok(d.g === '' && !d.ids.includes(gam[0]), '/api/ids: роликов про кейсы нет (g пустой)');
+      else ok(d.g && d.g.length % 11 === 0 && d.g.length > 11 * 100 && d.ids.includes(d.g.slice(0, 11)), '/api/ids: g — ролики 18+ («Удиви меня» несовершеннолетнему их не выберет)');
       ok(read('js/core/surprise.js').includes("D37Age.listOk(18)"), 'surprise.js: несовершеннолетнему 18+ не выпадают');
       const { default: game } = await imp('api/game.js');
       r = res(); game({ query: { id: 'horde' } }, r);

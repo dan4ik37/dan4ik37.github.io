@@ -6,6 +6,7 @@
 // в памяти «тёплого» инстанса функции, чтобы соседние запросы не тратили квоту.
 
 import { SNAPSHOT } from './uploads-snapshot.js';
+import { DETAILS_JSON } from './video-details.js';
 
 const KEY = process.env.YT_API_KEY || 'AIzaSyA0dK2a1YG_s54zG-zapYgjycIempCvHp0';
 const HANDLE = '@Dan4ik37Yt';
@@ -67,13 +68,14 @@ export function getVideo(id) {
 export function getUploads(max = 50, ttlMs = 3600e3) {
   return cached('uploads:' + max, ttlMs, async () => {
     const snap = max > 50 ? snapshotList() : [];
-    if (!snap.length) return fetchUploads(max);
+    if (!snap.length) return (await fetchUploads(max)).filter(v => !hiddenVideo(v.id, v.title));
     const known = new Set(snap.map(v => v.id));
     let head = [];
     try { head = await fetchUploads(200, id => known.has(id)); } catch (e) { /* без свежих — только снимок */ }
     const seen = new Set(), all = [];
     for (const v of [...head, ...snap]) if (!seen.has(v.id)) { seen.add(v.id); all.push(v); }
-    return all.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)).slice(0, max);
+    return all.filter(v => !hiddenVideo(v.id, v.title))
+      .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)).slice(0, max);
   });
 }
 
@@ -180,3 +182,22 @@ export function getVideoStats(ids) {
 // рекламу Google рядом показывать нельзя, иначе могут отклонить сайт или отключить показы.
 const GAMBLING_RE = /ggdrop|ггдроп|case\s*battle|casebattle|кейс\s*батл|кейсбатл|казино|casino|промокод на деп|\bдеп\b|депозит|рулетк|ставк[аиу]/i;
 export const isGambling = (...texts) => texts.some(t => GAMBLING_RE.test(String(t || '')));
+
+// 28.10.2026: AdSense отклонил сайт — «Обнаружены нарушения правил». У 555 из 5978 роликов в описании промокоды на депозит
+// («БОНУС КОДИК НА ДЕП»), у ~490 — в названии; аудитория сайта — дети. Такие ролики сайт не показывает вовсе: нет в списках,
+// карте сайта, поиске, «похожих»; /v/<id> — 404. Ролики на YouTube не трогаем. Вернуть как было — false.
+export const HIDE_GAMBLING = true;
+// Подробности снимка (video-details.js) — один разбор на всё (video-snap.js берёт отсюда же)
+let details = null, gIds = null;
+export function snapDetails() {
+  if (!details) { try { details = JSON.parse(DETAILS_JSON); } catch (e) { details = { d: [], t: [], v: {} }; } }
+  return details;
+}
+function gamblingIds() {
+  if (gIds) return gIds;
+  const D = snapDetails(), dg = D.d.map(x => isGambling(x));
+  gIds = new Set();
+  for (const id in D.v) if (dg[D.v[id][4]]) gIds.add(id);
+  return gIds;
+}
+export const hiddenVideo = (id, ...texts) => HIDE_GAMBLING && (isGambling(...texts) || gamblingIds().has(id));

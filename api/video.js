@@ -6,7 +6,7 @@
 // перелинковкой, который видят и Google/Яндекс, и превью мессенджеров.
 // Плеер — «фасад»: сначала превью, iframe YouTube грузится по клику
 // (страница лёгкая, просмотр при воспроизведении засчитывается каналу).
-import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, isGambling, esc, fmtDuration, fmtCount } from './_lib/yt.js';
+import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, isGambling, hiddenVideo, esc, fmtDuration, fmtCount } from './_lib/yt.js';
 import { page, YT_CHANNEL } from './_lib/page.js';
 import { videoFromSnapshot } from './_lib/video-snap.js';
 import { topicsFor } from './_lib/topics.js';
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       noindex: true
     }));
   }
-  if (!v) return notFound(res);
+  if (!v || hiddenVideo(id, v.snippet?.title, v.snippet?.description)) return notFound(res);
 
   const sn = v.snippet, st = v.statistics || {};
   const url = `${SITE}/v/${id}`;
