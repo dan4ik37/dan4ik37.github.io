@@ -1,0 +1,352 @@
+// ═══════════════════════════════════════
+//  D37 TERRAIN (T-111, W1) — streaming of the T1 terrain core around the player: blocks 32³ in rings, built in workers
+//  (wasm, JS fallback), dig/fill edits with re-mesh of the affected blocks, ground and rays for physics. No three.js here:
+//  meshes — js/engine/terra-mesh.js. World coordinates: METERS, f64, Y up (the core's units); the game converts with E.UNIT and
+//  its floating anchor. Plan: E:\d37-core\spec\PLAN.md (T1 / W1).
+// ═══════════════════════════════════════
+// TS = D37E.terra.create({ seed, radius: 5, caveRadius: 2, workers, cap, wasm: true, wasmUrl, workerUrl })
+//   TS.update(x, y, z)            — where the player is (m); schedules column probes and block builds (nearest first, budgets)
+//   TS.takeReady() → block | null — a built block for upload: { key, cx, cy, cz, q, buf, wi, … } (terra-mesh copies it, then TS.recycle(b))
+//   TS.onRelease = b => …         — a shown block left the ring (terra-mesh returns its geometry to the pool)
+//   TS.dig(x, y, z, r) / TS.fill(x, y, z, r) — edit (quantized to 1/64 m, applied in order); affected blocks are rebuilt first
+//   TS.ground(x, z, yRef) → surface height (m) under yRef + 1.1 (caves: the floor of the cave you are in); TS.water(x, z) → 0 | -Infinity
+//   TS.ray(ox, oy, oz, dx, dy, dz, maxT) → { t, x, y, z } | null — density march (dig/fill target)
+//   TS.stats(), TS.dispose()
+// Pure helpers (node tests): D37E.terra.key(cx, cy, cz), D37E.terra.affected(x, y, z, r) → [[cx, cy, cz], …] (blocks an edit touches)
+// D37E.terra.ON — one-line rollback of the whole W1 test page (false → the page says "off").
+(() => {
+  const root = typeof window !== 'undefined' ? window : globalThis;
+  const E = root.D37E = root.D37E || {};
+  const TE = E.terra = E.terra || {};
+  TE.ON = true;
+  const KX = 1 << 20;
+  const core = () => E.terraCore;
+  TE.key = (cx, cy, cz) => ((cx + KX) * 2097152 + (cz + KX)) * 128 + (cy + 64);
+  TE.colKey = (cx, cz) => (cx + KX) * 2097152 + (cz + KX);
+  const Q64 = v => Math.round(v * 64) / 64;
+  TE.quant = Q64;
+  // blocks whose mesh an edit can change (the core's own predicate: edit_touches)
+  TE.affected = (x, y, z, r, out = []) => {
+    const T1 = core(), m = r + 6, e = [x, y, z, r, 0];
+    for (let cx = Math.floor((x - m) / 32); cx <= Math.floor((x + m) / 32); cx++)
+      for (let cz = Math.floor((z - m) / 32); cz <= Math.floor((z + m) / 32); cz++)
+        for (let cy = Math.floor((y - m) / 32); cy <= Math.floor((y + m) / 32); cy++)
+          if (T1.touches(e, 0, cx * 32, cy * 32, cz * 32)) out.push([cx, cy, cz]);
+    return out;
+  };
+
+  TE.create = function (o = {}){
+    const T1 = core();
+    if (!T1) throw new Error('terra: terra-core.js is not loaded');
+    const ver = typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1';
+    const seed = (o.seed ?? 1337) | 0, cap = o.cap || T1.DEFAULT_CAP;
+    const mob = !!E.isMobile?.(), cores = (root.navigator && navigator.hardwareConcurrency) || 4;
+    const TS = {
+      seed, radius: o.radius ?? (mob ? 4 : 5), caveRadius: o.caveRadius ?? 2, keep: 0, dead: false,
+      blocks: new Map(), cols: new Map(), onRelease: null,
+      st: { built: 0, empty: 0, buildMs: 0, buildMax: 0, colMs: 0, cols: 0, sent: 0, stale: 0, errors: 0, fallbacks: 0, kind: '', edits: 0,
+        respawns: 0, local: 0, maxQueue: 0, trunc: 0, quads: 0 },
+    };
+    TS.keep = TS.radius + 1;   // hysteresis ring: blocks stay until 1 block beyond the radius (R+2 kept 2.3× the needed columns at R = 4)
+    // ── edits (meters, order kept) ──
+    let ed = new Float64Array(5 * 256), ne = 0;
+    // ── workers ──
+    const wanted = o.workers ?? (mob ? (cores >= 6 ? 2 : 1) : Math.max(1, Math.min(3, cores - 2)));
+    const workerUrl = o.workerUrl || 'js/engine/terra-worker.js?v=' + ver;
+    const wasmUrl = o.wasm === false ? null : (o.wasmUrl || 'js/engine/terra.wasm?v=' + ver);
+    const W = [];
+    let jobId = 0;
+    const jobs = new Map();   // id → { kind: 'col'|'blk', key, wi }
+    function spawn(slot){
+      const w = new Worker(workerUrl), K = { w, slot, busy: 0, ok: false, dead: false, kind: '', ids: new Set() };
+      w.onmessage = e => onMsg(K, e.data);
+      w.onerror = ev => {
+        ev?.preventDefault?.();
+        if (K.dead || TS.dead) return;
+        K.dead = true; TS.st.errors++;
+        for (const id of K.ids) requeue(id);
+        K.ids.clear(); K.busy = 0;
+        try { w.terminate(); } catch (e) {}
+        if (TS.st.respawns < 3) { TS.st.respawns++; setTimeout(() => { if (!TS.dead) { try { W[slot] = spawn(slot); replay(W[slot]); } catch (e) {} } }, 300); }
+      };
+      // absolute (the worker resolves against its own folder); document.baseURI respects <base href="/"> on /play/… addresses
+      w.postMessage({ t: 'init', wasm: wasmUrl ? new URL(wasmUrl, root.document?.baseURI || root.location?.href || 'http://x/').href : null, cap });
+      return K;
+    }
+    function replay(K){ if (ne) K.w.postMessage({ t: 'edits', list: ed.slice(0, ne * 5), n: ne }); }
+    try { if (typeof Worker === 'function' && o.workers !== 0) for (let i = 0; i < wanted; i++) W.push(spawn(i)); }
+    catch (e) { console.warn('terra: no workers — building on the page', e); }
+    // fallback: a builder on the page (one job per update, small budget) when workers are missing or all died
+    let local = null;
+    const localCore = () => local || (local = T1.js(cap));
+
+    function requeue(id){
+      const j = jobs.get(id); jobs.delete(id);
+      if (!j) return;
+      if (j.kind === 'col') { const c = TS.cols.get(j.key); if (c && c.st === 1) c.st = 0; }
+      else { const b = TS.blocks.get(j.key); if (b && b.st === 1) b.st = 0; }
+      dirtyQ = true;
+    }
+    function onMsg(K, d){
+      if (TS.dead) return;
+      if (d.t === 'ready') { K.ok = true; K.kind = d.kind; TS.st.kind = d.kind; if (d.err) TS.st.wasmErr = d.err; return; }
+      if (d.t === 'fallback') { K.kind = d.kind; TS.st.kind = d.kind; TS.st.fallbacks++; TS.st.wasmErr = d.err; return; }
+      const j = jobs.get(d.id);
+      if (j) { jobs.delete(d.id); K.ids.delete(d.id); K.busy--; }
+      if (d.t === 'err') { TS.st.errors++; if (j) requeue(d.id); return; }
+      if (d.t === 'col') { gotCol(d.cx, d.cz, d.hmin, d.hmax, d.ms); return; }
+      if (d.t === 'built') gotBlock(K, j, d);
+    }
+    function gotCol(cx, cz, hmin, hmax, ms){
+      TS.st.cols++; TS.st.colMs += ms || 0;
+      const c = TS.cols.get(TE.colKey(cx, cz));
+      if (!c) return;
+      c.st = 2; c.hmin = hmin; c.hmax = hmax; dirtyQ = true;
+    }
+    function gotBlock(K, j, d){
+      const b = j ? TS.blocks.get(j.key) : null;
+      const give = () => { if (d.buf && K) K.w.postMessage({ t: 'buf', buf: d.buf }, [d.buf]); };
+      if (!b || b.st !== 1 || b.job !== d.id) { give(); return; }
+      if (d.q < 0) { TS.st.errors++; give(); b.st = 0; b.fails = (b.fails || 0) + 1; b.retryAt = now() + 500 * b.fails; dirtyQ = true; return; }
+      TS.st.buildMs += d.ms || 0; TS.st.buildMax = Math.max(TS.st.buildMax, d.ms || 0);
+      if (d.trunc) TS.st.trunc++;
+      if (d.ne < b.need) { TS.st.stale++; give(); b.st = 0; dirtyQ = true; return; }   // an edit came while it was being built
+      TS.st.built++; if (!d.q) TS.st.empty++;
+      b.st = 2; b.ne = d.ne; b.q = d.q; b.buf = d.buf; b.wi = K ? K.slot : -1;
+      ready.push(b);
+    }
+    const ready = [];
+    const now = () => (root.performance ? performance.now() : Date.now());
+
+    // ── desired set: columns in rings (nearest first), then their blocks ──
+    let cx0 = NaN, cy0 = 0, cz0 = NaN, dirtyQ = true, lastQ = 0;
+    const queue = [], QP = [];   // queue — pooled items { kind, key, cx, cy, cz, pri }; qh — head (no splice: no garbage)
+    let qh = 0, qn = 0, qstamp = 0;
+    const qpush = (kind, key, cx, cy, cz, pri) => { const it = QP[qn] || (QP[qn] = { kind: '', key: 0, cx: 0, cy: 0, cz: 0, pri: 0 }); qn++; it.kind = kind; it.key = key; it.cx = cx; it.cy = cy; it.cz = cz; it.pri = pri; queue.push(it); };
+    const byPri = (a, b) => a.pri - b.pri;
+    const RING = [];    // (dx, dz, d²) by distance, built once per radius
+    function ringFor(R){
+      if (RING.R === R) return RING;
+      RING.length = 0; RING.R = R;
+      for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++) if (dx * dx + dz * dz <= R * R + R) RING.push([dx, dz, dx * dx + dz * dz]);
+      RING.sort((a, b) => a[2] - b[2]);
+      return RING;
+    }
+    function blockOf(cx, cy, cz, create){
+      const k = TE.key(cx, cy, cz);
+      let b = TS.blocks.get(k);
+      if (!b && create) { b = { key: k, cx, cy, cz, st: 0, need: 0, ne: -1, q: 0, buf: null, wi: -1, job: 0, mesh: null, shown: false, fails: 0, retryAt: 0, qs: 0 }; TS.blocks.set(k, b); }
+      return b;
+    }
+    // blocks of a known column: the surface range; near the player also the cave blocks down to −32 m (caves end at −28 m)
+    function rebuildQueue(){
+      queue.length = 0; qh = 0; qn = 0; qstamp++;
+      const R = TS.radius, RC = TS.caveRadius, ring = ringFor(R), t = now();
+      for (let i = 0; i < ring.length; i++) {
+        const dx = ring[i][0], dz = ring[i][1], d2 = ring[i][2], cx = cx0 + dx, cz = cz0 + dz, ck = TE.colKey(cx, cz);
+        let c = TS.cols.get(ck);
+        if (!c) { c = { key: ck, cx, cz, st: 0, hmin: 0, hmax: 0 }; TS.cols.set(ck, c); }
+        if (c.st === 0) { qpush('col', ck, cx, 0, cz, d2 * 4); continue; }
+        if (c.st !== 2) continue;
+        const lo = Math.floor(Math.floor(c.hmin) / 32), hi = Math.floor(Math.floor(c.hmax) / 32), y0 = d2 <= RC * RC + RC ? Math.min(lo, -1) : lo;
+        for (let cy = y0; cy <= hi; cy++) {
+          const b = blockOf(cx, cy, cz, true);
+          if (b.st !== 0 || b.retryAt > t) continue;
+          b.qs = qstamp;
+          qpush('blk', b.key, cx, cy, cz, d2 * 4 + Math.abs(cy - cy0) + (b.ne >= 0 && b.ne < b.need ? -1e6 : 0));
+        }
+      }
+      // edited blocks outside the column ranges (a fill in the sky, a dig below the caves) — right after the re-meshes
+      for (const b of TS.blocks.values()) if (b.st === 0 && b.need > 0 && b.qs !== qstamp && inRing(b)) { b.qs = qstamp; qpush('blk', b.key, b.cx, b.cy, b.cz, -1e5); }
+      queue.sort(byPri);
+      TS.st.maxQueue = Math.max(TS.st.maxQueue, queue.length);
+      dirtyQ = false; lastQ = t;
+    }
+    const inRing = b => { const dx = b.cx - cx0, dz = b.cz - cz0; return dx * dx + dz * dz <= TS.keep * TS.keep + TS.keep; };
+    function unloadFar(){
+      const K2 = TS.keep * TS.keep + TS.keep;
+      for (const [k, b] of TS.blocks) {
+        const dx = b.cx - cx0, dz = b.cz - cz0;
+        if (dx * dx + dz * dz <= K2) continue;
+        drop(b); TS.blocks.delete(k);
+      }
+      for (const [k, c] of TS.cols) { const dx = c.cx - cx0, dz = c.cz - cz0; if (dx * dx + dz * dz > (TS.keep + 3) * (TS.keep + 3)) TS.cols.delete(k); }
+    }
+    function drop(b){
+      if (b.st === 2 && b.buf) { giveBack(b); }
+      if (b.shown && TS.onRelease) TS.onRelease(b);
+      b.shown = false; b.st = -1;
+    }
+    function giveBack(b){
+      const K = W[b.wi];
+      if (b.buf && K && !K.dead) K.w.postMessage({ t: 'buf', buf: b.buf }, [b.buf]);
+      b.buf = null;
+    }
+    // ── dispatch with budgets: ≤ 2 jobs in flight per worker (fresh priorities), page builder — ≤ 1 job per update ──
+    function dispatch(){
+      for (let wi = 0; wi < W.length; wi++) {
+        const K = W[wi];
+        if (!K || K.dead) continue;
+        while (K.busy < 2 && qh < queue.length) send(K, queue[qh++]);
+      }
+      if (qh < queue.length && !W.some(K => K && !K.dead)) buildLocal(queue[qh++]);   // no live worker — build here, one job per update
+    }
+    function send(K, it){
+      if (it.kind === 'col') {
+        const c = TS.cols.get(it.key);
+        if (!c || c.st !== 0) return false;
+        c.st = 1;
+        const id = ++jobId; jobs.set(id, { kind: 'col', key: it.key, wi: K.slot }); K.ids.add(id); K.busy++;
+        K.w.postMessage({ t: 'col', id, seed, cx: it.cx, cz: it.cz });
+        return true;
+      }
+      const b = TS.blocks.get(it.key);
+      if (!b || b.st !== 0) return false;
+      b.st = 1; b.need = Math.max(b.need, 0);
+      const id = ++jobId; b.job = id; jobs.set(id, { kind: 'blk', key: it.key, wi: K.slot }); K.ids.add(id); K.busy++;
+      TS.st.sent++;
+      K.w.postMessage({ t: 'build', id, seed, cx: it.cx, cy: it.cy, cz: it.cz, ne });
+      return true;
+    }
+    function buildLocal(it){
+      const L = localCore(), t0 = now();
+      TS.st.local++;
+      if (it.kind === 'col') { L.colInfo(seed, it.cx, it.cz); const o = L.out(); const c = TS.cols.get(it.key); if (c) c.st = 1; gotCol(it.cx, it.cz, o.info[0], o.info[1], now() - t0); return; }
+      const b = TS.blocks.get(it.key);
+      if (!b || b.st !== 0) return;
+      b.st = 1; const id = ++jobId; b.job = id;
+      const fox = it.cx * 32, foy = it.cy * 32, foz = it.cz * 32;
+      let n = 0; for (let e = 0; e < ne; e++) if (T1.touches(ed, e, fox, foy, foz)) n++;
+      const buf = L.edits(n); let k = 0;
+      for (let e = 0; e < ne && k < n; e++) if (T1.touches(ed, e, fox, foy, foz)) { buf.set(ed.subarray(e * 5, e * 5 + 5), k * 5); k++; }
+      const q = L.build(seed, it.cx, it.cy, it.cz, n), o = L.out();
+      let ab = null;
+      if (q > 0) { ab = new ArrayBuffer(q * 80); new Float32Array(ab, 0, q * 12).set(o.pos.subarray(0, q * 12)); new Int8Array(ab, q * 48, q * 16).set(o.nrm.subarray(0, q * 16)); new Uint8Array(ab, q * 64, q * 16).set(o.col.subarray(0, q * 16)); }
+      gotBlock(null, { key: it.key }, { id, q, buf: ab, hmin: o.info[0], hmax: o.info[1], trunc: o.info[3], ms: now() - t0, ne });
+    }
+
+    TS.update = (x, y, z) => {
+      if (TS.dead) return;
+      const cx = Math.floor(x / 32), cy = Math.floor(y / 32), cz = Math.floor(z / 32);
+      if (cx !== cx0 || cz !== cz0 || cy !== cy0) { cx0 = cx; cy0 = cy; cz0 = cz; dirtyQ = true; unloadFar(); }
+      if (dirtyQ && now() - lastQ > 60) rebuildQueue();
+      dispatch();
+    };
+    TS.takeReady = () => {
+      while (ready.length) { const b = ready.shift(); if (b.st === 2) return b; }
+      return null;
+    };
+    TS.readyCount = () => ready.length;
+    // the mesh copied the data — buffer back to its worker; the block is shown
+    TS.recycle = b => { giveBack(b); b.st = 3; b.shown = true; };
+    // ── edits ──
+    function edit(x, y, z, r, mode){
+      x = Q64(x); y = Q64(y); z = Q64(z); r = Q64(r);
+      if (!(r > 0) || !isFinite(x + y + z)) return 0;
+      if (ed.length < (ne + 1) * 5) { const a = new Float64Array(ed.length * 2); a.set(ed); ed = a; }
+      ed[ne * 5] = x; ed[ne * 5 + 1] = y; ed[ne * 5 + 2] = z; ed[ne * 5 + 3] = r; ed[ne * 5 + 4] = mode;
+      ne++; TS.st.edits = ne;
+      const msg = { t: 'edit', e: [x, y, z, r, mode] };
+      for (const K of W) if (K && !K.dead) K.w.postMessage(msg);
+      const list = TE.affected(x, y, z, r);
+      for (const [cx, cy, cz] of list) {
+        const b = blockOf(cx, cy, cz, inRing({ cx, cz }));
+        if (!b) continue;
+        b.need = ne;
+        if (b.st === 1 || b.st === 0) { b.st = 0; continue; }   // in flight → result will be stale (ne) and rebuilt; waiting → just rebuilt
+        if (b.st === 2) { giveBack(b); b.st = 0; continue; }
+        if (b.st === 3) { b.st = 0; }   // shown: keeps showing the old mesh until the new one is uploaded (no hole)
+      }
+      phClear();
+      dirtyQ = true; lastQ = 0;
+      return list.length;
+    }
+    TS.dig = (x, y, z, r = 2.5) => edit(x, y, z, r, 0);
+    TS.fill = (x, y, z, r = 2) => edit(x, y, z, r, 1);
+    TS.editCount = () => ne;
+    TS.edits = () => ed.slice(0, ne * 5);
+
+    // ── physics: surface under yRef from the density field at integer columns (cached; cleared by edits) ──
+    const PH = new Map(), DP = [];   // column key → { h, d: Float64Array(256) for y −128…127 (NaN = not computed) }; DP — pool of d
+    const phClear = () => { for (const c of PH.values()) if (DP.length < 4096) DP.push(c.d); PH.clear(); };
+    const PK = (ix, iz) => (ix + 33554432) * 67108864 + (iz + 33554432);
+    let ops = new Float64Array(5 * 16), nops = 0;
+    function colOps(ix, iz){   // edits that can reach this column (horizontal test), order kept
+      nops = 0;
+      for (let e = 0; e < ne; e++) {
+        const o = e * 5, r = ed[o + 3] + 1;
+        if (Math.abs(ed[o] - ix) > r || Math.abs(ed[o + 2] - iz) > r) continue;
+        if (ops.length < (nops + 1) * 5) { const a = new Float64Array(ops.length * 2); a.set(ops); ops = a; }
+        ops.set(ed.subarray(o, o + 5), nops * 5); nops++;
+      }
+    }
+    function phCol(ix, iz){
+      const k = PK(ix, iz);
+      let c = PH.get(k);
+      if (!c) {
+        if (PH.size > 2048) phClear();
+        const d = DP.pop() || new Float64Array(256);
+        d.fill(NaN);
+        c = { h: T1.height(seed, ix, iz), d, ops: null, nops: 0 };
+        colOps(ix, iz);
+        if (nops) { c.ops = ops.slice(0, nops * 5); c.nops = nops; }
+        PH.set(k, c);
+      }
+      return c;
+    }
+    function dAt(c, ix, y, iz){
+      const i = y + 128;
+      if (i >= 0 && i < 256) { const v = c.d[i]; if (v === v) return v; }
+      let v = T1.density(seed, ix, y, iz, c.ops, c.nops);
+      if (i >= 0 && i < 256) c.d[i] = v;
+      return v;
+    }
+    function surface(ix, iz, yTop){
+      const c = phCol(ix, iz), j = Math.floor(yTop);
+      if (dAt(c, ix, j, iz) <= 0) {
+        for (let k = j; k > j - 28; k--) { const a = dAt(c, ix, k - 1, iz); if (a > 0) { const b = dAt(c, ix, k, iz); return k - 1 + a / (a - b); } }
+        return j - 28;
+      }
+      for (let k = j; k < j + 8; k++) { const b = dAt(c, ix, k + 1, iz); if (b <= 0) { const a = dAt(c, ix, k, iz); return k + a / (a - b); } }
+      return j + 8;
+    }
+    TS.ground = (x, z, yRef) => {
+      const x0 = Math.floor(x), z0 = Math.floor(z), fx = x - x0, fz = z - z0, yt = yRef + 1.1;
+      const a = surface(x0, z0, yt), b = surface(x0 + 1, z0, yt), c = surface(x0, z0 + 1, yt), d = surface(x0 + 1, z0 + 1, yt);
+      return (a * (1 - fx) + b * fx) * (1 - fz) + (c * (1 - fx) + d * fx) * fz;
+    };
+    TS.water = (x, z) => (phCol(Math.round(x), Math.round(z)).h < -0.3 ? 0 : -Infinity);
+    TS.height = (x, z) => T1.height(seed, x, z);
+    TS.density = (x, y, z) => T1.density(seed, x, y, z, ed, ne);
+    // ray march through the density field (m); first crossing into solid
+    TS.ray = (ox, oy, oz, dx, dy, dz, maxT = 60) => {
+      const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
+      let a = 0, fa = T1.density(seed, ox, oy, oz, ed, ne);
+      if (fa > 0) return { t: 0, x: ox, y: oy, z: oz };
+      for (let t = 0.35; t <= maxT; t += 0.35) {
+        const fb = T1.density(seed, ox + dx * t, oy + dy * t, oz + dz * t, ed, ne);
+        if (fb > 0) {
+          let lo = a, hi = t;
+          for (let i = 0; i < 8; i++) { const m = (lo + hi) / 2; if (T1.density(seed, ox + dx * m, oy + dy * m, oz + dz * m, ed, ne) > 0) hi = m; else lo = m; }
+          return { t: hi, x: ox + dx * hi, y: oy + dy * hi, z: oz + dz * hi };
+        }
+        a = t; fa = fb;
+      }
+      return null;
+    };
+    TS.stats = () => {
+      let shown = 0, quads = 0, inflight = 0;
+      for (const b of TS.blocks.values()) { if (b.shown) { shown++; quads += b.q; } if (b.st === 1) inflight++; }
+      return { ...TS.st, blocks: TS.blocks.size, shown, quads, inflight, queued: queue.length - qh, ready: ready.length, cols: TS.cols.size, workers: W.filter(K => K && !K.dead).length,
+        kinds: W.map(K => K ? K.kind || '…' : '-').join(','), phCols: PH.size, buildAvg: TS.st.built ? TS.st.buildMs / TS.st.built : 0 };
+    };
+    TS.dispose = () => {
+      TS.dead = true;
+      for (const K of W) { try { K && K.w.terminate(); } catch (e) {} }
+      W.length = 0; jobs.clear(); ready.length = 0; queue.length = 0; QP.length = 0;
+      TS.blocks.clear(); TS.cols.clear(); PH.clear(); DP.length = 0;
+      local = null; TS.onRelease = null;
+    };
+    return TS;
+  };
+})();
