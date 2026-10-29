@@ -157,7 +157,9 @@ async function games(screen){
     for (let i = 0; i < 60 && !(await B.ev(`!!document.querySelector('#gamesStageBox > *:not(.gm-loading)')`)); i++) await sleep(250);
     await sleep(600); await B.ev(CLEAN);
     console.log('  2048, шапка:', (await B.ev(stageBar)).join(' · '));
-    ok(await vis('#gamesStage [data-gs-set]') === 1 && await vis('#gamesStage [data-gs-full]') === 1, 'обычная игра: ⚙️ и ⛶ — по одному, в шапке');
+    // T-123 (шапка 2.0, HUD2.shell): в шапке ← · ☰ · ⛶, ⚙️ — в ☰ (D37Shell.items); без флага — как было
+    if (await B.ev(`document.getElementById('gamesStage').classList.contains('gs2')`)) ok(await vis('#gamesStage .gs2-menubtn') === 1 && await vis('#gamesStage [data-gs-set]') === 0 && await vis('#gamesStage [data-gs-full]') <= 1 && (await B.ev(`D37Shell.items().map(i => i.id).join()`)).includes('sh-set'), 'обычная игра: в шапке ☰ (и ⛶), ⚙️ — в ☰');
+    else ok(await vis('#gamesStage [data-gs-set]') === 1 && await vis('#gamesStage [data-gs-full]') === 1, 'обычная игра: ⚙️ и ⛶ — по одному, в шапке');
     await B.shot('g1-2048');
     // «Кубомир»: меню миров
     await B.send('Page.navigate', { url: BASE() + '/#/games/kubomir' });
@@ -183,7 +185,7 @@ async function games(screen){
           await sleep(200);
           const km = await B.ev(MENU);
           console.log('  Кубомир в мире, меню:', km.join(' · '));
-          if (TAG !== 'before') ok(['Продолжить', 'Настройки', 'Моды мира', 'весь экран', 'Как играть', 'Я застрял', 'выйти'].every(w => km.some(t => t.includes(w))), 'Кубомир в мире: ☰ — меню паузы (моды, «Я застрял», полный экран, выход)', km);
+          if (TAG !== 'before') ok(['Продолжить', 'Настройки', 'Моды мира', /весь экран|Обычный экран/, 'Как играть', 'Я застрял', 'выйти'].every(w => km.some(t => typeof w === 'string' ? t.includes(w) : w.test(t))), 'Кубомир в мире: ☰ — меню паузы (моды, «Я застрял», полный экран, выход)', km);
           await B.shot('g3b-kubomir-world-menu');
           await B.tapSel('.kb-top [data-kb="menu"]'); await sleep(250);
           ok(!(await B.ev(`!!document.querySelector('.gs-menu')`)), 'Кубомир: ☰ ещё раз — меню закрыто');

@@ -1664,6 +1664,7 @@ Players.PlayerAdded.Connect(player => {
     C.blocked = !!window.D37Settings?.isOpen?.() || !!pl.phoneOn;   // открыто окно ⚙️ или телефон 📱 — персонаж стоит
     C.walk = !!pl.phoneOn && !window.D37Settings?.isOpen?.();   // с телефоном в руке — можно идти (как в ГТА)
     C.step(dt);
+    if (C.down('emote') && !C.blocked && pl.H.poseRadial && !ed.e2m) pl.H.poseRadial();   // T (интерфейс 2.0, как в «Мире»): круг позы и эмоций
     if (C.down('pause') && !C.blocked && !(mp && ed.player)) { stopPlay(); return; }   // в комнате по ссылке Esc не выкидывает из игры
     if (C.down('view')) playView(pl);   // V — вид от 1-го / 3-го лица (как в «Мире»)
     // едем на движущейся детали

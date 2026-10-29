@@ -207,6 +207,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     const { C, TS } = st;
     C.blocked = !!window.D37Settings?.isOpen?.();
     C.step(dt);
+    if (st.v2 && st.mode === 'walk' && !C.blocked && C.down('emote')) st.H.poseRadial();   // T (интерфейс 2.0): круг позы и эмоций
     while (st.pend.length) {   // копать / насыпать: луч по плотности — первая точка земли (до 60 м)
       const p = st.pend.shift(), hit = TS.ray(p.ox, p.oy, p.oz, p.dx, p.dy, p.dz, 60);
       if (!hit) continue;
