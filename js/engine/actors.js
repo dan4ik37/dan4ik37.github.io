@@ -21,10 +21,12 @@
 // цветов человечка) тремя общими InstancedMesh на всех: 3 вызова отрисовки вместо 7–18 на каждого, сборка — без K.build. Новый
 // житель сначала фигурка, подробным становится в update (не больше одной сборки за кадр). Сколько подробных — дело устройства
 // (телефон 8, ПК 16 в «Мире»); сколько жителей есть и что они делают — у всех одинаково. A.impCount() — сколько сейчас фигурок.
+// Фигурки рисуются ближние к игроку первыми (порядок tiers), буфер растёт удвоением 128 → 1024 (T-127 ревью: 129-я и дальше не
+// рисовались вовсе — в «Студии 3D» зомби у самого игрока бывали невидимы, а кусали).
 (() => {
   const E = window.D37E = window.D37E || {};
   const LOD_FAR = 30, LOD_NEAR = 24, LOOK_R = 5, CAM_R = 14, ME_R = 8;
-  const IMP_MAX = 128;   // фигурок на один набор актёров (больше — не рисуются)
+  const IMP_MAX = 128, IMP_HARD = 1024;   // фигурок: буфер на 128, растёт удвоением до 1024 (сверх — не рисуются дальние)
   // цвета фигурки: верх, низ, кожа — у kit (World3D.impColors), иначе — от ключа
   const PAL = ['#4f8df7', '#e8384f', '#22c55e', '#f59e0b', '#a855f7', '#14b8a6', '#f472b6', '#64748b'];
   const impColors = (look, key) => {
@@ -66,9 +68,10 @@
         imp: !!opt?.npc, v2: !!(opt?.npc && L2), impC: null, impK: null, impI: -1, camD: 0, camK: 0, bobP: Math.random() * 6 };
       setLook(a, look);
       list.set(key, a); sync();
+      if (a.v2) rank.push(a);   // фигурка — сразу в рисуемых (в свой ряд по расстоянию — на следующем tiers)
       return a;
     }
-    function remove(key){ const a = list.get(key); if (a) { if (a.vm) a.vm.dispose(); if (a.ch) K.dispose(a.ch); list.delete(key); sync(); for (let i = 0; i < arr.length; i++) if (arr[i].lk === a) arr[i].lk = null; R.shadowDirty?.(); } }
+    function remove(key){ const a = list.get(key); if (a) { if (a.vm) a.vm.dispose(); if (a.ch) K.dispose(a.ch); list.delete(key); sync(); const ri = rank.indexOf(a); if (ri >= 0) rank.splice(ri, 1); for (let i = 0; i < arr.length; i++) if (arr[i].lk === a) arr[i].lk = null; R.shadowDirty?.(); } }
     // Звуки телефона у человечка (события кадра из world3d.js: 1 — шорох кармана, 2 — касание экрана, 4 — щелчок камеры)
     const PHE = K.PHE || { POCKET: 1, TAP: 2, SHUTTER: 4 };
     function phoneSounds(a, ev, cam){
@@ -106,18 +109,29 @@
       return a.lt;
     }
     // ── простые фигурки (V2): кто подробный — cap ближайших к камере ближе far (возврат в фигурку — дальше far + 6 или не в cap) ──
-    let L2 = null, IMP = null, impN = 0, tierT = 0;
+    let L2 = null, IMP = null, impN = 0, tierT = 0, impCap = IMP_MAX;
     const rank = [];   // кандидаты (без мусора: тот же массив)
     function impMesh(){
       if (IMP !== null) return IMP;
       const T = window.THREE;
       if (!T || !R.scene) return (IMP = false);
-      const mk = (geo, y) => { geo.translate(0, y, 0); const m = new T.InstancedMesh(geo, new T.MeshLambertMaterial({ color: '#ffffff' }), IMP_MAX); m.count = 0;
-        m.instanceColor = new T.InstancedBufferAttribute(new Float32Array(IMP_MAX * 3).fill(1), 3);   // цвета — до первой отрисовки (иначе шейдер собран без них)
-        m.frustumCulled = false; m.userData.actor = true; R.scene.add(m); R.shadowsOn?.(m); return m; };
+      const mk = (geo, y) => { geo.translate(0, y, 0); return impInst(geo, new T.MeshLambertMaterial({ color: '#ffffff' })); };
       IMP = { legs: mk(new T.BoxGeometry(.42, .86, .26), .43), torso: mk(new T.BoxGeometry(.54, .66, .32), 1.19), head: mk(new T.SphereGeometry(.23, 10, 8), 1.76),
         m4: new T.Matrix4(), col: new T.Color() };
       return IMP;
+    }
+    function impInst(geo, mat){
+      const T = window.THREE, m = new T.InstancedMesh(geo, mat, impCap); m.count = 0;
+      m.instanceColor = new T.InstancedBufferAttribute(new Float32Array(impCap * 3).fill(1), 3);   // цвета — до первой отрисовки (иначе шейдер собран без них)
+      m.frustumCulled = false; m.userData.actor = true; R.scene.add(m); R.shadowsOn?.(m); return m;
+    }
+    // больше фигурок, чем буфер: новый вдвое больше (те же форма и материал), старый — прочь; цвета — заново
+    function impGrow(n){
+      let c = impCap; while (c < n && c < IMP_HARD) c *= 2;
+      if (c === impCap) return;
+      impCap = c;
+      for (const k of ['legs', 'torso', 'head']) { const o = IMP[k]; IMP[k] = impInst(o.geometry, o.material); o.parent?.remove(o); o.dispose?.(); }
+      for (let i = 0; i < arr.length; i++) arr[i].impK = null;
     }
     function tiers(cam){
       rank.length = 0;
@@ -137,9 +151,12 @@
     const impSet = (m, n) => { m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; };
     function figures(t){
       const M = impMesh(); if (!M) return false;
+      let want = 0;
+      for (let i = 0; i < rank.length; i++) { const a = rank[i]; if (a.v2 && !a.hidden && a.fade >= .02) want++; }
+      if (want > impCap) impGrow(want);
       let n = 0, moved = false;
-      for (let i = 0; i < arr.length && n < IMP_MAX; i++) {
-        const a = arr[i]; if (!a.v2 || a.hidden || a.fade < .02) continue;
+      for (let i = 0; i < rank.length && n < impCap; i++) {   // ближние к игроку — первыми (rank — по расстоянию от tiers)
+        const a = rank[i]; if (!a.v2 || a.hidden || a.fade < .02) continue;
         const bob = a.moving ? Math.abs(Math.sin(t * 9 + a.bobP)) * .07 : 0, y = (a.sit ? (a.seatY != null ? a.seatY - .5 : a.sitY) : a.y) + bob;
         M.m4.makeRotationY(a.yaw); M.m4.setPosition(a.x, y, a.z);
         M.legs.setMatrixAt(n, M.m4); M.torso.setMatrixAt(n, M.m4); M.head.setMatrixAt(n, M.m4);
@@ -226,7 +243,7 @@
       dispose(){
         for (const a of list.values()) { if (a.vm) a.vm.dispose(); if (a.ch) K.dispose(a.ch); } list.clear(); arr = []; rank.length = 0; trail.clear();
         if (IMP) { for (const m of [IMP.legs, IMP.torso, IMP.head]) { m.parent?.remove(m); m.geometry.dispose(); m.material.dispose(); m.dispose?.(); } }
-        IMP = null; impN = 0; R.shadowDirty?.();
+        IMP = null; impN = 0; impCap = IMP_MAX; R.shadowDirty?.();
       },
     };
   };
