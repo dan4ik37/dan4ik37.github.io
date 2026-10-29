@@ -21,11 +21,12 @@ function nodeBot(decide, act){
 // browser: a JS string that installs window.__bot (setInterval). It reads the live state, calls decide and performs the action
 // with real events on the canvas (field units → client pixels). actSrc — body of function (a, s, C, m, P) where
 // P.tap(fx, fy, type) dispatches a PointerEvent ('pointerdown' by default) and P.key(code, up) a KeyboardEvent on window.
-// stopAfter — the bot stops acting after that score (the slower ⚔️ opponent B).
-function e2eBot(id, decide, actSrc){
+// stopAfter — the bot stops acting after that score (the slower ⚔️ opponent B). initSrc — code run once (sets m.* for timer jitter).
+function e2eBot(id, decide, actSrc, initSrc){
   return (gap, stopAfter = 1e9) => `(() => {
     clearInterval(window.__bot);
     const T = GAME_IMPL.${id}._test, C = T.spec.consts, m = {}, decide = ${decide.toString()};
+    ${initSrc || ''}
     const P = {
       tap(fx, fy, type){ const cv = document.querySelector('.ak-cv'); if (!cv) return; const r = cv.getBoundingClientRect();
         cv.dispatchEvent(new PointerEvent(type || 'pointerdown', { clientX: r.left + fx * r.width / T.spec.W, clientY: r.top + fy * r.height / T.spec.H,
