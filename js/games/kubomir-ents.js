@@ -111,28 +111,64 @@
 
     // ═══ Выпавшие вещи: летят дугой, прыгают, скользят и встают, на воде — качаются, рядом с игроком (есть место) —
     // тянутся к нему и «влетают» (pickup). Свои (Q, после смерти) — подобрать можно через 2 с, остальные — через 0,5 с ═══
-    X.addItem = (x, y, z, stack, scatter, vel, own) => {
+    // keep (T-124 SH0.2) — вещь обрушения или беды (сундук упал, опора рухнула): не пропадает через 5 минут и не вытесняется при
+    // переполнении (вытесняется самая старая обычная)
+    X.addItem = (x, y, z, stack, scatter, vel, own, keep) => {
       if (!stack || !(stack.n > 0) || !V().item(stack.id)) return null;
       if (X.client && !own) return null;   // у гостя вещи в мире — только хозяина (снимки)
       const r = X.rng;
-      const e = { id: (X.iseq = ((X.iseq | 0) % 65000) + 1), x, y, z, px: x, py: y, pz: z, vx: vel ? vel[0] : (r() - .5) * 2.4, vy: vel ? vel[1] : 3 + r() * 1.5, vz: vel ? vel[2] : (r() - .5) * 2.4, s: { id: stack.id, n: stack.n, d: stack.d | 0 }, age: 0, mesh: null, ph: r() * 6, lit: Lit.make(null), ground: false, float: false, tilt: 0, delay: vel || scatter ? 2 : .5 };
+      const e = { id: (X.iseq = ((X.iseq | 0) % 65000) + 1), x, y, z, px: x, py: y, pz: z, vx: vel ? vel[0] : (r() - .5) * 2.4, vy: vel ? vel[1] : 3 + r() * 1.5, vz: vel ? vel[2] : (r() - .5) * 2.4, s: { id: stack.id, n: stack.n, d: stack.d | 0 }, age: 0, mesh: null, ph: r() * 6, lit: Lit.make(null), ground: false, float: false, tilt: 0, delay: vel || scatter ? 2 : .5, keep: !!keep };
       if (scatter) { e.vx = (r() - .5) * 6; e.vz = (r() - .5) * 6; e.vy = 4; }
       e.mesh = VR.itemMesh(e.s.id, 15 << 12);
       const flat = e.mesh.geometry.userData.flat;
       e.mesh.scale.setScalar(flat ? .42 : .28); e.k = flat ? .21 : .14;
       R.scene.add(e.mesh);
       X.items.push(e);
-      if (X.items.length > 300) dropItem(0);
+      if (X.items.length > ITEM_MAX) { for (let i = 0; i < X.items.length; i++) if (!X.items[i].keep) { dropItem(i); break; } }   // самая старая обычная; keep — никогда
       return e;
     };
+    const ITEM_MAX = 300, EV_CAP = 32;
     function dropItem(i){ const e = X.items[i]; R.scene.remove(e.mesh); e.mesh.geometry.dispose(); X.items.splice(i, 1); }
+    // ── вещи одного события (обрушение, упавшее дерево, сундук): одинаковые — в стопки (до размера стопки, каждая — там, где
+    // начала копиться), не больше EV_CAP вещей на событие (остаток — в последнюю стопку той же вещи, сверх размера: при подборе
+    // берётся сколько влезет); ничего не теряется. ev = X.itemBatch(keep) → ev.add(x, y, z, вещь) …, ev.flush() → сколько вещей ──
+    X.itemBatch = keep => {
+      const recs = [], open = new Map();   // recs: [x, y, z, id, n, d]; open: id → номер стопки, что ещё копится
+      return {
+        add(x, y, z, s){
+          if (!s || !(s.n > 0)) return;
+          const it = V().item(s.id); if (!it) return;
+          if (it.tool || (s.d | 0)) { recs.push([x, y, z, s.id, s.n, s.d | 0]); return; }   // инструменты — по одному (износ свой)
+          let n = s.n;
+          while (n > 0) {
+            let k = open.get(s.id);
+            if (k === undefined) { k = recs.length; recs.push([x, y, z, s.id, 0, 0]); open.set(s.id, k); }
+            const r = recs[k], take = Math.min(n, Math.max(1, it.stack) - r[4]);
+            r[4] += take; n -= take;
+            if (r[4] >= Math.max(1, it.stack)) open.delete(s.id);
+          }
+        },
+        flush(){
+          let made = 0;
+          const last = new Map();
+          for (const r of recs) {
+            if (!(r[4] > 0)) continue;
+            if (made >= EV_CAP && last.has(r[3]) && !r[5]) { last.get(r[3]).s.n += r[4]; continue; }   // сверх предела — в последнюю стопку той же вещи
+            const e = X.addItem(r[0], r[1], r[2], { id: r[3], n: r[4], d: r[5] }, false, null, false, keep);
+            if (e) { made++; if (!r[5]) last.set(r[3], e); }
+          }
+          recs.length = 0; open.clear();
+          return made;
+        },
+      };
+    };
     function itemsTick(dt){
       const P = S.P, Vx = V(), Tl = Vx.T.liquid;
       for (let i = X.items.length - 1; i >= 0; i--) {
         const e = X.items[i];
         e.px = e.x; e.py = e.y; e.pz = e.z;
         e.age += dt;
-        if (e.age > 300) { dropItem(i); continue; }
+        if (e.age > 300 && !e.keep) { dropItem(i); continue; }
         if (!W.loaded(e.x, e.z)) continue;
         // вода: всплывает к поверхности и качается на ней (пружина), течёт медленнее; иначе — падает
         const wv = W.raw(e.x, e.y + .12, e.z), cy = Math.floor(e.y + .12);
@@ -176,7 +212,7 @@
       if (X.tickN % 20 === 0) for (let i = 0; i < X.items.length; i++) for (let j = X.items.length - 1; j > i; j--) {
         const a = X.items[i], b = X.items[j], it = Vx.item(a.s.id);
         if (a.s.id !== b.s.id || it.tool || Math.abs(a.x - b.x) > 1 || Math.abs(a.y - b.y) > .6 || Math.abs(a.z - b.z) > 1 || a.s.n + b.s.n > it.stack) continue;
-        a.s.n += b.s.n; dropItem(j);
+        a.s.n += b.s.n; if (b.keep) a.keep = true; dropItem(j);
       }
     }
     // рисование: между тактами — плавно (X.frac); в полёте кувыркается, легла — выпрямилась, крутится и качается (на воде — сильнее);
@@ -895,18 +931,18 @@
         dx /= dl; dz /= dl; pv = { x: x + .5 + dx * .5, y: y + 1, z: z + .5 + dz * .5 };
       }
       // вещи: брёвна — пачками (у большого дерева не сотни вещей), из листвы — как у обычного дерева (доля — по числу листьев)
-      const nLog = C.n, pack = nLog > 24 ? 6 : 1, lk = Math.min(1, 150 / Math.max(1, leaves)), acc = new Map();
+      const nLog = C.n, pack = nLog > 24 ? 6 : 1, lk = Math.min(1, 150 / Math.max(1, leaves)), acc = new Map(), ev = X.itemBatch(false);   // вещи дерева — одно событие: стопками
       return X.fallGroup(cells, pv, { x: dx, z: dz }, {
         fast: true,
         trunk: v => LOGF[v & 0xfff] === 1,
         onLand: (v, wx, wy, wz) => {
           const b = Vx.blocks[v & 0xfff], r = X.rng();
-          if (LOGF[b.id]) { const id = b.drop || b.name, n = (acc.get(id) || 0) + 1; if (n >= pack) { acc.set(id, 0); X.addItem(wx, wy, wz, { id, n }); } else acc.set(id, n); return; }
-          if (r < .05 * lk && Vx.item(SAPLING_OF(b.name))) X.addItem(wx, wy, wz, { id: SAPLING_OF(b.name), n: 1 });
-          else if (r < .07 * lk) X.addItem(wx, wy, wz, { id: 'stick', n: 1 });
-          else if (r < .08 * lk && b.name === 'leaves_oak') X.addItem(wx, wy, wz, { id: 'apple', n: 1 });
+          if (LOGF[b.id]) { const id = b.drop || b.name, n = (acc.get(id) || 0) + 1; if (n >= pack) { acc.set(id, 0); ev.add(wx, wy, wz, { id, n }); } else acc.set(id, n); return; }
+          if (r < .05 * lk && Vx.item(SAPLING_OF(b.name))) ev.add(wx, wy, wz, { id: SAPLING_OF(b.name), n: 1 });
+          else if (r < .07 * lk) ev.add(wx, wy, wz, { id: 'stick', n: 1 });
+          else if (r < .08 * lk && b.name === 'leaves_oak') ev.add(wx, wy, wz, { id: 'apple', n: 1 });
         },
-        onLanded: (g) => { for (const [id, n] of acc) if (n > 0) X.addItem(g.px, g.py + .5, g.pz, { id, n }); acc.clear(); },
+        onLanded: (g) => { for (const [id, n] of acc) if (n > 0) ev.add(g.px, g.py + .5, g.pz, { id, n }); acc.clear(); ev.flush(); },
       });
     }
 

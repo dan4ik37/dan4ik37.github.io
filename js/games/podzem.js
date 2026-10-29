@@ -482,19 +482,20 @@
   }
 
   // ═══ Сущности: выпавшие предметы ═══
-  function dropItem(id, n, x, y, vx, vy){
+  // keep (T-124 SH0.2) — вещь обрушения или беды: не пропадает через 5 минут и не вытесняется (вытесняется самая старая обычная)
+  function dropItem(id, n, x, y, vx, vy, keep){
     if (!n || !itemDef(id)) return;
     // рядом такой же — сложить
-    for (const it of G.items) if (it.id === id && Math.abs(it.x - x) < 1.5 && Math.abs(it.y - y) < 1.5 && it.n + n <= stackOf(id)) { it.n += n; it.t = 0; return; }
-    if (G.items.length > 400) G.items.shift();
-    G.items.push({ id, n, x: x - .3, y: y - .3, w: .6, h: .6, vx: vx ?? (rand() - .5) * 4, vy: vy ?? -4 - rand() * 3, ground: false, stepUp: 0, t: 0, pick: .4 });
+    for (const it of G.items) if (it.id === id && Math.abs(it.x - x) < 1.5 && Math.abs(it.y - y) < 1.5 && it.n + n <= stackOf(id)) { it.n += n; it.t = 0; if (keep) it.keep = true; return; }
+    if (G.items.length > 400) { const k = G.items.findIndex(it => !it.keep); if (k >= 0) G.items.splice(k, 1); }
+    G.items.push({ id, n, x: x - .3, y: y - .3, w: .6, h: .6, vx: vx ?? (rand() - .5) * 4, vy: vy ?? -4 - rand() * 3, ground: false, stepUp: 0, t: 0, pick: .4, keep: !!keep });
   }
   function updItems(dt){
     const p = G.pl, pcx = p.x + p.w / 2, pcy = p.y + p.h / 2;
     for (let n = G.items.length - 1; n >= 0; n--) {
       const it = G.items[n];
       it.t += dt; it.pick -= dt;
-      if (it.t > 300) { G.items.splice(n, 1); continue; }
+      if (it.t > 300 && !it.keep) { G.items.splice(n, 1); continue; }
       const dx = pcx - (it.x + .3), dy = pcy - (it.y + .3), d = Math.hypot(dx, dy);
       if (it.pick <= 0 && !p.dead && d < 4.2 && roomFor(it.id)) {
         if (d < 1.1) {
@@ -1301,13 +1302,13 @@
     lightCheckChest();
   }
   function lightCheckChest(){}
-  function dropOf(t, x, y){
+  function dropOf(t, x, y, keep){
     let d = t.d;
     if (d === undefined) d = t.key;
     if (!d) return;
-    if (d.endsWith('?')) { if (rand() < .35) dropItem(d.slice(0, -1), 1, x, y); return; }
-    if (t.key === 'lifecrystal') { dropItem('lifecrystal', 1, x, y); return; }
-    dropItem(d, 1, x, y);
+    if (d.endsWith('?')) { if (rand() < .35) dropItem(d.slice(0, -1), 1, x, y, undefined, undefined, keep); return; }
+    if (t.key === 'lifecrystal') { dropItem('lifecrystal', 1, x, y, undefined, undefined, keep); return; }
+    dropItem(d, 1, x, y, undefined, undefined, keep);
   }
   function potLoot(x, y){
     const r = rand(), d = y - G.gen.colInfo(x).h;
@@ -1381,14 +1382,15 @@
     checkSupport(x, y + 1);
   }
   // опора у растений, факелов, предметов на полу; песок — проснуться
-  function checkSupport(x, y){
+  // keep — проверка после обрушения (podzem-support.js): сундук без пола высыпает содержимое вещами «keep» (не висит в воздухе, ничего не пропадает)
+  function checkSupport(x, y, keep){
     const f = fgAt(x, y); if (!f || f === 255) return;
     if (P.FALL[f]) { const c = cAt(x, y); if (c) c.awake = 40; return; }
     const sup = P.SUP[f];
     if (!sup) return;
     if (P.KIND[f] === 1) {
       const [ax, ay, w, h] = objAnchor(x, y);
-      if (sup === 1) for (let dx = 0; dx < w; dx++) { const b = fgAt(ax + dx, ay + h); if (!(P.SOLID[b] === 1 || P.SOLID[b] === 2)) { breakTile(x, y, true); return; } }
+      if (sup === 1) for (let dx = 0; dx < w; dx++) { const b = fgAt(ax + dx, ay + h); if (!(P.SOLID[b] === 1 || P.SOLID[b] === 2)) { if (keep) spillChest(ax, ay, f); breakTile(x, y, true); return; } }
       return;
     }
     const below = fgAt(x, y + 1), above = fgAt(x, y - 1), lf = fgAt(x - 1, y), rt = fgAt(x + 1, y);
@@ -1398,6 +1400,12 @@
     else if (sup === 2) ok = solid(above) || above === f || above === T.JLEAVES || above === T.LEAVES;
     else if (sup === 4) ok = wallAt(x, y) || solid(below) || solid(lf) || solid(rt) || solid(above);
     if (!ok) breakTile(x, y, true);
+  }
+  function spillChest(ax, ay, f){
+    if (f !== T.CHEST && f !== T.LOOT) return;
+    const k = ax + ',' + ay, items = G.chests.get(k) || (f === T.LOOT ? lootFor(ax, ay) : null);
+    if (items) for (const s of items) if (s && s.n > 0) dropItem(s.id, s.n, ax + 1, ay + 1, undefined, undefined, true);
+    G.chests.set(k, []);
   }
   // ── Поставить блок / стену ──
   function anySupport(x, y){
@@ -2798,8 +2806,8 @@
   }
 
   // обрушение (podzem-support.js): что переходнику нужно от игры
-  const SUPH = { cAt: (x, y) => cAt(x, y), idx, fgAt: (x, y) => fgAt(x, y), setCell: (x, y, f, st, w, lq) => setCell(x, y, f, st, w, lq), checkSupport: (x, y) => checkSupport(x, y),
-    debris: (x, y, w, h, f, n) => debris(x, y, w, h, tileColor(f, 0), n), dropTile: (f, x, y) => { const t = TILES[f] || G.modTiles?.[f]; if (t) dropOf(t, x + .5, y + .5); },
+  const SUPH = { cAt: (x, y) => cAt(x, y), idx, fgAt: (x, y) => fgAt(x, y), setCell: (x, y, f, st, w, lq) => setCell(x, y, f, st, w, lq), checkSupport: (x, y) => checkSupport(x, y, true),
+    debris: (x, y, w, h, f, n) => debris(x, y, w, h, tileColor(f, 0), n), dropTile: (f, x, y) => { const t = TILES[f] || G.modTiles?.[f]; if (t) dropOf(t, x + .5, y + .5, true); },
     snd: (n, o) => snd(n, o), hurtPlayer: (d, k, by) => hurtPlayer(d, k, by), P };
   // огонь (podzem-fire.js): что переходнику нужно от игры
   const onScreen = (x, y) => { const v = viewTiles(); return Math.abs(x + .5 - G.cam.x) < v[0] / 2 + 2 && Math.abs(y + .5 - G.cam.y) < v[1] / 2 + 2; };

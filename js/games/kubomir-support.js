@@ -149,9 +149,14 @@
     };
 
     // ── кусок падает: прицепленное отпадает вещами, клетки — из мира, кусок — целым вниз; лёг — блоками (куда нельзя — вещью) ──
+    // сундук и печь в куске (T-124 SH0.2): содержимое (W.tile) едет вместе с блоком и ложится с ним на новое место; лечь нельзя —
+    // высыпается вещами «keep» (не пропадают). Вещи события — стопками (st.ents.itemBatch), не сотни штук
+    const batch = keep => st.ents?.itemBatch ? st.ents.itemBatch(keep) : { add: (x, y, z, s) => st.ents?.addItem?.(x, y, z, s, false, null, false, keep), flush(){} };
+    function spill(tile, x, y, z, ev){ if (tile) for (const s of [...(tile.items || []), tile.in, tile.fuel, tile.out]) if (s && s.n > 0) ev.add(x + .5, y + .5, z + .5, s); }
     function dropGroup(xyz, depth = 0, instant = false){
       fresh();
       const n = xyz.length / 3, cells = [], nat = [];
+      let tiles = null;
       let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9, y0 = 1e9;
       for (let i = 0; i < n; i++) {
         const x = xyz[i * 3], y = xyz[i * 3 + 1], z = xyz[i * 3 + 2], v = W.raw(x, y, z);
@@ -162,16 +167,20 @@
       }
       if (!cells.length) return;
       X.stats.cells += cells.length / 4;
-      for (let i = 0; i < cells.length; i += 4) popAttached(cells[i], cells[i + 1], cells[i + 2]);
+      const evA = batch(true), ev = batch(true);   // отпавшее сразу; что не легло — при посадке
+      for (let i = 0; i < cells.length; i += 4) popAttached(cells[i], cells[i + 1], cells[i + 2], evA);
+      evA.flush();
       for (let i = 0; i < cells.length; i += 4) {
         const x = cells[i], y = cells[i + 1], z = cells[i + 2], v = cells[i + 3];
+        const tl = W.dropTile ? W.dropTile(x, y, z) : null;
+        if (tl) { if (!tiles) tiles = new Array(cells.length >> 2).fill(null); tiles[i >> 2] = tl; X.stats.tiles = (X.stats.tiles | 0) + 1; }
         W.set(x, y, z, 0, { urgent: 2 });
         if ((i >> 2) % 3 === 0) st.ents?.debris?.(x, y, z, v & 0xfff, 3);
       }
       const pivot = { x: (x0 + x1) / 2 + .5, y: y0, z: (z0 + z1) / 2 + .5 };
       const landed = [];   // где легли блоками: потом — держатся ли сами (лёг краем на столб — остальное свалится дальше)
-      const onSettle = (v, x, y, z, i) => { if (settle(v, x, y, z, nat[i])) landed.push(x, y, z); };
-      const onLanded = () => recheck(landed, depth + 1);
+      const onSettle = (v, x, y, z, i) => { if (settle(v, x, y, z, nat[i], tiles ? tiles[i] : null, ev)) landed.push(x, y, z); };
+      const onLanded = () => { ev.flush(); recheck(landed, depth + 1); };
       const nc = cells.length / 4;   // 1–3 блока — без сетки и анимации: осыпаются сразу (пыль), иначе — куском
       const g = !instant && nc > 3 && nc <= PART ? st.ents?.fallGroup?.(cells, pivot, { x: 1, z: 0 }, { drop: true, cap: 8, onSettle, onLanded }) : null;
       if (g) return;
@@ -181,7 +190,7 @@
       for (let k = 0; k < 4000 && !S.dropStep(F, 1 / 20, solidAt); k++);
       for (let i = 0; i < cells.length; i += 4) onSettle(cells[i + 3], cells[i], cells[i + 1] - F.off, cells[i + 2], i >> 2);
       if (nc > 3 || (X.thudT = (X.thudT || 0) + 1) % 6 === 1) st.AU?.play('kb_thud', { x: pivot.x - st.ox, y: pivot.y - F.off + 1, z: pivot.z - st.oz, vol: nc > 3 ? .9 : .5, rate: .85 });
-      if (nc > 3) onLanded();   // упало 1–3 блока — проверять, держатся ли они, не нужно (лежат на том, на что упали)
+      if (nc > 3) onLanded(); else ev.flush();   // упало 1–3 блока — проверять, держатся ли они, не нужно (лежат на том, на что упали)
     }
     // легли — держатся ли? (падение только добавляет блоки — чужое держание не уменьшается; не держатся только сами упавшие)
     X.recheck = xyz => { recheck(xyz, 1); X.step(); };
@@ -210,30 +219,36 @@
     }
     const solidAt = (x, y, z) => { const v = W.raw(x, y, z); if (v < 0) return true; if (!(v > 0)) return false; const t = v & 0xfff; return V.T.solid[t] === 1 && V.T.shape[t] !== V.SHAPE.cross; };
     // лёг: блоком (природный камень — булыжником, дёрн — землёй), занято — вещью
-    function settle(v, x, y, z, natural){
-      const b = V.blocks[v & 0xfff]; if (!b) return;
+    function settle(v, x, y, z, natural, tile, ev){
+      const b = V.blocks[v & 0xfff]; if (!b) { spill(tile, x, y, z, ev); return; }
       let place = v;
       if (natural) { const r = b.name === 'stone' ? 'cobble' : b.name === 'grass' || b.name === 'snow_grass' ? 'dirt' : null; if (r && V.ID[r] !== undefined) place = V.cell(V.ID[r], 0); }
       const cur = W.raw(x, y, z);
       const free = cur >= 0 && y >= 1 && y < V.H - 1 && (cur === 0 || (V.blocks[cur & 0xfff]?.replace && !V.T.solid[cur & 0xfff]) || V.T.liquid[cur & 0xfff] || V.T.shape[cur & 0xfff] === V.SHAPE.cross || V.T.shape[cur & 0xfff] === V.SHAPE.torch);
       const body = free && (overlapP(x, y, z) || st.ents?.blocked?.(x, y, z) || (st.ents?.others || []).some(o => !o.dead && o.x + .3 > x && o.x - .3 < x + 1 && o.z + .3 > z && o.z - .3 < z + 1 && o.y + 1.8 > y && o.y < y + 1));
       if (free && !body && !b.glass) {
-        if (cur > 0 && !V.T.liquid[cur & 0xfff]) dropBlockItem(cur, x, y, z);   // факел, цветок под упавшим — вещью
+        if (cur > 0 && !V.T.liquid[cur & 0xfff]) dropBlockItem(cur, x, y, z, ev);   // факел, цветок под упавшим — вещью
         W.set(x, y, z, place, { urgent: 2 });
+        if (tile) {   // сундук / печь — содержимое на новом месте (чужое, что там осталось без блока, — вещами)
+          spill(W.dropTile ? W.dropTile(x, y, z) : null, x, y, z, ev);
+          W.tile?.(x, y, z, () => tile);
+          if ('fuel' in tile || 'in' in tile) st.ents?.furnaces?.add(x + ',' + y + ',' + z);
+        }
         return true;
       }
-      if (!st.creative) dropBlockItem(b.glass ? 0 : place, x, y, z);
+      if (!st.creative) dropBlockItem(b.glass ? 0 : place, x, y, z, ev);
+      spill(tile, x, y, z, ev);   // лечь некуда — содержимое вещами (и в «Творчестве»: это вещи игрока)
       return false;
     }
     const overlapP = (x, y, z) => { const p = st.P; if (!p || p.dead) return false; const hw = (p.w || .6) / 2; return p.x + hw > x && p.x - hw < x + 1 && p.z + hw > z && p.z - hw < z + 1 && p.y + (p.h || 1.8) > y && p.y < y + 1; };
-    function dropBlockItem(v, x, y, z){
+    function dropBlockItem(v, x, y, z, ev){
       if (!(v > 0) || st.creative) return;
       const b = V.blocks[v & 0xfff]; if (!b) return;
       const name = b.name === 'door_oak' ? 'door' : b.name === 'furnace_lit' ? 'furnace' : b.drop || b.name;
-      if (name && V.item(name)) st.ents?.addItem?.(x + .5, y + .4, z + .5, { id: name, n: 1 });
+      if (name && V.item(name)) { if (ev) ev.add(x + .5, y + .4, z + .5, { id: name, n: 1 }); else st.ents?.addItem?.(x + .5, y + .4, z + .5, { id: name, n: 1 }, false, null, false, true); }
     }
     // факел, лестница, растение, дверь, прицепленные к клетке (x, y, z), — отпадают вещами
-    function popAttached(x, y, z){
+    function popAttached(x, y, z, ev){
       for (let k = 0; k < 6; k++) {
         const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0), ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0), nz = z + (k === 4 ? 1 : k === 5 ? -1 : 0);
         const v = W.raw(nx, ny, nz); if (!(v > 0)) continue;
@@ -247,7 +262,7 @@
         if (ax !== x || ay !== y || az !== z) continue;
         if (sh === V.SHAPE.door) { const u = W.raw(nx, ny + 1, nz); if (u > 0 && (u & 0xfff) === t) W.set(nx, ny + 1, nz, 0, { urgent: 2 }); }
         W.set(nx, ny, nz, 0, { urgent: 2 });
-        dropBlockItem(v, nx, ny, nz);
+        dropBlockItem(v, nx, ny, nz, ev);
       }
     }
     return X;

@@ -68,6 +68,32 @@ const sec = t => console.log('— ' + t);
     console.log(`  пересчёт при ломании: ${a.ms.toFixed(2)} мс (вместе с самим ломанием), групп ${a.stats.groups}, плиток ${a.stats.cells}`);
   }
 
+  // T-124 SH0.2: сундук на рухнувшей балке — не висит в воздухе: содержимое высыпается вещами «keep» (не пропадают через 5 мин и
+  // не вытесняются, когда вещей больше 400)
+  sec('сундук на рухнувшей постройке: содержимое — вещами «keep», ничего не пропадает');
+  {
+    const G = await world('real');
+    await site(G, X0, Y0);
+    fill(X0 - 6, Y0 - 16, X0 + 14, Y0, 0); fill(X0 - 6, Y0 + 1, X0 + 14, Y0 + 1, STONE);
+    for (let y = Y0 - 6; y <= Y0; y++) placeAt(G, X0, y, PLANKS);
+    for (let x = X0 + 1; x <= X0 + 4; x++) placeAt(G, x, Y0 - 6, PLANKS);
+    const CH = ID('chest'), ax = X0 + 2, ay = Y0 - 8;
+    for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) T.setCell(ax + dx, ay + dy, CH, (dx + dy * 2) << 4, null, 0);
+    const box = Array(20).fill(null); box[0] = { id: 'torch', n: 30 }; box[3] = { id: 'bar_iron', n: 7 }; box[19] = { id: 'wood', n: 50 };
+    G.chests.set(ax + ',' + ay, box);
+    T.tp(X0 + 10, Y0 - 2);
+    T.breakTile(X0, Y0 - 1);
+    await sim.frames(3);
+    const keep = G.items.filter(i => i.keep), sum = id => keep.filter(i => i.id === id).reduce((a, i) => a + i.n, 0);
+    const r = { chestGone: !G.chests.has(ax + ',' + ay) && T.fgAt(ax, ay) !== CH, torch: sum('torch'), iron: sum('bar_iron'), wood: sum('wood'), keep: keep.length };
+    ok(r.chestGone && r.torch === 30 && r.iron === 7 && r.wood >= 50, 'балка под сундуком рухнула — сундук не висит, всё содержимое вещами «keep»', r);
+    for (let i = 0; i < 450; i++) G.items.push({ id: 'dirt', n: 1, x: X0 - 4 + (i % 9), y: Y0 - 2, w: .6, h: .6, vx: 0, vy: 0, ground: true, stepUp: 0, t: 0, pick: 9, keep: false });
+    for (const it of G.items) it.t = 400;
+    await sim.frames(.1);
+    const left = G.items.filter(i => i.keep).length;
+    ok(left === r.keep && G.items.every(i => i.keep), 'прошло 5 минут — обычные вещи пропали, «keep» лежат', { left, was: r.keep, all: G.items.length });
+  }
+
   sec('поставить то, что не удержится, — нельзя; цвет рамки');
   {
     const G = await world('real');

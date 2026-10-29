@@ -106,7 +106,7 @@
       X.stats.burnt++;
       if (!st.creative) {
         const tile = W.dropTile ? W.dropTile(x, y, z) : null;
-        if (tile) for (const q of [...(tile.items || []), tile.in, tile.fuel, tile.out]) if (q && q.n > 0) st.ents?.addItem(x + .5, y + .5, z + .5, q);
+        if (tile) for (const q of [...(tile.items || []), tile.in, tile.fuel, tile.out]) if (q && q.n > 0) st.ents?.addItem(x + .5, y + .5, z + .5, q, false, null, false, true);   // содержимое сундука в пожаре — «keep» (T-124: не пропадает)
         const cc = coalChance(m);
         if (cc && (FI.hash(x, y, z, 0xc0a1, X.F.T) & 1023) < cc * 1024) { st.ents?.addItem(x + .5, y + .4, z + .5, { id: 'coal', n: 1 }); X.stats.coal++; }
       }

@@ -996,6 +996,8 @@ function fakeWorld(sky, blk, walls = new Set()){
       get(x, y, z){ const v = this.raw(x, y, z); return v < 0 ? -1 : v & 0xfff; },
       chunk(cx, cz){ const k = cx + '|' + cz; let c = chunks.get(k); if (!c) chunks.set(k, c = { cx, cz, edits: null, gen: true }); return c; },
       set(x, y, z, v, o = {}){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); cells.set(key(x, y, z), v); this.rev++; if (!o.nat) { const c = this.chunk(x >> 4, z >> 4); (c.edits || (c.edits = new Map())).set(((x & 15) << 11) | ((z & 15) << 7) | y, v); } return true; },
+      tiles: new Map(), tile(x, y, z, make){ const k = key(Math.floor(x), Math.floor(y), Math.floor(z)); let t = this.tiles.get(k); if (!t && make) { t = make(); this.tiles.set(k, t); } return t || null; },
+      dropTile(x, y, z){ const k = key(Math.floor(x), Math.floor(y), Math.floor(z)), t = this.tiles.get(k); this.tiles.delete(k); return t || null; },
       lightAt(){ return 15 << 12; }, loaded: () => true, heightAt: () => floor, chunkAt(x, z){ return this.chunk(Math.floor(x) >> 4, Math.floor(z) >> 4); } }; return W; };
     const mkS = (W, support, diff = 'easy') => { const S12 = { R: Object.assign({}, R, { lighting: { time: 12 }, night: 0 }), VR, W, P: { x: 30.5, y: 10, z: 30.5, vx: 0, vy: 0, vz: 0, dead: false }, ox: 0, oz: 0, meta: { diff, support }, ST: { rd: 6 }, creative: false };
       const X = window.KubomirEnts.create(S12); S12.ents = X; X.spawnT = 1e9; S12.sup = KS.attach(S12); return { X, S12 }; };
@@ -1047,6 +1049,35 @@ function fakeWorld(sky, blk, walls = new Set()){
     { const W = mkSW(); build(W); W.set(52, 15, 50, V.cell(ID.torch, 0)); const { X, S12 } = mkS(W, 'soft');
       const code = S12.sup.code(50, 11, 50); W.set(50, 11, 50, 0); S12.sup.removed(50, 11, 50, code);
       ok(W.get(52, 15, 50) === 0 && X.items.some(e => e.s.id === 'torch'), 'факел на падающей балке — отпал вещью'); X.dispose(); }
+    // T-124 SH0.2: сундук в падающем куске — содержимое едет с ним и лежит в нём на новом месте; лечь некуда — вещами «keep»
+    const chestFall = (blockLanding) => {
+      const W = mkSW(); build(W); W.set(53, 15, 50, V.cell(ID.chest, 0));
+      const items = new Array(27).fill(null); items[0] = { id: 'diamond', n: 5 }; items[4] = { id: 'cobble', n: 64 }; items[26] = { id: 'sword_iron', n: 1, d: 7 };
+      W.tile(53, 15, 50, () => ({ items }));
+      const { X, S12 } = mkS(W, 'soft');
+      if (blockLanding) Object.assign(S12.P, { x: 53.5, y: 14, z: 50.5 });   // игрок стоит там, куда ляжет сундук
+      const code = S12.sup.code(50, 11, 50); W.set(50, 11, 50, 0); S12.sup.removed(50, 11, 50, code);
+      for (let i = 0; i < 400 && X.groups.length; i++) X.tick(1 / 20);
+      const t = W.tile(53, 14, 50), old = W.tile(53, 15, 50), keep = X.items.filter(e => e.keep), sum = id => keep.filter(e => e.s.id === id).reduce((a, e) => a + e.s.n, 0);
+      const r = { at: W.get(53, 14, 50) === ID.chest, same: t === null ? null : t.items === items && t.items[0].n === 5 && t.items[4].n === 64 && t.items[26].d === 7, old: !!old, keep: keep.length, dia: sum('diamond'), cob: sum('cobble'), sw: sum('sword_iron'), tiles: S12.sup.stats.tiles | 0 };
+      X.dispose(); return r;
+    };
+    { const a = chestFall(false), b = chestFall(true);
+      ok(a.at && a.same === true && !a.old && a.tiles === 1, 'сундук в падающем куске: лёг на новое место вместе с содержимым (те же 27 ячеек), на старом месте пусто', a);
+      ok(!b.at && b.dia === 5 && b.cob === 64 && b.sw === 1 && !b.old, 'сундуку лечь некуда (там игрок) — содержимое высыпалось вещами «keep», ничего не пропало', b); }
+    // вещи события: стопками, не больше 32 штук; 300 обычных вещей после — ни одной «keep» не вытеснили; «keep» не пропадают через 5 мин
+    { const W = mkSW(); const { X } = mkS(W, 'soft');
+      for (let i = 0; i < 40; i++) X.addItem(20 + i, 12, 20, { id: 'torch', n: 1 }, false, null, false, true);
+      const ev = X.itemBatch(true), kinds = ['cobble', 'planks_oak', 'dirt', 'stick', 'torch', 'glass', 'sand', 'gravel', 'log_oak', 'coal', 'apple', 'string'].filter(k => V.item(k));
+      for (let i = 0; i < 300; i++) ev.add(30 + (i % 7), 12, 30 + (i % 5), { id: kinds[i % kinds.length], n: 1 });
+      const made = ev.flush(), keepN = () => X.items.filter(e => e.keep).length, total = X.items.filter(e => e.keep).reduce((a, e) => a + e.s.n, 0) - 40;
+      for (let i = 0; i < 300; i++) X.addItem(60 + (i % 20), 12, 60 + (i / 20 | 0), { id: 'dirt', n: 1 });
+      const keepAfter = keepN(), all = X.items.length;
+      for (const e of X.items) e.age = 400; X.tick(1 / 20);
+      ok(made <= 32 && made >= kinds.length && total === 300, 'событие на 300 вещей — ' + made + ' стопок (не больше 32), все 300 штук на месте', { made, total, kinds: kinds.length });
+      ok(keepAfter === 40 + made && all <= 300 + 40 + made, '300 обычных вещей после — ни одной «keep» не вытеснили (вытесняются старые обычные)', { keepAfter, all });
+      ok(X.items.length === keepAfter && X.items.every(e => e.keep), '5 минут прошло — обычные пропали, «keep» лежат', { left: X.items.length, keepAfter });
+      X.dispose(); }
     // своды пещер: «реализм» — широкий зал обваливается (лёг булыжником), «мягкое» — нет
     const cave = (support) => {
       const W = mkSW(40);
