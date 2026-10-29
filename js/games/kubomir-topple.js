@@ -387,6 +387,7 @@
       const c = b.cells, n = c.length / 4, ev = batch(true), xyz = [];
       own++;
       try { for (let i = 0; i < n; i++) put(c[i * 4], c[i * 4 + 1], c[i * 4 + 2], c[i * 4 + 3], b, i, ev, xyz); } finally { own--; }
+      if (b.kind === 'tree') for (let k = 0; k < xyz.length; k += 3) { const x = xyz[k], y = xyz[k + 1], z = xyz[k + 2], ch = W.chunkAt ? W.chunkAt(x, z) : null; ch?.edits?.delete(((x & 15) << 11) | ((z & 15) << 7) | y); }   // дерево на месте — снова живое (генератор даст то же)
       ev.flush();
       end(s, b, xyz, false);
     }
@@ -394,7 +395,7 @@
     function dropDist(s, b){
       const c = b.cells, n = c.length / 4, low = new Map();
       for (let i = 0; i < n; i++) {
-        if (b.kind === 'tree' && st.ents.treeKind(c[i * 4 + 3]) === 3) continue;   // листва не держит упавший ствол
+        if (b.kind === 'tree' && st.ents.treeKind(c[i * 4 + 3]) >= 2) continue;   // листва и тонкие ветки (станут вещами) не держат упавший ствол
         Wd.land(s, c[i * 4] - b.ox, c[i * 4 + 1] - b.oy, c[i * 4 + 2] - b.oz, LC);
         const k = (LC[0] + 4096) * 8192 + (LC[2] + 4096), y = LC[1]; if (!low.has(k) || low.get(k) > y) low.set(k, y);
       }

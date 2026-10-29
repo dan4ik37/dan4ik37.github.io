@@ -238,6 +238,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       return;
     }
     if (MODE === 'topple') {
+      if (process.env.KB_SCENE_ONLY) await ev(`(() => { const K = window.KubomirTopple; K.CUT = K.LEAN = K.FELL = false; return 1; })()`);   // база: та же сцена без T-138 (память самой сцены)
       // T-138: крен и падение целым, рубка дерева — «Кубомир», мир «реализм»: подрубленная башня 3×3×14 и дуб-великан 2×2 (живые брёвна)
       // падают одновременно — кадр (ЦП, среднее, 95 %, худший), кадров в секунду, худший такт T-138 и обрушения; KB_PHONE=1 — ЦП ×4
       await idle();
@@ -265,11 +266,12 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         // башня: снят столбик +x внизу, у следующего — подруб наполовину (удары API копания)
         for (let z = cz; z < cz + 3; z++) { const c = S.sup.code(cx + 2, gy, z); W.set(cx + 2, gy, z, 0, { urgent: 1 }); S.sup.removed(cx + 2, gy, z, c); }
         const M = S.mine, hitAt = (x, y, z, nx) => ({ x, y, z, v: W.raw(x, y, z), nx, ny: 0, nz: 0 });
-        for (let z = cz; z < cz + 3; z++) for (let k = 0; k < 2; k++) { M.need = 1; M.t = .26; const h = hitAt(cx + 1, gy, z, 1); if (h.v > 0) T.mine(h, V.blocks[h.v & 0xfff], M); }
+        const frame = () => new Promise(r => requestAnimationFrame(r));   // удары — по кадру (как у игрока: удар — четверть блока, не пачкой в одном кадре)
+        for (let z = cz; z < cz + 3; z++) for (let k = 0; k < 2; k++) { M.need = 1; M.t = .26; const h = hitAt(cx + 1, gy, z, 1); if (h.v > 0) T.mine(h, V.blocks[h.v & 0xfff], M); await frame(); }
         // великан 2×2: подруб с +x (6/8 ствола), запил с −x до недопила
         let r = 0, sw = 0;
-        const chop = (nx, n) => { for (let k = 0; k < n && r !== 2; k++) { let h = null; for (let i = 0; i < 2 && !h; i++) for (let j = 0; j < 2 && !h; j++) { const v = W.raw(tx + i, gy + 1, tz + j); if (v > 0 && (v & 0xfff) === ID.log_oak) h = hitAt(tx + i, gy + 1, tz + j, nx); } if (!h) return; M.need = 1; M.t = .25 + 1e-6; r = T.mine(h, V.blocks[ID.log_oak], M); sw++; } };
-        chop(1, 6); await wait(300); chop(-1, 16);
+        const chop = async (nx, n) => { for (let k = 0; k < n && r !== 2; k++) { await frame(); let h = null; for (let i = 0; i < 2 && !h; i++) for (let j = 0; j < 2 && !h; j++) { const v = W.raw(tx + i, gy + 1, tz + j); if (v > 0 && (v & 0xfff) === ID.log_oak) h = hitAt(tx + i, gy + 1, tz + j, nx); } if (!h) return; M.need = 1; M.t = .25 + 1e-6; r = T.mine(h, V.blocks[ID.log_oak], M); sw++; } };
+        await chop(1, 6); await wait(300); await chop(-1, 16);
         M.key = ''; M.t = 0;
         const tFell = performance.now();
         for (let i = 0; i < 400 && (T.bodies().length || T.busy()); i++) await wait(100);
@@ -296,10 +298,13 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       // 20 кругов «построил — подрубил — упало — убрал»: память JS не растёт
       const h0 = await heap();
       const rounds = [];
-      for (let k = 0; k < +(process.env.KB_N || 20); k++) { await ev(scene, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 }); const r = await ev(run, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 }); rounds.push([r.went && r.far >= 15 ? 1 : 0, r.cpuFall, r.p95, r.max, r.fps, r.worstTickMs, r.ms]); }
+      for (let k = 0; k < +(process.env.KB_N || 20); k++) { await ev(scene, 120000); if (process.env.KB_SCENE_ONLY) { rounds.push([1, 0, 0, 0, 0, 0, {}]); continue; } if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 }); const r = await ev(run, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 }); rounds.push([r.went && r.far >= 15 ? 1 : 0, r.cpuFall, r.p95, r.max, r.fps, r.worstTickMs, r.ms]); }
       const h1 = await heap(); res.tpHeap = { h0, h1 }; console.log('T-138 память, МБ', JSON.stringify(res.tpHeap));
       if (rounds.length) { const col = i => rounds.map(r => r[i]).sort((a, b) => a - b), med = a => a[a.length >> 1]; res.tpRounds = { n: rounds.length, ok: rounds.filter(r => r[0]).length, cpuMed: med(col(1)), p95Med: med(col(2)), maxMed: med(col(3)), maxMax: col(3)[rounds.length - 1], fpsMed: med(col(4)), tickMed: med(col(5)), tickMax: col(5)[rounds.length - 1], evMed: Object.fromEntries(Object.keys(rounds[0][6] || {}).map(k => [k, med(rounds.map(r => r[6][k]).sort((a, b) => a - b))])) }; console.log('T-138 круги' + (PHONE ? ' (ЦП ×4)' : ''), JSON.stringify(res.tpRounds)); ok(res.tpRounds.ok === rounds.length, 'каждый круг: башня и великан упали', res.tpRounds); }
-      ok(h1 - h0 < 8, (process.env.KB_N || 20) + ' кругов «башня и великан упали — убрали»: память JS не растёт (< 8 МБ)', res.tpHeap);
+      // сама сцена (каждый круг заново 41×29×31 клеток: снести, построить) растёт ~1,7 МБ / круг и без T-138 (KB_SCENE_ONLY=1 — та же сцена с
+      // выключенными флагами); утечку T-138 ловят 20× reopen с падением (KB_TOPPLE=1) и node-проба (40 падений в одном мире — +0,24 МБ)
+      const per = (h1 - h0) / Math.max(1, +(process.env.KB_N || 20));
+      ok(per < 3, (process.env.KB_N || 20) + ' кругов «башня и великан упали — убрали»: ' + per.toFixed(2) + ' МБ / круг (сцена без T-138 — ~1,7)', res.tpHeap);
       const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`), errs = logs.filter(l => !/X3595|DevTools|favicon/i.test(l));
       ok(!pr.bad.length, 'все программы шейдеров собрались', pr.bad);
       ok(!errs.length, 'в консоли — без ошибок и исключений', errs.slice(0, 6));
