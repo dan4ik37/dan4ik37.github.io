@@ -168,7 +168,7 @@
     const sn = new Int32Array(NS * SMP), sy = new Int32Array(NS * SMP), st = new Int32Array(NS * SMP);   // samples: along dir, up, across (eighths)
     const hx = new Int32Array(NS), hy = new Int32Array(NS), hz = new Int32Array(NS);
     const ev = new Int32Array(NS * 4 * 5 + 5);
-    const Wd = { NS, SMP, READS, ph, dir, th, ticks, ev, nev: 0, used: 0, start: 0, tickN: 0, stats: { reads: 0, maxReads: 0, deferred: 0, repivots: 0, hangs: 0, lands: 0, added: 0, busy: 0 } };
+    const Wd = { NS, SMP, READS, ph, dir, th, om, ticks, ev, nev: 0, used: 0, start: 0, tickN: 0, stats: { reads: 0, maxReads: 0, deferred: 0, repivots: 0, hangs: 0, lands: 0, added: 0, busy: 0 } };
     // scratch for sample selection (no garbage per add)
     const HS = 1 << 13, hk = new Int32Array(HS), hv = new Uint8Array(HS);
     const ckey = (x, y, z) => ((x + 512) & 1023) * 1048576 + ((y + 512) & 1023) * 1024 + ((z + 512) & 1023);

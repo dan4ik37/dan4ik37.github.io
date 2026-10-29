@@ -187,6 +187,8 @@
         const dx = T.x - e.x, dy = T.y + .9 - e.y, dz = T.z - e.z, dd = Math.hypot(dx, dy, dz);
         const pull = !T.dead && e.age > e.delay && dd < 2.6 && dd > .05 && (T === P ? !X.room || X.room(e.s) : !T.room || T.room(e.s));
         if (pull) { const k = (8 + 22 * (1 - dd / 2.6)) * dt / dd; e.vx += dx * k; e.vy += dy * k * .8; e.vz += dz * k; }
+        // T-138 F4 (kubomir-debris.js): лежит на склоне — катится вниз (правило ядра D37E.debris.slope), со скалы — падает
+        if (X.hookRoll && e.ground && !pull && !e.float) X.hookRoll(e, dt); else if (e.roll) e.roll = false;
         BOX.x = e.x; BOX.y = e.y; BOX.z = e.z;
         const vy0 = e.vy;
         Vx.moveBox(W, BOX, e.vx * dt, e.vy * dt, e.vz * dt);
@@ -194,8 +196,8 @@
         if (BOX.hitY) { if (vy0 < -3 && !pull) { e.vy = -vy0 * .3; e.ground = false; } else { e.vy = 0; e.ground = vy0 <= 0; } }
         else e.ground = false;
         if (BOX.hitX) e.vx *= -.3; if (BOX.hitZ) e.vz *= -.3;
-        const fr = e.ground && !pull ? Math.exp(-dt * 5) : Math.exp(-dt * .4); e.vx *= fr; e.vz *= fr;
-        if (e.ground && Math.abs(e.vx) + Math.abs(e.vz) < .03) e.vx = e.vz = 0;
+        const fr = e.ground && !pull ? Math.exp(-dt * (e.roll ? .8 : 5)) : Math.exp(-dt * .4); e.vx *= fr; e.vz *= fr;
+        if (e.ground && !e.roll && Math.abs(e.vx) + Math.abs(e.vz) < .03) e.vx = e.vz = 0;
         // застрял в блоке — наверх
         if (Vx.boxHits(W, BOX.x, BOX.y + .01, BOX.z, .2, .2)) BOX.y += 2 * dt * 5;
         e.x = BOX.x; e.y = BOX.y; e.z = BOX.z;

@@ -82,7 +82,7 @@
       vx[i] = clampV(vX | 0); vy[i] = clampV(vY | 0); vz[i] = clampV(vZ | 0);
       const s = Math.max(1, Math.min(8, size | 0)); hq[i] = s * 4096;
       kg[i] = Math.max(1, m | 0); rl[i] = Math.max(0, Math.min(1000, roll | 0));
-      el[i] = rl[i] >= 500 ? 250 : 120; mu[i] = rl[i] >= 500 ? 120 : 450;
+      el[i] = rl[i] >= 1000 ? 250 : rl[i] >= 500 ? 200 : 120; mu[i] = rl[i] >= 1000 ? 120 : rl[i] >= 500 ? 300 : 450;   // бревно катится далеко, камень — шершавый, кубик скользит
       st[i] = 1; still[i] = 0; gr[i] = 0; age[i] = 0; tag[i] = t | 0; ax[i] = 0; az[i] = 0;
       live++; D.stats.added++;
       return i;

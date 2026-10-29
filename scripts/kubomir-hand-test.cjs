@@ -1539,7 +1539,7 @@ function fakeWorld(sky, blk, walls = new Set()){
     // ── F3: живое дерево — подруб с +x и запил с −x: падает к подрубу целым, брёвна лежат (дорубить), листва — вещами ──
     const plantTree = (W, x, z, h = 7, D = 1) => { for (let y = 10; y < 10 + h; y++) for (let i = 0; i < D; i++) for (let j = 0; j < D; j++) W.set(x + i, y, z + j, LOG, { nat: true });
       const top = 10 + h - 1; for (let y = top - 2; y <= top + 1; y++) for (let dx = -2; dx <= 1 + D; dx++) for (let dz = -2; dz <= 1 + D; dz++) if (W.raw(x + dx, y, z + dz) === 0) W.set(x + dx, y, z + dz, LEAF, { nat: true }); };
-    { const W = mkW(); plantTree(W, 50, 50); const { X, S14 } = mkS(W, null, { x: 53.5, y: 10, z: 50.5 }), T = S14.topple;
+    { const W = mkW(); plantTree(W, 50, 50); const { X, S14 } = mkS(W, null, { x: 53.5, y: 10, z: 52.5 }), T = S14.topple;   // игрок сбоку от линии падения (ствол ложится на землю — не в игрока)
       S14._D = 1;
       const b = V.blocks[ID.log_oak], hit = { x: 50, y: 11, z: 50, v: LOG, nx: 1, ny: 0, nz: 0 };
       ok(T.mines(hit, b) === 2, 'живое бревно ствола — рубка (не ломается с одного удара)');
@@ -1587,6 +1587,121 @@ function fakeWorld(sky, blk, walls = new Set()){
       S14.mine = { t: 0, need: 1 }; const m = T.mines({ x: 50, y: 11, z: 50, v: LOG, nx: -1, ny: 0, nz: 0 }, V.blocks[ID.log_oak]); KT.FELL = true;
       ok(m !== 2, 'KT.FELL = false — живое дерево рубится как раньше (одно бревно — fellTree)', m); X.dispose(); }
     console.log('  цифры T-138:', JSON.stringify(NUM14));
+
+    // ═══ 15. T-138 шаг 2: обломки (F4, kubomir-debris.js + D37E.debris) и игра вместе (F5: решает хозяин, гость повторяет события) ═══
+    sec('T-138 шаг 2: обломки летят по весу, катятся со склона и скалы, ложатся блоком; вещи катятся; игра вместе — гость видит то же, что хозяин');
+    run('js/engine/debris.js'); run('js/games/kubomir-debris.js');
+    const KD = window.KubomirDebris, NUM15 = {};
+    const mkS2 = (W, support, P, o = {}) => { const r = mkS(W, support, P); if (o.net) r.S14.net = o.net; if (o.guest) { r.S14.coopGuest = true; r.X.client = true; } r.S14.debris = o.noDebris ? null : KD.attach(r.S14); return r; };
+    const tick2 = (S, frames, phase) => { S.ents.tick(1 / 20); S.sup?.step(); if (phase) phase(S, 1); S.topple?.tick(); if (phase) phase(S, 2); S.debris?.tick(S.topple ? S.topple.left() : 0); if (phase) phase(S, 3);
+      if (frames) for (let k = 0; k < frames; k++) { S.ents.frac = (k + 1) / (frames + 1); S.ents.frame(1 / 144, 0); S.debris?.frame(1 / 144); } };
+    const cobbles = (W, X) => { let blocks = 0, far = -1e9, low = 1e9; for (const [k, v] of W.cells) if (v === CB) { blocks++; const [x, y] = k.split(',').map(Number); if (x > far) far = x; if (x >= 66 && y < low) low = y; } const items = X.items.reduce((a, e) => a + (e.s.id === 'cobble' ? e.s.n : 0), 0); return { blocks, items, far, low }; };
+    // спуск лестницей к +x от x = 66 (ступень 1 на клетку, до y = 1) — склон за местом, куда ложится башня
+    const slope = W => { for (let x = 66; x < 90; x++) { const top = Math.max(1, 10 - (x - 65)); for (let y = top; y < 10; y++) for (let z = 40; z <= 60; z++) W.set(x, y, z, 0, { nat: true, silent: true }); } };
+    const tower15 = (o = {}) => {
+      const W = mkW(); if (o.slope) slope(W);
+      for (let y = 10; y < 24; y++) for (let x = 49; x <= 51; x++) for (let z = 49; z <= 51; z++) W.set(x, y, z, CB);
+      const sv = { ON: KD.ON, ITEMS: KD.ITEMS }; Object.assign(KD, o.kd || {});
+      const { X, S14 } = mkS2(W, 'real', { x: 40.5, y: 10, z: 40.5 }, o), T = S14.topple;
+      if (o.items) { X.addItem(58.5, 10.1, 46.5, { id: 'sapling_oak', n: 1 }, false, [0, 0, 0]); X.addItem(58.5, 10.1, 54.5, { id: 'cobble', n: 1 }, false, [0, 0, 0]); }
+      for (let z = 49; z <= 51; z++) { const c = S14.sup.code(51, 10, z); W.set(51, 10, z, 0); S14.sup.removed(51, 10, z, c); }
+      for (let k = 0; k < 4; k++) tick2(S14, 0);
+      for (let z = 49; z <= 51; z++) mineHits(S14, 50, 10, z, 1, 0, 2);
+      const it0 = o.items ? X.items.map(e => [e.s.id, e.x, e.z]) : null;
+      let i = 0, maxLive = 0; for (; i < 900; i++) { tick2(S14, o.frames ? o.frames(i) : 0); const L = S14.debris ? S14.debris.live() : 0; if (L > maxLive) maxLive = L; if (i > 30 && !T.bodies().length && !L) break; }
+      const r = Object.assign(cobbles(W, X), { ticks: i, maxLive, stats: Object.assign({}, T.stats), dstats: S14.debris ? Object.assign({}, S14.debris.stats) : null, snap: [...W.cells].filter(e => e[1]).map(e => e.join('=')).sort().join(';'), left: S14.debris ? S14.debris.live() : 0 });
+      if (o.items) { r.move = {}; for (const [id, x0, z0] of it0) { const e = X.items.find(q => q.s.id === id); r.move[id] = e ? +Math.hypot(e.x - x0, e.z - z0).toFixed(2) : -1; } }
+      Object.assign(KD, sv); X.dispose(); S14.debris?.dispose(); return r;
+    };
+    { const A = tower15(), B2 = tower15({ frames: i => 1 + (i * 7) % 5 }), S2 = tower15({ slope: true });
+      ok((A.stats.broke | 0) >= 4 && A.left === 0 && A.dstats.blocks > 0, 'башня 3×3×14 легла с размаху: верх отломился обломками (' + (A.stats.broke | 0) + '), они долетели и легли блоками (' + A.dstats.blocks + ')', { broke: A.stats.broke, slid: A.stats.slid, d: A.dstats });
+      ok(A.blocks + A.items === 123, 'ничего не потерялось: блоков ' + A.blocks + ' + вещей ' + A.items + ' = 123', { blocks: A.blocks, items: A.items });
+      ok(B2.snap === A.snap && B2.ticks === A.ticks, 'кадры (1–5 между тактами) не влияют на обломки: тот же мир, те же такты', [A.ticks, B2.ticks]);
+      ok(S2.blocks + S2.items === 123 && S2.low < 10 && S2.far > A.far, 'за башней спуск: обломки скатились вниз (ниже уровня — y ' + S2.low + ', дальше — x ' + S2.far + ' против ' + A.far + ' на ровном)', { low: S2.low, far: S2.far, flat: A.far });
+      const off = tower15({ kd: { ON: false, ITEMS: false } }), none = tower15({ noDebris: true });
+      ok(off.snap === none.snap && !(off.stats.broke | 0), 'KubomirDebris.ON / ITEMS = false — мир ровно как без обломков (откат одной строкой)', { same: off.snap === none.snap });
+      const It = tower15({ items: true });
+      ok(It.move.sapling_oak > 2 * Math.max(.3, It.move.cobble), 'удар упавшей башни: росток (лёгкий) отлетел на ' + It.move.sapling_oak + ', булыжник (тяжёлый) — на ' + It.move.cobble, It.move);
+      NUM15.tower = { broke: A.stats.broke | 0, slid: A.stats.slid | 0, blocks: A.dstats.blocks, items: A.dstats.items, ticks: A.ticks, maxLive: A.maxLive, far: A.far, slopeFar: S2.far, slopeLow: S2.low, reads: A.dstats.reads, maxTickMs: +A.dstats.maxTickMs.toFixed(2), ceil: A.stats.ceil, push: It.move }; }
+
+    // ── вещи на склоне катятся (правило ядра), на ровном — лежат; KD.ITEMS = false — как было ──
+    const itemsRoll = on => {
+      const W = mkW(); for (let x = 56; x < 80; x++) { const top = Math.max(1, 10 - (x - 55)); for (let y = top; y < 10; y++) for (let z = 45; z <= 55; z++) W.set(x, y, z, 0, { nat: true, silent: true }); }
+      const sv = KD.ITEMS; KD.ITEMS = on;
+      const { X, S14 } = mkS2(W, null, { x: 30.5, y: 10, z: 30.5 });
+      X.addItem(57.5, 8.2, 50.5, { id: 'cobble', n: 1 }, false, [0, 0, 0]); X.addItem(40.5, 10.2, 50.5, { id: 'stick', n: 1 }, false, [0, 0, 0]);
+      for (let i = 0; i < 400; i++) tick2(S14, 0);
+      const a = X.items.find(e => e.s.id === 'cobble'), b = X.items.find(e => e.s.id === 'stick');
+      const r = { x: +a.x.toFixed(2), y: +a.y.toFixed(2), flat: +b.x.toFixed(2), rolled: S14.debris.stats.rolledItems };
+      KD.ITEMS = sv; X.dispose(); S14.debris.dispose(); return r;
+    };
+    { const on = itemsRoll(true), off = itemsRoll(false);
+      ok(on.x > 62 && on.y < 5 && on.flat === 40.5, 'вещь на лестнице-склоне скатилась вниз (x ' + on.x + ', y ' + on.y + '), на ровном — лежит', on);
+      ok(off.x < 58.5, 'KD.ITEMS = false — вещь лежит, где упала (как было)', off);
+      NUM15.items = { on, off }; }
+
+    // ── F5: игра вместе. Хозяин и гость — свои миры; правки хозяина и события ('kt') — гостю с той же задержкой в тактах ──
+    const pair = (build, o = {}) => {
+      const Wh = mkW(), Wg = mkW(); build(Wh); build(Wg);
+      const reqs = [], edits = [];   // edits: [такт хозяина, фаза, x, y, z, v]
+      const H = mkS2(Wh, 'real', { x: 40.5, y: 10, z: 40.5 }, { net: { host: true } }), G = mkS2(Wg, 'real', { x: 40.5, y: 10, z: 40.5 }, { guest: true, net: { reqCut: (...a) => reqs.push(a) } });
+      let hT = 0, ph = 0;
+      Wh.listeners.push((x, y, z, was, v) => edits.push(hT, ph, x, y, z, v));
+      const enc = u => Buffer.from(u).toString('base64'), dec = s => new Uint8Array(Buffer.from(s, 'base64'));
+      const LAG = 2, trace = { h: [], g: [], hd: [], gd: [] };
+      const applyEd = (t, p) => { for (let k = 0; k < edits.length; k += 6) if (edits[k] === t && edits[k + 1] === p) Wg.set(edits[k + 2], edits[k + 3], edits[k + 4], edits[k + 5], { net: 1 }); };
+      // гость шлёт удар — хозяин делает то, что делает kubomir-coop.js 'kc' (стоимость удара, hostHit, насквозь — сломать)
+      const serve = () => { while (reqs.length) { const [x, y, z, nx, ny, nz] = reqs.shift(), v = Wh.raw(x, y, z); if (!(v > 0)) continue; const b = V.blocks[v & 0xfff], need = 1, hit = { x, y, z, v, nx, ny, nz };
+        const per = H.S14.topple.hitCost(hit, b, need), r = per > 0 ? H.S14.topple.hostHit(hit, b, need, { x: G.S14.P.x, z: G.S14.P.z }) : 1; if (r === 1) { ph = 9; Wh.set(x, y, z, 0); } } };
+      const step = () => {
+        hT++;
+        ph = 0; serve(); P0.onH?.();
+        tick2(H.S14, 0, (S, p) => { ph = p; });
+        trace.h.push(H.S14.topple.bodies().length ? H.S14.topple.Wd.th[0] : -1); trace.hd.push(H.S14.debris.state());
+        const ev = H.S14.topple.netTake(v => v, enc); if (ev) G.S14.topple.netIn(JSON.parse(JSON.stringify(ev)), v => v, dec);
+        // гость: такт hT − LAG видит мир хозяина того такта (правки — по фазам, как они шли у хозяина)
+        const gt = hT - LAG; if (gt < 1) return;
+        if (gt === 1) for (const p of [0, 1, 2, 3, 9]) applyEd(0, p);   // правки до первого такта
+        applyEd(gt, 0); applyEd(gt, 9);
+        tick2(G.S14, 0, (S, p) => { if (p === 2) P0.onG?.(); if (p >= 2) applyEd(gt, p - 1); });   // onG — после событий такта, до правок «во время такта» хозяина
+        const gv = G.S14.topple.netView(); trace.g.push(gv.length ? gv[0][1] : -1); trace.gd.push(G.S14.debris.state());
+      };
+      const P0 = { H, G, Wh, Wg, reqs, step, trace, edits }; return P0;
+    };
+    { const P = pair(W => { for (let y = 10; y < 18; y++) for (let x = 49; x <= 51; x++) for (let z = 49; z <= 51; z++) W.set(x, y, z, CB); });
+      const Hs = P.H.S14;
+      for (let z = 49; z <= 51; z++) { const c = Hs.sup.code(51, 10, z); P.Wh.set(51, 10, z, 0); Hs.sup.removed(51, 10, z, c); }
+      for (let k = 0; k < 4; k++) P.step();
+      // гость рубит подрубку (+x) на клетках 50 — удары уходят хозяину; срезы у гостя — от хозяина
+      for (let z = 49; z <= 51; z++) { const v = P.Wg.raw(50, 10, z); P.G.S14.mine = { t: .5 + 1e-9, need: 1 }; P.G.S14.topple.mine({ x: 50, y: 10, z, v, nx: 1, ny: 0, nz: 0 }, V.blocks[v & 0xfff], P.G.S14.mine); }
+      const sent = P.reqs.length; let cutH = 0, cutG = 0;
+      P.onH = () => { cutH = cutH || P.H.S14.topple.cutAt(50, 10, 50); }; P.onG = () => { cutG = cutG || P.G.S14.topple.cutAt(50, 10, 50); };
+      let guestBodies = 0; for (let i = 0; i < 900; i++) { P.step(); guestBodies = Math.max(guestBodies, P.G.S14.topple.bodies().length); if (i > 40 && !Hs.topple.bodies().length && !Hs.debris.live() && !P.G.S14.debris.live() && !P.G.S14.topple.netView().length && !P.G.S14.topple.netQueue()) break; }
+      for (let k = 0; k < 4; k++) P.step();   // гость отстаёт на 2 такта — догнать
+      const th = P.trace.h.filter(t => t >= 0), tg = P.trace.g.filter(t => t >= 0);
+      const hd = P.trace.hd.filter(s => s), gd = P.trace.gd.filter(s => s);
+      const snapH = [...P.Wh.cells].filter(e => e[1]).map(e => e.join('=')).sort().join(';'), snapG = [...P.Wg.cells].filter(e => e[1]).map(e => e.join('=')).sort().join(';');
+      ok(sent === 6 && cutH && cutH === cutG, 'гость рубит: 6 ударов ушли хозяину (сам не режет), срез у гостя — тот же, что у хозяина', { sent, cutH, cutG });
+      ok(guestBodies === 0 && P.G.S14.topple.stats.checks === 0, 'гость сам ничего не решает: своих тел и проверок этажей нет', P.G.S14.topple.stats);
+      ok(th.length > 20 && th.join() === tg.join(), 'крен и падение у гостя — те же углы по тактам, что у хозяина (' + th.length + ' тактов)', { h: th.length, g: tg.length, diff: th.findIndex((t, k) => t !== tg[k]) });
+      ok(hd.length > 5 && hd.join('|') === gd.join('|'), 'обломки у гостя — тот же путь по тактам (' + hd.length + ' тактов с обломками)', { h: hd.length, g: gd.length, at: hd.findIndex((s, k) => s !== gd[k]), hs: hd.find((s, k) => s !== gd[k]), gs: gd[hd.findIndex((s, k) => s !== gd[k])] });
+      ok(snapH === snapG && !P.G.S14.debris.live(), 'в конце миры хозяина и гостя совпали клетка в клетку, у гостя не осталось ни тел, ни обломков', { same: snapH === snapG, onlyH: snapH.split(';').filter(c => !snapG.includes(c)).slice(0, 6), onlyG: snapG.split(';').filter(c => !snapH.includes(c)).slice(0, 6) });
+      NUM15.coop = { hits: sent, ticks: th.length, debrisTicks: hd.length, netBodies: P.G.S14.topple.stats.netBodies, netCuts: P.G.S14.topple.stats.netCuts, netIn: P.G.S14.debris.stats.netIn, events: P.edits.length / 6 };
+      P.H.X.dispose(); P.G.X.dispose(); Hs.debris.dispose(); P.G.S14.debris.dispose(); }
+    // гость рубит живое дерево — хозяин валит, у гостя дерево падает и брёвна лежат так же
+    { const P = pair(W => plantTree(W, 50, 50, 7)); P.G.S14.P.x = 53.5; P.G.S14.P.z = 50.5; P.H.S14._D = 1;
+      const chopG = (nx, n) => { for (let k = 0; k < n; k++) { const v = P.Wg.raw(50, 11, 50); if (!(v > 0)) return; P.G.S14.mine = { t: 1 / 8 + 1e-9, need: 1 }; P.G.S14.topple.mine({ x: 50, y: 11, z: 50, v, nx, ny: 0, nz: 0 }, V.blocks[v & 0xfff], P.G.S14.mine); P.step(); } };
+      chopG(1, 3); chopG(-1, 4);
+      let seen = 0; for (let i = 0; i < 400; i++) { P.step(); seen = Math.max(seen, P.G.S14.topple.netView().length); if (i > 20 && !P.H.S14.topple.bodies().length && !P.G.S14.topple.netView().length && !P.G.S14.topple.netQueue()) break; }
+      for (let k = 0; k < 4; k++) P.step();
+      let lyingH = 0, lyingG = 0; for (let x = 51; x <= 60; x++) for (let y = 10; y <= 12; y++) { if ((P.Wh.raw(x, y, 50) & 0xfff) === ID.log_oak) lyingH++; if ((P.Wg.raw(x, y, 50) & 0xfff) === ID.log_oak) lyingG++; }
+      ok(P.H.S14.topple.stats.fells === 1 && seen === 1 && lyingH >= 5 && lyingG === lyingH, 'гость рубит живое дерево (подруб + запил) — валит хозяин; у гостя виден крен и падение, брёвна лежат так же (' + lyingG + ')', { fells: P.H.S14.topple.stats.fells, seen, lyingH, lyingG });
+      P.H.X.dispose(); P.G.X.dispose(); P.H.S14.debris.dispose(); P.G.S14.debris.dispose(); }
+    { KT.NET = false; const P = pair(W => W.set(50, 12, 50, STN)); const v = P.Wg.raw(50, 12, 50);
+      P.G.S14.mine = { t: 0, need: 1 }; const m = P.G.S14.topple.mines({ x: 50, y: 12, z: 50, v, nx: 1, ny: 0, nz: 0 }, V.blocks[ID.stone]); KT.NET = true;
+      ok(m === 0, 'KT.NET = false — гость копает как раньше (обычное «сломать»), откат одной строкой', m);
+      P.H.X.dispose(); P.G.X.dispose(); P.H.S14.debris.dispose(); P.G.S14.debris.dispose(); }
+    console.log('  цифры T-138 шаг 2:', JSON.stringify(NUM15));
   }
 
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);

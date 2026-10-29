@@ -640,6 +640,7 @@
     st.fellOn = () => opts.fell !== false;
     st.ktWear = n => { if (!st.creative) wear(st, st.P.sel, n); };
     try { st.topple = window.KubomirTopple?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:topple', e); st.topple = null; }   // T-138: надрубы, крен и падение целым, рубка дерева (kubomir-topple.js)
+    try { st.debris = window.KubomirDebris?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:debris', e); st.debris = null; }   // T-138 F4: обломки летят по весу, катятся со склона и скалы; вещи катятся (kubomir-debris.js)
     try { st.fire = window.KubomirFire?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:fire', e); st.fire = null; }   // огонь (T-022d): горит, перекидывается (если в мире включено), гаснет
     st.swimDeep = swimDeep; st.swimDrawY = (a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt);   // 👥 у других игроков — так же (kubomir-coop.js)   // руки как в Майнкрафте, свет человечков
     st.weatherOff = opts.weather === false;
@@ -718,6 +719,7 @@
     if (st.net) { try { if (st.coopGuest) { if (coopG === st.net) coopG = null; st.net.leave(); } else st.net.close('exit'); } catch (e) { console.error(e); } }
     st.coopEl?.remove();
     try { st.topple?.flush?.(); } catch (e) { console.error(e); }   // T-138: что кренится и падает — ложится сразу (в сохранение)
+    try { st.debris?.flush?.(); st.debris?.dispose?.(); } catch (e) { console.error(e); }   // T-138 F4: обломки в полёте — блоком / вещью сразу
     try { st.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение, что считается и падает, — до конца (в сохранение)
     let saved = null;
     try { if (!o.quick) await (saved = saveAll(st, true)); else saved = saveAll(st, true); } catch (e) { console.error(e); }
@@ -811,7 +813,7 @@
   // вкладку закрывают: синхронно в localStorage (журнал), база — как успеет
   function journalNow(){
     const st = S; if (!st || !st.ready || st.coopGuest) return;
-    try { st.topple?.flush?.(); } catch (e) { console.error(e); }   // T-138: крен и падение — до конца
+    try { st.topple?.flush?.(); st.debris?.flush?.(); } catch (e) { console.error(e); }   // T-138: крен, падение и обломки — до конца
     try { st.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение — до конца, чтобы в журнал легло, как будет
     const V = VX(), recs = [];
     for (const k of st.unsaved) { const c = st.W.chunks.get(k); if (c && c.gen) { const r = chunkRec(c, st); recs.push({ cx: r.cx, cz: r.cz, e: V.store.b64(new Uint8Array(r.e.buffer)), t: r.t }); } }
@@ -898,6 +900,7 @@
       st.ents?.tick(1 / 20);
       st.sup?.step();   // обрушение: очередь падающих кусков (по бюджету шага; kubomir-support.js)
       st.topple?.tick();   // T-138: проверка этажей, крен, падение целым, рубка (такт мира — одинаково при любой частоте кадров)
+      st.debris?.tick(st.topple ? st.topple.left() : 0);   // T-138 F4: обломки — остаток общего потолка за такт (§5.x)
       st.fire?.tick();   // огонь: такт ядра (D37E.fire), ветер и дождь погоды, лава и молния поджигают (kubomir-fire.js)
       if (!st.creative) survivalTick(st, 1 / 20);
       st.modRun?.tick(1 / 20);
@@ -2031,6 +2034,7 @@
     dofFor(st);   // глубина резкости набора «Ультра»: автофокус движка, резко ближе ¾ дальности, мягко только даль у тумана
     st.hand?.frame(dt, t);   // руки и вещь в руке (поверх позы человечка), свет человечков — как у кубиков
     st.ents?.frame(dt, t);
+    st.debris?.frame(dt);   // T-138 F4: обломки — плавно между тактами
     st.WX?.frame(dt, t);   // дождь / снег вокруг камеры, шум, гром
     st.fire?.frame(dt, t);   // пламя движка на блоках «огонь» (fx.js), дым, угли, треск
     VR.select(st.hit && !C.blocked ? st.hit : null);
