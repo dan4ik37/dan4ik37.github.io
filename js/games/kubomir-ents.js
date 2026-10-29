@@ -749,6 +749,7 @@
       const isTrunk = i => o.trunk ? o.trunk(cells[i * 4 + 3]) : true, dist = i => { const rx = cells[i * 4] + .5 - pivot.x, ry = cells[i * 4 + 1] + .5 - pivot.y, rz = cells[i * 4 + 2] + .5 - pivot.z; return rx * rx + ry * ry + rz * rz; };
       const smp = far.filter(isTrunk).slice(0, 48).concat(far.filter(i => !isTrunk(i)).sort((a, b) => dist(b) - dist(a)).slice(0, 24));
       const g = { cells: cells.slice(), n, mesh, geo, px: pivot.x, py: pivot.y, pz: pivot.z, ax: dir.z, az: -dir.x, dx: dir.x, dz: dir.z, th: 0, pth: 0, w: o.push ?? .35, hc, smp: Int32Array.from(smp), done: 0, bounced: false, hitIds: new Set(), lit: Lit.make(null), o, t: 0, F: null, pfy: 0 };
+      if (o.topple) { g.TP = 1; g.on = 0; g.oy = 0; g.pon = 0; g.poy = 0; }   // T-138: крен и падение считает D37E.topple (kubomir-topple.js): угол и сдвиг ставит он
       if (o.drop && window.D37E?.support) {   // обрушение: целым куском вниз; чуть кренится (по зерну куска — у всех так же)
         const flat = []; for (let i = 0; i < n; i++) flat.push(cells[i * 4], cells[i * 4 + 1], cells[i * 4 + 2]);
         g.F = window.D37E.support.drop(flat, { down: -1, g: 30, vmax: 40, far: 96 });
@@ -769,6 +770,7 @@
           if (window.D37E.support.dropStep(g.F, dt, solidHit)) { g.done = 1e-6; g.pfy = g.F.fy; } else dropHit(g);
           continue;
         }
+        if (g.TP) { g.t += dt; if (!g.o.visual) pushUnder(g); continue; }   // T-138: угол — от D37E.topple (такт мира), здесь только толчок
         g.pth = g.th; g.t += dt;
         if (g.done) { g.done += dt; if (g.done > .3) { landGroup(g); groups.splice(gi, 1); } continue; }
         g.w += 9.8 * 1.5 / g.hc * Math.sin(Math.max(.12, g.th)) * dt;
@@ -784,10 +786,15 @@
           continue;
         }
         g.th = Math.max(0, nth);
-        // под деревом моб или игрок — толкнуть в сторону падения (урон — только «обычно» / «сложно»); у гостя — только картинка
+        if (!g.o.visual) pushUnder(g);
+      }
+    }
+    // под деревом моб или игрок — толкнуть в сторону падения (урон — только «обычно» / «сложно»); у гостя — только картинка
+    function pushUnder(g){
         const hurtK = S.meta?.diff === 'normal' || S.meta?.diff === 'hard' ? 2 : 0;
-        if (!g.o.visual) for (let k = 0; k < g.smp.length; k++) {
+        for (let k = 0; k < g.smp.length; k++) {
           const i = g.smp[k], p = rot(g, g.cells[i * 4] + .5 - g.px, g.cells[i * 4 + 1] + .5 - g.py, g.cells[i * 4 + 2] + .5 - g.pz, g.th);
+          if (g.TP) { p.x += g.dx * g.on; p.y += g.oy; p.z += g.dz * g.on; }
           for (const m of X.mobs) {
             const M = MOBS[m.type]; if (g.hitIds.has(m.id) || Math.abs(m.x - p.x) > M.w / 2 + .5 || Math.abs(m.z - p.z) > M.w / 2 + .5 || p.y < m.y - .3 || p.y > m.y + M.h + .3) continue;
             g.hitIds.add(m.id); m.vx += g.dx * 5; m.vz += g.dz * 5; m.vy = Math.max(m.vy, 4); if (hurtK) X.damage(m, hurtK, g.dx, g.dz, 'tree'); else m.hurtT = .35;
@@ -798,7 +805,6 @@
             if (hurtK && !S.creative) S.ents?.hookHurt?.(hurtK, { x: g.px, y: g.py, z: g.pz });
           }
         }
-      }
     }
     // лёг: пыль, листья, стук — и на вещи (o.onLand); сетка убрана
     function landGroup(g){
@@ -857,6 +863,13 @@
     };
     function groupsFrame(dt, a){
       for (const g of groups) {
+        if (g.TP) {   // T-138: крен / падение D37E.topple — плавно между тактами (угол и сдвиг после переката и спуска)
+          const th = g.pth + (g.th - g.pth) * a, on = g.pon + (g.on - g.pon) * a, oy = g.poy + (g.oy - g.poy) * a;
+          GA.set(g.ax, 0, g.az); GQ.setFromAxisAngle(GA, th);
+          g.mesh.quaternion.copy(GQ); g.mesh.position.set(g.px + g.dx * on - S.ox, g.py + oy, g.pz + g.dz * on - S.oz);
+          const c = rot(g, 0, g.hc, 0, th); Lit.update(g.lit, S, c.x + g.dx * on, c.y + oy, c.z + g.dz * on, dt); VR.itemLightF(g.geo, g.lit.lv);
+          continue;
+        }
         if (g.F) {
           const fy = g.done ? g.F.fy : g.pfy + (g.F.fy - g.pfy) * a, k = Math.min(.06, fy * .012);
           GA.set(g.ax, 0, g.az); GQ.setFromAxisAngle(GA, k);
@@ -892,6 +905,31 @@
       return null;
     };
     X.fellAt = X.fellTree;
+    // T-138 (kubomir-topple.js): кусок D37E.topple лёг / встал на место — сетку убрать: пыль у клеток xyz ([x, y, z, …], мир), стук
+    X.groupEnd = (g, xyz, loud) => {
+      const gi = groups.indexOf(g); if (gi >= 0) groups.splice(gi, 1);
+      if (xyz) for (let k = 0, n = xyz.length / 3, st = Math.max(1, (n / 10) | 0); k < n; k += st) X.dust(xyz[k * 3] + .5, xyz[k * 3 + 1], xyz[k * 3 + 2] + .5, V().blocks[g.cells[3] & 0xfff]?.id || 1, 3, { w: .9, sp: 1.2, s: .3, s1: .7, a: .5, vy: .5 });
+      if (loud) { S.AU?.play('kb_thud', { x: g.px - S.ox, y: g.py + 1, z: g.pz - S.oz, vol: Math.min(1, .6 + g.n / 120), rate: .78 }); const d = S.P ? Math.hypot(S.P.x - g.px, S.P.z - g.pz) : 99; if (d < 14 && S.shakeOK?.()) S.rig?.shake?.(Math.min(1.4, (.3 + g.n / 120) * (1 - d / 16)), .3); }
+      R.scene.remove(g.mesh); g.geo.dispose();
+    };
+    // T-138 F3: дерево над срезом в слое yc (слой — пень с надрубом, остаётся): брёвна выше, не касающиеся ничего твёрдого, кроме листвы
+    // и своего пня, и своя листва (как fellFrom) → { cells [x, y, z, v, …], n, nLog, leaves, thin } или null (не дерево). sec — [x, z, …]
+    X.treeAbove = (sec, yc) => {
+      treeFlags();
+      const Vx = V(), Tt = Vx.T, seeds = [];
+      for (let i = 0; i < sec.length; i += 2) { const v = W.raw(sec[i], yc + 1, sec[i + 1]); if (v > 0 && LOGF[v & 0xfff]) seeds.push([sec[i], yc + 1, sec[i + 1]]); }
+      if (!seeds.length) return null;
+      const soft = t => !Tt.solid[t] || LEAFF[t] || Tt.liquid[t] || Tt.shape[t] === Vx.SHAPE.cross || Tt.shape[t] === Vx.SHAPE.torch;
+      const C = Vx.component(W, seeds, { take: (v, x, y) => y > yc && LOGF[v & 0xfff] === 1, edge: (v, x, y) => (v < 0 ? 2 : v === 0 || soft(v & 0xfff) || (y <= yc && LOGF[v & 0xfff]) ? 0 : 2), max: 480 });
+      if (!C || C.touch || C.grounded) return null;
+      let thin = 0; for (let i = 0; i < C.cells.length; i += 4) if (THINF[C.cells[i + 3] & 0xfff]) thin++;
+      const Lf = ownLeaves(C); if (!Lf) return null;
+      const leaves = Lf.n - C.n; if (leaves < 3 && thin < 2) return null;
+      return { cells: Lf.cells, n: Lf.n, nLog: C.n, leaves, thin };
+    };
+    X.treeKind = v => { treeFlags(); const t = v & 0xfff; return LOGF[t] ? (THINF[t] ? 2 : 1) : LEAFF[t] ? 3 : 0; };   // 1 бревно · 2 тонкая ветка · 3 листва
+    // что выпадает из листвы упавшего дерева (как у fellFrom): росток / палка / яблоко по случаю r (0…1), lk — доля (большие — меньше)
+    X.leafItem = (v, r, lk) => { const Vx = V(), b = Vx.blocks[v & 0xfff]; if (!b) return null; if (r < .05 * lk && Vx.item(SAPLING_OF(b.name))) return SAPLING_OF(b.name); if (r < .07 * lk) return 'stick'; if (r < .08 * lk && b.name === 'leaves_oak') return 'apple'; return null; };
     const SAPLING_OF = n => n === 'leaves_jungle' ? 'sapling_jungle' : 'sapling_' + n.slice(7);
     // Листва падающего куска — своя: та, что ближе (шагами по листве) к брёвнам этого куска, чем к чужим брёвнам рядом (у соседнего
     // дерева крона не «раздевается»), не дальше 8 шагов (у ели-великана юбки широкие, у ивы пряди длинные). Обход — сразу от всех

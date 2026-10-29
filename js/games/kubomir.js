@@ -588,6 +588,7 @@
     st.ST = V.streamer({ world: W, rd: opts.rd, url, features: modState.features, genVer: meta.genVer || 1,
       bare: () => window.KubomirEnts?.bareOf?.(st) || 0,   // зима: лиственные — с голыми ветвями (сетка чанка, T-022b)
       load: c => guest ? guest.loadChunk(c) : st.savedKeys.has(c.cx + '|' + c.cz) ? V.store.chunk(meta.id, c.cx, c.cz) : null,
+      cuts: (cx, cz) => st.topple ? st.topple.cutsFor(cx, cz) : null,   // T-138 F1: надрубленные клетки — в сетку чанка
       applySaved: (c, rec) => applySaved(c, rec),
       onGen: c => { st.ents?.onChunkTiles?.(c); st.fire?.onChunk(c); },   // огонь: блоки «огонь» из правок (сохранённый пожар)
       onMesh: (c, m) => { VR.setChunk(c, m); st.KL?.onChunk(c, m); st.fire?.onMesh(c, m); },
@@ -637,6 +638,8 @@
     st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;
     st.sup = window.KubomirSupport?.attach?.(st) || null; st.shakeOK = () => shakeOK(st);   // обрушение и прочность (T-022a; мир без него — null)
     st.fellOn = () => opts.fell !== false;
+    st.ktWear = n => { if (!st.creative) wear(st, st.P.sel, n); };
+    try { st.topple = window.KubomirTopple?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:topple', e); st.topple = null; }   // T-138: надрубы, крен и падение целым, рубка дерева (kubomir-topple.js)
     try { st.fire = window.KubomirFire?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:fire', e); st.fire = null; }   // огонь (T-022d): горит, перекидывается (если в мире включено), гаснет
     st.swimDeep = swimDeep; st.swimDrawY = (a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt);   // 👥 у других игроков — так же (kubomir-coop.js)   // руки как в Майнкрафте, свет человечков
     st.weatherOff = opts.weather === false;
@@ -714,6 +717,7 @@
     S = null;
     if (st.net) { try { if (st.coopGuest) { if (coopG === st.net) coopG = null; st.net.leave(); } else st.net.close('exit'); } catch (e) { console.error(e); } }
     st.coopEl?.remove();
+    try { st.topple?.flush?.(); } catch (e) { console.error(e); }   // T-138: что кренится и падает — ложится сразу (в сохранение)
     try { st.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение, что считается и падает, — до конца (в сохранение)
     let saved = null;
     try { if (!o.quick) await (saved = saveAll(st, true)); else saved = saveAll(st, true); } catch (e) { console.error(e); }
@@ -807,6 +811,7 @@
   // вкладку закрывают: синхронно в localStorage (журнал), база — как успеет
   function journalNow(){
     const st = S; if (!st || !st.ready || st.coopGuest) return;
+    try { st.topple?.flush?.(); } catch (e) { console.error(e); }   // T-138: крен и падение — до конца
     try { st.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение — до конца, чтобы в журнал легло, как будет
     const V = VX(), recs = [];
     for (const k of st.unsaved) { const c = st.W.chunks.get(k); if (c && c.gen) { const r = chunkRec(c, st); recs.push({ cx: r.cx, cz: r.cz, e: V.store.b64(new Uint8Array(r.e.buffer)), t: r.t }); } }
@@ -892,6 +897,7 @@
     if (st.steps % 3 === 0) {
       st.ents?.tick(1 / 20);
       st.sup?.step();   // обрушение: очередь падающих кусков (по бюджету шага; kubomir-support.js)
+      st.topple?.tick();   // T-138: проверка этажей, крен, падение целым, рубка (такт мира — одинаково при любой частоте кадров)
       st.fire?.tick();   // огонь: такт ядра (D37E.fire), ветер и дождь погоды, лава и молния поджигают (kubomir-fire.js)
       if (!st.creative) survivalTick(st, 1 / 20);
       st.modRun?.tick(1 / 20);
@@ -1495,10 +1501,12 @@
       else if (st.mine.need < Infinity) {
         st.mine.t += dt;
         st.mine.snd -= dt; if (st.mine.snd <= 0) { st.mine.snd = .24; st.AU?.play(digSound(b), { x: hit.x - st.ox + .5, y: hit.y + .5, z: hit.z - st.oz + .5, vol: .45, rate: .9 + Math.random() * .2 }); st.ents?.hitFx?.(hit.x, hit.y, hit.z, b.id, hit.nx | 0, hit.ny | 0, hit.nz | 0); }
-        if (st.mine.t >= st.mine.need) { breakBlock(st, hit); st.mine.key = ''; st.mine.t = 0; st.mine.cool = .05; }
+        st.mine.km = st.topple && !hit.ice ? st.topple.mines(hit, b) : 0;   // T-138: надруб со стороны удара (1) / рубка живого дерева (2)
+        if (st.mine.km) { const r = st.topple.mine(hit, b, st.mine); if (r === 1) { breakBlock(st, hit); st.mine.key = ''; st.mine.t = 0; st.mine.cool = .05; } else if (r === 2) { st.mine.key = ''; st.mine.t = 0; st.mine.cool = .25; } }
+        else if (st.mine.t >= st.mine.need) { breakBlock(st, hit); st.mine.key = ''; st.mine.t = 0; st.mine.cool = .05; }
       }
-    } else { st.mine.key = ''; st.mine.t = 0; }
-    st.mine.st = mining && st.mine.need < Infinity && !st.creative ? Math.floor(st.mine.t / st.mine.need * 8) : -1;
+    } else { st.mine.key = ''; st.mine.t = 0; st.mine.km = 0; }
+    st.mine.st = mining && st.mine.need < Infinity && !st.creative && !st.mine.km ? Math.floor(st.mine.t / st.mine.need * 8) : -1;
     st.mine.k = mining && st.mine.need < Infinity && !st.creative ? Math.min(1, st.mine.t / st.mine.need) : mining ? 1 : 0;
     // поставить / открыть / съесть (ПКМ, LT; держишь — повтор). ЛКМ никогда не ставит, ПКМ никогда не ломает
     const wantPlace = live && (C.down('place') || (C.held('place') && st.placeCool <= 0));
