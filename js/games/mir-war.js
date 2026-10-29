@@ -507,7 +507,7 @@
       const html = `<b>${M0[0]} ${esc(M0[1])} · ${tm}</b>${body}<div>Ты: ${W.kills} выбил · ${W.deaths} выбыл${W.robotKills ? ` · 🤖 ${W.robotKills}` : ''}</div>`;
       if (V2) {
         scChip?.set(`${tm} · ${W.mode === 'ffa' ? `${W.kills}/${W.deaths}` : `${W.teams[1]}:${W.teams[2]}`}`);
-        if (scSheet?.isOpen) { const d = scSheet.body.firstChild || scSheet.body.appendChild(document.createElement('div')); d.className = 'mz-score-t'; d.innerHTML = html; }
+        if (scSheet?.isOpen()) { const d = scSheet.body.firstChild || scSheet.body.appendChild(document.createElement('div')); d.className = 'mz-score-t'; d.innerHTML = html; }
         return;
       }
       hq('.mz-score').innerHTML = html;

@@ -215,7 +215,7 @@
       });
     }
     const R = {
-      el, get isOpen(){ return open; }, get sticky(){ return sticky; },
+      el, isOpen: () => open, isSticky: () => sticky,
       // at — точка в px окна host (по умолчанию середина); list — [{ id, icon, label, cur, on }]
       open(list, at, oo = {}){
         items = list || []; if (!items.length) return;
@@ -319,7 +319,7 @@
       update(i){ if (i != null) sel = i; always = mode() === 'open'; render(); },
       open(){ isOpen = true; render(); arm(); host.dispatchEvent(new CustomEvent('e2:tray', { detail: { open: true } })); },
       close(){ clearTimeout(closeT); if (!isOpen) return; isOpen = false; render(); host.dispatchEvent(new CustomEvent('e2:tray', { detail: { open: false } })); },
-      get isOpen(){ return isOpen || always; },
+      isOpen: () => isOpen || always,
       // прямоугольник лотка в px окна host (свёрнут и раскрыт — для D37TouchLayout avoid; меряется только по запросу)
       rect(){ const b = el.getBoundingClientRect(), h = host.getBoundingClientRect(); return { l: b.left - h.left, t: b.top - h.top, r: b.right - h.left, b: b.bottom - h.top, label: 'Вещи' }; },
       dispose(){ dead = true; clearTimeout(closeT); clearTimeout(holdT); wheel?.dispose(); el.remove(); },
@@ -367,7 +367,7 @@
   };
 
   // ── Лист (инвентарь, «➕ Ещё», телефон…): лёжа — справа (≤ 50 %), стоя — снизу (≤ 55 %); вкладки; ✕, смахнуть, Esc — закрыть.
-  //    o: { title, tabs: [{ id, icon, label, render(body) }], body: el, onClose, max: .55 }. S.open(tab?), S.close(), S.isOpen, S.body ──
+  //    o: { title, tabs: [{ id, icon, label, render(body) }], body: el, onClose, max: .55 }. S.open(tab?), S.close(), S.isOpen(), S.body ──
   E.sheet = function (host, o = {}){
     const el = document.createElement('div'); el.className = 'e2-sheet'; el.hidden = true;
     el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', o.title || 'Окно');
@@ -387,7 +387,7 @@
       body.textContent = ''; try { t.render?.(body); } catch (e) { console.error(e); }
     }
     const S = {
-      el, body, get isOpen(){ return open; }, get tab(){ return cur; },
+      el, body, isOpen: () => open, tab: () => cur,
       open(t){
         const hb = host.getBoundingClientRect(), side = hb.width > hb.height;
         el.className = 'e2-sheet ' + (side ? 'side' : 'bottom');
@@ -435,7 +435,7 @@
         else if (W && H) cam.setViewOffset(W, H, cx, cy, W, H);
       },
       clear(){ cx = cy = tx = ty = 0; live = false; cam?.clearViewOffset?.(); },
-      get busy(){ return live || !!(cx || cy); },
+      busy: () => live || !!(cx || cy),
     };
   };
 
@@ -527,7 +527,7 @@
     H.poseIcon = id => { if (id === poseCur || !poseBtn) return; poseCur = id; const ic = poseBtn.firstChild; if (ic && ic.nodeType === 3) ic.textContent = POSE_IC[id] || '⬇'; if (id !== 'crouch' && id !== 'stand') setLatch(false); };
     H.radialAt = (items, at, oo = {}) => { radial().open(items, at, Object.assign({ sticky: true }, oo)); return radial(); };
     H.poseRadial = oo => openPose(null, Object.assign({ sticky: true, lock: !!document.pointerLockElement }, oo));
-    H.radialOpen = () => !!rad?.isOpen;
+    H.radialOpen = () => !!rad?.isOpen();
     // ── подписи кнопок — до первого нажатия, не больше двух сразу ──
     function seenBtn(d){ if (d.classList.contains('new')) { d.classList.toggle('new', false); TL()?.markSeen?.(game, 'b-' + d.dataset.k); } }
     // ── листы и сдвиг ──
@@ -535,7 +535,7 @@
     H.sheet = o => { const s = E.sheet(el, o); sheets.add(s); return s; };
     H.tray = o => { const t = E.tray(hud, Object.assign({ wheelHost: el }, o)); trays.add(t); return t; };
     const trays = new Set();
-    H.inset = () => { const d = { l: 0, t: 0, r: 0, b: 0 }; for (const s of sheets) if (s.isOpen) { const q = s.inset; d.l = Math.max(d.l, q.l); d.t = Math.max(d.t, q.t); d.r = Math.max(d.r, q.r); d.b = Math.max(d.b, q.b); } return d; };
+    H.inset = () => { const d = { l: 0, t: 0, r: 0, b: 0 }; for (const s of sheets) if (s.isOpen()) { const q = s.inset; d.l = Math.max(d.l, q.l); d.t = Math.max(d.t, q.t); d.r = Math.max(d.r, q.r); d.b = Math.max(d.b, q.b); } return d; };
     // ── плашки ──
     const chipBox = document.createElement('div'); chipBox.className = 'e2-chips'; hud.appendChild(chipBox);
     const chips = new Map();
@@ -577,7 +577,7 @@
         onWin(window, 'keydown', e => { if (e.code === 'F3' && !e.repeat) { e.preventDefault(); sync(!dbg.on); } });
         onWin(window, 'd37:settings', e => { if (e.detail?.key === 'hudDebug' || e.detail?.key === '*') sync(want()); });
       } else dbg.fn = fn;
-      return { show: v => dbg.sync(v), get on(){ return dbg.on; } };
+      return { show: v => dbg.sync(v), on: () => dbg.on };
     };
     return {
       // кнопка позы — свои нажатия (true — обработано здесь)

@@ -1585,7 +1585,7 @@
     const vk = veh ? '#veh' : P.mode === 'sit' ? '#sit' : X.cur && X.raw ? X.raw : '';
     if (vk !== S.vk) { S.vk = vk; H.act(!vk ? null : vk === '#veh' ? { icon: '🚪', label: 'Выйти' } : vk === '#sit' ? { icon: '⬆', label: 'Встать' } : { icon: window.D37E.verbIcon(vk), label: vk }); }
     H.poseIcon(poseNow(P));
-    if (S.vo?.busy) S.vo.tick(1 / 60);
+    if (S.vo?.busy()) S.vo.tick(1 / 60);
   }
   function addLog(p, text){
     S.log.push({ who: p ? p.nick : '', me: p === S.me, sys: !p, text });
