@@ -20,6 +20,8 @@
   const LOD = true;        // T-127: false — откат одной строкой (предел 170 / 260 по body.low, радиус от экрана, сетка-словарь, Math.random-зерно)
   const CAP = 260;         // D1: один предел врагов для всех устройств (вдвоём × 1,25); замер телефона ×4 — docs/progress.md 29.10
   const SPAWN_R = 600;     // радиус появления и возврата отставших (× 1,6), профиль site_solo — как у ПК в окне
+  const FAIR_R = 420;      // «на экране» для правил (молния, бомба): круг одного радиуса у всех (площадь — как экран ПК 16:9), не прямоугольник
+                           // экрана устройства (T-127 ревью: телефон и ПК с одним зерном и вводом набирали разные очки)
   const SEP_K = 6, SEP_R = 21;   // расталкивание: ≤ 6 касающихся пар на врага; 21 — самый большой не босс (босса обходим отдельно)
   const hseed = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) || 1; };
   const EF = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
@@ -481,7 +483,9 @@
     }
     return out;
   }
-  function inView(G, p){ const hw = G.viewW / 2, hh = G.viewH / 2; return G.en.filter(e => !e.dead && Math.abs(e.x - p.x) < hw && Math.abs(e.y - p.y) < hh); }
+  // «на экране» для правил: LOD — круг FAIR_R (одинаково на любом экране), откат — прямоугольник экрана устройства
+  function onScreen(G, p, e){ const dx = e.x - p.x, dy = e.y - p.y; return LOD ? dx * dx + dy * dy < FAIR_R * FAIR_R : Math.abs(dx) < G.viewW / 2 && Math.abs(dy) < G.viewH / 2; }
+  function inView(G, p){ return G.en.filter(e => !e.dead && onScreen(G, p, e)); }
   function inRange(G, p, R){ const r2 = R * R; return G.en.filter(e => !e.dead && !e.swarm && (e.x - p.x) ** 2 + (e.y - p.y) ** 2 < r2); }
 
   // ── Оружие ──
@@ -683,8 +687,7 @@
     else if (c.k === 'heal') { heal(p, 30); fx(G, 'text', p.x, p.y - 30, .8, { text: '+30 ❤️', color: '#4ade80' }); }
     else if (c.k === 'magnet') { G.vacuum = 1.5; G.banner = { text: '🧲 Весь опыт — к тебе!', t: 1.4 }; }
     else if (c.k === 'bomb') {
-      const hw = G.viewW / 2, hh = G.viewH / 2;
-      for (const e of G.en) if (!e.dead && Math.abs(e.x - p.x) < hw && Math.abs(e.y - p.y) < hh) hurt(G, e, e.d.boss ? 400 / p.might : 99999, p, 0, 0);
+      for (const e of G.en) if (!e.dead && onScreen(G, p, e)) hurt(G, e, e.d.boss ? 400 / p.might : 99999, p, 0, 0);
       fx(G, 'flash', p.x, p.y, .4, {});
       G.shake = .3;
     } else if (c.k === 'chest') chest(G, p);
@@ -1918,6 +1921,6 @@
       input.keys = {}; input.on = false;
       root = null; cv = null; ctx = null; ov = null; hud = null; wrap = null;
     },
-    _test: { live: () => G, spawnEnemy, LOD, CAP, SPAWN_R, SEP_K, newGame, step, lvOptions, apply, optInfo, score, setView, xpNeed, encodeSnap, decodeSnap, WEAPONS, PASSIVES, HEROES, EN, WAVES, EVENTS },
+    _test: { live: () => G, spawnEnemy, LOD, CAP, SPAWN_R, FAIR_R, SEP_K, newGame, step, lvOptions, apply, optInfo, score, setView, xpNeed, encodeSnap, decodeSnap, WEAPONS, PASSIVES, HEROES, EN, WAVES, EVENTS },
   };
 })();
