@@ -392,6 +392,26 @@
    ]
   },
   {
+   "f": "js/apps/ai3d/ai3d-core.js",
+   "fn": "loadRef",
+   "k": "sink:src [img]",
+   "c": "url-checked",
+   "n": "AI3D (T-112): img.src only after /^data:image\\/(png|jpeg|webp|gif);base64,/ — reference picture from the local AI bridge / picture saved inside the scene",
+   "xs": [
+    "q.data"
+   ]
+  },
+  {
+   "f": "js/apps/ai3d/ai3d-core.js",
+   "fn": "loadTex",
+   "k": "sink:src [img]",
+   "c": "url-checked",
+   "n": "AI3D (T-112): img.src only after /^data:image\\/(png|jpeg|webp|gif);base64,/ — reference picture from the local AI bridge / picture saved inside the scene",
+   "xs": [
+    "url"
+   ]
+  },
+  {
    "f": "js/apps/apps.js",
    "fn": "css",
    "k": "sink:href [l]",

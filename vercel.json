@@ -63,6 +63,15 @@
       ]
     },
     {
+      "source": "/tools/3d/:path*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
@@ -367,6 +376,14 @@
     },
     {
       "source": "/photo/:path+",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/tools/3d",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/tools/3d/:path+",
       "destination": "/index.html"
     },
     {

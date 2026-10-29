@@ -37,7 +37,8 @@ const PAGES = {
   ads:        ['ad-bottom','ads'],
   adv:        ['adv-page'],      // 📣 кабинет рекламодателя (js/features/adcab.js грузится при входе)
   phone:      ['phone-page'],    // телефон 📱 на странице (js/features/phone.js)
-  photo:      ['photo-page']     // 🖼 фоторедактор (js/apps/apps.js грузит редактор при входе); страница для поиска — /tools/photo
+  photo:      ['photo-page'],    // 🖼 фоторедактор (js/apps/apps.js грузит редактор при входе); страница для поиска — /tools/photo
+  ai3d:       ['ai3d-page']      // 🧊 3D-мастерская AI3D (T-112): адрес /tools/3d, скрытая (noindex; нет в поиске, меню, подвале, sitemap)
 };
 const ALL_PAGE_IDS = Object.values(PAGES).flat();
 
@@ -60,6 +61,7 @@ const D37Route = (() => {
     if (!r || r === 'home') return '/';
     if (r === 'games' || r === 'play') return '/play' + (rest.length ? '/' + rest.join('/') : '');
     if (r === 'c') { const c = String(rest[0] || '').replace(/[^a-z0-9]/gi, '').toLowerCase(); return c ? '/chat/join/' + c : '/chat'; }
+    if (r === 'ai3d') return '/tools/3d' + (rest.length ? '/' + rest.join('/') : '');   // 🧊 AI3D: раздел #/ai3d живёт по адресу /tools/3d
     return ROOTS.has(r) ? '/' + p.join('/') : '/';
   }
   // '/play/chess/abcd' → '#/games/chess/abcd'; '/', '/index.html', '/home' → '#/home'; не раздел (серверная страница) — null
@@ -67,6 +69,7 @@ const D37Route = (() => {
     const p = segs(path), r = p[0];
     if (!r || (p.length === 1 && (r === 'index.html' || r === 'home'))) return '#/home';
     if (r === 'play') return '#/games' + (p.length > 1 ? '/' + p.slice(1).join('/') : '');
+    if (r === 'tools' && p[1] === '3d') return '#/ai3d' + (p.length > 2 ? '/' + p.slice(2).join('/') : '');   // остальные /tools/* — серверные страницы
     return ROOTS.has(r) ? '#/' + p.join('/') : null;
   }
   const loc = () => root.location;
@@ -207,8 +210,9 @@ const D37Route = (() => {
     phone: ['Телефон — dan4ik37', 'Телефон сайта dan4ik37: сообщения, звонки, друзья и приложения.'],
     photo: ['Фоторедактор онлайн — слои, обрезка, текст, фильтры | dan4ik37',
       'Бесплатный фоторедактор в браузере: слои, обрезка под шортс и превью, коррекция, фильтры, надписи, кисть и ластик. Работает на телефоне, без регистрации.'],
+    ai3d: ['3D-мастерская AI3D — dan4ik37', '3D-мастерская: модели по командам от ИИ, экспорт в GLB и в «Студию 3D».'],
   };
-  const NOINDEX = new Set(['profile', 'invite', 'adv', 'phone', 'games']);
+  const NOINDEX = new Set(['profile', 'invite', 'adv', 'phone', 'games', 'ai3d']);   // ai3d — скрытая 3D-мастерская /tools/3d
   // Что разделу показать поисковику: { title, description, canonical, noindex }
   function routeMeta(route, param){
     const m = ROUTE_META[route] || ROUTE_META.home;
@@ -342,6 +346,7 @@ function finishShowPage(route, activeIds){
   if (route==='chat' && !gated && typeof renderChatPage==='function') renderChatPage(param);     // чат «как Дискорд»
   if (route==='phone' && typeof phoneRoute==='function') phoneRoute(route, param);      // телефон 📱 на странице
   if (route==='photo') window.D37Apps?.open('photo', param);                           // 🖼 фоторедактор (js/apps/apps.js)
+  if (route==='ai3d') window.D37Apps?.open('ai3d', param);                             // 🧊 3D-мастерская AI3D (js/apps/apps.js)
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным
   activeIds.forEach(id=>{
