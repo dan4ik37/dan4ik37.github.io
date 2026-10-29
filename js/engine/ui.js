@@ -464,6 +464,7 @@
       setLatch(false);
       const cur = poseO?.current ? poseO.current() : '';
       if (it.id === cur && (cur === 'sit' || cur === 'lie' || cur === 'crouch' || cur === 'crawl')) { tap('crouch'); return; }   // та же поза — встать
+      if (it.id === 'crouch' && !poseO?.crouch) { if (cur === 'sit' || cur === 'lie') tap('crouch'); else setLatch(true); return; }   // присесть — как нажатие кнопки (держится)
       try { poseO?.onPick?.(it); } catch (e) { console.error(e); }
     }
     function setLatch(v){ if (latch === v) return; latch = v; C?.press('crouch', v); poseBtn?.classList.toggle('on', v); }
@@ -494,7 +495,8 @@
       };
       d.addEventListener('pointerup', up); d.addEventListener('pointercancel', up);
     }
-    const center = d => { const b = d.getBoundingClientRect(), h = el.getBoundingClientRect(); return { x: b.left + b.width / 2 - h.left - 60, y: b.top - h.top - 40 }; };
+    // круг — над кнопкой позы (не закрывает кнопки; выбор считается от пальца, так что место круга на выбор не влияет)
+    const center = d => { const b = d.getBoundingClientRect(), h = el.getBoundingClientRect(); return { x: b.left + b.width / 2 - h.left - 40, y: b.top - h.top - 124 }; };
     // ── действие ──
     let actBtn = null, pill = null, holdC = null, verb = null, verbK = '', holdQ = 0;
     const HR = 15, HL = 2 * Math.PI * HR;
@@ -579,7 +581,7 @@
       // кнопка позы — свои нажатия (true — обработано здесь)
       button(b, d){
         d.dataset.k = b.id || b.action || b.kind || '';
-        if (b.kind !== 'pose') return false;
+        if (b.kind !== 'pose') { if (b.own) d.addEventListener('pointerdown', () => seenBtn(d)); return !!b.own; }   // own — нажатия ведёт игра сама
         wirePose(d); return true;
       },
       plain(b, d){

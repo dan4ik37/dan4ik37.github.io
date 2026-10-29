@@ -2147,6 +2147,7 @@
       // дальние участки — прячем
       for (const v of B.views) if (v?.root) { const d = Math.hypot(cam.x - v.lot.x, cam.z - v.lot.z); v.root.visible = d < 125; }
       B.near = Math.hypot(S.P.ch.x + 45, S.P.ch.z + 41) < 75;
+      if (S.hud2 && topBtn.hidden === B.near) topBtn.hidden = !B.near;   // HUD 2.0 (T-123): 🏘️ — только у района участков (и всегда в ☰)
       // кнопка «Строить» — на своём участке
       const fab = q('.mb-fab'), canB = !!B.me && !B.bm && !B.war?.bm && (BM.onMyLot() || BM.inHouse());
       if (fab.hidden === canB) fab.hidden = !canB;
