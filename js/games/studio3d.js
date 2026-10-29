@@ -303,7 +303,7 @@ Players.PlayerAdded.Connect(player => {
     ed.NPC = SC.npc = E.npcs(R, ph);
     // T-127 (AI LOD P1): телефон и «низкая» рисуют подробными 16 ближайших NPC (зомби «Выживания» — до 64), остальных — простыми
     // фигурками (actors.js V2); живут и ходят все одинаково. ПК — все подробные
-    if (R.q === 'low' || E.isMobile?.()) ed.NPC.A.impostors?.({ cap: 16, far: 60 });
+    if (R.q === 'low' || E.isMobile?.()) ed.NPC.A.impostors?.({ cap: 16, far: 60, focus: () => ed.playing?.P?.ch || null });   // в игре — ближние к своему игроку (вид сверху)
     // вода ландшафта: в ней плавают (player.js)
     ph.waterLevel = (x, z) => TR.enabled && TR.water.on && Math.abs(x) < TR.size / 2 && Math.abs(z) < TR.size / 2 ? TR.water.level : -Infinity;
     ph.waveAt = TR.waveAt || null;   // волны воды ландшафта (waves.js): пловцы качаются на той же волне, что видна

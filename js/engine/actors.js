@@ -112,7 +112,9 @@
       if (IMP !== null) return IMP;
       const T = window.THREE;
       if (!T || !R.scene) return (IMP = false);
-      const mk = (geo, y) => { geo.translate(0, y, 0); const m = new T.InstancedMesh(geo, new T.MeshLambertMaterial({ color: '#ffffff' }), IMP_MAX); m.count = 0; m.frustumCulled = false; m.userData.actor = true; R.scene.add(m); R.shadowsOn?.(m); return m; };
+      const mk = (geo, y) => { geo.translate(0, y, 0); const m = new T.InstancedMesh(geo, new T.MeshLambertMaterial({ color: '#ffffff' }), IMP_MAX); m.count = 0;
+        m.instanceColor = new T.InstancedBufferAttribute(new Float32Array(IMP_MAX * 3).fill(1), 3);   // цвета — до первой отрисовки (иначе шейдер собран без них)
+        m.frustumCulled = false; m.userData.actor = true; R.scene.add(m); R.shadowsOn?.(m); return m; };
       IMP = { legs: mk(new T.BoxGeometry(.42, .86, .26), .43), torso: mk(new T.BoxGeometry(.54, .66, .32), 1.19), head: mk(new T.SphereGeometry(.23, 10, 8), 1.76),
         m4: new T.Matrix4(), col: new T.Color() };
       return IMP;
@@ -120,7 +122,9 @@
     function tiers(cam){
       rank.length = 0;
       // порядок — по расстоянию; уже подробному — фора 4 м (на границе cap двое не меняются туда-сюда)
-      for (let i = 0; i < arr.length; i++) { const a = arr[i]; if (!a.imp) continue; a.camD = cam ? Math.hypot(a.x - cam.x, a.z - cam.z) : 0; a.camK = a.camD - (a.v2 ? 0 : 4); rank.push(a); }
+      // от чего меряем: точка игры (focus — свой игрок при виде сверху) или камера
+      const f = (L2.focus && L2.focus()) || cam;
+      for (let i = 0; i < arr.length; i++) { const a = arr[i]; if (!a.imp) continue; a.camD = f ? Math.hypot(a.x - f.x, a.z - f.z) : 0; a.camK = a.camD - (a.v2 ? 0 : 4); rank.push(a); }
       for (let i = 1; i < rank.length; i++) { const a = rank[i]; let j = i - 1; while (j >= 0 && rank[j].camK > a.camK) { rank[j + 1] = rank[j]; j--; } rank[j + 1] = a; }   // вставками: n — десятки
       let rigs = 0, built = false;
       for (let i = 0; i < rank.length; i++) {
@@ -213,8 +217,9 @@
       pose(key, p){ const a = list.get(key); if (a && p) Object.assign(a, p); return a; },
       emote(key, e, t){ const a = list.get(key); if (a?.ch) { a.ch.emote = e; a.ch.emoteT = t; } },
       top: key => list.get(key)?.ch?.top || 2.3,
-      // простые фигурки: { cap — сколько подробных, far — дальше простая (м), near — ближе снова подробная }; null — выкл.
-      impostors(o){ L2 = o ? { cap: Math.max(0, o.cap | 0), far: o.far || 56, near: o.near || (o.far || 56) - 6 } : null; tierT = 0;
+      // простые фигурки: { cap — сколько подробных, far — дальше простая (м), near — ближе снова подробная, focus() — от какой точки
+      // мерить ({ x, z }; нет — от камеры) }; null — выкл.
+      impostors(o){ L2 = o ? { cap: Math.max(0, o.cap | 0), far: o.far || 56, near: o.near || (o.far || 56) - 6, focus: o.focus || null } : null; tierT = 0;
         if (!L2) for (const a of arr) if (a.v2) { a.v2 = false; setLook(a, a.look, true); } },
       impCount: () => impN,
       tierOf: key => { const a = list.get(key); return !a ? null : a.v2 ? 'V2' : a.lod ? 'V1' : 'V0'; },

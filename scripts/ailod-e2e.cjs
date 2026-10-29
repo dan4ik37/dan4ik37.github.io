@@ -24,9 +24,9 @@ const server = http.createServer((req, res) => {
 });
 server.keepAliveTimeout = 1000;
 // in the page before the site's scripts: frame counter, long frames, NPC step timer (wrapped when a game creates D37E.npcs)
-const INSTR = `(() => { if (window.__ai) return; const T = window.__ai = { fr: 0, long: 0, last: 0, npcMs: 0, npcN: 0, npcMax: 0, dts: new Float32Array(4096), nd: 0 };
-  const tick = t => { if (T.last) { const d = t - T.last; if (d > 50) T.long++; if (T.nd < 4096) T.dts[T.nd++] = d; } T.last = t; T.fr++; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
-  T.reset = () => { T.fr = 0; T.long = 0; T.npcMs = 0; T.npcN = 0; T.npcMax = 0; T.nd = 0; };
+const INSTR = `(() => { if (window.__ai) return; const T = window.__ai = { fr: 0, long: 0, last: 0, npcMs: 0, npcN: 0, npcMax: 0, dts: new Float32Array(4096), nd: 0, R: null, cs: 0, cn: 0 };
+  const tick = t => { if (T.last) { const d = t - T.last; if (d > 50) T.long++; if (T.nd < 4096) T.dts[T.nd++] = d; } if (T.R?.stats) { T.cs += T.R.stats.calls || 0; T.cn++; } T.last = t; T.fr++; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+  T.reset = () => { T.fr = 0; T.long = 0; T.npcMs = 0; T.npcN = 0; T.npcMax = 0; T.nd = 0; T.cs = 0; T.cn = 0; };
   T.pct = q => { if (!T.nd) return null; const a = Array.from(T.dts.subarray(0, T.nd)).sort((x, y) => x - y); return +a[Math.min(a.length - 1, Math.floor(q * a.length))].toFixed(1); };
   T.wrap = N => { if (!N || N.__aiw) return N; N.__aiw = 1; const s = N.step; N.step = (dt, pl) => { const a = performance.now(); s(dt, pl); const d = performance.now() - a; T.npcMs += d; T.npcN++; if (d > T.npcMax) T.npcMax = d; }; return N; };
   let hooked = false; const hook = () => { const E = window.D37E; if (!E || !E.npcs || hooked) return; hooked = true; const f = E.npcs; E.npcs = function(R, ph){ return T.wrap(f(R, ph)); }; Object.assign(E.npcs, f); };
@@ -60,7 +60,7 @@ const INSTR = `(() => { if (window.__ai) return; const T = window.__ai = { fr: 0
     const m0 = await metric(); await sleep(ms); const m1 = await metric();
     const s = await ev(`(() => { const R = ${statsExpr || 'null'}, ST = R?.stats, n = Math.max(1, ST?.frames || 0), T = __ai;
       return { frames: T.fr, long: T.long, cpu: ST ? +(ST.sumCpu / n).toFixed(2) : null, cpuMax: ST ? +ST.maxCpu.toFixed(1) : null, calls: ST?.calls ?? null,
-        frameP50: T.pct(.5), frameP95: T.pct(.95), npcMs: T.npcN ? +(T.npcMs / T.npcN).toFixed(3) : null, npcMax: +T.npcMax.toFixed(2), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null, ...(${extraExpr || '{}'}) }; })()`);
+        frameP50: T.pct(.5), frameP95: T.pct(.95), callsAvg: T.cn ? Math.round(T.cs / T.cn) : null, npcMs: T.npcN ? +(T.npcMs / T.npcN).toFixed(3) : null, npcMax: +T.npcMax.toFixed(2), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null, ...(${extraExpr || '{}'}) }; })()`);
     s.fps = +(s.frames / (ms / 1000)).toFixed(1);
     s.taskMsFrame = +((m1.task - m0.task) * 1000 / Math.max(1, s.frames)).toFixed(2);
     s.scriptMsFrame = +((m1.script - m0.script) * 1000 / Math.max(1, s.frames)).toFixed(2);
@@ -87,12 +87,16 @@ const INSTR = `(() => { if (window.__ai) return; const T = window.__ai = { fr: 0
     if (list.includes('mir')) {
       await go('#/games/world', 'window.GAME_IMPL?.world?._test?.state()?.zones?.wmv');
       await ev(`(() => { const A = window.D37Age; if (A) { A.known = () => true; A.canOpen = () => true; A.allows = () => true; A.group = () => 'adult'; }
-        const S = GAME_IMPL.world._test.state(); S.fixedTime = 13; __ai.wrap(S.NPC); return 1; })()`);
+        const S = GAME_IMPL.world._test.state(); S.fixedTime = 13; __ai.wrap(S.NPC); __ai.R = S.R; return 1; })()`);
       const SR = `GAME_IMPL.world._test.state().R`, X = `{ npc: GAME_IMPL.world._test.state().NPC?.list?.size ?? null, imp: GAME_IMPL.world._test.state().NPC?.A?.impCount?.() ?? null }`;
       await ev(`(async () => { GAME_IMPL.world._test.state().zones.padGo('hub'); await new Promise(r => setTimeout(r, 6000)); return 1; })()`, 60000);
       await windowOf('mir: capital square', 6000, SR, X);
       await ev(`(async () => { GAME_IMPL.world._test.state().zones.padGo('metro'); await new Promise(r => setTimeout(r, 12000)); return 1; })()`, 90000);
       await windowOf('mir: Big City', 8000, SR, X);
+      if (process.env.AB) {   // A/B in the same page: figures off (every resident a full rig) — what V2 saves
+        const off = await ev(`(() => { const A = GAME_IMPL.world._test.state().NPC?.A; if (!A?.impostors) return false; A.impostors(null); return true; })()`);
+        if (off) { await sleep(3000); await windowOf('mir: Big City, figures off', 8000, SR, X); }
+      }
       await send('Emulation.setCPUThrottlingRate', { rate: 1 });
     }
     if (list.includes('horde')) {
@@ -117,7 +121,7 @@ const INSTR = `(() => { if (window.__ai) return; const T = window.__ai = { fr: 0
       await go('#/games/studio3d', 'window.GAME_IMPL?.studio3d?._test?.state()?.R && window.D37E?.studioTemplates?.["m-survival"]');
       await ev(`(async () => { const T = GAME_IMPL.studio3d._test, ED = T.state(); T.template(ED.SC, ED.TR, 'm-survival');
         ED.SC.settings.game = Object.assign({}, ED.SC.settings.game, { mode: 'survival', waves: 20, zombies: 20, grow: 10, lives: 0, zdmg: 5, count: 0, min: 1 });
-        await new Promise(r => setTimeout(r, 1500)); __ai.wrap(ED.NPC); document.querySelector('.s3-play')?.click(); await new Promise(r => setTimeout(r, 4000)); return !!ED.playing; })()`, 60000);
+        await new Promise(r => setTimeout(r, 1500)); __ai.wrap(ED.NPC); __ai.R = ED.R; document.querySelector('.s3-play')?.click(); await new Promise(r => setTimeout(r, 4000)); return !!ED.playing; })()`, 60000);
       const SR = `GAME_IMPL.studio3d._test.state().R`;
       const X = `{ zombies: [...GAME_IMPL.studio3d._test.state().NPC.list.values()].filter(e => e.P).length, imp: GAME_IMPL.studio3d._test.state().NPC?.A?.impCount?.() ?? null }`;
       // clear a wave (remove the zombies) — the next one comes after 6 s: 20, 30, 40, 50, 60, 70 …
@@ -129,6 +133,11 @@ const INSTR = `(() => { if (window.__ai) return; const T = window.__ai = { fr: 0
       for (let w = 3; w <= 6; w++) await ev(nextWave, 60000);
       await sleep(6000);
       await windowOf('studio: wave 6 (cap)', 8000, SR, X);
+      if (process.env.SHOT) { const { data } = await send('Page.captureScreenshot', { format: 'jpeg', quality: 60 }); fs.writeFileSync(process.env.SHOT, Buffer.from(data, 'base64')); console.log('shot', process.env.SHOT); }
+      if (process.env.AB) {
+        const off = await ev(`(() => { const A = GAME_IMPL.studio3d._test.state().NPC?.A; if (!A?.impostors) return false; A.impostors(null); return true; })()`);
+        if (off) { await sleep(4000); await windowOf('studio: wave 6, figures off', 8000, SR, X); }
+      }
       await send('Emulation.setCPUThrottlingRate', { rate: 1 });
     }
   } catch (e) {
