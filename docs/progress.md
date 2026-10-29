@@ -574,4 +574,7 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
   (центр масс против опоры, перегруз слабой стороны → медленный крен со скрипом и пылью → нашло опору и стоит наклонённым
   или упало одним куском; толстая масса на тонкой опоре не висит) — в STRUCTURE_HAZARDS §0.9; первый запуск T-138 перезапущен
   с этим правилом (успел только прочитать код).
-
+- 29.10 T-131 (AI3D A2): take — shared skeleton + 35 procedural clips (js/engine/skel.js) on HumanBodyBones, foot plants by world contacts
+  + IK (key-rate slide metric: an engine interpolates across touchdown/lift); skinned playback in D37E.models with shared clips and
+  humanoid retarget (Mixamo/Biped/A-pose); Studio 3D `act` reuses the NPC key (NET_EXTRA full); FBX pack for Backrooms in
+  E:\d37-core\anim. Skip — quadruped shared gaits, look.aim action row (PROPOSED to the Backrooms lead), skinned instancing.
