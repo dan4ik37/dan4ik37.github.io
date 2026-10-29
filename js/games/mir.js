@@ -2027,6 +2027,19 @@
     const tp = (x, z, yaw) => { if (!S?.P) return; if (S.mySeat) S.P.standUp(); S.P.place(x, null, z, yaw); S.rig?.snap(S.P.ch.x, S.P.ch.y, S.P.ch.z); if (S.rig) S.rig.yaw = yaw - PI; S.forceSend = true; savePos(); };
     S.phoneOff = Ph.attach('world', Object.assign(Object.create(PHONE_HOOKS), {   // hotkey — геттер общего прототипа (PHONE_HOOKS, T-085)
       title: '🌍 Мир Денчика',
+      // T-123 fix 5 (HUD_V2 §9.2): телефон стоя — листом снизу (≤ 60 %), картинка уезжает вверх: лицо персонажа не под телефоном;
+      // лёжа — телефон справа, картинка — в свободную часть. r — прямоугольник телефона (px окна) | null — закрыли
+      sheet: () => !!S?.vo,
+      cover(r){
+        const s = S; if (!s?.vo || !s.wrap) return;
+        const W = s.wrap.clientWidth, Hh = s.wrap.clientHeight;
+        if (!r) { s.vo.want(null, W, Hh); return; }
+        const w = s.wrap.getBoundingClientRect(), d = { l: 0, t: 0, r: 0, b: 0 };
+        if (r.top > w.top + w.height * .25 && r.left <= w.left + w.width * .1) d.b = Math.max(0, w.bottom - r.top);   // лист снизу
+        else if (r.left > w.left + w.width * .3) d.r = Math.max(0, w.right - r.left);   // справа
+        else if (r.right < w.right - w.width * .3) d.l = Math.max(0, r.right - w.left);   // слева (левша)
+        s.vo.want(d.b || d.r || d.l ? d : null, W, Hh);
+      },
       pause(on){ const s = S; if (!s?.C) return; s.phoneOn = on; s.C.blocked = on || !!s.menu; s.C.reset_state(); if (s.I) { if (on) { s.I.unlock(); s.I.reset?.(); } s.I.enabled = !on; } },
       // телефон в руке персонажа (как в ГТА): достаёт, у уха, играет, снимает — видят все (в 'st'); true — показываем человечком
       hand(st){

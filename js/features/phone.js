@@ -14,6 +14,9 @@
 // Игра подключает телефон: off = D37Phone.attach('world', { title, hotkey: true, bar: элемент (сюда кнопка 📱), pause(on),
 //   activity(), shot(), where(), players(), tp(x, z, yaw), toFriend(uid) → true/false, shard(n?) }) → off() при выходе.
 //   Пока телефон открыт — pause(true): игра держит C.blocked (как при окне ⚙️), мышь отпущена; Esc и P забирает телефон.
+//   T-123 (docs/HUD_V2.md §9.2): sheet() → true — стоя на телефоне экран не на весь, а листом снизу (≤ 60 %, css/phone.css .ph-gsheet);
+//   cover(прямоугольник телефона { left, top, right, bottom } в px окна | null) — открыли / закрыли / повернули: игра уводит
+//   картинку из-под телефона (D37E.viewOffset), чтобы персонаж и его лицо были видны.
 // Пути: '' (домашний), msgs, msgs/<uid>, friends, calls, calls/<код> (войти в звонок), incall, comm, comm/<id>[/<канал>|…],
 //   comm/join/<код>, camera, map, game (мини-игра «Птичка»), notif, bank (денки «Живого города»), settings. Ссылка #/phone/<путь>; приглашение #/c/<код> → #/chat/join/<код>.
 // Телефон в руке персонажа (как в ГТА, world3d.js): hooks.hand(состояние) — '' (убран), use (смотрит в экран), call (у уха —
@@ -318,6 +321,7 @@
       isOpen = true; openedByCall = !!opt.byCall;
       returnFocus = document.activeElement;
       root.hidden = false;
+      { const sh = ctx?.hooks.sheet; root.classList.toggle('ph-gsheet', !!(typeof sh === 'function' ? sh() : sh)); }
       document.documentElement.classList.add('ph-open');
       // персонаж достаёт телефон (3D) — экран выезжает снизу, когда телефон уже в руке; иначе — сразу
       cur = path !== undefined && path !== null ? String(path).replace(/^\/+|\/+$/g, '').replace(/^call\//, 'calls/') : cur;
@@ -327,6 +331,7 @@
       if (anim) slideT = setTimeout(() => { if (isOpen) root.classList.add('on'); }, HAND_IN);
       else requestAnimationFrame(() => root.classList.add('on'));
       if (ctx?.hooks.pause) try { ctx.hooks.pause(true); } catch (e) {}
+      coverSync();
       if (!docked) setTimeout(() => { if (isOpen && !root.contains(document.activeElement)) root.focus({ preventScroll: true }); }, 30);
       refreshCounts();
     } else if (!opt.byCall) openedByCall = false;
@@ -345,11 +350,21 @@
     runCleanup();
     view.innerHTML = '';
     if (ctx?.hooks.pause) try { ctx.hooks.pause(false); } catch (e) {}
+    coverSync();
     slideT = setTimeout(() => { if (!isOpen) handSync(); }, HAND_OUT);   // сначала уехал экран — потом персонаж убирает телефон
     if (returnFocus && document.body.contains(returnFocus) && returnFocus.focus) try { returnFocus.focus({ preventScroll: true }); } catch (e) {}
     returnFocus = null;
   };
   P.toggle = path => isOpen && !docked ? P.close() : P.open(path);
+  // где телефон поверх игры (px окна, без анимации выезда — offset*, не getBoundingClientRect) → hooks.cover; закрыт — null.
+  // Одно чтение раскладки при открытии / закрытии / повороте, не каждый кадр
+  function coverSync(){
+    const f = ctx?.hooks.cover; if (!f || !root) return;
+    const r = isOpen && !docked && !root.hidden ? { left: root.offsetLeft, top: root.offsetTop, right: root.offsetLeft + root.offsetWidth, bottom: root.offsetTop + root.offsetHeight } : null;
+    try { f(r); } catch (e) { console.error(e); }
+  }
+  let coverRaf = 0;
+  window.addEventListener('resize', () => { if (!isOpen || !ctx?.hooks.cover || coverRaf) return; coverRaf = requestAnimationFrame(() => { coverRaf = 0; coverSync(); }); });
   // звонок закончился, а телефон открыл сам звонок — убрать
   P.closeIfByCall = () => { if (openedByCall && isOpen && !docked) P.close(); };
 
@@ -504,6 +519,7 @@
       renderBadges();
     }
     if (isOpen && hooks?.pause) try { hooks.pause(true); } catch (e) {}
+    if (isOpen) coverSync();
     hand = ''; handSync();   // разговор уже идёт — персонаж сразу у уха (вошёл в мир во время звонка)
     setTimeout(() => actCheck(true), 300);
     if (pendingTp) tryPendingTp();
@@ -511,6 +527,7 @@
       btn?.remove();
       if (ctx !== me) return;
       if (isOpen && me.hooks.pause) try { me.hooks.pause(false); } catch (e) {}
+      if (isOpen && me.hooks.cover) try { me.hooks.cover(null); } catch (e) {}
       ctx = null;
       if (isOpen && (cur === 'map' || cur === 'camera')) P.refresh();
       setTimeout(() => actCheck(true), 300);

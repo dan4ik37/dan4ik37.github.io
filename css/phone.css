@@ -78,6 +78,18 @@ html.s3-open .call-pill{top:calc(env(safe-area-inset-top) + 48px)}
   .ph .ph-call{padding:44px 16px 30px}
   .ph .ph-call .ph-ava{margin:4px 0 8px}
 }
+/* T-123 (HUD_V2 §9.2): поверх игры стоя (игра попросила hooks.sheet — «Мир Денчика») — лист снизу ≤ 60 % экрана, а не на весь:
+   персонаж и лицо видны над ним (игра уводит картинку вверх — hooks.cover); содержимое — компактнее, как у телефона лёжа */
+@media (max-width:560px) and (orientation:portrait){
+  .ph.ph-gsheet:not(.docked){top:40vh;top:40dvh;height:auto}
+  .ph.ph-gsheet:not(.docked) .ph-wid{padding:8px 12px;margin-bottom:10px}
+  .ph.ph-gsheet:not(.docked) .ph-wid>b{font-size:26px}
+  .ph.ph-gsheet:not(.docked) .ph-home{padding:10px 14px 26px}
+  .ph.ph-gsheet:not(.docked) .ph-grid{gap:10px 6px}
+  .ph.ph-gsheet:not(.docked) .ph-icon>i{width:48px;height:48px;font-size:23px;border-radius:14px}
+  .ph.ph-gsheet:not(.docked) .ph-dock{margin-top:10px;padding:8px}
+  .ph.ph-gsheet:not(.docked) .ph-call{padding:44px 16px 30px}
+}
 @media (prefers-reduced-motion:reduce){.ph{transition:none;transform:none}}
 html.ph-open:has(.ph:not(.docked)) .chat-toast{display:none}
 
