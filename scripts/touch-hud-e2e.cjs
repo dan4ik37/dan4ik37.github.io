@@ -92,6 +92,33 @@ const touch = async (send, x, y, holdMs = 70, move) => {
   await sleep(60);
 };
 
+// ═══ T-123: круг позы — удержал кнопку позы, круг открылся (он поднят над пальцем и прижат к краю экрана) — повёл палец на
+// НАРИСОВАННЫЙ значок и отпустил: выбран именно он (до исправления — сосед по направлению от точки нажатия). want — { подпись: поза },
+// cur — выражение «поза сейчас»; после каждой — короткое нажатие кнопки позы (с метками времени касания): встал ═══
+async function poseSlide(B, btnSel, radSel, want, cur, tag){
+  const { send, ev } = B;
+  const at = sel => ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e || e.hidden || !e.getClientRects().length) return null; const r = e.getBoundingClientRect(); return r.width ? [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] : null; })()`);
+  const tp = (type, x, y, ts) => send('Input.dispatchTouchEvent', Object.assign({ type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1, radiusX: 4, radiusY: 4 }] }, ts ? { timestamp: ts } : {}));
+  const qtap = async (x, y) => { const t = Date.now() / 1000; await tp('touchStart', x, y, t); await tp('touchEnd', 0, 0, t + .09); await sleep(400); };
+  for (const [label, pose] of Object.entries(want)) {
+    const pb = await at(btnSel);
+    if (!pb) { ok(false, `${tag}: нет кнопки позы (${btnSel})`); return; }
+    await tp('touchStart', pb[0], pb[1]);
+    let ic = null; for (let i = 0; i < 25 && !ic; i++) { await sleep(100); ic = await at(`${radSel} .e2-rad-it[aria-label="${label}"]`); }
+    if (!ic) { await tp('touchEnd'); ok(false, `${tag}: удержал кнопку позы — круга с «${label}» нет`); continue; }
+    for (let k = 1; k <= 5; k++) { await tp('touchMove', pb[0] + (ic[0] - pb[0]) * k / 5, pb[1] + (ic[1] - pb[1]) * k / 5); await sleep(40); }
+    await sleep(80); await tp('touchEnd'); await sleep(600);
+    const got = await ev(cur);
+    ok(got === pose, `${tag}: удержал позу и повёл палец на видимый «${label}» — ${pose}`, { got, pb, ic });
+    if (got && got !== 'stand') {
+      const pb2 = await at(btnSel); if (pb2) await qtap(pb2[0], pb2[1]);
+      const g2 = await ev(cur);
+      ok(!g2 || g2 === 'stand', `${tag}: «${label}» → нажал кнопку позы — встал`, g2);
+    }
+    await sleep(300);
+  }
+}
+
 async function openKubomir(B, VW, VH){
   const { send, ev } = B;
   const ls = { d37_perf: 'low', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_gfx: 'low', d37_settings: JSON.stringify({ gfxPreset: 'low', gfx: 'low', autoLand: true }), d37_kb_opt: JSON.stringify({ rd: 4 }) };
@@ -280,12 +307,12 @@ async function fullChecks(B, VW, VH, row){
     await qtap('pose');
     ok(!(await ev(`!!GAME_IMPL.kubomir._test.state().touchSneak`)), 'кнопка позы: ещё раз — встал', await kst());
     const pb = (await geo()).btns.find(b => b.id === 'pose');
-    if (pb) {   // круг из четырёх (по часовой от верха): ⬇ красться, 🐛 ползком, 🪑 сесть, 🛌 лечь — повёл влево — лечь
-      await touch(send, pb.x, pb.y, 120, [[pb.x - 10, pb.y], [pb.x - 30, pb.y], [pb.x - 60, pb.y]]);
-      await sleep(300);
-      ok(await ev(`GAME_IMPL.kubomir._test.poseCur()`) === 'lie', 'круг позы: удержал ⬇ и повёл влево — лёг', await ev(`GAME_IMPL.kubomir._test.poseCur()`));
+    if (pb) {   // круг из четырёх (по часовой от верха): ⬇ красться, 🐛 ползком, 🪑 сесть, 🛌 лечь — повёл палец на каждый видимый значок
+      await poseSlide(B, '.kb-tbar [data-id="pose"]', '.kb-wrap .e2-radial:not([hidden])',
+        { 'Лечь': 'lie', 'Сесть': 'sit', 'Ползком': 'crawl', 'Красться': 'sneak' }, `GAME_IMPL.kubomir._test.poseCur() || 'stand'`, '«Кубомир»');
       await qtap('pose'); await sleep(200);
-      ok(!(await ev(`GAME_IMPL.kubomir._test.poseCur()`)), 'лежит — нажал позу — встал');
+      if (await ev(`GAME_IMPL.kubomir._test.poseCur()`)) { await qtap('pose'); await sleep(200); }
+      ok(!(await ev(`GAME_IMPL.kubomir._test.poseCur()`)), 'круг позы пройден — стоит');
       await touch(send, pb.x, pb.y, 500); await sleep(200);   // удержал, не ведя, — круг ждёт нажатия (3 с): 🪑
       const cs = await at('.kb-wrap .e2-radial:not([hidden]) .e2-rad-it[data-i="2"]'); if (cs) await touch(send, cs[0], cs[1], 60);
       await sleep(300);
@@ -454,6 +481,14 @@ async function worldChecks(B, VW, VH){
     for (const r of m.matchedCSSRules) console.log('   правило:', r.rule.selectorList.text, '→', r.rule.style.cssProperties.filter(p => /right|bottom|padding|inset/.test(p.name)).map(p => p.name + ':' + p.value + (p.important ? '!' : '')).join('; '));
     if (m.inlineStyle) console.log('   inline:', m.inlineStyle.cssText);
   }
+  // T-123: круг позы — повёл палец на видимый значок (правша и левша)
+  const wPose = `(() => { const P = GAME_IMPL.world._test.state().P; return P.mode === 'sit' ? (P.seat?.lie ? 'lie' : 'sit') : P.crouch ? 'crouch' : 'stand'; })()`;
+  await ev(`(() => { document.querySelectorAll('.age-sheet,#appCard,.apu,.apt,.notif-toast,.chat-toast,.wld-panel').forEach(e => e.remove()); return 1; })()`);
+  for (const lefty of [false, true]) {
+    await ev(`(() => { D37Settings.set('lefty', ${lefty}); return 1; })()`); await sleep(600);
+    await poseSlide(B, '.wld-wrap .e-btn[data-k="pose"]', '.wld-wrap .e2-radial:not([hidden])', { 'Сесть': 'sit', 'Лечь': 'lie', 'Присесть': 'crouch' }, wPose, lefty ? '«Мир», левша' : '«Мир»');
+  }
+  await ev(`(() => { D37Settings.set('lefty', false); return 1; })()`); await sleep(300);
 }
 
 // ═══ «Подземье»: кнопки не наезжают, под пальцем — свои, «Настроить кнопки» в ⚙️ → «⛏ Подземье» двигает их (CSS-переменные) ═══
@@ -498,4 +533,10 @@ async function podzemChecks(B, VW, VH){
   ok(jl && jl.rx < VW / 2 && Math.abs(pl.x - jl.x) < 2 && Math.abs(pl.y - jl.y) < 2, '«Подземье», левша: «прыжок» слева, в редакторе — там же', [jl, pl]);
   await ev(`(() => { D37Settings.set('lefty', false); return 1; })()`); await sleep(300);
   await shot(send, `podzem-${VW}x${VH}-after-editor`);
+  // T-123: круг позы — повёл палец на видимый значок (правша и левша; круг поднят над пальцем на 124 px и сдвинут на ∓40)
+  for (const lefty of [false, true]) {
+    await ev(`(() => { D37Settings.set('lefty', ${lefty}); return 1; })()`); await sleep(500);
+    await poseSlide(B, '.pz-touch [data-t="pose"]', '.pz-wrap > .e2-radial:not([hidden])', { 'Сесть': 'sit', 'Лечь': 'lie', 'Присесть': 'crouch' }, `GAME_IMPL.podzem.api.poseNow() || 'stand'`, lefty ? '«Подземье», левша' : '«Подземье»');
+  }
+  await ev(`(() => { D37Settings.set('lefty', false); return 1; })()`); await sleep(300);
 }

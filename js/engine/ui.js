@@ -226,16 +226,19 @@
         el.style.left = ox + 'px'; el.style.top = oy + 'px';
         sel = -1; lbl.textContent = oo.title || ''; moved = false; sticky = false; clearTimeout(stickyT);
         lock = !!oo.lock; vx = vy = 0;
-        from = oo.from || null;   // палец (px экрана), с которого открыли: выбор — по сдвигу от него (круг может стоять в стороне)
+        from = !lock && oo.from ? oo.from : null;   // палец (px экрана), с которого открыли: пока не сдвинулся на DEAD — выбора нет (круг может стоять в стороне)
         el.hidden = false; open = true;
         if (oo.sticky) toSticky();
       },
-      // палец (px экрана): сектор — по углу от середины круга, ближе 28 px — «отмена»
+      // палец (px экрана): сектор — по углу от середины НАРИСОВАННОГО круга (он бывает прижат к краю или поднят над пальцем —
+      // T-123: повёл палец на видимый значок — выбран он, а не сосед); ближе DEAD к середине (✕) — «отмена»;
+      // пока палец не сдвинулся на DEAD от точки нажатия — выбора нет (иначе дрожь пальца под кругом выбрала бы нижний пункт)
       move(cx, cy){
         if (!open || !hb) return;
-        const dx = from ? cx - from.x : cx - hb.left - ox, dy = from ? cy - from.y : cy - hb.top - oy, d = Math.hypot(dx, dy);
-        if (d > 14) moved = true;
-        if (d < DEAD) { setSel(-1); return; }
+        const dx = cx - hb.left - ox, dy = cy - hb.top - oy;
+        const dm = from ? Math.hypot(cx - from.x, cy - from.y) : Math.hypot(dx, dy);
+        if (dm > 14) moved = true;
+        if (dm < DEAD || Math.hypot(dx, dy) < DEAD) { setSel(-1); return; }
         const n = items.length, a = Math.atan2(dy, dx) + Math.PI / 2;
         setSel(((Math.round(a / (2 * Math.PI / n)) % n) + n) % n);
       },
@@ -472,22 +475,28 @@
     function setLatch(v){ if (latch === v) return; latch = v; C?.press('crouch', v); poseBtn?.classList.toggle('on', v); }
     function wirePose(d){
       poseBtn = d;
-      let pid = null, x0 = 0, y0 = 0, holdT = 0, opened = false;
+      let pid = null, x0 = 0, y0 = 0, holdT = 0, opened = false, t0 = 0, mv = false;
       d.addEventListener('pointerdown', e => {
         e.preventDefault(); e.stopPropagation(); try { d.setPointerCapture(e.pointerId); } catch (er) {}
-        pid = e.pointerId; x0 = e.clientX; y0 = e.clientY; opened = false;
+        pid = e.pointerId; x0 = e.clientX; y0 = e.clientY; opened = false; t0 = e.timeStamp; mv = false;
         clearTimeout(holdT); holdT = later(() => { if (pid != null && !opened) opened = openPose(center(d), { from: { x: x0, y: y0 } }); }, 250);
         seenBtn(d);
       });
       d.addEventListener('pointermove', e => {
         if (e.pointerId !== pid) return;
-        if (!opened && Math.hypot(e.clientX - x0, e.clientY - y0) > 18) { clearTimeout(holdT); timers.delete(holdT); opened = openPose(center(d), { from: { x: x0, y: y0 } }); }
+        const far = Math.hypot(e.clientX - x0, e.clientY - y0) > 18; if (far) mv = true;
+        if (!opened && far) { clearTimeout(holdT); timers.delete(holdT); opened = openPose(center(d), { from: { x: x0, y: y0 } }); }
         if (opened) radial().move(e.clientX, e.clientY);
       });
       const up = e => {
         if (e.pointerId !== pid) return;
         pid = null; clearTimeout(holdT); timers.delete(holdT);
-        if (opened) { opened = false; radial().up(); return; }
+        if (opened) {
+          opened = false;
+          // круг открыл запоздавший таймер (тяжёлый кадр), а по времени события это короткое нажатие без сдвига — нажатие
+          if (!mv && e.type === 'pointerup' && e.timeStamp - t0 < 250) radial().close(true);
+          else { radial().up(); return; }
+        }
         if (e.type !== 'pointerup') return;
         // нажатие: сидит/лежит/ползёт — встать; бежит — кувырок; иначе — присесть и держать (нажал ещё раз — встал)
         const cur = poseO?.current ? poseO.current() : '';
@@ -497,7 +506,7 @@
       };
       d.addEventListener('pointerup', up); d.addEventListener('pointercancel', up);
     }
-    // круг — над кнопкой позы (не закрывает кнопки; выбор считается от пальца, так что место круга на выбор не влияет)
+    // круг — над кнопкой позы (не закрывает кнопки и палец; выбор — по углу от середины нарисованного круга: повёл на значок — он)
     const center = d => { const b = d.getBoundingClientRect(), h = el.getBoundingClientRect(); return { x: b.left + b.width / 2 - h.left - 40, y: b.top - h.top - 124 }; };
     // ── действие ──
     let actBtn = null, pill = null, holdC = null, verb = null, verbK = '', holdQ = 0, pillT = 0;

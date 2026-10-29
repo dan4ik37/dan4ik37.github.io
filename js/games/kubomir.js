@@ -2351,7 +2351,7 @@
     R.open(POSE_IT.map(it => Object.assign({}, it, { cur: it.id === cur })), at, { onPick: it => posePick(st, it.id), from: oo.from, lock: oo.lock, sticky: oo.sticky, title: oo.title || '' });
     return true;
   }
-  // нажатия кнопки позы (kubomir-input.js touchBar: b.ptr): удержал 0,25 с или повёл пальцем — круг над кнопкой, выбор — по сдвигу пальца
+  // нажатия кнопки позы (kubomir-input.js touchBar: b.ptr): удержал 0,25 с или повёл пальцем — круг над кнопкой, выбор — по углу от середины круга (повёл на значок — он)
   function poseBtnPtr(st){
     let pid = null, x0 = 0, y0 = 0, ht = 0, opened = false, t0 = 0, mv = false;
     const openAt = d => { const b = d.getBoundingClientRect(), w = wrap()?.getBoundingClientRect(); if (!w) return; opened = poseRadial(st, { x: b.left + b.width / 2 - w.left - 40, y: b.top - w.top - 124 }, { from: { x: x0, y: y0 } }); };

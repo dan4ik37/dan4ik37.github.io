@@ -1245,7 +1245,7 @@
         e.preventDefault(); e.stopPropagation();
         const t = b.dataset.t;
         try { b.setPointerCapture(e.pointerId); } catch (er) {}
-        const q = { kind: 'btn', t, x0: e.clientX, y0: e.clientY, rad: false, holdT: 0 };
+        const q = { kind: 'btn', t, x0: e.clientX, y0: e.clientY, rad: false, holdT: 0, t0: e.timeStamp, mv: false };
         ptr.set(e.pointerId, q);
         if (b.classList.contains('new')) { b.classList.toggle('new', false); window.D37TouchLayout?.markSeen?.('podzem', 'b-' + t); }
         if (t === 'pose') { q.holdT = setTimeout(() => { if (ptr.get(e.pointerId) === q && !q.rad) openRad(q, 'pose', b); }, 250); return; }
@@ -1261,14 +1261,17 @@
       // поза: сдвинул палец — круг сразу; ⛏ 2.0: смахнул вверх — круг «что в руке» (копать перестаёт)
       touchEl.addEventListener('pointermove', e => {
         const q = ptr.get(e.pointerId); if (!q || q.kind !== 'btn') return;
-        if (q.rad) { rad?.move(e.clientX, e.clientY); return; }
         const dx = e.clientX - q.x0, dy = e.clientY - q.y0;
+        if (!q.mv && Math.hypot(dx, dy) > 18) q.mv = true;
+        if (q.rad) { rad?.move(e.clientX, e.clientY); return; }
         if (q.t === 'pose' && Math.hypot(dx, dy) > 18) { clearTimeout(q.holdT); openRad(q, 'pose', touchEl.querySelector('[data-t="pose"]')); }
         else if (v2 && q.t === 'use' && dy < -48 && Math.abs(dx) < 60) { U.touch.use = false; U.touch.front = false; API.attackEnd(); btn('use', false); openRad(q, 'use', touchEl.querySelector('[data-t="use"]')); }
       });
       const endBtn = e => {
         const q = ptr.get(e.pointerId); if (!q || q.kind !== 'btn') return;
         ptr.delete(e.pointerId); clearTimeout(q.holdT);
+        // круг открыл запоздавший таймер (тяжёлый кадр), а по времени события это короткое нажатие без сдвига — нажатие (как «Кубомир»)
+        if (q.rad && q.t === 'pose' && e.type === 'pointerup' && !q.mv && e.timeStamp - q.t0 < 250) { rad?.close(true); poseTap(); return; }
         if (q.rad) { if (e.type === 'pointerup') rad?.up(); else rad?.close(true); return; }
         if (q.t === 'pose') { if (e.type === 'pointerup') poseTap(); return; }
         if (q.t !== 'build') btn(q.t, false);
