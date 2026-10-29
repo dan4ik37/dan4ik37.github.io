@@ -408,6 +408,19 @@ spec/data/skeleton.json (Unity HumanBodyBones names, left/right = the character'
   20 × 600 frames — heap +0.09 MB, 0.026 ms per frame (PC). Leak 20× close/open (the world reloads 20 animated models): 0 live instances
   after every close, 0 bones/skeletons/mixers alive at the end, heap 22.3 → 26.9 (cycle 10) → 27.1 MB (cycle 20) — the same ~5 MB warm-up
   as with static models or an empty world, flat after it. Generator: 35 clips in ~145 ms (node). AI3D human GLB 687 KB, compile 45–64 ms.
+- **Review fixes (29.10 evening).** (1) Toes: at the lift they were snapped from flat to the foot's 55° toe-down pitch (toe tip 25 mm
+  into the floor, toe sole −44 mm) — now they straighten over the first half of the swing (≤ 11.8°/key, sole ≥ −2.1 mm = the planted
+  wobble). (2) Biped/Rocketbox: thighs are children of «Bip01 Spine», clavicles of «Bip01 Neck» — locals were computed against the shared
+  parent (legs rode the spine, arms the neck: 15.7° / 136 mm in crouch idle); now `tg.par` = the nearest mapped ancestor in the MODEL
+  hierarchy and position tracks keep re-parented joints on Hips/UpperChest (0.1 mm / 0.01°; test with own bone orientations, A-pose,
+  turned root). (3) stop_l / stop_r are entered at loop phase 0 / 0.5 (were both 0, with 0.75–1.25 s at full speed): slow down from the
+  first key, 0.68 m, still at 0.9 s, the named foot plants last. (4) `M.play`: clips with meta.loop = false play once and hold the end
+  (turn looped 90° and back); an unknown name plays the idle (it faded everything out and froze mid-pose); `'none'` keeps updating the
+  fade and ends in the rest pose (it froze too). (5) FBX default pose (node transforms) was a take's frame — build_fbx.py clears the pose
+  before export; check_fbx.py checks default = bind pose. (6) clips.csv: `dir_right` / `dir_fwd` / `turn_left_deg` by the character's own
+  sides (dir_x had +x = character LEFT, mirrored in Unity). (7) Strafes: cycle × 0.65, landing offset × 0.45 → feet ≤ 0.70 m apart (were
+  0.79–0.87), hips ≤ 5.2% low (were 12–17%: lunges). anim-test 67 checks, FBX check 111/111 (+ toe sole, default pose). GAMES_VER 151,
+  D37Apps VER 7.
 - **Gaps.** Quadrupeds get the rig but no shared gait (use AI3D `gait`); look.aim needs an action id row; one FBX on male proportions
   (Unity retargets; Foot IK cleans the rest); clips are keyed procedurally (no motion capture); the AI3D in-editor preview is rigid
   parts (the skinned look only after export); skinned copies are drawn one by one (no instancing).

@@ -10,7 +10,7 @@
 // three r149 (the same build as the games, only if not loaded yet), js/apps/ai3d/*, css/ai3d.css; leaving the route → unmount().
 (function () {
   'use strict';
-  const VER = '6';   // 6 — AI3D: общий скелет и действия (T-131, A2); 5 — 3D-мастерская AI3D /tools/3d; 4 — проект .d37photo и черновик при уходе из редактора
+  const VER = '7';   // 7 — AI3D A2 после проверки (носки, стоп, шаги вбок, Biped); 6 — AI3D: общий скелет и действия (T-131, A2); 5 — 3D-мастерская AI3D /tools/3d; 4 — проект .d37photo и черновик при уходе из редактора
   const FABRIC = 'https://cdn.jsdelivr.net/npm/fabric@7.4.0/dist/index.min.js';
   // ИИ «🪄 Убрать фон» — только по кнопке: ONNX Runtime Web 1.30.0 (MIT) с jsDelivr + модель U²-Netp (Apache-2.0, ~4,6 МБ)
   // с Hugging Face, закреплённая на коммите (лицензии проверены — docs/PHOTO.md)
