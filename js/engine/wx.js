@@ -446,7 +446,7 @@
       const u = h32(S, s, 60 + g) % 1000;
       let acc = 0;
       for (const r of B[g]) {
-        const I = r.dur === 0 ? x.K.pI : 500 + h32(S, s, 80 + g) % 501;
+        const I = r.dur === 0 && x.K.k !== 0 ? x.K.pI : 500 + h32(S, s, 80 + g) % 501;   // 'par' on an empty slot: its own intensity
         if (!eligible(r, x, W, reg, I)) continue;
         acc += rarity(W, r);
         if (u < acc) {
@@ -464,13 +464,14 @@
       }
     }
     // groups 0 and 3: independent draws (flavour stacks; markers are read by hosts)
+    const I0 = x.K.k !== 0 ? x.K.pI : 500 + h32(S, s, 80) % 501;
     for (const g of [0, 3]) for (const r of B[g]) {
       if (r.float) continue;
       const pm = r.pm < 0 ? 1000 : rarity(W, r);
-      if (h32(S, s, 100 + r.id) % 1000 >= pm || !eligible(r, x, W, reg, x.K.pI)) continue;
+      if (h32(S, s, 100 + r.id) % 1000 >= pm || !eligible(r, x, W, reg, I0)) continue;
       if (r.id < 32) R.fl0 |= 1 << r.id; else if (r.id < 64) R.fl1 |= 1 << (r.id - 32);
       if (r.key === 'fire_risk') { const d = dryOf(x), T = LV.fire; let f = 0; while (f < 4 && d >= T[f + 1].b) f++; R.fire = f; }
-      if (r.vis && r.g === 0) { const v = r.vis[1] - Math.floor((r.vis[1] - r.vis[0]) * (x.K.pI - 500) / 500); if (v < R.vis) { R.vis = v; R.mist = r.id; } }
+      if (r.vis && r.g === 0) { const v = r.vis[1] - Math.floor((r.vis[1] - r.vis[0]) * (I0 - 500) / 500); if (v < R.vis) { R.vis = v; R.mist = r.id; } }
     }
     st.rolls.set(key, R);
     x.W = x.st = x.reg = x.q = null;   // the shared scratch keeps no closed world alive
@@ -560,6 +561,7 @@
     if (pr === PR.rain) o.tMin = 1;
     if (pr === PR.virga) { t.precip *= 1 - k; t.thunder *= 1 - k; t.cloud = Math.max(t.cloud, .55 * k); }
     if (r.hail) { const hc = hailClass(r, A.I, o.kids); o.hail = hc ? k : 0; t.hail = Math.max(t.hail, k); }
+    else if (pr === PR.rain) { o.hail = 0; t.hail *= 1 - k; }   // a warm-rain storm (tropics, monsoon): no hail
     if (r.mistLike) t.fog = Math.max(t.fog, k);
     if (r.look[2].flat) t.cloud = Math.max(t.cloud, .9 * k);
     if (r.dusty) t.cloud = Math.max(t.cloud, .35 * k);

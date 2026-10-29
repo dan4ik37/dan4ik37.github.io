@@ -221,6 +221,20 @@ sec('детский городок (kc) и storm: false — никаких си�
   ok(hailBig === 0, 'дети: град ≤ 1,3 см', hailBig);
   { const Wh = worldOf('temperate', { realm: 'adult' }), Wk = worldOf('temperate', {}); Wh.set({ weather: 'hail' }); Wk.set({ weather: 'hail' }); const a = Wh.at(0, 0, Date.now(), 5).hailSize, k = Wk.at(0, 0, Date.now(), 5).hailSize; hailAdult += a > 1.3 ? 1 : 0; ok(hailAdult > 0 && k <= 1.3 && k > 0, 'град «один всегда»: взрослые (после проверки 18+) — крупнее, дети — «шарик» 1,3 см', { a, k }); }
 }
+sec('строка «по родителю» на пустой части — своя сила (туман в низинах есть); тропическая гроза — без града');
+{
+  const reg = () => ({ ...X.regionOfClimate('temperate', {}), F: 16 });   // a valley
+  const W = worldOf('temperate', { reg, elements: 'real' }), Wt = worldOf('tropic', { elements: 'real' });
+  let mist = 0, mistK = 0, trop = 0, tropHail = 0;
+  for (let i = 0; i < (FULL ? 120000 : 30000); i++) {
+    const ms = Date.UTC(2026, 3, 1) + i * 211111;
+    const A = X.active(W, 0, 0, W.wNow(ms), ms, 'temperate');
+    if (A.r && A.r.key === 'valley_mist' && A.phase >= 2) { mist++; if (A.k > 0) mistK++; }
+    const s = Wt.at(0, 0, ms, 5); if (s.special === 'tropic_storm' && s.sp > .3) { trop++; if (s.hail > 0) tropHail++; }
+  }
+  ok(mist > 0 && mistK === mist, 'туман в низинах виден (сила > 0)', { mist, mistK });
+  ok(trop > 0 && tropHail === 0, 'тропическая гроза — без града', { trop, tropHail });
+}
 sec('фронт идёт с запада на восток: то же явление восточнее — позже ровно на x / front');
 {
   const W = worldOf('desert', { elements: 'real' }), W2 = worldOf('desert', { elements: 'real' });
