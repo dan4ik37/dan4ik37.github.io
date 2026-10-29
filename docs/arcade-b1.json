@@ -1,0 +1,768 @@
+{
+  "batch": "T-140 b1",
+  "branch": "t140-b1",
+  "base": "t140-arcade",
+  "integration": "All fields are also in js/games/arcade/<id>.json (the card read by scripts/make-arcade.mjs). Integrator: run `node scripts/make-arcade.mjs` (GAMES/GAME_TAGS, GAME_AGE, SEO pages, game_score_cap/game_win_xp, rules), `python -X utf8 img/games/_make-cards.py fifteen repeat popit watersort parking pet riddles evolve spinner flip`, bump GAMES_VER. Shared files were NOT edited on this branch.",
+  "xpNote": "XP like similar games in game_win_xp: 2–3 min runs 4 / duel 5 (catch, snake, lights, tiles); ≤ 40 s runs 2 / duel 4 (reaction). No coin rewards.",
+  "games": [
+    {
+      "id": "fifteen",
+      "prototype": "slide",
+      "icon": "🔢",
+      "title": "Пятнашки",
+      "color": "#5b8cff",
+      "desc": "Сдвигай плитки и собери их по порядку: три доски (3×3, 3×3, 4×4) за 3 минуты, цвет плитки подсказывает её ряд. С другом — одинаковые доски.",
+      "tags": "new mini friends brain",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "bestLabel": "очков",
+      "scoreCap": 700,
+      "scoreCapDuel": 700,
+      "xp": 4,
+      "xpDuel": 5,
+      "winForXp": "all 3 boards solved within 3 min",
+      "maxHonestScore": "660 = 3 × 100 + 2 × 180 s (instant solve)",
+      "runLength": "≤ 3 min",
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/fifteen.js"
+      ],
+      "rules": [
+        "Нажми плитку рядом с пустой клеткой — она переедет в пустую клетку.",
+        "Если нажать плитку в той же строке или столбце, что и пустая клетка, сдвинется вся линия до неё — это один ход.",
+        "Собери плитки по порядку слева направо и сверху вниз, пустая клетка — в правом нижнем углу.",
+        "Собранная доска — 100 очков. Собрал все три — бонус 2 очка за каждую оставшуюся секунду.",
+        "Время вышло — за каждую плитку на своём месте на текущей доске +3 очка."
+      ],
+      "tips": [
+        "Собирай по рядам: сначала верхний ряд, потом следующий — и не трогай уже собранное.",
+        "Последние две плитки ряда ставь вместе: сначала одну чуть в сторону, потом обе на место.",
+        "Цвет помогает: плитки одного цвета живут в одном ряду."
+      ],
+      "twist": "tiles coloured by target row, tiles in place glow, tapping any tile in the gap's row/column slides the whole line (one move), 3 boards race (3×3, 3×3, 4×4)",
+      "prototypeBugsFixed": [
+        "Math.random scramble → seeded rng; a board is never already solved at start",
+        "\"fewer moves is better\" with no end → bigger-is-better score + 3 min limit (competition needs both to finish)",
+        "no keyboard → arrows / WASD"
+      ],
+      "files": [
+        "js/games/arcade/fifteen.js",
+        "js/games/arcade/fifteen.json",
+        "scripts/arcade/fifteen.cjs"
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.071,
+          "p95": 0.2,
+          "p99": 1.5
+        },
+        "botRun": {
+          "score": 616,
+          "title": "🏆 Все доски собраны!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 483
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 620 : 100",
+          "b": "😔 Победил Гость 609 100 : 620"
+        }
+      }
+    },
+    {
+      "id": "repeat",
+      "prototype": "simon",
+      "icon": "🎵",
+      "title": "Повтори мелодию",
+      "color": "#a78bfa",
+      "desc": "Игра на память: послушай мелодию на четырёх клавишах и повтори её — каждый раунд на ноту длиннее. Три сердечка на ошибки. С другом — одна мелодия у обоих.",
+      "tags": "new mini friends brain",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "bestLabel": "очков",
+      "scoreCap": 1100,
+      "scoreCapDuel": 1100,
+      "xp": 4,
+      "xpDuel": 5,
+      "winForXp": "10+ rounds completed",
+      "maxHonestScore": "1020 = 40 rounds (Σ notes 820 + 5 × 40)",
+      "runLength": "until 3 mistakes / 40 rounds; 6 s idle = mistake",
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/repeat.js"
+      ],
+      "rules": [
+        "Слушай и смотри: клавиши загораются по одной — это мелодия раунда.",
+        "Когда покажется «Твой ход», нажми те же клавиши в том же порядке.",
+        "Каждая новая верная нота — +1 очко, вся мелодия раунда — ещё +5. Следующий раунд на ноту длиннее.",
+        "Ошибка или 6 секунд без нажатия — минус сердечко, мелодия прозвучит ещё раз.",
+        "Три сердечка потеряно — игра окончена. Всего 40 раундов."
+      ],
+      "tips": [
+        "Мелодия каждого раунда — это прошлая плюс одна новая нота в конце. Запоминай только новую.",
+        "Пой ноты про себя или запоминай знаки: ●▲■★.",
+        "Нажатия во время показа не считаются — не торопись."
+      ],
+      "twist": "3 hearts (a mistake replays the same melody), tempo rises from round 6, pentatonic notes with a symbol per key (playable muted)",
+      "prototypeBugsFixed": [
+        "Math.random melody → rng (same melody for both)",
+        "playback via setTimeout/async (races on fast taps and on close) → step counters",
+        "could not restart after a mistake without \"Start\" → kit overlay \"↻ Ещё раз\"",
+        "waiting forever for input → 6 s idle counts as a mistake",
+        "own AudioContext per game → shared kit sound"
+      ],
+      "files": [
+        "js/games/arcade/repeat.js",
+        "js/games/arcade/repeat.json",
+        "scripts/arcade/repeat.cjs"
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.015,
+          "p95": 0,
+          "p99": 0.5
+        },
+        "botRun": {
+          "score": 90,
+          "title": "🎵 Мелодия ушла"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 484
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 90 : 13",
+          "b": "😔 Победил Гость 609 13 : 90"
+        }
+      }
+    },
+    {
+      "id": "popit",
+      "prototype": "popit",
+      "icon": "🫧",
+      "title": "Поп-ит",
+      "color": "#ff6fd8",
+      "desc": "Лопай пупырки на скорость: 40 секунд, целый лист — +10 и он переворачивается, ✨ золотая пупырка — +5. С другом — одинаковые золотые пупырки.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "bestLabel": "очков",
+      "scoreCap": 1000,
+      "scoreCapDuel": 1000,
+      "xp": 2,
+      "xpDuel": 4,
+      "winForXp": "score ≥ 200",
+      "maxHonestScore": "≈ 750 for a very fast two-finger player (≈ 13 taps/s); bot at 7.5 taps/s = 436",
+      "runLength": "40 s",
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/popit.js"
+      ],
+      "rules": [
+        "Нажми на целую пупырку — она лопнет, +1 очко.",
+        "Лопнул все 30 — +10 очков, лист переворачивается, и пупырки снова целые.",
+        "✨ Золотая пупырка появляется ненадолго — успей нажать, это +5 очков.",
+        "У тебя 40 секунд. Время вышло — игра окончена."
+      ],
+      "tips": [
+        "Лопай по рядам — так не пропустишь пупырку в конце листа.",
+        "Играй двумя пальцами: каждый палец — свою половину листа.",
+        "Золотую лови сразу — за полторы секунды она исчезнет."
+      ],
+      "twist": "a fully popped sheet flips (+10, new colours), golden ✨ bubble for 1.5 s (+5), a note per row",
+      "prototypeBugsFixed": [
+        "Date.now timing and \"fewer seconds is better\" → 40 s limit and a score",
+        "auto-restart via setTimeout → kit overlay",
+        "Math.random sound pitch and own AudioContext → integer notes through the kit",
+        "whole field re-rendered with inline styles on every tap → class toggles"
+      ],
+      "files": [
+        "js/games/arcade/popit.js",
+        "js/games/arcade/popit.json",
+        "scripts/arcade/popit.cjs"
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.028,
+          "p95": 0.2,
+          "p99": 0.6
+        },
+        "botRun": {
+          "score": 455,
+          "title": "🔥 Пальцы-пулемёт!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 471
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 467 : 20",
+          "b": "😔 Победил Гость 769 20 : 467"
+        }
+      }
+    },
+    {
+      "id": "watersort",
+      "prototype": "water",
+      "icon": "🎨",
+      "title": "Сортировка красок",
+      "color": "#3a86ff",
+      "desc": "Головоломка: переливай краски из банки в банку, пока в каждой не останется один цвет. Три уровня за 3 минуты, у каждой краски свой знак. С другом — одинаковые банки.",
+      "tags": "new mini friends brain",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "bestLabel": "очков",
+      "scoreCap": 700,
+      "scoreCapDuel": 700,
+      "xp": 4,
+      "xpDuel": 5,
+      "winForXp": "all 3 levels solved within 3 min",
+      "maxHonestScore": "660 = (4+5+6) × 10 + 3 × 50 + 2 × 180 s",
+      "runLength": "≤ 3 min",
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/watersort.js"
+      ],
+      "rules": [
+        "Нажми банку, потом ту, куда перелить. Переливается верхний цвет — столько слоёв, сколько влезет.",
+        "Лить можно только на такой же цвет или в пустую банку. В банке помещается 4 слоя.",
+        "Краска впервые собрана в одну банку — +10 очков, банка закрывается крышкой ⭐.",
+        "Все краски разложены — уровень пройден, +50 очков. Прошёл все три — бонус 2 очка за каждую оставшуюся секунду.",
+        "«↶ Отменить ход» возвращает последнее переливание. Время вышло — игра окончена."
+      ],
+      "tips": [
+        "Не занимай обе пустые банки сразу — они нужны, чтобы распутать краски.",
+        "Сначала освобождай банку, где нужного цвета больше всего сверху.",
+        "Застрял — отмени пару ходов: это бесплатно."
+      ],
+      "twist": "paint jars with a symbol per colour (●▲■◆★♥, colour-blind friendly), completed jar gets a ⭐ lid, unlimited undo, 3 levels race (4/5/6 paints + 2 empty)",
+      "prototypeBugsFixed": [
+        "Math.random shuffle without a solvability check (dead-end levels possible) → rng + allocation-free DFS solver in create guarantees every level is solvable",
+        "\"fewer moves is better\" with no end → score + 3 min limit",
+        "undo via JSON.stringify of the whole field → 3-number ring",
+        "pouring a completed jar back and forth re-earned points → reward per colour, once per level"
+      ],
+      "files": [
+        "js/games/arcade/watersort.js",
+        "js/games/arcade/watersort.json",
+        "scripts/arcade/watersort.cjs"
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.044,
+          "p95": 0.1,
+          "p99": 1.2
+        },
+        "botRun": {
+          "score": 628,
+          "title": "🏆 Все краски разложены!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 44
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 632 : 90",
+          "b": "😔 Победил Гость 609 90 : 632"
+        }
+      }
+    },
+    {
+      "id": "parking",
+      "prototype": "park",
+      "icon": "🚗",
+      "title": "Парковка",
+      "color": "#ffd60a",
+      "desc": "Выпусти все машины со стоянки: машина едет по стрелке, только если путь свободен. Три стоянки за 2 минуты, врезался — БИП и −5. С другом — одинаковые стоянки.",
+      "tags": "new mini friends brain",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "bestLabel": "очков",
+      "scoreCap": 700,
+      "scoreCapDuel": 700,
+      "xp": 4,
+      "xpDuel": 5,
+      "winForXp": "all 3 lots cleared within 2 min",
+      "maxHonestScore": "640 = (8+10+13) × 10 + 3 × 30 + 2 × 120 s",
+      "runLength": "≤ 2 min",
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/parking.js"
+      ],
+      "rules": [
+        "Нажми на машину — она поедет по своей стрелке до края стоянки.",
+        "Если на пути стоит другая машина, никто не едет: «БИП!», мешающая машина качается, −5 очков (не ниже нуля).",
+        "Машина уехала — +10 очков. Стоянка пуста — +30, и открывается следующая.",
+        "Освободил все три стоянки — бонус 2 очка за каждую оставшуюся секунду. Время вышло — игра окончена."
+      ],
+      "tips": [
+        "Сначала ищи машины, у которых путь до края уже свободен.",
+        "Посмотри, кто мешает большому числу машин, — выпусти его пораньше.",
+        "Не жми наугад: каждый «БИП» стоит 5 очков."
+      ],
+      "twist": "a blocked car honks «БИП!» and the blocking car shakes (−5, never below 0), cars drive off with an animation, 3 lots race",
+      "prototypeBugsFixed": [
+        "Math.random → rng (same lots for both)",
+        "Date.now timing and \"fewer seconds is better\" with no end → score + 2 min limit",
+        "tapping a blocked car cost nothing → −5 and a hint",
+        "filter/flatMap over all cells on every tap → Int8Array occupancy grid",
+        "600 random attempts per lot (thousands of boxed doubles) → shuffled table of all 216 placements, 4 random bytes per rng() call"
+      ],
+      "files": [
+        "js/games/arcade/parking.js",
+        "js/games/arcade/parking.json",
+        "scripts/arcade/parking.cjs"
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.056,
+          "p95": 0,
+          "p99": 1.4
+        },
+        "botRun": {
+          "score": 606,
+          "title": "🏆 Ни одного БИП!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 488
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 618 : 110",
+          "b": "😔 Победил Гость 150 110 : 618"
+        }
+      }
+    },
+    {
+      "id": "pet",
+      "prototype": "pet",
+      "icon": "🐾",
+      "title": "Питомец",
+      "color": "#a98bff",
+      "desc": "Целый день с пушистым Бусей: корми, играй, укладывай спать и исполняй желания 💭, чтобы он не ушёл гулять. С другом — одинаковые желания.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "bestLabel": "очков",
+      "scoreCap": 600,
+      "scoreCapDuel": 600,
+      "xp": 4,
+      "xpDuel": 5,
+      "winForXp": "the whole day (2.5 min) survived",
+      "maxHonestScore": "≈ 510 = 150 s + 30 + ~22 wishes × 15; perfect bot = 450",
+      "runLength": "≤ 2.5 min",
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/pet.js"
+      ],
+      "rules": [
+        "Три шкалы: 🍎 еда, ⚽ игра и 💤 сон. Они понемногу тают, и чем ближе вечер, тем быстрее.",
+        "Кнопки «Кормить», «Играть» и «Спать» пополняют свою шкалу. Пока Буся ест, играет или спит, другие кнопки ждут.",
+        "Шкала почти полная — Буся скажет «Не хочу!», и ты потеряешь 3 очка.",
+        "💭 Появилось желание — исполни его за 4 секунды и получи +15 очков.",
+        "Каждая секунда дня — +1 очко, весь день — ещё +30. Любая шкала опустела — Буся обиделся и ушёл гулять, игра окончена."
+      ],
+      "tips": [
+        "Не жди, пока шкала станет красной: помогай, когда она на середине.",
+        "Укладывай спать, когда еда и игра полные — во сне они тают медленнее.",
+        "Желание стоит 15 секунд жизни — лови каждое."
+      ],
+      "twist": "own creature Буся (CSS-drawn fluffy star-meadow critter, no Tamagotchi look), wishes 💭 (+15 within 4 s), sleeping halves the other needs' decay, evening makes sleep drain faster, sky changes morning → night",
+      "prototypeBugsFixed": [
+        "setInterval(1 s) + s.map per tick → fixed steps + Float64Array",
+        "buttons had no cooldown (spam kept the pet alive forever) → each action takes time",
+        "overfeeding silently hit another need → \"Не хочу!\" and −3",
+        "after the end ANY button press instantly restarted (same class of bug as \"tap → game over\") → kit overlay",
+        "endless run → the day ends",
+        "💀 → \"ушёл гулять\" (kids realm)"
+      ],
+      "files": [
+        "js/games/arcade/pet.js",
+        "js/games/arcade/pet.json",
+        "scripts/arcade/pet.cjs"
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.053,
+          "p95": 0.1,
+          "p99": 0.8
+        },
+        "botRun": {
+          "score": 465,
+          "title": "🌟 Лучший друг Буси!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 473
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 465 : 50",
+          "b": "😔 Победил Гость 265 50 : 465"
+        }
+      }
+    },
+    {
+      "id": "riddles",
+      "prototype": "brain",
+      "icon": "🧠",
+      "title": "Загадки с подвохом",
+      "color": "#ffc233",
+      "desc": "10 народных загадок-хитростей на время: в каждой подвох, после ответа — короткое «почему». Чем быстрее верный ответ, тем больше очков. С другом — одни загадки.",
+      "tags": "new mini friends brain",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "bestLabel": "очков",
+      "scoreCap": 1100,
+      "scoreCapDuel": 1100,
+      "xp": 4,
+      "xpDuel": 5,
+      "winForXp": "7+ correct of 10",
+      "maxHonestScore": "1100 = 10 × (50 + 4 × 15 s)",
+      "runLength": "≤ 10 × 17.5 s",
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/riddles.js"
+      ],
+      "rules": [
+        "Прочитай загадку и выбери один из четырёх ответов.",
+        "На ответ — 15 секунд. Верно — 50 очков и ещё 4 за каждую оставшуюся секунду. Неверно или время вышло — 0.",
+        "После ответа появится объяснение. Нажми «Дальше ▶» или подожди 2,5 секунды.",
+        "Всего 10 загадок. 7 и больше верных ответов — победа."
+      ],
+      "tips": [
+        "Читай вопрос до конца: подвох обычно в одном слове.",
+        "Самый «очевидный» ответ часто неверный.",
+        "Если сомневаешься, подумай, не про буквы ли загадка."
+      ],
+      "twist": "32 folk trick riddles (public-domain folklore, no puzzle-app levels) with a short \"why\" after each answer, speed bonus, timer bar",
+      "prototypeBugsFixed": [
+        "sort(() => Math.random() − .5) (biased, not reproducible) → Fisher–Yates on rng; same questions and answer order for both",
+        "correct answer often in the same slot → answers shuffled",
+        "no time limit per question → 15 s",
+        "setTimeout transitions → steps; double tap could skip the explanation → 0.5 s guard",
+        "innerHTML with text → textContent",
+        "only 8 questions → 32"
+      ],
+      "files": [
+        "js/games/arcade/riddles.js",
+        "js/games/arcade/riddles.json",
+        "scripts/arcade/riddles.cjs"
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.014,
+          "p95": 0,
+          "p99": 0.3
+        },
+        "botRun": {
+          "score": 1096,
+          "title": "🏆 Ни одного подвоха не пропустил!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 506
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 1 100 : 220",
+          "b": "😔 Победил Гость 265 220 : 1 100"
+        }
+      }
+    },
+    {
+      "id": "evolve",
+      "prototype": "evo",
+      "icon": "🐉",
+      "title": "Эволюция",
+      "color": "#2ec27e",
+      "desc": "Соединяй двух одинаковых: яйцо → птенец → ящерка → дракончик → дракон. Яйца падают всё чаще — не дай гнезду переполниться за 2 минуты. С другом — одинаковые яйца.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "bestLabel": "очков",
+      "scoreCap": 1000,
+      "scoreCapDuel": 1000,
+      "xp": 4,
+      "xpDuel": 5,
+      "winForXp": "2+ dragons",
+      "maxHonestScore": "≈ 700 (≈ 7 dragons + chains); bot at 3 taps/s = 539",
+      "runLength": "≤ 2 min (ends earlier when the nest overflows)",
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/evolve.js"
+      ],
+      "rules": [
+        "Нажми на одного, потом на второго такого же — они сольются в следующего по цепочке во второй клетке.",
+        "Птенец — +1, ящерка — +3, дракончик — +8, дракон — +25. Дракон улетает и освобождает клетку.",
+        "Слияние меньше чем через секунду после прошлого — серия: сверху +1, +2… до +5.",
+        "Выбранного можно переставить в пустую клетку.",
+        "Гнездо переполнилось (новому яйцу некуда упасть) — игра окончена. Иначе через 2 минуты. Два дракона и больше — победа."
+      ],
+      "tips": [
+        "Сливай яйца сразу — их больше всего, и они быстро забивают гнездо.",
+        "Держи одинаковых рядом: так быстрее найти пару.",
+        "Серия растёт, если сливать без пауз, — не отвлекайся."
+      ],
+      "twist": "eggs fall into the 4×4 nest by themselves and faster over time, the grown dragon flies away (frees the cell), chain bonus for merges < 1 s apart, own chain 🥚→🐣→🦎→🐲→🐉",
+      "prototypeBugsFixed": [
+        "Math.random → rng (same eggs in the same cells for both)",
+        "\"fewer moves is better\" and a dead end with no game over (full board, nothing to merge — the game hung) → score, 2 min limit and game over on overflow",
+        "the dragon stayed in its cell forever → flies away"
+      ],
+      "files": [
+        "js/games/arcade/evolve.js",
+        "js/games/arcade/evolve.json",
+        "scripts/arcade/evolve.cjs"
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.037,
+          "p95": 0,
+          "p99": 0.4
+        },
+        "botRun": {
+          "score": 522,
+          "title": "🐉 Повелитель драконов!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 476
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 522 : 74",
+          "b": "😔 Победил Гость 609 74 : 522"
+        }
+      }
+    },
+    {
+      "id": "spinner",
+      "prototype": "spin",
+      "icon": "🌀",
+      "title": "Спиннер",
+      "color": "#2ec27e",
+      "desc": "Держи скорость спиннера в зелёной зоне: свайп раскручивает, прижатый палец тормозит, зона меняется каждые 5 секунд. 40 секунд на точность. С другом — одинаковые зоны.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "bestLabel": "очков",
+      "scoreCap": 800,
+      "scoreCapDuel": 800,
+      "xp": 2,
+      "xpDuel": 4,
+      "winForXp": "score ≥ 250",
+      "maxHonestScore": "≈ 640 (8 zones × (2 s × 10 + 3 s × 20)); bot = 592",
+      "runLength": "40 s",
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/spinner.js"
+      ],
+      "rules": [
+        "Веди пальцем (или мышью) по кругу — спиннер раскручивается: четверть круга прибавляет около 1,5 оборота в секунду.",
+        "Прижми палец и держи на месте — спиннер тормозит. Сам он тоже понемногу замедляется.",
+        "Каждые 0,1 секунды со скоростью в зелёной зоне — +1 очко. В зоне дольше 2 секунд — 🔥 и +2.",
+        "Зона меняется каждые 5 секунд. Игра длится 40 секунд.",
+        "Клавиатура: пробел или → — толчок, ↓ — тормоз."
+      ],
+      "tips": [
+        "Короткие свайпы точнее одного длинного.",
+        "Скорость падает сама — подталкивай заранее, пока стрелка у нижнего края зоны.",
+        "Зона сдвинулась ниже — коснись спиннера и подержи палец."
+      ],
+      "twist": "not \"who spins fastest\" but precision: keep the speed inside a green zone that moves every 5 s (rng); 2+ s in the zone = 🔥 ×2; a swipe adds speed by swept angle (frame- and device-independent), a held finger brakes",
+      "prototypeBugsFixed": [
+        "a += w and w *= .993 per FRAME (2.4× faster/longer on 144 Hz) → per second",
+        "record = max speed (depends on mouse vs finger flick speed) → zone precision",
+        "no end → 40 s",
+        "HUD string rebuilt every frame → only on change; canvas labels precomputed",
+        "atan2 per pointer event (boxed doubles) → once per step"
+      ],
+      "files": [
+        "js/games/arcade/spinner.js",
+        "js/games/arcade/spinner.json",
+        "scripts/arcade/spinner.cjs"
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.413,
+          "p95": 0.9,
+          "p99": 1.9
+        },
+        "botRun": {
+          "score": 541,
+          "title": "🌀 Мастер вращения!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 551
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 593 : 44",
+          "b": "😔 Победил Гость 769 44 : 593"
+        }
+      }
+    },
+    {
+      "id": "flip",
+      "prototype": "bottle",
+      "icon": "🍶",
+      "title": "Бутылка",
+      "color": "#3aa0ff",
+      "desc": "Подбрось бутылку с водой так, чтобы она встала на табурет: зажми, поймай силу и отпусти. На крышку — 25, два оборота — ×2. 10 бросков. С другом — одинаковые табуреты.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "bestLabel": "очков",
+      "scoreCap": 450,
+      "scoreCapDuel": 450,
+      "xp": 2,
+      "xpDuel": 4,
+      "winForXp": "score ≥ 100",
+      "maxHonestScore": "390 = 10 × (15 × 2) + streak 90",
+      "runLength": "10 throws (≈ 30–90 s; auto-throw after 8 s idle, auto-release after 5 s hold)",
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/flip.js"
+      ],
+      "rules": [
+        "Зажми палец (кнопку мыши или пробел) — сила качается от слабой до сильной и обратно. Отпусти — бросок.",
+        "Бутылка сама летит к табурету, а сила решает, как высоко она взлетит и сколько оборотов успеет сделать (один оборот — 0,8 секунды полёта).",
+        "Встала на дно — 10 очков, почти идеально ровно — 15, встала на крышку — 25. Два оборота и больше — очки ×2.",
+        "Удачные броски подряд — серия: +2, +4, +6… Упала — серия сначала.",
+        "Всего 10 бросков. Не бросаешь 8 секунд — бутылка полетит сама, но слабо."
+      ],
+      "tips": [
+        "К высокому табурету нужно бросать сильнее — но и оборотов будет больше.",
+        "Поймай ритм: сила качается туда и обратно всегда одинаково.",
+        "Полтора оборота — на крышку: это 25 очков, но попасть сложнее."
+      ],
+      "twist": "a stool of different height/width per throw (rng); power sets flight time and so the number of turns; landing on the cap (1.5 turns) = 25, 2+ turns = ×2, streak bonus",
+      "prototypeBugsFixed": [
+        "motion and spin per FRAME (vy += .35, a += .18 → 2.4× faster on 144 Hz) → closed-form flight from time in 1/60 s steps, exact landing moment",
+        "power oscillation per frame → per second",
+        "pointerleave threw the bottle when the finger slid off the canvas → only release",
+        "spin independent of power and no target → stool at varying height",
+        "endless streak → 10 throws",
+        "text over the field every frame → only the throw result"
+      ],
+      "files": [
+        "js/games/arcade/flip.js",
+        "js/games/arcade/flip.json",
+        "scripts/arcade/flip.cjs"
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.373,
+          "p95": 0.9,
+          "p99": 2.4
+        },
+        "botRun": {
+          "score": 235,
+          "title": "🎉 Отличные броски!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 563
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 235 : 32",
+          "b": "😔 Победил Гость 609 32 : 235"
+        }
+      }
+    }
+  ],
+  "tests": {
+    "unit": "node scripts/arcade-test.cjs → 269 ok, 0 fail (bots identical at 30/60/144 FPS, recorded taps replayed identically, same seed → same game, Math.random/Date throw, scenarios incl. prototype-bug regressions, allocations per step)",
+    "chrome": "scripts/arcade-e2e.cjs, phone 412×915, touch, CPU ×4, two browsers over real Supabase Realtime: every game passed all 14 checks (start does not end the run, pause on hidden tab, frame budget, end overlay + record + «Ещё раз», 20 open/close, ⚔️ same field / live opponent score / result on both sides), 0 console errors. Numbers per game in games[].e2e.",
+    "harnessFlakes": "With several batches running Chrome at once, scripts/arcade-e2e.cjs failed 3 ways that were not game bugs: (1) the debug port is 9300 + random(400) and b2/b3/t138 Chromes sat in the same range; (2) Chrome took ~16 s to start (the loop allows 20 s); (3) local files took ~8 s each, so the page showed the static home markup with no site JS and «игра открылась» timed out. Each affected game passed when rerun. Suggested harness fix (not applied, shared file): --remote-debugging-port=0 + read <profile>/DevToolsActivePort, a 60 s start wait, one retry of the first open."
+  }
+}
