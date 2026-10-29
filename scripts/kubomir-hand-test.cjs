@@ -1065,7 +1065,9 @@ function fakeWorld(sky, blk, walls = new Set()){
     };
     { const a = chestFall(false), b = chestFall(true);
       ok(a.at && a.same === true && !a.old && a.tiles === 1, 'сундук в падающем куске: лёг на новое место вместе с содержимым (те же 27 ячеек), на старом месте пусто', a);
-      ok(!b.at && b.dia === 5 && b.cob === 64 && b.sw === 1 && !b.old, 'сундуку лечь некуда (там игрок) — содержимое высыпалось вещами «keep», ничего не пропало', b); }
+      ok(!b.at && b.dia === 5 && b.cob === 64 && b.sw === 1 && !b.old, 'сундуку лечь некуда (там игрок) — содержимое высыпалось вещами «keep», ничего не пропало', b);
+      KS.TILES = false; const c = chestFall(false); KS.TILES = true;
+      ok(c.old && c.tiles === 0, 'откат одной строкой (KubomirSupport.TILES = false): содержимое не едет с куском — как до T-124', c); }
     // вещи события: стопками, не больше 32 штук; 300 обычных вещей после — ни одной «keep» не вытеснили; «keep» не пропадают через 5 мин
     { const W = mkSW(); const { X } = mkS(W, 'soft');
       for (let i = 0; i < 40; i++) X.addItem(20 + i, 12, 20, { id: 'torch', n: 1 }, false, null, false, true);

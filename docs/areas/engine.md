@@ -239,6 +239,18 @@
 - Tests: support-load-test.cjs (G7 + §3 verdicts = T-120 prototype numbers, props, held-before, placement, 5 seeds, code 5, landing,
   boxes, ticks 30/60/144, per-tick time, alloc), kubomir-hand-test §12, podzem-support-test, studio-support-test; Chrome: kubomir-e2e
   `KB_LOAD=1` (support / soak / reopen), podzem-support-e2e `PZ_LOAD=1`.
+- Review fixes (T-124 review, GAMES_VER 144): a side supporter needs strictly higher sup (equal ones only when nothing else holds
+  the node) — ties by key had sent load along a ring (9×9 roof corner 1309 ‰ → 971, mirror cells ±2); job option `early` — the v1
+  groups are published right after the two pass-1 solves (`J.early`; castle 3,408 nodes: tick 18 instead of 62), load failures
+  come later; `J.warn` — creak only when a load failure is coming; placement on a cut-off piece (G.full) skips the load passes;
+  JIT warm-up of a load world's own grids in idle ticks (`S.warmTick` / `S.warmStop`, ≤ 1 ms, not game state; warming another grid
+  does not carry over); grid / job / L fields declared in the literals (a later property deoptimised every job). Adapters: v1 part
+  of placement and tint on a v1-size grid (exactly v1), load part from the tick estimate for that exact cell (Kubomir cache keyed by
+  the piece's chunk revisions); Podzem cursor/preview never run the full check (`canPlace(f, x, y, real)`); seeds re-read at job
+  start / restart / apply (support put back during the job → no fall); groups that cannot move stay; crushed cells pop attached
+  blocks and spill chest contents (Podzem: neighbours re-checked); `X.flush()` on stopWorld / journal (Kubomir kubomir.js, Podzem
+  podzem.js) finishes jobs and lands groups; co-op: a guest window on a moved chest gets `shut`, edits follow the tile object, a spill
+  waits for the guest's close; `KubomirSupport.TILES = false` — one-line rollback of the SH0.2 tile move. Studio: crushed parts fall.
 
 ## 🔥 Огонь — D37E.fire (js/engine/fire.js; T-022d, 22.10.2026, GAMES_VER 135; docs/PHYSICS_PLAN.md §4)
 - Владелец: «огонь — особенностью движка, во все игры». ОДНО ядро без Three.js: FI.grid (клетки 2D/3D) и FI.parts (детали); материалы
