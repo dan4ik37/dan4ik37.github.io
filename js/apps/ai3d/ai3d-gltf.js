@@ -16,6 +16,9 @@
 //  COLOR_0 only when the material uses vertex colours (glTF always multiplies it in), only standard attributes, normals normalized,
 //  TRS nodes (animated nodes must not use a matrix), the editor's own geometries are never modified, equal materials are written once
 //  (the editor has one per mesh; Studio 3D merges parts by glTF material).
+// Skeleton (T-131, A2): when parts carry a shared-skeleton bone (op «skel», ai3d-rig.js) those parts become SkinnedMeshes on one
+// skeleton (T-pose bones, bound in their own pose), clips get bone tracks and clips.csv-like metadata in animations[i].extras.d37;
+// rollback: D37AI3DGltf.SKIN = false → the old rigid-part export.
 // D37AI3DGltf: exportGLB(group, clips, o) → Promise<ArrayBuffer>; toStudio(buf, name) → model (D37E.models compile + save, the
 // same way the photo editor sends pictures); toModule(src) — for node tests; setExporter(cls) — node tests inject the class.
 (function(){
@@ -124,11 +127,20 @@
     const Exp = o.Exporter || Exporter || await loadExporter();
     const { sc, made } = exportScene(T, group);
     if (!sc.children.length) throw new Error('Сцена пустая — нечего сохранять');
+    let metas = null;
+    if (api.SKIN && o.state && root.D37AI3DRig && o.state.some(x => x.bone && x.rigp)) {
+      const r = root.D37AI3DRig.skinnedScene(T, group, o.state, o.ANIM || {}, sc);
+      metas = r.metas;
+      // the editor's rigid-part clips: keep only tracks whose node is still in the export (rigged parts are bones now)
+      const has = n => !!sc.getObjectByName(n);
+      clips = (clips || []).filter(c => !r.clips.some(x => x.name === c.name)).map(c => { const tr = c.tracks.filter(t => has(t.name.slice(0, t.name.lastIndexOf('.')))); return tr.length ? new T.AnimationClip(c.name, c.duration, tr) : null; }).filter(Boolean).concat(r.clips);
+      sc.traverse(x => { if (x.isSkinnedMesh) { made.push(x.geometry); } });
+    }
     try {
       const buf = await new Promise((ok, no) => new Exp().parse(sc, ok, e => no(e instanceof Error ? e : new Error(String(e && e.message || e))),
         { binary: true, trs: true, onlyVisible: false, animations: clips || [], maxTextureSize: o.maxTextureSize || 2048 }));
       if (!(buf instanceof ArrayBuffer) || buf.byteLength < 20 || new DataView(buf).getUint32(0, true) !== 0x46546C67) throw new Error('экспорт вернул не GLB');
-      return buf;
+      return metas ? root.D37AI3DRig.withExtras(buf, metas) : buf;
     } finally { for (const x of made) { try { x.dispose(); } catch (e) {} } }
   }
 
@@ -145,5 +157,5 @@
     return model;
   }
 
-  root.D37AI3DGltf = { EXPORTER_URL, toModule, loadExporter, exportScene, exportGLB, toStudio, setExporter(c){ Exporter = c; } };
+  const api = root.D37AI3DGltf = { SKIN: true, EXPORTER_URL, toModule, loadExporter, exportScene, exportGLB, toStudio, setExporter(c){ Exporter = c; } };
 })();

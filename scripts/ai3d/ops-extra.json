@@ -5,6 +5,7 @@
  ["addon ears", [{"op":"addon","on":"p1","kind":"ears","style":"cat","name":"ea"}]],
  ["key, play, anim_del", [{"op":"key","anim":"k","time":0,"names":["p1"]},{"op":"move","name":"p1","by":[1,0,0]},{"op":"key","anim":"k","time":1},{"op":"play","anims":["k"]},{"op":"play","stop":true},{"op":"anim_del","anim":"k"}]],
  ["jiggle", [{"op":"make","type":"dog","name":"jd","pos":[5,0,0],"fur":{"density":300}},{"op":"gait","prefix":"jd_","clip":"walk","anim":"a"},{"op":"jiggle","anim":"a","parts":["jd_ear_L"],"k":120}]],
+ ["skel, actions (shared skeleton, T-131)", [{"op":"make","type":"human","name":"sk","pos":[8,0,0]},{"op":"skel","prefix":"sk_"},{"op":"actions","prefix":"sk_","set":["loco.idle","loco.walk.fwd"]}]],
  ["del", [{"op":"del","name":"p2"}]],
  ["clear", [{"op":"clear"}]]
 ]

@@ -10,7 +10,7 @@
 // three r149 (the same build as the games, only if not loaded yet), js/apps/ai3d/*, css/ai3d.css; leaving the route → unmount().
 (function () {
   'use strict';
-  const VER = '5';   // 5 — 3D-мастерская AI3D /tools/3d; 4 — проект .d37photo и черновик при уходе из редактора
+  const VER = '6';   // 6 — AI3D: общий скелет и действия (T-131, A2); 5 — 3D-мастерская AI3D /tools/3d; 4 — проект .d37photo и черновик при уходе из редактора
   const FABRIC = 'https://cdn.jsdelivr.net/npm/fabric@7.4.0/dist/index.min.js';
   // ИИ «🪄 Убрать фон» — только по кнопке: ONNX Runtime Web 1.30.0 (MIT) с jsDelivr + модель U²-Netp (Apache-2.0, ~4,6 МБ)
   // с Hugging Face, закреплённая на коммите (лицензии проверены — docs/PHOTO.md)
@@ -21,7 +21,7 @@
   const PHOTO = [FABRIC, CORE.tools, CORE.assets, CORE.ai, 'js/apps/photo/photo-cmds.js', 'js/apps/photo/photo-core.js', 'js/apps/photo/photo-ui.js'];
   // AI3D: three r149 — the same file js/games/world3d.js loads (one copy of THREE on the page)
   const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js';
-  const AI3D = ['js/apps/ai3d/ai3d-gltf.js', 'js/apps/ai3d/ai3d-core.js', 'js/apps/ai3d/ai3d-ui.js'];
+  const AI3D = ['js/engine/skel.js', 'js/apps/ai3d/ai3d-rig.js', 'js/apps/ai3d/ai3d-gltf.js', 'js/apps/ai3d/ai3d-core.js', 'js/apps/ai3d/ai3d-ui.js'];
   const loaded = new Map();
   const url = src => /^https?:/.test(src) ? src : src + '?v=' + VER;
   // Скрипты грузятся параллельно, а выполняются по порядку (async = false)

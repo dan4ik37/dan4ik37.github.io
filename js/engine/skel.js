@@ -126,6 +126,9 @@
       const an = g(FT[k]), kn = g(LL[k]);
       if (!has[TO[k]]) s(TO[k], [an[0] + (an[0] - kn[0]) * .3, an[1] * .3, an[2] + an[1] * 1.35]);
     }
+    // the generator works under the hips: recentre x/z (origin keeps the shift for callers that need world positions)
+    const origin = [P[0], 0, P[2]];
+    for (let i = 0; i < NB; i++) { P[i * 3] -= origin[0]; P[i * 3 + 2] -= origin[2]; }
     const parent = new Int8Array(NB), off = new Float64Array(NB * 3);
     for (let i = 0; i < NB; i++) { const pi = BONES[i].parent; parent[i] = pi; for (let c = 0; c < 3; c++) off[i * 3 + c] = P[i * 3 + c] - (pi >= 0 ? P[pi * 3 + c] : 0); }
     const len = (a, b) => Math.hypot(P[a * 3] - P[b * 3], P[a * 3 + 1] - P[b * 3 + 1], P[a * 3 + 2] - P[b * 3 + 2]);
@@ -134,7 +137,7 @@
     // heel contact point (ground, behind the ankle) and ball (= the toes joint): foot-local offsets from the ankle
     const heel = [0, 1].map(k => [0, -P[FT[k] * 3 + 1], -Math.max(.03, P[FT[k] * 3 + 1] * .62)]);
     const ball = [0, 1].map(k => vSub(g(TO[k]), g(FT[k])));
-    return { v: VERSION, rest: P, off, parent, legLen, ankleH, hipH: P[1], heel, ball, k: legLen / .816 };
+    return { v: VERSION, rest: P, off, parent, legLen, ankleH, hipH: P[1], heel, ball, k: legLen / .816, origin };
   }
   const restPose = sk => ({ pos: sk.rest, q: new Float32Array(NB * 4).map((_, i) => i % 4 === 3 ? 1 : 0) });
 
@@ -478,7 +481,7 @@
     if (pl.loop) { for (let b = 0; b < NB * 4; b++) q[(n - 1) * NB * 4 + b] = q[b]; for (let c = 0; c < 3; c++) p[(n - 1) * 3 + c] = p[c]; }
     const sc = 1 / kt, cl = L => L.map(c => c.slice(0, 4).map(x => Math.max(0, Math.min(dur, x * sc)))).filter(c => c[1] - c[0] > 1e-6), contacts = { L: cl(pl.contacts[0]), R: cl(pl.contacts[1]) };
     const clip = { name: id, action: spec.action, variant: spec.variant, loop: !!pl.loop, additive: !!pl.additive, pose: !!pl.pose, fps, dur, n, t: tt, q, p, root: rt,
-      speed: +pl.speed.toFixed(4), dir: pl.dir, heading: pl.heading, contacts, sync: +pl.sync.toFixed(4), blend: pl.blend, reach, v: VERSION };
+      speed: +(pl.speed * kt).toFixed(4), dir: pl.dir, heading: pl.heading, contacts, sync: +pl.sync.toFixed(4), blend: pl.blend, reach, v: VERSION };
     clip.slide = footSlide(sk, clip);
     return clip;
   }
@@ -496,8 +499,9 @@
     const L = (arr, c) => arr[a * 3 + c] + (arr[b * 3 + c] - arr[a * 3 + c]) * f;
     return { Q, hp: [L(clip.p, 0), L(clip.p, 1), L(clip.p, 2)], root: [L(clip.root, 0), L(clip.root, 1), L(clip.root, 2)] };
   }
-  function sample(sk, clip, t){
-    const s = localsAt(clip, t), r = s.root, w = fk(sk, s.Q, s.hp, qY(r[2] / D2R), [r[0], 0, r[1]]), out = new Float64Array(NB * 3);
+  // o.inplace — ignore the root track (the body stays over the origin; loops in an editor preview)
+  function sample(sk, clip, t, o){
+    const s = localsAt(clip, t), r = o && o.inplace ? [0, 0, 0] : s.root, w = fk(sk, s.Q, s.hp, qY(r[2] / D2R), [r[0], 0, r[1]]), out = new Float64Array(NB * 3);
     for (let i = 0; i < NB; i++) out.set(w.P[i], i * 3);
     return { pos: out, G: w.G, P: w.P };
   }
@@ -551,9 +555,11 @@
 
   // ═══ three.js clip (shared by every instance of a model: tracks are read-only) ═══
   // o.names[b] — node name for shared bone b (null = the model has no such bone); o.root: 'inplace' (default for loops) or 'bake'
-  // (Hips carries the root motion: one-shots show their turn/steps); o.target — retarget onto another rest pose:
-  // { R: Float64Array(NB·4) world rest quats of the target bones (shared order), T: same but "as in a T-pose" (see model.js),
-  //   chain: for each shared bone the nearest mapped ancestor, hipsP: target rest hips position, hipsK: target/source hips height }
+  // (Hips carries the root motion: one-shots show their turn/steps); o.target — retarget onto another rest pose (model.js libSetup):
+  // { Tw[b]: the target bone's world rest rotation "as in a T-pose" (A-pose arms swung up to the reference directions), chain[b]: the
+  //   nearest mapped ancestor, mid[b]: rest rotation of unmapped target bones between it and the real parent, pw: world rotation of the
+  //   Hips' parent, hipsP/srcHips/hipsK: hips position mapping, hipsLocal(v): model space → the Hips' parent space }.
+  // Target pose: world G'_b = G_b · Tw_b (G = canonical world rotation), local = (G'_chain · mid)⁻¹ · G'_b.
   function toThree(T, clip, o){
     o = o || {};
     const names = o.names || BONES.map(b => b.id), bake = o.root ? o.root === 'bake' : !clip.loop, n = clip.n, tr = [];
@@ -565,6 +571,7 @@
       if (bake) Q[0] = qMul(ry, Q[0]);
       let hp = [clip.p[i * 3], clip.p[i * 3 + 1], clip.p[i * 3 + 2]];
       if (bake) hp = vAdd(qRot(ry, hp), [clip.root[i * 3], 0, clip.root[i * 3 + 1]]);
+      if (o.origin) hp = [hp[0] + o.origin[0], hp[1], hp[2] + o.origin[2]];   // skeleton recentred by fromJoints → back to its place
       if (tg) {
         // canonical world rotations → target: G'_j = G_j · Tw_j; local = G'_parent⁻¹ · G'_j (parent = nearest mapped ancestor)
         const G = new Array(NB), Gt = new Array(NB);
@@ -572,10 +579,11 @@
         for (let b = 0; b < NB; b++) {
           if (!has[b]) continue;
           Gt[b] = qMul(G[b], tg.Tw[b]);
-          const pa = tg.chain[b], L = pa < 0 ? qMul(qInv(tg.pw || qId()), Gt[b]) : qMul(qInv(Gt[pa]), Gt[b]);
-          Q[b] = L;
+          const pa = tg.chain[b];
+          Q[b] = pa < 0 ? qMul(qInv(tg.pw || qId()), Gt[b]) : qMul(qInv(tg.mid && tg.mid[b] ? qMul(Gt[pa], tg.mid[b]) : Gt[pa]), Gt[b]);
         }
         hp = vAdd(tg.hipsP, vSc(vSub(hp, tg.srcHips), tg.hipsK));
+        if (tg.hipsLocal) hp = tg.hipsLocal(hp);
       }
       for (let b = 0; b < NB; b++) { let qq = Q[b]; if (i > 0) { const a = quat[b], o2 = (i - 1) * 4; if (qq[0] * a[o2] + qq[1] * a[o2 + 1] + qq[2] * a[o2 + 2] + qq[3] * a[o2 + 3] < 0) qq = qq.map(x => -x); } quat[b].set(qq, i * 4); }
       hipsP.set(hp, i * 3);

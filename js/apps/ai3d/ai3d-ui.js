@@ -105,7 +105,7 @@
       try { ws = new URLSearchParams(root.location.search).get('ws'); } catch (e) {}
       const env = {
         ws: ws || null,
-        exportGLB: (group, clips) => root.D37AI3DGltf.exportGLB(group, clips),
+        exportGLB: (group, clips, x) => root.D37AI3DGltf.exportGLB(group, clips, x),
         onAI: on => { aiBtn.textContent = on ? '🟢 ИИ' : '🔌 ИИ'; aiBtn.classList.toggle('on', !!on); },
       };
       const T = root.THREE;

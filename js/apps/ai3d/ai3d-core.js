@@ -1325,6 +1325,7 @@ function run(cmds){
    if(c.op==='gait'){const rig=rigList(c),fw=({'-z':[0,0,-1],'+x':[1,0,0],'-x':[-1,0,0]})[c.forward]||[0,0,1],keys=gaitGen(rig,{clip:c.clip||'walk',duration:c.duration,amp:c.amp,forward:fw,keys:c.keys}),an=c.anim||c.clip||'walk';
     ANIM[an]={keys,loop:c.loop!==false};let nj=0;const sec=Array.isArray(c.secondary)?c.secondary:c.secondary===false?[]:rig.filter(p=>p.role==='breast'||p.role==='belly').map(p=>p.n);if(sec.length)nj=jiggleApply(an,sec,{k:c.k,damp:c.damp,gain:c.gain});
     NOTE+='анимация '+an+' ('+(c.clip||'walk')+', '+keys[keys.length-1].t+' с, '+Object.keys(keys[0].poses).length+' частей'+(nj?', вторичное движение: '+nj:'')+'). Выбрать для кнопки «Играть»: play{anim} или anims:[тело,лицо] (тело и лицо вместе); кадр: pose{anim,time}\n';return}
+   if(c.op==='skel'||c.op==='actions'){if(!window.D37AI3DRig)throw new Error(c.op+': нет модуля скелета (ai3d-rig.js)');NOTE+=window.D37AI3DRig.op(c,{state,ANIM,THREE})+'\n';return}   // site: T-131 A2 — общий скелет и действия (ai3d-rig.js)
    if(c.op==='jiggle'){const n=jiggleApply(c.anim,c.parts||[],c);NOTE+='jiggle: '+n+' частей\n';return}
    if(c.op==='fur'){const tg=c.on?state.filter(x=>x.name===c.on):c.prefix?state.filter(x=>x.name.startsWith(c.prefix)&&!x.name.endsWith('_fur')&&!(x.rg&&x.rg.role==='fur')):[];if(!tg.length)throw new Error('fur: нужен on:имя или prefix');let t=0;tg.forEach(x=>{t+=furFor(x,c,c.name&&tg.length===1?c.name:undefined)});if(!t)throw new Error('fur: ни одной пряди (проверь region/length)');return}
    if(c.op==='warp'){const o=state.find(x=>x.name===c.name);if(!o)throw new Error('warp: нет объекта '+c.name);let m=asMesh(o),k=0;while(m.v.length/3<(c.minVerts||1500)&&k<3){m=subdivSel(m,null);k++}
@@ -1672,7 +1673,7 @@ const PROMPT=`Ты управляешь 3D-сценой. Отвечай ТОЛЬ
 async function copyText(t){try{await navigator.clipboard.writeText(t);return true}catch(e){return false}}
 $('#ins').onclick=async()=>{const ok=await copyText(PROMPT);say((ok?'Скопировано. Вставь ИИ в начале чата:\n\n':'Скопируй вручную и вставь ИИ:\n\n')+PROMPT)};
 $('#obj').onclick=async()=>{const t=obj();say(await copyText(t)?'OBJ скопирован ('+t.length+' символов). Вставь в файл с расширением .obj.':t)};
-function __exportGLB(){return env&&env.exportGLB?env.exportGLB(group,clips()):Promise.reject(new Error('экспорт GLB недоступен'))}   // site: ai3d-gltf.js
+function __exportGLB(){return env&&env.exportGLB?env.exportGLB(group,clips(),{state,ANIM}):Promise.reject(new Error('экспорт GLB недоступен'))}   // site: ai3d-gltf.js (+ state, ANIM: скелет, T-131)
 $('#glb').onclick=()=>{   // site: the 60 s revoke timer gets no closure (an arrow here kept the closed editor alive for 60 s)
  say('Готовлю GLB…');__exportGLB().then(b=>{const a=document.createElement('a'),u=URL.createObjectURL(new Blob([b],{type:'model/gltf-binary'}));a.href=u;a.download='model.glb';a.click();setTimeout(URL.revokeObjectURL,60000,u);say('GLB готов: '+Math.round(b.byteLength/1024)+' КБ')},e=>say('Экспорт GLB не удался: '+(e&&e.message||e),1))};
 $('#play').onclick=()=>{
