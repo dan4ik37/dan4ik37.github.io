@@ -114,6 +114,9 @@
     const FWD = [1, 0, -1, 1, 0, 1, 1, 1];
     H.pairs = (i, k, m, out, d2o) => {
       const x = X[i], y = Y[i], r = RD[i], gx = cx[i], gy = cy[i];
+      // a forward cell farther than r + maxR from the point holds nobody it touches — skip its chain (review #5: ~29 of ~33 checks
+      // per call were forward-cell items out of reach). Margin 1e-6·cell: the floor() rounding of cell ids never drops a pair
+      const reach = r + maxR + cell * 1e-6, lx = x - gx * cell, ly = y - gy * cell, ex = cell - lx, ey = cell - ly, rr2 = reach * reach;
       let c = 0;
       for (let j = nx[i]; j >= 0 && c < k; j = nx[j]) {   // own cell: items after i in the chain
         if (cx[j] !== gx || cy[j] !== gy || !(tag[j] & m)) continue;
@@ -121,7 +124,9 @@
         if (d < rr * rr) { out[c] = j; d2o[c] = d; c++; }
       }
       for (let f = 0; f < 8 && c < k; f += 2) {
-        const ax = gx + FWD[f], ay = gy + FWD[f + 1], h = bucket(ax, ay);
+        const fx = FWD[f], fy = FWD[f + 1], qx = fx > 0 ? ex : fx < 0 ? lx : 0, qy = fy > 0 ? ey : 0;
+        if (qx * qx + qy * qy >= rr2) continue;
+        const ax = gx + fx, ay = gy + fy, h = bucket(ax, ay);
         if (stamp[h] !== cur) continue;
         for (let j = head[h]; j >= 0 && c < k; j = nx[j]) {
           if (cx[j] !== ax || cy[j] !== ay || !(tag[j] & m)) continue;
