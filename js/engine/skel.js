@@ -476,7 +476,7 @@
     }
     // loops: the last frame equals the first in the root frame (root keeps moving)
     if (pl.loop) { for (let b = 0; b < NB * 4; b++) q[(n - 1) * NB * 4 + b] = q[b]; for (let c = 0; c < 3; c++) p[(n - 1) * 3 + c] = p[c]; }
-    const sc = 1 / kt, contacts = { L: pl.contacts[0].map(c => c.slice(0, 4).map(x => Math.max(0, Math.min(dur, x * sc)))), R: pl.contacts[1].map(c => c.slice(0, 4).map(x => Math.max(0, Math.min(dur, x * sc)))) };
+    const sc = 1 / kt, cl = L => L.map(c => c.slice(0, 4).map(x => Math.max(0, Math.min(dur, x * sc)))).filter(c => c[1] - c[0] > 1e-6), contacts = { L: cl(pl.contacts[0]), R: cl(pl.contacts[1]) };
     const clip = { name: id, action: spec.action, variant: spec.variant, loop: !!pl.loop, additive: !!pl.additive, pose: !!pl.pose, fps, dur, n, t: tt, q, p, root: rt,
       speed: +pl.speed.toFixed(4), dir: pl.dir, heading: pl.heading, contacts, sync: +pl.sync.toFixed(4), blend: pl.blend, reach, v: VERSION };
     clip.slide = footSlide(sk, clip);
@@ -532,9 +532,9 @@
     for (const c of clips) {
       const nr = x => c.dur > 0 ? x / c.dur : 0, iv = L => L.map(x => f3(nr(x[0])) + '-' + f3(nr(x[1]))).join(';');
       // loops: the first plant inside the cycle and its lift (lift may wrap past 1)
-      const pl = L => { if (!c.loop || !L.length) return ['', '']; const x = L.find(q => q[0] > 1e-6) || L[0]; let lift = x[1]; if (lift >= c.dur - 1e-6 && L[0][0] < 1e-6 && L.length > 1) lift = L[0][1] + c.dur; return [f3(nr(x[0]) % 1), f3(nr(lift) % 1)]; };
+      const pl = L => { if (!c.loop || !L.length || (L.length === 1 && L[0][0] < 1e-6 && L[0][1] > c.dur - 1e-6)) return ['', '']; const x = L.find(q => q[0] > 1e-6) || L[0]; let lift = x[1]; if (lift >= c.dur - 1e-6 && L[0][0] < 1e-6 && L.length > 1) lift = L[0][1] + c.dur; return [f3(nr(x[0]) % 1), f3(nr(lift) % 1)]; };
       const [lp, ll] = pl(c.contacts.L), [rp, rl] = pl(c.contacts.R);
-      const rm = c.additive ? 'none' : c.heading ? 'xz+yaw' : 'xz';
+      const rm = c.additive ? 'none' : c.heading ? 'xz+yaw' : (c.speed > 0 || /^(start|stop)/.test(c.variant)) ? 'xz' : 'none';
       const notes = [PROPOSED[c.action] ? 'PROPOSED action id: ' + PROPOSED[c.action] : '', c.additive ? (c.pose ? 'additive pose: play the last frame, weight = amount' : 'additive overlay on loco.idle') : '',
         c.sync && !c.loop ? (c.variant.startsWith('start') ? 'ends at loop phase ' + f3(c.sync) : 'starts at loop phase ' + f3(c.sync)) : ''].filter(Boolean).join('; ');
       rows.push([c.name, c.action, c.variant, c.loop ? 'Y' : 'N', c.additive ? 'Y' : 'N', c.additive ? 'frame0' : '', c.pose ? 'Y' : 'N', f3(c.dur), c.fps, c.n - 1, f3(c.speed), f3(c.dir[0]), f3(c.dir[1]), c.heading, 0, rm,
