@@ -1999,7 +1999,7 @@
       Q.ladder = P.climb && !P.onGround; Q.sit = false; Q.hang = !!P.hang; Q.pk = pkm; Q.pkK = P.pk ? P.pk.k : 0; Q.climbPh = P.climbPh || 0;
       // сидит / лежит (T-123): поза world3d 7 / 13 (лежанка ночью — спит, глаза закрыты; kubomir-world.js st.kbSleep)
       const lp = st.kbSleep || (st.pose2 && st.pose2.k === 'lie' ? st.pose2 : null), sp2 = !lp && st.pose2 ? st.pose2 : null;
-      Q.lie = !!lp; Q.sleep = !!st.kbSleep; Q.seatY = lp ? lp.y + .02 : sp2 ? sp2.y + SIT_Y : null;
+      Q.lie = !!lp; Q.sleep = !!st.kbSleep; Q.seatY = lp ? lp.y + .02 : sp2 ? sp2.y + (sp2.dy ?? SIT_Y) : null;
       if (lp || sp2) { const q = lp || sp2; Q.sit = !!sp2; Q.x = q.x - st.ox; Q.z = q.z - st.oz; Q.y = q.y; Q.yaw = q.yaw ?? want; Q.moving = false; Q.speed = 0; Q.crouch = 0; Q.crawl = false; Q.air = false; Q.ladder = false; }
       A.pose('me', Q);
       me.hidden = !st.camMode || st.camD < .95;   // вид сзади/спереди, а камера прижата к стене — не смотреть изнутри головы
@@ -2306,7 +2306,7 @@
 
   // ── Поза: нажал — красться (ещё раз — встать); сидит / лежит / ползёт — встать; удержал или смахнул — круг ──
   const POSE_IT = [{ id: 'sneak', icon: '⬇', label: 'Красться' }, { id: 'crawl', icon: '🐛', label: 'Ползком' }, { id: 'sit', icon: '🪑', label: 'Сесть' }, { id: 'lie', icon: '🛌', label: 'Лечь' }];
-  const SIT_Y = .3, SIT_EYE = .95, LIE_EYE = .45;   // сиденье над землёй (человечек 0,8), глаза сидя и лёжа
+  const SIT_Y = .17, SIT_EDGE = .1, SIT_EYE = .8, LIE_EYE = .45;   // сиденье над землёй / над краем (человечек 0,8), глаза сидя и лёжа
   const poseCur = st => st.pose2 ? st.pose2.k : st.P.crawl || st.touchCrawl || st.crawlOn ? 'crawl' : st.P.sneak || st.touchSneak ? 'sneak' : '';
   function poseStand(st){ st.pose2 = null; st.touchSneak = false; st.touchCrawl = false; st.crawlOn = false; st.sneakOn = false; }
   function poseTap(st){
@@ -2351,10 +2351,15 @@
   // ── Сесть и лечь (§3.2): на землю, где стоишь (ступенек и плит в «Кубомире» нет — место по блоку не ищем); «лечь» рядом с лежанкой —
   // как ПКМ по ней (дом здесь, ночью — сон, kubomir-world.js) и лечь на неё. Только вид: тело игрока, удары и лучи — как стоя ──
   const canPose = st => { const P = st.P; return P.onGround && !P.fly && !(P.water > .3) && !(P.lava > .2) && !P.pk && !P.hang && !P.climb && !P.dead; };
+  // край обрыва впереди (клетка под ногами впереди пустая) — сесть на край, ноги вниз; иначе — на землю (голени — в земле: у позы
+  // world3d «сидит» колени согнуты, как на стуле; ровных ног вперёд в ней нет — см. отчёт T-123 B)
   function sitHere(st){
     if (!canPose(st)) { st.H.toast('🪑 Сесть можно, когда стоишь на земле'); return false; }
-    const P = st.P; poseStand(st);
-    st.pose2 = { k: 'sit', x: P.x, y: P.y, z: P.z, yaw: P.bodyYaw || 0, hp: P.hp };
+    const P = st.P, V = VX(), d = lookDir(st), l = Math.hypot(d.x, d.z) || 1, fx = d.x / l, fz = d.z / l;
+    const solid = (x, y, z) => { const v = st.W.raw(Math.floor(x), Math.floor(y), Math.floor(z)); return v > 0 && !!V.T.solid[v & 0xfff]; };
+    const edge = !solid(P.x + fx * .8, P.y - .5, P.z + fz * .8) && !solid(P.x + fx * .8, P.y + .5, P.z + fz * .8) && solid(P.x, P.y - .5, P.z);
+    poseStand(st);
+    st.pose2 = edge ? { k: 'sit', x: P.x + fx * .22, y: P.y, z: P.z + fz * .22, yaw: P.bodyYaw || 0, hp: P.hp, dy: SIT_EDGE } : { k: 'sit', x: P.x, y: P.y, z: P.z, yaw: P.bodyYaw || 0, hp: P.hp, dy: SIT_Y };
     return true;
   }
   function lieHere(st){
@@ -2729,6 +2734,7 @@
   }
   // 2.0 (T-123, §5): каждая подсказка — один раз на устройство (телефон — строка на 6 с, компьютер — карточка на 12 с), потом — только
   // ☰ → «💡 Подсказка»; «📍 Твои вещи…» после нокаута — пока не дошёл (стрелка меняется раз в секунду)
+  const TIP_PC = 8000;
   const tipId = txt => { const c = txt.codePointAt(0) || 0; return c === 0x1F4CD ? 'death' : c.toString(36); };
   function tips2(st, box, txt){
     const id = txt ? tipId(txt) : '';
@@ -2736,7 +2742,7 @@
     if (txt !== st.tipNow) {
       st.tipNow = txt;
       const TL = window.D37TouchLayout;
-      if (txt && (!TL?.hintOnce || TL.hintOnce(ID, 'tip-' + id))) tipPut(st, box, txt, st.I?.touch ? TIP_LINE : TIP_OPEN);
+      if (txt && (!TL?.hintOnce || TL.hintOnce(ID, 'tip-' + id))) tipPut(st, box, txt, st.I?.touch ? TIP_LINE : TIP_PC);
       else if (!txt || st.tipId === 'death') tipPut(st, box, '', 0);
     }
     if (st.tipUntil && now() > st.tipUntil) tipPut(st, box, '', 0);
@@ -2993,7 +2999,7 @@
   function uiHooks(){ return { give: s => give(S, s), drop: s => S && spawnItem(S, S.P.x, S.P.y + 1.4, S.P.z, s, false, (() => { const d = lookDir(S); return [d.x * 4, 2, d.z * 4]; })()), unlock, toast: (t, ok) => S?.H.toast(t, ok), sound: (n, o) => S?.AU?.play(n, o || {}),
     // ── KX:ui ── окно вещей → помощники: сделал на верстаке, забрал из печи, поменял аксессуары, открыть книгу рецептов / помощников
     craft: (id, n) => S?.X?.emit('craft', id, n), smelt: (id, n) => S?.X?.emit('smelt', id, n), x: () => S?.X || null,
-    sheet: () => !!(S?.v2 && S.I?.touch), inset: p => S && sheetInset(S, p) }; }   // T-123: окно вещей — лист, мир виден рядом
+    sheet: () => !!(S?.v2 && (S.I?.touch || (wrap()?.clientHeight || 999) < 560)), inset: p => S && sheetInset(S, p) }; }   // T-123: окно вещей — лист (телефон; компьютер — когда окно игры низкое и окно вещей прокручивалось бы), мир виден рядом
   // лист открыт: центр картинки — в свободной части окна (камера та же, игра та же; D37E.viewOffset), закрыт — обратно
   function sheetInset(st, panel){
     const w = wrap(); if (!w || !E().viewOffset) return;

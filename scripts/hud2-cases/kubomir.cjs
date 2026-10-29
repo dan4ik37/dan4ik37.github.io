@@ -28,6 +28,19 @@ module.exports = {
   thrash: ['third'],
   scenes: {
     async idle(T){ await T.sleep(9000); },   // подсказка (6 с) ушла, кнопки побледнели (4 с) — покой
+    // KB_PERF=1: кадр в покое (телефон — ЦП ×4): медиана и 95 % промежутка кадров, скрипт / стили / раскладка на кадр
+    async perf(T){
+      if (!process.env.KB_PERF) return;
+      const m = async () => Object.fromEntries((await T.send('Performance.getMetrics')).metrics.map(x => [x.name, x.value]));
+      for (const walk of [false, true]) {
+        if (walk) await T.ev(`(() => { const S = ${T0}.state(); S.C.press('forward', true); return 1; })()`);
+        const a = await m();
+        const fr = await T.ev(`(async () => { const d = []; let p = performance.now(); await new Promise(r => { const f = t => { d.push(t - p); p = t; if (d.length < 240) requestAnimationFrame(f); else r(); }; requestAnimationFrame(f); }); d.sort((x, y) => x - y); return [d[d.length >> 1], d[Math.floor(d.length * .95)], d.length]; })()`, 90000);
+        const b = await m(), per = k => ((b[k] - a[k]) * 1000 / fr[2]).toFixed(2);
+        if (walk) await T.ev(`(() => { const S = ${T0}.state(); S.C.press('forward', false); return 1; })()`);
+        console.log(`  кадр ${walk ? 'идёт' : 'стоит'}: ${fr[0].toFixed(1)} / ${fr[1].toFixed(1)} мс (медиана / 95 %) · скрипт ${per('ScriptDuration')} · стили ${per('RecalcStyleDuration')} · раскладка ${per('LayoutDuration')} мс/кадр`);
+      }
+    },
     async third(T){ await T.ev(`(() => { ${T0}.cam(1); return 1; })()`); await T.sleep(3500); },   // всплывашка «🎥 Вид сзади» ушла
     async 'tray-open'(T){
       if (T.P.mobile) { const xy = await T.ev(tray); if (xy) await T.touch(xy[0], xy[1]); }
@@ -62,7 +75,23 @@ module.exports = {
       await T.sleep(700);
       console.log('  окно вещей:', await T.ev(`(() => { const w = document.querySelector('.kb-wrap').getBoundingClientRect(), p = document.querySelector('.kb-inv .kb-panel')?.getBoundingClientRect(); if (!p) return 'нет'; const a = Math.max(0, Math.min(p.right, w.right) - Math.max(p.left, w.left)) * Math.max(0, Math.min(p.bottom, w.bottom) - Math.max(p.top, w.top)); const sc = document.querySelector('.kb-inv .kb-panel'); return 'лист ' + (100 * a / (w.width * w.height)).toFixed(1) + '% окна · ' + Math.round(p.width) + '×' + Math.round(p.height) + ' · прокрутка ' + (sc.scrollHeight > sc.clientHeight + 2 ? 'есть' : 'нет') + ' · вкладки: ' + [...document.querySelectorAll('.kb-stabs button')].map(b => b.textContent).join(' / '); })()`));
     },
+    // KB_LEAK=1: 20 кругов интерфейса 2.0 (лоток, круг, лист с вкладками, сесть / встать) и 20 раз мир закрыть / открыть — узлы,
+    // слушатели, память (ЦП без замедления)
+    async leak(T){
+      if (!process.env.KB_LEAK) return;
+      await T.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      const heap = () => T.ev(`(async () => { for (let i = 0; i < 3; i++) { window.gc?.(); await new Promise(r => setTimeout(r, 250)); } return performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null; })()`, 30000);
+      const cnt = async () => { const h = await heap(); const d = await T.send('Memory.getDOMCounters'); return { nodes: d.nodes, listeners: d.jsEventListeners, mb: h }; };
+      const ui = n => T.ev(`(async () => { const t = ${T0}, w = ms => new Promise(r => setTimeout(r, ms)); for (let i = 0; i < ${'${n}'}; i++) { const S = t.state(); t.tray?.(true); await w(20); t.tray?.(false); S.ui.open('inv'); await w(20); for (const b of document.querySelectorAll('.kb-stabs button')) { b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); await w(10); } S.ui.close(); t.pose?.('sit'); await w(20); t.pose?.('sit'); const R = S.rad; if (R) { R.open([{ id: 1, icon: 'a' }, { id: 2, icon: 'b' }], null, {}); R.close(true); } } return 1; })()`.replace('${n}', String(n)), 180000);
+      const world = n => T.ev(`(async () => { const t = ${T0}; let ok = 0; for (let i = 0; i < ${'${n}'}; i++) { const id = t.state().meta.id; await t.stop(); await new Promise(r => setTimeout(r, 200)); t.play(id); for (let k = 0; k < 150; k++) { await new Promise(r => setTimeout(r, 400)); if (t.state()?.ready) break; } if (t.state()?.ready) ok++; } return ok; })()`.replace('${n}', String(n)), 900000);
+      await ui(3); const a0 = await cnt(); await ui(20); const a1 = await cnt();
+      console.log('  утечки, 20 кругов (лоток, круг, лист, сесть):', JSON.stringify(a0), '→', JSON.stringify(a1));
+      await world(2); const b0 = await cnt(); const n = await world(20); await T.sleep(2000); const b1 = await cnt();
+      console.log(`  утечки, мир закрыть / открыть ${n} из 20:`, JSON.stringify(b0), '→', JSON.stringify(b1));
+      if (T.P.mobile) await T.send('Emulation.setCPUThrottlingRate', { rate: T.P.cpu });
+    },
     async cross(T){
+      if (!T.P.mobile) return;   // «прицел» — режим телефона
       await T.ev(`(() => { const t = ${T0}, S = t.state(); S.ui.close(); t.opts({ touchMode: 'cross' }); t.touchUI?.(); return 1; })()`);
       await T.sleep(1200);
     },

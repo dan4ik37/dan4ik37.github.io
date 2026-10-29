@@ -205,6 +205,8 @@ let BASE = '';
 async function fullChecks(B, VW, VH, row){
   const { send, ev } = B;
   const land = VW > VH;
+  // интерфейс 2.0 «Кубомира» (T-123, флаг HUD2.kubomir): кнопки — поза и прыжок (🎒 — в лотке, 🔄 — ячейка левой руки, 🐛 — в круге позы)
+  const v2 = await ev(`!!document.querySelector('.kb-e2')`);
   // все видимые кнопки: середина, края, что под ними; наложения
   const geo = () => ev(`(() => {
     const wrap = document.querySelector('.kb-wrap').getBoundingClientRect();
@@ -229,7 +231,7 @@ async function fullChecks(B, VW, VH, row){
   const G = await checkGeo('по умолчанию');
   const sizes = G.btns.map(b => b.id + ' ' + Math.round(b.w)).join(', ');
   console.log('  кнопки:', sizes);
-  ok(G.btns.length >= 4 && G.btns.every(b => b.w >= 38 && b.w <= 64), 'кнопки — 40…60 px (по умолчанию)', sizes);
+  ok(G.btns.length >= (v2 ? 2 : 4) && G.btns.every(b => b.w >= 38 && b.w <= 64), 'кнопки — 40…60 px (по умолчанию)', sizes);
   const jump = G.btns.find(b => b.id === 'jump');
   ok(jump && G.btns.every(b => b.w <= jump.w), '«прыжок» — самая крупная');
   ok(jump && jump.x > G.wrap.l + G.wrap.w * .6, '«прыжок» — справа (под большим пальцем)', jump);
@@ -244,6 +246,47 @@ async function fullChecks(B, VW, VH, row){
   await tapBtn('jump', 150);
   let log = await ev(`__tl.splice(0)`);
   ok(log.includes('C:jump:true') && log.includes('C:jump:false'), 'кнопка «прыжок» → прыжок (нажал и отпустил)', log);
+  const at = async sel => ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e || e.hidden) return null; const r = e.getBoundingClientRect(); return r.width ? [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] : null; })()`);
+  if (v2) {
+    // лоток: нажал — весь ряд и 🎒; 🎒 — окно вещей (лист); смахнул вбок — соседняя вещь; удержал — круг вещей
+    let p = await at('.kb-hrow .kb-slot.on'); if (p) await touch(send, p[0], p[1], 60);
+    ok(await ev(`!!document.querySelector('.kb-hrow.kb-open')`), 'лоток: нажал — раскрылся (весь ряд и 🎒)');
+    p = await at('.kb-hrow .kb-bag'); if (p) await touch(send, p[0], p[1], 60);
+    ok(await ev(`GAME_IMPL.kubomir._test.state().ui.isOpen() && !!document.querySelector('.kb-inv.kb-sheet')`), 'лоток → 🎒 → окно вещей листом');
+    await ev(`GAME_IMPL.kubomir._test.state().ui.close()`); await sleep(3300);
+    ok(!(await ev(`!!document.querySelector('.kb-hrow.kb-open')`)), 'лоток свернулся сам (3 с)');
+    const sel0 = await ev(`GAME_IMPL.kubomir._test.state().P.sel`);
+    p = await at('.kb-hrow .kb-slot.on'); if (p) await touch(send, p[0], p[1], 60, [[p[0] + 15, p[1]], [p[0] + 34, p[1]], [p[0] + 44, p[1]]]);
+    ok(await ev(`GAME_IMPL.kubomir._test.state().P.sel`) === (sel0 + 1) % 9, 'лоток: смахнул вправо — следующая вещь (не раскрываясь)');
+    p = await at('.kb-hrow .kb-slot.on'); if (p) await touch(send, p[0], p[1], 600);
+    ok(await ev(`!!document.querySelector('.kb-wrap .e2-radial:not([hidden])')`), 'лоток: удержал — круг вещей');
+    await sleep(3300);
+    p = await at('.kb-hrow .kb-slot.on'); if (p) await touch(send, p[0], p[1], 60, [[p[0], p[1] - 20], [p[0], p[1] - 44]]);
+    ok(await ev(`GAME_IMPL.kubomir._test.state().ui.isOpen()`), 'лоток: смахнул вверх — окно вещей');
+    await ev(`GAME_IMPL.kubomir._test.state().ui.close()`); await sleep(200);
+    // поза: нажал — красться (ещё раз — встал); удержал и повёл к 🪑 — сел
+    await tapBtn('pose');
+    ok(await ev(`!!GAME_IMPL.kubomir._test.state().touchSneak`), 'кнопка позы: нажал — красться');
+    await tapBtn('pose');
+    ok(!(await ev(`!!GAME_IMPL.kubomir._test.state().touchSneak`)), 'кнопка позы: ещё раз — встал');
+    const pb = (await geo()).btns.find(b => b.id === 'pose');
+    if (pb) {   // круг из четырёх (по часовой от верха): ⬇ красться, 🐛 ползком, 🪑 сесть, 🛌 лечь — повёл влево — лечь
+      await touch(send, pb.x, pb.y, 120, [[pb.x - 10, pb.y], [pb.x - 30, pb.y], [pb.x - 60, pb.y]]);
+      await sleep(300);
+      ok(await ev(`GAME_IMPL.kubomir._test.poseCur()`) === 'lie', 'круг позы: удержал ⬇ и повёл влево — лёг', await ev(`GAME_IMPL.kubomir._test.poseCur()`));
+      await tapBtn('pose'); await sleep(200);
+      ok(!(await ev(`GAME_IMPL.kubomir._test.poseCur()`)), 'лежит — нажал позу — встал');
+      await touch(send, pb.x, pb.y, 500); await sleep(200);   // удержал, не ведя, — круг ждёт нажатия (3 с): 🪑
+      const cs = await at('.kb-wrap .e2-radial:not([hidden]) .e2-rad-it[data-i="2"]'); if (cs) await touch(send, cs[0], cs[1], 60);
+      await sleep(300);
+      ok(await ev(`GAME_IMPL.kubomir._test.poseCur()`) === 'sit', 'круг позы: удержал и нажал 🪑 — сел', await ev(`GAME_IMPL.kubomir._test.poseCur()`));
+      await tapBtn('pose'); await sleep(200);
+    }
+    // руки: факел в правой → нажал ячейку левой руки → в левой
+    await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); S.P.inv[S.P.sel] = { id: 'torch', n: 3 }; S.P.off = null; return 1; })()`);
+    await sleep(200); p = await at('.kb-oslot'); if (p) await touch(send, p[0], p[1], 60);
+    ok(await ev(`GAME_IMPL.kubomir._test.state().P.off?.id === 'torch'`), 'ячейка левой руки → факел в левой руке');
+  } else {
   // вещи
   await tapBtn('inv');
   ok(await ev(`GAME_IMPL.kubomir._test.state().ui.isOpen()`), 'кнопка «вещи» → окно вещей');
@@ -257,6 +300,7 @@ async function fullChecks(B, VW, VH, row){
   await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); S.P.inv[S.P.sel] = { id: 'torch', n: 3 }; S.P.off = null; return 1; })()`);
   await tapBtn('swap');
   ok(await ev(`GAME_IMPL.kubomir._test.state().P.off?.id === 'torch'`), 'кнопка «руки» → факел в левой руке');
+  }
   // щит: появляется, держать — «щит»
   await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); S.P.off = { id: 'shield', n: 1 }; return 1; })()`);
   await sleep(500);
@@ -266,7 +310,7 @@ async function fullChecks(B, VW, VH, row){
   await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); S.P.off = null; S.P.inv[S.P.sel] = null; return 1; })()`);
   // подсказка новичку: свёрнута — нажал — развернулась
   const tip = await ev(`(() => { const t = document.querySelector('.kb-tip'); return t ? { hidden: t.hidden, mini: t.classList.contains('mini'), h: Math.round(t.getBoundingClientRect().height) } : null; })()`);
-  if (tip && !tip.hidden) {
+  if (tip && !tip.hidden && !v2) {   // 2.0: подсказка — один раз на устройство, без значка 💡
     ok(tip.mini, 'подсказка через несколько секунд — свёрнута в значок', tip);
     const r = await ev(`(() => { const r = document.querySelector('.kb-tip').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
     await touch(send, r[0], r[1], 60);
@@ -302,7 +346,7 @@ async function fullChecks(B, VW, VH, row){
   if (!hasRow) return;
   await ev(`(() => { document.querySelector('#gsSettings [data-tl-edit]').click(); return 1; })()`); await sleep(600);
   const ed = await ev(`(() => { const e = document.querySelector('.tl-ed'); if (!e) return null; return { settings: !!document.querySelector('#gsSettings'), n: e.querySelectorAll('.tl-p').length, ids: [...e.querySelectorAll('.tl-p')].map(p => p.dataset.id) }; })()`);
-  ok(ed && !ed.settings && ed.n >= 5, 'редактор открылся поверх игры (все кнопки, окно настроек закрыто)', ed);
+  ok(ed && !ed.settings && ed.n >= (v2 ? 3 : 5), 'редактор открылся поверх игры (все кнопки, окно настроек закрыто)', ed);
   if (!ed) return;
   await shot(send, `kubomir-${VW}x${VH}-editor`);
   const pj = await ev(`(() => { const r = document.querySelector('.tl-ed .tl-p[data-id="jump"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
@@ -339,13 +383,13 @@ async function fullChecks(B, VW, VH, row){
   // ── утечки: вещи 20 раз, редактор 10 раз ──
   const c0 = await counters(send, ev);
   for (let i = 0; i < 20; i++) {
-    const b = (await geo()).btns.find(x => x.id === 'inv'); await touch(send, b.x, b.y, 40);
+    if (v2) await ev(`GAME_IMPL.kubomir._test.state().ui.open('inv')`); else { const b = (await geo()).btns.find(x => x.id === 'inv'); await touch(send, b.x, b.y, 40); }
     await ev(`(async () => { await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); GAME_IMPL.kubomir._test.state().ui.close(); return 1; })()`);
   }
   for (let i = 0; i < 10; i++) await ev(`(async () => { D37TouchLayout.edit(); await new Promise(r => requestAnimationFrame(r)); document.querySelector('.tl-ed [data-tl="cancel"]').click(); await new Promise(r => requestAnimationFrame(r)); return 1; })()`);
   const c1 = await counters(send, ev);
   for (let i = 0; i < 20; i++) {
-    const b = (await geo()).btns.find(x => x.id === 'inv'); await touch(send, b.x, b.y, 40);
+    if (v2) await ev(`GAME_IMPL.kubomir._test.state().ui.open('inv')`); else { const b = (await geo()).btns.find(x => x.id === 'inv'); await touch(send, b.x, b.y, 40); }
     await ev(`(async () => { await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); GAME_IMPL.kubomir._test.state().ui.close(); return 1; })()`);
   }
   for (let i = 0; i < 10; i++) await ev(`(async () => { D37TouchLayout.edit(); await new Promise(r => requestAnimationFrame(r)); document.querySelector('.tl-ed [data-tl="cancel"]').click(); await new Promise(r => requestAnimationFrame(r)); return 1; })()`);

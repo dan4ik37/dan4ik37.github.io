@@ -418,9 +418,12 @@ html.e2-nofade .kb-e2 .e-hud.e2-idle~.kb-tbar,html.e2-nofade .kb-e2 .e-hud.e2-id
 .kb-hrow.kb-tray:not(.kb-open) .kb-hotbar .kb-slot:not(.on):not(.nb){display:none}
 .kb-hrow.kb-tray:not(.kb-open) .kb-slot.nb{opacity:.6}
 .kb-e2 .kb-touch .kb-bottom{opacity:var(--e2-fade,1)}
-.kb-e2 .kb-touch .kb-hotbar{background:none;border:0;box-shadow:none;padding:0;gap:4px;align-items:center;touch-action:none}
-.kb-e2 .kb-touch .kb-slot{background:var(--e2-bg,rgba(14,12,28,.42));border:1.5px solid var(--e2-line,rgba(255,255,255,.38));border-radius:10px;box-shadow:var(--e2-shadow,0 2px 10px rgba(0,0,0,.25))}
-.kb-e2 .kb-touch .kb-slot.on{border-color:#ffd23f;background:rgba(124,58,237,.5);transform:none;box-shadow:var(--e2-shadow,0 2px 10px rgba(0,0,0,.25))}
+.kb-e2 .kb-hud{--kb-s:42px}
+.kb-e2 .kb-hud .kb-hotbar{background:none;border:0;box-shadow:none;padding:0;gap:4px;align-items:center;touch-action:none}
+.kb-e2 .kb-hud .kb-slot{background:var(--e2-bg,rgba(14,12,28,.42));border:1.5px solid var(--e2-line,rgba(255,255,255,.38));border-radius:10px;box-shadow:var(--e2-shadow,0 2px 10px rgba(0,0,0,.25))}
+.kb-e2 .kb-hud .kb-slot.on{border-color:#ffd23f;background:rgba(124,58,237,.5);transform:none;box-shadow:var(--e2-shadow,0 2px 10px rgba(0,0,0,.25))}
+/* «🖱 Нажми на мир» мигает 3 раза, а не всё время (бесконечная анимация — ~125 пересчётов стилей в секунду на компьютере) */
+body.high .kb-e2 .kb-lockhint{animation-iteration-count:3}
 .kb-e2 .kb-touch .kb-hrow:not(.kb-open) .kb-slot.on{width:48px;height:48px}
 @media (orientation:portrait){.kb-e2 .kb-touch .kb-hrow.kb-open .kb-hotbar{flex-wrap:wrap;justify-content:center;width:216px}}
 /* левая рука — ячейка слева от лотка (нажал — поменять руки; это и есть «🔄 руки») */
