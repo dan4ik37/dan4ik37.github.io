@@ -56,7 +56,7 @@
     if (!T1) throw new Error('terra: terra-core.js is not loaded');
     const ver = typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1';
     const seed = (o.seed ?? 1337) | 0, cap = o.cap || T1.DEFAULT_CAP;
-    const gen = o.gen === 2 ? 2 : 1, rules = gen === 2 ? (o.rules | 0) : 0, param = o.param | 0, compact = !!o.compact;
+    const gen = o.gen === 2 ? 2 : 1, rules = gen === 2 ? (o.rules | 0) : 0, param = o.param | 0, compact = !!o.compact, FLAT_UP = T1.FLAT_UP;
     // point queries by the world rules (rules 0: the plain v1 field — the same bits)
     const dens = rules ? (x, y, z, ops, n) => T1.densityR(seed, x, y, z, ops, n, rules) : (x, y, z, ops, n) => T1.density(seed, x, y, z, ops, n);
     const hgt = rules === 4 ? (x, z) => T1.heightR(seed, x, z, 4) : (x, z) => T1.height(seed, x, z);
@@ -311,7 +311,7 @@
       const L = EB.get(TE.colKey(Math.floor(x / 32), Math.floor(z / 32)));
       let n = 0;
       if (L) for (let i = 0; i < L.length; i++) {
-        const o = L[i] * 5, r = T1.reachH(ed, L[i]), rv = T1.reachV(ed, L[i]);
+        const o = L[i] * 5, fl = ed[o + 4] === 2, rv = fl ? FLAT_UP : ed[o + 3], r = fl ? ed[o + 3] + FLAT_UP : rv;   // reach (hot: inlined)
         if (Math.abs(x - ed[o]) > r || Math.abs(y - ed[o + 1]) > rv || Math.abs(z - ed[o + 2]) > r) continue;
         if (rops.length < (n + 1) * 5) { const a = new Float64Array(rops.length * 2); a.set(rops); rops = a; }
         for (let k = 0; k < 5; k++) rops[n * 5 + k] = ed[o + k];
@@ -511,7 +511,7 @@
       const L = EB.get(TE.colKey(Math.floor(ix / 32), Math.floor(iz / 32)));
       if (!L) return;
       for (let i = 0; i < L.length; i++) {
-        const o = L[i] * 5, r = T1.reachH(ed, L[i]) + 1;
+        const o = L[i] * 5, r = (ed[o + 4] === 2 ? ed[o + 3] + FLAT_UP : ed[o + 3]) + 1;
         if (Math.abs(ed[o] - ix) > r || Math.abs(ed[o + 2] - iz) > r) continue;
         if (ops.length < (nops + 1) * 5) { const a = new Float64Array(ops.length * 2); a.set(ops); ops = a; }
         ops.set(ed.subarray(o, o + 5), nops * 5); nops++;
