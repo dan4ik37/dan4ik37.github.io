@@ -20,6 +20,7 @@
   const VX = () => window.D37E.vox, SU = () => window.D37E.support;
   const KS = window.KubomirSupport = window.KubomirSupport || {};
   KS.MODES = ['off', 'soft', 'real'];
+  KS.TILES = true;   // T-124 SH0.2: содержимое сундука и печи едет с падающим куском (false — откат одной строкой: остаётся, как раньше)
   KS.NOTES = {
     off: 'Обрушение выкл: блоки держатся где угодно, как в Майнкрафте.',
     soft: 'Мягкое: постройкам нужна опора — длинные балки и навесы без колонн падают, пещеры не обваливаются. Рамка при стройке — цветом: синий — на опоре, зелёный — крепко, жёлтый — так себе, красный — еле держится.',
@@ -60,10 +61,13 @@
     // чанк — один раз на столбик соседних клеток (обход в ширину идёт рядом), без Math.floor: координаты — целые
     let lc = null, lcx = 1e9, lcz = 1e9;
     const H = V.H;
+    // чанки, которые прочитала оценка «поставить» (её кэш — по их номерам правок, не по общему W.rev: тот растёт от любой правки мира)
+    const TRK = { on: false, n: 0, over: 0, wrev: 0, c: new Array(32).fill(null), r: new Float64Array(32) };
+    const track = c => { if (!c || typeof c.rev !== 'number') { TRK.over = 1; return; } for (let i = 0; i < TRK.n; i++) if (TRK.c[i] === c) return; if (TRK.n >= 32) { TRK.over = 1; return; } TRK.c[TRK.n] = c; TRK.r[TRK.n] = c.rev; TRK.n++; };
     const read = (x, y, z) => {
       if (y < 0) return 1; if (y >= H) return 0;
       const cx = x >> 4, cz = z >> 4;
-      if (cx !== lcx || cz !== lcz) { lc = W.chunk(cx, cz); lcx = cx; lcz = cz; }
+      if (cx !== lcx || cz !== lcz) { lc = W.chunk(cx, cz); lcx = cx; lcz = cz; if (TRK.on) track(lc); }
       const c = lc; if (!c || !c.gen) return 5;   // незагруженное — опора «край куска» (не рушим то, чего не видим; v1 — как 1)
       const i = ((x & 15) << 11) | ((z & 15) << 7) | y, v = c.ids ? c.ids[i] : W.raw(x, y, z);   // мир без массива клеток (проверки) — через raw
       if (!v) return 0; if (v < 0) return 1;
@@ -76,16 +80,18 @@
     };
     const fresh = () => { lc = null; lcx = lcz = 1e9; };   // перед каждым расчётом (чанки могли выгрузить)
     const LD = !!(S.LOAD && S.loadJob && (st.meta?.load === 1 || st.meta?.load === true));   // v2: вес и моменты
-    const X = { mode, P, G, load: LD, stats: { solves: 0, ms: 0, maxMs: 0, groups: 0, cells: 0, refused: 0, jobs: 0, ticks: 0, restarts: 0, crushed: 0, over: 0, tickMs: 0, maxTickMs: 0, lastTicks: 0, lastN: 0 }, matOf: KS.matOf };
+    const X = { mode, P, G, load: LD, stats: { solves: 0, ms: 0, maxMs: 0, groups: 0, cells: 0, refused: 0, jobs: 0, ticks: 0, restarts: 0, crushed: 0, over: 0, tickMs: 0, maxTickMs: 0, lastTicks: 0, lastN: 0, early: 0, creaks: 0, skipped: 0, inPlace: 0, estOps: 0, jobOps: 0 }, matOf: KS.matOf };
     X.code = (x, y, z) => { fresh(); return read(x, y, z); };
     const SEEDS = [];
     const nowMs = () => performance.now();
     // ── поставить: удержится ли блок b в (x, y, z) → держание (‰) или −1 (не участвует — можно всегда) ──
+    let GV = null;   // мир с нагрузкой: оценка v1 — на своей сетке размера v1 (на G может идти задание)
+    const EG = () => LD ? GV || (GV = S.grid({ dims: 3, down: -1, max: 24576 })) : G;
     X.estimate = (x, y, z, b) => {
       const m = MT[b.id]; if (m === undefined || m === 255) return -1;
       SEEDS.length = 0; SEEDS.push(x, y, z, (m << 2) | 2);
-      fresh(); G.build(SEEDS, read, BO);
-      return G.estimate(P);
+      const g = EG(); fresh(); g.build(SEEDS, read, BO);
+      return g.estimate(P);
     };
     X.canPlace = (x, y, z, b) => {
       if (LD) return placeOk(x, y, z, b);
@@ -96,18 +102,22 @@
     X.tint = (T, b) => {
       if (!T || !b) return null;
       const m = MT[b.id]; if (m === undefined || m === 255) return null;
-      if (LD) return tintAtTick(T, b);
       const t = nowMs();
+      if (LD) { EST.want = true; EST.wantT = t; EST.wx = T.x; EST.wy = T.y; EST.wz = T.z; EST.wid = b.id; }   // нагрузка — заданием в такте мира
       if (!(last.x === T.x && last.y === T.y && last.z === T.z && last.id === b.id && (last.rev === W.rev || t - last.t < 100))) {
         const s = X.estimate(T.x, T.y, T.z, b);
         last.x = T.x; last.y = T.y; last.z = T.z; last.id = b.id; last.rev = W.rev; last.t = t; last.s = s;
-        last.lv = S.level(s, m, P, G.g.gnd[0]);
+        last.lv = S.level(s, m, P, EG().g.gnd[0]);
       }
-      const c = S.COLORS[last.lv];
+      // мир с нагрузкой: держание v1 — сразу (как в старых мирах), нагрузка поднимает цвет, когда задание оценки этой клетки готово
+      // (T-124: раньше рамка до 1–4 с держала цвет прошлой клетки)
+      const lv = LD && EST.done && EST.x === T.x && EST.y === T.y && EST.z === T.z && EST.id === b.id && estValid() ? Math.max(last.lv, EST.ld) : last.lv;
+      last.lvShown = lv;
+      const c = S.COLORS[lv];
       TINT[0] = (c >> 16 & 255) / 255; TINT[1] = (c >> 8 & 255) / 255; TINT[2] = (c & 255) / 255;
       return TINT;
     };
-    X.level = () => last.lv;
+    X.level = () => last.lvShown ?? last.lv;
     // ── сломали (x, y, z) с кодом code (до правки: X.code) → пересчёт и обрушение ──
     X.removed = (x, y, z, code) => {
       if (!code || (code & 3) < 2) return 0;
@@ -182,21 +192,22 @@
         if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; if (y < y0) y0 = y;
       }
       if (!cells.length) return;
+      if (LD && !canMove(cells)) { X.stats.inPlace++; return; }   // v2: лечь некуда ниже (стоит на чём-то) — остаётся как есть
       X.stats.cells += cells.length / 4;
       const evA = batch(true), ev = batch(true);   // отпавшее сразу; что не легло — при посадке
       for (let i = 0; i < cells.length; i += 4) popAttached(cells[i], cells[i + 1], cells[i + 2], evA);
       evA.flush();
       for (let i = 0; i < cells.length; i += 4) {
         const x = cells[i], y = cells[i + 1], z = cells[i + 2], v = cells[i + 3];
-        const tl = W.dropTile ? W.dropTile(x, y, z) : null;
-        if (tl) { if (!tiles) tiles = new Array(cells.length >> 2).fill(null); tiles[i >> 2] = tl; X.stats.tiles = (X.stats.tiles | 0) + 1; }
+        const tl = KS.TILES && W.dropTile ? W.dropTile(x, y, z) : null;
+        if (tl) { tileTaken(x, y, z, tl); if (!tiles) tiles = new Array(cells.length >> 2).fill(null); tiles[i >> 2] = tl; X.stats.tiles = (X.stats.tiles | 0) + 1; }
         W.set(x, y, z, 0, { urgent: 2 });
         if ((i >> 2) % 3 === 0) st.ents?.debris?.(x, y, z, v & 0xfff, 3);
       }
       const pivot = { x: (x0 + x1) / 2 + .5, y: y0, z: (z0 + z1) / 2 + .5 };
       const landed = [];   // где легли блоками: потом — держатся ли сами (лёг краем на столб — остальное свалится дальше)
       let moved = false;   // v2: лёг на том же месте (стоял на опоре, сдвига нет) — нагрузка та же, проверять снова незачем
-      const onSettle = (v, x, y, z, i) => { if (y !== cells[i * 4 + 1]) moved = true; if (settle(v, x, y, z, nat[i], tiles ? tiles[i] : null, ev)) landed.push(x, y, z); };
+      const onSettle = (v, x, y, z, i) => { if (y !== cells[i * 4 + 1]) moved = true; if (settle(v, x, y, z, nat[i], tiles ? tiles[i] : null, ev, cells[i * 4], cells[i * 4 + 1], cells[i * 4 + 2])) landed.push(x, y, z); };
       const onLanded = () => { ev.flush(); if (moved || !LD) recheck(landed, depth + 1); };
       const nc = cells.length / 4;   // 1–3 блока — без сетки и анимации: осыпаются сразу (пыль), иначе — куском
       const g = !instant && nc > 3 && nc <= PART ? st.ents?.fallGroup?.(cells, pivot, { x: 1, z: 0 }, { drop: true, cap: 8, onSettle, onLanded }) : null;
@@ -208,6 +219,23 @@
       for (let i = 0; i < cells.length; i += 4) onSettle(cells[i + 3], cells[i], cells[i + 1] - F.off, cells[i + 2], i >> 2);
       if (nc > 3 || (X.thudT = (X.thudT || 0) + 1) % 6 === 1) st.AU?.play('kb_thud', { x: pivot.x - st.ox, y: pivot.y - F.off + 1, z: pivot.z - st.oz, vol: nc > 3 ? .9 : .5, rate: .85 });
       if (nc > 3) onLanded(); else ev.flush();   // упало 1–3 блока — проверять, держатся ли они, не нужно (лежат на том, на что упали)
+    }
+    // кусок сдвинется хоть на клетку? (жёсткий: стоит, если под любой нижней клеткой твёрдое не из него)
+    function canMove(cells){
+      const mine = new Set(); for (let i = 0; i < cells.length; i += 4) mine.add(V.supportKey(cells[i], cells[i + 1], cells[i + 2]));
+      for (let i = 0; i < cells.length; i += 4) { const x = cells[i], y = cells[i + 1] - 1, z = cells[i + 2]; if (!mine.has(V.supportKey(x, y, z)) && solidAt(x, y, z)) return false; }
+      return true;
+    }
+    // плитку (сундук, печь) в (x, y, z) берёт обрушение: открытое на ней окно — закрыть (своё; гостю — st.net.tileMoved: его правки — в
+    // саму плитку), иначе правки окна уходили в пустоту, а вещи двоились (T-124)
+    function tileTaken(x, y, z, tl){
+      const U = st.ui; if (U?.isOpen?.() && U.pos && U.pos.x === x && U.pos.y === y && U.pos.z === z) U.close({ esc: true });
+      st.net?.tileMoved?.(x, y, z, tl);
+    }
+    // высыпать содержимое плитки в (x, y, z) (её место было ox, oy, oz): окно гостя ещё открыто — после того, как закроет
+    function tileSpill(tl, x, y, z, ox, oy, oz, ev){
+      if (st.net?.tileMoved?.(ox, oy, oz, tl, null, () => { const e = batch(true); spill(tl, x, y, z, e); e.flush(); })) return;
+      spill(tl, x, y, z, ev);
     }
     // легли — держатся ли? (падение только добавляет блоки — чужое держание не уменьшается; не держатся только сами упавшие)
     X.recheck = xyz => { recheck(xyz, 1); X.step(); };
@@ -237,9 +265,9 @@
     }
     const solidAt = (x, y, z) => { const v = W.raw(x, y, z); if (v < 0) return true; if (!(v > 0)) return false; const t = v & 0xfff; return V.T.solid[t] === 1 && V.T.shape[t] !== V.SHAPE.cross; };
     // лёг: блоком (природный камень — булыжником, дёрн — землёй), занято — вещью
-    function settle(v, x, y, z, natural, tile, ev){ own++; try { return settle0(v, x, y, z, natural, tile, ev); } finally { own--; } }
-    function settle0(v, x, y, z, natural, tile, ev){
-      const b = V.blocks[v & 0xfff]; if (!b) { spill(tile, x, y, z, ev); return; }
+    function settle(v, x, y, z, natural, tile, ev, ox, oy, oz){ own++; try { return settle0(v, x, y, z, natural, tile, ev, ox, oy, oz); } finally { own--; } }
+    function settle0(v, x, y, z, natural, tile, ev, ox = x, oy = y, oz = z){
+      const b = V.blocks[v & 0xfff]; if (!b) { if (tile) tileSpill(tile, x, y, z, ox, oy, oz, ev); return; }
       let place = v;
       if (natural) { const r = b.name === 'stone' ? 'cobble' : b.name === 'grass' || b.name === 'snow_grass' ? 'dirt' : null; if (r && V.ID[r] !== undefined) place = V.cell(V.ID[r], 0); }
       const cur = W.raw(x, y, z);
@@ -252,11 +280,12 @@
           spill(W.dropTile ? W.dropTile(x, y, z) : null, x, y, z, ev);
           W.tile?.(x, y, z, () => tile);
           if ('fuel' in tile || 'in' in tile) st.ents?.furnaces?.add(x + ',' + y + ',' + z);
+          st.net?.tileMoved?.(ox, oy, oz, tile, [x, y, z]);   // игра вместе: окно гостя пишет в неё же — теперь она здесь
         }
         return true;
       }
       if (!st.creative) dropBlockItem(b.glass ? 0 : place, x, y, z, ev);
-      spill(tile, x, y, z, ev);   // лечь некуда — содержимое вещами (и в «Творчестве»: это вещи игрока)
+      if (tile) tileSpill(tile, x, y, z, ox, oy, oz, ev);   // лечь некуда — содержимое вещами (и в «Творчестве»: это вещи игрока)
       return false;
     }
     const overlapP = (x, y, z) => { const p = st.P; if (!p || p.dead) return false; const hw = (p.w || .6) / 2; return p.x + hw > x && p.x - hw < x + 1 && p.z + hw > z && p.z - hw < z + 1 && p.y + (p.h || 1.8) > y && p.y < y + 1; };
@@ -293,6 +322,7 @@
     let own = 0;
     const JQ = [], CRUSH = [];
     let cur = null, restarts = 0, touched = false, J = null, GE = null, JE = null, BOE = null;
+    const JOBO = { early: true };   // v1-куски падают сразу после двух проходов 1 (не ждут проходов нагрузки; T-124: обрушение — не через секунды)
     if (LD) {
       J = G.loadJob();
       GE = S.grid({ dims: 3, down: -1, max: 4096 }); JE = GE.loadJob(); BOE = { r: 96, rn: 13, P, max: 4096, opb: 16 };
@@ -307,78 +337,134 @@
       if (q && q.kind === kind && q.depth === depth && q.seeds.length < 4 * 4096 && Math.abs(q.seeds[0] - x) < NEAR && Math.abs(q.seeds[2] - z) < NEAR && Math.abs(q.seeds[1] - y) < NEAR) { q.seeds.push(x, y, z, code); return; }
       JQ.push({ kind, depth, seeds: [x, y, z, code], t0: X.stats.ticks });
     }
-    function loadTick(){
+    // семена задания — по миру сейчас (T-124): «сломали», а клетку уже вернули (подпорку поставили во время скрипа) — не семя; «легло», а
+    // клетки уже нет — тоже. Семян не осталось — задания нет
+    function liveSeeds(job){
+      const a = job.seeds; let k = 0; fresh();
+      for (let i = 0; i < a.length; i += 4) {
+        const c = read(a[i], a[i + 1], a[i + 2]), solid = c === 1 || c === 5 || (c & 3) >= 2;
+        if (job.kind === 'rm' ? solid : (c & 3) < 2) continue;
+        if (job.kind !== 'rm') a[i + 3] = c;
+        if (k !== i) { a[k] = a[i]; a[k + 1] = a[i + 1]; a[k + 2] = a[i + 2]; a[k + 3] = a[i + 3]; }
+        k += 4;
+      }
+      a.length = k; return k > 0;
+    }
+    const startJob = () => { fresh(); J.start(cur.kind, cur.seeds, read, BO, JOBO); };
+    const dropJob = () => { J.busy = false; J.early = 0; cur = null; X.stats.skipped++; };
+    // такт мира: задание — SOLVE_BUDGET шагов; оценка «поставить» — в том же потолке (что осталось, не меньше EST_MIN)
+    function loadTick(budget = S.SOLVE_BUDGET, flushing = false){
       const t0 = nowMs();
       X.stats.ticks++;
-      if (!J.busy && JQ.length) { cur = JQ.shift(); restarts = 0; touched = false; fresh(); J.start(cur.kind, cur.seeds, read, BO); X.stats.jobs++; }
+      for (let k = 0; k < 8 && !J.busy && JQ.length; k++) { cur = JQ.shift(); restarts = 0; touched = false; if (liveSeeds(cur)) { startJob(); X.stats.jobs++; } else { cur = null; X.stats.skipped++; } }
+      if (J.busy && touched) { touched = false; if (restarts < 2) { restarts++; X.stats.restarts++; if (liveSeeds(cur)) startJob(); else dropJob(); } }
+      let used = 0;
       if (J.busy) {
-        if (touched) { touched = false; if (restarts < 2) { restarts++; X.stats.restarts++; fresh(); J.start(cur.kind, cur.seeds, read, BO); } }
-        fresh();
-        const fin = J.step(S.SOLVE_BUDGET);
-        if (J.ticks === 2) creak(cur);
+        const o0 = J.ops; fresh();
+        const fin = J.step(budget);
+        used = J.ops - o0; X.stats.jobOps += used;
+        if (J.early) takeEarly();
+        if (J.warn === 1) { J.warn = 2; if (!fin && !flushing) creak(cur); }   // скрип — только если что-то сломается под нагрузкой (T-124)
         if (fin) apply(cur);
       }
-      tintTick();
+      if (!flushing) tintTick(Math.max(EST_MIN, S.SOLVE_BUDGET - used));
       const ms = nowMs() - t0; X.stats.tickMs += ms; if (ms > X.stats.maxTickMs) X.stats.maxTickMs = ms;
     }
+    // v1-куски задания (держались до, не держатся после — проход 1): падают сразу, задание идёт дальше (нагрузка)
+    function takeEarly(){ const ne = J.early; J.early = 0; X.stats.groups += ne; X.stats.early += ne; for (let k = 0; k < ne; k++) enqueue(G.groups(k), cur.depth); }
     function apply(job){
       const R = J.res; cur = null;
       X.stats.solves++; X.stats.lastTicks = R.ticks; X.stats.lastN = R.n; X.stats.over += R.over;
+      if (!liveSeeds(job)) { X.stats.skipped++; return; }   // все семена уже вернули (поставили обратно) — ничего не меняется
       const ng = R.ng; X.stats.groups += ng;
-      // раздавленные клетки — сначала (их нет в группах): постройка — своей вещью «keep», природное — булыжником (вещью)
+      // раздавленные клетки — сначала (их нет в группах): постройка — своей вещью «keep», природное — булыжником (вещью); прицепленное
+      // (факел, лестница, дверь) — вещами, сундук и печь — содержимое вещами «keep» (T-124: не висят в воздухе и не пропадают)
       if (R.crushed) {
         J.crushedList(CRUSH); const ev = batch(true); own++;
-        try { for (const i of CRUSH) { const x = G.px[i], y = G.py[i], z = G.pz[i], v = W.raw(x, y, z); if (!(v > 0)) continue; W.set(x, y, z, 0, { urgent: 2 }); X.stats.crushed++; const nat = (G.g.mat[i] === S.MAT.rock || G.g.mat[i] === S.MAT.soil); dropBlockItem(nat && V.ID.cobble !== undefined && (v & 0xfff) === V.ID.stone ? V.cell(V.ID.cobble, 0) : v, x, y, z, ev); st.ents?.debris?.(x, y, z, v & 0xfff, 4); } } finally { own--; }
+        try {
+          for (const i of CRUSH) {
+            const x = G.px[i], y = G.py[i], z = G.pz[i], v = W.raw(x, y, z); if (!(v > 0)) continue;
+            popAttached(x, y, z, ev);
+            const tl = W.dropTile ? W.dropTile(x, y, z) : null;
+            if (tl) { tileTaken(x, y, z, tl); tileSpill(tl, x, y, z, x, y, z, ev); }
+            W.set(x, y, z, 0, { urgent: 2 }); X.stats.crushed++;
+            const nat = (G.g.mat[i] === S.MAT.rock || G.g.mat[i] === S.MAT.soil);
+            dropBlockItem(nat && V.ID.cobble !== undefined && (v & 0xfff) === V.ID.stone ? V.cell(V.ID.cobble, 0) : v, x, y, z, ev); st.ents?.debris?.(x, y, z, v & 0xfff, 4);
+          }
+        } finally { own--; }
         ev.flush();
       }
       for (let k = 0; k < ng; k++) enqueue(G.groups(k), job.depth);
     }
-    function creak(job){   // задание дольше такта: скрип и пыль там, где правка
+    // сохранить / закрыть мир (kubomir.js stopWorld, journalNow): что считается и падает — до конца сразу (T-124: иначе в сохранении
+    // постройка висит навсегда, а содержимое сундука в падающем куске пропадает)
+    X.flush = () => {
+      for (let pass = 0; pass < 8; pass++) {
+        let any = false;
+        if (LD) for (let k = 0; k < 256 && (J.busy || JQ.length); k++) { any = true; loadTick(1 << 30, true); }
+        while (Q.length) { any = true; const q = Q.shift(); dropGroup(q.xyz, q.depth, true); }
+        if (st.ents?.landAll?.()) any = true;
+        if (!any) return;
+      }
+    };
+    function creak(job){   // что-то сломается под нагрузкой (задание ещё идёт): скрип и пыль там, где правка
+      X.stats.creaks++;
       const x = job.seeds[0], y = job.seeds[1], z = job.seeds[2];
       st.AU?.play('kb_creak', { x: x - st.ox + .5, y: y + 1, z: z - st.oz + .5, vol: .55, rate: .8 });
       const v = W.raw(x, y + 1, z); if (v > 0) st.ents?.debris?.(x, y + 1, z, v & 0xfff, 2);
     }
     // ── поставить (v2): держание и нагрузка; рамка — в такте мира (задание оценки по кусочкам), клик — сразу, если не готово ──
-    const EST = { x: 0, y: -999, z: 0, id: -1, rev: -1, ok: true, lv: 0, busy: false, want: false, wx: 0, wy: 0, wz: 0, wid: -1, wrev: -1 };
-    const EST_BUDGET = 2048;
+    // EST — итог оценки нагрузки для клетки и блока (ok — правило нагрузки, ld — уровень нагрузки для рамки), действителен, пока не
+    // менялись чанки, которые читал её кусок (tc / tr; не загружено или больше 32 чанков — по общему W.rev)
+    const EST = { x: 0, y: -999, z: 0, id: -1, ok: true, ld: 0, done: false, busy: false, want: false, wantT: 0, wx: 0, wy: 0, wz: 0, wid: -1, bx: 0, by: 0, bz: 0, bid: -1,
+      tn: 0, tover: 0, wrev: -1, tc: new Array(32).fill(null), tr: new Float64Array(32) };
+    const EST_MIN = 512;   // оценке в такте — что осталось от потолка SOLVE_BUDGET после задания, но не меньше этого
+    const trackBegin = () => { TRK.n = 0; TRK.over = 0; TRK.wrev = W.rev; };
+    function estStore(x, y, z, id, o){
+      EST.x = x; EST.y = y; EST.z = z; EST.id = id; EST.ok = o.ok; EST.ld = o.load; EST.done = true; EST.busy = false;
+      EST.tn = TRK.n; EST.tover = TRK.over; EST.wrev = TRK.wrev; for (let i = 0; i < TRK.n; i++) { EST.tc[i] = TRK.c[i]; EST.tr[i] = TRK.r[i]; }
+    }
+    function estValid(){
+      if (EST.tover || !EST.tn) return EST.wrev === W.rev;
+      for (let i = 0; i < EST.tn; i++) { const c = EST.tc[i]; if (c.rev !== EST.tr[i] || W.chunk(c.cx, c.cz) !== c) return false; }
+      return true;
+    }
+    // поставить (v2): держание — ровно как в v1 (сетка размера v1), нагрузка — оценка в такте мира для этой клетки, если готова и
+    // действительна, иначе сейчас (раз на клик); кусок не влез в оценку (G.full) — по нагрузке «можно» (T-124)
     function placeOk(x, y, z, b){
       const m = MT[b.id]; if (m === undefined || m === 255) return true;
-      if (EST.x === x && EST.y === y && EST.z === z && EST.id === b.id && EST.rev === W.rev && !EST.busy) return EST.ok;
-      fresh(); const o = S.placeCheck(GE, x, y, z, (m << 2) | 2, read, BOE);
-      EST.busy = false; EST.x = x; EST.y = y; EST.z = z; EST.id = b.id; EST.rev = W.rev; EST.ok = o.ok; EST.lv = o.lv;
-      if (!o.ok) X.stats.refused++;
-      return o.ok;
-    }
-    function tintAtTick(T, b){
-      EST.want = true; EST.wx = T.x; EST.wy = T.y; EST.wz = T.z; EST.wid = b.id;
-      const same = EST.x === T.x && EST.y === T.y && EST.z === T.z && EST.id === b.id;
-      last.lv = same ? EST.lv : last.lv;
-      const c = S.COLORS[last.lv];
-      TINT[0] = (c >> 16 & 255) / 255; TINT[1] = (c >> 8 & 255) / 255; TINT[2] = (c & 255) / 255;
-      return TINT;
-    }
-    function tintTick(){
-      if (EST.busy) {
-        fresh();
-        if (JE.step(EST_BUDGET)) { const m = MT[EST.wid2]; const o = S.placeResult(GE, (m << 2) | 2); EST.busy = false; EST.x = EST.bx; EST.y = EST.by; EST.z = EST.bz; EST.id = EST.wid2; EST.rev = EST.brev; EST.ok = o.ok; EST.lv = o.lv; }
-        return;
+      const s = X.estimate(x, y, z, b);
+      if (s >= 0 && s < P.min[m]) { X.stats.refused++; return false; }
+      if (!(EST.done && EST.x === x && EST.y === y && EST.z === z && EST.id === b.id && estValid())) {
+        trackBegin(); TRK.on = true; fresh();
+        try { const o = S.placeCheck(GE, x, y, z, (m << 2) | 2, read, BOE); estStore(x, y, z, b.id, o); } finally { TRK.on = false; }
       }
-      if (!EST.want) return;
-      EST.want = false;
-      if (EST.x === EST.wx && EST.y === EST.wy && EST.z === EST.wz && EST.id === EST.wid && EST.rev === W.rev) return;
-      const m = MT[EST.wid]; if (m === undefined || m === 255) return;
-      fresh(); S.placeStart(GE, EST.wx, EST.wy, EST.wz, (m << 2) | 2, read, BOE);
-      EST.busy = true; EST.bx = EST.wx; EST.by = EST.wy; EST.bz = EST.wz; EST.wid2 = EST.wid; EST.brev = W.rev;
+      if (!EST.ok) X.stats.refused++;
+      return EST.ok;
+    }
+    // оценка нагрузки для рамки — заданием в такте мира; цель сменилась — старое задание бросаем (не досчитываем чужую клетку)
+    function tintTick(budget){
+      if (!EST.want || nowMs() - EST.wantT > 500) { EST.want = false; EST.busy = false; return; }   // блока в руке нет — не считаем
+      const wx = EST.wx, wy = EST.wy, wz = EST.wz, wid = EST.wid;
+      if (EST.busy && (EST.bx !== wx || EST.by !== wy || EST.bz !== wz || EST.bid !== wid)) EST.busy = false;
+      if (!EST.busy) {
+        if (EST.done && EST.x === wx && EST.y === wy && EST.z === wz && EST.id === wid && estValid()) return;
+        const m = MT[wid]; if (m === undefined || m === 255) return;
+        trackBegin(); fresh(); S.placeStart(GE, wx, wy, wz, (m << 2) | 2, read, BOE);
+        EST.busy = true; EST.bx = wx; EST.by = wy; EST.bz = wz; EST.bid = wid;
+      }
+      TRK.on = true; fresh(); const o0 = JE.ops;
+      try { if (JE.step(budget)) estStore(EST.bx, EST.by, EST.bz, EST.bid, S.placeResult(GE, (MT[EST.bid] << 2) | 2)); } finally { TRK.on = false; X.stats.estOps += JE.ops - o0; }
     }
     // ── замер без последствий (v2): задание целиком по кусочкам бюджета — сколько тактов и худший такт (мс) ──
     function dry2(x, y, z, code){
-      while (J.busy || JQ.length) loadTick();   // замер — на пустой очереди (идущее задание доводим до конца)
+      for (let k = 0; k < 4096 && (J.busy || JQ.length); k++) loadTick();   // замер — на пустой очереди (идущее задание доводим до конца)
       const t0 = nowMs(); fresh(); J.start('rm', [x, y, z, code], read, BO);
       let maxT = 0, nt = 0, wph = -1; const ph = [0, 0, 0, 0, 0, 0, 0, 0], po = [0, 0, 0, 0, 0, 0, 0, 0];
       for (;;) { const p = J.phase, o0 = J.ops, a = nowMs(); fresh(); const fin = J.step(S.SOLVE_BUDGET); const d = nowMs() - a; nt++; ph[p] += d; po[p] += J.ops - o0; if (d > maxT) { maxT = d; wph = p; } if (fin) break; }
       return { ms: nowMs() - t0, maxTick: maxT, worstPhase: wph, phaseMs: ph.map(v => +v.toFixed(2)), phaseOps: po, ticks: nt, nodes: G.g.n, groups: J.res.ng, fall: J.res.nf, ops: J.res.ops };
     }
-    X.jobs = () => ({ busy: !!J?.busy, queued: JQ.length, cur: cur ? { kind: cur.kind, seeds: cur.seeds.length / 4 } : null });
+    X.jobs = () => ({ busy: !!J?.busy, queued: JQ.length, cur: cur ? { kind: cur.kind, seeds: cur.seeds.length / 4 } : null, est: { done: EST.done, busy: EST.busy, skipped: !!JE?.skipped, full: !!GE?.full } });
     return X;
   };
 })();

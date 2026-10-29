@@ -994,8 +994,9 @@ function fakeWorld(sky, blk, walls = new Set()){
     const mkSW = (floor = 10) => { const cells = new Map(), chunks = new Map(); const W = { seed: 9, rev: 0, listeners: [], cells, chunks,
       raw(x, y, z){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (y < 0) return 7; if (y >= 128) return 0; const v = cells.get(key(x, y, z)); return v === undefined ? (y < floor ? ID.stone : 0) : v; },
       get(x, y, z){ const v = this.raw(x, y, z); return v < 0 ? -1 : v & 0xfff; },
-      chunk(cx, cz){ const k = cx + '|' + cz; let c = chunks.get(k); if (!c) chunks.set(k, c = { cx, cz, edits: null, gen: true }); return c; },
-      set(x, y, z, v, o = {}){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); cells.set(key(x, y, z), v); this.rev++; if (!o.nat) { const c = this.chunk(x >> 4, z >> 4); (c.edits || (c.edits = new Map())).set(((x & 15) << 11) | ((z & 15) << 7) | y, v); } return true; },
+      chunk(cx, cz){ const k = cx + '|' + cz; let c = chunks.get(k); if (!c) chunks.set(k, c = { cx, cz, key: k, edits: null, gen: true, rev: 0 }); return c; },
+      set(x, y, z, v, o = {}){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); const was = this.raw(x, y, z); cells.set(key(x, y, z), v); this.rev++; const c = this.chunk(x >> 4, z >> 4); c.rev = this.rev; if (!o.nat) (c.edits || (c.edits = new Map())).set(((x & 15) << 11) | ((z & 15) << 7) | y, v); if (!o.silent) for (const f of this.listeners) f(x, y, z, was, v, o); return true; },
+      markTile(x, z){ const c = this.chunk(Math.floor(x) >> 4, Math.floor(z) >> 4); c.rev = ++this.rev; },
       tiles: new Map(), tile(x, y, z, make){ const k = key(Math.floor(x), Math.floor(y), Math.floor(z)); let t = this.tiles.get(k); if (!t && make) { t = make(); this.tiles.set(k, t); } return t || null; },
       dropTile(x, y, z){ const k = key(Math.floor(x), Math.floor(y), Math.floor(z)), t = this.tiles.get(k); this.tiles.delete(k); return t || null; },
       lightAt(){ return 15 << 12; }, loaded: () => true, heightAt: () => floor, chunkAt(x, z){ return this.chunk(Math.floor(x) >> 4, Math.floor(z) >> 4); } }; return W; };
@@ -1121,6 +1122,134 @@ function fakeWorld(sky, blk, walls = new Set()){
       let beam = 0; for (let x = 51; x <= 53; x++) if (W.get(x, 14, 50) === ID.planks_oak) beam++;
       ok(beam === 0 && s.stats.groups >= 1, 'глыба легла на конец консоли — консоль сломалась у стены и упала вместе с ней', { beam, ticks, st: s.stats });
       X.dispose(); }
+    // ═══ T-124, разбор SH1: исправления (номера — из разбора) ═══
+    const sumKeep = (X, id) => X.items.filter(e => e.keep && e.s.id === id).reduce((a, e) => a + e.s.n, 0);
+    // (2, 16) раздавленный сундук под легшим грузом: содержимое — вещами «keep», факел на нём отпал, пустой «плитки» в клетке нет
+    { const W = mkSW(); const IR = V.cell(ID.iron_block);
+      W.set(50, 10, 50, V.cell(ID.chest, 0)); const items = new Array(27).fill(null); items[0] = { id: 'diamond', n: 5 }; items[3] = { id: 'cobble', n: 64 }; W.tile(50, 10, 50, () => ({ items }));
+      W.set(51, 10, 50, V.cell(ID.torch, 4));   // факел на боку сундука
+      for (let y = 11; y <= 16; y++) W.set(50, y, 50, IR);
+      const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup;
+      W.set(50, 17, 50, IR); W.set(50, 18, 50, IR); s.recheck([50, 17, 50, 50, 18, 50]);   // кусок «лёг» сверху
+      tickUntil(X, S12);
+      const r = { crushed: s.stats.crushed, dia: sumKeep(X, 'diamond'), cob: sumKeep(X, 'cobble'), chest: sumKeep(X, 'chest'), torch: X.items.some(e => e.s.id === 'torch'), torchCell: W.get(51, 10, 50), orphan: W.tiles.has('50,10,50') };
+      ok(r.crushed >= 1 && r.dia === 5 && r.cob === 64 && r.chest === 1 && r.torch && r.torchCell === 0 && !r.orphan, 'нагрузка раздавила сундук — все вещи из него лежат «keep», факел на нём отпал, пустой плитки в клетке нет', r);
+      X.dispose(); }
+    // (3) поставить в мире с нагрузкой: часть «держание» — ровно как v1 (сетка v1): то, что v1 не даёт, не даёт и нагрузка
+    { const tower = load => { const W = mkSW(); const OB = V.cell(ID.obsidian); for (let y = 10; y < 86; y++) for (let x = 40; x < 49; x++) for (let z = 40; z < 49; z++) W.set(x, y, z, OB);
+        const { X, S12 } = mkS(W, 'real', 'easy', load), b = V.blocks[ID.obsidian]; const a = S12.sup.canPlace(44, 86, 44, b), c = S12.sup.canPlace(49, 50, 44, b); X.dispose(); return [a, c]; };
+      const v1 = tower(undefined), v2 = tower(1);
+      ok(v1.join() === v2.join() && v1[0] === false, 'башня 9×9×76 (больше 4096 узлов): сверху v1 не даёт поставить — и с нагрузкой не даёт (раньше давала: оценка на малой сетке)', { v1, v2 }); }
+    // (5, 6) закрыть мир, пока кусок с сундуком летит и задание ещё идёт: X.flush — всё ложится сразу, сундук с вещами — на новом месте
+    { const W = mkSW(); build(W); W.set(53, 15, 50, V.cell(ID.chest, 0)); const items = new Array(27).fill(null); items[0] = { id: 'diamond', n: 5 }; W.tile(53, 15, 50, () => ({ items }));
+      const { X, S12 } = mkS(W, 'soft'); const code = S12.sup.code(50, 11, 50); W.set(50, 11, 50, 0); S12.sup.removed(50, 11, 50, code);
+      X.tick(1 / 20); const air = X.groups.length;
+      S12.sup.flush(); const t = W.tile(53, 14, 50);
+      ok(air === 1 && !X.groups.length && W.get(53, 14, 50) === ID.chest && t && t.items === items && t.items[0].n === 5, 'закрыли мир, пока кусок с сундуком падает: лёг сразу, сундук с вещами — в мире (попадёт в сохранение)', { air, left: X.groups.length, at: W.get(53, 14, 50), same: t?.items === items });
+      X.dispose(); }
+    { const W = mkSW(); build(W); const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup;
+      const code = s.code(50, 11, 50); W.set(50, 11, 50, 0); s.removed(50, 11, 50, code);
+      const queued = s.jobs().queued; s.flush();
+      let beam = 0; for (let x = 51; x <= 54; x++) if (W.get(x, 14, 50) === ID.planks_oak) beam++;
+      ok(queued === 1 && !s.jobs().busy && !s.jobs().queued && beam === 0 && !X.groups.length, 'мир с нагрузкой: сломали столб и сразу закрыли — задание досчитано, балка упала до сохранения (не висит навсегда)', { queued, beam, jobs: s.jobs() });
+      X.dispose(); }
+    // (9) мир с нагрузкой: v1-куски падают сразу после двух проходов 1 — не ждут конца задания (кусок 1000+ клеток)
+    const beamScene = W => { for (let z = 48; z <= 52; z++) for (let y = 10; y < 15; y++) W.set(50, y, z, PL); for (let x = 51; x <= 53; x++) W.set(x, 14, 50, PL);
+      for (let x = 60; x < 70; x++) for (let z = 40; z < 60; z++) for (let y = 10; y < 15; y++) W.set(x, y, z, PL); for (let x = 51; x < 60; x++) W.set(x, 10, 50, PL); };
+    { const W = mkSW(); beamScene(W); const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup;
+      const c = s.code(50, 14, 50); W.set(50, 14, 50, 0); s.removed(50, 14, 50, c);
+      let tFall = -1, t = 0; for (; t < 200; t++) { s.step(); X.tick(1 / 20); if (tFall < 0 && (X.groups.length || W.get(53, 14, 50) !== ID.planks_oak)) tFall = t + 1; const jb = s.jobs(); if (!jb.busy && !jb.queued && !X.groups.length && !s.queue.length) break; }
+      const total = s.stats.lastTicks;
+      ok(tFall > 0 && tFall * 2 <= total && s.stats.early >= 1, 'балка без опоры (кусок ' + s.stats.lastN + ' узлов): падает на ' + tFall + '-м такте, задание целиком — ' + total + ' тактов', { tFall, total, st: s.stats });
+      X.dispose(); }
+    // (11) сломал опору и поставил обратно, пока задание идёт: постройка стоит (семена — по миру сейчас), прицепленное не отпало
+    for (const back of [false, true]) {
+      const W = mkSW(); beamScene(W); W.set(52, 15, 50, V.cell(ID.torch, 0)); const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup;
+      const c = s.code(50, 14, 50); W.set(50, 14, 50, 0); s.removed(50, 14, 50, c);
+      if (back) W.set(50, 14, 50, PL);   // вернул до первого такта
+      tickUntil(X, S12);
+      let beam = 0; for (let x = 51; x <= 53; x++) if (W.get(x, 14, 50) === ID.planks_oak) beam++;
+      if (back) ok(beam === 3 && W.get(52, 15, 50) === ID.torch && !X.items.length && s.stats.groups === 0, 'сломал стену под балкой и сразу поставил обратно — балка стоит, факел на ней на месте', { beam, items: X.items.length, st: s.stats });
+      else ok(beam === 0, 'не вернул — балка упала', { beam });
+      X.dispose(); }
+    { const W = mkSW(); beamScene(W); const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup;
+      const c = s.code(50, 14, 50); W.set(50, 14, 50, 0); s.removed(50, 14, 50, c);
+      s.step(); W.set(50, 14, 50, PL);   // вернул после первого такта (задание уже идёт — заново, без этого семени)
+      tickUntil(X, S12);
+      let beam = 0; for (let x = 51; x <= 53; x++) if (W.get(x, 14, 50) === ID.planks_oak) beam++;
+      ok(beam === 3 && s.stats.restarts + s.stats.skipped >= 1, 'вернул опору во время задания — заново по миру сейчас, балка стоит', { beam, st: s.stats });
+      X.dispose(); }
+    // (10) рамка: перевёл курсор с конца консоли (тёмно-красная) на верх стены — сразу цвет новой клетки (держание v1), не старой
+    { const W = mkSW(); beamScene(W); const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup, pl = V.blocks[ID.planks_oak];
+      const A = { x: 54, y: 14, z: 50 }, B = { x: 50, y: 15, z: 50 };
+      for (let i = 0; i < 200; i++) { s.tint(A, pl); s.step(); }
+      const lA = s.level(); s.tint(B, pl); const lB0 = s.level(); for (let i = 0; i < 200; i++) { s.tint(B, pl); s.step(); } const lB = s.level();
+      ok(lA === 4 && lB0 <= 2 && lB <= 2, 'рамка: на конце консоли тёмно-красная; на верхе стены — сразу её цвет (держание v1), нагрузка — когда досчитается', { lA, lB0, lB });
+      // (13) оценка — в том же потолке шагов за такт; правка в далёком чанке её не перезапускает (кэш — по чанкам куска)
+      const ops0 = s.stats.estOps; for (let i = 0; i < 20; i++) { s.tint(B, pl); s.step(); } const idle = s.stats.estOps - ops0;
+      W.set(500, 20, 500, PL); const ops1 = s.stats.estOps; for (let i = 0; i < 20; i++) { s.tint(B, pl); s.step(); } const far = s.stats.estOps - ops1;
+      W.set(50, 16, 50, PL); const ops2 = s.stats.estOps; for (let i = 0; i < 3; i++) { s.tint(B, pl); s.step(); } const near = s.stats.estOps - ops2;
+      ok(idle === 0 && far === 0 && near > 0, 'оценка рамки: готова — не считается снова; правка в далёком чанке — тоже; рядом — заново', { idle, far, near });
+      const c = s.code(60, 10, 40); W.set(60, 10, 40, 0); s.removed(60, 10, 40, c); let worst = 0;
+      for (let i = 0; i < 40; i++) { const j0 = s.stats.estOps, b0 = s.stats.jobOps; s.tint({ x: 54, y: 14, z: 51 + (i & 1) }, pl); s.step(); const used = (s.stats.jobOps - b0) + (s.stats.estOps - j0); if (s.jobs().busy && used > worst) worst = used; }
+      ok(worst > 0 && worst <= SUP.SOLVE_BUDGET + 512 + 64, 'такт: задание + оценка рамки — не больше потолка (SOLVE_BUDGET, у оценки — минимум 512): худший ' + worst, { worst });
+      X.dispose(); }
+    // (14) клик рядом с постройкой больше 4096 узлов: оценка нагрузки не влезла (G.full) — проходы нагрузки не считаются
+    { const W = mkSW(); for (let y = 10; y < 40; y++) for (let x = 40; x < 56; x++) for (let z = 40; z < 56; z++) W.set(x, y, z, CB);
+      const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup; const ok1 = s.canPlace(56, 39, 48, V.blocks[ID.cobble]), e = s.jobs().est;
+      ok(ok1 && e.skipped && e.full, 'клик у постройки 7680 блоков: держание — как v1, нагрузку на обрезанном куске не считаем (вердикт и так «можно»)', { ok1, e });
+      X.dispose(); }
+    // (15) скрип — только если что-то сломается под нагрузкой: 10 блоков пола из дома 9×9 — ни одного скрипа
+    { const W = mkSW(); const n = 9; for (let y = 0; y < 4; y++) for (let x = 0; x < n; x++) for (let z = 0; z < n; z++) if (x === 0 || z === 0 || x === n - 1 || z === n - 1) W.set(40 + x, 10 + y, 40 + z, PL);
+      for (let x = 1; x < n - 1; x++) for (let z = 1; z < n - 1; z++) W.set(40 + x, 10, 40 + z, PL);
+      const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup; let creaks = 0; S12.AU = { play: k => { if (k === 'kb_creak') creaks++; } };
+      for (const [x, z] of [[2, 2], [3, 3], [4, 4], [5, 5], [6, 6], [2, 6], [6, 2], [4, 2], [2, 4], [4, 6]]) { const c = s.code(40 + x, 10, 40 + z); W.set(40 + x, 10, 40 + z, 0); s.removed(40 + x, 10, 40 + z, c); tickUntil(X, S12); }
+      ok(creaks === 0 && s.stats.jobs === 10 && s.stats.groups === 0, 'дом 9×9: вынул 10 блоков пола (ничего не падает) — ни одного скрипа (было 10)', { creaks, st: s.stats });
+      X.dispose(); }
+    { const W = mkSW(); beamScene(W); const IR = V.cell(ID.iron_block); const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup; let creaks = 0; S12.AU = { play: k => { if (k === 'kb_creak') creaks++; } };
+      const blk = []; for (let y = 15; y < 17; y++) for (let z = 49; z <= 51; z++) { W.set(53, y, z, IR); blk.push(53, y, z); }
+      s.recheck(blk); tickUntil(X, S12);
+      let beam = 0; for (let x = 51; x <= 53; x++) if (W.get(x, 14, 50) === ID.planks_oak) beam++;
+      ok(beam === 0 && creaks >= 1, 'железо легло на конец консоли (кусок 1000+ клеток, задание дольше такта) — скрип, консоль сломалась', { beam, creaks, st: s.stats });
+      X.dispose(); }
+    // (1) игра вместе (настоящий kubomir-coop.js, хозяин): у гостя открыт сундук, кусок с ним упал — правки гостя — в сундук на новом
+    // месте; лечь некуда — высыпается, когда гость закроет окно (с его правками: ничего не двоится); своё окно хозяина — закрывается
+    {
+      run('js/games/kubomir-coop.js');
+      const doc0 = globalThis.document;
+      globalThis.document = Object.assign({ addEventListener(){}, removeEventListener(){}, visibilityState: 'visible', createElement: () => ({ style: {}, classList: { add(){}, toggle(){} }, remove(){}, appendChild(){} }) }, doc0 || {});
+      const sent = [], cap = {};
+      window.D37Coop = { makeKey: async () => ({ pub: 'P', jwk: {}, code: 'C0DE' }), sign: async () => 'proof', hash: () => 'h', cleanNick: s => String(s || ''), toB64: u => Buffer.from(u).toString('base64'), fromB64: b => new Uint8Array(Buffer.from(b, 'base64')),
+        room: o => { Object.assign(cap, o); return { me: 'host', send: (id, u8) => { if (u8[0] === 1) sent.push([id, JSON.parse(new TextDecoder().decode(u8.subarray(1)))]); }, flush(){}, mode: () => 'relay', close(){}, stats: () => ({}) }; } };
+      const J1 = o => { const s = new TextEncoder().encode(JSON.stringify(o)), u = new Uint8Array(s.length + 1); u[0] = 1; u.set(s, 1); return u; };
+      const scene = async (blockLanding, hostWin) => {
+        sent.length = 0;
+        const W = mkSW(); build(W); W.set(53, 15, 50, V.cell(ID.chest, 0)); const items = new Array(27).fill(null); items[0] = { id: 'diamond', n: 5 }; items[1] = { id: 'cobble', n: 10 }; W.tile(53, 15, 50, () => ({ items }));
+        const { X, S12 } = mkS(W, 'soft'); Object.assign(S12, { savedKeys: new Set(), unsaved: new Set(), remapOut: [], remapIn: [] }); S12.meta.name = 'T'; S12.meta.seed = 9;
+        let hostOpen = !!hostWin; const UI = { pos: hostWin ? { x: 53, y: 15, z: 50 } : null, isOpen: () => hostOpen, close(){ hostOpen = false; this.pos = null; } }; S12.ui = UI;
+        const H = window.KubomirCoop.host(S12, { toast(){}, changed(){} }); await H.start(); S12.net = H;
+        cap.onMembers([{ id: 'g1', nick: 'Гость' }]); cap.onMsg('g1', J1({ t: 'hi', v: 1, nonce: 'n1', pkey: 'pk1', nick: 'Гость' })); await new Promise(r => setTimeout(r, 0)); await new Promise(r => setTimeout(r, 0));
+        const G = H.guests.get('g1'); Object.assign(G, { tx: 53.5, ty: 14, tz: 51.5, x: 53.5, y: 14, z: 51.5 });
+        if (!hostWin) cap.onMsg('g1', J1({ t: 'open', x: 53, y: 15, z: 50 }));
+        const opened = sent.find(m => m[1].t === 'tile');
+        if (blockLanding) Object.assign(S12.P, { x: 53.5, y: 14, z: 50.5 });
+        const code = S12.sup.code(50, 11, 50); W.set(50, 11, 50, 0); S12.sup.removed(50, 11, 50, code);
+        for (let i = 0; i < 400 && X.groups.length; i++) X.tick(1 / 20);
+        const shut = sent.some(m => m[0] === 'g1' && m[1].t === 'shut' && m[1].x === 53 && m[1].y === 15);
+        // гость (у него свой экземпляр плитки) взял алмазы и положил 3 булыжника; закрыл окно — 'close' со своей плиткой
+        let keepBefore = sumKeep(X, 'diamond') + sumKeep(X, 'cobble');
+        if (!hostWin) { const gt = { items: new Array(27).fill(null) }; gt.items[1] = { id: 'cobble', n: 13 }; cap.onMsg('g1', J1({ t: 'close', x: 53, y: 15, z: 50, tile: gt })); }
+        const t = W.tile(53, 14, 50);
+        const r = { ready: !!G.ready, opened: !!opened?.[1]?.ok, shut, hostOpen, at: W.get(53, 14, 50) === ID.chest, dia: t ? (t.items[0]?.n | 0) : -1, cob: t ? (t.items[1]?.n | 0) : -1, keepBefore,
+          keepDia: sumKeep(X, 'diamond'), keepCob: sumKeep(X, 'cobble'), locks: H.locks.size, pend: H.pend.size };
+        H.close('test', true); X.dispose(); return r;
+      };
+      const a = await scene(false), b = await scene(true), c = await scene(false, true);
+      ok(a.ready && a.opened && a.shut && a.at && a.dia === 0 && a.cob === 13 && a.keepDia === 0 && a.locks === 0, 'игра вместе: сундук гостя упал вместе с куском — гостю «закрой окно», его правки (взял алмазы, положил булыжник) — в сундуке на новом месте, ничего не двоится', a);
+      ok(b.shut && !b.at && b.keepBefore === 0 && b.keepDia === 0 && b.keepCob === 13 && b.pend === 0, 'игра вместе: сундуку лечь некуда — высыпается, когда гость закрыл окно, и с его правками (алмазы у гостя — на земле их нет)', b);
+      ok(!c.hostOpen && c.at && c.dia === 5 && c.cob === 10, 'своё окно хозяина на падающем сундуке — закрылось, сундук с вещами — на новом месте', c);
+      globalThis.document = doc0;
+    }
     // своды пещер: «реализм» — широкий зал обваливается (лёг булыжником), «мягкое» — нет
     const cave = (support) => {
       const W = mkSW(40);
