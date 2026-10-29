@@ -346,6 +346,7 @@ uniform vec3 uBetaR;
 uniform float uBetaM;
 uniform vec4 uAtm3;
 uniform vec4 uSky;
+uniform vec4 uSkyWx;
 varying vec3 vR; varying vec3 vM; varying vec3 vT; varying vec3 vDir;
 ${PHASE}
 void main(){
@@ -353,6 +354,9 @@ void main(){
   float c = dot( d, uSunL );
   vec3 col = uSky.x * ( uBetaR * vR * d37PhR( c ) + uBetaM * vM * d37PhM( c, uAtm3.z ) );
   float disc = smoothstep( uSky.y - 0.00004, uSky.y, c );
+  // погода (крючок T-145, V.setWeather tint / vis / dust): небо у камеры — к цвету пыли, песка, снега при той же яркости; солнце
+  // тонет в ней (купол; оболочка с орбиты — нет: погода местная)
+  if ( uSkyWx.w > 0.0 ) { col = mix( col, uSkyWx.rgb * dot( col, vec3( 0.2126, 0.7152, 0.0722 ) ) * 1.15, uSkyWx.w ); disc *= 1.0 - uSkyWx.w * 0.85; }
   col += vT * disc * uSky.z;
   gl_FragColor = vec4( col * uSky.w, 1.0 );
   #include <tonemapping_fragment>
@@ -462,12 +466,13 @@ void main(){
       defines: { D37_MORPH: F.morph ? 1 : false, D37_PSH: F.shadows ? 1 : false, D37_PWX: F.weather ? 1 : false, D37_ECL: F.eclipse ? 1 : false } });
     terrainMat.customProgramCacheKey = () => 'd37planet3' + (F.morph ? 'm' : '') + (F.shadows ? 's' : '') + (F.weather ? 'w' : '') + (F.eclipse ? 'e' : '');
     own.push(terrainMat);
-    // небо: купол (у камеры) и оболочка (вокруг планеты)
+    // небо: купол (у камеры) и оболочка (вокруг планеты); SKYWX — цвет и сила погоды в небе купола (V.setWeather)
+    const SKYWX = { value: new T.Vector4(0, 0, 0, 0) };
     const mkSky = mode => {
-      const u = { ...U, uMode: { value: mode }, uSky: { value: new T.Vector4().copy(U.uSky.value) } };
+      const u = { ...U, uMode: { value: mode }, uSky: { value: new T.Vector4().copy(U.uSky.value) }, uSkyWx: mode === 0 ? SKYWX : { value: new T.Vector4() } };
       const m = new T.ShaderMaterial({ name: 'planet-sky', uniforms: u, vertexShader: SKY_V, fragmentShader: SKY_F, fog: false, lights: false, depthWrite: false,
         transparent: true, blending: T.AdditiveBlending, side: T.BackSide });
-      m.customProgramCacheKey = () => 'd37planetsky1';
+      m.customProgramCacheKey = () => 'd37planetsky2';
       own.push(m); return m;
     };
     const dome = new T.Mesh(domeGeo(T), mkSky(0)); dome.frustumCulled = false; dome.renderOrder = 901; own.push(dome.geometry); dome.layers.set(SKYL);
@@ -840,7 +845,7 @@ void main(){
     const srgbLin = c => { c = clamp(+c || 0, 0, 1); return c <= .04045 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4); };
     V.setWeather = wx => {
       const W4 = TU.uWx.value, WT = TU.uWt.value, WV = TU.uWv.value;
-      if (!wx) { wxK = { sun: 1, sky: 1, gray: 0 }; sunKAt = -1; W4.x = W4.y = 0; WV.x = WV.y = 0; WT.w = 0; return; }
+      if (!wx) { wxK = { sun: 1, sky: 1, gray: 0 }; sunKAt = -1; W4.x = W4.y = 0; WV.x = WV.y = 0; WT.w = 0; SKYWX.value.w = 0; return; }
       const over = clamp(+wx.cloud || 0, 0, 1) ** 2, rain = clamp(+wx.rain || 0, 0, 1), fog = clamp(+wx.fog || 0, 0, 1), storm = clamp(+wx.storm || 0, 0, 1);
       const dust = clamp(+wx.dust || 0, 0, 1), flat = clamp(+wx.flat || 0, 0, 1);
       wxK = { sun: clamp(1 - .78 * over - .1 * fog - .15 * storm - .55 * dust, .08, 1), sky: clamp(1 - .35 * over - .15 * rain - .2 * storm - .25 * dust, .3, 1),
@@ -852,6 +857,9 @@ void main(){
       if (Array.isArray(tc) && tc.length >= 3) { WT.set(srgbLin(tc[0]), srgbLin(tc[1]), srgbLin(tc[2]), 1); } else if (!WT.w) WT.set(.52, .37, .2, 0);
       const vis = +wx.vis;
       WV.x = vis > 0 && Number.isFinite(vis) ? 1 / max(15, vis) : 0; WV.y = flat;
+      // небо купола: видимость — как дымка на ~1500 u, без неё — по пыли; цвет — оттенок погоды (яркость — неба)
+      const sk = clamp(max(WV.x > 0 ? 1 - Math.exp(-4500 * WV.x) : 0, .6 * dust, .8 * flat), 0, 1), tm = max(WT.x, WT.y, WT.z, 1e-3);
+      SKYWX.value.set(WT.x / tm, WT.y / tm, WT.z / tm, sk);
       sunKAt = -1;
     };
 
