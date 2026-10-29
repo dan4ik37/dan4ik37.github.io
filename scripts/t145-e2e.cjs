@@ -63,6 +63,9 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
   const ourErr = () => errs.filter(e => /^(exception|error)/.test(e) && !/supabase|realtime|ERR_|Failed to fetch|NetworkError|adsbygoogle|googlesyndication|yandex|net::|WebSocket|401|403|404|CORS|130\.61\.75\.73|world_now/i.test(e));
   const weatherWarn = () => errs.filter(e => /погода|wx|terra|терра|планета/i.test(e) && /^warning/.test(e));
   const heap = async () => { await send('HeapProfiler.collectGarbage'); await sleep(300); await send('HeapProfiler.collectGarbage'); return +(await ev(`performance.memory.usedJSHeapSize / 1048576`)).toFixed(1); };
+  // live objects of a prototype (DevTools queryObjects): three.js scenes, renderers, geometries left after a game closed
+  const live = async expr => { try { const p = await send('Runtime.evaluate', { expression: expr }); if (!p.result?.objectId) return -1; const q = await send('Runtime.queryObjects', { prototypeObjectId: p.result.objectId });
+    const n = await send('Runtime.callFunctionOn', { objectId: q.objects.objectId, functionDeclaration: 'function(){ return this.length; }', returnByValue: true }); return n.result.value; } catch (e) { return -1; } };
   const res = { prof: PROF, rate: RATE, q: Q };
   try {
     await send('Page.enable'); await send('Runtime.enable'); await send('HeapProfiler.enable');
@@ -217,8 +220,9 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         await sleep(2500);
         await close(); await sleep(1500);
         const h = await heap(), w = await ev(`window.__liveW ? window.__liveW.size : -1`), cv = await ev(`document.querySelectorAll('canvas').length`);
-        H.push({ r, gid, ms, heap: h, workers: w, canvases: cv });
-        console.log(`  круг ${r + 1}/${N} ${gid}: открылась за ${ms} мс, память после сборки ${h} МБ, потоков ${w}, холстов ${cv}`);
+        const sc = await live('window.THREE ? THREE.Scene.prototype : null'), rd = await live('window.THREE ? THREE.WebGLRenderer.prototype : null'), bg = await live('window.THREE ? THREE.BufferGeometry.prototype : null');
+        H.push({ r, gid, ms, heap: h, workers: w, canvases: cv, scenes: sc, renderers: rd, geoms: bg });
+        console.log(`  круг ${r + 1}/${N} ${gid}: открылась за ${ms} мс, память после сборки ${h} МБ, потоков ${w}, холстов ${cv}, сцен ${sc}, рендереров ${rd}, геометрий ${bg}`);
       }
       res.reopen = { h0, rounds: H };
       const last = H[H.length - 1] || {}, mid = H[Math.floor(H.length / 2)] || {};

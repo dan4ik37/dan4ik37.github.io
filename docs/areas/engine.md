@@ -146,6 +146,9 @@
 - «Новая земля» (terra-demo.js, T-145, flag TERRA_WX): calendar weather in metres of the world (anchor + u / U), climate of rain and
   snow by `biomes.climateAtFn`, specials by `wx.regionOf(biomes.t1(SEED, { gen: 2 }))`, the sky ends over the core height (no rain
   in caves). «Кубомир» v4 worlds: kubomir-weather.js kbRegion takes zone-0 cells from `D37E.biomes.region` (biomes.js in its scripts).
+  Phone ×4 'mid' (scripts/t145-e2e.cjs): «Новая земля» walking, clear, CPU per frame 4.24 ms with weather vs 4.32 ms without (noise);
+  walking in a sandstorm 4.70 ms (77 grains + 42 streaks, fog at 62 u). Coast: sea strips of 4 m only over core ground below the sea
+  (SEA_FINE) — a pit 4+ m from the shore is dry to the eye too, as for physics (TS.water).
 - Tests: wx-test (55: data, grid, twin, season, T_q ±1.1°, golden, §2.11 frequencies, kids, fronts, order, AI, WxRec, speed),
   wxfx-test (11: pools, caps, low, roof, pushSky, 0.22 B/frame), wx-e2e (Chrome: Mir + Kubomir storms, phone ×4, soak),
   world-reopen-e2e with REOPEN_WX=sandstorm (20× phone, no leaks).

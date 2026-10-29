@@ -442,6 +442,13 @@ whiteout, smoke — E:/claude-tmp/t145/planet/wx2/shots; eclipse — E:/claude-t
 **Not done:** real phone check (owner); the old v1 path still drops a face to its root chunk for ~0.1 s when a new leaf is not ready yet while
 walking (pre-existing; v2 does not) — v1 is only the rollback now.
 
+**Integration (branch t145-planet-all, 29.10.2026).** The planet is in the site catalog for everyone (0+, tag «Новые»; SEO page
+/games/planet; rollback T145_OPEN in js/features/games.js and api/_lib/games-seo.js). Weather by biome is wired: the planet scripts load
+wx.js + wx-fx.js, planet-demo planetWx(v, st.wx.wfx) feeds V.setWeather with dust / flat / vis / tint (linear → sRGB) 4×/s; desert
+latitudes get sandstorms by their climate class. Phone ×4 'mid' (scripts/t145-e2e.cjs, loaded machine): ground 4.75 ms CPU per frame
+with the specials vs 4.42 with the one-line rollback (D37E.climate.SPECIAL = false + wxfx.ON = false); in a sandstorm 4.17 ms (fog at
+62 u, 46 draw calls instead of 70); orbit 3.81 ms. The debug line (chunks, CPU) is hidden, F3 shows it.
+
 ## 13. Step list → board tasks
 | Step | What | Size | After |
 |---|---|---|---|
