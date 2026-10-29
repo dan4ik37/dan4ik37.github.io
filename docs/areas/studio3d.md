@@ -277,3 +277,52 @@
   TimeLeft, RoundStart/RoundEnd/MatchEnd, AddScore/GetScore/GetTeam/SetTeam/EndRound/StartMatch) и Camera.* (Mode/SetMode/Shake) — в
   JS, Lua и C#. NET_EXTRA += fov, team, order. Тест: node scripts/studio-modes-test.cjs [путь к three@0.149] (178). Проверено мышью:
   все заготовки режимов одному, «Команды» и «Прятки» — вдвоём; на настоящем телефоне/геймпаде/iOS — ещё нет (синтетические события).
+
+## AI3D /tools/3d — our Blender, A1 (T-112, 29.10.2026)
+The owner's own 3D editor AI3D (from his package ai3d-mcp: ai3d.html, author — the owner) is a hidden page of the site. Plan: E:\d37-core\spec\PLAN.md
+«AI3D = our Blender» (A1 done here; A2–A5 below). Studio 3D stays the game/world editor; AI3D is the asset workshop next to it.
+- **Wiring.** Route `ai3d` ↔ address `/tools/3d` (router.js toPath/toHash special case; other /tools/* stay server pages), PAGES.ai3d = `#ai3d-page`
+  (`#ai3dRoot`), vercel.json rewrites `/tools/3d`, `/tools/3d/:path+` → index.html + header `X-Robots-Tag: noindex`, sw.js SPA_PATH (VERSION v8),
+  ROUTE_META + NOINDEX. Not in sitemap, search palette, menus or footer; hotkeys.js leaves the keyboard to the editor (`D37AI3D.active`) and the
+  arrows never page into it. Loader js/apps/apps.js (`D37Apps.open('ai3d')`, VER 5): three r149 build (the same file as js/games/world3d.js; reused
+  if a game loaded it), css/ai3d.css, js/apps/ai3d/{ai3d-gltf,ai3d-core,ai3d-ui}.js; leaving the route → `unmount()`.
+- **Files.** ai3d-core.js — the owner's script wrapped in `D37AI3DCore.create(host, env)` (body between `/*@ai3d-body*/` markers also runs as a
+  plain script in node); his op names and logic unchanged, site changes marked `site:`. ai3d-ui.js — shell: his panel and buttons (ids `a3-*`),
+  «🎲 Пример» (the six demo scenes), «📦 В Студию 3D», «🔌 ИИ», WebGL fallback, context-loss notice. ai3d-gltf.js — GLB export + Studio import.
+  Dark and light theme (.a3 tokens follow html[data-theme]); the 3D background is `--bg` of `.a3`.
+- **Export (fixed).** r149 GLTFExporter (examples/jsm, jsDelivr 0.149.0) fetched, its `import … from 'three'` rewritten to read `window.THREE`,
+  loaded from a blob: URL (no second copy of three); r149 call `parse(input, onDone, onError, options)` → real GLB. Export works on a clean copy:
+  no userData extras (dog JSON chunk 3.36 MB → 88 KB, GLB 4.4 MB → 1.1 MB; fox 6.3 → 1.5 MB; island 13.8 → 2.6 MB); factors sRGB → linear while
+  ColorManagement.legacyMode is on ('#a8754a' → 0.392), COLOR_0 always linear and only when the material uses vertex colours; textures tagged
+  sRGB; full-detail geometry (the screen may show LOD copies / culled meshes); outline hulls skipped; TRS nodes; animations kept; the editor's
+  geometries are never touched. «📦 В Студию 3D» = this GLB → `D37E.models.compile` + `save` (IndexedDB «d37e») → «🧩 Модели» in Studio 3D,
+  the same path as the photo editor. AI3D itself does not import GLB (OBJ only).
+- **Fixed after the first real browser run.** r149 toon gradient (LuminanceFormat failed in WebGL2 texStorage → black gradient, dark anime faces)
+  → RGBA; one offscreen renderer for snapshots / reference compare (each call made a new WebGL context); outline program per thickness; LOD
+  copies built lazily when a mesh is far, ≤ 1 per frame, freed with their geometry (dog: 73 frames > 50 ms while orbiting → 0); adaptive resolution
+  measured the input pace in "draw on changes" mode (phone stuck at 0.6×, a 247×214 canvas) → rAF interval after a rendered frame, CPU-bound
+  frames do not lower it (now 2× = 824×716); the geometry cache is pruned after each build, only unused entries above max(60, objects + 20) (it evicted
+  in-use ones: two characters re-made every geometry on each run); drawn/painted textures (TEXS) freed when no object, undo/redo
+  snapshot or definition refers to them (never freed before: +25 per selftest, soak heap 71 MB after an empty scene); a WebGL context
+  restore drops the old three objects and rebuilds (no stale "delete: object does not belong to this context" on close); clear colour set only when the theme changes; undo snapshots capped at ~12M chars (≤ 24 MB) (island JSON is 4 MB; 30 copies = phone crash); no
+  `morphTargets` material parameter; ids scoped (`a3-`); bridge images only `data:image/…`; MCP bridge (server.mjs, ws://localhost:3737 or
+  `/tools/3d?ws=ws://localhost:PORT`) only on demand and only to this computer; full cleanup on close.
+- **Tests.** `node scripts/ai3d-test.cjs <three r149>` (CI, 114 checks): the owner's test.mjs (332) and test-run.mjs (58 rows ok, 15 skipped on
+  stubs) from scripts/ai3d/, the body in strict mode on real three r149 (36/36 self-test command rows, selftest() 50/50), the six demos →
+  GLB (magic, no extras, colours, COLOR_0, full detail, animations) → r149 GLTFLoader → D37E.models.compile; all 63 ops run (self-test rows
+  + demos + scripts/ai3d/ops-extra.json); cache, texture and undo limits. `node scripts/ai3d-e2e.cjs
+  smoke|shots|perf|leak [20]|soak [10]|look|retain` (Chrome; smoke is the CI e2e entry). Blender 5.2 headless (E:\claude-tmp\t112\blender\check.py):
+  all six GLBs import with the same object/mesh/triangle counts, table top Base Color 0.3916 (linear), fur colour attributes, 1 action per
+  animated scene; the browser-exported textured GLB: 15 images in sRGB, 30 shape keys.
+- **Numbers (phone 412×915×2, CPU ×4, headless Chrome on a loaded PC; GPU not throttled).** Open: cold 5.5 s (whole site + three from
+  the network), in-page 0.47–0.51 s. Demo build: dog 300 ms, fox 307, island 347. Orbit (touch drags), frame CPU p50/p95: table 1.3/2.4 ms,
+  dog 2.4/4.0, fox 2.8/4.6, island (78k tris) 1.2/2.3, 0–3 frames > 50 ms; canvas 824×716 (2×); idle — 0 frames (render on demand). JS heap
+  9–20 MB. 20 open/close: 0 renderers, 0 WebGL contexts, canvases and window/document listeners as before, heap 7.2 → 9.0 MB (flat from
+  cycle 10). Soak 10 min of random ops (920: self-test rows, demos, undo/redo, 66 broken batches, 65 exports, 6 «В Студию 3D», 11 selftests,
+  views, play, orbit): 0 errors, every rollback kept the scene, heap 16–58 MB per minute, 17 MB after an empty scene + GC (was 71–112 MB).
+- **Next (A2–A5 need).** A2: shared skeleton (spec/BODY.md) — AI3D parts are rigid (no skin); rigAuto + gait clips → bones + skinned glTF;
+  D37E model.js has no skin/animation playback yet. A3: colliders/mass/joints → glTF extension D37_physics (AI3D manifestOf has colliders).
+  A4: terrain from core T1 instead of AI3D's own value noise; scatter → batch.js instancing, not one merged mesh. A5: command layer like the
+  photo editor (D37Tools «d37 v1»: schema per op, per-step undo; AI3D now has whole-state rollback and no ANIM/CON rollback), short guide topics,
+  MCP server. Also: materials are one per mesh (exporter does not merge identical ones; Studio compile does); inverted-hull outlines do not show
+  on hard-edged boxes (face normals) — a classic limitation.

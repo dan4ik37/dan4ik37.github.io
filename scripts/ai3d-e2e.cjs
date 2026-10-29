@@ -343,6 +343,7 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
       // what is left after an empty scene (undo history dropped): a leak would stay here
       await ev(`(D37AI3D.core.reset(), 1)`); await gc(); out.heapAfterReset = await heap();
       console.log('  heap after reset + GC', out.heapAfterReset, 'MB');
+      ok(out.heapAfterReset < 60, 'heap after an empty scene + GC < 60 MB (no growth kept)', out.heapAfterReset);
       console.log('  ops', JSON.stringify(N));
       out.errors = realErrors(logs.filter(l => !l.startsWith('warning')));
       ok(out.errors.length === 0 && N.thrown === 0, min + ' min random ops: 0 errors', out.errors.slice(0, 8));

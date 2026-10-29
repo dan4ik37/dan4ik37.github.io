@@ -188,6 +188,19 @@ function threeDir(){
   for (const D of DEMOS) D.cmds.forEach(x => reached.add(x.op));
   for (const [, c] of extra) c.forEach(x => reached.add(x.op));
   ok(allOps.size === 63 && [...allOps].every(o => reached.has(o)), 'every op of run() is exercised (63)', { ops: allOps.size, missing: [...allOps].filter(o => !reached.has(o)) });
+  // the geometry cache follows the scene: after selftest() (hundreds of objects) and an empty scene it is back to ≤ 60
+  S.reset(); globalThis.AI3D.selftest(); const gcBig = vm.runInThisContext('GC.size'); S.reset(); S.run(DEMOS[0].cmds);
+  const gcNow = vm.runInThisContext('GC.size');
+  ok(gcNow <= 60, 'geometry cache pruned to the scene', { afterSelftest: gcBig, now: gcNow });
+  // drawn/painted textures (TEXS) are freed when nothing refers to them, kept while undo can bring their objects back
+  ok(vm.runInThisContext('Object.keys(TEXS).length') <= 8, 'textures of the self-test scene freed', vm.runInThisContext('Object.keys(TEXS).length'));
+  S.reset();
+  S.run(Array.from({ length: 10 }, (_, i) => ({ op: 'art', name: 'ar' + i, pos: [i, 1, 0], w: .3, h: .3, shapes: [{ t: 'ell', c: [.5, .5], r: [.4, .4], fill: '#ff8a3a' }] })));
+  S.run(Array.from({ length: 10 }, (_, i) => ({ op: 'del', name: 'ar' + i })));
+  const texKept = vm.runInThisContext('Object.keys(TEXS).length');
+  vm.runInThisContext('state=JSON.parse(hist.pop());build()');   // what «Отменить» does
+  const mapped = vm.runInThisContext('group.children.filter(m=>m.material.map).length');
+  ok(texKept === 10 && mapped === 10, 'undo brings drawn cards back with their textures', { texKept, mapped });
   // undo snapshots stay bounded (terrain JSON ~4 MB each)
   S.reset(); S.run(DEMOS[5].cmds); for (let i = 0; i < 12; i++) S.run([{ op: 'set', name: 'land', pos: [0, i * .01, 0] }]);
   const histChars = vm.runInThisContext('hist.reduce((s,x)=>s+x.length,0)'), histN = vm.runInThisContext('hist.length');

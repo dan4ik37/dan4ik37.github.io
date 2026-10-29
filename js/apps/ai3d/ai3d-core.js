@@ -193,7 +193,7 @@ function polysMesh(ps,A0){const map=new Map(),v=[],f=[];
 
 let VER=Date.now();const GC=new Map();
 function gkey(o){const s=o.size;return o.type+'|'+(o.ver||0)+'|'+(o.type==='mesh'?s.v.length+'/'+s.f.length+(s.c?'c':'')+(s.sk?'s'+Object.keys(s.sk).join('|'):''):(o.type==='obj'||o.type==='csg')?s.length:JSON.stringify(s))}
-function cgeo(o){const k=gkey(o);let g=GC.get(k);if(!g){g=geo(o.type,o.size);GC.set(k,g);if(GC.size>Math.max(60,state.length+20)){const f=GC.keys().next().value,ev=GC.get(f);ev.dispose();const L=LODC.get(ev);if(L)L.forEach(x=>x.dispose());GC.delete(f)}}return g}
+function cgeo(o){const k=gkey(o);let g=GC.get(k);if(!g){g=geo(o.type,o.size);GC.set(k,g);}return g}
 
 const SET={lod:true,cull:true,adaptive:true,onDemand:true,shadows:true};
 let TG=null;function toonGrad(){if(!TG){TG=new THREE.DataTexture(new Uint8Array([95,95,95,255,175,175,175,255,255,255,255,255]),3,1,THREE.RGBAFormat);   // site: was LuminanceFormat (r149 WebGL2)
@@ -1139,8 +1139,13 @@ function build(){dirty=true;
   if(o.bump&&m.geometry.attributes.uv){try{m.material.bumpMap=bumpTex(o.bump.k,o.bump.sc);m.material.bumpScale=o.bump.st}catch(e){}}
   group.add(m);
  });
- fitShadow();
+ fitShadow();__gcPrune();__texPrune();
 }
+function __texPrune(){const ids=Object.keys(TEXS);if(ids.length<9)return;const used=new Set();state.forEach(o=>{if(o.texid)used.add(o.texid)});let un=ids.filter(id=>!used.has(id));if(un.length<9)return;   // site
+ let defs='';try{defs=JSON.stringify(Object.values(CUSTOM).map(f=>f()))}catch(e){return}
+ un.filter(id=>!defs.includes(id)&&!hist.some(s=>s.includes(id))&&!redo.some(s=>s.includes(id))).forEach(id=>{const T=TEXS[id];if(T.tex&&!__noDisp)T.tex.dispose();delete TEXS[id]})}
+function __gcPrune(){const cap=Math.max(60,state.length+20);if(GC.size<=cap)return;const used=new Set();group.children.forEach(m=>used.add(m.userData.g0||m.geometry));   // site
+ for(const [k,g] of GC){if(GC.size<=cap)break;if(used.has(g))continue;if(!__noDisp)g.dispose();const L=LODC.get(g);if(L&&!__noDisp)L.forEach(x=>x.dispose());GC.delete(k)}}
 function fitShadow(){try{const b=new THREE.Box3().setFromObject(group);if(b.isEmpty())return;const c=b.getCenter(new THREE.Vector3()),r=Math.max(b.getSize(new THREE.Vector3()).length()/2,1);dl.target.position.copy(c);dl.position.copy(c).add(new THREE.Vector3(5,10,7).normalize().multiplyScalar(r*3+4));const sc=dl.shadow.camera;sc.left=sc.bottom=-r*1.2;sc.right=sc.top=r*1.2;sc.near=.5;sc.far=r*8+10;sc.updateProjectionMatrix();dl.target.updateMatrixWorld()}catch(e){}}
 function summary(only){
  const f=v=>+v.toFixed(3);
