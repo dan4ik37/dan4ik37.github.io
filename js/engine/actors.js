@@ -63,7 +63,7 @@
         roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, lie: false, sleep: false, hidden: false, fade: 1, lastTrail: 0, ch: null, sig: '',
         lod: 0, lookAt: null, lk: null, lkT: Math.random() * .3, lt: { x: 0, y: 0, z: 0 }, phone: '', hold: null, fp: null, vm: null, bob: { ph: 0, w: 0, k: 1 },
         ao: { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, lie: false, sleep: false, look: null, phone: '', hold: null },
-        imp: !!opt?.npc, v2: !!(opt?.npc && L2), impC: null, impK: null, camD: 0, bobP: Math.random() * 6 };
+        imp: !!opt?.npc, v2: !!(opt?.npc && L2), impC: null, impK: null, impI: -1, camD: 0, camK: 0, bobP: Math.random() * 6 };
       setLook(a, look);
       list.set(key, a); sync();
       return a;
@@ -119,8 +119,9 @@
     }
     function tiers(cam){
       rank.length = 0;
-      for (let i = 0; i < arr.length; i++) { const a = arr[i]; if (!a.imp) continue; a.camD = cam ? Math.hypot(a.x - cam.x, a.z - cam.z) : 0; rank.push(a); }
-      for (let i = 1; i < rank.length; i++) { const a = rank[i]; let j = i - 1; while (j >= 0 && rank[j].camD > a.camD) { rank[j + 1] = rank[j]; j--; } rank[j + 1] = a; }   // вставками: n — десятки
+      // порядок — по расстоянию; уже подробному — фора 4 м (на границе cap двое не меняются туда-сюда)
+      for (let i = 0; i < arr.length; i++) { const a = arr[i]; if (!a.imp) continue; a.camD = cam ? Math.hypot(a.x - cam.x, a.z - cam.z) : 0; a.camK = a.camD - (a.v2 ? 0 : 4); rank.push(a); }
+      for (let i = 1; i < rank.length; i++) { const a = rank[i]; let j = i - 1; while (j >= 0 && rank[j].camK > a.camK) { rank[j + 1] = rank[j]; j--; } rank[j + 1] = a; }   // вставками: n — десятки
       let rigs = 0, built = false;
       for (let i = 0; i < rank.length; i++) {
         const a = rank[i], want = rigs < L2.cap && a.camD < (a.v2 ? L2.near : L2.far + 6);

@@ -67,7 +67,7 @@ const town = (cap) => {
   ph.cam.x = 60;
   for (let f = 0; f < 600; f++) ph.A.update(1 / 60, 10 + f / 60, ph.cam);
   const t2 = []; for (let i = 0; i < 16; i++) t2.push(ph.A.tierOf('npc:r' + i));
-  ok(t2.slice(8).every(t => t !== 'V2') && t2.slice(0, 8).every(t => t === 'V2'), 'камера ушла — подробные теперь другие 8', t2);
+  ok(t2.slice(12).every(t => t !== 'V2') && t2.slice(0, 4).every(t => t === 'V2') && t2.filter(t => t !== 'V2').length === 8, 'камера ушла — подробные теперь другие (ближние к ней), всё так же 8', t2);
   // дальше far — фигурка и на ПК
   pc.A.add('npc:far', {}, { x: 0, y: 0, z: 90 }, { npc: true });
   for (let f = 0; f < 60; f++) pc.A.update(1 / 60, 20 + f / 60, pc.cam);
