@@ -845,6 +845,16 @@
       { const d = S.P ? Math.hypot(S.P.x - g.px, S.P.z - g.pz) : 99; if (d < 14 && S.shakeOK?.()) S.rig?.shake?.(Math.min(1.6, (.35 + n / 90) * (1 - d / 16)), .3); }
       R.scene.remove(g.mesh); g.geo.dispose();
     }
+    // сохранить / закрыть мир: падающие куски обрушения ложатся сразу (блоки и содержимое сундуков — в сохранение; T-124) → сколько
+    X.landAll = () => {
+      let n = 0;
+      for (let gi = groups.length - 1; gi >= 0; gi--) {
+        const g = groups[gi]; if (!g.F || g.o.visual) continue;
+        if (!g.done) for (let k = 0; k < 4000; k++) if (window.D37E.support.dropStep(g.F, 1 / 20, solidHit)) break;
+        groups.splice(gi, 1); landDrop(g); n++;
+      }
+      return n;
+    };
     function groupsFrame(dt, a){
       for (const g of groups) {
         if (g.F) {

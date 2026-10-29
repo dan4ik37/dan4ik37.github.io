@@ -691,6 +691,7 @@
     S = null;
     if (st.net) { try { if (st.coopGuest) { if (coopG === st.net) coopG = null; st.net.leave(); } else st.net.close('exit'); } catch (e) { console.error(e); } }
     st.coopEl?.remove();
+    try { st.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение, что считается и падает, — до конца (в сохранение)
     let saved = null;
     try { if (!o.quick) await (saved = saveAll(st, true)); else saved = saveAll(st, true); } catch (e) { console.error(e); }
     // ☁️ копия в облако: вышел в меню или ушёл со страницы (вкладку не закрыли); закрыли вкладку — отправится в следующий раз
@@ -780,6 +781,7 @@
   // вкладку закрывают: синхронно в localStorage (журнал), база — как успеет
   function journalNow(){
     const st = S; if (!st || !st.ready || st.coopGuest) return;
+    try { st.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение — до конца, чтобы в журнал легло, как будет
     const V = VX(), recs = [];
     for (const k of st.unsaved) { const c = st.W.chunks.get(k); if (c && c.gen) { const r = chunkRec(c, st); recs.push({ cx: r.cx, cz: r.cz, e: V.store.b64(new Uint8Array(r.e.buffer)), t: r.t }); } }
     const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData, ice: m.ice, snow: m.snow, fireState: m.fireState };
