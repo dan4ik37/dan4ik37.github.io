@@ -68,7 +68,7 @@
     const vx = new Int32Array(N), vy = new Int32Array(N), vz = new Int32Array(N), hq = new Int32Array(N), kg = new Int32Array(N);
     const rl = new Int16Array(N), el = new Int16Array(N), mu = new Int16Array(N), ax = new Int32Array(N), az = new Int32Array(N);
     const st = new Uint8Array(N), still = new Uint8Array(N), gr = new Uint8Array(N), age = new Int32Array(N), tag = new Int32Array(N);
-    const ev = new Int32Array(N * 3 * 5 + 5);
+    const ev = new Int32Array(N * 4 * 5), HCAP = N * 3;   // ≤ 1 SLEEP / LOST per piece per tick + HIT events capped at 3N (never overflow)
     const D = { N, READS, st, tag, kg, hq, px, py, pz, vx, vy, vz, ev, nev: 0, used: 0, start: 0, tickN: 0,
       stats: { reads: 0, maxReads: 0, deferred: 0, added: 0, full: 0, sleeps: 0, hits: 0, lost: 0, blasts: 0, rolls: 0, edges: 0 } };
     let hint = 0, live = 0;
@@ -106,7 +106,7 @@
       return false;
     }
     function bounce(i, v){   // v — speed into the surface (> 0) → the speed back (≥ 0)
-      if (v > HMIN) { D.stats.hits++; pushEv(i, 2, v, 0, 0); }
+      if (v > HMIN) { D.stats.hits++; if (D.nev < HCAP) pushEv(i, 2, v, 0, 0); }
       return v > BMIN ? tr(v * el[i] / 1000) : 0;
     }
     function move(solid, i, axis){

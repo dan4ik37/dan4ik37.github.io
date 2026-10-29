@@ -239,6 +239,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     }
     if (MODE === 'topple') {
       if (process.env.KB_SCENE_ONLY) await ev(`(() => { const K = window.KubomirTopple; K.CUT = K.LEAN = K.FELL = false; return 1; })()`);   // база: та же сцена без T-138 (память самой сцены)
+      if (process.env.KB_NO_DEBRIS) await ev(`(() => { const K = window.KubomirDebris; K.ON = K.ITEMS = false; return 1; })()`);   // A/B шага 2: та же сцена без обломков (F4) — кадр и память
       // T-138: крен и падение целым, рубка дерева — «Кубомир», мир «реализм»: подрубленная башня 3×3×14 и дуб-великан 2×2 (живые брёвна)
       // падают одновременно — кадр (ЦП, среднее, 95 %, худший), кадров в секунду, худший такт T-138 и обрушения; KB_PHONE=1 — ЦП ×4
       await idle();
@@ -300,8 +301,8 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       ok(res.tp.leaned >= 1 && res.tp.far >= 15, 'подрубленная башня кренится и падает целой к подрубу (легла: ' + res.tp.far + ' блоков)', res.tp);
       ok(res.tp.went && res.tp.fells >= 1 && res.tp.lying >= 8, 'великан: подруб и запил — упал целым, брёвна лежат (' + res.tp.lying + ')', res.tp);
       ok(res.tp.maxReads <= 2048, 'чтений мира за такт ≤ 2048 (потолок)', res.tp.maxReads);
-      ok(res.tp.deb && res.tp.deb.broke >= 1 && res.tp.deb.left === 0 && res.tp.deb.blocks + res.tp.deb.items >= res.tp.deb.broke, 'шаг 2 (F4): верх башни отломился обломками (' + (res.tp.deb && res.tp.deb.broke) + '), все легли блоками / вещами; скатились по спуску — ' + (res.tp.deb && res.tp.deb.down), res.tp.deb);
-      ok(res.tp.deb && res.tp.deb.ceilMax <= 6144, 'общий потолок за такт (постройки + обломки) ≤ 6144 операций', res.tp.deb);
+      if (!process.env.KB_NO_DEBRIS) ok(res.tp.deb && res.tp.deb.broke >= 1 && res.tp.deb.left === 0 && res.tp.deb.blocks + res.tp.deb.items >= res.tp.deb.broke, 'шаг 2 (F4): верх башни отломился обломками (' + (res.tp.deb && res.tp.deb.broke) + '), все легли блоками / вещами; скатились по спуску — ' + (res.tp.deb && res.tp.deb.down), res.tp.deb);
+      if (!process.env.KB_NO_DEBRIS) ok(res.tp.deb && res.tp.deb.ceilMax <= 6144, 'общий потолок за такт (постройки + обломки) ≤ 6144 операций', res.tp.deb);
       // 20 кругов «построил — подрубил — упало — убрал»: память JS не растёт
       const h0 = await heap();
       const rounds = [];
@@ -377,7 +378,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const h1 = await heap(), errs = logs.slice(ex0).filter(l => !/X3595|DevTools|favicon/i.test(l));
       // мир «Обрушение» (KB_SUPPORT=1): сколько было пересчётов и обрушений — что прогон их правда задел
       const fireSt = FIRE ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.fire; return X?.F ? { burnt: X.stats.burnt, ignited: X.F.stats.ignited, out: X.F.stats.out, peak: X.F.stats.peak, blocks: X.blocks.n } : null; })()`, 10000).catch(() => null) : undefined;
-      const tpl = process.env.KB_TOPPLE ? await ev(`(() => { const s = GAME_IMPL.kubomir._test.state()?.topple?.stats; return s ? { leans: s.leans, tips: s.tips, fells: s.fells, lands: s.lands, hangs: s.hangs, back: s.back, checks: s.checks, maxTickMs: +s.maxTickMs.toFixed(2) } : null; })()`, 10000).catch(() => null) : null;
+      const tpl = process.env.KB_TOPPLE ? await ev(`(() => { const s = GAME_IMPL.kubomir._test.state()?.topple?.stats; const d = GAME_IMPL.kubomir._test.state()?.debris?.stats; return s ? { leans: s.leans, tips: s.tips, fells: s.fells, lands: s.lands, hangs: s.hangs, back: s.back, checks: s.checks, maxTickMs: +s.maxTickMs.toFixed(2), broke: s.broke | 0, slid: s.slid | 0, ceilMax: s.ceilMax | 0, debris: d ? { spawned: d.spawned, blocks: d.blocks, items: d.items, rolledItems: d.rolledItems, maxTickMs: +d.maxTickMs.toFixed(2) } : null } : null; })()`, 10000).catch(() => null) : null;
       const sup = SUPPORT ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.sup, s = X?.stats; return s ? { mode: X.mode, load: !!X.load, solves: s.solves, avgMs: +(s.ms / Math.max(1, s.solves)).toFixed(2), maxMs: +s.maxMs.toFixed(1), groups: s.groups, cells: s.cells | 0, refused: s.refused, jobs: s.jobs, restarts: s.restarts, crushed: s.crushed, tickAvgMs: s.ticks ? +(s.tickMs / s.ticks).toFixed(3) : 0, maxTickMs: +(s.maxTickMs || 0).toFixed(2) } : null; })()`, 10000).catch(() => null) : undefined;
       res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6), sup, fire: fireSt, topple: tpl };
       console.log('ЗАМЕР soak', JSON.stringify(res.soak));
@@ -811,6 +812,8 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           await wait(300); for (let z = bz; z < bz + 2; z++) { const c = S.sup.code(bx + 1, by, z); W.set(bx + 1, by, z, 0, { urgent: 1 }); S.sup.removed(bx + 1, by, z, c); }
           await wait(1500); return { bodies: S.topple.bodies().length, leans: S.topple.stats.leans + S.topple.stats.tips }; })()`, 30000);
         hs.push(await heap());
+        // сколько миров (D37E.vox.World) живо в куче — 1 (этот): старый мир никто не держит (иначе скачок памяти — удержанный мир)
+        try { const p = await send('Runtime.evaluate', { expression: 'D37E.vox.World.prototype' }), q = await send('Runtime.queryObjects', { prototypeObjectId: p.result.objectId }), c = await send('Runtime.callFunctionOn', { objectId: q.objects.objectId, functionDeclaration: 'function(){ return this.length; }', returnByValue: true }); (res.worlds = res.worlds || []).push(c.result.value); await send('Runtime.releaseObject', { objectId: q.objects.objectId }); } catch (e) { (res.worlds = res.worlds || []).push(-1); }
         await ev(`(async () => { await GAME_IMPL.kubomir._test.stop(); GAME_IMPL.kubomir._test.menu(); return true; })()`, 60000);
         for (let k = 0; k < 60; k++) { await sleep(500); if (await ev(`!!document.querySelector('.kb-world [data-w="play"]')`, 3000).catch(() => false)) break; }
         await ev(`(() => { const b = document.querySelector('.kb-world [data-w="play"]'); b && b.click(); return !!b; })()`);
@@ -820,7 +823,11 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       }
       await idle(); await new Promise(r => setTimeout(r, 2000)); hs.push(await heap());
       res.reopen = hs; console.log('ЗАМЕР reopen, память JS после сборки мусора (МБ):', hs.join(' → '));
-      ok(hs.length >= 8 && hs[hs.length - 1] - hs[1] < 25, 'закрыть/открыть мир ' + (hs.length - 1) + ' раз — память не растёт', hs);
+      // пол последних замеров (меньший из 6): после ~10-го открытия куча и БЕЗ T-138 скачет через раз на ~+45 МБ (112 ↔ 155, мир в куче
+      // один — не удержан; замер 29.10, KB_TOPPLE и без) — утечка поднимает пол, скачок через раз — нет
+      const floor = Math.min(...hs.slice(-6)); res.reopenFloor = floor;
+      ok(hs.length >= 8 && floor - hs[1] < 25, 'закрыть/открыть мир ' + (hs.length - 1) + ' раз — память не растёт (пол последних 6 — ' + floor + ' МБ)', hs);
+      if (res.worlds) ok(res.worlds.every(n => n === 1), 'старые миры не держатся: в куче всегда один D37E.vox.World', res.worlds);
       if (LOAD) ok(!res.loadLost, 'мир с нагрузкой после каждого открытия — с нагрузкой (meta.load сохраняется)', res.loadLost | 0);
       return;
     }

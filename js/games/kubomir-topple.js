@@ -420,8 +420,10 @@
       const dU = st.debris?.D ? st.debris.D.used : 0;
       if (X.used > wStruct) wStruct = X.used; if (dU > wDebris) wDebris = dU;
       wDef = Wd.stats.deferred + (st.debris?.D ? st.debris.D.stats.deferred : 0);
-      if (++wN >= 20) { X.stats.ceilLine = 'потолок ' + KT.CEIL + ' · постройки ' + wStruct + ' · обломки ' + wDebris + ' · отложено ' + wDef; X.stats.ceil = { cap: KT.CEIL, struct: wStruct, debris: wDebris, deferred: wDef }; if (wStruct + wDebris > (X.stats.ceilMax | 0)) X.stats.ceilMax = wStruct + wDebris; wStruct = 0; wDebris = 0; wN = 0; }
+      if (++wN >= 20) { const C = X.stats.ceil; C.cap = KT.CEIL; C.struct = wStruct; C.debris = wDebris; C.deferred = wDef; if (wStruct + wDebris > (X.stats.ceilMax | 0)) X.stats.ceilMax = wStruct + wDebris; wStruct = 0; wDebris = 0; wN = 0; }   // без мусора: объект один, строка — по запросу
     }
+    X.stats.ceil = { cap: KT.CEIL, struct: 0, debris: 0, deferred: 0 };
+    Object.defineProperty(X.stats, 'ceilLine', { enumerable: true, get(){ const C = X.stats.ceil; return 'потолок ' + C.cap + ' · постройки ' + C.struct + ' · обломки ' + C.debris + ' · отложено ' + C.deferred; } });
     function retry(p){
       const [kind, cells, nat, dir] = p;
       // тело заново (как в group): клетки уже на месте — проверка решит снова
@@ -615,8 +617,9 @@
         while (gHead < GQ.length && GQ[gHead][0] + gOff <= nowT) { try { gApply(GQ[gHead]); } catch (e) { console.error(e); } gHead++; }
         if (gHead > 256 || gHead === GQ.length) { GQ.splice(0, gHead); gHead = 0; }
       }
-      for (const [, G] of GB) { const g = G.g; g.pth = g.th; g.pon = g.on; g.poy = g.oy; g.th = G.th; g.on = G.on; g.oy = G.oy; }
+      if (GB.size) GB.forEach(gLerp);   // без итератора на такт (мусор)
     }
+    function gLerp(G){ const g = G.g; g.pth = g.th; g.pon = g.on; g.poy = g.oy; g.th = G.th; g.on = G.on; g.oy = G.oy; }
     function gApply(e){
       const k = e[1];
       if (k === 'b') {
@@ -630,7 +633,7 @@
       else if (k === 'c') {
         const x = e[2] | 0, y = e[3] | 0, z = e[4] | 0, c = e[5] | 0; if (!W.tile || !W.loaded?.(x, z)) return;
         if (c) { const t = W.tile(x, y, z, () => ({})); t.cut = c; } else { const t = W.tile(x, y, z); if (t) { delete t.cut; if (!Object.keys(t).length) W.dropTile(x, y, z); } }
-        W.markTile?.(x, z); X.stats.netCuts = (X.stats.netCuts | 0) + 1;
+        W.markTile?.(x, z); st.ST?.touch?.(x, z, 2); X.stats.netCuts = (X.stats.netCuts | 0) + 1;   // сетку чанка — заново (надруб виден и у гостя)
       } else if (k === 'd' || k === 'x' || k === 'B') st.debris?.netApply?.(e.slice(1));
     }
     X.netQueue = () => GQ.length - gHead;

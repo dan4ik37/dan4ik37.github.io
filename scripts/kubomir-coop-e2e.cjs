@@ -17,7 +17,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const MODE = process.argv[2] || 'basic';
-const TMP = 'E:/claude-tmp/coop', SHOTS = path.join(TMP, 'shots');
+const TMP = process.env.D37_TMP ? path.join(process.env.D37_TMP, 'coop') : 'E:/claude-tmp/coop', SHOTS = path.join(TMP, 'shots');   // D37_TMP — своя временная папка задачи
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 fs.mkdirSync(SHOTS, { recursive: true });
