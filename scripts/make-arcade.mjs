@@ -87,7 +87,9 @@ if (errs.length) { for (const e of errs) console.log('✗', e); process.exit(1);
 let stale = 0;
 for (const [f, txt] of out) {
   const p = path.join(SITE, f), old = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
-  if (old === txt) continue;
+  // CRLF / LF не в счёт: на Windows git (autocrlf) отдаёт файлы с CRLF, в CI (Linux) — с LF
+  const lf = x => x.split(String.fromCharCode(13, 10)).join(String.fromCharCode(10));
+  if (old !== null && lf(old) === lf(txt)) continue;
   stale++;
   if (CHECK) console.log('✗ не собрано:', f);
   else fs.writeFileSync(p, txt);
