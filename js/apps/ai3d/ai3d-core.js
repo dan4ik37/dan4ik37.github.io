@@ -11,18 +11,25 @@
 //   ids scoped to the host; colours from .a3 tokens; ColorManagement.legacyMode = true while open (r128 colour maths on r149, restored on
 //   close); no "morphTargets" material parameter (r149); one offscreen renderer for snapshots (was a new WebGL context per call); outline
 //   program per thickness; LOD copies freed with their geometry; undo snapshots capped (~12M chars); stoppable render loop and resize
-//   observer; frame CPU ring for e2e; theme() re-reads the 3D background (live site theme switch); GLB through ai3d-gltf.js (binary on r149, no userData extras, linear colours); the MCP bridge
-//   (server.mjs, ws://localhost) only on demand; full GPU cleanup in __dispose().
+//   observer; frame CPU ring for e2e; meshes reused across builds when unchanged, replaced materials disposed after the next render;
+//   legacyMode set after the renderer exists and a part-way create() failure cleaned up (__box.abort); theme() re-reads the 3D background;
+//   GLB through ai3d-gltf.js (binary on r149, no userData extras, linear colours); the MCP bridge (server.mjs, ws://localhost) only on
+//   demand; bridge highlight only on materials with emissive; full GPU cleanup in __dispose().
 (function(){
-function create(host,env){
+// create() failing part-way (no ResizeObserver, a throw after the render loop started…) must not leave the loop, the WebGL context or
+// the global ColorManagement.legacyMode behind: the body registers __box.abort right after the renderer exists.
+function create(host,env){const __box={};try{return body(host,env,__box)}catch(e){if(__box.abort){try{__box.abort()}catch(_){}}throw e}}
+function body(host,env,__box){
 /*@ai3d-body*/
 const $=s=>host.querySelector(String(s).replace(/#([\w-]+)/g,'#a3-$1'));   // site: ids inside the host only, prefixed a3-
 let state=[],hist=[],redo=[];
 const cs=()=>getComputedStyle(host);   // site: colours from the editor root (.a3 tokens, both site themes)
 let __bgC='',__bgN=0,__bgSet='';const bg=()=>{if(!__bgC||++__bgN>90){__bgN=0;__bgC=cs().getPropertyValue('--bg').trim()||'#10171d'}return __bgC};   // site: no style recalc every frame
-const __cm=THREE.ColorManagement,__cmL=__cm?__cm.legacyMode:undefined;if(__cm&&'legacyMode' in __cm)__cm.legacyMode=true;   // site: restored in __dispose
 let __alive=true,__raf=0;
 const cv=$('#c'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+const __cm=THREE.ColorManagement,__cmL=__cm?__cm.legacyMode:undefined;if(__cm&&'legacyMode' in __cm)__cm.legacyMode=true;   // site: after the renderer (it throws without WebGL); restored in __dispose
+if(typeof __box==='object'&&__box)__box.abort=()=>{let done=false;try{__dispose();done=true}catch(e){}if(done)return;   // site: __dispose() throws on names not made yet → the minimum by hand
+ __alive=false;cancelAnimationFrame(__raf);if(__cm&&'legacyMode' in __cm)__cm.legacyMode=__cmL;try{__ro.disconnect()}catch(e){}try{R.dispose();R.forceContextLoss()}catch(e){}};
 const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(50,1,.1,500);
 scene.add(new THREE.HemisphereLight(0xffffff,0x556070,.55));
 const dl=new THREE.DirectionalLight(0xfff4e6,.85);dl.position.set(5,10,7);scene.add(dl);scene.add(dl.target);

@@ -227,6 +227,14 @@ function threeDir(){
   // dispose
   S.dispose();
   ok(THREE.ColorManagement.legacyMode === true && globalThis.AI3D === undefined, 'dispose: window.AI3D removed, colour mode restored');
+  // the factory: create() failing part-way (here: no ResizeObserver, after the renderer and half the editor exist) passes the error on and
+  // restores the global colour mode (__box.abort); the site shows its fallback (scripts/ai3d-e2e.cjs smoke checks that in Chrome)
+  vm.runInThisContext(src, { filename: 'ai3d-core.js (factory)' });
+  THREE.ColorManagement.legacyMode = false; const RO0 = globalThis.ResizeObserver; globalThis.ResizeObserver = function () { throw new Error('test: no ResizeObserver'); };
+  let cf = null; try { globalThis.D37AI3DCore.create(doc, {}); } catch (e) { cf = e.message; }
+  globalThis.ResizeObserver = RO0;
+  ok(cf === 'test: no ResizeObserver' && THREE.ColorManagement.legacyMode === false && globalThis.AI3D === undefined, 'create() failing part-way: error passed on, colour mode restored', { cf, legacyMode: THREE.ColorManagement.legacyMode });
+  THREE.ColorManagement.legacyMode = true;
   console.warn = origWarn;
   const uniq = [...new Set(warns.map(w => w.replace(/\d+/g, 'N').slice(0, 120)))];
   ok(!uniq.some(w => /morphTargets|Creating normalized normal/.test(w)), 'no r149 morphTargets / normal warnings', uniq);
