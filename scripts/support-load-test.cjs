@@ -47,7 +47,7 @@ function stat(W, seed){
   const J = G.loadJob(); J.start('now', [s[0], s[1], s[2], W.read(s[0], s[1], s[2])], W.read, BO(W.mode), { ratiosOnly: true }); J.run();
   const L = J.L(), g = G.g, byPos = new Map(); let w = 0, wi = -1;
   for (let i = 0; i < g.n; i++) { byPos.set(key(G.px[i], G.py[i], G.pz[i]), L.ra[i]); if (!L.unk[i] && L.ra[i] > w) { w = L.ra[i]; wi = i; } }
-  return { worst: w, kind: wi >= 0 ? KIND[L.fk[wi]] : '-', at: wi >= 0 ? [G.px[wi], G.py[wi], G.pz[wi]] : null, n: g.n, byPos, unk: J.res.unk, ops: J.res.ops };
+  return { worst: w, kind: wi < 0 ? '-' : L.ra[wi] > L.raj[wi] ? 'storey' : KIND[L.fk[wi]], at: wi >= 0 ? [G.px[wi], G.py[wi], G.pz[wi]] : null, n: g.n, byPos, unk: J.res.unk, ops: J.res.ops };
 }
 // collapse: remove cells (job 'rm'), → { fell: Set of positions, groups, crushed, res }
 function removeJob(W, list, budget){
@@ -119,10 +119,11 @@ sec('обрушение: убрали подпорку — падает пере
     const left = [1, 2, 3, 4, 5].filter(x => W3.has(x, 8, 0));
     ok(rootStep > 0 && left.length === 0, 'убираем леса с конца (' + mode + '): консоль ломается у скалы и падает целиком', { rootStep, left });
   }
-  // one-sided balcony on a post with a second post: remove it — tips over (storey cut at the base)
+  // one-sided balcony on a post with a second post: remove it — it overturns (storey at the post base): reported with the tip
+  // direction (+x) for S1.T (SH3: tipping); a straight drop cannot move what rests on its support, so nothing else moves now
   const W4 = world([...post(5), ...slab(5, 0, 2, -2, 2), ...post(5, 'wood', 2, 0)]);
   const R4 = removeJob(W4, [[2, 0, 0]]);
-  ok(R4.fell.has(key(0, 0, 0)) && R4.fell.has(key(2, 5, 2)) && R4.res.tips >= 1, 'односторонний балкон без второго столба — опрокидывается целиком (ярус у земли)', { n: R4.fell.size, tips: R4.res.tips, tipD: R4.res.tipD });
+  ok(R4.res.tips >= 1 && R4.res.tipD === 0 && !R4.fell.has(key(0, 0, 0)) && [...R4.fell].every(k => k.startsWith('2,')), 'односторонний балкон без второго столба — опрокидывание (к +x) передано наклону (SH3), прямо вниз не падает', { fell: [...R4.fell], tips: R4.res.tips, tipD: R4.res.tipD });
   // centred 5×3 slab: removing the prop is fine
   const W5 = world([...post(5), ...slab(5, -2, 2, -1, 1), ...post(5, 'wood', 2, 1)]);
   const R5 = removeJob(W5, [[2, 0, 1]]);

@@ -481,6 +481,7 @@
       W: new Float64Array(max), Mx: new Float64Array(max), Mz: new Float64Array(max), My: new Float64Array(max), C: new Float64Array(max), w0: new Float64Array(max),
       hx: new Int32Array(max), hy: new Int32Array(max), hz: new Int32Array(max), ex: new Int32Array(max), ey: new Int32Array(max), ez: new Int32Array(max), key: new Int32Array(max),
       unk: new Uint8Array(max), stand: new Uint8Array(max), standE: new Int32Array(max), ra: new Float64Array(max), rb: new Float64Array(max), rw: new Float64Array(max),
+      rj: new Float64Array(max), raj: new Float64Array(max), rbj: new Float64Array(max),   // the same without the storey check (what a cut acts on until S1.T)
       fk: new Uint8Array(max), fr: new Int32Array(max), ord: new Int32Array(max), rank: new Int32Array(max), tmp: new Int32Array(max), cnt: new Int32Array(1024),
       edis: new Uint8Array(ne), adis: new Uint8Array(max), crushed: new Uint8Array(max), cutv: new Uint8Array(max), dn: new Uint8Array(max),
       spt: new Int32Array(max * 6), spn: new Uint8Array(max), vis: new Uint8Array(max), cq: new Int32Array(max), cutOf: new Int32Array(max), cutR: new Float64Array(max), cutD: new Int8Array(max), cutS: new Int32Array(max + 1), cutM: new Int32Array(max), nCut: 0,
@@ -721,7 +722,7 @@
         }
         // crush: the load standing on u
         if (!nat && C[u] > 0) { const r = ratio(C[u], Math.floor(comp[m] * geo.topArea(u))); if (r > rmax) { rmax = r; rk = 3; rf = -1; } }
-        L.rw[u] = rmax; L.fk[u] = rk; L.fr[u] = rf;
+        L.rw[u] = rmax; L.rj[u] = rmax; L.fk[u] = rk; L.fr[u] = rf;
       }
       return Math.max(1, used);
     }
@@ -775,20 +776,23 @@
         if (r > worst) { worst = r; wd = d; }
       }
       L.cutR[ci0] = worst; L.cutD[ci0] = wd; L.cutS[ci0 + 1] = s0 + nm; L.nCut = ci0 + 1;
-      for (let j = 0; j < nm; j++) { const c = L.cutM[s0 + j]; L.cutOf[c] = ci0; if (!lnone[mat[c]] && worst > L.rw[c]) { L.rw[c] = worst; L.fk[c] = 4; L.fr[c] = ci0; } }
+      for (let j = 0; j < nm; j++) { const c = L.cutM[s0 + j]; L.cutOf[c] = ci0; if (!lnone[mat[c]] && worst > L.rw[c]) L.rw[c] = worst; }
     }
     function endSide(){
       const n = g.n;
       if (side === 0) {   // keep "before": ratios and support
-        for (let i = 0; i < n; i++) { L.rb[i] = L.rw[i]; g.sup0[i] = g.sup[i]; }
+        for (let i = 0; i < n; i++) { L.rb[i] = L.rw[i]; L.rbj[i] = L.rj[i]; g.sup0[i] = g.sup[i]; }
         side = 1; beginSolve(); J.phase = PH_SOLVE; return;
       }
-      for (let i = 0; i < n; i++) L.ra[i] = L.rw[i];
+      for (let i = 0; i < n; i++) { L.ra[i] = L.rw[i]; L.raj[i] = L.rj[i]; }
       if (stopAt) { finish(); return; }
-      ci = 0; J.phase = PH_SELECT; L.anyCut = 0;
+      ci = 0; J.phase = PH_SELECT; L.anyCut = 0; L.tips = 0; L.tipD = -1; L.tipCut = -1;
       for (let i = 0; i < n; i++) { L.dn[i] = 0; L.cutv[i] = 0; }
     }
-    J.failing = u => !L.unk[u] && !P.lnone[g.mat[u]] && L.ra[u] > 1000 && L.rb[u] <= 1000 && L.ra[u] > L.rb[u];
+    // a cut acts on joint / hang / crush failures (SH1). A storey failure (overturning) needs S1.T to tip the part above (SH3): a
+    // straight drop cannot move what rests on its support, so until then it is reported (res.tips, tipD) and refuses placement
+    J.failing = u => !L.unk[u] && !P.lnone[g.mat[u]] && L.raj[u] > 1000 && L.rbj[u] <= 1000 && L.raj[u] > L.rbj[u];
+    J.tipping = u => !L.unk[u] && !P.lnone[g.mat[u]] && L.ra[u] > 1000 && L.rb[u] <= 1000 && L.ra[u] > L.rb[u] && L.cutOf[u] >= 0 && L.cutR[L.cutOf[u]] > 1000;
     // ── failure selection: one forward pass in the strict (after) order ──
     function selectMore(budget){
       const n = g.n, ord = L.ord, spt = L.spt, spn = L.spn, dn = L.dn, cutv = L.cutv;
@@ -799,8 +803,9 @@
         if (!hold(u)) continue;
         let d = 0; for (let j = 0; j < spn[u]; j++) { const s = spt[u * 6 + j]; if (cutv[s] || dn[s]) { d = 1; break; } }
         dn[u] = d;
-        if (d || cutv[u] || !J.failing(u)) continue;
-        cutNode(u); L.anyCut = 1;
+        if (d || cutv[u]) continue;
+        if (J.failing(u)) { cutNode(u); L.anyCut = 1; }
+        else if (J.tipping(u)) { const c = L.cutOf[u]; if (L.tipCut !== c) { L.tipCut = c; L.tips = (L.tips | 0) + 1; L.tipD = L.cutD[c]; } }
       }
       if (ci >= n) {
         J.round++;
@@ -883,14 +888,18 @@
   // node gets more — no; G.full or unk on the path — yes. Synchronous on a small grid (≤ 4,096 nodes: the estimate grid of the game).
   // → OUT { sup (v1 support of the new block), ok, lv (build tint = max(support level, load level)), load (load level), worst ‰ }
   const OUT = { sup: 0, ok: true, lv: 0, load: 0, worst: 0, n: 0 }, SEED4 = [0, 0, 0, 0], PCO = { ratiosOnly: true, kg: 1000 };
-  S.placeCheck = (G, x, y, z, code, read, b, o) => {
-    const P = b.P, m = code >> 2, J = G.loadJob();
+  // by parts (the game's tint at the world tick): S.placeStart(…) → G.loadJob().step(budget) until true → S.placeResult(G, code)
+  S.placeStart = (G, x, y, z, code, read, b, o) => {
     SEED4[0] = x; SEED4[1] = y; SEED4[2] = z; SEED4[3] = code;
-    PCO.kg = o && o.kg ? o.kg : 1000; J.start('add', SEED4, read, b, PCO); J.run();
-    const g = G.g, s = g.n ? g.sup[0] : 0, ld = J.loadLevel(), sl = S.level(s, m, P, g.gnd[0]);
-    OUT.sup = s; OUT.n = g.n; OUT.load = ld; OUT.worst = J.res.worst; OUT.ok = g.n > 0 && s >= P.min[m] && !J.refuses(); OUT.lv = Math.max(sl, ld);
+    PCO.kg = o && o.kg ? o.kg : 1000;
+    return G.loadJob().start('add', SEED4, read, b, PCO);
+  };
+  S.placeResult = (G, code) => {
+    const J = G.loadJob(), P = J.P, m = code >> 2, g = G.g, s = g.n ? g.sup[0] : 0, ld = J.loadLevel(), sl = S.level(s, m, P, g.gnd[0]);
+    OUT.sup = s; OUT.n = g.n; OUT.load = ld; OUT.worst = J.res ? J.res.worst : 0; OUT.ok = g.n > 0 && s >= P.min[m] && !J.refuses(); OUT.lv = Math.max(sl, ld);
     return OUT;
   };
+  S.placeCheck = (G, x, y, z, code, read, b, o) => { S.placeStart(G, x, y, z, code, read, b, o).run(); return S.placeResult(G, code); };
 
   function sortRange(a, lo, hi){ for (let i = lo + 1; i < hi; i++) { const v = a[i]; let j = i - 1; while (j >= lo && (a[j] >> 2) > (v >> 2)) { a[j + 1] = a[j]; j--; } a[j + 1] = v; } }
 

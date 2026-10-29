@@ -999,7 +999,7 @@ function fakeWorld(sky, blk, walls = new Set()){
       tiles: new Map(), tile(x, y, z, make){ const k = key(Math.floor(x), Math.floor(y), Math.floor(z)); let t = this.tiles.get(k); if (!t && make) { t = make(); this.tiles.set(k, t); } return t || null; },
       dropTile(x, y, z){ const k = key(Math.floor(x), Math.floor(y), Math.floor(z)), t = this.tiles.get(k); this.tiles.delete(k); return t || null; },
       lightAt(){ return 15 << 12; }, loaded: () => true, heightAt: () => floor, chunkAt(x, z){ return this.chunk(Math.floor(x) >> 4, Math.floor(z) >> 4); } }; return W; };
-    const mkS = (W, support, diff = 'easy') => { const S12 = { R: Object.assign({}, R, { lighting: { time: 12 }, night: 0 }), VR, W, P: { x: 30.5, y: 10, z: 30.5, vx: 0, vy: 0, vz: 0, dead: false }, ox: 0, oz: 0, meta: { diff, support }, ST: { rd: 6 }, creative: false };
+    const mkS = (W, support, diff = 'easy', load) => { const S12 = { R: Object.assign({}, R, { lighting: { time: 12 }, night: 0 }), VR, W, P: { x: 30.5, y: 10, z: 30.5, vx: 0, vy: 0, vz: 0, dead: false }, ox: 0, oz: 0, meta: { diff, support, load }, ST: { rd: 6 }, creative: false };
       const X = window.KubomirEnts.create(S12); S12.ents = X; X.spawnT = 1e9; S12.sup = KS.attach(S12); return { X, S12 }; };
     const PL = V.cell(ID.planks_oak), CB = V.cell(ID.cobble);
     ok(KS.attach({ meta: {}, W: mkSW() }) === null && KS.attach({ meta: { support: 'off' }, W: mkSW() }) === null, 'старый мир (нет meta.support) и «выкл» — без обрушения');
@@ -1077,6 +1077,49 @@ function fakeWorld(sky, blk, walls = new Set()){
       ok(made <= 32 && made >= kinds.length && total === 300, 'событие на 300 вещей — ' + made + ' стопок (не больше 32), все 300 штук на месте', { made, total, kinds: kinds.length });
       ok(keepAfter === 40 + made && all <= 300 + 40 + made, '300 обычных вещей после — ни одной «keep» не вытеснили (вытесняются старые обычные)', { keepAfter, all });
       ok(X.items.length === keepAfter && X.items.every(e => e.keep), '5 минут прошло — обычные пропали, «keep» лежат', { left: X.items.length, keepAfter });
+      X.dispose(); }
+    // ═══ T-124 SH1: нагрузка (meta.load = 1) — задания в такте мира, «держалось до», подпорки, поставить, рамка в такте ═══
+    { const W = mkSW(); const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup;
+      W.chunk(40, 40).gen = false;
+      ok(s.load === true && s.code(645, 12, 645) === 5 && KS.attach({ meta: { support: 'real' }, W: mkSW() }).load === false, 'мир с load: 1 — нагрузка (v2); незагруженное — код 5 (край куска); без load — v1', { load: s.load, c: s.code(645, 12, 645) });
+      X.dispose(); }
+    const tickUntil = (X, S12, n = 400) => { let t = 0; for (; t < n; t++) { S12.sup.step(); X.tick(1 / 20); const jb = S12.sup.jobs(); if (!jb.busy && !jb.queued && !X.groups.length && !S12.sup.queue.length) break; } return t; };
+    // 5×5 досок на столбе — как из импорта (перегружено): убрал угол — ничего не падает; подпорки под углами выбил — плита отломилась
+    { const W = mkSW(); for (let y = 10; y < 15; y++) W.set(50, y, 50, PL); for (let x = 48; x <= 52; x++) for (let z = 48; z <= 52; z++) W.set(x, 15, z, PL);
+      const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup;
+      const c0 = s.code(48, 15, 48); W.set(48, 15, 48, 0); const r0 = s.removed(48, 15, 48, c0);
+      const t0 = tickUntil(X, S12);
+      let have = 0; for (let x = 48; x <= 52; x++) for (let z = 48; z <= 52; z++) if (W.get(x, 15, z) === ID.planks_oak) have++;
+      ok(r0 === 0 && have === 24 && s.stats.groups === 0 && s.stats.jobs === 1, 'перегруженная плита (импорт): убрал угол — пересчёт заданием в такте мира, ничего не упало', { have, t0, st: s.stats });
+      X.dispose(); }
+    { const W = mkSW(); for (let y = 10; y < 15; y++) W.set(50, y, 50, PL); for (let x = 48; x <= 52; x++) for (let z = 48; z <= 52; z++) W.set(x, 15, z, PL);
+      const corners = [[48, 48], [52, 48], [48, 52], [52, 52]]; for (const [x, z] of corners) for (let y = 10; y < 15; y++) W.set(x, y, z, PL);
+      const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup;
+      for (const [x, z] of corners) { const c = s.code(x, 10, z); W.set(x, 10, z, 0); s.removed(x, 10, z, c); }
+      const busy1 = s.jobs().busy || s.jobs().queued > 0, ticks = tickUntil(X, S12);
+      let ring = 0; for (let x = 48; x <= 52; x++) for (let z = 48; z <= 52; z++) if (W.get(x, 15, z) === ID.planks_oak) ring++;
+      let all = 0; for (const [, v] of W.cells) if ((v & 0xfff) === ID.planks_oak) all++;
+      const items = X.items.reduce((a, e) => a + (e.s.id === 'planks_oak' ? e.s.n : 0), 0);
+      ok(busy1 && ring === 1 && W.get(50, 15, 50) === ID.planks_oak && W.get(50, 14, 50) === ID.planks_oak && s.stats.groups >= 1, 'выбил 4 подпорки под углами — плита отломилась вокруг столба (стоит середина и столб)', { ring, ticks, st: s.stats });
+      ok(all + items === 5 + 25 + 4 * 4, 'ничего не пропало: блоками или вещами', { all, items });
+      X.dispose(); }
+    // поставить: металл на конец деревянной консоли — нельзя (перегрузит), доску у корня — можно; рамка — в такте мира, не в кадре
+    { const W = mkSW(); for (let z = 48; z <= 52; z++) for (let y = 10; y < 15; y++) W.set(50, y, z, PL); for (let x = 51; x <= 53; x++) W.set(x, 14, 50, PL);
+      const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup, iron = V.blocks[ID.iron_block], pl = V.blocks[ID.planks_oak];
+      const a = s.canPlace(53, 15, 50, iron), b = s.canPlace(51, 15, 50, pl), c = s.canPlace(54, 14, 50, pl);
+      ok(!a && b && !c, 'нагрузка: железный блок на конец консоли — нельзя, доску у корня — можно, 4-я доска консоли — нельзя', { a, b, c });
+      const T1 = { x: 53, y: 15, z: 50 }; s.tint(T1, iron); const lv0 = s.level(); for (let i = 0; i < 6; i++) s.step(); s.tint(T1, iron); const lv1 = s.level();
+      const T2 = { x: 51, y: 15, z: 50 }; s.tint(T2, pl); for (let i = 0; i < 6; i++) s.step(); s.tint(T2, pl); const lv2 = s.level();
+      ok(lv1 === 4 && lv2 <= 3, 'рамка: считается в такте мира (не в кадре) — у железа на конце консоли тёмно-красная, у доски у корня — нет', { lv0, lv1, lv2 });
+      X.dispose(); }
+    // лёг кусок на консоль и перегрузил — консоль ломается (проверка после посадки — с нагрузкой), всё ложится
+    { const W = mkSW(); for (let z = 48; z <= 52; z++) for (let y = 10; y < 15; y++) W.set(50, y, z, PL); for (let x = 51; x <= 53; x++) W.set(x, 14, 50, PL);
+      for (let y = 15; y < 20; y++) W.set(60, y, 60, CB); for (let x = 53; x <= 53; x++) for (let y = 21; y < 23; y++) for (let z = 49; z <= 51; z++) W.set(x, y, z, CB);   // глыба над концом консоли, держится на столбе (60, 60)? нет — её «уронит» recheck
+      const { X, S12 } = mkS(W, 'real', 'easy', 1), s = S12.sup;
+      const blk = []; for (let y = 21; y < 23; y++) for (let z = 49; z <= 51; z++) { W.set(53, y, z, 0); W.set(53, y - 6, z, CB); blk.push(53, y - 6, z); }   // «легла» на конец консоли
+      s.recheck(blk); const ticks = tickUntil(X, S12);
+      let beam = 0; for (let x = 51; x <= 53; x++) if (W.get(x, 14, 50) === ID.planks_oak) beam++;
+      ok(beam === 0 && s.stats.groups >= 1, 'глыба легла на конец консоли — консоль сломалась у стены и упала вместе с ней', { beam, ticks, st: s.stats });
       X.dispose(); }
     // своды пещер: «реализм» — широкий зал обваливается (лёг булыжником), «мягкое» — нет
     const cave = (support) => {
