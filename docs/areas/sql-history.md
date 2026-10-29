@@ -1,6 +1,10 @@
 <!-- Moved verbatim from CLAUDE.md on 2026-10-28 (CLAUDE.md is now a short English index). Russian, as written then. When you change this area, rewrite the part you touch in short English. -->
 
 ## Ожидает запуска владельцем (обновлять этот список!)
+**29.10 T-140 (34 mini-games, after the merge):** rerun the whole `games-more.sql` (idempotent; only `game_score_cap` and `game_win_xp`
+changed — keys <id> and <id>_duel of every js/games/arcade/<id>.json; all 102 older keys unchanged, checked against the live DB). Nothing
+else after it. REST: /rpc/game_win_xp {"p_game":"tiles"} → 4, {"p_game":"pegs"} → 2, {"p_game":"cannon_duel"} → 5;
+/rpc/game_score_cap {"p_game":"hole"} → 40000 (0 / null — not applied). PGlite: whole file twice + every key.
 Проверено с сервера 22.10 утром: ПРИМЕНЕНЫ premium.sql (donor_levels, donor_me mode off, «Аноним» зарезервирован), age.sql + community.sql (kid_contact → auth, kidsafe_on → true, call_check → null, age_public_kids → 42501), games-more.sql (kletochki 4, chervyachki_online 6, quest_rule w_xp 5 / w_pts 40, weekly_quests, season_state), coins.sql (coin_run_cap kletochki/chervyachki 10). НЕ применён только ops.sql (п. 14). bases.sql / raids.sql — после слияния военных баз (T-013).
 1–3. Экономика 15.10.2026 (docs/ECONOMY.md) — СТРОГО по порядку: 1) `games-more.sql` (ещё раз) — проверка
    `/rpc/game_win_xp` {"p_game":"horde"} → 10 (20 — старая версия), {"p_game":"fillword_daily"} → 6 (новые игры), {"p_game":"podzem_boss1"} → 6 («Подземье»), {"p_game":"kubomir"} → 4 («Кубомир»); 2) `coins.sql` (ещё раз) — `/rpc/coin_rule` {"p_key":"daily"} → 20
