@@ -25,7 +25,7 @@ function engine(lod = true){
 // --alloc (child of the "0 garbage per step" check below): the engine in the MAIN context, as on the page. In a vm context
 // `Math` is looked up through the sandbox (and here it is Object.create(Math) to poison random) — V8 cannot inline Math.sqrt /
 // atan2 / exp there and boxes every result, so a vm measurement shows garbage the browser never makes. Three scenes in turn:
-// 200 sleeping idlers near the player, 64 awake zombies chasing him, 64 wanderers; each — warm-up, gc, best of 3 windows.
+// 200 sleeping idlers near the player, 64 awake zombies chasing him, 64 wanderers among 40 boxes; each — warm-up, gc, best of 3 windows.
 // The parent runs it with a 64 MB young generation: no scavenge inside a window, so the heap delta is ALL the garbage made.
 if (process.argv.includes('--alloc')) {
   global.window = global; global.localStorage = { getItem: () => null, setItem(){}, removeItem(){} };
@@ -38,6 +38,7 @@ if (process.argv.includes('--alloc')) {
   const wins = [];
   for (const kind of ['idle', 'follow', 'wander']) {
     const ph = new E.Phys({ ground: 0 }), N = E.npcs({}, ph), n = kind === 'idle' ? 200 : 64;
+    if (kind === 'wander') for (let i = 0; i < 40; i++) ph.addBox({ x: ((i * 37) % 200) - 100, y: 1, z: ((i * 91) % 200) - 100, hx: 2, hy: 1, hz: 2 });   // дома: запросы физики с находками
     for (let i = 0; i < n; i++) {
       const a = i * 2.39996, r = 20 + (i % 9);
       const pos = kind === 'idle' ? [(i % 20) * 3, 0, Math.floor(i / 20) * 3] : kind === 'follow' ? [Math.cos(a) * r, 0, Math.sin(a) * r] : [((i * 13) % 160) - 80, 0, ((i * 29) % 160) - 80];
@@ -148,14 +149,14 @@ function runAt(fps, steps, lod = true, poison = true){
 // T-127 review #1 / #4: measured in a child process (see --alloc above) with the engine in the main context. Before the review the
 // check ran here after other vm contexts (megamorphic shared code) with a 600-step warm-up: it failed in 5 of 14 runs, and it
 // covered sleepers only. Awake bodies made 200–290 B per NPC per step (Set.clear, double arguments of calls V8 did not inline,
-// step-event objects nobody listened to) — now under 1 B.
+// step-event objects nobody listened to, query lists shrunk by length = 0 and regrown by push) — now under 1 B.
 {
   const r = require('child_process').spawnSync(process.execPath, ['--expose-gc', '--min-semi-space-size=64', '--max-semi-space-size=64', __filename, '--alloc'], { encoding: 'utf8', timeout: 150000 });
   let res = null; try { res = JSON.parse(String(r.stdout).trim().split(String.fromCharCode(10)).pop()); } catch (e) {}
   const good = k => !!res && res[k] && res[k].best < 64;
   ok(good('idle') && res.idle.st.asleep === 200, '200 спящих рядом с игроком: без мусора на шаге (< 64 Б, 0 сборок)', res ? res.idle : { code: r.status, err: String(r.stderr).slice(0, 300) });
   ok(good('follow') && res.follow.st.awake === 64, '64 зомби гонятся за игроком: без мусора на шаге (< 64 Б на всех, 0 сборок)', res ? res.follow : null);
-  ok(good('wander') && res.wander.st.awake + res.wander.st.asleep === 64, '64 бродят: без мусора на шаге (< 64 Б на всех, 0 сборок)', res ? res.wander : null);
+  ok(good('wander') && res.wander.st.awake + res.wander.st.asleep === 64, '64 бродят среди домов: без мусора на шаге (< 64 Б на всех, 0 сборок)', res ? res.wander : null);
   setTimeout(finish, 0);
 }
 // ═══ Rollback: LOD = false — как было (гонится и кусает) ═══
