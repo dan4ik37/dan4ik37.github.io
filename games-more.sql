@@ -16,6 +16,8 @@
 --  «Клеточки» (kletochki — с ботами, kletochki_online — 2+ человека; очки — лучшая масса за жизнь, победа — 1-е место в раунде)
 --  и «Червячки» (chervyachki, chervyachki_online; очки — лучшая длина) — io-игры 22.10.2026: 4 XP с ботами, 6 онлайн.
 --  Проверка (22.10): /rpc/game_win_xp {"p_game":"kletochki"} → 4, {"p_game":"chervyachki_online"} → 6 (0 — старая версия файла).
+--  29.10.2026 (T-140): мини-игры js/games/arcade — ключи <id> и <id>_duel между маркерами «arcade» (собирает node scripts/make-arcade.mjs
+--  из js/games/arcade/<id>.json). Проверка: /rpc/game_win_xp {"p_game":"tiles"} → 4, {"p_game":"lights_duel"} → 5 (0 — не применён).
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно. Нужен games.sql (он уже применён).
 --  Функции целиком скопированы из games.sql + новые ключи (заменяет games-emoji.sql — тот можно не запускать).
 --  До запуска игры работают, просто без XP и таблицы рекордов.
@@ -83,6 +85,10 @@ returns int language sql immutable as $$
     when p_game = 'mirwar' then 200                          -- «Мир Денчика», Боевая зона: выбитые за раунд (mir-war.js)
     when p_game in ('kletochki', 'kletochki_online') then 50000       -- «Клеточки»: лучшая масса за жизнь (kletochki.js)
     when p_game in ('chervyachki', 'chervyachki_online') then 50000   -- «Червячки»: лучшая длина за жизнь (chervyachki.js)
+    -- ⟦arcade⟧ мини-игры (T-140): строки до закрывающего маркера собирает node scripts/make-arcade.mjs из js/games/arcade/<id>.json
+    when p_game in ('lights', 'lights_duel') then 3000
+    when p_game in ('tiles', 'tiles_duel') then 20000
+    -- ⟦/arcade⟧
     else null end;
 $$;
 
@@ -131,6 +137,10 @@ returns int language sql immutable as $$
     when 'mirwar' then 3
     when 'kletochki' then 4 when 'kletochki_online' then 6
     when 'chervyachki' then 4 when 'chervyachki_online' then 6
+    -- ⟦arcade⟧ мини-игры (T-140): строки до закрывающего маркера собирает node scripts/make-arcade.mjs из js/games/arcade/<id>.json
+    when 'lights' then 4 when 'lights_duel' then 5
+    when 'tiles' then 4 when 'tiles_duel' then 5
+    -- ⟦/arcade⟧
     else 0 end;
 $$;
 

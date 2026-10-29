@@ -29,6 +29,10 @@ export const GAME_AGE = {
   emoji: [6, 'Названия игр, в том числе хорроров и стрелялок (только эмодзи).'],
   clicker: [0, ''], quiz: [6, 'Тесты про героев игр, в том числе хорроров (FNAF).'],
   wheel: [0, ''], random: [0, ''], typing: [0, ''], cps: [0, ''], fonts: [0, ''], photo: [0, ''],
+  // ⟦arcade⟧ мини-игры (T-140): строки до закрывающего маркера собирает node scripts/make-arcade.mjs из js/games/arcade/<id>.json — руками не править
+  lights: [0, ''],
+  tiles: [0, ''],
+  // ⟦/arcade⟧
 };
 export const gameAge = id => (GAME_AGE[id] || [0, ''])[0];
 export const UGC_AGE = 12;   // игра / мир игрока без метки (age.sql: age_rating по умолчанию 12)

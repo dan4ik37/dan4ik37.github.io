@@ -37,6 +37,10 @@ GAMES = [
     ('pauk', '🕷️', 'Паук', '#a855f7'),
     ('freecell', '♣️', 'Свободная ячейка', '#38bdf8'),
     ('miner', '💣', 'Сапёр', '#ef4444'),
+    # ⟦arcade⟧ мини-игры (T-140): строки до закрывающего маркера собирает node scripts/make-arcade.mjs из js/games/arcade/<id>.json
+    ('lights', '💡', 'Свет в окнах', '#ffc233'),
+    ('tiles', '⬛', 'Чёрные плитки', '#e5e7eb'),
+    # ⟦/arcade⟧
     ('mahjong', '🀄', 'Маджонг Коннект', '#f59e0b'),
     ('sudoku', 'draw:sudoku', 'Судоку', '#60a5fa'),
     ('krokodil', 'draw:kroko', 'Крокодил', '#22c55e'),
