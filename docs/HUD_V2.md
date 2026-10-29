@@ -105,7 +105,9 @@ Combat adds 👊 (primary, 56 px). Vehicles swap the set (§9.2). Flying swaps p
 ### 3.1 Pose radial
 - It opens around the pose button, clamped so the whole ring fits inside the window and safe areas. Radius 92 px; items
   are 48 px visual / 52 px hit; at most 8 items; the 8th can be "➕ Ещё".
-- **Slide-to-pick:** slide toward an item and release. Releasing in the dead zone (r < 28 px) cancels. **Sticky mode:** if the
+- **Slide-to-pick:** slide toward an item and release. The sector is the angle from the centre of the ring *as drawn* (it may be
+  clamped to the edge or lifted over the finger), so sliding onto the visible icon picks it; nothing is picked until the finger
+  has moved 28 px from where it pressed (T-136). Releasing in the dead zone (r < 28 px, the ✕) cancels. **Sticky mode:** if the
   finger lifts without moving, the ring stays open for 3 s for tap-picking (for players who do not know the gesture). A
   sector highlight and a label above the ring show the choice. `navigator.vibrate(8)` on each sector change, only if
   vibration is supported and the "shake" setting is on.
