@@ -158,7 +158,7 @@
     const scene = J.scenes?.[J.scene ?? 0];
     if (scene) for (const ni of scene.nodes || []) walk(ni, m4.id(), 0, -1);
     else (J.meshes || []).forEach((me, i) => { for (const p of me.primitives || []) prims.push({ p, M: m4.id() }); });
-    const SK = E.models?.SKIN !== false ? skinOf(G, prims, NW, NP) : null;   // скелет: первый скин, который использует меш
+    const SK = skinOf(G, prims, NW, NP);   // скелет: первый скин, который использует меш (SKIN = false выключает только движение)
     const raw = [];
     for (const { p, M: M0, ni, skin } of prims) {
       let M = M0;
