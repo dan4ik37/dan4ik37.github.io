@@ -725,6 +725,7 @@ Players.PlayerAdded.Connect(player => {
     ed.G.update();
     ed.FX.update(dt);
     ed.NPC.frame(dt, performance.now() / 1000, cam.position);
+    window.D37E.models.animate?.(dt, cam);   // модели со скелетом (ближние — каждый кадр, дальние — реже)
     ed.R.update(dt); ed.R.follow(c.x - Math.sin(c.yaw) * 20, c.z - Math.cos(c.yaw) * 20, 0);
     ext('editFrame', dt);   // прицел геймпада, вид «сверху», подсказки… — до кадра
     ed.R.render();
@@ -1238,6 +1239,7 @@ Players.PlayerAdded.Connect(player => {
           <label class="s3-lbl">Форма столкновений<select data-p="fit"><option value="precise"${o.fit !== 'box' ? ' selected' : ''}>🎯 Точно — по поверхности модели</option><option value="box"${o.fit === 'box' ? ' selected' : ''}>📦 Коробкой — быстрее</option></select></label>
           <label class="s3-chk"><input type="checkbox" data-p="anchored"${o.anchored !== false ? ' checked' : ''}> Закреплена (Anchored)</label>
           <label class="s3-chk"><input type="checkbox" data-p="shadow"${o.shadow !== false ? ' checked' : ''}> Тень</label>`;
+        if (md && md.skin) h += actSelect(o, md);   // модель со скелетом: что она делает (T-131)
       } else if (o.cls === 'Model') {
         h += `<p class="s3-note">Модель — группа. Перетащи детали на неё в Проводнике. Двигай и крути её стрелками целиком.</p>`;
       } else if (o.cls === 'Script') {
@@ -1752,6 +1754,7 @@ Players.PlayerAdded.Connect(player => {
     A.update(dt, t, R.camera.position);
     ambTick(pl);
     ed.NPC.frame(dt, t, R.camera.position);
+    window.D37E.models.animate?.(dt, R.camera);
     drawBubbles(pl);
     if (ed.mp) mpTags();
     pl.AU.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
@@ -2267,9 +2270,23 @@ Players.PlayerAdded.Connect(player => {
     clearInterval(ed.autosave);
     ed.loop?.stop(); ed.ro?.disconnect();
     window.removeEventListener('keydown', ed.kd, true); window.removeEventListener('keyup', ed.ku, true); window.removeEventListener('blur', ed.blur); window.removeEventListener('pagehide', ed.onHide);
-    try { ed.B?.dispose(); ed.SC?.dispose(); ed.NPC?.dispose(); ed.FX?.dispose(); ed.TR?.dispose(); ed.G?.dispose(); ed.R?.dispose(); } catch (e) {}
+    try { ed.B?.dispose(); ed.SC?.dispose(); ed.NPC?.dispose(); ed.FX?.dispose(); ed.TR?.dispose(); ed.G?.dispose(); window.D37E.models.releaseAll?.(); window.D37E.models.dispose?.(); ed.R?.dispose(); } catch (e) {}   // модели: копии на GPU — с этим рендерером
     ed.box.remove();
     document.documentElement.classList.remove('s3-open');
+  }
+
+  // ═══ Модель со скелетом: выбор действия (свои клипы из файла + общие действия D37E.skel для гуманоидов; T-131) ═══
+  const ACT_RU = { 'loco.idle': '🧍 Стоит', 'loco.walk.fwd': '🚶 Идёт', 'loco.walk.back': '🚶 Идёт назад', 'loco.walk.left': '🚶 Шагает влево', 'loco.walk.right': '🚶 Шагает вправо',
+    'loco.jog.fwd': '🏃 Бежит трусцой', 'loco.sprint.fwd': '🏃 Бежит быстро', 'stance.crouch.idle': '🧎 Присел', 'stance.crouch.fwd': '🧎 Крадётся', 'carry.carry.idle': '📦 Держит ящик',
+    'carry.carry.fwd': '📦 Несёт ящик', 'loco.idle.fidget_look': '👀 Оглядывается', 'loco.idle.fidget_shift': '🧍 Переминается', 'loco.idle.fidget_hands': '🤲 Трёт руки',
+    'gesture.stretch': '🙆 Потягивается', 'loco.turn.l90': '↩️ Поворот влево', 'loco.turn.r90': '↪️ Поворот вправо', 'hit.flinch.front': '😖 Вздрагивает' };
+  function actSelect(o, md){
+    const A = window.D37E.models.actions(md), cur = o.act || '';
+    const opt = (v, t) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(t)}</option>`;
+    let s = opt('', '✨ Само (стоит)') + opt('none', '⏸ Без движения');
+    if (A.own.length) s += `<optgroup label="Из файла модели">${A.own.map(n => opt(n, n)).join('')}</optgroup>`;
+    if (A.lib.length) s += `<optgroup label="Общие действия">${A.lib.map(n => opt(n, ACT_RU[n] || n)).join('')}</optgroup>`;
+    return `<label class="s3-lbl">🦴 Действие (${esc(A.bones)} костей)<select data-p="act">${s}</select></label>`;
   }
 
   // ═══ Расширения студии (инструменты, набор предметов, ИИ-помощник — каждый своим файлом, без правок здесь) ═══

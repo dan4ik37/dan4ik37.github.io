@@ -583,4 +583,8 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
 - 29.10 T-141 голос: владелец «зачем Cloudflare, нельзя как в дс?» → как в Дискорде: голос идёт через наш сервер (SFU LiveKit, Apache-2.0,
   на Oracle рядом с T-045; встроенный TURN), голосовые каналы на много людей, IP людей друг другу не видны (детская аудитория); 1 на 1 —
   напрямую, когда получается; Cloudflare TURN не берём. Сначала владелец запускает сервер T-045 (docs/SERVER.md).
-
+- 29.10 T-131 (AI3D A2): take — shared skeleton + 35 procedural clips (js/engine/skel.js) on HumanBodyBones, foot plants by world contacts
+  + IK (key-rate slide metric: an engine interpolates across touchdown/lift); skinned playback in D37E.models with shared clips and
+  humanoid retarget (Mixamo/Biped/A-pose); Studio 3D `act` reuses the NPC key (NET_EXTRA full); FBX pack for Backrooms in
+  E:\d37-core\anim. Skip — quadruped shared gaits, look.aim action row (PROPOSED to the Backrooms lead), skinned instancing.
+- 29.10 T-131 review: take all 7 findings — toes no snap into the floor, Biped/Rocketbox retarget by the model's own parents (+ position tracks), stop_l/stop_r entered at phase 0/0.5, M.play one-shots once + unknown name → idle + 'none' → rest, FBX default pose = T-pose, clips.csv dir_right/dir_fwd/turn_left_deg, strafes as side steps (not lunges).

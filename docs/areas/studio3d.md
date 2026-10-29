@@ -345,11 +345,82 @@ The owner's own 3D editor AI3D (from his package ai3d-mcp: ai3d.html, author —
   10.9 fps, 87/99 ms, 90 links, 42 of 43 frames > 50 ms); human 132 fps 1.5/2.6 ms; fox 120–132 fps 2.9/5.8 ms; PC dog 131 fps (was ~12).
   (Headless rAF is not capped at 60, so these are not real phone FPS.) Leak 20 with «Скачать GLB»: 0 renderers, heap 7.2 → 9.1 MB. Soak 10 min:
   724 ops, 0 errors, 69 rollbacks, 45 exports, 15 selftests, 24 plays; heap 13–55 MB per minute, 20 MB after an empty scene + GC.
-- **Next (A2–A5 need).** A2: shared skeleton (spec/BODY.md) — AI3D parts are rigid (no skin). What the GLB has today: every part is a
-  flat child of one root node «AI3D» (state.parent links are not written), no armature or skin, clips as per-part TRS tracks (Blender: one
-  action per clip, correct ranges, shape-key animation too — but moving the pelvis does not move the legs). A2: export the part hierarchy
-  (local TRS) or bones + skin; rigAuto + gait clips → bones + skinned glTF; D37E model.js has no skin/animation playback yet. A3: colliders/mass/joints → glTF extension D37_physics (AI3D manifestOf has colliders).
+- **Next (A3–A5 need).** A2 is done (section below). A3: colliders/mass/joints → glTF extension D37_physics (AI3D manifestOf has colliders).
   A4: terrain from core T1 instead of AI3D's own value noise; scatter → batch.js instancing, not one merged mesh. A5: command layer like the
   photo editor (D37Tools «d37 v1»: schema per op, per-step undo; AI3D now has whole-state rollback and no ANIM/CON rollback), short guide topics,
   MCP server. Also: inverted-hull outlines do not show
   on hard-edged boxes (face normals) — a classic limitation.
+
+## AI3D A2 — shared skeleton + action clips, skinned models in D37E (T-131, 29.10.2026)
+Owner 29.10 «запускай сейчас»: «our Blender» step A2 for the site AND for Backrooms NPCs. Contract: E:\d37-core\spec\BODY.md,
+spec/data/skeleton.json (Unity HumanBodyBones names, left/right = the character's own side), spec/data/actions.csv (clip name =
+`<action id>[.<variant>]`).
+- **Generator — js/engine/skel.js (D37E.skel, English comments, node + browser).** 28 shared bones (Hips … Toes, 3 finger roots per hand;
+  no eyes), rest = T-pose with identity rotations (a clip stores whole local rotations). `reference({sex, height})` = BaseBody_Male/Female
+  proportions (measured headless in Blender); `fromJoints({id: [x,y,z]})` = any T-pose (missing optional bones made up, recentred under
+  the hips, `origin` kept). First batch (`LIST`, 35): loco.idle; loco.walk|jog|sprint × fwd/back/left/right; stance.crouch.idle|fwd;
+  carry.carry.idle|fwd; additive fidgets loco.idle.fidget_look|shift|hands + gesture.stretch; loco.turn.l90|r90|l180|r180;
+  loco.walk.start_l|start_r|stop_l|stop_r; additive poses look.aim.left|right|up|down (action id `look.aim` PROPOSED — no row in
+  actions.csv); additive hit.flinch.front|back. Feet are planned as world contacts (heel roll → flat → ball roll, the pivot point fixed),
+  legs by two-bone IK, hips height limited by the reach of both legs (smoothed, re-limited), arms/spine/head by phase; strafes are
+  step-close (the lead foot plants wide, the trail one closes in short — legs never cross); starts/stops ramp the root speed and land the
+  chosen foot first/last (`sync` = loop phase to blend at); gait sizes scale with leg length, times with its square root. Clip = local
+  quats + in-place Hips + a root track (x, z, yaw); `toThree(T, clip, {names, root: 'inplace'|'bake', target, origin})` (target =
+  retarget onto another rest, see model.js). `csv(clips)` → clips.csv (Layer-1 metadata). Deterministic: same input → same bytes
+  (golden hash in the test). Foot plant metric: contact point speed between consecutive KEYS inside a contact (an engine interpolates
+  across the touchdown/lift gap) — ≤ 0.00001 m/s generated; in-between slerp wobble ≤ 2.1 mm (fast gaits keyed at 60 fps).
+- **Skinned models — js/engine/model.js.** glTF skins (first skin a mesh uses; joints ≤ 255; armature/non-joint ancestors folded, e.g.
+  FBX-born scale 0.01 + turn), vertices baked in the node rest pose, joints/weights as 4 bytes (sum 255), bone animations (t/r/s,
+  LINEAR/STEP, CUBICSPLINE values) converted into model units, `extras.d37` clip metadata; `pack/unpack` with strict checks (cycles, joint
+  range, finite numbers). `M.instance(R, model, {act})` → SkinnedMesh per part on one Skeleton + AnimationMixer per copy; geometries,
+  materials, inverse binds and AnimationClips shared per model (and per renderer: a reopened studio gets its own copies — the old shared
+  geometries kept every closed studio's renderer alive through 'dispose' listeners). Shared actions on ANY humanoid-named skeleton
+  (HumanBodyBones, Mixamo `mixamorig:*`, 3ds Max Biped / Rocketbox `Bip01 *`): clips are generated for the model's own T-pose layout,
+  then retargeted (`Tw` = rest rotation "as in a T-pose", so A-pose arms work; unmapped bones in between kept). `M.play(h, name)`
+  cross-fades; additive clips play over the idle; `'none'` = rest pose. `M.animate(dt, camera)` once per frame: near ≤ 30 u every frame,
+  ≤ 60 every 2nd, ≤ 120 every 4th, farther or off-screen every 8th (accumulated dt), no allocations. Fallback = static rest pose (no
+  SkinnedMesh/AnimationMixer, too many bones for a GPU without float vertex textures, any error). **Rollback: `D37E.models.SKIN = false`.**
+- **Studio 3D.** Mesh property `act` (already saved and networked — NET_EXTRA is full at 16, so the NPC's `act` key is reused):
+  '' = by itself (idle), 'none', a clip from the file, or a shared action; panel «🦴 Действие» (Russian labels for the main ones);
+  switching = cross-fade, no rebuild; animated holders are not batched; release on unbuild + `releaseAll` and `models.dispose` on close.
+  games.js: skel.js before model.js in the Studio 3D list, GAMES_VER 148 (150 after the merge with T-127).
+- **AI3D.** js/apps/ai3d/ai3d-rig.js (D37AI3DRig) + ops `skel{prefix}` (each rigged part gets `bone`/`rigp`; bipeds: arms re-laid into a
+  T-pose, the mesh bound in its own pose; quadrupeds: front legs → arm bones, own clips only; tails/ears/wings/lids/breasts/hair → own
+  extra bones) and `actions{prefix, set: 'loco'|'all'|[ids]}` (shared clips generated for THIS character → editor animations named by
+  clip id, «Играть» previews them). GLB export (ai3d-gltf.js) with rigs: one SkinnedMesh per material (torso weighted across
+  Spine/Chest/UpperChest by height, the foot split at the toes), library clips regenerated exactly, the editor's own clips converted
+  (W_bone(t) = Part(t)·Part_rest⁻¹·W_bone(bind)), `animations[i].extras.d37`. Rollback: `D37AI3DGltf.SKIN = false`. D37Apps VER 6.
+- **Backrooms pack — E:\d37-core\anim** (committed there only): D37_Clips.fbx (Mecanim names, T-pose, BaseBody_Male proportions,
+  35 takes named by clip id, 60 fps file), clips.csv, README (Humanoid import, root motion per clip, rotation offset 0, additive layer
+  with reference frame 0), tools/build_fbx.py + check_fbx.py (headless Blender 5.2; pose basis B = R⁻¹·C·L·C⁻¹·R, C = +90° about X).
+  Rebuild: `node scripts/anim-pack.cjs E:/d37-core/anim`.
+- **Tests.** `node scripts/anim-test.cjs <three r149>` (CI, 55 checks): determinism + golden hash, foot plant ≤ 0.01 m/s, wobble ≤ 3 mm,
+  no overstretch, loops close, female/tall skeletons, clips.csv schema (ids from the spec's actions.csv, PROPOSED allowed; the committed
+  pack is current), a hand-made FBX-like skinned glTF (armature 0.01 + turn), pack/unpack and broken data, three r149 playback, SKIN=false
+  and weak-GPU fallbacks, A-pose Mixamo retarget (world arm/leg directions = canonical, < 2°), 20 copies LOD, heap, safety net for dropped
+  copies, the AI3D chain (make → skel → actions → GLB → compile → mixer: the flat foot stays put in the world, 0.0000 m/s).
+  `node scripts/anim-e2e.cjs perf|leak [20]` (Chrome; needs hm.glb written by anim-test). ai3d-test: 65 ops (+ skel, actions).
+  FBX: re-import check 109/109 (28 bones, 35 takes, lengths, slide ≤ 0.0002 m/s).
+- **Numbers (phone 412×915×2, CPU ×4, headless Chrome, 20 copies of the AI3D human, 12k tris each, 28 bones).** Frame CPU p50/p95: static
+  (SKIN=false, batched) 2.2/3.7 ms, 131 fps; animated 5.4–6.9/10.4–10.8 ms, 111–117 fps, 0 frames > 50 ms (after the merge with T-127,
+  machine busier — static rose to 3.3/5.4 too: animated 10.0–10.9/14.6–20 ms, 71–84 fps, still 0 frames > 50 ms); D37E.models.animate 0.81–0.92 ms
+  per frame for 20; draw calls 25 → 53 (skinned copies are not instanced). LOD over 2 s: near 262 mixer updates, far 65. Node: animate
+  20 × 600 frames — heap +0.09 MB, 0.026 ms per frame (PC). Leak 20× close/open (the world reloads 20 animated models): 0 live instances
+  after every close, 0 bones/skeletons/mixers alive at the end, heap 22.3 → 26.9 (cycle 10) → 27.1 MB (cycle 20) — the same ~5 MB warm-up
+  as with static models or an empty world, flat after it. Generator: 35 clips in ~145 ms (node). AI3D human GLB 687 KB, compile 45–64 ms.
+- **Review fixes (29.10 evening).** (1) Toes: at the lift they were snapped from flat to the foot's 55° toe-down pitch (toe tip 25 mm
+  into the floor, toe sole −44 mm) — now they straighten over the first half of the swing (≤ 11.8°/key, sole ≥ −2.1 mm = the planted
+  wobble). (2) Biped/Rocketbox: thighs are children of «Bip01 Spine», clavicles of «Bip01 Neck» — locals were computed against the shared
+  parent (legs rode the spine, arms the neck: 15.7° / 136 mm in crouch idle); now `tg.par` = the nearest mapped ancestor in the MODEL
+  hierarchy and position tracks keep re-parented joints on Hips/UpperChest (0.1 mm / 0.01°; test with own bone orientations, A-pose,
+  turned root). (3) stop_l / stop_r are entered at loop phase 0 / 0.5 (were both 0, with 0.75–1.25 s at full speed): slow down from the
+  first key, 0.68 m, still at 0.9 s, the named foot plants last. (4) `M.play`: clips with meta.loop = false play once and hold the end
+  (turn looped 90° and back); an unknown name plays the idle (it faded everything out and froze mid-pose); `'none'` keeps updating the
+  fade and ends in the rest pose (it froze too). (5) FBX default pose (node transforms) was a take's frame — build_fbx.py clears the pose
+  before export; check_fbx.py checks default = bind pose. (6) clips.csv: `dir_right` / `dir_fwd` / `turn_left_deg` by the character's own
+  sides (dir_x had +x = character LEFT, mirrored in Unity). (7) Strafes: cycle × 0.65, landing offset × 0.45 → feet ≤ 0.70 m apart (were
+  0.79–0.87), hips ≤ 5.2% low (were 12–17%: lunges). anim-test 67 checks, FBX check 111/111 (+ toe sole, default pose). GAMES_VER 151,
+  D37Apps VER 7.
+- **Gaps.** Quadrupeds get the rig but no shared gait (use AI3D `gait`); look.aim needs an action id row; one FBX on male proportions
+  (Unity retargets; Foot IK cleans the rest); clips are keyed procedurally (no motion capture); the AI3D in-editor preview is rigid
+  parts (the skinned look only after export); skinned copies are drawn one by one (no instancing).

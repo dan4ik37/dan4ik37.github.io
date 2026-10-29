@@ -75,6 +75,7 @@ function threeDir(){
   console.log('selftest():', st.split('\n')[0]);
 
   // ═══ 3. GLB export (ai3d-gltf.js, exporter module rewritten like in the browser) ═══
+  for (const f of ['js/engine/skel.js', 'js/apps/ai3d/ai3d-rig.js']) vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });   // shared skeleton (T-131)
   vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/apps/ai3d/ai3d-gltf.js'), 'utf8'), { filename: 'ai3d-gltf.js' });
   const G = globalThis.D37AI3DGltf;
   const expSrc = fs.readFileSync(path.join(TD, 'examples/jsm/exporters/GLTFExporter.js'), 'utf8');
@@ -185,14 +186,14 @@ function threeDir(){
   const extra = JSON.parse(fs.readFileSync(path.join(__dirname, 'ai3d', 'ops-extra.json'), 'utf8'));
   S.reset(); const exFail = [];
   for (const [n, c] of extra) { let r; try { r = S.run(c); } catch (e) { r = { ok: false, error: 'THROW ' + e.message }; } if (!r.ok) exFail.push(n + ': ' + r.error); }
-  ok(!exFail.length, 'remaining ops (mesh, parent, unconstrain, fur, addon, play, anim_del, jiggle, del, clear)', exFail);
+  ok(!exFail.length, 'remaining ops (mesh, parent, unconstrain, fur, addon, play, anim_del, jiggle, skel, actions, del, clear)', exFail);
   const runSrc = src.slice(src.indexOf('function run(cmds){', a), src.indexOf('function snap(', a));
   const allOps = new Set([...runSrc.matchAll(/c\.op==='([a-z_0-9]+)'/g)].map(m => m[1])), reached = new Set();
   for (const [, c] of rows) if (c) c.forEach(x => reached.add(x.op));
   const tA = src.indexOf('const T=[', a); for (const m of src.slice(tA, src.indexOf('];', tA)).matchAll(/op:'([a-z_0-9]+)'/g)) reached.add(m[1]);   // + ops inside selftest() function rows (photo, texture)
   for (const D of DEMOS) D.cmds.forEach(x => reached.add(x.op));
   for (const [, c] of extra) c.forEach(x => reached.add(x.op));
-  ok(allOps.size === 63 && [...allOps].every(o => reached.has(o)), 'every op of run() is exercised (63)', { ops: allOps.size, missing: [...allOps].filter(o => !reached.has(o)) });
+  ok(allOps.size === 65 && [...allOps].every(o => reached.has(o)), 'every op of run() is exercised (65: + skel, actions — T-131)', { ops: allOps.size, missing: [...allOps].filter(o => !reached.has(o)) });
   // «Играть» / undo / sheet: a frame that changes only pos/rot/scale/shape weights keeps the same meshes and materials (no new materials →
   // no shader relink); a colour change makes a new material and the old one waits for the next render (__oldM) before it is disposed
   S.reset(); S.run(DEMOS[1].cmds);

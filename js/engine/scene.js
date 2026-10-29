@@ -8,7 +8,8 @@
 //   SC.touching(ch) — каких деталей касается персонаж (для события «коснулся»); SC.on('add'|'remove'|'change', f).
 // Классы: Part (деталь: shape block | ball | cyl | wedge), Spawn (точка появления), Light (свет), Prefab (готовый предмет:
 // дерево, фонарь, скамейка…), Model (группа), Script (скрипт — код в песочнице, см. script.js), Mesh (своя 3D-модель —
-// как MeshPart: model — номер в D37E.models (model.js), pos — центр, size — растягивает модель; тело — fit: 'precise' —
+// как MeshPart: model — номер в D37E.models (model.js), pos — центр, size — растягивает модель; act — действие модели со скелетом
+// ('' — само: стоит, 'none' — без движения, имя клипа или общее действие D37E.skel: loco.walk.fwd…; T-131); тело — fit: 'precise' —
 // коробки по поверхности модели (M.colliders), 'box' — одна коробка size), Effect (частицы fx.js: kind — огонь, дым, искры…;
 // внутри детали — летят из неё, сам по себе — из pos; rate и scale — множители; нужен SC.fx = D37E.fx(R)), NPC (персонаж npc.js:
 // look, seed, act — idle | wander | follow | flee, speed, radius, damage, text; рисует и водит SC.npc = D37E.npcs(R, phys)).
@@ -187,6 +188,7 @@
       if (obj._light) { R.scene.remove(obj._light); obj._light = null; }
       if (obj._em) { obj._em.dispose(); obj._em = null; }
       if (obj.cls === 'NPC') SC.npc?.remove(obj);
+      if (obj._anim) { E.models?.release(obj._anim); obj._anim = null; }   // модель со скелетом: микшер и кости
       for (const c of obj._cols || []) ph.remove(c);
       obj._cols = [];
     }
@@ -209,14 +211,15 @@
       } else if (obj.cls === 'Mesh') {
         const holder = new T.Group(), md = E.models?.cached(obj.model);
         if (md) {
-          const g = E.models.instance(R, md), a = obj.alpha || 0;
+          const g = E.models.instance(R, md, { act: obj.act }), a = obj.alpha || 0;
+          obj._anim = g.userData.anim || null;   // анимированная (скелет) — своя копия, не склеивается
           g.scale.set(obj.size[0] / (md.size[0] || 1), obj.size[1] / (md.size[1] || 1), obj.size[2] / (md.size[2] || 1));
           g.position.y = -obj.size[1] / 2;   // у модели низ в нуле, а pos — центр (как у детали)
           if (a > 0) g.traverse(c => { if (!c.isMesh) return; c.material = c.material.clone(); c.material.transparent = true; c.material.opacity *= Math.max(SC.edit && a >= .999 ? .12 : 0, 1 - a); c.material.depthWrite = a < .5; c.userData.ownMat = true; });
           if (!R.r.shadowMap.enabled || obj.shadow === false || a >= .5) g.traverse(c => { if (c.isMesh) c.castShadow = false; });
           if (a >= .999 && !SC.edit) g.visible = false;
           holder.add(g);
-          holder.userData.batchable = !a;   // одинаковые модели — экземплярами (batch.js)
+          holder.userData.batchable = !a && !obj._anim;   // одинаковые модели — экземплярами (batch.js); со скелетом — нет
         } else {   // модель ещё грузится или её нет в этом браузере — каркас коробки
           const box = new T.Mesh(new T.BoxGeometry(obj.size[0], obj.size[1], obj.size[2]), meshStub());
           box.userData.ownGeo = true; box.userData.stub = true; holder.add(box);
@@ -330,6 +333,7 @@
       if (obj.cls === 'Model' && (key === 'pos' || key === 'rot')) { SC.transformModel(obj, key, val); return; }
       obj[key] = copy(val);
       if (obj.cls === 'NPC') { if (key === 'pos' || key === 'rot') place(obj._mesh, obj); SC.npc?.sync(obj); }
+      else if (key === 'act' && obj.cls === 'Mesh') { if (obj._anim) E.models.play(obj._anim, val); }   // действие — плавно, без пересборки
       else if (['shape', 'size', 'mat', 'color', 'alpha', 'kind', 'scale', 'text', 'range', 'power', 'shadow', 'model', 'rate', 'color2'].includes(key) || (key === 'enabled' && obj.cls === 'Effect') || (key === 'fov' && obj.cls === 'Camera')) build(obj);
       else if (key === 'pos' || key === 'rot') {
         if (obj._mesh && obj.cls !== 'Prefab') place(obj._mesh, obj);
