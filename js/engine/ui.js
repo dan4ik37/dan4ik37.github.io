@@ -500,7 +500,7 @@
     // круг — над кнопкой позы (не закрывает кнопки; выбор считается от пальца, так что место круга на выбор не влияет)
     const center = d => { const b = d.getBoundingClientRect(), h = el.getBoundingClientRect(); return { x: b.left + b.width / 2 - h.left - 40, y: b.top - h.top - 124 }; };
     // ── действие ──
-    let actBtn = null, pill = null, holdC = null, verb = null, verbK = '', holdQ = 0;
+    let actBtn = null, pill = null, holdC = null, verb = null, verbK = '', holdQ = 0, pillT = 0;
     const HR = 15, HL = 2 * Math.PI * HR;
     function wireAct(d){
       actBtn = d;
@@ -515,7 +515,8 @@
       if (actBtn.hidden === !!verb) actBtn.hidden = !verb;
       if (!verb) { if (pill) pill.hidden = true; return; }
       const ic = actBtn.firstChild; if (ic && ic.nodeType === 3) ic.textContent = verb.icon || '✋'; else actBtn.insertBefore(document.createTextNode(verb.icon || '✋'), actBtn.firstChild);
-      if (pill) { pill.textContent = verb.label || ''; pill.hidden = !verb.label || !touch; }
+      // подпись цели — 3 с после смены (потом хватает значка: экран чище); новая цель — снова
+      if (pill) { pill.textContent = verb.label || ''; pill.hidden = !verb.label || !touch; clearTimeout(pillT); if (!pill.hidden) pillT = later(() => { if (pill && !pill.hidden) pill.hidden = true; }, 3000); }
     }
     H.act = v => {
       const k = v ? (v.icon || '') + '|' + (v.label || '') : '';

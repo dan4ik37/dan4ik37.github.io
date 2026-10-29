@@ -185,3 +185,7 @@ html:is(.gs-compact,.gs-tall) .gs-fs .mir.e2 .wldOnline{display:none}
 .s3.s3-e2.s3-playing .s3-top>.s3-play::after{content:'';position:absolute;inset:-4px;border-radius:24px}
 .s3.s3-e2 .s3-hud:not(.s3-hurt) .s3-health{display:none}
 .s3.s3-e2.s3-playing .s3-health{top:max(56px,calc(env(safe-area-inset-top) + 48px))}
+/* значки вверху «Мира» (телефон лёжа и стоя во весь экран): картинка 36 px, «попадание» 44 px, между ними 8 px */
+html:is(.gs-compact,.gs-tall) .gs-fs .mir.e2 .wld-topbtns{gap:8px}
+html:is(.gs-compact,.gs-tall) .gs-fs .mir.e2 .wld-topbtns button{width:36px;height:36px;position:relative;border-radius:50%}
+html:is(.gs-compact,.gs-tall) .gs-fs .mir.e2 .wld-topbtns button::after{content:'';position:absolute;inset:-4px;border-radius:50%}

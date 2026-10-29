@@ -6,7 +6,7 @@
 // кнопка), пересчёты стилей и раскладки в покое (за 5 с), ошибки в консоли. Снимок — <D37_TMP или E:\claude-tmp>\t123\after\
 // <игра>-<профиль>-<сцена>.jpg. Выход 1 — нарушен предел (§2.2).
 // Запуск из корня сайта: node scripts/hud2-e2e.cjs [игры через запятую: world,studio,terra,shell] [профили: P,L,PC]
-// Дело игры: module.exports = { url, ready: 'выражение', root, extra?, skip?, caps?: { P, L, PC }, prep?: async T => {}, scenes: { имя: async T => {} } }
+// Дело игры: module.exports = { url, ready: 'выражение', root, extra?, skip?, caps?: { P, L, PC }, sceneCaps?: { сцена: { P, L, PC } }, prep?: async T => {}, scenes: { имя: async T => {} } }
 // T — { ev(expr), send(method, params), sleep(ms), touch(x, y, ms), prof }.
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
@@ -139,7 +139,7 @@ async function thrash(send, ms = 5000){
           const shotR = await B.send('Page.captureScreenshot', { format: 'jpeg', quality: 72 });
           fs.writeFileSync(path.join(OUT, `${gid}-${pk}-${name}.jpg`), Buffer.from(shotR.data, 'base64'));
           const th = name.startsWith('idle') || G.thrash?.includes(name) ? await thrash(B.send) : null;
-          const cap = (G.caps && G.caps[pk]) ?? CAPS[pk], over = m.pct > cap;
+          const cap = G.sceneCaps?.[name]?.[pk] ?? (G.caps && G.caps[pk]) ?? CAPS[pk], over = m.pct > cap;
           if (over) bad++;
           rows.push({ game: gid, prof: pk, scene: name, ...m, thrash: th, cap });
           console.log(`  ${name.padEnd(12)} HUD ${m.pct}% (предел ${cap}${over ? ' ✗' : ''}) · окно ${m.gameShare}% · кнопок ${m.controls}${m.ctx ? ' + ' + m.ctx + ' по обстановке' : ''} [${m.list.join(' ')}] · середина: ${m.center.join(',') || '—'} · палец ${m.hitOk} ок${m.hitBad.length ? ', мимо: ' + m.hitBad.join('; ') : ''}${th ? ` · покой: раскладок ${th.layouts}/с, стилей ${th.styles}/с` : ''}`);

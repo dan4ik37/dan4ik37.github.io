@@ -6,6 +6,7 @@ module.exports = {
   ready: `window.GAME_IMPL?.world?._test?.state()?.zones?.wmv`,
   root: '.wld-wrap', extra: '.wld-top, .wld-top *', skip: '.wld-pop,.wld-panel,.mp',
   caps: { P: 8, L: 6, PC: 4 },   // §9.2: цели «Мира» (меньше общего предела)
+  sceneCaps: { 'idle-war': { P: 12, L: 10, PC: 4 } },   // §9.2 «War zone»
   ls: { d37_mir_pos: '' },
   async prep(T){
     await T.ev(`(() => { localStorage.removeItem('d37_mir_pos'); const A = window.D37Age; if (A) { A.known = () => true; A.canOpen = () => true; A.allows = () => true; A.group = () => 'adult'; } ${W}.fixedTime = 13; return 1; })()`);
