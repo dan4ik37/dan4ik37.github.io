@@ -266,11 +266,14 @@
       tau0 = (ofs[spec.foot] + beta) * T - .22 * sq; dur = 1.75 * T + .3 * sq;
       fOf = t => S3((t - t0) / ta);
       ROf = t => { const x = (t - t0) / ta; return x <= 0 ? 0 : x >= 1 ? ta / 2 + (t - t0 - ta) : ta * I3(x); };
-    } else if (prof === 'stop') {   // full speed at loop phase 0; the root stops between the last two steps so the chosen foot plants last
-      const tdLast = (2 + ofs[spec.foot]) * T, tStop = tdLast - (.75 - beta / 2) * T, ta = .8 * T, t0 = tStop - ta;
-      dur = tdLast + .45 * sq;
-      fOf = t => 1 - S3((t - t0) / ta);
-      ROf = t => { const x = (t - t0) / ta; return x <= 0 ? t : x >= 1 ? t0 + ta / 2 : t0 + ta * (x - I3(x)); };
+    } else if (prof === 'stop') {
+      // entered at the touchdown of the chosen foot (loop phase 0 for L, .5 for R: a controller waits ≤ half a cycle) and slows
+      // down at once; the stances already on the floor at the entry keep their loop places, the other foot plants at the final
+      // place half a cycle later, the chosen foot closes beside it one cycle after the entry (it plants last)
+      const ta = .9 * T;
+      tau0 = ofs[spec.foot] * T; dur = T + .45 * sq;
+      fOf = t => 1 - S3(t / ta);
+      ROf = t => { const x = t / ta; return x <= 0 ? t : x >= 1 ? ta / 2 : ta * (x - I3(x)); };
     }
     return gaitBuild(sk, spec, g, { d, dz, lat, roll, T, beta, v, D, tau0, dur, fOf, ROf, ofs, k, prof });
   }
@@ -290,16 +293,19 @@
     const biasOf = s => bias + (lat ? Math.sign(cOf(s)[0] * d[0]) * e : 0);
     // stance m of foot s: clock times (touchdown, lift), centre in clip time, flat ankle position (world)
     const stance = (s, m) => {
-      const td = (m + ofs[s]) * T - tau0, lf = td + beta * T, tc = (td + lf) / 2, f = fOf(tc), c = cOf(s);
-      const r = v * ROf(tc) + f * biasOf(s);
-      return { td, lf, f, A: [c[0] + d[0] * r, ankleY(s), c[1] + d[1] * r], yaw: yawOf(s) };
+      const td = (m + ofs[s]) * T - tau0, lf = td + beta * T, tc = (td + lf) / 2, c = cOf(s);
+      let f = fOf(tc), fh = f, r = v * ROf(tc) + f * biasOf(s);
+      if (prof === 'stop') {   // on the floor at the entry: the loop place; later: the final place (flat, a light heel strike)
+        if (td <= 1e-9) { f = fh = 1; r = v * tc + biasOf(s); } else { f = 0; fh = fOf(td); r = v * ROf(dur + T); }
+      }
+      return { td, lf, f, fh, A: [c[0] + d[0] * r, ankleY(s), c[1] + d[1] * r], yaw: yawOf(s) };
     };
     // ankle + foot rotation at stance progress u (0..1) — pivots heel → flat → ball
     const sHeel = roll ? g.sHeel : 0, sToe = roll ? g.sToe : 1;
     const contactPose = (s, st, u) => {
       const yq = qY(st.yaw), f = st.f, ho = heelOff[s], bo = ballOff[s];
       let pitch = 0, piv = null;
-      if (u < sHeel) { pitch = -g.heel * f * (1 - u / sHeel); piv = ho; }
+      if (u < sHeel) { pitch = -g.heel * st.fh * (1 - u / sHeel); piv = ho; }
       else if (u > sToe) { pitch = g.toe * f * (u - sToe) / (1 - sToe); piv = bo; }
       const q = qMul(yq, qX(pitch));
       if (!piv) return { a: st.A.slice(), q, tq: q, pitch };

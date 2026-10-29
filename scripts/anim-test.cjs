@@ -18,7 +18,7 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'
 globalThis.window = globalThis;
 load('js/engine/core.js'); load('js/engine/skel.js'); load('js/engine/model.js');
 const E = globalThis.D37E, S = E.skel, M = E.models, U = E.UNIT;
-const GOLDEN = '45a99d29';   // FNV of all first-batch clips on BaseBody_Male (update together with a deliberate generator change)
+const GOLDEN = '62071f8b';   // FNV of all first-batch clips on BaseBody_Male (update together with a deliberate generator change)
 
 // ═══ 1. generator ═══
 const sk = S.reference();
@@ -45,6 +45,16 @@ const walk = A.find(c => c.name === 'loco.walk.fwd');
 ok(walk.loop && walk.speed > 1.4 && walk.speed < 1.6 && walk.dir[1] === 1, 'walk: loop, 1.5 m/s forward', [walk.speed, walk.dir]);
 const turn = A.find(c => c.name === 'loco.turn.l90');
 ok(Math.abs(turn.root[(turn.n - 1) * 3 + 2] - Math.PI / 2) < 1e-3 && turn.heading === 90, 'turn l90: root yaw +90°');
+// stops (review 29.10): stop_l is entered at loop phase 0 (left touchdown), stop_r at .5 — a controller waits ≤ half a cycle;
+// the entry pose is the walk loop at that phase; the root slows down from the first key and stands still within 1 s
+for (const [nm, ph] of [['loco.walk.stop_l', 0], ['loco.walk.stop_r', .5]]) {
+  const c = A.find(x => x.name === nm), tW = ph * walk.dur, fw = Math.round(tW * walk.fps);
+  let dq = 0; for (let b = 1; b < S.NB; b++) { let d = 0; for (let j = 0; j < 4; j++) d += c.q[b * 4 + j] * walk.q[(fw * S.NB + b) * 4 + j]; dq = Math.max(dq, 2 * Math.acos(Math.min(1, Math.abs(d))) * 180 / Math.PI); }
+  const sp = i => Math.hypot(c.root[i * 3] - c.root[(i - 1) * 3], c.root[i * 3 + 1] - c.root[(i - 1) * 3 + 1]) * c.fps;
+  let still = null; for (let i = 1; i < c.n && still === null; i++) if (sp(i) < 1e-4) still = (i - 1) / c.fps;
+  const travel = Math.hypot(c.root[(c.n - 1) * 3], c.root[(c.n - 1) * 3 + 1]);
+  ok(Math.abs(c.sync - ph) < 1e-6 && dq < .5 && sp(2) < .98 * walk.speed && still !== null && still <= 1 && travel < 1, nm + ': entered at loop phase ' + ph + ' (pose = walk there), slows down at once, still ≤ 1 s', { sync: c.sync, dq: +dq.toFixed(2), v2: +sp(2).toFixed(3), still, travel: +travel.toFixed(3) });
+}
 const tall = S.reference({ height: 2.2 }), cT = S.generate(tall, 'loco.walk.fwd');
 ok(cT.slide.max <= .01 && cT.speed > walk.speed && cT.dur > walk.dur, 'a 2.2 m skeleton: plants hold, longer/faster gait (dynamic similarity)', [cT.speed, cT.dur]);
 const fem = S.batch(S.reference({ sex: 'f' }));
