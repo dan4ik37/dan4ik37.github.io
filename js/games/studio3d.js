@@ -25,6 +25,7 @@
 // по js/engine/modes.js и ракурс по js/engine/views.js). Настройки мира — SC.settings (game, camera, age).
 (() => {
   const PI = Math.PI, DEG = PI / 180;
+  const S3_IMP = true;   // T-127: простые фигурки NPC на телефоне и «низкой» (actors.js V2); false — откат одной строкой (все подробные)
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const AI_LINKS = [['DeepSeek', 'https://chat.deepseek.com/'], ['GigaChat', 'https://giga.chat/'], ['Алиса', 'https://alice.yandex.ru/'], ['ChatGPT', 'https://chatgpt.com/']];
   // палитра как в Roblox (BrickColor)
@@ -301,6 +302,9 @@ Players.PlayerAdded.Connect(player => {
     ed.B = E.batcher?.(SC);   // склейка деталей в пачки (batch.js), лампы — в постоянный набор
     ed.FX = SC.fx = E.fx(R);
     ed.NPC = SC.npc = E.npcs(R, ph);
+    // T-127 (AI LOD P1): телефон и «низкая» рисуют подробными 16 ближайших NPC (зомби «Выживания» — до 64), остальных — простыми
+    // фигурками (actors.js V2); живут и ходят все одинаково. ПК — все подробные
+    if (S3_IMP && (R.q === 'low' || E.isMobile?.())) ed.NPC.A.impostors?.({ cap: 16, far: 60, focus: () => ed.playing?.P?.ch || null });   // в игре — ближние к своему игроку (вид сверху)
     // вода ландшафта: в ней плавают (player.js)
     ph.waterLevel = (x, z) => TR.enabled && TR.water.on && Math.abs(x) < TR.size / 2 && Math.abs(z) < TR.size / 2 ? TR.water.level : -Infinity;
     ph.waveAt = TR.waveAt || null;   // волны воды ландшафта (waves.js): пловцы качаются на той же волне, что видна

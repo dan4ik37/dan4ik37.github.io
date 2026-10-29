@@ -20,7 +20,47 @@
   // клетка сетки — целое число (без строк gx + ',' + gz): x — старшие разряды, z — младшие (|g| ≤ 16383, ключ — малое целое)
   const cellOf = v => { const g = Math.floor(v * INV); return g < -LIM ? -LIM : g > LIM ? LIM : g; };
   const keyOf = (gx, gz) => gx * 32768 + gz;
+  // T-127: не Math.hypot — встроенная функция возвращает число в куче (мусор на каждом шаге каждого тела) и её точность своя у
+  // каждого движка JS; sqrt округляет одинаково везде (телефон и ПК считают одно и то же)
+  const hyp = (x, y) => Math.sqrt(x * x + y * y);
   const HIT = { d: 0, nx: 0, nz: 0 };              // общий ответ circleHit
+  // круг для circleHitQ / insideQ — в полях, не в аргументах (T-127 ревью: вызов, который V8 не встроил, кладёт дробные аргументы в кучу —
+  // у бродячих среди домов ~19 Б на шаг каждого тела в pushOut)
+  const CQ = { x: .5, z: .5, r: .5 };
+  function circleHitQ(c){
+    const x = CQ.x, z = CQ.z, r = CQ.r;
+    if (c.type === 'cyl') {
+      const dx = x - c.x, dz = z - c.z, d = hyp(dx, dz), rr = r + c.r;
+      if (d >= rr) return null;
+      if (d < 1e-6) { HIT.d = rr; HIT.nx = 1; HIT.nz = 0; return HIT; }
+      HIT.d = rr - d; HIT.nx = dx / d; HIT.nz = dz / d;
+      return HIT;
+    }
+    // в систему коробки (поворот на −yaw): local = R(−yaw) · (p − c)
+    const px = x - c.x, pz = z - c.z;
+    const lx = c.cos * px - c.sin * pz, lz = c.sin * px + c.cos * pz;
+    const cx = Math.max(-c.hx, Math.min(c.hx, lx)), cz = Math.max(-c.hz, Math.min(c.hz, lz));
+    const dx = lx - cx, dz = lz - cz, d = hyp(dx, dz);
+    let nlx, nlz, depth;
+    if (d > 1e-6) {
+      if (d >= r) return null;
+      nlx = dx / d; nlz = dz / d; depth = r - d;
+    } else {
+      // центр внутри коробки — выталкиваем через ближнюю грань
+      const ox = c.hx - Math.abs(lx), oz = c.hz - Math.abs(lz);
+      if (ox < oz) { nlx = lx < 0 ? -1 : 1; nlz = 0; depth = ox + r; }
+      else { nlx = 0; nlz = lz < 0 ? -1 : 1; depth = oz + r; }
+    }
+    // обратно в мир: R(yaw)
+    HIT.d = depth; HIT.nx = c.cos * nlx + c.sin * nlz; HIT.nz = -c.sin * nlx + c.cos * nlz;
+    return HIT;
+  }
+  function insideQ(c){
+    const x = CQ.x, z = CQ.z;
+    if (c.type === 'cyl') return hyp(x - c.x, z - c.z) <= c.r;
+    const px = x - c.x, pz = z - c.z, lx = c.cos * px - c.sin * pz, lz = c.sin * px + c.cos * pz;
+    return Math.abs(lx) <= c.hx && Math.abs(lz) <= c.hz;
+  }
   const RH = { t: 0, nx: 0, ny: 0, nz: 0 };         // общий ответ лучей против тел
 
   class Phys {
@@ -35,8 +75,10 @@
       this.onPush = null;                   // (ch, тело, nx, nz, скорость в тело) — для rigid.js
       this.onChar = null;                   // (ch) — персонаж сделал шаг
       this._lists = [[], [], [], [], [], [], []];   // свои списки для запросов (без new [] на каждый шаг)
+      this._busy = new Uint8Array(7); this._qn = 0;
       this._pool = []; this._pi = 0; this._reusing = false; this._emitting = 0;
       this._scol = null;
+      this._cx = this._cz = this._cr = this._ymax = this._sy = this._b0 = this._b1 = this._b2 = this._b3 = .5; this._qskip = null;   // дробные — сразу «Double» у V8 (_supportQ, _queryAt)
     }
     // ── Добавить/убрать тело ──
     addBox(o){ return this._make('box', o); }
@@ -132,7 +174,12 @@
       return h;
     }
     // Все тела, чей прямоугольник в плане задевает область (без повторов)
-    query(minx, minz, maxx, maxz, out = []){
+    query(minx, minz, maxx, maxz, out = []){ this._b0 = minx; this._b1 = minz; this._b2 = maxx; this._b3 = maxz; this._queryAt(out, out.length); return out; }
+    // то же, область — в полях this._b0…_b3 (minx, minz, maxx, maxz). T-127 ревью: вызов, который V8 не встроил, кладёт в кучу каждое
+    // дробное число аргумента (fall → _support → _q → query: 64 Б на шаг у каждого тела); дробные поля объекта пишутся на месте
+    // Пишет в out с индекса n (n = out.length — дописать), возвращает, докуда записано
+    _queryAt(out, n){
+      const minx = this._b0, minz = this._b1, maxx = this._b2, maxz = this._b3;
       const mark = ++this.qmark, gx1 = cellOf(maxx), gz0 = cellOf(minz), gz1 = cellOf(maxz);
       for (let gx = cellOf(minx); gx <= gx1; gx++)
         for (let gz = gz0; gz <= gz1; gz++) {
@@ -141,48 +188,25 @@
           for (let i = 0; i < list.length; i++) {
             const c = list[i];
             if (c.mark === mark || c.maxx < minx || c.minx > maxx || c.maxz < minz || c.minz > maxz) continue;
-            c.mark = mark; out.push(c);
+            c.mark = mark; out[n++] = c;
           }
         }
-      return out;
+      return n;
     }
-    // Свой список для запроса (если он занят — вложенный вызов — новый)
-    _q(slot, minx, minz, maxx, maxz){
-      const l = this._lists[slot];
-      return this.query(minx, minz, maxx, maxz, l.length ? [] : l);
-    }
+    // Свой список для запроса — с начала, сколько — this._qn; занятый (вложенный вызов) — новый; отпустить — _qr(slot, list).
+    // Не list.length = 0: V8 тогда отдаёт память массива, и следующая находка выделяла новую (T-127 ревью: ~34 КБ на шаг у 260
+    // бродячих среди домов). Хвост за _qn — старые находки (те же тела этого мира), их не читают
+    _q(slot, minx, minz, maxx, maxz){ this._b0 = minx; this._b1 = minz; this._b2 = maxx; this._b3 = maxz; return this._qB(slot); }
+    // круг this._cx, _cz, _cr (без чисел в аргументах — см. _queryAt)
+    _qc(slot){ const x = this._cx, z = this._cz, r = this._cr; this._b0 = x - r; this._b1 = z - r; this._b2 = x + r; this._b3 = z + r; return this._qB(slot); }
+    _qB(slot){ let l = this._lists[slot]; if (this._busy[slot]) l = []; else this._busy[slot] = 1; this._qn = this._queryAt(l, 0); return l; }
+    _qr(slot, l){ if (l === this._lists[slot]) this._busy[slot] = 0; }
 
     // ── Круг (x, z, r) против следа тела в плане: { d: глубина, nx, nz: куда выталкивать } или null (объект общий!) ──
-    static circleHit(c, x, z, r){
-      if (c.type === 'cyl') {
-        const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz), rr = r + c.r;
-        if (d >= rr) return null;
-        if (d < 1e-6) { HIT.d = rr; HIT.nx = 1; HIT.nz = 0; return HIT; }
-        HIT.d = rr - d; HIT.nx = dx / d; HIT.nz = dz / d;
-        return HIT;
-      }
-      // в систему коробки (поворот на −yaw): local = R(−yaw) · (p − c)
-      const px = x - c.x, pz = z - c.z;
-      const lx = c.cos * px - c.sin * pz, lz = c.sin * px + c.cos * pz;
-      const cx = Math.max(-c.hx, Math.min(c.hx, lx)), cz = Math.max(-c.hz, Math.min(c.hz, lz));
-      const dx = lx - cx, dz = lz - cz, d = Math.hypot(dx, dz);
-      let nlx, nlz, depth;
-      if (d > 1e-6) {
-        if (d >= r) return null;
-        nlx = dx / d; nlz = dz / d; depth = r - d;
-      } else {
-        // центр внутри коробки — выталкиваем через ближнюю грань
-        const ox = c.hx - Math.abs(lx), oz = c.hz - Math.abs(lz);
-        if (ox < oz) { nlx = lx < 0 ? -1 : 1; nlz = 0; depth = ox + r; }
-        else { nlx = 0; nlz = lz < 0 ? -1 : 1; depth = oz + r; }
-      }
-      // обратно в мир: R(yaw)
-      HIT.d = depth; HIT.nx = c.cos * nlx + c.sin * nlz; HIT.nz = -c.sin * nlx + c.cos * nlz;
-      return HIT;
-    }
+    static circleHit(c, x, z, r){ CQ.x = x; CQ.z = z; CQ.r = r; return circleHitQ(c); }
     // Точка (x, z) внутри следа тела, с запасом pad (pad > 0 — шире)
     static inside(c, x, z, pad = 0){
-      if (c.type === 'cyl') return Math.hypot(x - c.x, z - c.z) <= c.r + pad;
+      if (c.type === 'cyl') return hyp(x - c.x, z - c.z) <= c.r + pad;
       const px = x - c.x, pz = z - c.z, lx = c.cos * px - c.sin * pz, lz = c.sin * px + c.cos * pz;
       return Math.abs(lx) <= c.hx + pad && Math.abs(lz) <= c.hz + pad;
     }
@@ -195,19 +219,24 @@
     }
     // Высота опоры под кругом (x, z, r): самая высокая крыша не выше yMax (и земля)
     supportAt(x, z, r, yMax, skip){ const y = this._support(x, z, r, yMax, skip); return { y, col: this._scol }; }
-    _support(x, z, r, yMax, skip){
+    _support(x, z, r, yMax, skip){ this._cx = x; this._cz = z; this._cr = r; this._ymax = yMax; this._qskip = skip || null; this._supportQ(); return this._sy; }
+    // то же без чисел в аргументах: круг — this._cx / _cz / _cr, верх — this._ymax, ответ — this._sy (и this._scol). Вызов, который
+    // V8 не встроил, кладёт в кучу каждое дробное число аргумента — fall() звал _support(ch.x, …) и терял 64 Б на шаг у каждого
+    // тела (T-127 ревью); поля объекта с дробными числами пишутся на месте
+    _supportQ(){
+      const x = this._cx, z = this._cz, r = this._cr, yMax = this._ymax, skip = this._qskip;
       let best = this.groundAt(x, z, r), col = null;
-      const list = this._q(0, x - r, z - r, x + r, z + r);
-      for (let i = 0; i < list.length; i++) {
+      const list = this._qc(0), ln = this._qn;
+      for (let i = 0; i < ln; i++) {
         const c = list[i];
         if (c.trigger || !c.solid || c === skip || c.kick) continue;   // мелочь (c.kick) — не опора, её пинают
         const top = c.type === 'wedge' ? Phys.topAt(c, x, z) : c.top;
         if (top > yMax + 1e-4 || top <= best) continue;
-        if (Phys.circleHit(c, x, z, r * .7) || Phys.inside(c, x, z)) { best = top; col = c; }
+        CQ.x = x; CQ.z = z; CQ.r = r * .7;
+        if (circleHitQ(c) || insideQ(c)) { best = top; col = c; }
       }
-      list.length = 0;
-      this._scol = col;
-      return best;
+      this._qr(0, list);
+      this._scol = col; this._sy = best;
     }
     // Один шаг движения персонажа: wish — желаемое направление (x, z, длина 0…1), speed, jump
     move(ch, dt, wish = { x: 0, z: 0 }, speed = 0, jump = false){
@@ -224,7 +253,7 @@
     }
     // По горизонтали на (mx, mz) — короткими шажками, чтобы не проскочить тонкую стену; упёрся — скользит вдоль
     slide(ch, mx, mz){
-      const n = Math.max(1, Math.ceil(Math.hypot(mx, mz) / (ch.r * .5))), seg = Math.hypot(mx, mz) / n;
+      const n = Math.max(1, Math.ceil(hyp(mx, mz) / (ch.r * .5))), seg = hyp(mx, mz) / n;
       for (let i = 0; i < n; i++) {
         const ox = ch.x, oz = ch.z;
         ch.x += mx / n; ch.z += mz / n;
@@ -241,7 +270,8 @@
       ch.landed = 0; ch.impact = 0;
       if (this.onChar) this.onChar(ch);
       if (ch.grounded) {
-        const sy = this._support(ch.x, ch.z, ch.r, ch.y + ch.step);
+        this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; this._ymax = ch.y + ch.step; this._qskip = null; this._supportQ();
+        const sy = this._sy;
         if (sy >= ch.y - ch.step - 1e-4) { ch.y = sy; ch.vy = 0; ch.onCol = this._scol; }   // ступенька вверх/вниз — идём по ней
         else { ch.grounded = false; ch.vy = Math.min(ch.vy, 0); ch.airT = 0; }          // шагнули с края — падаем
       }
@@ -250,15 +280,16 @@
         ch.vy -= ch.g * dt;
         let ny = ch.y + ch.vy * dt;
         if (ch.vy > 0) {   // потолок: тело над головой
-          const list = this._q(4, ch.x - ch.r, ch.z - ch.r, ch.x + ch.r, ch.z + ch.r);
-          for (let i = 0; i < list.length; i++) {
+          this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; const list = this._qc(4), ln = this._qn;
+          for (let i = 0; i < ln; i++) {
             const c = list[i];
             if (c.trigger || !c.solid) continue;
             if (c.bottom >= ch.y + ch.h - 1e-3 && ny + ch.h > c.bottom && Phys.circleHit(c, ch.x, ch.z, ch.r * .8)) { ny = c.bottom - ch.h; ch.vy = 0; }
           }
-          list.length = 0;
+          this._qr(4, list);
         }
-        const sy = this._support(ch.x, ch.z, ch.r, Math.max(ch.y, ny) + (ch.vy <= 0 ? .05 : 0));
+        this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; this._ymax = Math.max(ch.y, ny) + (ch.vy <= 0 ? .05 : 0); this._qskip = null; this._supportQ();
+        const sy = this._sy;
         if (ch.vy <= 0 && ny <= sy) { ch.impact = -ch.vy; ch.landed = Math.min(1, -ch.vy / 25); ny = sy; ch.vy = 0; ch.grounded = true; ch.onCol = this._scol; }
         ch.y = ny;
         if (this.ground != null && ch.y < this.groundAt(ch.x, ch.z) - 60) { ch.y = this.groundAt(ch.x, ch.z, ch.r); ch.vy = 0; ch.grounded = true; }   // упал за край мира — обратно
@@ -266,22 +297,22 @@
     }
     // Есть ли твёрдое тело в вертикальном цилиндре (x, z, r) от y0 до y1 (влезет ли тело: присесть, встать, залезть)
     blocked(x, z, y0, y1, r, skip){
-      const list = this._q(2, x - r, z - r, x + r, z + r);
+      this._cx = x; this._cz = z; this._cr = r; const list = this._qc(2), ln = this._qn;
       let res = null;
-      for (let i = 0; i < list.length; i++) {
+      for (let i = 0; i < ln; i++) {
         const c = list[i];
         if (c.trigger || !c.solid || c === skip || c.top <= y0 + 1e-3 || c.bottom >= y1 - 1e-3) continue;
         if (Phys.circleHit(c, x, z, r)) { res = c; break; }
       }
-      list.length = 0;
+      this._qr(2, list);
       return res;
     }
     // Вытолкнуть из стен (2 прохода) и погасить скорость в стену — скольжение вдоль
     pushOut(ch){
       for (let it = 0; it < 3; it++) {
         let moved = false;
-        const list = this._q(1, ch.x - ch.r, ch.z - ch.r, ch.x + ch.r, ch.z + ch.r);
-        for (let i = 0; i < list.length; i++) {
+        this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; const list = this._qc(1), ln = this._qn;
+        for (let i = 0; i < ln; i++) {
           const c = list[i];
           if (c.trigger || !c.solid) continue;
           if (c.bottom >= ch.y + ch.h - .02) continue;   // над головой
@@ -292,7 +323,8 @@
             if (c.kick && this.onPush && it === 0) { const k = Phys.circleHit(c, ch.x, ch.z, ch.r); if (k) { const kx = k.nx, kz = k.nz, into = Math.max(-(ch.vx * kx + ch.vz * kz), -(ch.tvx * kx + ch.tvz * kz)); if (into > 0) this.onPush(ch, c, kx, kz, into); } }
             continue;
           }
-          const hit = Phys.circleHit(c, ch.x, ch.z, ch.r);
+          CQ.x = ch.x; CQ.z = ch.z; CQ.r = ch.r;
+          const hit = circleHitQ(c);
           if (!hit) continue;
           const d = hit.d, nx = hit.nx, nz = hit.nz;
           // упёрся в движущуюся деталь — толкнуть её (rigid.js); скорость — та, с которой идёт в неё (или хочет идти)
@@ -302,24 +334,26 @@
           if (vn < 0) { ch.vx -= vn * nx; ch.vz -= vn * nz; }
           moved = true;
         }
-        list.length = 0;
+        this._qr(1, list);
         if (!moved) break;
       }
     }
     // Зоны-триггеры: ch.inside — где сейчас; события enter/exit — в ch.events (их забирает игра)
     triggers(ch){
       const now = ch._spare || new Set();
-      now.clear();
-      const list = this._q(3, ch.x - ch.r, ch.z - ch.r, ch.x + ch.r, ch.z + ch.r);
-      for (let i = 0; i < list.length; i++) {
+      if (now.size) now.clear();   // Set.clear() выделяет новую таблицу даже у пустого (≈ 120 Б на шаг у каждого тела, T-127 ревью)
+      this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; const list = this._qc(3), ln = this._qn;
+      for (let i = 0; i < ln; i++) {
         const c = list[i];
         if (!c.trigger || c.top < ch.y || c.bottom > ch.y + ch.h) continue;
         if (Phys.inside(c, ch.x, ch.z)) now.add(c);
       }
-      list.length = 0;
-      const ev = ch.events || (ch.events = []);
-      for (const c of now) if (!ch.inside.has(c)) ev.push({ type: 'enter', col: c });
-      for (const c of ch.inside) if (!now.has(c)) ev.push({ type: 'exit', col: c });
+      this._qr(3, list);
+      if (now.size || ch.inside.size) {   // обход Set — только если есть зоны (T-127: без мусора на каждом шаге)
+        const ev = ch.events || (ch.events = []);
+        for (const c of now) if (!ch.inside.has(c)) ev.push({ type: 'enter', col: c });
+        for (const c of ch.inside) if (!now.has(c)) ev.push({ type: 'exit', col: c });
+      }
       ch._spare = ch.inside; ch.inside = now;
     }
 
@@ -330,14 +364,14 @@
       else if (this.ground != null && dy < -1e-6) { const t = (this.ground - oy) / dy; if (t >= 0 && t < bt) { bt = t; bnx = 0; bny = 1; bnz = 0; } }
       // по ячейкам сетки вдоль луча (грубо: прямоугольник проекции отрезка)
       const ex = ox + dx * Math.min(maxT, bt), ez = oz + dz * Math.min(maxT, bt);
-      const list = this._q(5, Math.min(ox, ex), Math.min(oz, ez), Math.max(ox, ex), Math.max(oz, ez));
-      for (let i = 0; i < list.length; i++) {
+      const list = this._q(5, Math.min(ox, ex), Math.min(oz, ez), Math.max(ox, ex), Math.max(oz, ez)), ln = this._qn;
+      for (let i = 0; i < ln; i++) {
         const c = list[i];
         if (c.trigger || (filter && !filter(c))) continue;
         const hit = c.type === 'cyl' ? rayCyl(c, ox, oy, oz, dx, dy, dz) : c.type === 'wedge' ? rayWedge(c, ox, oy, oz, dx, dy, dz) : rayBox(c, ox, oy, oz, dx, dy, dz);
         if (hit && RH.t >= 0 && RH.t < bt) { bt = RH.t; bc = c; bnx = RH.nx; bny = RH.ny; bnz = RH.nz; }
       }
-      list.length = 0;
+      this._qr(5, list);
       if (bt >= maxT) return null;
       return { t: bt, x: ox + dx * bt, y: oy + dy * bt, z: oz + dz * bt, nx: bnx, ny: bny, nz: bnz, col: bc };
     }
@@ -348,13 +382,13 @@
       const blocked = new Uint8Array(w * h), y = o.y ?? this.ground ?? 0, step = o.step ?? .62, ht = o.h || 2.1;
       for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
         const x = minx + (i + .5) * cell, z = minz + (j + .5) * cell;
-        const list = this._q(6, x - r, z - r, x + r, z + r);
-        for (let k = 0; k < list.length; k++) {
+        const list = this._q(6, x - r, z - r, x + r, z + r), ln = this._qn;
+        for (let k = 0; k < ln; k++) {
           const c = list[k];
           if (c.trigger || !c.solid || c.top <= y + step || c.bottom >= y + ht) continue;
           if (Phys.circleHit(c, x, z, r * .92)) { blocked[j * w + i] = 1; break; }
         }
-        list.length = 0;
+        this._qr(6, list);
       }
       return { cell, minx, minz, w, h, blocked };
     }
@@ -433,7 +467,7 @@
     if (Math.abs(fd) < 1e-9) { if (fo > 0) return false; }
     else {
       const tp = -fo / fd;
-      if (fd < 0) { if (tp > W0) { W0 = tp; const l = Math.hypot(1, k); n0 = 0; n1 = 1 / l; n2 = k / l; has = true; } }
+      if (fd < 0) { if (tp > W0) { W0 = tp; const l = hyp(1, k); n0 = 0; n1 = 1 / l; n2 = k / l; has = true; } }
       else if (tp < W1) W1 = tp;
     }
     if (W0 > W1 || W0 < 0 || !has) return false;
@@ -452,7 +486,7 @@
         let lo = a, hi = b;
         for (let k = 0; k < 10; k++) { const m = (lo + hi) / 2; if (tf(T, ox, oy, oz, dx, dy, dz, m) < 0) hi = m; else lo = m; }
         const t = hi, x = ox + dx * t, z = oz + dz * t, e = .25;
-        const gx = T.sample(x + e, z) - T.sample(x - e, z), gz = T.sample(x, z + e) - T.sample(x, z - e), l = Math.hypot(gx, 2 * e, gz);
+        const gx = T.sample(x + e, z) - T.sample(x - e, z), gz = T.sample(x, z + e) - T.sample(x, z - e), l = Math.sqrt(gx * gx + 4 * e * e + gz * gz);
         RH.t = t; RH.nx = -gx / l; RH.ny = 2 * e / l; RH.nz = -gz / l;
         return true;
       }
@@ -499,7 +533,7 @@
     return null;
   }
   function lineFree(g, x1, z1, x2, z2){
-    const d = Math.hypot(x2 - x1, z2 - z1), n = Math.ceil(d / (g.cell * .5));
+    const d = hyp(x2 - x1, z2 - z1), n = Math.ceil(d / (g.cell * .5));
     for (let k = 1; k < n; k++) {
       const [i, j] = navCell(g, x1 + (x2 - x1) * k / n, z1 + (z2 - z1) * k / n);
       if (!navFree(g, i, j)) return false;

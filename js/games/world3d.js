@@ -2330,5 +2330,7 @@
   const phoneSnap = (ch, t) => { if (ch?.phS) { ch.phS.snapT = t; ch.phS.manual = true; } };
   const phoneCode = s => phIdx(s) + 1;
   const phoneName = c => PH_MODES[phIdx(c)] || '';
-  window.World3D = { supported, load, create, preview, resolve, kit, frameOf, PART_DEF, EMOTES, HEADS, CHAR_VERSION, PH_MODES, phonePose, phoneSnap, phoneCode, phoneName, HOLDS, MOTIONS };
+  // цвета простой фигурки (actors.js, V2): верх, низ, кожа — те же, что у человечка с этим видом
+  const impColors = (look, key) => { const R = resolve(look, key); return [colorOf(R, 'color'), colorOf(R, 'botc'), partCol(R, 'head')]; };
+  window.World3D = { supported, load, create, preview, resolve, impColors, kit, frameOf, PART_DEF, EMOTES, HEADS, CHAR_VERSION, PH_MODES, phonePose, phoneSnap, phoneCode, phoneName, HOLDS, MOTIONS };
 })();

@@ -218,6 +218,26 @@
     return (D._res = out);
   }
   // где житель в час h: { phase, x, z } (phase 'home' — дома, не видно)
+  // Пределы жителей (T-127, D4): weak — телефон или «низкая». Живут (мозги и тело) у всех одинаково: 16, из них 7 по расписанию,
+  // 2 новых за проверку (4 раза в секунду); устройству — только сколько подробных (7–18 вызовов отрисовки каждый), остальные —
+  // простые фигурки (actors.js V2). Откат одной строкой: MIR_LOD = false — как было (8 / 3 / 1 на телефоне, без фигурок).
+  const MIR_LOD = true;
+  const npcCaps = weak => MIR_LOD ? { NPC_CAP: 16, RES_CAP: 7, NPC_ADD: 2, RIG_CAP: weak ? 8 : 16, RIG_FAR: 56, imp: true }
+    : { NPC_CAP: weak ? 8 : 16, RES_CAP: weak ? 3 : 7, NPC_ADD: weak ? 1 : 2, RIG_CAP: 99, RIG_FAR: 1e9, imp: false };
+  // Кого из жителей держать живыми (T-127): ближние по расстоянию, не больше cap, из них по расписанию — не больше resCap.
+  // rows[0…n) — { d, o, want, res } → work (по порядку расстояния) с r.on. Без устройства: телефон и ПК выбирают одних и тех же.
+  const byD = (a, b) => a.d - b.d;
+  function npcPick(rows, n, cap, resCap, work){
+    work.length = 0;
+    for (let i = 0; i < n; i++) work.push(rows[i]);
+    work.sort(byD);
+    let on = 0, nr = 0;
+    for (let i = 0; i < work.length; i++) {
+      const r = work[i]; r.on = r.want && on < cap && (!r.res || nr < resCap);
+      if (r.on) { on++; if (r.res) nr++; }
+    }
+    return work;
+  }
   function residentAt(R, h){
     const t = ((h - R.shift) % 24 + 24) % 24, j = R.j;
     if (t < 7 || t >= 22.5) return { phase: 'home', x: R.hs[0], z: R.hs[1] };
@@ -1555,14 +1575,16 @@
       try { zs.mod?.shown?.(on); } catch (e) { console.error(e); }
     }
     // ── Жители зон — по расстоянию (как PopulationDirector в Backrooms: рядом — появляются, далеко — уходят), не больше NPC_CAP ──
-    const NPC_NEAR = 62, NPC_FAR = 82, NPC_CAP = R.q === 'low' || E?.isMobile?.() ? 8 : 16;
-    const RES_CAP = R.q === 'low' || E?.isMobile?.() ? 3 : 7;   // из них — жителей по расписанию (человечек — 7–18 вызовов отрисовки)
-    const NPC_ADD = R.q === 'low' || E?.isMobile?.() ? 1 : 2;   // новых за проверку (4 раза в секунду): сборка человечка — несколько мс
+    // T-127 (D4): пределы — npcCaps (одинаково на телефоне и ПК, кроме числа подробных человечков)
+    const NPC_NEAR = 62, NPC_FAR = 82, { NPC_CAP, RES_CAP, NPC_ADD, RIG_CAP, RIG_FAR } = npcCaps(R.q === 'low' || !!E?.isMobile?.());
     const hourNow = () => S.fixedTime ?? (E?.dayClock ? E.dayClock(Date.now(), 40, .2) : 14);
     rt.hourNow = hourNow;
+    const npcRows = [], npcWork = [];   // переиспользуемые строки (без мусора 4 раза в секунду)
     function npcTick(){
       if (!S.NPC) return;
-      const p = S.P.ch, L = [], h = hourNow();
+      if (MIR_LOD && S.NPC.A?.impostors && S.NPC.A._mirImp !== true) { S.NPC.A.impostors({ cap: RIG_CAP, far: RIG_FAR }); S.NPC.A._mirImp = true; }
+      const p = S.P.ch, h = hourNow();
+      let n = 0;
       for (const zs of rt.zones.values()) for (const o of zs.K?.npcs || []) {
         let home = false;
         if (o.mz?.sched) {   // житель: место по часам; рядом с игроком не прыгает — переходит, когда игрок далеко
@@ -1574,15 +1596,16 @@
           }
         }
         const d = Math.hypot(o.pos[0] - p.x, o.pos[2] - p.z) + Math.abs(o.pos[1] - p.y) * 2;   // другой этаж — «дальше»
-        L.push([d, o, !home && !!zs.npcOn && (o._on ? d < NPC_FAR : d < NPC_NEAR)]);
+        const r = npcRows[n] || (npcRows[n] = { d: 0, o: null, want: false, on: false, res: false });
+        r.d = d; r.o = o; r.want = !home && !!zs.npcOn && (o._on ? d < NPC_FAR : d < NPC_NEAR); r.res = !!o.mz?.sched; n++;
       }
-      L.sort((a, b) => a[0] - b[0]);
-      let n = 0, nr = 0, add = NPC_ADD;
-      for (const [, o, want] of L) {
-        const res = !!o.mz?.sched, on = want && n < NPC_CAP && (!res || nr < RES_CAP);
-        if (on) { n++; if (res) nr++; }
-        if (on && !o._on) { if (add-- > 0) { const a0 = rt.prof ? now() : 0; S.NPC.add(o); o._on = true; if (rt.prof) rt.prof.push(['npc', o.id, '', +(now() - a0).toFixed(1), rt.frameNo]); } }
-        else if (!on && o._on) { S.NPC.remove(o); o._on = false; }
+      npcPick(npcRows, n, NPC_CAP, RES_CAP, npcWork);
+      let add = NPC_ADD;
+      for (let i = 0; i < npcWork.length; i++) {
+        const r = npcWork[i], o = r.o;
+        if (r.on && !o._on) { if (add-- > 0) { const a0 = rt.prof ? now() : 0; S.NPC.add(o); o._on = true; if (rt.prof) rt.prof.push(['npc', o.id, '', +(now() - a0).toFixed(1), rt.frameNo]); } }
+        else if (!r.on && o._on) { S.NPC.remove(o); o._on = false; }
+        r.o = null;
       }
     }
     rt.zoneState = id => rt.zones.get(id);
@@ -2343,7 +2366,7 @@
   root.MirZones = {
     ADULT_AGE, WAR_AGE, ZONES, ZLIST, RESERVE, SEA, BUNKER, CANAL, EXPAND, AREAS, ROADS, PADS, PAD_R, PLACES0, FAMILY, PAY, DEFS, ROLES, ACTS,
     BTYPES, FLOOR_H, TILE, FACADES, PIECES, roofColor, lotsOf, buildings, building, modular, pieceGroup, facadeMat, accessRules: MZ_ACCESS,
-    def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX, residents, residentAt, BIG_GATES,
+    def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX, residents, residentAt, npcPick, npcCaps, BIG_GATES,
     MAP, mapBounds, mapLayout, worldMap, clusterRect, addHole, HOLES, BRK, brkHide, TOUGH, CELLAR, cellarOn: () => CELLAR.on,
     payState, payAdd, places, drawMap, fullView, merge, atlas, kit, build, groundHoles, start, district, esc,
     LOAD_D, SHOW_D, HIDE_D,
