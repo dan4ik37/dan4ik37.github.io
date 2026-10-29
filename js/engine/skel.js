@@ -318,8 +318,10 @@
       a[1] += (g.clear * k * Math.sin(Math.PI * w) + g.kick * k * Math.sin(Math.PI * Math.min(1, w / .65)) * (1 - .5 * w)) * amt;
       const pitch = A0.pitch + (A1.pitch - A0.pitch) * e - 8 * Math.sin(Math.PI * w) * amt * roll;
       const yaw = st.yaw + (nx.yaw - st.yaw) * e, q = qMul(qY(yaw), qX(pitch));
-      // toes: bend up after the push-off, flat again before the touchdown
-      return { a, q, tq: qMul(q, qX(-14 * Math.sin(Math.PI * Math.min(1, w * 1.4)) * amt * roll)), pitch };
+      // toes: at the lift they are still flat on the floor (bent up by the push-off pitch relative to the foot); they straighten
+      // smoothly over the first half of the swing (no snap into the floor), bend up a little more, and are straight before the touchdown
+      const rel = -A0.pitch * (1 - S3(w / .5)) - 14 * Math.sin(Math.PI * Math.min(1, w * 1.4)) * amt * roll;
+      return { a, q, tq: qMul(q, qX(rel)), pitch };
     };
     // contact list (seconds, in [0, dur]); flat / toe sub-phases for the slide metric
     for (let s = 0; s < 2; s++) {

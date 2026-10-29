@@ -18,7 +18,7 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'
 globalThis.window = globalThis;
 load('js/engine/core.js'); load('js/engine/skel.js'); load('js/engine/model.js');
 const E = globalThis.D37E, S = E.skel, M = E.models, U = E.UNIT;
-const GOLDEN = 'd28d1c48';   // FNV of all first-batch clips on BaseBody_Male (update together with a deliberate generator change)
+const GOLDEN = '45a99d29';   // FNV of all first-batch clips on BaseBody_Male (update together with a deliberate generator change)
 
 // ═══ 1. generator ═══
 const sk = S.reference();
@@ -49,7 +49,21 @@ const tall = S.reference({ height: 2.2 }), cT = S.generate(tall, 'loco.walk.fwd'
 ok(cT.slide.max <= .01 && cT.speed > walk.speed && cT.dur > walk.dur, 'a 2.2 m skeleton: plants hold, longer/faster gait (dynamic similarity)', [cT.speed, cT.dur]);
 const fem = S.batch(S.reference({ sex: 'f' }));
 ok(fem.every(c => c.slide.max <= .01 && c.reach === 0), 'female proportions: plants hold, no overstretch');
-console.log(`generator: ${A.length} clips in ${genMs.toFixed(0)} ms; slide max ${worst.toFixed(5)} m/s, wobble ≤ ${wob} mm, hash ${gh}`);
+// toes (review 29.10): no snap at the lift (key-to-key turn of the toe joint) and the toe sole never goes into the floor
+// (sole points under the toe joint and 3.5 / 7 cm ahead, sole thickness = rest toe joint height; keys and half-keys)
+const toeCheck = (skx, L) => {
+  const TO = [S.IDX.LeftToes, S.IDX.RightToes]; let jump = 0, sole = 9;
+  for (const c of L) for (let i = 0; i < c.n; i++) {
+    for (const h of i < c.n - 1 ? [0, .5] : [0]) { const w = S.sample(skx, c, (i + h) / c.fps);
+      for (const b of TO) for (const z of [0, .035, .07]) sole = Math.min(sole, w.P[b][1] + S.q.rot(w.G[b], [0, -skx.rest[b * 3 + 1], z])[1]); }
+    if (i) for (const b of TO) { const k0 = ((i - 1) * S.NB + b) * 4, k1 = (i * S.NB + b) * 4; let d = 0; for (let j = 0; j < 4; j++) d += c.q[k0 + j] * c.q[k1 + j]; jump = Math.max(jump, 2 * Math.acos(Math.min(1, Math.abs(d))) * 180 / Math.PI); }
+  }
+  return { jump: +jump.toFixed(1), sole: +(sole * 1000).toFixed(1) };
+};
+const toeM = toeCheck(sk, A), toeF = toeCheck(S.reference({ sex: 'f' }), fem);
+ok(toeM.jump <= 15 && toeF.jump <= 15, 'toes: no snap after the toe-off (toe joint ≤ 15° per key)', [toeM, toeF]);
+ok(toeM.sole >= -3 && toeF.sole >= -3, 'toes: the toe sole stays on/above the floor (≥ −3 mm, keys and half-keys)', [toeM, toeF]);
+console.log(`generator: ${A.length} clips in ${genMs.toFixed(0)} ms; slide max ${worst.toFixed(5)} m/s, wobble ≤ ${wob} mm, hash ${gh}; toes: ≤ ${toeM.jump}°/key, sole min ${toeM.sole} mm`);
 
 // ═══ 2. clips.csv ═══
 const csv = S.csv(A), rows = csv.trim().split('\n').map(l => { const out = []; let cur = '', q = false; for (const ch of l) { if (ch === '"') q = !q; else if (ch === ',' && !q) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out; });
