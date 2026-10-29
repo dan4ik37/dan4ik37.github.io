@@ -223,9 +223,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         await wait(1500); return 1; })()`);
       res.supPreview = {};
       for (const [name, tx, ty, tz] of [['pillar', 0.5, 1.5, 1.02], ['end', 4.98, 2.5, 0.5]]) {
-        await ev(`(async () => { const T = GAME_IMPL.kubomir._test, S = T.state(), v = S._pv; T.aim(v.px + ${tx}, v.gy + ${ty}, v.pz + ${tz}); T.hud(false); await new Promise(r => setTimeout(r, 1200)); return 1; })()`);
+        await ev(`(async () => { const T = GAME_IMPL.kubomir._test, S = T.state(), v = S._pv; if (S.sup?.stats) S.sup.stats.maxTickMs = 0; T.aim(v.px + ${tx}, v.gy + ${ty}, v.pz + ${tz}); T.hud(false); await new Promise(r => setTimeout(r, 1200)); return 1; })()`);   // T-124: худший такт — с оценкой рамки (блок в руке)
         await shot('support-preview-' + name);
-        res.supPreview[name] = await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); const m = S.VR.previewMesh?.(); return { place: S.placeAt && { x: S.placeAt.x, y: S.placeAt.y, z: S.placeAt.z, tint: S.placeAt.tint && S.placeAt.tint.map(v => +v.toFixed(2)) }, color: m && m.visible ? m.material.color.getHexString() : null, lv: S.sup.level() }; })()`);
+        res.supPreview[name] = await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); const m = S.VR.previewMesh?.(); return { place: S.placeAt && { x: S.placeAt.x, y: S.placeAt.y, z: S.placeAt.z, tint: S.placeAt.tint && S.placeAt.tint.map(v => +v.toFixed(2)) }, color: m && m.visible ? m.material.color.getHexString() : null, lv: S.sup.level(), tickMax: +(S.sup.stats.maxTickMs || 0).toFixed(2), estOps: S.sup.stats.estOps | 0 }; })()`);
       }
       console.log('ОБРУШЕНИЕ рамка', JSON.stringify(res.supPreview));
       ok(res.supPreview.pillar?.color && res.supPreview.end?.color && res.supPreview.pillar.color !== res.supPreview.end.color && res.supPreview.end.lv >= 3, 'рамка постройки — цветом устойчивости: у столба и на конце балки разная, на конце — красная', res.supPreview);
