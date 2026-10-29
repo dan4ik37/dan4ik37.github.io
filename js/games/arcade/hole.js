@@ -185,7 +185,7 @@
     for (let i = 0; i < N; i++) {
       if (G.ir[i] <= 0 || G.it[i] !== 6) continue;
       const rx = G.ir[i] + 12;
-      ctx.moveTo(G.ix[i] + rx * .94, G.iy[i] - rx * .34 * .2); ctx.ellipse(G.ix[i], G.iy[i], rx, 6, -.35, 0, 6.2832);
+      ctx.moveTo(G.ix[i] + rx * .9394, G.iy[i] - rx * .3429); ctx.ellipse(G.ix[i], G.iy[i], rx, 6, -.35, 0, 6.2832);
     }
     ctx.stroke();
     // дыра: чёрный круг и вращающийся диск
