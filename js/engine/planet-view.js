@@ -679,7 +679,7 @@ void main(){
     // бюджет кусков: выбрано больше — допустимая ошибка на экране растёт (плавно: куски перетекают), меньше 80 % — назад
     const LEAF_MAX = o.leafMax ?? (mob || low ? 220 : 450), PRE_MAX = mob || low ? 6 : 12;
     let bias = 1;
-    let showMark = 1, lastSel = -1e9, selX = Infinity, selY = Infinity, selZ = Infinity, waitMore = false, chgAt = 0;
+    let showMark = 1, lastSel = -1e9, selX = Infinity, selY = Infinity, selZ = Infinity, waitMore = false, chgAt = 0, waitN = 0, stuckAt = 0;
     const LS = { split: 0, merge: 0 };
     function select(){
       const t0 = now(), wasDirty = dirty;
@@ -699,7 +699,11 @@ void main(){
       showMark++;
       const vis = showList;
       if (F.lod2) {
-        const st = P.lodShow(isReady, t0, { gate: F.morph ? GATE : 2, leaves }, vis);
+        // застрял (ждёт, а делений и слияний нет 1 с — после прыжка с земли на орбиту края детей у крупного соседа не «поднимаются»,
+        // слияния ждали вечно: с орбиты планета с дырами) — один выбор со сбросом: мельче цели — прочь, на месте — готовая цель (T-145)
+        const flush = stuckAt > 0 && t0 - stuckAt > 1000;
+        const st = P.lodShow(isReady, t0, { gate: F.morph ? GATE : 2, leaves, flush }, vis);
+        if (flush) { stuckAt = 0; ST.flushes = (ST.flushes || 0) + 1; } else if (st.split || st.merge || !st.wait) stuckAt = 0; else if (!stuckAt) stuckAt = t0;
         // скачок на смене уровня (оценка сверху, пикселей): у делимого — его k × его точность; у сливаемых — (1 − k детей) × их точность
         if (st.splits) for (const d of st.splits) popAdd(F.morph ? d.k : 1, d.err, d, MORPH.proj);
         if (st.merges) for (const p of st.merges) { let kmin = 1, e = 0; for (const c of p.kids || []) { kmin = min(kmin, F.morph ? c.k : 0); e = max(e, c.err); } popAdd(1 - kmin, e, p, MORPH.proj); }
@@ -709,6 +713,7 @@ void main(){
         // выбор вхолостую: через 0,4 с после последней перемены — как обычно (сдвинулась камера, готов новый кусок)
         if (st.split || st.merge || st.stand || wasDirty) chgAt = t0;
         waitMore = st.split > 0 || st.merge > 0 || ((st.wait > 0 || st.need.length > 0) && t0 - chgAt < 400);
+        waitN = st.wait + st.need.length;   // показ ещё не сошёлся (ждёт перетекание или кусок) — выбор и без движения камеры, раз в 0,5 с
         if (leaves.length > LEAF_MAX) bias = min(4, bias * 1.06); else if (leaves.length < LEAF_MAX * .8) bias = max(1, bias / 1.03);
         // в очередь по ступеням: шаг показа (дети делимых, родители сливаемых, поднявшееся из-за горизонта), на уровень вперёд,
         // «куда летим» (из-за горизонта), листья не глубже 2 уровней под показанным; глубже — потом (их черёд придёт шагами)
@@ -1052,7 +1057,9 @@ void main(){
       PV.set(V.camBF); pvT = t0;
       const moved = Math.hypot(V.camBF[0] - selX, V.camBF[1] - selY, V.camBF[2] - selZ);
       const step = max(2, (V.altG > 0 ? V.altG : 10) * .05);
-      if (t0 - lastSel > (waitMore ? 60 : 125) && (moved > step || dirty || waitMore || queue.length || ready.length) || moved > step * 20) select();
+      // T-145 (слияние): показ ждёт (waitN) — выбирать раз в 0,5 с и стоя: после прыжка с земли на орбиту слияния ждали перетекания
+      // детей, а выбор без движения камеры больше не шёл — с орбиты планета была с дырами (188 кусков вместо ~12)
+      if (t0 - lastSel > (waitMore ? 60 : 125) && (moved > step || dirty || waitMore || queue.length || ready.length) || moved > step * 20 || (waitN > 0 && t0 - lastSel > 500)) select();
       pump(t0);
       if (F.lod2) {
         const tm = now();
@@ -1062,7 +1069,9 @@ void main(){
           const c3 = V.camBF, mv = abs(c3[0] - morphAt[0]) + abs(c3[1] - morphAt[1]) + abs(c3[2] - morphAt[2]);
           if (morphBusy || mv > .002 || MORPH.proj !== morphAt[4] || showMark !== morphAt[3]) {
             MORPH.dcMax = min(1, max(16, dt * 1000) / (FADE * 1000));   // после паузы переход идёт от этого кадра, а не скачком
+            const mb0 = morphBusy;
             morphBusy = P.lodMorph(showList, c3[0], c3[1], c3[2], t0, MORPH);
+            if (mb0 && !morphBusy) dirty = true;   // переходы кончились — слияния, что их ждали, выбрать сейчас
             morphSet();
             morphAt[0] = c3[0]; morphAt[1] = c3[1]; morphAt[2] = c3[2]; morphAt[3] = showMark; morphAt[4] = MORPH.proj; ST.morphRuns++;
           }
@@ -1076,7 +1085,7 @@ void main(){
     V.stats = () => ({
       shown: shown.size, leaves: leaves.length, cached: chunks.size, queued: queue.length + preQ.length, building: inflight.size, ready: ready.length,
       built: ST.built, buildAvg: ST.built ? ST.buildMs / ST.built : 0, buildMax: ST.buildMax, integ: ST.integ, integAvg: ST.integ ? ST.integMs / ST.integ : 0,
-      integMax: ST.integMax, integKB: Math.round(ST.integKB), selAvg: ST.sel ? ST.selMs / ST.sel : 0, selMax: ST.selMax, mainBuilds: ST.mainBuilds, rebases: ST.rebases, evicted: ST.evicted,
+      integMax: ST.integMax, integKB: Math.round(ST.integKB), selAvg: ST.sel ? ST.selMs / ST.sel : 0, selMax: ST.selMax, mainBuilds: ST.mainBuilds, rebases: ST.rebases, evicted: ST.evicted, flushes: ST.flushes || 0,
       errors: ST.errors, respawns: ST.respawns, workers: workers.filter(W => W && W.ok && !W.dead).length, nodes: P.nodes.size, alt: V.alt, altG: V.altG, near: nearFar[0], far: nearFar[1],
       pre: ST.pre, preBuilt: ST.preBuilt, splits: ST.splits, merges: ST.merges, popMax: +ST.popMax.toFixed(3), popAvg: ST.popN ? +(ST.popSum / ST.popN).toFixed(4) : 0, popN: ST.popN,
       uploads: ST.uploads, morphRuns: ST.morphRuns, split: R.depthSplit === SPLIT ? SPLIT.dist : 0,

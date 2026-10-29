@@ -118,6 +118,8 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         // A/B on the same page: without the specials core and visuals (D37E.climate.SPECIAL / D37E.wxfx.ON — the one-line rollbacks)
         res.planetGroundOff = await ev(`(async () => { D37E.climate.SPECIAL = false; D37E.wxfx.ON = false; await new Promise(r => setTimeout(r, 1500)); const m = await (${MEASURE})(${T.planet}.S.R, ${phone ? 150 : 300}); D37E.climate.SPECIAL = true; D37E.wxfx.ON = true; return m; })()`, 240000);
         console.log('  планета, земля без особой погоды (откат):', JSON.stringify(res.planetGroundOff));
+        res.planetGround2 = await ev(`(${MEASURE})(${T.planet}.S.R, ${phone ? 150 : 300})`, 240000);
+        console.log('  планета, земля снова с особой погодой (порядок A/B/A):', JSON.stringify(res.planetGround2));
         await ev(`${T.planet}.S.wx.force('sandstorm')`); await sleep(9000);
         const sd = await ev(`(() => { const S = ${T.planet}.S, d = S.V._dbg && S.V._dbg(), n = d && d.showList.find(n => n.ch && n.ch.mesh), U = n ? n.ch.mesh.material.uniforms : {}, K = S.wx.wfx.K; return { special: S.wx.state.special, dust: +K.dust.toFixed(2), vis: Math.round(K.vis), grains: S.wx.wfx.stats().grains,
           uWv: U.uWv ? +U.uWv.value.x.toFixed(5) : null, uWt: U.uWt ? [+U.uWt.value.x.toFixed(2), +U.uWt.value.y.toFixed(2), +U.uWt.value.z.toFixed(2), U.uWt.value.w] : null }; })()`);
@@ -126,14 +128,14 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         await shot('planet-sandstorm-' + PROF);
         res.planetStorm = await ev(`(${MEASURE})(${T.planet}.S.R, ${phone ? 150 : 300})`, 240000);
         console.log('  планета, песчаная буря:', JSON.stringify(res.planetStorm));
-        await ev(`${T.planet}.S.wx.force(null)`); await sleep(1500);
-        // space: orbit 300 km
+        // space: orbit 300 km — straight from the storm (the storm below must not tint the planet seen from orbit)
         await ev(`${T.planet}.orbit()`); await sleep(7000);
-        const sp = await ev(`(() => { const s = ${T.planet}.state(); return { mode: s.mode, altKm: Math.round((s.alt || 0) / 1000), shown: ${T.planet}.stats().shown }; })()`);
-        ok(sp.mode === 'fly' && sp.shown > 0, 'планета: орбита — планета видна целиком', sp);
+        const sp = await ev(`(() => { const s = ${T.planet}.state(); return { mode: s.mode, altKm: Math.round((s.alt || 0) / 1000), shown: ${T.planet}.stats().shown, flushes: ${T.planet}.stats().flushes, uWv: (() => { const d = ${T.planet}.S.V._dbg(), n = d.showList.find(n => n.ch && n.ch.mesh); return n ? n.ch.mesh.material.uniforms.uWv.value.x : -1; })() }; })()`);
+        ok(sp.mode === 'fly' && sp.shown > 0 && sp.shown <= 60 && sp.uWv === 0, 'планета: орбита после посадки — планета целиком (крупные куски, без дыр), без цвета бури снизу', sp);
         await shot('planet-orbit-' + PROF);
         res.planetOrbit = await ev(`(${MEASURE})(${T.planet}.S.R, ${phone ? 150 : 300})`, 240000);
         console.log('  планета, орбита:', JSON.stringify(res.planetOrbit));
+        await ev(`${T.planet}.S.wx.force(null)`);
         const e = ourErr(); ok(!e.length, 'планета: 0 ошибок', e.slice(0, 5));
       }
       await close();

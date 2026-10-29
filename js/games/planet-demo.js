@@ -262,7 +262,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     if (st.wx) {   // погода: частицы и небо движка — каждый кадр, свет планеты — 4 раза в секунду
       try {
         st.wx.frame(dt);
-        if ((st.wxT = (st.wxT || 0) - dt) <= 0) { st.wxT = .25; V.setWeather(planetWx(st.wx.vis || st.wx.state, st.wx.wfx)); }
+        if ((st.wxT = (st.wxT || 0) - dt) <= 0) { st.wxT = .25; V.setWeather(planetWx(st.wx.vis || st.wx.state, st.wx.wfx, V.altG)); }
       } catch (e) { console.warn('планета: погода', e); try { st.wx.dispose(); } catch (e2) {} st.wx = null; V.setWeather(null); }
     }
     V.update(dt, st.t, ms);
@@ -303,12 +303,14 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
   // особая погода по биомам (wx.js + wx-fx.js, T-145): пыль, цвет, видимость и белая мгла — сглаженные числа wx-fx (те же, что у неба
   // «Мира»); цвет у wx-fx линейный, крючок ждёт sRGB. Пустынные широты — песчаные бури, степные — пыльные и бураны (класс — по климату места)
   const WXT = [0, 0, 0];
-  function planetWx(v, F){
+  // погода — у земли: выше 2000 u (~1,7 км) тучи, пыль и мгла слабеют, с 8000 u нет (с орбиты планета не в цвет бури под тобой)
+  function planetWx(v, F, alt){
     if (!v) return null;
-    const o = { cloud: v.cloud, rain: v.rain, fog: v.fog, storm: v.thunder, snowCover: v.snowCover, wet: v.wet, dust: v.dust, tint: v.tint, vis: v.vis, flat: v.flat };
+    const h = clamp(((+alt || 0) - 2000) / 6000, 0, 1), k = 1 - h * h * (3 - 2 * h);
+    const o = { cloud: v.cloud * k, rain: v.rain * k, fog: v.fog * k, storm: v.thunder * k, snowCover: v.snowCover, wet: v.wet, dust: v.dust, tint: v.tint, vis: v.vis, flat: v.flat };
     if (F && F.K) {
       const K = F.K;
-      o.dust = K.dust; o.flat = K.flat; o.vis = K.vis < 509 ? K.vis : 0;
+      o.dust = K.dust * k; o.flat = K.flat * k; o.vis = K.vis < 509 && k > .05 ? K.vis / k : 0;
       if (K.tint[0] + K.tint[1] + K.tint[2] > 0) { for (let j = 0; j < 3; j++) WXT[j] = Math.pow(Math.max(0, K.tint[j]), 1 / 2.2); o.tint = WXT; }
     }
     return o;
