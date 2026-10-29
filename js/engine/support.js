@@ -411,12 +411,14 @@
       const SK = L.SK, SW = L.SW, SD = L.SD, SE = L.SE, SA = L.SA, SF = L.SF, rank = L.rank, mat = g.mat, sup = g.sup, m = mat[u], mn = P.min[m], cp = P.cap[m];
       const o = u * 6; let ns = 0;
       if ((g.anc[u] & 8) && !(L.adis[u] & 8) && Math.min(cp, MAXV - P.up[m]) >= mn) { SK[0] = 2; SW[0] = -1; SD[0] = 3; SE[0] = -4; SA[0] = Math.round(1024 * B.topArea(u)); SF[0] = 0; L.SCX[0] = L.hx[u]; L.SCZ[0] = L.hz[u]; ns = 1; }
-      for (let pass = 0; pass < 2; pass++) {
+      // pass 0 — stand, 1 — side (strictly higher support) and hang, 2 — side with equal support (only when nothing else holds it)
+      for (let pass = 0; pass < 3; pass++) {
+        if (pass === 2 && ns) break;
         for (let k = g.off[u], e = g.off[u + 1]; k < e && ns < 32; k++) {
           const a = g.adj[k], w = a >> 2, r = a & 3;
-          if ((pass === 0) !== (r === 0) || L.edis[k]) continue;
+          if ((pass === 0) !== (r === 0) || (pass === 2 && r !== 1) || L.edis[k]) continue;
           const loss = r === 0 ? P.up[m] : r === 1 ? P.side[m] : P.down[m];
-          if (!(rank[w] < rank[u] && hold(w) && P.bear[mat[w]] && Math.min(cp, sup[w] - loss) >= mn)) continue;
+          if (!(rank[w] < rank[u] && (pass === 2 || r !== 1 || sup[w] > sup[u]) && hold(w) && P.bear[mat[w]] && Math.min(cp, sup[w] - loss) >= mn)) continue;
           const p = w * 6;
           let area, d, f = 0;
           if (r === 0 || r === 2) { area = ovl(bx[o], bx[o + 3], bx[p], bx[p + 3]) * ovl(bx[o + 2], bx[o + 5], bx[p + 2], bx[p + 5]); d = r === 0 ? 3 : 2; }
@@ -454,7 +456,9 @@
   // ═══ v2 — load paths with mass and moments (T-124, STRUCTURE_HAZARDS.md §2.1 S1.L) ═══
   // Only for worlds with load: 1 while S.LOAD is on; everything above (v1) stays bit-identical (scripts/support-hash.js pins it).
   // Pass 1 = the v1 solve (same values; after a failure some links / anchor contacts are disabled). Strict order: w is "before" u
-  // when sup[w] > sup[u], or equal and key(w) < key(u), key = (height, x, z) from the piece origin (lower cells first).
+  // when sup[w] > sup[u], or equal and key(w) < key(u), key = (height, x, z) from the piece origin (lower cells first). A side
+  // supporter must have strictly higher sup (equal ones only when nothing else holds the node): the key orders the passes, it
+  // never moves load sideways along a row of equal cells (T-124 review: a symmetric roof had one overloaded corner).
   // Pass 2, after-most first: a holding node adds its own mass and sends its load W, first moments Mx, Mz (about its centre) and
   // the height moment My to its supporters — "stand wins": standing on a supporter / true anchor below sends everything down;
   // otherwise equal shares to all side and hang supporters (floor; remainders to the first in the fixed order −y, +x, −x, +z, −z,
@@ -668,10 +672,12 @@
           E6[0] = E6[1] = E6[2] = E6[3] = E6[4] = E6[5] = -1;
           for (let k = off[u], e = off[u + 1]; k < e; k++) E6[geo.dirOf(u, adj[k] >> 2)] = k;
           const ab = g.anc[u] & ~adis[u], bb = g.bnd[u] & ~adis[u], eb = g.estb[u] & ~adis[u];
-          for (let j = 0; j < 6; j++) {
+          // a side neighbour with the same support is a supporter only when nothing better holds u (ties by key alone would send
+          // load sideways along a row of equal cells and overload one corner of a symmetric roof — T-124 review)
+          for (let lax = 0; lax < 2 && !ns; lax++) for (let j = 0; j < 6; j++) {
             const d = ORD6[j], bit = 1 << d, loss = lossOf(d, m), k = E6[d];
             let kd = 0, w = -1;
-            if (k >= 0) { w = adj[k] >> 2; if (!edis[k] && rank[w] < rank[u] && hold(w) && bear[mat[w]] && Math.min(cap[m], sup[w] - loss) >= mn) kd = 1; }
+            if (k >= 0) { w = adj[k] >> 2; if (!edis[k] && rank[w] < rank[u] && (lax || REL6[d] !== 1 || sup[w] > sup[u]) && hold(w) && bear[mat[w]] && Math.min(cap[m], sup[w] - loss) >= mn) kd = 1; }
             else if ((ab & bit) && Math.min(cap[m], MAXV - loss) >= mn) kd = 2;
             else if ((eb & bit) && Math.min(cap[m], g.estv[u * 6 + d] - loss) >= mn) kd = 2;
             else if ((bb & bit) && Math.min(cap[m], MAXV - loss) >= mn) kd = 3;

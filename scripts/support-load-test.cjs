@@ -195,6 +195,20 @@ sec('тот же итог от 5 разных семян симметрично�
     const R = removeJob(W, order); fallSig.push([...R.fell].sort().join(';'));
   }
   ok(fallSig.every(v => v === fallSig[0]), 'убрали среднюю опору (семена в 5 разных порядках) — падает одно и то же', fallSig);
+  // T-124 review: equal-support neighbours are not side supporters (ties by key sent load along the ring: one corner of a
+  // symmetric roof read 1309 ‰ while the mirror corners read 351 / 351 / 22) — mirror cells now read the same (± remainders)
+  for (const [n, mode] of [[9, 'real'], [9, 'soft'], [12, 'real']]) {
+    const c = []; for (let y = 0; y < 4; y++) for (let x = 0; x < n; x++) for (let z = 0; z < n; z++) if (x === 0 || z === 0 || x === n - 1 || z === n - 1) c.push([x, y, z, 'wood']);
+    c.push(...slab(4, 0, n - 1, 0, n - 1));
+    const r = stat(world(c, mode), [0, 0, 0, 'wood']), at = (x, z) => r.byPos.get(key(x, 4, z)) | 0;
+    let asym = 0, corner = 0;
+    for (let x = 1; x < n - 1; x++) for (let z = 1; z < n - 1; z++) { const v = at(x, z), m = [at(n - 1 - x, z), at(x, n - 1 - z), at(n - 1 - x, n - 1 - z), at(z, x)]; for (const w of m) asym = Math.max(asym, Math.abs(v - w)); }
+    corner = Math.max(at(1, 1), at(n - 2, 1), at(1, n - 2), at(n - 2, n - 2));
+    ok(asym <= 4 && corner < at(1, n >> 1), 'крыша ' + n + '×' + n + ' (' + mode + ') на 4 стенах: зеркальные клетки нагружены одинаково (±' + asym + ' ‰), угол на двух стенах — легче середины стены', { asym, corner, mid: at(1, n >> 1), worst: r.worst, at: r.at });
+  }
+  { const c = []; for (let y = 0; y < 4; y++) for (let x = 0; x < 9; x++) for (let z = 0; z < 9; z++) if (x === 0 || z === 0 || x === 8 || z === 8) c.push([x, y, z, 'wood']);
+    c.push(...slab(4, 0, 8, 0, 8)); const r = stat(world(c), [0, 0, 0, 'wood']);
+    ok(r.worst <= 1000, 'дом 9×9 из досок с плоской крышей (реализм) — держится (было 1309 ‰ в одном углу)', { worst: r.worst, at: r.at, kind: r.kind }); }
 }
 
 // ═══ 7. Landing re-check: what landed adds load below ("before" = before the landing) ═══
