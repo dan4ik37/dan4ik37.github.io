@@ -26,7 +26,8 @@
   const root = typeof self !== 'undefined' ? self : globalThis;
   const E = root.D37E = root.D37E || {};
   const S = E.support = E.support || {};
-  S.VERSION = 1;
+  S.VERSION = 2;   // 1 — держание (v1); 2 — + нагрузка (v2, только миры с load: 1, см. ниже «v2»)
+  S.LOAD = true;   // v2 (T-124): false — откат одной строкой: у всех миров v1 как было (не «обрушение выкл»)
   const MAXV = S.MAXV = 1000;
 
   // ═══ Материалы: ‰ за шаг (дерево слабее, камень и бетон крепче, металл — лучше всех вбок; вбок теряется больше, чем вверх) ═══
@@ -34,6 +35,12 @@
   // 110 / 13, стекло — 15 / 3; природное (скала, грунт) вверх не теряет — своды пещер держатся вбок на 9 / 3 клетки от стены.
   const MATS = S.MATS = [];
   const MAT = S.MAT = {};
+  // v2 load columns (STRUCTURE_HAZARDS.md §3, start values signed at SH0): [mass_cell kg, load_comp kg, load_bend kg·m, load_hang kg,
+  // load_none]; an empty column gets a derived default (comp = mass × 50, bend = mass × 5, hang = mass × 4); natural rows never fail by load
+  const LOADV = { wood: [650, 60000, 3600, 3000], stone: [2400, 400000, 3200, 1500], brick: [1920, 300000, 2500, 1200], concrete: [2400, 600000, 8000, 4000],
+    metal: [7800, 1500000, 160000, 120000], glass: [2500, 125000, 3000, 0], dirt: [900, 80000, 1000, 500], sand: [1600, 60000, 500, 0], snow: [900, 6000, 300, 0],
+    rock: [2690, 0, 0, 0, 1], soil: [1500, 0, 0, 0, 1], slab: [2400, 600000, 60000, 30000], steel: [2500, 3000000, 400000, 300000] };
+  const lnum = (v, def) => { if (v === undefined || v === null || v === '') return def; v = Math.round(+v); return isFinite(v) && v >= 0 ? Math.min(v, 2 ** 30) : def; };
   S.defineMat = d => {
     if (!d || !d.key) throw new Error('материал без имени');
     if (MAT[d.key] !== undefined) return MAT[d.key];
@@ -41,6 +48,11 @@
     const m = Object.assign({ title: d.key, icon: '🧱', cap: MAXV, min: 100, up: 30, side: 150, down: 220, bear: 1, nat: 0 }, d);
     for (const k of ['cap', 'min', 'up', 'side', 'down']) m[k] = Math.max(0, Math.min(MAXV, Math.round(+m[k] || 0)));
     m.min = Math.max(1, m.min); m.bear = m.bear ? 1 : 0;
+    const LV = LOADV[d.key] || [];
+    m.mass = Math.max(1, lnum(d.mass ?? d.mass_cell, LV[0] ?? 1000));
+    m.lnone = (d.lnone ?? d.load_none ?? LV[4] ?? (m.nat ? 1 : 0)) ? 1 : 0;
+    const LC = 2 ** 30;
+    m.comp = lnum(d.comp ?? d.load_comp, LV[1] ?? Math.min(LC, m.mass * 50)); m.bend = lnum(d.bend ?? d.load_bend, LV[2] ?? Math.min(LC, m.mass * 5)); m.hang = lnum(d.hang ?? d.load_hang, LV[3] ?? Math.min(LC, m.mass * 4));
     m.id = MATS.length; MATS.push(m); MAT[m.key] = m.id;
     profs.clear();
     return m.id;
@@ -74,10 +86,16 @@
     if (P) return P;
     const mul = typeof mode === 'string' ? S.MODES[mode] || S.MODES.real : mode, n = MATS.length;
     P = { mode: k, cap: new Uint16Array(n), min: new Uint16Array(n), up: new Uint16Array(n), side: new Uint16Array(n), down: new Uint16Array(n), bear: new Uint8Array(n) };
+    // v2: capacities (soft × 2 — SH1 calibration: with the × 3 start value a 5-long wood cantilever out of a cliff stood in soft;
+    // G7 wants it to fall in soft and real), sway ‰ per cell of load height (real 50, soft 25)
+    const lk = mode === 'soft' ? 2 : typeof mode === 'string' ? 1 : (mul.load ?? 1);
+    P.sway = mode === 'soft' ? 25 : typeof mode === 'string' ? 50 : (mul.sway ?? 50);
+    P.mass = new Float64Array(n); P.comp = new Float64Array(n); P.bend = new Float64Array(n); P.hang = new Float64Array(n); P.lnone = new Uint8Array(n);
     for (const m of MATS) {
       const i = m.id;
       P.cap[i] = m.cap; P.min[i] = m.min; P.bear[i] = m.bear;
       P.up[i] = Math.round(m.up * (mul.up ?? 1)); P.side[i] = Math.max(1, Math.round(m.side * (mul.side ?? 1))); P.down[i] = Math.max(1, Math.round(m.down * (mul.down ?? 1)));
+      P.mass[i] = m.mass; P.lnone[i] = m.lnone; P.comp[i] = Math.round(m.comp * lk); P.bend[i] = Math.round(m.bend * lk); P.hang[i] = Math.round(m.hang * lk);
     }
     profs.set(k, P);
     return P;
@@ -107,6 +125,7 @@
       sup: new Uint16Array(max), sup0: new Uint16Array(max), dis: new Uint8Array(max), done: new Uint8Array(max), fall: new Uint8Array(max),
       nxt: new Int32Array(max), prv: new Int32Array(max), head: new Int32Array(MAXV + 1), gid: new Int32Array(max), gList: new Int32Array(max), gOff: new Int32Array(max + 1), ng: 0,
       q: new Int32Array(max),
+      anc: new Uint8Array(max), bnd: new Uint8Array(max), estb: new Uint8Array(max), estv: null,   // v2: опора по направлениям (настоящая / край куска / оценка природного)
     };
     g.reset = () => { g.n = 0; g.ne = 0; g.off[0] = 0; g.ng = 0; };
     // ── держание всех узлов: dis[i] = 1 — узла нет (сломан) ──
@@ -179,7 +198,7 @@
   S.graph = (max = 4096, deg = 8) => graph(max, deg);
 
   // ═══ Сетка клеток (3D — кубики, 2D — плитки): связный кусок от места правки, хеш-таблица без мусора ═══
-  const NOT = -1, EMPTY = -2, ANCH = -3, EST = -16;   // EST − e — природная клетка за краем куска с оценкой держания e
+  const NOT = -1, EMPTY = -2, ANCH = -3, ANCHB = -4, EST = -16;   // EST − e — природная клетка за краем куска с оценкой держания e; ANCHB — опора «край куска» (v1 — как ANCH)
   S.grid = (o = {}) => {
     const dims = o.dims === 2 ? 2 : 3, DOWN = o.down === 1 ? 1 : -1, max = Math.max(64, o.max | 0 || 24576), deg = dims === 2 ? 4 : 6;
     const g = graph(max, deg);
@@ -196,17 +215,17 @@
     G.at = (x, y, z = 0) => { const k = keyOf(x, y, z); if (k < 0) return -1; const v = look(k); return v >= 0 ? v : -1; };
     function add(x, y, z, code, d, isSeed){
       const i = g.n++;
-      px[i] = x; py[i] = y; pz[i] = z; dist[i] = d; g.mat[i] = code >> 2; g.gnd[i] = 0; g.init[i] = 0; g.seed[i] = isSeed ? 1 : 0;
+      px[i] = x; py[i] = y; pz[i] = z; dist[i] = d; g.mat[i] = code >> 2; g.gnd[i] = 0; g.init[i] = 0; g.seed[i] = isSeed ? 1 : 0; g.anc[i] = 0; g.bnd[i] = 0; g.estb[i] = 0;
       return i;
     }
     // Природная клетка за краем куска (дальше rn шагов): держание не считаем целиком, а оцениваем — под ней толща (2 твёрдые
     // клетки) — как опора; иначе это свод или навес: держится за ближайшую стену по прямой в своём слое (стена — твёрдое с
     // твёрдым под ним), cap − side × до стены; стены нет ближе предела — 0 (ничего не держит). Так пересчёт по одной клетке
     // (игрок копает зал понемногу) видит и обвал середины широкого свода, и не роняет то, что держит дальняя стена.
-    const solidC = c => c === 1 || (c & 3) >= 2;
+    const solidC = c => c === 1 || c === 5 || (c & 3) >= 2;   // 5 — опора «не загружено» (v1 — как 1)
     const HD = [1, 0, -1, 0, 0, 1, 0, -1];
     // «толща» / «стена»: под клеткой 3 природные подряд (не подкопанный кусок под сводом, а столб до пола)
-    const natC = c => c === 1 || (c & 3) === 3;   // природное или опора (поставленное под сводом — висит, не держит толщу)
+    const natC = c => c === 1 || c === 5 || (c & 3) === 3;   // природное или опора (поставленное под сводом — висит, не держит толщу)
     const col = (x, y, z, read) => natC(read(x, y + DOWN, z) | 0) && natC(read(x, y + 2 * DOWN, z) | 0) && natC(read(x, y + 3 * DOWN, z) | 0);
     function estimate(x, y, z, m, read, P){
       if (col(x, y, z, read)) return MAXV;
@@ -223,48 +242,77 @@
       return best;
     }
     const NOB = {};
-    // построить кусок: семена (их код — какой был), обход в ширину; b — свои пределы (лучше один объект на игру — без мусора)
-    G.build = (seeds, read, b = NOB) => {
-      const r = b.r ?? 64, rn = b.rn ?? 10, lim = Math.min(max, b.max || max), P = b.P || null;
+    // построить кусок: семена (их код — какой был), обход в ширину; b — свои пределы (лучше один объект на игру — без мусора).
+    // По частям (v2, задание с бюджетом): G.begin(семена, read, b), потом G.more(узлов) → true, когда кусок готов
+    let bR = 64, bRn = 10, bLim = max, bP = null, bRead = null, bI = 0;
+    G.begin = (seeds, read, b = NOB) => {
+      bR = b.r ?? 64; bRn = b.rn ?? 10; bLim = Math.min(max, b.max || max); bP = b.P || null; bRead = read; bI = 0;
       if (++gen > 65535) { stamp.fill(0); gen = 1; }
       used = 0; g.reset(); G.full = false;
       const ns = seeds.length >> 2;
       if (!ns) return 0;
       ox = seeds[0]; oy = seeds[1]; oz = dims === 2 ? 0 : seeds[2];
+      const lim = bLim;
       for (let s = 0; s < ns; s++) {
         const x = seeds[s * 4], y = seeds[s * 4 + 1], z = dims === 2 ? 0 : seeds[s * 4 + 2], code = seeds[s * 4 + 3];
         const k = keyOf(x, y, z); if (k < 0 || look(k) !== NOT) continue;
-        if ((code & 3) < 2 || g.n >= lim) { put(k, code === 1 ? ANCH : EMPTY); continue; }
+        if ((code & 3) < 2 || g.n >= lim) { put(k, code === 1 ? ANCH : code === 5 ? ANCHB : EMPTY); continue; }
         put(k, add(x, y, z, code, 0, true));
       }
-      for (let i = 0; i < g.n; i++) {
+      return g.n;
+    };
+    G.cursor = () => bI;
+    G.more = (budget = 1 << 30) => {   // бюджет — целое (Smi): без чисел-объектов в цикле
+      const read = bRead, r = bR, rn = bRn, lim = bLim, P = bP;
+      let i = bI;
+      for (; i < g.n && budget > 0; i++, budget--) {
         g.off[i] = g.ne;
         const x = px[i], y = py[i], z = pz[i], d = dist[i];
         for (let k6 = 0; k6 < deg; k6++) {
           const nx = x + DX[k6], ny = y + DY[k6], nz = z + DZ[k6];
           const k = keyOf(nx, ny, nz);
-          if (k < 0) { if (REL[k6] !== 2) g.gnd[i] |= REL[k6] === 0 ? 1 : 2; continue; }   // дальше 512 клеток — опора (снизу и сбоку)
+          if (k < 0) { if (REL[k6] !== 2) { g.gnd[i] |= REL[k6] === 0 ? 1 : 2; g.bnd[i] |= 1 << k6; } continue; }   // дальше 512 клеток — опора (снизу и сбоку)
           let v = look(k);
           if (v === NOT) {
             const c = read(nx, ny, nz) | 0, t = c & 3;
-            if (t < 2) v = c === 1 ? ANCH : EMPTY;
+            if (t < 2) v = c === 1 ? ANCH : c === 5 ? ANCHB : EMPTY;
             else if (t === 3 && col(nx, ny, nz, read)) v = ANCH;   // природная толща (3 твёрдые под ней) — опора: обход идёт только по «коже» у пустот
             else if (t === 3 && d + 1 > rn && P) v = EST - estimate(nx, ny, nz, c >> 2, read, P);   // природное за краем — оценка
-            else if (d + 1 > r || (t === 3 && d + 1 > rn) || g.n >= lim || used >= HLIM) { v = ANCH; if (g.n >= lim || used >= HLIM) G.full = true; }
+            else if (d + 1 > r || (t === 3 && d + 1 > rn) || g.n >= lim || used >= HLIM) { v = ANCHB; if (g.n >= lim || used >= HLIM) G.full = true; }
             else v = add(nx, ny, nz, c, d + 1, false);
             put(k, v);
           }
-          if (v === ANCH) g.gnd[i] |= REL[k6] === 0 ? 1 : REL[k6] === 1 ? 2 : 4;   // опора снизу / сбоку / сверху (висит)
+          if (v === ANCH || v === ANCHB) { g.gnd[i] |= REL[k6] === 0 ? 1 : REL[k6] === 1 ? 2 : 4; if (v === ANCH) g.anc[i] |= 1 << k6; else g.bnd[i] |= 1 << k6; }   // опора снизу / сбоку / сверху (висит)
           else if (v >= 0) g.adj[g.ne++] = (v << 2) | REL[k6];
           else if (v <= EST) {   // природное за краем: его оценка минус потеря этой клетки (стоит на нём / рядом / висит под ним)
             const e = EST - v, m = g.mat[i], rl = REL[k6], c = e - (rl === 0 ? P.up[m] : rl === 1 ? P.side[m] : P.down[m]);
             if (c > g.init[i]) g.init[i] = c;
+            if (g.estv) { g.estb[i] |= 1 << k6; g.estv[i * 6 + k6] = e; }
           }
         }
       }
+      bI = i;
+      if (i < g.n) return false;
       g.off[g.n] = g.ne;
-      return g.n;
+      return true;
     };
+    G.build = (seeds, read, b = NOB) => { G.begin(seeds, read, b); if (!g.n) { g.off[0] = g.ne; return 0; } G.more(1 << 30); return g.n; };
+    // ── v2 (нагрузка): геометрия куска для задания (S.loadJob) ──
+    G.isGrid = true; G.HU = 2; G.dims2 = dims === 2;
+    G.dirOf = (u, w) => { const dx = px[w] - px[u]; if (dx === 1) return 0; if (dx === -1) return 1; const dy = py[w] - py[u]; if (dy === -DOWN) return 2; if (dy === DOWN) return 3; return pz[w] - pz[u] === 1 ? 4 : 5; };
+    G.lprep = (L, P, i0, i1, kg) => {
+      const sg = -DOWN, d2 = dims === 2;
+      for (let i = i0; i < i1; i++) {
+        const x = px[i] - ox, h = (py[i] - oy) * sg, z = d2 ? 0 : pz[i] - oz;
+        L.hx[i] = 2 * x; L.hy[i] = 2 * h; L.hz[i] = 2 * z; L.ex[i] = 1; L.ey[i] = 1; L.ez[i] = d2 ? 0 : 1;
+        L.key[i] = (((h + 512) & 1023) << 20) | (((x + 512) & 1023) << 10) | ((z + 512) & 1023);
+        L.w0[i] = Math.round(P.mass[g.mat[i]] * kg / 1000);
+      }
+    };
+    G.topArea = () => 1;
+    G.cutBend = (c, L, P) => { const m = g.mat[c]; if (L.stand[c] === 1 && L.standE[c] >= 0) { const w = g.adj[L.standE[c]] >> 2, mw = g.mat[w]; if (!P.lnone[mw]) return P.bend[mw]; } return P.bend[m]; };
+    G.inPiece = (x, y, z = 0) => { const k = keyOf(x, y, z); return k >= 0 && look(k) !== NOT; };   // клетку уже читали (узел, пусто или опора)
+    G.loadJob = () => G.J || (G.J = S.loadJob(G));
     G.solve = (P, noSeeds) => { for (let i = 0; i < g.n; i++) g.dis[i] = noSeeds ? g.seed[i] : 0; return g.solve(P, !!noSeeds); };
     G.collapse = P => g.collapse(P);
     G.estimate = P => { if (!g.n) return 0; G.solve(P, false); return g.sup[0]; };
@@ -283,7 +331,7 @@
       if (B.n >= max) { B.over = true; return -1; }
       const i = B.n++, o6 = i * 6;
       bx[o6] = Math.min(x0, x1); bx[o6 + 1] = Math.min(y0, y1); bx[o6 + 2] = Math.min(z0, z1); bx[o6 + 3] = Math.max(x0, x1); bx[o6 + 4] = Math.max(y0, y1); bx[o6 + 5] = Math.max(z0, z1);
-      g.mat[i] = mat | 0; g.gnd[i] = gnd ? 1 : 0; g.init[i] = 0; g.seed[i] = 0;
+      g.mat[i] = mat | 0; g.gnd[i] = gnd ? 1 : 0; g.init[i] = 0; g.seed[i] = 0; g.anc[i] = gnd ? 8 : 0; g.bnd[i] = 0; g.estb[i] = 0; if (B.kg) B.kg[i] = 0;
       return i;
     };
     // касание a и b (eps — зазор): −1 — нет; 0 — a стоит на b; 2 — a под b (b стоит на a); 1 — сбоку
@@ -339,8 +387,511 @@
     };
     B.solve = (P, off) => { for (let i = 0; i < B.n; i++) g.dis[i] = off ? (off[i] ? 1 : 0) : 0; return g.solve(P, !!off); };
     B.groups = k => { const a = g.gOff[k], b = g.gOff[k + 1], out = []; for (let j = a; j < b; j++) out.push(g.gList[j]); return out; };
+    // ── v2 (нагрузка): коробки в полудециметрах от начала куска (первая коробка), масса — B.kg[i] (кг от игры) или mass × объём ──
+    B.kg = new Float64Array(max);
+    B.isGrid = false; B.HU = 20; B.dims2 = false; B.nStand = 0;
+    let bo0 = 0, bo1 = 0, bo2 = 0;
+    const q20 = v => Math.round(v * 20);
+    B.lprep = (L, P, i0, i1) => {
+      if (i0 === 0) { bo0 = q20(bx[0]) >> 1 << 1; bo1 = q20(bx[1]) >> 1 << 1; bo2 = q20(bx[2]) >> 1 << 1; }
+      for (let i = i0; i < i1; i++) {
+        const o = i * 6, x0 = bx[o], y0 = bx[o + 1], z0 = bx[o + 2], x1 = bx[o + 3], y1 = bx[o + 4], z1 = bx[o + 5];
+        L.hx[i] = Math.round((x0 + x1) * 10) - bo0; L.hy[i] = Math.round((y0 + y1) * 10) - bo1; L.hz[i] = Math.round((z0 + z1) * 10) - bo2;
+        L.ex[i] = Math.max(1, Math.round((x1 - x0) * 10)); L.ey[i] = Math.max(1, Math.round((y1 - y0) * 10)); L.ez[i] = Math.max(1, Math.round((z1 - z0) * 10));
+        const ky = Math.max(0, Math.min(1023, ((L.hy[i] - L.ey[i]) >> 1) + 512)), kx = Math.max(0, Math.min(1023, (L.hx[i] >> 1) + 512)), kz = Math.max(0, Math.min(1023, (L.hz[i] >> 1) + 512));
+        L.key[i] = (ky << 20) | (kx << 10) | kz;
+        L.w0[i] = B.kg[i] > 0 ? Math.round(B.kg[i]) : Math.max(1, Math.round(P.mass[g.mat[i]] * (x1 - x0) * (y1 - y0) * (z1 - z0)));
+      }
+    };
+    const ovl = (a0, a1, b0, b1) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+    B.topArea = u => { const o = u * 6; return Math.max(.01, (bx[o + 3] - bx[o]) * (bx[o + 5] - bx[o + 2])); };
+    B.cutBend = (c, L, P) => { const m = g.mat[c]; return Math.floor(P.bend[m] * B.topArea(c)); };
+    // опоры коробки u (задание v2): сначала «стоит на» (земля, коробки снизу), потом бок и «висит под»; площадь касания — к 1 м²
+    B.supporters = (u, L, P, hold) => {
+      const SK = L.SK, SW = L.SW, SD = L.SD, SE = L.SE, SA = L.SA, SF = L.SF, rank = L.rank, mat = g.mat, sup = g.sup, m = mat[u], mn = P.min[m], cp = P.cap[m];
+      const o = u * 6; let ns = 0;
+      if ((g.anc[u] & 8) && !(L.adis[u] & 8) && Math.min(cp, MAXV - P.up[m]) >= mn) { SK[0] = 2; SW[0] = -1; SD[0] = 3; SE[0] = -4; SA[0] = Math.round(1024 * B.topArea(u)); SF[0] = 0; L.SCX[0] = L.hx[u]; L.SCZ[0] = L.hz[u]; ns = 1; }
+      for (let pass = 0; pass < 2; pass++) {
+        for (let k = g.off[u], e = g.off[u + 1]; k < e && ns < 32; k++) {
+          const a = g.adj[k], w = a >> 2, r = a & 3;
+          if ((pass === 0) !== (r === 0) || L.edis[k]) continue;
+          const loss = r === 0 ? P.up[m] : r === 1 ? P.side[m] : P.down[m];
+          if (!(rank[w] < rank[u] && hold(w) && P.bear[mat[w]] && Math.min(cp, sup[w] - loss) >= mn)) continue;
+          const p = w * 6;
+          let area, d, f = 0;
+          if (r === 0 || r === 2) { area = ovl(bx[o], bx[o + 3], bx[p], bx[p + 3]) * ovl(bx[o + 2], bx[o + 5], bx[p + 2], bx[p + 5]); d = r === 0 ? 3 : 2; }
+          else {
+            const dx = L.hx[w] - L.hx[u], dz = L.hz[w] - L.hz[u], gx = Math.abs(dx) - L.ex[u] - L.ex[w], gz = Math.abs(dz) - L.ez[u] - L.ez[w], ax = gx >= gz;
+            area = ovl(bx[o + 1], bx[o + 4], bx[p + 1], bx[p + 4]) * (ax ? ovl(bx[o + 2], bx[o + 5], bx[p + 2], bx[p + 5]) : ovl(bx[o], bx[o + 3], bx[p], bx[p + 3]));
+            d = ax ? (dx > 0 ? 0 : 1) : (dz > 0 ? 4 : 5); f = ax ? (dx > 0 ? -L.ex[u] : L.ex[u]) : (dz > 0 ? -L.ez[u] : L.ez[u]);
+          }
+          L.SCX[ns] = r === 1 ? L.hx[u] : Math.round((Math.max(bx[o], bx[p]) + Math.min(bx[o + 3], bx[p + 3])) * 10) - bo0;   // contact centre (stand / hang)
+          L.SCZ[ns] = r === 1 ? L.hz[u] : Math.round((Math.max(bx[o + 2], bx[p + 2]) + Math.min(bx[o + 5], bx[p + 5])) * 10) - bo2;
+          SK[ns] = 1; SW[ns] = w; SD[ns] = d; SE[ns] = k; SA[ns] = Math.max(1, Math.round(1024 * area)); SF[ns] = f; ns++;
+        }
+        if (pass === 0) B.nStand = ns;
+      }
+      return ns;
+    };
+    B.full = false;
+    B.loadJob = () => B.J || (B.J = S.loadJob(B));
+    // v2: что падает, если убрать broken (как B.collapse, плюс нагрузка) — сразу, без бюджета (деталей ≤ 4096)
+    B.collapse2 = (P, broken) => {
+      for (let i = 0; i < B.n; i++) g.seed[i] = 0;
+      if (broken) for (const i of broken) if (i >= 0 && i < B.n) g.seed[i] = 1;
+      B.full = B.over;
+      const J = B.loadJob(); J.start('rm', null, null, { P }); J.run();
+      return g.ng;
+    };
+    // v2: нагрузка всех деталей как есть (подсветка): B.g.L.ra — ‰ (больше 1000 — перегружено, но стоит: «держалось раньше»)
+    B.loads = P => {
+      for (let i = 0; i < B.n; i++) g.seed[i] = 0;
+      const J = B.loadJob(); J.start('rm', null, null, { P }, { ratiosOnly: true }); J.run();
+      return g.L;
+    };
     return B;
   };
+  // ═══ v2 — load paths with mass and moments (T-124, STRUCTURE_HAZARDS.md §2.1 S1.L) ═══
+  // Only for worlds with load: 1 while S.LOAD is on; everything above (v1) stays bit-identical (scripts/support-hash.js pins it).
+  // Pass 1 = the v1 solve (same values; after a failure some links / anchor contacts are disabled). Strict order: w is "before" u
+  // when sup[w] > sup[u], or equal and key(w) < key(u), key = (height, x, z) from the piece origin (lower cells first).
+  // Pass 2, after-most first: a holding node adds its own mass and sends its load W, first moments Mx, Mz (about its centre) and
+  // the height moment My to its supporters — "stand wins": standing on a supporter / true anchor below sends everything down;
+  // otherwise equal shares to all side and hang supporters (floor; remainders to the first in the fixed order −y, +x, −x, +z, −z,
+  // +y); a side link adds q·r. Positions are in half-units (grid: 2 per cell; boxes: 20 per metre), moments in kg·half-unit.
+  // Checks (integer compares): crush (load standing on a cell ≤ comp), side joint (|m + q·r_face| ≤ bend·HU, the weaker material),
+  // hang (q ≤ hang), storey overturning of each cut (8 directions, diagonals × 181/128, sway ‰ per height). Natural rows never
+  // fail; boundary anchors (piece edge, G.full, unloaded = code 5) absorb load unchecked and flag unk — unk never fails.
+  // Failure ("held before"): after > 1000 ‰, before ≤ 1000 ‰ and raised; cut in strict order unless a supporter is already cut
+  // or downstream of a cut; ≤ 3 rounds. Everything runs as a resumable job with a fixed op budget per world tick (same finishing
+  // tick at 30 / 60 / 144 fps, phone and PC). No allocation per call: arrays per graph, allocated once on first use.
+  S.SOLVE_BUDGET = 4096;   // node ops per world tick (start value, equal on every device; ≤ 2 ms per tick on phone ×4 — see support-load-test)
+  // op weights per node and phase (calibrated in support-load-test: a 4,096-op slice ≈ the same time in every phase)
+  const OPW = S.OPW = { build: 4, prep: 1, init: 1, pop: 1, order: 1, load: 4, storey: 3, select: 1, groups: 1 };   // ≈ 30 ns per op on a PC (node 24)
+  const ORD6 = [3, 0, 1, 4, 5, 2];   // fixed neighbour order (grid direction k6: 0 +x, 1 −x, 2 up, 3 down, 4 +z, 5 −z)
+  const REL6 = [1, 1, 2, 0, 1, 1];   // k6 → rel (0 stands on it, 1 side, 2 hangs under it)
+  const DXH = [2, -2, 0, 0, 0, 0], DZH = [0, 0, 0, 0, 2, -2];   // k6 → offset of the neighbour centre (half-units)
+  const SAT = 2 ** 50, RMAX = 1e9;
+  const D8X = [1, -1, 0, 0, 1, 1, -1, -1], D8Z = [0, 0, 1, -1, 1, -1, 1, -1];
+  const ratio = (dem, cap) => dem <= 0 ? 0 : cap > 0 ? Math.min(RMAX, Math.floor(dem * 1000 / cap)) : RMAX;
+  function loadState(g){
+    if (g.L) return g.L;
+    const max = g.max, ne = g.adj.length;
+    const L = g.L = {
+      W: new Float64Array(max), Mx: new Float64Array(max), Mz: new Float64Array(max), My: new Float64Array(max), C: new Float64Array(max), w0: new Float64Array(max),
+      hx: new Int32Array(max), hy: new Int32Array(max), hz: new Int32Array(max), ex: new Int32Array(max), ey: new Int32Array(max), ez: new Int32Array(max), key: new Int32Array(max),
+      unk: new Uint8Array(max), stand: new Uint8Array(max), standE: new Int32Array(max), ra: new Float64Array(max), rb: new Float64Array(max), rw: new Float64Array(max),
+      fk: new Uint8Array(max), fr: new Int32Array(max), ord: new Int32Array(max), rank: new Int32Array(max), tmp: new Int32Array(max), cnt: new Int32Array(1024),
+      edis: new Uint8Array(ne), adis: new Uint8Array(max), crushed: new Uint8Array(max), cutv: new Uint8Array(max), dn: new Uint8Array(max),
+      spt: new Int32Array(max * 6), spn: new Uint8Array(max), vis: new Uint8Array(max), cq: new Int32Array(max), cutOf: new Int32Array(max), cutR: new Float64Array(max), cutD: new Int8Array(max), cutS: new Int32Array(max + 1), cutM: new Int32Array(max), nCut: 0,
+      E6: new Int32Array(6), SK: new Uint8Array(32), SW: new Int32Array(32), SD: new Int8Array(32), SE: new Int32Array(32), SA: new Float64Array(32), SF: new Int32Array(32), SCX: new Int32Array(32), SCZ: new Int32Array(32), unkA: new Uint8Array(max),
+    };
+    if (!g.estv) g.estv = new Uint16Array(max * 6);
+    return L;
+  }
+  // one load job per graph (grid or boxes); geo — the grid / boxes object (lprep, isGrid, HU)
+  const NOO = Object.freeze({});
+  function job(geo){
+    const g = geo.g, J = { busy: false, done: false, phase: 0, ops: 0, round: 0, kind: 'rm', res: null, P: null };
+    const RES = { ng: 0, nf: 0, n: 0, over: 0, unk: 0, crushed: 0, worst: 0, rounds: 0, ops: 0, ticks: 0, full: false, tips: 0, tipD: -1 };   // one result object per job (read it before the next start)
+    let L = null, P = null, kind = 'rm', ci = 0, cj = 0, side = 0, oPass = 0, oSub = 0, sv = 0, sPh = 0, qh = 0, qt = 0, cutStart = -1, gat = 0, kg = 1000, stopAt = 0;
+    const PH_BUILD = 0, PH_PREP = 1, PH_SOLVE = 2, PH_ORDER = 3, PH_LOAD = 4, PH_STOREY = 5, PH_SELECT = 6, PH_GROUPS = 7, PH_DONE = 8;
+    // ── start: kind 'rm' (seeds were removed: before = with them) | 'add' (seeds were added: before = without them) ──
+    J.start = (k, seeds, read, b, o = NOO) => {
+      kind = J.kind = k === 'add' || k === 'now' ? k : 'rm'; P = J.P = b.P; L = loadState(g); kg = o.kg ?? 1000; stopAt = o.ratiosOnly ? 1 : 0;   // 'now' — как есть (до = после)
+      J.busy = true; J.done = false; J.ops = 0; J.round = 0; J.res = null; J.ticks = 0;
+      if (geo.isGrid) { geo.begin(seeds, read, b); J.phase = PH_BUILD; } else { J.phase = PH_PREP; }
+      ci = 0; side = 0;
+      return J;
+    };
+    // ── a slice of work: budget in node ops → true when finished ──
+    J.step = (budget = S.SOLVE_BUDGET) => {
+      if (!J.busy) return true;
+      J.ticks++;
+      while (budget > 0 && J.busy) {
+        const used = run(budget);
+        budget -= used; J.ops += used;
+      }
+      return !J.busy;
+    };
+    J.run = () => { while (J.busy) J.step(1 << 30); return J; };
+    const hold = u => !g.dis[u] && g.sup[u] >= P.min[g.mat[u]];
+    function run(budget){
+      switch (J.phase) {
+        case PH_BUILD: {
+          const nb = Math.max(1, Math.floor(budget / OPW.build)), i0 = geo.cursor();
+          const fin = geo.more(nb);
+          const used = (geo.cursor() - i0) * OPW.build;
+          if (fin) { J.phase = PH_PREP; ci = 0; }
+          return Math.max(used, 1);
+        }
+        case PH_PREP: {
+          const n = g.n, nb = Math.max(1, Math.floor(budget / OPW.prep)), e = Math.min(n, ci + nb);
+          geo.lprep(L, P, ci, e, kg);
+          const off = g.off, edis = L.edis;
+          for (let i = ci; i < e; i++) { L.adis[i] = 0; L.crushed[i] = 0; for (let k = off[i], k1 = off[i + 1]; k < k1; k++) edis[k] = 0; }
+          const used = (e - ci) * OPW.prep; ci = e;
+          if (ci >= n) {
+            for (let i = 0; i < n; i++) g.seed[i] = g.seed[i] ? 1 : 0;
+            side = 0; beginSolve(); J.phase = PH_SOLVE;
+          }
+          return Math.max(used, 1);
+        }
+        case PH_SOLVE: { const u = solveMore(budget); if (sPh === 2) { beginOrder(); J.phase = PH_ORDER; } return u; }
+        case PH_ORDER: { const u = orderMore(budget); if (oPass > 4) { ci = g.n - 1; beginLoad(); J.phase = PH_LOAD; } return u; }
+        case PH_LOAD: { const u = loadMore(budget); if (ci < 0) { unkUp(); ci = 0; cutStart = -1; L.nCut = 0; L.cutS[0] = 0; L.vis.fill(0, 0, g.n); J.phase = PH_STOREY; } return u; }
+        case PH_STOREY: {
+          const u = storeyMore(budget);
+          if (ci >= g.n && cutStart < 0) endSide();
+          return u;
+        }
+        case PH_SELECT: { const u = selectMore(budget); return u; }
+        case PH_GROUPS: { const u = groupsMore(budget); return u; }
+        default: J.busy = false; return 1;
+      }
+    }
+    // side 0 = "before", side 1 = "after" (dis: rm → seeds absent after; add → seeds absent before)
+    function beginSolve(){
+      const n = g.n, dis = g.dis, seed = g.seed, cr = L.crushed;
+      for (let i = 0; i < n; i++) dis[i] = (side === 0 ? (kind === 'add' ? seed[i] : 0) : (kind === 'rm' ? seed[i] : 0)) | cr[i];
+      g.head.fill(-1); sPh = 0; ci = 0; sv = MAXV;
+    }
+    // ── pass 1 (v1 values; disabled links / anchors respected), resumable ──
+    // bucket lists of the graph (one pair of functions per job: no closures per call)
+    const ins = (i, v) => { const head = g.head, nxt = g.nxt, prv = g.prv, h = head[v]; nxt[i] = h; prv[i] = -1; if (h >= 0) prv[h] = i; head[v] = i; };
+    const del = (i, v) => { const head = g.head, nxt = g.nxt, prv = g.prv, a = prv[i], b = nxt[i]; if (a >= 0) nxt[a] = b; else head[v] = b; if (b >= 0) prv[b] = a; };
+    const dig = i => oPass === 0 ? L.key[i] & 1023 : oPass === 1 ? (L.key[i] >> 10) & 1023 : oPass === 2 ? (L.key[i] >> 20) & 1023 : MAXV - g.sup[i];
+    function solveMore(budget){
+      const n = g.n, sup = g.sup, mat = g.mat, done = g.done, dis = g.dis, off = g.off, adj = g.adj, head = g.head, nxt = g.nxt, prv = g.prv;
+      const cap = P.cap, up = P.up, sd = P.side, down = P.down, bear = P.bear, edis = L.edis, adis = L.adis, anc = g.anc, bnd = g.bnd, estb = g.estb, estv = g.estv;
+      let used = 0;
+      if (sPh === 0) {
+        const nb = Math.max(1, Math.floor(budget / OPW.init)), e = Math.min(n, ci + nb);
+        for (let i = ci; i < e; i++) {
+          sup[i] = 0; done[i] = 0;
+          if (dis[i]) { done[i] = 1; continue; }
+          const m = mat[i], ab = (anc[i] | bnd[i]) & ~adis[i], eb = estb[i] & ~adis[i];
+          let c = 0;
+          if (ab) for (let d = 0; d < 6; d++) if (ab & (1 << d)) { const r = REL6[d], cc = MAXV - (r === 0 ? up[m] : r === 1 ? sd[m] : down[m]); if (cc > c) c = cc; }
+          if (eb) for (let d = 0; d < 6; d++) if (eb & (1 << d)) { const r = REL6[d], cc = estv[i * 6 + d] - (r === 0 ? up[m] : r === 1 ? sd[m] : down[m]); if (cc > c) c = cc; }
+          if (c > cap[m]) c = cap[m];
+          if (c > 0) { sup[i] = c; ins(i, c); }
+        }
+        used += (e - ci) * OPW.init; ci = e;
+        if (ci < n) return Math.max(1, used);
+        sPh = 1; sv = MAXV;
+      }
+      let left = Math.max(1, Math.floor((budget - used) / OPW.pop));
+      for (let v = sv; v >= 1; v--) {
+        let u = head[v];
+        while (u >= 0) {
+          if (left <= 0) { sv = v; return used; }
+          del(u, v); done[u] = 1; left--; used += OPW.pop;
+          if (bear[mat[u]]) {
+            for (let k = off[u], e = off[u + 1]; k < e; k++) {
+              if (edis[k]) continue;
+              const a = adj[k], w = a >> 2;
+              if (done[w]) continue;
+              const r = a & 3, m = mat[w];
+              let c = v - (r === 2 ? up[m] : r === 1 ? sd[m] : down[m]);
+              if (c > cap[m]) c = cap[m];
+              if (c > sup[w]) { if (sup[w] > 0) del(w, sup[w]); sup[w] = c; ins(w, c); }
+            }
+          }
+          u = head[v];
+        }
+      }
+      sPh = 2;
+      return Math.max(1, used);
+    }
+    // ── strict order: (1000 − sup, key) ascending; ≤ 48 nodes — insertion sort, else LSD radix 4 × 10 bits (stable) ──
+    function beginOrder(){ oPass = 0; oSub = 0; ci = 0; const n = g.n, ord = L.ord; for (let i = 0; i < n; i++) ord[i] = i; if (n <= 48) oPass = 5 - 1; }
+    function orderMore(budget){
+      const n = g.n, sup = g.sup, key = L.key;
+      if (oPass === 4) {   // small piece: insertion sort (same order as the radix: total order by (prim, key, index))
+        const ord = L.ord;
+        for (let i = 1; i < n; i++) { const v = ord[i], pv = MAXV - sup[v], kv = key[v]; let j = i - 1; while (j >= 0) { const w = ord[j], pw = MAXV - sup[w]; if (pw < pv || (pw === pv && (key[w] < kv || (key[w] === kv && w < v)))) break; ord[j + 1] = w; j--; } ord[j + 1] = v; }
+        finishOrder(); return Math.max(1, n * OPW.order);
+      }
+      // radix pass oPass (0: z, 1: x, 2: height, 3: 1000 − sup): sub 0 count, 1 prefix, 2 scatter
+      const cnt = L.cnt, src = oPass & 1 ? L.tmp : L.ord, dst = oPass & 1 ? L.ord : L.tmp;
+      const nb = Math.max(1, Math.floor(budget / OPW.order) * 4);   // cheap steps: 4 per op
+      let used = 0;
+      if (oSub === 0) {
+        if (ci === 0) cnt.fill(0);
+        const e = Math.min(n, ci + nb);
+        for (let k = ci; k < e; k++) cnt[dig(src[k])]++;
+        used += Math.ceil((e - ci) / 4) * OPW.order; ci = e;
+        if (ci < n) return Math.max(1, used);
+        let s = 0; for (let d = 0; d < 1024; d++) { const c = cnt[d]; cnt[d] = s; s += c; }
+        oSub = 2; ci = 0; used += 1;
+      }
+      const e = Math.min(n, ci + nb);
+      for (let k = ci; k < e; k++) { const i = src[k]; dst[cnt[dig(i)]++] = i; }
+      used += Math.ceil((e - ci) / 4) * OPW.order; ci = e;
+      if (ci >= n) { oPass++; oSub = 0; ci = 0; if (oPass === 4) finishOrder(); }   // 4 passes: ord → tmp → ord → tmp → ord
+      return Math.max(1, used);
+    }
+    function finishOrder(){ const n = g.n, ord = L.ord, rank = L.rank; for (let k = 0; k < n; k++) rank[ord[k]] = k; oPass = 5; }
+    // ── pass 2: load, after-most first (resumable over the order) ──
+    function beginLoad(){
+      const n = g.n, W = L.W, Mx = L.Mx, Mz = L.Mz, My = L.My, C = L.C, unk = L.unk, st = L.stand, rw = L.rw, fk = L.fk, spn = L.spn;
+      for (let i = 0; i < n; i++) { W[i] = 0; Mx[i] = 0; Mz[i] = 0; My[i] = 0; C[i] = 0; unk[i] = 0; L.unkA[i] = 0; st[i] = 0; rw[i] = 0; fk[i] = 0; spn[i] = 0; L.cutOf[i] = -1; }
+    }
+    const lossOf = (d, m) => { const r = REL6[d]; return r === 0 ? P.up[m] : r === 1 ? P.side[m] : P.down[m]; };
+    // unk (spec §2.1): every node adjacent to a boundary anchor, plus every node whose load passes through such a node (forward
+    // pass in the strict order: a supporter is before its node); the load pass already marked nodes that received unk load
+    function unkUp(){
+      const n = g.n, ord = L.ord, unkA = L.unkA, unk = L.unk, spt = L.spt, spn = L.spn;
+      for (let k = 0; k < n; k++) { const u = ord[k]; if (!unkA[u]) for (let j = 0; j < spn[u]; j++) if (unkA[spt[u * 6 + j]]) { unkA[u] = 1; break; } if (unkA[u]) unk[u] = 1; }
+    }
+    function loadMore(budget){
+      const ord = L.ord, rank = L.rank, mat = g.mat, sup = g.sup, off = g.off, adj = g.adj, edis = L.edis, adis = L.adis;
+      const W = L.W, Mx = L.Mx, Mz = L.Mz, My = L.My, C = L.C, unk = L.unk, hx = L.hx, hy = L.hy, hz = L.hz, ex = L.ex, ez = L.ez, w0 = L.w0;
+      const E6 = L.E6, SK = L.SK, SW = L.SW, SD = L.SD, SE = L.SE, SA = L.SA, SF = L.SF, min = P.min, cap = P.cap, bear = P.bear, lnone = P.lnone, bend = P.bend, hang = P.hang, comp = P.comp;
+      const HU = geo.HU, isGrid = geo.isGrid;
+      let left = Math.max(1, Math.floor(budget / OPW.load)), used = 0;
+      for (; ci >= 0 && left > 0; ci--, left--) {
+        used += OPW.load;
+        const u = ord[ci];
+        if (!hold(u)) continue;
+        const m = mat[u], mn = min[m], nat = lnone[m];
+        W[u] += w0[u]; My[u] += w0[u] * hy[u];
+        if (W[u] > SAT || Math.abs(Mx[u]) > SAT || Math.abs(Mz[u]) > SAT || Math.abs(My[u]) > SAT) { unk[u] = 1; W[u] = Math.min(W[u], SAT); }
+        if (g.bnd[u]) L.unkA[u] = 1;
+        // supporters: SK kind (1 node, 2 true anchor, 3 boundary), SW node, SD direction, SE edge (or −1 − direction), SA contact
+        // area × 1024 (grid: 1024), SF joint face offset (u centre − face, half-units); stand supporters are [s0, s1)
+        let ns = 0, s0 = 0, s1 = 0;
+        if (isGrid) {
+          E6[0] = E6[1] = E6[2] = E6[3] = E6[4] = E6[5] = -1;
+          for (let k = off[u], e = off[u + 1]; k < e; k++) E6[geo.dirOf(u, adj[k] >> 2)] = k;
+          const ab = g.anc[u] & ~adis[u], bb = g.bnd[u] & ~adis[u], eb = g.estb[u] & ~adis[u];
+          for (let j = 0; j < 6; j++) {
+            const d = ORD6[j], bit = 1 << d, loss = lossOf(d, m), k = E6[d];
+            let kd = 0, w = -1;
+            if (k >= 0) { w = adj[k] >> 2; if (!edis[k] && rank[w] < rank[u] && hold(w) && bear[mat[w]] && Math.min(cap[m], sup[w] - loss) >= mn) kd = 1; }
+            else if ((ab & bit) && Math.min(cap[m], MAXV - loss) >= mn) kd = 2;
+            else if ((eb & bit) && Math.min(cap[m], g.estv[u * 6 + d] - loss) >= mn) kd = 2;
+            else if ((bb & bit) && Math.min(cap[m], MAXV - loss) >= mn) kd = 3;
+            if (!kd) continue;
+            if (d === 3) { s0 = ns; s1 = ns + 1; }
+            SK[ns] = kd; SW[ns] = w; SD[ns] = d; SE[ns] = kd === 1 ? k : -1 - d; SA[ns] = 1024; SF[ns] = d === 0 ? -ex[u] : d === 1 ? ex[u] : d === 4 ? -ez[u] : d === 5 ? ez[u] : 0; L.SCX[ns] = hx[u]; L.SCZ[ns] = hz[u]; ns++;
+          }
+        } else { ns = geo.supporters(u, L, P, hold); s0 = 0; s1 = geo.nStand; }
+        L.spn[u] = 0;
+        if (!ns) { L.unkA[u] = 1; unk[u] = 1; continue; }
+        let rmax = 0, rk = 0, rf = 0;
+        if (s1 > s0) {
+          // stand wins: everything down (grid: the cell below; boxes: equal shares among everything it stands on)
+          const k = s1 - s0, q0 = Math.floor(W[u] / k), qr = W[u] - q0 * k, my0 = Math.floor(My[u] / k), myr = My[u] - my0 * k, SCX = L.SCX, SCZ = L.SCZ;
+          let Rx = Mx[u] + W[u] * hx[u], Rz = Mz[u] + W[u] * hz[u];   // each share acts at its contact centre; the rest — an equal couple
+          for (let j = s0; j < s1; j++) { const q = q0 + (j === s0 ? qr : 0); Rx -= q * SCX[j]; Rz -= q * SCZ[j]; }
+          const mx0 = Math.floor(Rx / k), mxr = Rx - mx0 * k, mz0 = Math.floor(Rz / k), mzr = Rz - mz0 * k;
+          L.stand[u] = SK[s0] === 1 ? 1 : SK[s0] === 2 ? 2 : 3; L.standE[u] = SE[s0];
+          for (let j = s0; j < s1; j++) {
+            const f = j === s0, q = q0 + (f ? qr : 0), mx = mx0 + (f ? mxr : 0), mz = mz0 + (f ? mzr : 0), my = my0 + (f ? myr : 0);
+            if (SK[j] === 3) { L.unkA[u] = 1; continue; }
+            if (SK[j] !== 1) continue;
+            const w = SW[j];
+            C[w] += q; W[w] += q; Mx[w] += mx + q * (SCX[j] - hx[w]); Mz[w] += mz + q * (SCZ[j] - hz[w]); My[w] += my; if (unk[u]) unk[w] = 1;
+            if (L.spn[u] < 6) L.spt[u * 6 + L.spn[u]++] = w;
+          }
+        } else {
+          // side / hang: equal shares to all of them; each joint is checked about its face
+          const k = ns, q0 = Math.floor(W[u] / k), qr = W[u] - q0 * k, mx0 = Math.floor(Mx[u] / k), mxr = Mx[u] - mx0 * k, mz0 = Math.floor(Mz[u] / k), mzr = Mz[u] - mz0 * k, my0 = Math.floor(My[u] / k), myr = My[u] - my0 * k;
+          // boxes: a part held on both sides of an axis carries its own mass to each side as a half-span (arm / 2: W·L/8, as the grid)
+          let both = 0;
+          if (!isGrid) { let mk = 0; for (let j = 0; j < ns; j++) mk |= 1 << SD[j]; both = ((mk & 3) === 3 ? 1 : 0) | ((mk & 48) === 48 ? 2 : 0); }
+          const own = Math.floor(w0[u] / k);
+          for (let j = 0; j < ns; j++) {
+            const f = j === 0, q = q0 + (f ? qr : 0), mx = mx0 + (f ? mxr : 0), mz = mz0 + (f ? mzr : 0), my = my0 + (f ? myr : 0), d = SD[j], kd = SK[j], w = SW[j];
+            if (kd === 3) { L.unkA[u] = 1; continue; }
+            if (!nat) {   // natural nodes never fail: no check
+              const wn = kd !== 1 || lnone[mat[w]];
+              let dem, cp;
+              if (d === 2) { dem = q; cp = Math.floor((wn ? hang[m] : Math.min(hang[m], hang[mat[w]])) * SA[j] / 1024); }
+              else { const xa = d === 0 || d === 1, half = both & (xa ? 1 : 2) ? Math.floor(own * SF[j] / 2) : 0; dem = Math.abs((xa ? mx : mz) + q * SF[j] - half); cp = Math.floor((wn ? bend[m] : Math.min(bend[m], bend[mat[w]])) * SA[j] / 1024) * HU; }
+              const r = ratio(dem, cp);
+              if (r > rmax) { rmax = r; rk = d === 2 ? 2 : 1; rf = SE[j]; }
+            }
+            if (kd !== 1) continue;   // true anchor: absorbed after the check
+            W[w] += q; Mx[w] += mx + q * (hx[u] - hx[w]); Mz[w] += mz + q * (hz[u] - hz[w]); My[w] += my; if (unk[u]) unk[w] = 1;
+            if (L.spn[u] < 6) L.spt[u * 6 + L.spn[u]++] = w;
+          }
+        }
+        // crush: the load standing on u
+        if (!nat && C[u] > 0) { const r = ratio(C[u], Math.floor(comp[m] * geo.topArea(u))); if (r > rmax) { rmax = r; rk = 3; rf = -1; } }
+        L.rw[u] = rmax; L.fk[u] = rk; L.fr[u] = rf;
+      }
+      return Math.max(1, used);
+    }
+    // ── storey overturning: cuts = stand links of one layer whose upper cells are side-connected inside the layer ──
+    function storeyMore(budget){
+      const n = g.n, vis = L.vis, cq = L.cq, off = g.off, adj = g.adj, edis = L.edis, hy = L.hy, ey = L.ey, st = L.stand;
+      let left = Math.max(1, Math.floor(budget / OPW.storey)), used = 0;
+      while (left > 0) {
+        if (cutStart < 0) {   // next start: a holding standing node not yet visited
+          while (ci < n && (vis[ci] || !st[ci] || !hold(ci))) ci++;
+          if (ci >= n) return Math.max(1, used);
+          qh = 0; qt = 0; cq[qt++] = ci; vis[ci] = 1; cutStart = ci;
+        }
+        while (qh < qt && left > 0) {
+          const u = cq[qh++]; left--; used += OPW.storey;
+          const hb = hy[u] - ey[u];
+          for (let k = off[u], e = off[u + 1]; k < e; k++) {
+            if (edis[k] || (adj[k] & 3) !== 1) continue;
+            const w = adj[k] >> 2;
+            if (vis[w] || !hold(w) || hy[w] - ey[w] !== hb) continue;
+            vis[w] = 1; cq[qt++] = w;
+          }
+        }
+        if (qh < qt) return Math.max(1, used);
+        evalCut(qt); cutStart = -1; ci++;
+      }
+      return Math.max(1, used);
+    }
+    function evalCut(qn){
+      const cq = L.cq, st = L.stand, W = L.W, Mx = L.Mx, Mz = L.Mz, My = L.My, hx = L.hx, hy = L.hy, hz = L.hz, ex = L.ex, ey = L.ey, ez = L.ez, unk = L.unk, mat = g.mat, lnone = P.lnone;
+      let Wt = 0, Mxo = 0, Mzo = 0, Myt = 0, R = 0, nm = 0, yc = 0, bad = false, live = false;
+      const ci0 = L.nCut, s0 = L.cutS[ci0];
+      for (let j = 0; j < qn; j++) {
+        const c = cq[j]; if (!st[c]) continue;
+        if (unk[c] || st[c] === 3) bad = true;
+        if (!lnone[mat[c]]) live = true;
+        Wt += W[c]; Mxo += Mx[c] + W[c] * hx[c]; Mzo += Mz[c] + W[c] * hz[c]; Myt += My[c]; yc = hy[c] - ey[c];
+        R += geo.cutBend(c, L, P);
+        L.cutM[s0 + nm++] = c;
+      }
+      if (!nm || bad || !live || !(Wt > 0)) return;
+      const sw = Math.floor((Myt - Wt * yc) * P.sway / 1000), HU = geo.HU, Rh = R * HU, nd = geo.dims2 ? 2 : 8;
+      let worst = 0, wd = -1;
+      for (let d = 0; d < nd; d++) {
+        const dx = D8X[d], dz = D8Z[d];
+        let ext = -Infinity;
+        for (let j = 0; j < nm; j++) { const c = L.cutM[s0 + j], e = dx * hx[c] + dz * hz[c] + (dx ? ex[c] : 0) + (dz ? ez[c] : 0); if (e > ext) ext = e; }
+        const over = dx * Mxo + dz * Mzo - Wt * ext;
+        const diag = dx && dz, dem = diag ? 128 * over + 181 * sw : over + sw, cp = diag ? 181 * Rh : Rh;
+        const r = ratio(dem, cp);
+        if (r > worst) { worst = r; wd = d; }
+      }
+      L.cutR[ci0] = worst; L.cutD[ci0] = wd; L.cutS[ci0 + 1] = s0 + nm; L.nCut = ci0 + 1;
+      for (let j = 0; j < nm; j++) { const c = L.cutM[s0 + j]; L.cutOf[c] = ci0; if (!lnone[mat[c]] && worst > L.rw[c]) { L.rw[c] = worst; L.fk[c] = 4; L.fr[c] = ci0; } }
+    }
+    function endSide(){
+      const n = g.n;
+      if (side === 0) {   // keep "before": ratios and support
+        for (let i = 0; i < n; i++) { L.rb[i] = L.rw[i]; g.sup0[i] = g.sup[i]; }
+        side = 1; beginSolve(); J.phase = PH_SOLVE; return;
+      }
+      for (let i = 0; i < n; i++) L.ra[i] = L.rw[i];
+      if (stopAt) { finish(); return; }
+      ci = 0; J.phase = PH_SELECT; L.anyCut = 0;
+      for (let i = 0; i < n; i++) { L.dn[i] = 0; L.cutv[i] = 0; }
+    }
+    J.failing = u => !L.unk[u] && !P.lnone[g.mat[u]] && L.ra[u] > 1000 && L.rb[u] <= 1000 && L.ra[u] > L.rb[u];
+    // ── failure selection: one forward pass in the strict (after) order ──
+    function selectMore(budget){
+      const n = g.n, ord = L.ord, spt = L.spt, spn = L.spn, dn = L.dn, cutv = L.cutv;
+      let left = Math.max(1, Math.floor(budget / OPW.select)), used = 0;
+      for (; ci < n && left > 0; ci++, left--) {
+        used += OPW.select;
+        const u = ord[ci];
+        if (!hold(u)) continue;
+        let d = 0; for (let j = 0; j < spn[u]; j++) { const s = spt[u * 6 + j]; if (cutv[s] || dn[s]) { d = 1; break; } }
+        dn[u] = d;
+        if (d || cutv[u] || !J.failing(u)) continue;
+        cutNode(u); L.anyCut = 1;
+      }
+      if (ci >= n) {
+        J.round++;
+        if (L.anyCut && J.round < 3) { side = 1; beginSolve(); J.phase = PH_SOLVE; }
+        else { ci = 0; beginGroups(); J.phase = PH_GROUPS; }
+      }
+      return Math.max(1, used);
+    }
+    const offEdge = k => { const edis = L.edis, a = g.adj[k], w = a >> 2, u = edgeFrom(k); edis[k] = 1; for (let j = g.off[w], e = g.off[w + 1]; j < e; j++) if ((g.adj[j] >> 2) === u) edis[j] = 1; };
+    const edgeFrom = k => { let lo = 0, hi = g.n - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (g.off[mid] <= k) lo = mid; else hi = mid - 1; } return lo; };
+    function cutNode(u){
+      const fk = L.fk[u], fr = L.fr[u];
+      L.cutv[u] = 1;
+      if (fk === 1 || fk === 2) { if (fr >= 0) offEdge(fr); else L.adis[u] |= 1 << (-1 - fr); }
+      else if (fk === 3) L.crushed[u] = 1;
+      else if (fk === 4) {   // storey: every stand link of the cut; tip edge = the failing direction (S1.T, SH3)
+        for (let j = L.cutS[fr], e = L.cutS[fr + 1]; j < e; j++) {
+          const c = L.cutM[j]; L.cutv[c] = 1;
+          if (L.stand[c] === 1 && L.standE[c] >= 0) offEdge(L.standE[c]);
+          else if (L.stand[c] === 2) L.adis[c] |= 8;   // the anchor below (direction 3)
+        }
+        L.tips = (L.tips | 0) + 1; L.tipD = L.cutD[fr];
+      }
+    }
+    // ── groups: v1 rule (held before, not after) + crushed cells; links cut by a failure split groups ──
+    function beginGroups(){
+      const n = g.n, fall = g.fall, gid = g.gid, sup = g.sup, sup0 = g.sup0, seed = g.seed, mat = g.mat, min = P.min, cr = L.crushed;
+      let nf = 0, nc = 0;
+      for (let i = 0; i < n; i++) {
+        const m = mat[i], was = kind === 'rm' ? !seed[i] && sup0[i] >= min[m] : (seed[i] || sup0[i] >= min[m]);
+        fall[i] = !cr[i] && was && (g.dis[i] ? 0 : sup[i] < min[m]) ? 1 : 0; gid[i] = -1; nf += fall[i]; nc += cr[i];
+      }
+      g.ng = 0; g.nf = nf; gat = 0; ci = 0; qh = qt = 0; L.nCrushed = nc;
+    }
+    function groupsMore(budget){
+      const n = g.n, fall = g.fall, gid = g.gid, gList = g.gList, gOff = g.gOff, q = g.q, off = g.off, adj = g.adj, edis = L.edis;
+      let left = Math.max(1, Math.floor(budget / OPW.groups)), used = 0;
+      while (left > 0) {
+        if (qh >= qt) {
+          if (qt) { g.ng++; qh = qt = 0; }
+          while (ci < n && (!fall[ci] || gid[ci] >= 0)) ci++;
+          if (ci >= n) { gOff[g.ng] = gat; finish(); return Math.max(1, used); }
+          gOff[g.ng] = gat; q[qt++] = ci; gid[ci] = g.ng;
+        }
+        while (qh < qt && left > 0) {
+          const u = q[qh++]; gList[gat++] = u; left--; used += OPW.groups;
+          for (let k = off[u], e = off[u + 1]; k < e; k++) { if (edis[k]) continue; const w = adj[k] >> 2; if (fall[w] && gid[w] < 0) { gid[w] = g.ng; q[qt++] = w; } }
+        }
+      }
+      return Math.max(1, used);
+    }
+    function finish(){
+      const n = g.n;
+      let over = 0, unkN = 0, worst = 0, crushed = 0;
+      for (let i = 0; i < n; i++) { if (L.unk[i]) unkN++; if (L.crushed[i]) crushed++; if (!L.cutv[i] && J.failing(i)) over++; if (L.ra[i] > worst && !L.unk[i]) worst = L.ra[i]; }
+      const R = J.res = RES; R.ng = stopAt ? 0 : g.ng; R.nf = stopAt ? 0 : g.nf; R.n = n; R.over = over; R.unk = unkN; R.crushed = crushed; R.worst = worst; R.rounds = J.round; R.ops = J.ops; R.ticks = J.ticks; R.full = !!geo.full; R.tips = L.tips | 0; R.tipD = L.tipD ?? -1;
+      L.tips = 0; L.tipD = -1;
+      J.busy = false; J.done = true; J.phase = PH_DONE;
+    }
+    // placement verdict after a ratiosOnly 'add' run: refuse when any node goes ≤ 1000 → > 1000 ‰, or an overloaded node gets more
+    J.refuses = () => {
+      if (geo.full) return false;
+      const n = g.n, mat = g.mat;
+      for (let i = 0; i < n; i++) { if (L.unk[i] || P.lnone[mat[i]]) continue; const a = L.ra[i], b = L.rb[i]; if ((b <= 1000 && a > 1000) || (b > 1000 && a > b)) return true; }
+      return false;
+    };
+    // load level for the build tint: worst after-ratio among nodes the edit raised (0 / ≤ 50 / ≤ 80 / ≤ 100 / > 100 %)
+    J.loadLevel = () => {
+      const n = g.n; let w = 0;
+      for (let i = 0; i < n; i++) if (!L.unk[i] && !P.lnone[g.mat[i]] && L.ra[i] > L.rb[i] && L.ra[i] > w) w = L.ra[i];
+      return w <= 0 ? 0 : w <= 500 ? 1 : w <= 800 ? 2 : w <= 1000 ? 3 : 4;
+    };
+    J.L = () => L;
+    J.crushedList = out => { out.length = 0; const n = g.n; for (let i = 0; i < n; i++) if (L.crushed[i]) out.push(i); return out; };
+    J.reset = () => { if (L) { L.edis.fill(0); L.adis.fill(0); L.crushed.fill(0); } };
+    return J;
+  }
+  S.loadJob = geo => job(geo);
+  // placement rule (v2): may block code go to (x, y, z)? v1 refuses — no; any node of the piece ≤ 1000 → > 1000 ‰, or an overloaded
+  // node gets more — no; G.full or unk on the path — yes. Synchronous on a small grid (≤ 4,096 nodes: the estimate grid of the game).
+  // → OUT { sup (v1 support of the new block), ok, lv (build tint = max(support level, load level)), load (load level), worst ‰ }
+  const OUT = { sup: 0, ok: true, lv: 0, load: 0, worst: 0, n: 0 }, SEED4 = [0, 0, 0, 0], PCO = { ratiosOnly: true, kg: 1000 };
+  S.placeCheck = (G, x, y, z, code, read, b, o) => {
+    const P = b.P, m = code >> 2, J = G.loadJob();
+    SEED4[0] = x; SEED4[1] = y; SEED4[2] = z; SEED4[3] = code;
+    PCO.kg = o && o.kg ? o.kg : 1000; J.start('add', SEED4, read, b, PCO); J.run();
+    const g = G.g, s = g.n ? g.sup[0] : 0, ld = J.loadLevel(), sl = S.level(s, m, P, g.gnd[0]);
+    OUT.sup = s; OUT.n = g.n; OUT.load = ld; OUT.worst = J.res.worst; OUT.ok = g.n > 0 && s >= P.min[m] && !J.refuses(); OUT.lv = Math.max(sl, ld);
+    return OUT;
+  };
+
   function sortRange(a, lo, hi){ for (let i = lo + 1; i < hi; i++) { const v = a[i]; let j = i - 1; while (j >= lo && (a[j] >> 2) > (v >> 2)) { a[j + 1] = a[j]; j--; } a[j + 1] = v; } }
 
   // ═══ Падение целым куском (сетка): шагами игры, а не кадрами — одинаково при любой частоте кадров ═══
