@@ -99,12 +99,21 @@
     //    (центр и ±32): пустыня → песчаные бури (климат дождя и снега при этом умеренный — где идёт снег, туда он и ложится), снега,
     //    болото, горы; поверхности и приметы (берег, река, вершины выше 95) — из тех же проб. От зерна мира: у всех игроков одна ──
     const wxCells = new Map(), WXB = { desert: 3, snow: 5, swamp: 7, mountains: 2 }, WXS = { desert: 0x3, beach: 0x1, ocean: 0x80, river: 0x80, plains: 0x6 | 0x20, forest: 0xa | 0x20, birch: 0xa | 0x20, mountains: 0x30, snow: 0x60, swamp: 0x184 };
-    const wxCol = {};
+    const wxCol = {}; let kbSrc = null, kbSrcG = null;   // kbSrc — источник D37E.biomes для мира (новый мир — новый источник)
     function kbRegion(x, z){
       const cx = Math.floor(x / 128), cz = Math.floor(z / 128), key = cx * 65536 + cz;
       let r = wxCells.get(key);
       if (r) return r;
       const mx = cx * 128 + 64, mz = cz * 128 + 64, zone = zoneAt(mx, mz), votes = {};
+      // мир v4 (логичные биомы T-116, js/engine/biomes.js): обычная зона — запись места из D37E.biomes (степь и саванна — по жаре
+      // и сухости, тропики, берег, вершины), зоны 1 и 2 — как ниже
+      if (zone === 0 && st.G && st.G.ver >= 4 && window.D37E.biomes?.region) {
+        const q = window.D37E.biomes.region(kbSrcG === st.G ? kbSrc : (kbSrcG = st.G, kbSrc = window.D37E.biomes.kb(st.G)), mx, mz, 128, {});
+        r = { cls: q.cls | 0, smask: q.smask | 0, F: q.F | 0, alt: 0, kc: 0 };
+        if (wxCells.size > 512) wxCells.clear();
+        wxCells.set(key, r);
+        return r;
+      }
       let smask = 0, F = 0, best = '', bn = 0;
       for (const [dx, dz] of [[0, 0], [32, 0], [-32, 0], [0, 32], [0, -32]]) {
         const col = st.G ? Vx.genColumn(st.G, mx + dx, mz + dz, wxCol) : null, b = col ? Vx.BIOME_IDS[col.b] : 'plains';

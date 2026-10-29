@@ -268,7 +268,7 @@
   WX._gen = 0;
 
   // ═══ Biome adapter (T-116 land track switches WX.biomeAt; until then: the game's own biome callback or the climate key) ═══
-  WX.biomeAt = (W, x, z) => (W && typeof W.biomeAt === 'function' ? W.biomeAt(x, z) : '');
+  WX.biomeAt = (W, x, z) => (W && typeof W.biomeAt === 'function' ? W.biomeAt(x, z) : '');   // a world on D37E.biomes: WX.regionOf below
   WX.regionOfBiome = (id, out = {}) => {
     const c = BIOME2CLS[id]; if (c === undefined) return null;
     const K = CLS[c]; out.cls = c; out.smask = K.smask; out.F = K.F; out.alt = 0; out.kc = 0;
@@ -276,6 +276,25 @@
     return out;
   };
   WX.regionOfClimate = (ck, out = {}) => { const c = CK2CLS[ck] ?? 0, K = CLS[c]; out.cls = c; out.smask = K.smask; out.F = K.F; out.alt = 0; out.kc = 0; return out; };
+  // T-145: the land track's logical biomes (js/engine/biomes.js, D37E.biomes) → region records. A game on that land passes
+  // C.world({ wxRegionAt: D37E.wx.regionOf(src) }) with src = D37E.biomes.t1(seed, …) | .kb(G): one record per 128 m weather cell
+  // (§7.1; B.region — the majority class of five samples, surfaces OR-ed, coast / high features), cached; class, surface and feature
+  // bit orders are the same in both files (climate_classes.csv). No D37E.biomes → null (the climate key decides, as before)
+  WX.regionOf = (src, cell = 128) => {
+    const B = E.biomes;
+    if (!B || !B.region || !src) return null;
+    const cache = new Map();
+    return (x, z) => {
+      const ix = Math.floor(x / cell), iz = Math.floor(z / cell), k = ix * 4194304 + iz;
+      let r = cache.get(k);
+      if (r) return r;
+      const q = B.region(src, x, z, cell, {});
+      r = { cls: q.cls | 0, smask: q.smask | 0, F: q.F | 0, alt: 0, kc: 0 };   // alt 0: heights are not the weather's business here
+      if (cache.size > 512) cache.clear();
+      cache.set(k, r);
+      return r;
+    };
+  };
 
   // ═══ Integer time and season (§1.3) ═══
   const mulhi = (h, t) => Math.floor(((h >>> 16) * t + Math.floor((h & 0xffff) * t / 65536)) / 65536);   // floor(h · t / 2^32), t < 2^23

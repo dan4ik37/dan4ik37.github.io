@@ -190,5 +190,39 @@ function smallShare(b, n, minCells, skip){
 // ── 6. no Math.random in generation code ──
 for (const f of ['js/engine/voxel-gen.js', 'js/engine/terra-core.js', 'js/engine/biomes.js']) ok(!/Math\.random/.test(fs.readFileSync(path.join(SITE, f), 'utf8')), f + ': no Math.random');
 
+// ── 7. T-145: weather by biome on this land — D37E.wx.regionOf(src) (js/engine/wx.js) → region records from D37E.biomes ──
+run('js/engine/wx.js');
+{
+  const X = E.wx, src = B.t1(1337, { gen: 2 }), RO = X.regionOf(src);
+  ok(typeof RO === 'function', 'wx.regionOf(t1 src) → a function');
+  // a desert cell and a cold cell of the new land (seed 1337)
+  let des = null, cold = null;
+  for (let r = 0; r < 60000 && !(des && cold); r += 512) for (let a = 0; a < 24 && !(des && cold); a++) {
+    const x = Math.round(Math.cos(a * Math.PI / 12) * r), z = Math.round(Math.sin(a * Math.PI / 12) * r), q = B.region(src, x, z, 128, {});
+    if (!des && q.cls === 3) des = [x, z]; if (!cold && q.cls === 5) cold = [x, z];
+  }
+  ok(!!des && !!cold, 'the new land has desert and snow weather cells', { des, cold });
+  if (des) {
+    const a = RO(des[0], des[1]), b = B.region(src, des[0], des[1], 128, {});
+    ok(a.cls === b.cls && a.smask === b.smask && a.F === b.F && Number.isInteger(a.smask) && a.kc === 0, 'regionOf = B.region (integers, no kids city)', { a, b });
+    ok(RO(des[0] + 1, des[1] + 1) === a || Math.floor((des[0] + 1) / 128) !== Math.floor(des[0] / 128), 'one record per 128 m cell (cached)');
+  }
+  // a year of the calendar weather at those cells: the desert gets sand / dust storms, the snow cell never does
+  const W = C2 => E.climate.world({ seed: 'terra-1337', mode: 'calendar', climateAt: B.climateAtFn(src), lapse: -.0065, seaY: 0, front: 4000, hourAt: () => 10.5, wxRegionAt: RO, realm: 'kids' });
+  const Wd = W(), t0y = Date.UTC(2026, 0, 1), seen = { des: {}, cold: {} };
+  for (let i = 0; i < 365 * 24 * 2; i++) {
+    const ms = t0y + i * 1800000;
+    if (des) { const s = Wd.at(des[0], des[1], ms, 5); if (s.special) seen.des[s.special] = (seen.des[s.special] || 0) + 1; }
+    if (cold) { const s = Wd.at(cold[0], cold[1], ms, 5); if (s.special) seen.cold[s.special] = (seen.cold[s.special] || 0) + 1; }
+  }
+  ok(des && (seen.des.sandstorm || seen.des.haboob), 'desert cell: sandstorms within a year', seen.des);
+  ok(cold && !seen.cold.sandstorm && !seen.cold.haboob, 'snow cell: no sandstorms', seen.cold);
+  console.log('  year of weather, specials (half-hour samples): desert', JSON.stringify(seen.des), '· snow', JSON.stringify(seen.cold));
+  // Kubomir v4: the same adapter on a voxel world
+  const RK = X.regionOf(B.kb(V.genInit('t145', { ver: 4 })));
+  const rk = RK(300, -200);
+  ok(rk && Number.isInteger(rk.cls) && rk.cls >= 0 && rk.cls <= 8, 'Kubomir v4: regionOf(kb src) gives a class 0…8', rk);
+}
+
 console.log(`biomes-test: ${pass} ok, ${fail} failed (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 process.exit(fail ? 1 : 0);

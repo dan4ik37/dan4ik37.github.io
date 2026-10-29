@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════
-//  ТЕРРА — скрытая страница проверки (T-111, W1; /play/terra, #/games/terra): новый рельеф ядра T1 (js/engine/terra*.js, сборка
+//  НОВАЯ ЗЕМЛЯ («Терра», T-111, W1; /play/terra; в каталоге с T-145): новый рельеф ядра T1 (js/engine/terra*.js, сборка
 //  terra.wasm из E:\d37-terrain) — плотность (высоты, биомы, реки, пещеры), блоки 32³ кольцами вокруг игрока, сборка в потоках,
 //  копать и насыпать, ходьба обычным player.js со своим человечком (анимации world3d), полёт (F). Плавающее начало: якорь
-//  (кратен 32 м) переезжает только в шаге логики. Нет в каталоге, поиске и рекордах. Флаг: D37E.terra.ON (terra.js).
+//  (кратен 32 м) переезжает только в шаге логики. Без рекордов. Флаг: D37E.terra.ON (terra.js); каталог — T145_OPEN (games.js).
 // ═══════════════════════════════════════
 // Управление: WASD — идти/лететь, Пробел — прыжок / вверх, C — присесть / вниз, Shift — бег / быстрее, мышь (тянуть) — смотреть;
 // клик по земле — копать (или насыпать: Q меняет), правый клик — насыпать; E / R — копать / насыпать в центр экрана; F — полёт.
@@ -34,6 +34,10 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
   // морю и ветру); SEA_TILES = false — прежняя плоскость моря на весь круг (была видна в ямах на суше); CAM_CLIMB = false — камера
   // в яме снова упирается в затылок; COMPACT = false — прежние вершины (Float32, копия для физики)
   const TERRA_GEN = 2, SEA_TILES = true, CAM_CLIMB = true, COMPACT = true;
+  // T-145: погода по биомам новой земли (climate.js + wx.js + precip.js + wx-fx.js): дождь, снег, туман и особая погода места —
+  // пустыня → песчаные бури, степь → пыльные бури и бураны, горы → град и туман; запись места — из логичных биомов (D37E.biomes →
+  // D37E.wx.regionOf). Откат одной строкой: TERRA_WX = false (небо и свет — как раньше, без частиц)
+  const TERRA_WX = true;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   let S = null;
 
@@ -48,7 +52,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     const st = S = { el, wrap, msg, dead: false, v2 };
     window.D37E.load().then(ok => {
       if (S !== st) return;
-      if (!window.D37E.terra?.ON) { msg.textContent = 'Проверка рельефа выключена'; return; }
+      if (!window.D37E.terra?.ON) { msg.textContent = 'Новая земля временно выключена'; return; }
       if (!ok || !window.D37E.supported?.()) { msg.textContent = 'Нужен браузер с WebGL (3D) — открой в Chrome или на компьютере'; return; }
       try { start(st); } catch (e) { console.error(e); msg.textContent = 'Ошибка запуска рельефа'; }
     });
@@ -83,6 +87,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
       st.sea.rotation.x = -Math.PI / 2; st.sea.scale.set(TS.radius * 64 * U + 80, TS.radius * 64 * U + 80, 1); st.sea.renderOrder = 2;
       R.scene.add(st.sea);
     }
+    if (TERRA_WX) weatherInit(st);
     // управление
     const C = st.C = E.controls({});
     const I = st.I = E.input(wrap, { controls: C, ignore: 'button, .tr-bar, .e-btn' });
@@ -151,6 +156,22 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     st.ro?.observe(wrap);
     R.resize();
     st.loop = E.loop(dt => step(st, dt), dt => frame(st, dt));
+  }
+  // погода: координаты погоды — метры мира (якорь + ед. / U; переезд якоря её не сдвигает), климат дождя и снега — по классу места
+  // (biomes.climateAtFn), особая погода — по записи места (wx.regionOf), небо кончается над рельефом ядра (в пещере не льёт). Время
+  // года — календарь (как в «Мире»), сутки — свет страницы. Сломалась — без неё
+  function weatherInit(st){
+    const E = window.D37E, Cl = E.climate, B = E.biomes, T1 = E.terraCore, R = st.R;
+    if (!Cl || !Cl.world || !Cl.attach || !B || !B.t1) return;
+    try {
+      const src = B.t1(SEED, { gen: TERRA_GEN });
+      const W0 = Cl.world({ seed: 'terra-' + SEED, mode: 'calendar', climateAt: B.climateAtFn(src), lapse: -.0065, seaY: 0, front: 4000,
+        hourAt: () => R.lighting?.time ?? 10.5, wxRegionAt: E.wx?.regionOf ? E.wx.regionOf(src) : null, realm: 'kids' });
+      const WA = Object.create(W0);
+      WA.at = (x, z, ms, y) => W0.at(x / U, z / U, ms, y == null ? y : y / U);
+      st.wx = Cl.attach(R, { world: WA, origin: () => [st.ax * U, st.az * U], skyTop: (x, z) => Math.max(0, T1.height(SEED, x / U, z / U)) * U, occlusion: false });
+      st.W = W0;
+    } catch (e) { console.warn('терра: погода не запустилась', e); st.wx = null; }
   }
   function touchButtons(st){
     if (!st.I.touch) return;
@@ -341,6 +362,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     }
     st.A.update(dt, performance.now() / 1000, cam.position);
     if (st.seaG) seaUpdate(st, dt); else st.sea.position.set(Math.round(cam.position.x / 8) * 8, 0, Math.round(cam.position.z / 8) * 8);
+    if (st.wx) try { st.wx.frame(dt); } catch (e) { console.warn('терра: погода', e); try { st.wx.dispose(); } catch (e2) {} st.wx = null; }
     I.frameEnd(); C.frameEnd();
     const mob = !!window.D37E.isMobile?.();
     TM.upload(mob ? 2 : 3, mob ? 2 : 4);
@@ -379,6 +401,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     try { st.TM?.dispose(); } catch (e) { console.error(e); }
     try { st.TS?.dispose(); } catch (e) { console.error(e); }
     try { st.sea?.geometry.dispose(); } catch (e) {}
+    try { st.wx?.dispose(); } catch (e) { console.error(e); }
     try { st.A?.dispose(); } catch (e) {}
     try { st.H?.dispose(); st.I?.dispose(); st.C?.dispose?.(); } catch (e) {}
     try { st.R?.dispose(); } catch (e) { console.error(e); }
@@ -400,6 +423,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     flat: () => { if (S) { const b = S.wrap.getBoundingClientRect(); queueEdit(S, b.left + b.width / 2, b.top + b.height * .62, 'flat'); } },
     t145: () => S && { gen: S.TS.gen, seaTiles: S.seaN ?? null, climbP: S.rig.climbP, compact: !!S.TM.compact, biome: S.TS.climate(S.ax + (S.mode === 'walk' ? S.Pl.ch.x : S.fly.x) / U, S.az + (S.mode === 'walk' ? S.Pl.ch.z : S.fly.z) / U) },
     tp: (x, z) => { if (!S) return; const ax = Math.floor(x / 32) * 32, az = Math.floor(z / 32) * 32; rebase(S, ax - S.ax, az - S.az); const lx = (x - S.ax) * U, lz = (z - S.az) * U; if (S.mode === 'fly') { S.fly.x = lx; S.fly.z = lz; } else { S.refY = S.TS.height(x, z) + 2; S.Pl.place(lx, S.ph.terrain.sample(lx, lz), lz, S.Pl.yaw); } },
+    wx: () => S && S.wx && Object.assign(S.wx.stats(), { region: S.W && S.W.wxRegionAt ? S.W.wxRegionAt(S.ax + (S.mode === 'walk' ? S.Pl.ch.x : S.fly.x) / U, S.az + (S.mode === 'walk' ? S.Pl.ch.z : S.fly.z) / U) : null }),
     get S(){ return S; },
   };
   window.GAME_IMPL = window.GAME_IMPL || {};

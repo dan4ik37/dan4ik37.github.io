@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════
-//  ПЛАНЕТА — скрытая страница проверки (/play/planet, #/games/planet): полёт с орбиты до земли без экранов загрузки,
+//  ПЛАНЕТА (/play/planet; в каталоге с T-145, откат — T145_OPEN в games.js): полёт с орбиты до земли без экранов загрузки,
 //  посадка и ходьба своим персонажем по «плоскому куску» (обычный player.js), день и ночь от вращения планеты.
-//  Движок — js/engine/planet.js + planet-view.js (T-051, docs/plans/planet.md). Нет в каталоге, поиске и рекордах.
+//  Движок — js/engine/planet.js + planet-view.js (T-051, docs/plans/planet.md). Без рекордов. Строка отладки (куски, ЦП) — по F3.
 //  Небесная механика (T-079, docs/plans/planet-space.md PS-1): время — часы мира (js/engine/clock.js: у всех одно, по серверу),
 //  Луна и Песчаная летят по орбитам Кеплера (orbit.js, system.js) и видны в небе с фазами (space-view.js); «🪐 Система» (M) — карта.
 // ═══════════════════════════════════════
@@ -16,6 +16,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
 .pl-hud{position:absolute;left:10px;top:10px;z-index:5;max-width:min(92%,520px);padding:6px 10px;border-radius:12px;background:rgba(6,8,20,.6);color:#e2e8f0;font:700 12px/1.45 Montserrat,system-ui,sans-serif;pointer-events:none;white-space:pre-wrap}
 .pl-hud b{color:#fff}
 .pl-st{display:block;margin-top:2px;font:600 11px/1.4 ui-monospace,Consolas,monospace;color:#a5b4fc}
+.pl-st[hidden]{display:none}
 .pl-bar{position:absolute;right:10px;top:10px;z-index:6;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:60%}
 .pl-bar button{border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:.38rem .7rem;background:rgba(10,8,24,.66);color:#fff;font:800 .78rem Montserrat,sans-serif;cursor:pointer;min-height:36px}
 .pl-bar button.on{background:var(--accent,#9b6dff);border-color:transparent}
@@ -99,6 +100,9 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     const hud = document.createElement('div'); hud.className = 'pl-hud';
     const h1 = document.createElement('div'), h2 = document.createElement('span'); h2.className = 'pl-st';
     hud.appendChild(h1); hud.appendChild(h2); wrap.appendChild(hud);
+    // строка отладки (куски, кэш, вызовы, ЦП) — скрыта (правило HUD: отладка не на виду); F3 — показать (запоминается на устройстве)
+    let dbg = false; try { dbg = localStorage.getItem('d37_planet_dbg') === '1'; } catch (e) {}
+    h2.hidden = !dbg;
     st.h1 = h1; st.h2 = h2;
     const bar = document.createElement('div'); bar.className = 'pl-bar'; wrap.appendChild(bar);
     const btn = (txt, title, f) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.title = title; b.addEventListener('click', e => { e.stopPropagation(); f(b); }); bar.appendChild(b); return b; };
@@ -126,6 +130,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
       if (st.map?.isOpen) return;
       if (e.code === 'KeyT') cycleTime(st);
       if (e.code === 'KeyL') toggleLand(st);
+      if (e.code === 'F3') { e.preventDefault(); st.h2.hidden = !st.h2.hidden; try { localStorage.setItem('d37_planet_dbg', st.h2.hidden ? '0' : '1'); } catch (e2) {} }
     };
     window.addEventListener('keydown', st.keyT);
   }
@@ -257,7 +262,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     if (st.wx) {   // погода: частицы и небо движка — каждый кадр, свет планеты — 4 раза в секунду
       try {
         st.wx.frame(dt);
-        if ((st.wxT = (st.wxT || 0) - dt) <= 0) { st.wxT = .25; V.setWeather(planetWx(st.wx.vis || st.wx.state)); }
+        if ((st.wxT = (st.wxT || 0) - dt) <= 0) { st.wxT = .25; V.setWeather(planetWx(st.wx.vis || st.wx.state, st.wx.wfx)); }
       } catch (e) { console.warn('планета: погода', e); try { st.wx.dispose(); } catch (e2) {} st.wx = null; V.setWeather(null); }
     }
     V.update(dt, st.t, ms);
@@ -284,7 +289,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     st.h1.textContent = `🪐 ${st.mode === 'fly' ? '✈ полёт' : '🚶 пешком'} · высота ${altS} · ${spdS}\n${lat}, ${lon} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} местного${moonS}${sk}\n${own}`;
     const s = V.stats(), rs = R.stats;
     const fps = rs.frames ? 1000 / (rs.sumDt / rs.frames) : 0, cpu = rs.frames ? rs.sumCpu / rs.frames : 0;
-    st.h2.textContent = `кусков ${s.shown} · кэш ${s.cached} · в очереди ${s.queued + s.building} · вызовов ${rs.calls} · FPS ${fps.toFixed(0)} · ЦП ${cpu.toFixed(1)} мс`;
+    if (!st.h2.hidden) st.h2.textContent = `кусков ${s.shown} · кэш ${s.cached} · в очереди ${s.queued + s.building} · вызовов ${rs.calls} · FPS ${fps.toFixed(0)} · ЦП ${cpu.toFixed(1)} мс`;
     rs.frames = 0; rs.sumDt = 0; rs.sumCpu = 0; rs.maxDt = 0; rs.maxCpu = 0; rs.sumR = 0;
     if (st.tele && !st.tele.hidden && st.teleId) st.tele.textContent = `🔭 ${st.teleName} ×${Math.round(50 / cam.fov)}${st.track ? ' · слежу' : ''} — вернуть`;
     st.bLand.textContent = st.mode === 'fly' ? '🛬 Сесть' : '✈ Взлететь';
@@ -295,8 +300,18 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
   function toggleLand(st){ if (st.mode === 'fly') land(st); else fly(st); }
   // погода → земля планеты (planet-view.js V.setWeather): крючок для погоды по биомам (T-145, BIOME_WEATHER.md v2 §WX2) — новые поля
   // (dust, tint, vis, flat) просто идут дальше, когда ядро погоды начнёт их давать
-  function planetWx(v){
-    return v ? { cloud: v.cloud, rain: v.rain, fog: v.fog, storm: v.thunder, snowCover: v.snowCover, wet: v.wet, dust: v.dust, tint: v.tint, vis: v.vis, flat: v.flat } : null;
+  // особая погода по биомам (wx.js + wx-fx.js, T-145): пыль, цвет, видимость и белая мгла — сглаженные числа wx-fx (те же, что у неба
+  // «Мира»); цвет у wx-fx линейный, крючок ждёт sRGB. Пустынные широты — песчаные бури, степные — пыльные и бураны (класс — по климату места)
+  const WXT = [0, 0, 0];
+  function planetWx(v, F){
+    if (!v) return null;
+    const o = { cloud: v.cloud, rain: v.rain, fog: v.fog, storm: v.thunder, snowCover: v.snowCover, wet: v.wet, dust: v.dust, tint: v.tint, vis: v.vis, flat: v.flat };
+    if (F && F.K) {
+      const K = F.K;
+      o.dust = K.dust; o.flat = K.flat; o.vis = K.vis < 509 ? K.vis : 0;
+      if (K.tint[0] + K.tint[1] + K.tint[2] > 0) { for (let j = 0; j < 3; j++) WXT[j] = Math.pow(Math.max(0, K.tint[j]), 1 / 2.2); o.tint = WXT; }
+    }
+    return o;
   }
   function land(st){
     if (st.mode !== 'fly') return;

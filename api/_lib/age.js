@@ -24,6 +24,7 @@ export const GAME_AGE = {
   balda: [0, ''], fillword: [0, ''], sudoku: [0, ''], mahjong: [0, ''], miner: [0, ''], kosynka: [0, ''], freecell: [0, ''], pauk: [0, ''], blocks: [0, ''],
   domino: [0, ''], chess: [0, ''], uno: [0, ''], durak: [0, ''], pool: [0, ''], ludo: [0, ''], nardy: [0, ''],
   wardrobe: [0, ''], cities: [0, ''], words: [0, ''],
+  planet: [0, ''], terra: [0, ''],   // T-145: «Планета», «Новая земля»
   guess: [12, 'Кусочки превью роликов канала — бывают страшилки.'],
   '2048': [0, ''], checkers: [0, ''], catch: [0, ''], sea: [0, ''], snake: [0, ''], memory: [0, ''], ttt: [0, ''], reaction: [0, ''],
   emoji: [6, 'Названия игр, в том числе хорроров и стрелялок (только эмодзи).'],
