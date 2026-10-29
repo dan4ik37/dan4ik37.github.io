@@ -32,7 +32,11 @@ Russian). Read only the area file(s) your task needs — never all of them.
 - Age: kids realm (<18, unknown or unverified) and adults realm (18+ reliably verified), separated in DB (realm + RLS),
   realtime, servers, search, P2P. Chat bands <9 / 9–12 / 13–15 / 16–17; <9 chat only with parent consent. Payments: <14 none,
   14–17 with parent consent and limits. Birth year is confidential (only the person sees it). User text only via
-  `textContent` / `esc()`. The server decides what matters. No graphic violence: knockout and fade instead of death.
+  `textContent` / `esc()`. The server decides what matters. Violence and horror BY AGE (owner 29.10, «как у китайцев —
+  зелёная кровь, блюр»): same gameplay, presentation tiers per the game's/realm's label — kids realm: knockout and fade, no
+  blood (or stylised/blurred), cartoon monsters; 18+ realm only (reliably verified; provider still blocked → code ships
+  switched off): scarier, more dangerous monsters and harsher visuals, never on pages with AdSense/РСЯ ads (shocking-content
+  policy). Relationships with friendly creatures: friendship/companions for all; romance only 18+ and never explicit.
 - Games: identical gameplay on phone and PC (fixed step, per-second forces, input = action state); "weak/strong" quality is
   visuals only; determinism tests at 30/60/144 FPS.
 - Payments: no money intake until the owner has a legal status and a provider. DonationAlerts donations give the "💛 Донатер"
