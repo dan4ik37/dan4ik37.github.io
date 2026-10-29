@@ -145,11 +145,9 @@
   C.STATES = ['clear', 'cloudy', 'overcast', 'rain', 'thunderstorm', 'snow', 'blizzard', 'fog', 'heat'];
   C.STATE_NAMES = { clear: 'ясно', cloudy: 'облачно', overcast: 'пасмурно', rain: 'дождь', thunderstorm: 'гроза', snow: 'снег', blizzard: 'метель', fog: 'туман', heat: 'зной' };
   C.STATE_ICONS = { clear: '☀️', cloudy: '⛅', overcast: '☁️', rain: '🌧', thunderstorm: '⛈', snow: '🌨', blizzard: '❄️', fog: '🌫', heat: '🔥' };
-  // Особая погода по биому (T-135, BIOME_WEATHER.md v2, js/engine/wx.js): состояния ДОПИСАНЫ в конец (сохранённые миры, скрипты и
-  // sanitize работают как раньше); видны только в s.stateX (C.labelX), s.state и C.label — как были
-  C.STATES.push('sandstorm', 'duststorm', 'buran', 'whiteout', 'hail', 'downpour', 'freezing_rain', 'seafog');
-  Object.assign(C.STATE_NAMES, { sandstorm: 'песчаная буря', duststorm: 'пыльная буря', buran: 'буран', whiteout: 'белая мгла', hail: 'град', downpour: 'ливень', freezing_rain: 'ледяной дождь', seafog: 'морской туман' });
-  Object.assign(C.STATE_ICONS, { sandstorm: '🏜️', duststorm: '💨', buran: '🌬️', whiteout: '⚪', hail: '🧊', downpour: '☔', freezing_rain: '🥶', seafog: '🌁' });
+  // Особая погода по биому (T-135, BIOME_WEATHER.md v2, js/engine/wx.js): её состояния (песчаная буря, буран…) дописывает в конец
+  // C.STATES сам wx.js — только в играх, где он есть (на страницах сайта и в «Студии 3D» без него список прежний); видны только
+  // в s.stateX (C.labelX), s.state и C.label — как были
   C.SPECIAL = true;   // откат одной строкой: false — погода как до T-135 (особой погоды нет, wx.js не зовётся)
   C.labelX = s => (s ? s.state : 'clear');   // wx.js заменяет: состояние с особой погодой
   C.label = s => s.thunder > .35 ? 'thunderstorm' : s.snow > .5 && s.wind > 10 ? 'blizzard' : s.snow > .08 ? 'snow' : s.rain > .08 ? 'rain'

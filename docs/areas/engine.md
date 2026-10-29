@@ -118,7 +118,7 @@
 - Core (WX1): js/engine/wx.js, loaded after climate.js only in games (index.html keeps the light climate.js). climate.js gets a ~25-line
   hook: `sample()` calls `E.wx.apply()` after the ribbon mix — inside a special's window the parts follow the integer event (precip
   type, hail, temperature band, wind ≥ the row's, direction), outside every window `null` → every old field bit-identical (golden vs
-  the pre-T-135 climate.js from git). New states are APPENDED (sandstorm, duststorm, buran, whiteout, hail, downpour, freezing_rain,
+  the pre-T-135 climate.js from git). New states are APPENDED by wx.js (only where it loads: the site and Studio keep nine) (sandstorm, duststorm, buran, whiteout, hail, downpour, freezing_rain,
   seafog) and appear only in `s.stateX` (C.labelX); `state` / C.label unchanged. New fields: special, sp, vis (m, 510 = clear), dust,
   dustC, tint, tintK, flat, hailSize (cm), freezing, fireRisk, sign/signKey (lead: in-world signs only), funnel, flav/flav2, glaze, drift.
 - Schedule: integer twin of the ribbon (`slotKindQ` = slotEvent, 0 mismatches in 168,000 slots), salts 0x5758 / 60+; one main special

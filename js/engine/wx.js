@@ -603,6 +603,11 @@
     return s;
   };
   C.labelX = s => (s && s.sp > .35 && STATEX[s.special]) || (s ? s.state : 'clear');
+  // the new states are APPENDED (saved worlds, scripts and sanitize keep working); only where wx.js runs, so a page without it
+  // (the site, Studio until its «Особая погода» setting) keeps the nine old ones and never offers a state it cannot show
+  if (!C.STATES.includes('sandstorm')) C.STATES.push('sandstorm', 'duststorm', 'buran', 'whiteout', 'hail', 'downpour', 'freezing_rain', 'seafog');
+  Object.assign(C.STATE_NAMES, { sandstorm: 'песчаная буря', duststorm: 'пыльная буря', buran: 'буран', whiteout: 'белая мгла', hail: 'град', downpour: 'ливень', freezing_rain: 'ледяной дождь', seafog: 'морской туман' });
+  Object.assign(C.STATE_ICONS, { sandstorm: '🏜️', duststorm: '💨', buran: '🌬️', whiteout: '⚪', hail: '🧊', downpour: '☔', freezing_rain: '🥶', seafog: '🌁' });
 
   // ═══ Integer record for gameplay hosts (WxRec, §3.1) and AI visibility (§6.1) ═══
   WX.at = (W, x, z, ms = Date.now(), out = {}) => {
