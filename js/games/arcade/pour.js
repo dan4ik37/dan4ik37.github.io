@@ -7,6 +7,10 @@
 // полки (со 2-го уровня) и наклонные доски (с 4-го); вода течёт, как только отпустил палец (или пробел; сама — когда 4 с
 // ничего не рисуешь: пока палец рисует, вода ждёт — проверка T-140: раньше 4 с считались от начала уровня и вода лилась
 // на недорисованную горку).
+// Проверка T-140 (D2): капля считается, только если по пути коснулась ТВОЕЙ линии. Раньше вода, что лилась сама (4 с без
+// рисования, пробел) и попадала в стакан по полкам и доскам уровня, давала очки и ⭐: партия без единой линии выигрывала
+// 27 из 200 (в среднем 54 очка), «только пробел» — 44 из 200. Такие капли в стакане видны, но не в счёт. Победа — 3 ⭐ за
+// партию (одна ⭐ бывала и от каракулей наугад: 16 из 30 партий; три — 2 из 30, у бота-горки — 5–18 ⭐).
 // Исправлено против прототипа: (1) капли двигались «за кадр» — на 144 Гц вода лилась в 2,4 раза быстрее; теперь шаг 60 Гц,
 // 3 подшага, скорости в секунду (и предел скорости — капля не проскакивает линию); (2) Ls.flatMap / slice / map / W.filter и
 // новые объекты-капли каждый кадр (мусор) — теперь пулы в типизированных массивах; (3) Math.random — rng (у соперников те же
@@ -17,9 +21,9 @@
   const T = ArcadeKit.T;
   const W = 320, H = 440, SPY = 30, GW = 64, GY = 364, GB = 428, RD = 2.5, RC = 5.5;
   const NP = 128, NS = 160, NDROP = 100, EMIT = 2, SUB = 3, AGE = 6 * 60, AUTO = 4 * 60, PAUSE = 70;
-  const G0 = 1100, VMAX = 640, INK = 440, STEPD = 8, TIME = 120 * 60;
+  const G0 = 1100, VMAX = 640, INK = 440, STEPD = 8, TIME = 120 * 60, WINSTARS = 3;
   const C = { bg: '#141a2b', tile: 'rgba(255,255,255,.03)', tap: '#9aa4b8', tapD: '#5d6678', glass: '#bcd7ff', glassBg: 'rgba(188,215,255,.07)', water: '#4db8ff',
-    waterD: 'rgba(77,184,255,.55)', line: '#ffffff', shelf: '#b08355', shelfD: '#7a5532', ink: '#5ad1ff', inkBg: 'rgba(255,255,255,.08)', star: '#ffd166', good: 'rgba(122,255,170,.16)', poor: 'rgba(255,77,109,.14)' };
+    waterD: 'rgba(77,184,255,.55)', line: '#ffffff', shelf: '#b08355', shelfD: '#7a5532', ink: '#5ad1ff', inkBg: 'rgba(255,255,255,.08)', star: '#ffd166', good: 'rgba(122,255,170,.16)', poor: 'rgba(255,77,109,.14)', selfW: 'rgba(188,215,255,.16)' };
 
   // свой генератор (xorshift32) с зерном из rng партии: целое 0…2^24−1 — без «упакованных» дробных
   function rnd(s){ let x = s.rs[0]; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; s.rs[0] = x; return x >>> 8; }
@@ -28,9 +32,9 @@
   function create(rng){
     const s = { rng, rs: Int32Array.of((rng() * 4294967296) | 0 || 1), t: 0, left: TIME, score: 0, over: false, why: '', snd: 0,
       lv: 0, ph: 0, pt: 0, idle: 0, sx: 160, gx: 100, qa: .5, qb: .5, qc: .5, qd: .5, emitted: 0, got: 0, ink: INK, dr: 0, lx: 0, ly: 0, nfix: 0, ns: 0, mine: 0,
-      stars: 0, total: 0, bonus: 0, lastGot: -1, lastStar: 0,
+      stars: 0, total: 0, bonus: 0, lastGot: -1, lastStar: 0, self: 0, selfAll: 0,
       x: new Float64Array(NP), y: new Float64Array(NP), x0: new Float64Array(NP), y0: new Float64Array(NP), vx: new Float64Array(NP), vy: new Float64Array(NP),
-      on: new Uint8Array(NP), age: new Uint16Array(NP),
+      on: new Uint8Array(NP), age: new Uint16Array(NP), mark: new Uint8Array(NP),
       ax: new Float64Array(NS), ay: new Float64Array(NS), bx: new Float64Array(NS), by: new Float64Array(NS),
       x1: new Float64Array(NS), x2: new Float64Array(NS), y1: new Float64Array(NS), y2: new Float64Array(NS), kind: new Uint8Array(NS) };
     level(s);
@@ -51,7 +55,7 @@
 
   // новый уровень: кран и стакан не друг над другом; полки — со 2-го, наклонные доски — с 4-го
   function level(s){
-    s.lv++; s.ph = 0; s.pt = 0; s.idle = 0; s.emitted = 0; s.got = 0; s.ink = INK; s.dr = 0; s.ns = 0; s.mine = 0;
+    s.lv++; s.ph = 0; s.pt = 0; s.idle = 0; s.emitted = 0; s.got = 0; s.self = 0; s.ink = INK; s.dr = 0; s.ns = 0; s.mine = 0;
     s.on.fill(0);
     let sx = 0, gx = 0;
     for (let k = 0; k < 30; k++) {
@@ -116,6 +120,7 @@
       const dot = s.vx[i] * nx + s.vy[i] * ny;
       const kk = dot < 0 ? 1.3 * dot : 0;
       s.vx[i] = (s.vx[i] - kk * nx) * .992; s.vy[i] = (s.vy[i] - kk * ny) * .992;
+      s.mark[i] |= s.kind[k] === 0 ? 1 : 0;   // коснулась линии игрока — капля «его»
     }
   }
 
@@ -144,7 +149,7 @@
         let i = 0;
         while (i < NP && s.on[i]) i++;
         if (i < NP) {
-          s.on[i] = 1; s.age[i] = 0;
+          s.on[i] = 1; s.age[i] = 0; s.mark[i] = 0;
           s.x[i] = s.sx + ((rnd(s) % 61) - 30) * .1; s.y[i] = SPY + 6; s.vx[i] = ((rnd(s) % 41) - 20); s.vy[i] = 60;
           s.x0[i] = s.x[i]; s.y0[i] = s.y[i];
         }
@@ -166,7 +171,10 @@
         }
         const x = s.x[i], y = s.y[i];
         if (y > GY + 6 && y < GB && x > gx + 2 && x < gx + GW - 2) {
-          s.on[i] = 0; s.got++; s.score++; s.snd = s.got % 10 === 0 ? 523 + s.got * 4 : s.snd;
+          s.on[i] = 0;
+          // не касалась твоей линии — попала сама (полки и доски уровня): видна, но не в счёт
+          if (!s.mark[i]) { s.self++; s.selfAll++; continue; }
+          s.got++; s.score++; s.snd = s.got % 10 === 0 ? 523 + s.got * 4 : s.snd;
           continue;
         }
         if (y > H + 12 || ++s.age[i] > AGE) { s.on[i] = 0; continue; }
@@ -192,7 +200,9 @@
     ctx.fillStyle = C.tap; ctx.fillRect(s.sx - 12, 8, 24, 14); ctx.fillRect(s.sx - 7, 20, 14, SPY - 18);
     // стакан: фон, вода (уровень — сколько налито), стенки
     ctx.fillStyle = C.glassBg; ctx.fillRect(gx, GY, GW, GB - GY);
-    const lvl = (GB - GY - 4) * Math.min(1, s.got / NDROP);
+    const lvl = (GB - GY - 4) * Math.min(1, s.got / NDROP), lv2 = (GB - GY - 4) * Math.min(1, (s.got + s.self) / NDROP);
+    // капли «сами» (не касались твоей линии) — бледный слой поверх: видно, что вода попала, но не в счёт
+    if (lv2 > lvl) { ctx.fillStyle = C.selfW; ctx.fillRect(gx + 3, GB - lv2, GW - 6, lv2 - lvl); }
     ctx.fillStyle = C.waterD; ctx.fillRect(gx + 3, GB - lvl, GW - 6, lvl);
     ctx.fillStyle = C.star; ctx.fillRect(gx - 4, GB - (GB - GY - 4) * .8 - 1, 6, 2);
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -226,7 +236,7 @@
   ArcadeKit.define('pour', {
     kind: 'canvas', W, H, drag: true,
     title: '🥛 Налей воды',
-    intro: 'Нарисуй пальцем горку от крана к стакану и отпусти — польётся вода. Капля в стакане — очко, 80 из 100 — ⭐. Чернила ограничены: сэкономишь — бонус. 2 минуты, уровни всё хитрее.',
+    intro: 'Нарисуй пальцем горку от крана к стакану и отпусти — польётся вода. Капля, что прокатилась по твоей линии и попала в стакан, — очко, 80 из 100 — ⭐, три ⭐ — победа. Чернила ограничены: сэкономишь — бонус. 2 минуты, уровни всё хитрее.',
     controls: 'Рисуй пальцем (или мышью с зажатой кнопкой), отпусти — вода польётся. Пробел — лить сразу. Пока рисуешь, вода ждёт; не рисуешь 4 с — польётся сама.',
     duelTitle: 'Одинаковые уровни у обоих',
     keys: { Space: 0 },
@@ -234,11 +244,12 @@
     hudKey: s => s.lv * 1e8 + s.ph * 1e7 + s.got * 1e4 + Math.ceil(s.left / 60),
     // коротко — на телефоне 360 px строка не обрезается («рисуй горку» — в подсказке на старте)
     hud: s => '⏱ ' + clock(s.left) + ' · ур. ' + s.lv + ' · 💧 ' + s.got + '/' + NDROP + (s.ph === 3 && s.lastStar ? ' ⭐' : ''),
-    win: s => s.stars > 0,
+    win: s => s.stars >= WINSTARS,
     result: s => ({
-      title: s.stars >= 5 ? '🏆 Мастер воды!' : s.stars ? '⭐ Стаканы полны!' : '⏰ Время вышло',
-      text: 'налито капель: ' + s.total + ' · уровней: ' + (s.ph === 3 ? s.lv : s.lv - 1) + ' · ⭐ ' + s.stars + (s.bonus ? ' · бонусы +' + s.bonus : ''),
+      title: s.stars >= 5 ? '🏆 Мастер воды!' : s.stars >= WINSTARS ? '⭐ Стаканы полны!' : '⏰ Время вышло',
+      text: 'налито капель: ' + s.total + ' · уровней: ' + (s.ph === 3 ? s.lv : s.lv - 1) + ' · ⭐ ' + s.stars + (s.bonus ? ' · бонусы +' + s.bonus : '')
+        + (s.selfAll ? ' · сами, мимо линии (не в счёт): ' + s.selfAll : ''),
     }),
-    consts: { W, H, SPY, GW, GY, GB, RD, RC, NP, NS, NDROP, EMIT, SUB, AGE, AUTO, PAUSE, G0, VMAX, INK, STEPD, TIME },
+    consts: { W, H, SPY, GW, GY, GB, RD, RC, NP, NS, NDROP, EMIT, SUB, AGE, AUTO, PAUSE, G0, VMAX, INK, STEPD, TIME, WINSTARS },
   });
 })();

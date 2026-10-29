@@ -94,6 +94,33 @@ module.exports = {
     // без линии вода мимо — 0, без бонусов
     s = spec.create(K.rng(76)); n = 0; while (s.ph !== 3 && n < 2000) { spec.step(s, K.STEP, inp); n++; }
     ok(s.ph === 3 && s.got === 0 && s.score === 0 && s.stars === 0, 'pour: без горки вода мимо стакана — 0 очков', { got: s.got, score: s.score });
+    // проверка T-140 (D2): партия без единой линии — 0 очков и не победа, даже когда полки уровня несут воду в стакан
+    // (было: 27 побед из 200, «только пробел» — 44 из 200); капли «сами» видны в счётчике self
+    { let maxSc = 0, wins = 0, self = 0, wins2 = 0, max2 = 0;
+      for (let seed = 1; seed <= 200; seed++) {
+        const z = spec.create(K.rng(seed)); let m = 0; while (!z.over && m < C.TIME + 10) { spec.step(z, K.STEP, inp); m++; }
+        maxSc = Math.max(maxSc, z.score); wins += spec.win(z) ? 1 : 0; self += z.selfAll;
+        const r = K.sim(spec, { seed, fps: 60, maxMs: 200000, bot: (q, k, push) => { if (q.ph === 0 && q.pt === 2) { push(T.KEY, 0, 0, 0); push(T.KEYUP, 0, 0, 0); } } });
+        max2 = Math.max(max2, r.score); wins2 += spec.win(r.s) ? 1 : 0;
+      }
+      ok(maxSc === 0 && wins === 0 && max2 === 0 && wins2 === 0 && self > 0, 'pour: без линий (сама и «только пробел», 200 зёрен) — 0 очков, ни одной победы; вода, что попала сама, не в счёт', { maxSc, wins, max2, wins2, self }); }
+    // каракули наугад (короткие линии в случайных местах, 8 раз в секунду) — редко победа (3 ⭐) и в разы меньше очков,
+    // чем горка бота (одна ⭐ от каракулей бывала в половине партий — поэтому победа — три)
+    { const NS = 20; let w = 0, sc = 0, wb = 0, sb = 0;
+      for (let seed = 1; seed <= NS; seed++) {
+        let i = seed * 7 + 1;
+        const r = K.sim(spec, { seed, fps: 60, maxMs: 200000, bot: (q, k, push) => { if (k % 7) return; i = (i * 1103515245 + 12345) >>> 0; const x = (i % 997) / 997 * C.W, y = ((i >>> 10) % 991) / 991 * C.H;
+          push(T.DOWN, x, y, 0); push(T.MOVE, x + 40 * ((i >> 3) % 3 - 1), y + 40 * ((i >> 5) % 3 - 1), 0); push(T.UP, x, y, 0); } });
+        w += spec.win(r.s) ? 1 : 0; sc += r.score;
+        const b = K.sim(spec, { seed, fps: 60, maxMs: 200000, bot: module.exports.bot(K, spec, 5) }); wb += spec.win(b.s) ? 1 : 0; sb += b.score;
+      }
+      console.log('  pour: ' + NS + ' партий — каракули наугад: побед ' + w + ', в среднем ' + Math.round(sc / NS) + '; бот-горка: побед ' + wb + ', в среднем ' + Math.round(sb / NS));
+      ok(w <= 2 && wb === NS && sc * 5 < sb, 'pour: каракули наугад — почти не победа и в разы меньше очков, чем горка', { w, mean: sc / NS, wb, meanBot: sb / NS }); }
+    // капля, что коснулась линии игрока, — в счёт; линия в стороне от воды ничего не даёт
+    { const z = spec.create(K.rng(75)), gc = z.gx + C.GW / 2, dir = gc > z.sx ? 1 : -1;
+      line(z, z.sx - 16 * dir, 64, gc - 6 * dir, C.GY - 34); send(z, T.UP, gc, C.GY - 34); let m = 0; while (z.ph !== 3 && m < 1200) { spec.step(z, K.STEP, inp); m++; }
+      const y = spec.create(K.rng(76)); line(y, 4, 420, 30, 420); send(y, T.UP, 30, 420); m = 0; while (y.ph !== 3 && m < 2000) { spec.step(y, K.STEP, inp); m++; }
+      ok(z.got >= 80 && z.self === 0 && y.got === 0 && y.score === 0, 'pour: капли по горке игрока — в счёт; линия в углу, мимо воды, — 0', { got: z.got, self: z.self, y: y.got }); }
     // капля не проскакивает линию на предельной скорости (подшаги + предел скорости)
     s = spec.create(K.rng(77)); line(s, 0, 300, 320, 300); s.ph = 2; s.on[0] = 1; s.x[0] = 160; s.y[0] = 240; s.vx[0] = 0; s.vy[0] = C.VMAX; s.age[0] = 0;
     stepN(s, 20);
