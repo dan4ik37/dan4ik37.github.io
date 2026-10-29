@@ -335,6 +335,30 @@
   fills / banks, parkour hooks, edit buckets, wasm vs JS timing); Chrome: `node scripts/terra-e2e.cjs perf | leak [N] | soak [min] |
   shots` (PC=1 — desktop). C# (Unity) binding + managed port + tests: E:\d37-terrain\csharp, contract E:\d37-terrain\spec\API.md.
 
+## 🌍 T-145 track L — new land tails (T-115) and logical biomes (T-116), 29.10.2026 (branch t145-land)
+- Also merged here: the T-111 review fixes (d62cbfe, physics = drawn mesh, Phys terrain hooks, edit buckets) — they had never
+  reached main (main had merged the earlier f3535dd).
+- T1 core ABI 2 (E:\d37-terrain 12414bc, spec/API.md §3a): generator v2 (logical climate → Whittaker; biomes 11 Steppe, 12 Jungle),
+  world rules (0 earth, 1 mono, 2 patchwork, 3 absurd islands, 4 inverted), flatten edits (mode 2). Heights unchanged — only the
+  surface colour differs between v1 and v2. wasm == JS == DLL == C# bit for bit (golden G 200, R 72, Q2 50). terra.js:
+  create({ gen, rules, param, compact }), TS.flatten / TS.climate / TS.ceiling; workers get gen/rules in init and re-apply them
+  after a JS fallback; inverted worlds route edits through the mirrored test (TE.touchesW).
+- D37E.biomes (js/engine/biomes.js, new, English): one API for T1 and Kubomir v4 — at(src, x, z) → biome, class (climate_classes.csv
+  integers), surface bits, ts / tp / m, tempC; region(src, x, z, cell) → integer record { ck, cls, smask, F, alt } (BIOME_WEATHER
+  §1.2, five fixed samples); climateKey / climateAtFn (climate.js keys for C.world({ climateAt })); PRESETS (strange worlds as data,
+  mirror of E:\d37-terrain\data\world_presets.json). This is the name agreed for the weather track (T-135).
+- /play/terra flags (js/games/terra-demo.js, one-line rollbacks): TERRA_GEN = 2 (logical biomes; HUD shows the biome and °C),
+  SEA_TILES (sea = 32 m tiles over columns whose own terrain is below 0 — a pit on land stays dry; coast / river columns keep water),
+  CAM_CLIMB (camera rig option `climb`: in a crater the rig searches, every 0.2 s with 3 rays, a steeper pitch with a clear line
+  and eases into it — not into the back of the head), COMPACT (blocks as u16 positions = the physics numbers, octahedral normals u8×2,
+  rgb: 44 B per quad on the page and GPU instead of 80 B geometry + 24 B physics; TS.recycle(b, meshPosArray) — the physics reads
+  the mesh's own array). Tool «▭ Выровнять» (flatten pad r 6 m at the hit point). Phys: opt-in `terrain.ceiling(x, z, y)` — a jump
+  stops at a cave roof / overhang / fill (the DRAWN roof), walking under a roof lower than the head is blocked, crouching passes.
+- Tests: terra-test (+ compact block, compact physics == old, pad within 0.015 m, roofs = drawn mesh, Phys ceiling), biomes-test
+  (new, in ci-run), Rust `cargo test` (v2 adjacency / distance / patches / column == point / inverted mirror / flatten / 0 allocations
+  for every rule), C# tests. Chrome: `node scripts/terra-e2e.cjs t145` (phone ×4: biome, inland crater stays dry, camera climb on/off,
+  flatten pad level; Page.setDownloadBehavior deny).
+
 ## 🧠 AI LOD P1 — «ум толпы» on the site (T-127, 29.10.2026, GAMES_VER 148, review fixes 149; spec E:\d37-core\spec\AI_LOD.md §10.2, §12 P1)
 - Owner decisions (docs/progress.md 29.10): D1 Horde — one enemy cap for every device; D4 Mir — the same 16 residents on phone
   and PC, phones draw the extra ones as simple figures; D5 Studio survival — ≤ 64 zombies alive at once across waves.
