@@ -107,6 +107,43 @@
 - Замер (ПК, 1280×720, «высокая», scripts/climate-e2e.cjs): студия — ЦП 0,96 мс / 53 вызова без погоды → 1,16 мс / 57 в снег, 1,20 мс /
   57 в дождь; «Кубомир» — 3,15 мс / 583 → 3,44 мс / 585. Снимки — E:\claude-tmp\climate\shots. X3595 на Direct3D — было и до погоды.
 
+## 🌪 Weather by biome — D37E.wx + D37E.wxfx (T-135, steps WX0–WX2, 29.10.2026, GAMES_VER 152; spec E:\d37-core\spec\BIOME_WEATHER.md v2)
+- Owner: «в разных биомах свои особенности: песчаная буря, пыльная буря, перекати-поле, зимой буран, град» + «реалистичнее, редкие
+  исключения» + «град вредит по-настоящему». Data (WX0, Layer-1, append-only): data/wx/weather_events.csv (53 rows: spec rows 1–48 +
+  49–53 realism: desert winter rain mostly evaporates or falls cold, snow in a desert ≈ 0.2 per game year on winter nights only, hail in
+  the tropics rare), climate_classes.csv (the ONE place of the class integers 0 temperate … 8 warm, default surfaces/features per
+  class), wx_levels.csv (hail harm by class: shared / kids ‰ per 10 s and health floors — kids never below 50 %, crop damage, dents;
+  VIS_RATE, dB, fire classes, Kp, glaze: walk ×0.5, car steering ×0.7, braking ×0.6, no spins). `node scripts/make-wx.mjs` writes them
+  into the <wx-data> block of js/engine/wx.js (`--check` in CI). Copy the CSVs to E:\d37-core\spec\data once the Backrooms lead OKs.
+- Core (WX1): js/engine/wx.js, loaded after climate.js only in games (index.html keeps the light climate.js). climate.js gets a ~25-line
+  hook: `sample()` calls `E.wx.apply()` after the ribbon mix — inside a special's window the parts follow the integer event (precip
+  type, hail, temperature band, wind ≥ the row's, direction), outside every window `null` → every old field bit-identical (golden vs
+  the pre-T-135 climate.js from git). New states are APPENDED (sandstorm, duststorm, buran, whiteout, hail, downpour, freezing_rain,
+  seafog) and appear only in `s.stateX` (C.labelX); `state` / C.label unchanged. New fields: special, sp, vis (m, 510 = clear), dust,
+  dustC, tint, tintK, flat, hailSize (cm), freezing, fireRisk, sign/signKey (lead: in-world signs only), funnel, flav/flav2, glaze, drift.
+- Schedule: integer twin of the ribbon (`slotKindQ` = slotEvent, 0 mismatches in 168,000 slots), salts 0x5758 / 60+; one main special
+  per place per slot (rows own ‰ intervals, acc ≤ 1000 checked on a grid), groups 0/3 independent; fronts move west → east with
+  W.front (a place 8,000 u east sees the same special exactly 8,000 / front w-h later); «Стихии» `elements` 'rare' (default: strong rows
+  half as often) | 'real' | 'off'. Region record per place: `wxRegionAt(x, z)` → { cls, smask, F, alt, kc }; else `WX.biomeAt(W, x, z)`
+  (the ONE biome adapter — T-116 switches it; `W.biomeAt` callback until then) → `WX.regionOfBiome`; else the climate key.
+  Kids' city (kc) and W.storm === false: no strong rows. Realm 'kids' (default): hail at most HA1 (1.3 cm), wind W9 halved.
+- AI: `WX.visQ`, `WX.sight(d, vq, kind‰)`, `WX.limitAt(x, z)` (cell 64 u × 2 s cache) — creatures never see farther than the player's fog
+  (≤ 4× for natives); npc.js caps follow/flee radius by it (`E.wx.AI = false` — off).
+- Visuals (WX2): js/engine/wx-fx.js — sky/fog tint and visibility through R.setWeather (render.js applyFog: fog end = min(fog, vis),
+  floor 15; gfx.js E.weatherSky: horizon/zenith to the storm colour, pale sun, light ≥ 45 %, whiteout `flat`), grains (Points) and low
+  streaks (LineSegments) around the camera, lazily created, hidden = 0 draw calls, ≤ 2 draws in a storm; phone/'mid' 45 %, 'low' tint
+  only; louder/lower wind loop; hail streak length by size. precip.js attaches it itself (Mir, Studio when loaded, Planet when loaded);
+  Kubomir attaches its own (kubomir-weather.js: weather cells 128×128 by five generator samples, `pushSky` because Kubomir darkens its
+  own sky). Flags: `D37E.climate.SPECIAL = false` (all off), `D37E.wxfx.ON = false` (no visuals), graphics guard key 'wxfx'.
+- Mir: `mirWxRegion` (mir.js) — 64-u cells: steppe (dust storms, tumbleweed wind, буран, позёмка), mountains (high: fog, hail), sea /
+  war coast (coast: sea fog, squalls, waterspouts), capital and cities (town: hoarfrost, freezing rain, valley mist); kids' city kc.
+- Planet (integrator): add 'js/engine/wx.js' after climate.js and 'js/engine/wx-fx.js' after precip.js to the planet scripts; planet
+  desert latitudes then get sandstorms by themselves; pass `st.wx.wfx.K` (dust, tint, tintK, vis, flat — or `E.wxfx.planetSky(state)`)
+  into planet-view `V.setWeather` (sky toward the tint, sun dimmer, fog at vis).
+- Tests: wx-test (55: data, grid, twin, season, T_q ±1.1°, golden, §2.11 frequencies, kids, fronts, order, AI, WxRec, speed),
+  wxfx-test (11: pools, caps, low, roof, pushSky, 0.22 B/frame), wx-e2e (Chrome: Mir + Kubomir storms, phone ×4, soak),
+  world-reopen-e2e with REOPEN_WX=sandstorm (20× phone, no leaks).
+
 ## 🪐 Планета (D37E.planet; T-051, 22.10.2026; план и замеры — docs/plans/planet.md)
 - T-075 (PL-2 LOD v2 + PL-4 движок) — НА ПАУЗЕ 22.10 (лимит), влито ВЫКЛЮЧЕННЫМ: флаги D37E.planetView.FLAGS, включить — localStorage d37_planet_v2 = '1' + перезагрузка (или o.flags); выкл — старые пути (выбор кусков, 1 диапазон глубины, туман движка байт-в-байт, без погоды). Всегда включено: E.setSunProvider, обод куска по диагонали физики, поток перезапускается (до 3), R.guardVolatile. Как продолжить — docs/plans/planet.md §12a; проверки: planet-lod-test (--fast в ci-run), gfx-strict PAGE=planet, planet-perf V2=1.
 - Владелец 22.10: «планета — основа мира и вселенной, параллельно, скоро»; «планету нужно будет реализовать в других играх» → ОБЩИЙ модуль

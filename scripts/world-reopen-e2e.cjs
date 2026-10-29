@@ -26,6 +26,8 @@ const G = {
 }[GAME];
 if (!G) { console.log('Нет такого: ' + GAME + ' (world | studio3d)'); process.exit(2); }
 const N = Math.max(2, +N_ || 20);
+// REOPEN_WX=sandstorm (или buran, duststorm…) — в каждом круге вместо дождя особая погода по биому (T-135: пулы wx-fx.js тоже уходят)
+const WXF = /^[a-z_]+$/.test(process.env.REOPEN_WX || '') ? process.env.REOPEN_WX : 'rain';
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
 const OUT = path.join(TMP, 't085');
@@ -96,6 +98,7 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
   const res = { prof: PROF, n: N, closedMB: [], openMB: [], openMs: [] };
   try {
     await send('Page.enable'); await send('Runtime.enable'); await send('HeapProfiler.enable');
+    try { await send('Page.setDownloadBehavior', { behavior: 'deny' }); } catch (e) {}   // проверки ничего не качают (владелец)
     await send('Emulation.setDeviceMetricsOverride', phone ? { width: 412, height: 915, deviceScaleFactor: 2, mobile: true } : { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
     if (phone) {
       await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; 23078PND5G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l' });
@@ -132,7 +135,7 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
       if (ms < 0) { ok(false, `открытие ${k}: мир не открылся`); break; }
       // дождь: погода рисует общую на страницу карту «что над головой» (gfx.js GFXU.occRT) — каждый рендерер вешает на неё своё
       // «dispose»; без дождя этот путь утечки не проверяется (так он и прятался — зависел от погоды за окном)
-      await ev(`(() => { const S = ${G.state}; try { ${G.wx}?.force?.('rain'); } catch (e) {} return 1; })()`);
+      await ev(`(() => { const S = ${G.state}; try { ${G.wx}?.force?.('${WXF}'); } catch (e) {} return 1; })()`);
       // REOPEN_FOREST=1 — в каждом круге ещё и в лес (деревья пород T-022b: геометрии у рендерера мира — должны уйти вместе с ним)
       if (process.env.REOPEN_FOREST && GAME === 'world') {
         const t = await ev(`(async () => { const S = ${G.state}, W = MirZones.worldMap(); let best = null;
@@ -160,7 +163,8 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
     console.log('  память JS, мир открыт:', res.openMB.map(([k, v]) => `#${k} ${v}`).join(' · '));
     // ── проверки ──
     ok(!alive.length, `${N} закрытий (${G.name}): ни одного прошлого состояния и контекста WebGL в памяти (WeakRef после сборки мусора)`, alive);
-    ok(res.occ > 0, `дождь (${G.name}): карта «что над головой» рисовалась (${res.occ} раз) — путь через общую карту проверен`);
+    if (WXF === 'rain') ok(res.occ > 0, `дождь (${G.name}): карта «что над головой» рисовалась (${res.occ} раз) — путь через общую карту проверен`);
+    else ok(true, `${WXF} (${G.name}): особая погода в каждом круге (карта «что над головой» — только в дождь/снег, здесь ${res.occ})`);
     const grow = +(F.heapMB - B.heapMB).toFixed(1);
     // прирост на круг — по медианам начала и конца (код, который V8 дособирает горячим, растёт в первых кругах и выходит на полку;
     // одиночный выброс — то, что было в пути в момент закрытия, — медиана не замечает)

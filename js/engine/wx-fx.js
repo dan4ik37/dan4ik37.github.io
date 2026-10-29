@@ -32,9 +32,10 @@
     const on = FX.ON && S && S.sp !== undefined && !(E.gfxSafe && E.gfxSafe('wxfx'));
     const k = 1 - Math.exp(-d / 3), tK = on ? +S.tintK || 0 : 0, du = on ? +S.dust || 0 : 0, fl = on ? +S.flat || 0 : 0, vis = on ? +S.vis || 510 : 510;
     K.dust += (du - K.dust) * k; K.tintK += (tK - K.tintK) * k; K.flat += (fl - K.flat) * k;
-    K.vis += (vis - K.vis) * k; if (Math.abs(K.vis - vis) < .5) K.vis = vis;
+    K.vis += (vis - K.vis) * k;
     if (on && S.tint) { const t = tintLin(S.tint); for (let j = 0; j < 3; j++) K.tint[j] += (t[j] - K.tint[j]) * (K.key ? k : 1); K.key = S.tint; }
-    if (K.dust < .003) K.dust = 0; if (K.tintK < .003) K.tintK = 0; if (K.flat < .003) K.flat = 0;
+    if (K.dust < .01 && !du) K.dust = 0; if (K.tintK < .01 && !tK) K.tintK = 0; if (K.flat < .01 && !fl) K.flat = 0;   // the tail snaps off
+    if (Math.abs(K.vis - vis) < 3) K.vis = vis;
     return K;
   }
   FX.planetSky = (S, out = {}) => { const K = out._k || (out._k = Sky()); skyStep(K, S, .5); out.dust = K.dust; out.tintK = K.tintK; out.flat = K.flat; out.vis = K.vis < 509 ? K.vis : 0; out.tint = K.tint; return out; };
@@ -48,10 +49,12 @@
     // ── pools (lazy): grains — Points, streaks — LineSegments (bottom opaque, the tail fades) ──
     const NG = Math.round(500 * q), NS = Math.round(270 * q);
     let gO = null, sO = null, gPos, gCol, sPos, sCol, tex = null, gN = 0, sN = 0, gW = 0, sW = 0;
-    const gx = new Float32Array(NG), gy = new Float32Array(NG), gz = new Float32Array(NG), gh = new Float32Array(NG), gp = new Float32Array(NG), gl = new Uint8Array(NG);
+    const gx = new Float32Array(NG), gy = new Float32Array(NG), gz = new Float32Array(NG), gh = new Float32Array(NG), gb = new Float32Array(NG), gl = new Uint8Array(NG);
+    const TX = new Float32Array(8), TZ = new Float32Array(8), TY = new Float32Array(8);   // turbulence of 8 phase groups (trig per frame, not per grain)
+    let colC = null, colL = -1, colDirty = false, sColC = null, sColL = -1;
     const sx = new Float32Array(NS), sy = new Float32Array(NS), sz = new Float32Array(NS), sl = new Float32Array(NS), sv = new Float32Array(NS), sL = new Uint8Array(NS);
-    let seed = 0x9e3779b9 >>> 0;
-    const rnd = () => { seed = (seed + 0x6d2b79f5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const RS = new Uint32Array([0x9e3779b9]);   // the state in a typed array: a big uint32 in a closure slot is a new heap number per store
+    const rnd = () => { RS[0] += 0x6d2b79f5; let t = RS[0] | 0; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
     function make(){
       if (gO || !T || !q) return;
       const n = 16, d = new Uint8Array(n * n * 4);
@@ -82,7 +85,8 @@
         if (fill) { x = cx + (rnd() - .5) * 2 * RAD; z = cz + (rnd() - .5) * 2 * RAD; }
         else { const a = (rnd() - .5) * 2 * RAD; x = cx - ux * RAD + -uz * a; z = cz - uz * RAD + ux * a; }
         const g = groundAt(x + ox, z + oz, cy); if (g === null) continue;
-        gx[i] = x; gz[i] = z; gh[i] = Math.min(7, -Math.log(1 - rnd() * .995) * 1.6); gy[i] = g + gh[i]; gp[i] = rnd() * 6.283; gl[i] = 1;
+        gx[i] = x; gz[i] = z; gh[i] = Math.min(7, -Math.log(1 - rnd() * .995) * 1.6); gy[i] = g + gh[i]; gb[i] = .85 + .15 * rnd(); gl[i] = 1;
+        if (colC) { const f = colL * gb[i], j = i * 3; gCol[j] = colC[0] * f; gCol[j + 1] = colC[1] * f; gCol[j + 2] = colC[2] * f; colDirty = true; }
         return;
       }
       gl[i] = 0;
@@ -106,56 +110,63 @@
       const kk = K.dust, wantG = look && kk > .01 ? Math.min(NG, Math.round(look.grains * q * amt * kk)) : 0, wantS = look && kk > .01 ? Math.min(NS, Math.round(look.streaks * q * amt * kk)) : 0;
       if (!gO && !wantG && !wantS) return;
       make(); if (!gO) return;
-      const p = cam.position, cx = p.x, cy = p.y, cz = p.z, [ox, oz] = origin();
+      const p = cam.position, cx = p.x, cy = p.y, cz = p.z, O = origin(), ox = O[0], oz = O[1];   // no destructuring (no iterator per frame)
       const wd = S ? S.windDir || 0 : 0, ws = Math.max(3, S ? S.wind || 0 : 0), ux = Math.cos(wd), uz = Math.sin(wd);
       const c = DUST_RGB[(S && S.dustC) | 0] || DUST_RGB[0], li = .3 + .7 * cl(lum, 0, 1);
       // grains: carried by the wind, a little turbulence; the count follows the special's strength
       gN = wantG;
       if (!gN) { if (gO.visible) { gO.visible = false; gl.fill(0); fillG = true; gW = 0; } }
       else {
-        const vx = ux * ws * .9, vz = uz * ws * .9, t = performance.now() / 1000;
+        const t = performance.now() / 1000;
+        for (let k = 0; k < 8; k++) { const ph = k * .785; TX[k] = (ux * ws * .9 + Math.sin(t * 2.1 + ph) * .8) * d; TZ[k] = (uz * ws * .9 + Math.cos(t * 1.7 + ph) * .8) * d; TY[k] = Math.sin(t * 3 + ph * 2) * .5 * d; }
+        // colours: written at spawn; all of them again only when the dust colour or the daylight moved
+        if (c !== colC || Math.abs(li - colL) > .02) { colC = c; colL = li; for (let i = 0; i < gN; i++) { const f = li * gb[i], j = i * 3; gCol[j] = c[0] * f; gCol[j + 1] = c[1] * f; gCol[j + 2] = c[2] * f; } colDirty = true; }
         let born = 0;
+        const R2 = (RAD + 2) * (RAD + 2);
         for (let i = 0; i < gN; i++) {
           if (!gl[i]) { if (born < 120) { spawnG(i, cx, cy, cz, ox, oz, ux, uz, fillG); born++; } }
           else {
-            gx[i] += (vx + Math.sin(t * 2.1 + gp[i]) * .8) * d; gz[i] += (vz + Math.cos(t * 1.7 + gp[i]) * .8) * d; gy[i] += Math.sin(t * 3 + gp[i] * 2) * .5 * d;
+            const k = i & 7;
+            gx[i] += TX[k]; gz[i] += TZ[k]; gy[i] += TY[k];
             const dx = gx[i] - cx, dz = gz[i] - cz;
-            if (dx * dx + dz * dz > (RAD + 2) * (RAD + 2)) spawnG(i, cx, cy, cz, ox, oz, ux, uz, false);
+            if (dx * dx + dz * dz > R2) spawnG(i, cx, cy, cz, ox, oz, ux, uz, false);
           }
           const j = i * 3;
-          if (gl[i]) { gPos[j] = gx[i]; gPos[j + 1] = gy[i]; gPos[j + 2] = gz[i]; const f = li * (.85 + .15 * Math.sin(gp[i])); gCol[j] = c[0] * f; gCol[j + 1] = c[1] * f; gCol[j + 2] = c[2] * f; }
+          if (gl[i]) { gPos[j] = gx[i]; gPos[j + 1] = gy[i]; gPos[j + 2] = gz[i]; }
           else gPos[j + 1] = -9999;
         }
         fillG = false;
         for (let i = gN; i < gW; i++) gl[i] = 0;
         gW = gN;
-        gO.material.size = S && S.dustC === 3 ? .11 : .07;
-        const g = gO.geometry; g.setDrawRange(0, gN); g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true; gO.visible = true;
+        gO.material.size = S && S.dustC === 3 ? .14 : .1;   // snow flakes are bigger than sand grains
+        const g = gO.geometry; g.setDrawRange(0, gN); g.attributes.position.needsUpdate = true; if (colDirty) { g.attributes.color.needsUpdate = true; colDirty = false; } gO.visible = true;
       }
       // low streaks: sand or snow snaking along the ground, faster than the air above it
       sN = wantS;
       if (!sN) { if (sO.visible) { sO.visible = false; sL.fill(0); fillS = true; sW = 0; } }
       else {
-        const sp = ws * 1.1;
+        const sp = ws * 1.1, R2 = (RAD + 2) * (RAD + 2);
+        // one colour for every streak: written only when the dust colour or the daylight moved (dead ones hide by position)
+        let sDirty = false;
+        if (c !== sColC || Math.abs(li - sColL) > .02) { sColC = c; sColL = li; sDirty = true; for (let i = 0; i < NS; i++) { const j8 = i * 8; sCol[j8] = sCol[j8 + 4] = c[0] * li; sCol[j8 + 1] = sCol[j8 + 5] = c[1] * li; sCol[j8 + 2] = sCol[j8 + 6] = c[2] * li; sCol[j8 + 3] = .55; sCol[j8 + 7] = 0; } }
         let born = 0;
         for (let i = 0; i < sN; i++) {
           if (!sL[i]) { if (born < 80) { spawnS(i, cx, cy, cz, ox, oz, ux, uz, fillS); born++; } }
           else {
             sx[i] += ux * sp * sv[i] * d; sz[i] += uz * sp * sv[i] * d;
             const dx = sx[i] - cx, dz = sz[i] - cz;
-            if (dx * dx + dz * dz > (RAD + 2) * (RAD + 2)) spawnS(i, cx, cy, cz, ox, oz, ux, uz, false);
+            if (dx * dx + dz * dz > R2) spawnS(i, cx, cy, cz, ox, oz, ux, uz, false);
           }
-          const j6 = i * 6, j8 = i * 8;
+          const j6 = i * 6;
           if (sL[i]) {
             const l = sl[i];
             sPos[j6] = sx[i]; sPos[j6 + 1] = sy[i]; sPos[j6 + 2] = sz[i]; sPos[j6 + 3] = sx[i] - ux * l; sPos[j6 + 4] = sy[i] + .02; sPos[j6 + 5] = sz[i] - uz * l;
-            sCol[j8] = c[0] * li; sCol[j8 + 1] = c[1] * li; sCol[j8 + 2] = c[2] * li; sCol[j8 + 3] = .55; sCol[j8 + 4] = c[0] * li; sCol[j8 + 5] = c[1] * li; sCol[j8 + 6] = c[2] * li; sCol[j8 + 7] = 0;
-          } else { sCol[j8 + 3] = 0; sCol[j8 + 7] = 0; sPos[j6 + 1] = sPos[j6 + 4] = -9999; }
+          } else sPos[j6 + 1] = sPos[j6 + 4] = -9999;
         }
         fillS = false;
         for (let i = sN; i < sW; i++) sL[i] = 0;
         sW = sN;
-        const g = sO.geometry; g.setDrawRange(0, sN * 2); g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true; sO.visible = true;
+        const g = sO.geometry; g.setDrawRange(0, sN * 2); g.attributes.position.needsUpdate = true; if (sDirty) g.attributes.color.needsUpdate = true; sO.visible = true;
       }
     };
     // sky numbers for R.setWeather (precip.js adds them to its own object)

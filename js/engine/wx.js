@@ -29,7 +29,7 @@
   const CSV_EVENTS = [
     "1,sandstorm,Песчаная буря,earth,desert,sand|soil,sp|su|au,any,none|cloud,dry>=8,40,1,15-35,1200-2400,140-230,none,25-60,12,W7-9,W9h,amb_sand+amb_wind,tint:sand+fog,tint:sand+fog+g225+s120+tum2,tint:sand+fog+g500+s270+drift+tum4,slow+push,slow_h+push_h,drift_sand+dust_coat,vis+amb+shelter_herb+tracks25,dust_horizon+wind_rise+animals_flee,1",
     "2,haboob,Стена пыли,earth,desert|steppe,sand|soil,su,12-23,thunder,dry>=8,500,1,par,6000-9000,172-240,par,20-40,18,W8-9,W9h,wall_roar+amb_sand,tint:dust+fog,band+tint:dust+fog+g225+s120,band2+tint:dust+fog+g500+s270+drift,slow+push,slow_h+push_h,drift_sand+dust_coat,vis+amb+flee_lead+shelter_all+tracks25,wall_brown+gust_cold+animals_flee+birds_low+lamps_on,1",
-    "3,duststorm,Пыльная буря,earth,steppe|desert,soil|grass|road,sp|su,any,none|cloud,dry>=4,80,1,10-30,1200-3600,110-180,none,80-150,8,W6-8,W8h,amb_dust,tint:ochre+fog,tint:ochre+fog+g160+tum2,tint:ochre+fog+g360+s160+tum4,slow,slow_h,dust_coat,vis+amb+shelter_herb,yellow_horizon+dust_trails+wind_rise,1",
+    "3,duststorm,Пыльная буря,earth,steppe|desert,soil|grass|road,sp|su,any,none|cloud,dry>=4,80,1,10-30,1200-3600,110-180,none,60-110,8,W6-8,W8h,amb_dust,tint:ochre+fog,tint:ochre+fog+g160+tum2,tint:ochre+fog+g360+s160+tum4,slow,slow_h,dust_coat,vis+amb+shelter_herb,yellow_horizon+dust_trails+wind_rise,1",
     "4,dust_devil,Пылевой вихрь,earth,desert|steppe,sand|soil,sp|su,11-17,heat,T>=26,500,2,s60-240,0,0-30,none,-,4,-,-,devil_whoosh,-,fun1,fun2+leaf40,wobble,wobble,-,none,visible_column,0",
     "5,heat_haze,Марево,earth,desert|steppe|tropic,sand|rock|road|salt,su,11-17,heat,T>=28,1000,0,par,0,par,none,-,0,-,-,-,-,-,haze,-,-,-,none,shimmer,0",
     "6,mirage,Мираж,earth,desert|steppe,sand|road|salt,sp|su,10-18,heat|none,T>=25,1000,0,par,0,par,none,-,0,-,-,-,-,mir,mir,-,-,-,none,fake_water,0",
@@ -473,6 +473,7 @@
       if (r.vis && r.g === 0) { const v = r.vis[1] - Math.floor((r.vis[1] - r.vis[0]) * (x.K.pI - 500) / 500); if (v < R.vis) { R.vis = v; R.mist = r.id; } }
     }
     st.rolls.set(key, R);
+    x.W = x.st = x.reg = x.q = null;   // the shared scratch keeps no closed world alive
     return R;
   }
 
