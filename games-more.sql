@@ -86,8 +86,40 @@ returns int language sql immutable as $$
     when p_game in ('kletochki', 'kletochki_online') then 50000       -- «Клеточки»: лучшая масса за жизнь (kletochki.js)
     when p_game in ('chervyachki', 'chervyachki_online') then 50000   -- «Червячки»: лучшая длина за жизнь (chervyachki.js)
     -- ⟦arcade⟧ мини-игры (T-140): строки до закрывающего маркера собирает node scripts/make-arcade.mjs из js/games/arcade/<id>.json
+    when p_game in ('bricks', 'bricks_duel') then 10000
+    when p_game in ('bubbles', 'bubbles_duel') then 15000
+    when p_game in ('cannon', 'cannon_duel') then 4000
+    when p_game in ('colorjump', 'colorjump_duel') then 400
+    when p_game in ('cuberun', 'cuberun_duel') then 400
+    when p_game in ('darts', 'darts_duel') then 400
+    when p_game in ('descent', 'descent_duel') then 400
+    when p_game in ('drone', 'drone_duel') then 300
+    when p_game in ('evolve', 'evolve_duel') then 1000
+    when p_game in ('fifteen', 'fifteen_duel') then 700
+    when p_game in ('flip', 'flip_duel') then 450
+    when p_game in ('gates', 'gates_duel') then 20000
+    when p_game in ('hole', 'hole_duel') then 40000
+    when p_game in ('jumper', 'jumper_duel') then 2500
     when p_game in ('lights', 'lights_duel') then 3000
+    when p_game in ('lock', 'lock_duel') then 600
+    when p_game in ('parking', 'parking_duel') then 700
+    when p_game in ('pegs', 'pegs_duel') then 1000
+    when p_game in ('pet', 'pet_duel') then 600
+    when p_game in ('planets', 'planets_duel') then 6000
+    when p_game in ('popit', 'popit_duel') then 1000
+    when p_game in ('pour', 'pour_duel') then 4000
+    when p_game in ('repeat', 'repeat_duel') then 1100
+    when p_game in ('riddles', 'riddles_duel') then 1100
+    when p_game in ('road', 'road_duel') then 1000
+    when p_game in ('shield', 'shield_duel') then 1500
+    when p_game in ('slice', 'slice_duel') then 3000
+    when p_game in ('sling', 'sling_duel') then 6000
+    when p_game in ('spinner', 'spinner_duel') then 800
     when p_game in ('tiles', 'tiles_duel') then 20000
+    when p_game in ('tower', 'tower_duel') then 200
+    when p_game in ('twolanes', 'twolanes_duel') then 400
+    when p_game in ('watersort', 'watersort_duel') then 700
+    when p_game in ('zigzag', 'zigzag_duel') then 800
     -- ⟦/arcade⟧
     else null end;
 $$;
@@ -138,8 +170,40 @@ returns int language sql immutable as $$
     when 'kletochki' then 4 when 'kletochki_online' then 6
     when 'chervyachki' then 4 when 'chervyachki_online' then 6
     -- ⟦arcade⟧ мини-игры (T-140): строки до закрывающего маркера собирает node scripts/make-arcade.mjs из js/games/arcade/<id>.json
+    when 'bricks' then 4 when 'bricks_duel' then 5
+    when 'bubbles' then 4 when 'bubbles_duel' then 5
+    when 'cannon' then 4 when 'cannon_duel' then 5
+    when 'colorjump' then 4 when 'colorjump_duel' then 5
+    when 'cuberun' then 4 when 'cuberun_duel' then 5
+    when 'darts' then 4 when 'darts_duel' then 5
+    when 'descent' then 4 when 'descent_duel' then 5
+    when 'drone' then 4 when 'drone_duel' then 5
+    when 'evolve' then 4 when 'evolve_duel' then 5
+    when 'fifteen' then 4 when 'fifteen_duel' then 5
+    when 'flip' then 2 when 'flip_duel' then 4
+    when 'gates' then 4 when 'gates_duel' then 5
+    when 'hole' then 4 when 'hole_duel' then 5
+    when 'jumper' then 4 when 'jumper_duel' then 5
     when 'lights' then 4 when 'lights_duel' then 5
+    when 'lock' then 4 when 'lock_duel' then 5
+    when 'parking' then 4 when 'parking_duel' then 5
+    when 'pegs' then 2 when 'pegs_duel' then 4
+    when 'pet' then 4 when 'pet_duel' then 5
+    when 'planets' then 4 when 'planets_duel' then 5
+    when 'popit' then 2 when 'popit_duel' then 4
+    when 'pour' then 4 when 'pour_duel' then 5
+    when 'repeat' then 4 when 'repeat_duel' then 5
+    when 'riddles' then 4 when 'riddles_duel' then 5
+    when 'road' then 4 when 'road_duel' then 5
+    when 'shield' then 4 when 'shield_duel' then 5
+    when 'slice' then 4 when 'slice_duel' then 5
+    when 'sling' then 4 when 'sling_duel' then 5
+    when 'spinner' then 2 when 'spinner_duel' then 4
     when 'tiles' then 4 when 'tiles_duel' then 5
+    when 'tower' then 4 when 'tower_duel' then 5
+    when 'twolanes' then 4 when 'twolanes_duel' then 5
+    when 'watersort' then 4 when 'watersort_duel' then 5
+    when 'zigzag' then 4 when 'zigzag_duel' then 5
     -- ⟦/arcade⟧
     else 0 end;
 $$;
