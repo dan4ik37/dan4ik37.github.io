@@ -55,6 +55,7 @@
     const W = st.W, P = S.prof(mode), soft = mode === 'soft', BED = V.ID.bedrock;
     const G = S.grid({ dims: 3, down: -1, max: 24576 });
     const BO = { r: 96, rn: 13, P };   // природное — на 13 шагов (свод держится вбок до 9 клеток + высота зала)
+    BO.opb = 16;   // v2: вес узла при сборке куска — чтение чанков мира (Chrome, телефон ×4: ~4–7 мкс на узел; такт ≤ 2 мс)
     // код клетки для ядра: 0 пусто, 1 опора, постройка / природное с материалом
     // чанк — один раз на столбик соседних клеток (обход в ширину идёт рядом), без Math.floor: координаты — целые
     let lc = null, lcx = 1e9, lcz = 1e9;
@@ -294,7 +295,7 @@
     let cur = null, restarts = 0, touched = false, J = null, GE = null, JE = null, BOE = null;
     if (LD) {
       J = G.loadJob();
-      GE = S.grid({ dims: 3, down: -1, max: 4096 }); JE = GE.loadJob(); BOE = { r: 96, rn: 13, P, max: 4096 };
+      GE = S.grid({ dims: 3, down: -1, max: 4096 }); JE = GE.loadJob(); BOE = { r: 96, rn: 13, P, max: 4096, opb: 16 };
       // чужая правка (игрок поставил, огонь, вода) внутри куска идущего задания — пересчитать заново
       if (Array.isArray(W.listeners)) W.listeners.push((x, y, z) => { if (!own && J.busy && G.inPiece(x, y, z)) touched = true; });
     }
@@ -373,9 +374,9 @@
     function dry2(x, y, z, code){
       if (J.busy) return null;
       const t0 = nowMs(); fresh(); J.start('rm', [x, y, z, code], read, BO);
-      let maxT = 0, nt = 0;
-      for (;;) { const a = nowMs(); fresh(); const fin = J.step(S.SOLVE_BUDGET); const d = nowMs() - a; nt++; if (d > maxT) maxT = d; if (fin) break; }
-      return { ms: nowMs() - t0, maxTick: maxT, ticks: nt, nodes: G.g.n, groups: J.res.ng, fall: J.res.nf, ops: J.res.ops };
+      let maxT = 0, nt = 0, wph = -1; const ph = [0, 0, 0, 0, 0, 0, 0, 0], po = [0, 0, 0, 0, 0, 0, 0, 0];
+      for (;;) { const p = J.phase, o0 = J.ops, a = nowMs(); fresh(); const fin = J.step(S.SOLVE_BUDGET); const d = nowMs() - a; nt++; ph[p] += d; po[p] += J.ops - o0; if (d > maxT) { maxT = d; wph = p; } if (fin) break; }
+      return { ms: nowMs() - t0, maxTick: maxT, worstPhase: wph, phaseMs: ph.map(v => +v.toFixed(2)), phaseOps: po, ticks: nt, nodes: G.g.n, groups: J.res.ng, fall: J.res.nf, ops: J.res.ops };
     }
     X.jobs = () => ({ busy: !!J?.busy, queued: JQ.length, cur: cur ? { kind: cur.kind, seeds: cur.seeds.length / 4 } : null });
     return X;

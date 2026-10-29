@@ -207,6 +207,35 @@
   падает — кадр 1,8–2,1 → 2,0–2,8 мс; память не растёт (12 кругов; мир закрыть/открыть 20 раз — «Кубомир» полка ~112 МБ, «Подземье» 20,3 → 20,7); 10 мин игры в мире «реализм» — 0 ошибок (оба; kubomir-e2e KB_SUPPORT=1 KB_MODE=soak / reopen KB_N=20). Проверки: support-test (44), kubomir-hand-test §12, podzem-support-test (11,
   10 мин игры), studio-support-test (19), mir-support-test (11); Chrome — kubomir-e2e KB_MODE=support, podzem-support-e2e.
 
+### Structure v2 — load (T-124, 29.10.2026, GAMES_VER 143; spec E:\d37-core\spec\STRUCTURE_HAZARDS.md §2.1 S1.L, steps SH0.1, SH0.2, SH1)
+- v1 is pinned: `scripts/support-hash.js` hashes sup[] + groups over a seeded 36,000-step build (3D real/soft, 2D, a cave dug cell
+  by cell, boxes) at 30/60/144 fps; `V1_HASH` in support-test.cjs (`--chrome` checks the same hash in Chrome). Any v1 change breaks it.
+- Opt-in per world: Kubomir `meta.load = 1`, Podzem `W.load = 1`, Studio `SC.settings.phys.load = 1` (no UI toggle yet — SH0.5b).
+  Rollback for every world: `D37E.support.LOAD = false` (v1, never "support off"). `S.VERSION = 2`.
+- Kernel (support.js, after boxes): `S.loadJob(geo)` — a resumable job ('rm' = edit removed seeds, 'add' = landing / placement,
+  'now' = as is): build (resumable BFS: `G.begin` / `G.more`) → pass 1 (v1 values, disabled links respected) → strict order
+  (1000 − sup, then key = height, x, z; radix) → pass 2 (W, Mx, Mz, My in half-units; stand wins; equal split to all side / hang
+  supporters) → checks (crush, side joint about its face, hang, storey overturning of each cut, 8 directions, ×181/128) → "held
+  before" failure (after > 1000 ‰, before ≤ 1000 ‰, raised) → cut in strict order (≤ 3 rounds) → groups (+ crushed cells).
+  Budget: `S.SOLVE_BUDGET` ops per world tick (weights `S.OPW` ≈ equal time per op). Placement: `S.placeCheck` (or placeStart /
+  placeResult time-sliced) — refuses when v1 refuses, a node goes ≤ 1000 → > 1000 ‰, or an overloaded node gets more; G.full / unk → allowed.
+- Material load data: `LOADV` in support.js (spec §3 start values); soft × 2 (calibrated: × 3 let the 5-long cliff cantilever stand).
+- Anchors: true (ground, bedrock, natural col(), soft natural, EST estimate) — the joint to it is checked with the cell's own
+  capacity (cantilever out of a cliff fails at its root); boundary (piece edge r / rn, G.full, beyond 512, unloaded = code 5 from
+  the adapters; v1 treats 5 as 1) — absorbs load unchecked, nodes adjacent / whose load passes through / receiving its load = unk,
+  unk never fails.
+- Interim until S1.T (SH3): a storey (overturning) failure is reported (`res.tips`, `res.tipD`) and refuses placement, but is not cut —
+  a straight drop cannot move what rests on its support. Cuts act on joint / hang / crush.
+- Adapters: jobs at the world tick (Kubomir st.sup.step; Podzem every 3rd 1/60 step), FIFO + one pending job that collects nearby
+  seeds, an edit inside the active piece restarts it with the union of seeds (≤ 2), creak when a job takes > 1 tick, landing re-check
+  as an 'add' job (cascade ≤ 2; a group that landed in place is not re-checked), crushed → keep items, build tint at the tick.
+- SH0.2 (all worlds): chest / furnace contents (W.tile) move with a collapsing group (or spill as keep items); keep items never
+  despawn or get evicted; `ents.itemBatch(keep)` merges an event's items into stacks (≤ 32 entities; felled trees too); Podzem — a
+  chest on a collapsed build spills keep items instead of hanging.
+- Tests: support-load-test.cjs (G7 + §3 verdicts = T-120 prototype numbers, props, held-before, placement, 5 seeds, code 5, landing,
+  boxes, ticks 30/60/144, per-tick time, alloc), kubomir-hand-test §12, podzem-support-test, studio-support-test; Chrome: kubomir-e2e
+  `KB_LOAD=1` (support / soak / reopen), podzem-support-e2e `PZ_LOAD=1`.
+
 ## 🔥 Огонь — D37E.fire (js/engine/fire.js; T-022d, 22.10.2026, GAMES_VER 135; docs/PHYSICS_PLAN.md §4)
 - Владелец: «огонь — особенностью движка, во все игры». ОДНО ядро без Three.js: FI.grid (клетки 2D/3D) и FI.parts (детали); материалы
   FI.MATS (wood, planks, leaves, grass, turf, cloth, fuel, char, flame, tree; моды — FI.defineMat); такты по шагам игры, бюджет за такт,

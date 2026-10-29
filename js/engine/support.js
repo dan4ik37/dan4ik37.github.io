@@ -467,7 +467,7 @@
   // tick at 30 / 60 / 144 fps, phone and PC). No allocation per call: arrays per graph, allocated once on first use.
   S.SOLVE_BUDGET = 4096;   // node ops per world tick (start value, equal on every device; ≤ 2 ms per tick on phone ×4 — see support-load-test)
   // op weights per node and phase (calibrated in support-load-test: a 4,096-op slice ≈ the same time in every phase)
-  const OPW = S.OPW = { build: 4, prep: 1, init: 1, pop: 1, order: 1, load: 4, storey: 3, select: 1, groups: 1 };   // ≈ 30 ns per op on a PC (node 24)
+  const OPW = S.OPW = { build: 4, prep: 1, init: 1, pop: 1, order: 1, load: 6, storey: 4, select: 1, groups: 1 };   // ≈ equal time per op (node 24 and Chrome; load and storey were the worst slices in the Kubomir page)
   const ORD6 = [3, 0, 1, 4, 5, 2];   // fixed neighbour order (grid direction k6: 0 +x, 1 −x, 2 up, 3 down, 4 +z, 5 −z)
   const REL6 = [1, 1, 2, 0, 1, 1];   // k6 → rel (0 stands on it, 1 side, 2 hangs under it)
   const DXH = [2, -2, 0, 0, 0, 0], DZH = [0, 0, 0, 0, 2, -2];   // k6 → offset of the neighbour centre (half-units)
@@ -495,11 +495,12 @@
   function job(geo){
     const g = geo.g, J = { busy: false, done: false, phase: 0, ops: 0, round: 0, kind: 'rm', res: null, P: null };
     const RES = { ng: 0, nf: 0, n: 0, over: 0, unk: 0, crushed: 0, worst: 0, rounds: 0, ops: 0, ticks: 0, full: false, tips: 0, tipD: -1 };   // one result object per job (read it before the next start)
-    let L = null, P = null, kind = 'rm', ci = 0, cj = 0, side = 0, oPass = 0, oSub = 0, sv = 0, sPh = 0, qh = 0, qt = 0, cutStart = -1, gat = 0, kg = 1000, stopAt = 0;
+    let wb = 4, L = null, P = null, kind = 'rm', ci = 0, cj = 0, side = 0, oPass = 0, oSub = 0, sv = 0, sPh = 0, qh = 0, qt = 0, cutStart = -1, gat = 0, kg = 1000, stopAt = 0;
     const PH_BUILD = 0, PH_PREP = 1, PH_SOLVE = 2, PH_ORDER = 3, PH_LOAD = 4, PH_STOREY = 5, PH_SELECT = 6, PH_GROUPS = 7, PH_DONE = 8;
     // ── start: kind 'rm' (seeds were removed: before = with them) | 'add' (seeds were added: before = without them) ──
     J.start = (k, seeds, read, b, o = NOO) => {
       kind = J.kind = k === 'add' || k === 'now' ? k : 'rm'; P = J.P = b.P; L = loadState(g); kg = o.kg ?? 1000; stopAt = o.ratiosOnly ? 1 : 0;   // 'now' — как есть (до = после)
+      wb = Math.max(1, b.opb | 0 || OPW.build);   // build weight per node: the game's world read is part of it (a constant per adapter — the same on every device)
       J.busy = true; J.done = false; J.ops = 0; J.round = 0; J.res = null; J.ticks = 0;
       if (geo.isGrid) { geo.begin(seeds, read, b); J.phase = PH_BUILD; } else { J.phase = PH_PREP; }
       ci = 0; side = 0;
@@ -520,9 +521,9 @@
     function run(budget){
       switch (J.phase) {
         case PH_BUILD: {
-          const nb = Math.max(1, Math.floor(budget / OPW.build)), i0 = geo.cursor();
+          const nb = Math.max(1, Math.floor(budget / wb)), i0 = geo.cursor();
           const fin = geo.more(nb);
-          const used = (geo.cursor() - i0) * OPW.build;
+          const used = (geo.cursor() - i0) * wb;
           if (fin) { J.phase = PH_PREP; ci = 0; }
           return Math.max(used, 1);
         }
