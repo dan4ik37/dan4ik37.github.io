@@ -95,7 +95,7 @@ for (const r of R1) {
   if (!(clip === action || clip.startsWith(action + '.'))) bad.push(clip + ': name ≠ action[.variant]');
   if (actionIds && !actionIds.has(action) && !S.PROPOSED[action]) bad.push(clip + ': action not in actions.csv: ' + action);
   if (!/^[YN]$/.test(r[col('loop')]) || !/^[YN]$/.test(r[col('additive')])) bad.push(clip + ': Y/N');
-  for (const n of ['dur_s', 'speed_mps', 'dir_x', 'dir_z', 'heading_deg', 'sync', 'blend_in_s', 'blend_out_s', 'foot_slide_mps']) if (!Number.isFinite(+r[col(n)])) bad.push(clip + ': ' + n);
+  for (const n of ['dur_s', 'speed_mps', 'dir_right', 'dir_fwd', 'turn_left_deg', 'sync', 'blend_in_s', 'blend_out_s', 'foot_slide_mps']) if (!Number.isFinite(+r[col(n)])) bad.push(clip + ': ' + n);
   if (!['xz', 'xz+yaw', 'none'].includes(r[col('root_motion')])) bad.push(clip + ': root_motion');
   for (const n of ['L_contacts', 'R_contacts']) if (r[col(n)] && !/^\d\.\d{3}-\d\.\d{3}(;\d\.\d{3}-\d\.\d{3})*$/.test(r[col(n)])) bad.push(clip + ': ' + n);
   if (+r[col('rot_offset_deg')] !== 0) bad.push(clip + ': rot offset');
@@ -103,6 +103,10 @@ for (const r of R1) {
 }
 ok(!bad.length, 'csv rows valid (names, action ids' + (actionIds ? ' from spec' : '') + ', formats)', bad.slice(0, 6));
 ok(new Set(R1.map(r => r[0])).size === R1.length, 'csv: clip names unique');
+// directions by the character's own sides (review 29.10: dir_x had +x = character LEFT, mirrored in Unity where +X = right)
+const rowOf = nm => R1.find(r => r[0] === nm), num = (nm, c) => +rowOf(nm)[col(c)];
+ok(num('loco.walk.left', 'dir_right') === -1 && num('loco.walk.right', 'dir_right') === 1 && num('loco.walk.fwd', 'dir_fwd') === 1 && num('loco.walk.back', 'dir_fwd') === -1
+  && num('loco.turn.l90', 'turn_left_deg') === 90 && num('loco.turn.r90', 'turn_left_deg') === -90 && !S.CSV_COLUMNS.some(c => /^dir_[xyz]$|^heading/.test(c)), 'csv: dir_right / dir_fwd / turn_left_deg by the character sides (left strafe → dir_right −1)');
 const packed = 'E:/d37-core/anim/clips.csv';
 if (fs.existsSync(packed)) ok(fs.readFileSync(packed, 'utf8').replace(/\r/g, '') === csv, 'E:/d37-core/anim/clips.csv is current (rebuild: node scripts/anim-pack.cjs)');
 

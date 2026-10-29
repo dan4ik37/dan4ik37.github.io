@@ -537,7 +537,9 @@
   }
 
   // ═══ clips.csv (Layer-1 metadata, one row per clip) ═══
-  const CSV_COLUMNS = ['clip', 'action', 'variant', 'loop', 'additive', 'ref', 'pose', 'dur_s', 'fps', 'frames', 'speed_mps', 'dir_x', 'dir_z', 'heading_deg', 'rot_offset_deg', 'root_motion',
+  // Directions and turns are named by the character's own sides (BODY.md §5: right/up/forward), never by an axis sign: dir_right
+  // = +1 travels to the character's right (the clip's own frame is glTF-like, +X = the character's LEFT), turn_left_deg > 0 = left.
+  const CSV_COLUMNS = ['clip', 'action', 'variant', 'loop', 'additive', 'ref', 'pose', 'dur_s', 'fps', 'frames', 'speed_mps', 'dir_right', 'dir_fwd', 'turn_left_deg', 'rot_offset_deg', 'root_motion',
     'L_plant', 'L_lift', 'R_plant', 'R_lift', 'L_contacts', 'R_contacts', 'sync', 'blend_in_s', 'blend_out_s', 'foot_slide_mps', 'notes'];
   function csv(clips){
     const f3 = x => (+x).toFixed(3), cell = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
@@ -550,7 +552,7 @@
       const rm = c.additive ? 'none' : c.heading ? 'xz+yaw' : (c.speed > 0 || /^(start|stop)/.test(c.variant)) ? 'xz' : 'none';
       const notes = [PROPOSED[c.action] ? 'PROPOSED action id: ' + PROPOSED[c.action] : '', c.additive ? (c.pose ? 'additive pose: play the last frame, weight = amount' : 'additive overlay on loco.idle') : '',
         c.sync && !c.loop ? (c.variant.startsWith('start') ? 'ends at loop phase ' + f3(c.sync) : 'starts at loop phase ' + f3(c.sync)) : ''].filter(Boolean).join('; ');
-      rows.push([c.name, c.action, c.variant, c.loop ? 'Y' : 'N', c.additive ? 'Y' : 'N', c.additive ? 'frame0' : '', c.pose ? 'Y' : 'N', f3(c.dur), c.fps, c.n - 1, f3(c.speed), f3(c.dir[0]), f3(c.dir[1]), c.heading, 0, rm,
+      rows.push([c.name, c.action, c.variant, c.loop ? 'Y' : 'N', c.additive ? 'Y' : 'N', c.additive ? 'frame0' : '', c.pose ? 'Y' : 'N', f3(c.dur), c.fps, c.n - 1, f3(c.speed), f3(c.dir[0] ? -c.dir[0] : 0), f3(c.dir[1]), c.heading, 0, rm,
         lp, ll, rp, rl, iv(c.contacts.L), iv(c.contacts.R), f3(c.sync), c.blend[0], c.blend[1], (c.slide ? c.slide.max : 0).toFixed(4), notes].map(cell).join(','));
     }
     return rows.join('\n') + '\n';
