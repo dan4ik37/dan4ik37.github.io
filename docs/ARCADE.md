@@ -65,6 +65,14 @@ clears it), `s.v` (DOM games: bump when the field must be redrawn).
 - **Input** is an event queue applied at step boundaries by event time (frame-rate independent). Resolve taps by the cell
   *under the finger* (row and column), give a small tolerance, forgive taps before the run really starts, never end the run
   on the very first tap. Keyboard: map keys in `keys`; DOM buttons work with Tab + Enter through `click`.
+- **Two thumbs** (check T-140 D1): browsers fire NO `click` for overlapping multi-touch taps, so the kit never relies on it
+  for pointers. DOM `pick: 'tap'` (default) counts a press at `pointerup` of that finger (a swipe that scrolls the page —
+  `pointercancel` — or a finger slid off the button is not a press); `pick: 'down'` counts at `pointerdown` — use it when
+  the ORDER of fast presses matters (notes, pop-it): with 'tap' two overlapping thumbs count in release order.
+- **Skill, not luck or idleness** (check T-140 R1, D2–D4): a run with no input (the game acting by itself — auto-drop,
+  auto-pour) scores 0 and is never a win; tapping blindly / at random (as fast as allowed, and at a human tempo) must score
+  clearly less and win clearly less often than a strategy bot at the same tempo. Add a scenario that proves it (pegs, pour,
+  parking, planets have one).
 - **No garbage per step/frame**: typed arrays, fixed rings, preallocated pools created in `create`; no `{}`/`[]`/closures/
   `filter/map/forEach`/template strings in `step`/`draw`. Strings for canvas text: constants, or cache on `G`
   (`if (G.sc !== s.score) { G.sc = s.score; G.scT = String(s.score); }`). `draw` only reads `s`.
