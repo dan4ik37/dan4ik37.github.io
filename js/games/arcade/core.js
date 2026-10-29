@@ -45,9 +45,11 @@
   const newSeed = () => 1 + Math.floor(Math.random() * 2147483646);
 
   // ── input queue: a fixed ring of pooled events (no allocation per event); handlers must not keep ev ──
+  // x / y / t start as doubles (0.5) and are then zeroed: the fields are «double» from birth, so V8 never re-types them
+  // later (a Smi → double change deoptimizes the runner and makes it box numbers for a while)
   function Queue(size){
     const b = [];
-    for (let i = 0; i < size; i++) b.push({ type: 0, x: 0, y: 0, k: 0, t: 0 });
+    for (let i = 0; i < size; i++) { const e = { type: 0, x: 0.5, y: 0.5, k: 0, t: 0.5 }; e.x = e.y = e.t = 0; b.push(e); }
     const q = {
       h: 0, n: 0,
       push(type, x, y, k, t){
@@ -65,17 +67,24 @@
   // ── fixed-step runner. Step k starts at wall time off + k·STEP_MS; an event with time t is applied before the first
   // step whose start ≥ t — so the result depends on event times only, not on the frame rate. hooks.before(s, k) — test
   // bots (R.pushNow stamps an event with the time of this step), hooks.after(s) — after each step (sounds). ──
+  // Hot-path hardening (T-140 integration): every double of the runner lives in the Float64Array tm (typed-array stores
+  // never box and have no field types), R has one fixed shape built in one literal (methods included), steps is a Smi —
+  // so the optimized frame() is not thrown away by «field type changed» deopts when a new run / game starts.
   function Runner(spec, s, hooks){
-    const R = { s, steps: 0, off: 0, lim: 0, on: false, alpha: 1, q: Queue(64), inp: { down: false, x: 0, y: 0, keys: 0 } };
-    const inp = R.inp, q = R.q, before = hooks && hooks.before, after = hooks && hooks.after;
-    R.start = now => { R.on = true; R.off = now - R.steps * STEP_MS; q.clear(); };   // also «continue» after a pause
-    R.stop = () => { R.on = false; q.clear(); };
-    R.push = (type, x, y, k, t) => { if (R.on) q.push(type, x, y, k, t); };
-    R.pushNow = (type, x, y, k) => { if (R.on) q.push(type, x, y, k, R.lim); };   // for bots inside hooks.before
+    // tm[0] off — wall time of step 0, tm[1] lim — wall time of the current step, tm[2] alpha — draw interpolation
+    const tm = new Float64Array(3), q = Queue(64), inp = { down: false, x: 0.5, y: 0.5, keys: 0 };
+    inp.x = inp.y = 0;
+    tm[2] = 1;
+    const before = hooks && hooks.before, after = hooks && hooks.after;
+    const R = { s, steps: 0, on: false, tm, q, inp, start, stop, push, pushNow, frame };
+    function start(now){ R.on = true; tm[0] = now - R.steps * STEP_MS; q.clear(); }   // also «continue» after a pause
+    function stop(){ R.on = false; q.clear(); }
+    function push(type, x, y, k, t){ if (R.on) q.push(type, x, y, k, t); }
+    function pushNow(type, x, y, k){ if (R.on) q.push(type, x, y, k, tm[1]); }   // for bots inside hooks.before
     function drain(){
       while (q.n) {
         const e = q.peek();
-        if (e.t > R.lim) break;
+        if (e.t > tm[1]) break;
         q.shift();
         const ty = e.type;
         if (ty === T.DOWN) { inp.down = true; inp.x = e.x; inp.y = e.y; }
@@ -87,14 +96,14 @@
         if (R.s.over) return;
       }
     }
-    R.frame = now => {
+    function frame(now){
       if (!R.on) return 0;
-      let target = Math.floor((now - R.off) / STEP_MS);
+      let target = Math.floor((now - tm[0]) / STEP_MS);
       // lag (slow phone, hidden tab): at most MAX_STEPS per frame, the rest of the time is dropped — no catch-up storm
-      if (target - R.steps > MAX_STEPS) { R.off += (target - R.steps - MAX_STEPS) * STEP_MS; target = R.steps + MAX_STEPS; }
+      if (target - R.steps > MAX_STEPS) { tm[0] += (target - R.steps - MAX_STEPS) * STEP_MS; target = R.steps + MAX_STEPS; }
       let n = 0;
       while (R.steps < target) {
-        R.lim = R.off + R.steps * STEP_MS;   // wall time of this step (a field, not an argument: no boxed double per call)
+        tm[1] = tm[0] + R.steps * STEP_MS;   // wall time of this step (typed array, not an argument: no boxed double per call)
         if (before) before(R.s, R.steps);
         drain();
         if (!R.s.over) spec.step(R.s, STEP, inp);
@@ -102,10 +111,10 @@
         if (after) after(R.s);
         if (R.s.over) { R.on = false; break; }
       }
-      const a = (now - R.off) / STEP_MS - R.steps;
-      R.alpha = !R.on ? 1 : a < 0 ? 0 : a > 1 ? 1 : a;
+      const a = (now - tm[0]) / STEP_MS - R.steps;
+      tm[2] = !R.on ? 1 : a < 0 ? 0 : a > 1 ? 1 : a;
       return n;
-    };
+    }
     return R;
   }
 
@@ -126,7 +135,7 @@
       if (now > maxMs) break;
       while (i < ev.length && ev[i].t <= now) { const e = ev[i++]; R.push(e.type, e.x || 0, e.y || 0, e.k || 0, e.t); }
       R.frame(now);
-      if (G) spec.draw(G, s, R.alpha);
+      if (G) spec.draw(G, s, R.tm[2]);
     }
     return { s, steps: R.steps, frames: f, over: !!s.over, score: s.score };
   }
@@ -387,7 +396,7 @@
     const R = I.run;
     if (I.dead || !R || !R.on) return;
     R.frame(performance.now());
-    paint(I, R.alpha, false);
+    paint(I, R.tm[2], false);
     hud(I);
     if (I.s.over) return finish(I);
     if (R.on) I.raf = requestAnimationFrame(I.tick);
