@@ -48,7 +48,9 @@
       }
     }
     const batch = keep => st.ents?.itemBatch ? st.ents.itemBatch(keep) : { add: (x, y, z, s) => st.ents?.addItem?.(x, y, z, s, false, null, false, keep), flush(){} };
-    const blockedAt = (x, y, z) => { const p = st.P; if (p && !p.dead && p.x + .3 > x && p.x - .3 < x + 1 && p.z + .3 > z && p.z - .3 < z + 1 && p.y + 1.8 > y && p.y < y + 1) return true; return !!st.ents?.blocked?.(x, y, z); };
+    // кто стоит в клетке: игрок, другие игроки (гости — ревью S2), мобы — туда блок не пишется
+    const inBox = (p, x, y, z) => !!p && !p.dead && p.x + .3 > x && p.x - .3 < x + 1 && p.z + .3 > z && p.z - .3 < z + 1 && p.y + 1.8 > y && p.y < y + 1;
+    const blockedAt = (x, y, z) => { if (inBox(st.P, x, y, z)) return true; const O = st.ents?.others; if (O) for (let i = 0; i < O.length; i++) if (inBox(O[i], x, y, z)) return true; return !!st.ents?.blocked?.(x, y, z); };
 
     // ═══ обломок родился: клетка (x, y, z) — откуда (занято — выше, до 3), скорость (м/с) → true; false — зовущий делает как раньше ═══
     X.spawnCell = (x, y, z, v, vx, vy, vz) => {
@@ -103,6 +105,7 @@
     // ═══ такт мира: ядро (доля потолка) → уснул — блок / вещь; удар — звук ═══
     const PT = { x: 0, y: 0, z: 0 }, SET = [];
     let snd = 0;
+    // reads — остаток общего потолка (kubomir-topple.js X.left(): 0 — постройки съели всё → пол KD.FLOOR); < 0 / нет — своя доля KD.READS
     X.tick = reads => {
       if (!D.live()) { D.used = 0; return; }
       const t0 = performance.now();
@@ -113,7 +116,7 @@
     };
     function tick0(reads){
       for (let i = 0; i < D.N; i++) { const w = view[i]; if (w) { w.px = w.x; w.py = w.y; w.pz = w.z; } }
-      const n = D.tick(stop, Math.max(KD.FLOOR, Math.min(KD.READS, reads > 0 ? reads : KD.READS)));
+      const n = D.tick(stop, reads >= 0 ? Math.max(KD.FLOOR, Math.min(KD.READS, reads)) : KD.READS);   // ревью PERF-6: было «0 → вся доля»
       X.stats.reads += D.used;
       snd = 0; SET.length = 0;
       for (let e = 0; e < n; e++) {
@@ -196,6 +199,8 @@
       if (SET.length && st.sup?.recheck) { st.sup.recheck(SET.slice()); SET.length = 0; }
       return n;
     };
+    // сохранение без изменения мира (kubomir-topple.js X.pending): куда лёг бы каждый летящий обломок (как X.flush) → f(x, y, z, v)
+    X.pending = f => { if (guest()) return; for (let i = 0; i < D.N; i++) if (D.st[i] === 1 || D.st[i] === 2) f(Math.floor(D.px[i] / ONE), Math.max(1, Math.floor((D.py[i] - D.hq[i] + 1) / ONE)), Math.floor(D.pz[i] / ONE), D.tag[i]); };
     X.live = () => D.live();
     // для проверок: обломки по номеру хозяина — «номер:x,y,z,vx,vy,vz» (Q16), по возрастанию номера ('' — нет)
     X.state = () => { const a = []; for (let i = 0; i < D.N; i++) if (D.st[i] === 1 || D.st[i] === 2) a.push([nidOf[i], D.px[i], D.py[i], D.pz[i], D.vx[i], D.vy[i], D.vz[i]]); a.sort((p, q) => p[0] - q[0]); return a.map(r => r[0] + ':' + r.slice(1).join(',')).join(' '); };

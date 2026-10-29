@@ -712,8 +712,11 @@
       }
       return { pos, vd, cl, lt, idx };
     }
+    // классических падающих (деревья fellTree, куски обрушения) — не больше 3; тела T-138 (g.TP) — свой предел (o.cap) и их не
+    // считают: 3 повисших дерева T-138 больше не запрещают обычное падение дерева (ревью PERF-2)
+    const nClassic = () => { let n = 0; for (let i = 0; i < groups.length; i++) if (!groups[i].TP) n++; return n; };
     X.fallGroup = (cells, pivot, dir, o = {}) => {
-      if (groups.length >= (o.cap || 3) || !cells.length) return null;
+      if ((o.topple ? groups.length : nClassic()) >= (o.cap || 3) || !cells.length) return null;
       const Vx = V(), n = cells.length / 4;
       if (o.drop || o.fast) {   // обрушение и деревья (T-022b) — быстрая сетка
         const A = dropGeo(cells, pivot); if (!A) return null;
@@ -751,7 +754,7 @@
       const isTrunk = i => o.trunk ? o.trunk(cells[i * 4 + 3]) : true, dist = i => { const rx = cells[i * 4] + .5 - pivot.x, ry = cells[i * 4 + 1] + .5 - pivot.y, rz = cells[i * 4 + 2] + .5 - pivot.z; return rx * rx + ry * ry + rz * rz; };
       const smp = far.filter(isTrunk).slice(0, 48).concat(far.filter(i => !isTrunk(i)).sort((a, b) => dist(b) - dist(a)).slice(0, 24));
       const g = { cells: cells.slice(), n, mesh, geo, px: pivot.x, py: pivot.y, pz: pivot.z, ax: dir.z, az: -dir.x, dx: dir.x, dz: dir.z, th: 0, pth: 0, w: o.push ?? .35, hc, smp: Int32Array.from(smp), done: 0, bounced: false, hitIds: new Set(), lit: Lit.make(null), o, t: 0, F: null, pfy: 0 };
-      if (o.topple) { g.TP = 1; g.on = 0; g.oy = 0; g.pon = 0; g.poy = 0; }   // T-138: крен и падение считает D37E.topple (kubomir-topple.js): угол и сдвиг ставит он
+      if (o.topple) { g.TP = 1; g.on = 0; g.oy = 0; g.pon = 0; g.poy = 0; mesh.frustumCulled = true; }   // T-138: крен и падение считает D37E.topple (kubomir-topple.js): угол и сдвиг ставит он; сфера сетки — от оси (поворот и сдвиг — у сетки), вне вида не рисуется
       if (o.drop && window.D37E?.support) {   // обрушение: целым куском вниз; чуть кренится (по зерну куска — у всех так же)
         const flat = []; for (let i = 0; i < n; i++) flat.push(cells[i * 4], cells[i * 4 + 1], cells[i * 4 + 2]);
         g.F = window.D37E.support.drop(flat, { down: -1, g: 30, vmax: 40, far: 96 });
@@ -901,9 +904,9 @@
     }
     const FELL_N = [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
     X.fellTree = (x, y, z, P) => {
-      if (groups.length >= 3) return null;
+      if (nClassic() >= 3) return null;
       treeFlags();
-      for (let k = 0; k < FELL_N.length && groups.length < 3; k++) { const d = FELL_N[k], g = fellFrom(x, y, z, x + d[0], y + d[1], z + d[2], P, k); if (g) return g; }
+      for (let k = 0; k < FELL_N.length && nClassic() < 3; k++) { const d = FELL_N[k], g = fellFrom(x, y, z, x + d[0], y + d[1], z + d[2], P, k); if (g) return g; }
       return null;
     };
     X.fellAt = X.fellTree;
@@ -916,13 +919,15 @@
     };
     // T-138 F3: дерево над срезом в слое yc (слой — пень с надрубом, остаётся): брёвна выше, не касающиеся ничего твёрдого, кроме листвы
     // и своего пня, и своя листва (как fellFrom) → { cells [x, y, z, v, …], n, nLog, leaves, thin } или null (не дерево). sec — [x, z, …]
-    X.treeAbove = (sec, yc) => {
+    // nat(x, y, z) — природная клетка (не правка игрока): брёвна игрока и всё построенное рядом — не часть дерева и его не держат
+    // (дерево падает мимо / на них: упрётся — повиснет); держит только природное твёрдое (скала) — ревью D8
+    X.treeAbove = (sec, yc, nat) => {
       treeFlags();
       const Vx = V(), Tt = Vx.T, seeds = [];
-      for (let i = 0; i < sec.length; i += 2) { const v = W.raw(sec[i], yc + 1, sec[i + 1]); if (v > 0 && LOGF[v & 0xfff]) seeds.push([sec[i], yc + 1, sec[i + 1]]); }
+      for (let i = 0; i < sec.length; i += 2) { const v = W.raw(sec[i], yc + 1, sec[i + 1]); if (v > 0 && LOGF[v & 0xfff] && (!nat || nat(sec[i], yc + 1, sec[i + 1]))) seeds.push([sec[i], yc + 1, sec[i + 1]]); }
       if (!seeds.length) return null;
       const soft = t => !Tt.solid[t] || LEAFF[t] || Tt.liquid[t] || Tt.shape[t] === Vx.SHAPE.cross || Tt.shape[t] === Vx.SHAPE.torch;
-      const C = Vx.component(W, seeds, { take: (v, x, y) => y > yc && LOGF[v & 0xfff] === 1, edge: (v, x, y) => (v < 0 ? 2 : v === 0 || soft(v & 0xfff) || (y <= yc && LOGF[v & 0xfff]) ? 0 : 2), max: 480 });
+      const C = Vx.component(W, seeds, { take: (v, x, y, z) => y > yc && LOGF[v & 0xfff] === 1 && (!nat || nat(x, y, z)), edge: (v, x, y, z) => (v < 0 ? 2 : v === 0 || soft(v & 0xfff) || (y <= yc && LOGF[v & 0xfff]) || (nat && !nat(x, y, z)) ? 0 : 2), max: 480 });
       if (!C || C.touch || C.grounded) return null;
       let thin = 0; for (let i = 0; i < C.cells.length; i += 4) if (THINF[C.cells[i + 3] & 0xfff]) thin++;
       const Lf = ownLeaves(C); if (!Lf) return null;

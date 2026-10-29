@@ -639,7 +639,7 @@
     st.sup = window.KubomirSupport?.attach?.(st) || null; st.shakeOK = () => shakeOK(st);   // обрушение и прочность (T-022a; мир без него — null)
     st.fellOn = () => opts.fell !== false;
     st.ktWear = n => { if (!st.creative) wear(st, st.P.sel, n); };
-    try { st.topple = window.KubomirTopple?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:topple', e); st.topple = null; }   // T-138: надрубы, крен и падение целым, рубка дерева (kubomir-topple.js)
+    try { st.topple = window.KubomirTopple?.attach?.(st) || null; if (!guest && meta.topple) st.topple?.restore?.(meta.topple); } catch (e) { console.error(e); window.d37Err?.('kb:topple', e); st.topple = null; }   // T-138: надрубы, крен и падение целым, рубка дерева (kubomir-topple.js); тела, что были в полёте при сохранении, — ложатся
     try { st.debris = window.KubomirDebris?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:debris', e); st.debris = null; }   // T-138 F4: обломки летят по весу, катятся со склона и скалы; вещи катятся (kubomir-debris.js)
     try { st.fire = window.KubomirFire?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:fire', e); st.fire = null; }   // огонь (T-022d): горит, перекидывается (если в мире включено), гаснет
     st.swimDeep = swimDeep; st.swimDrawY = (a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt);   // 👥 у других игроков — так же (kubomir-coop.js)   // руки как в Майнкрафте, свет человечков
@@ -718,7 +718,7 @@
     S = null;
     if (st.net) { try { if (st.coopGuest) { if (coopG === st.net) coopG = null; st.net.leave(); } else st.net.close('exit'); } catch (e) { console.error(e); } }
     st.coopEl?.remove();
-    try { st.topple?.flush?.(); } catch (e) { console.error(e); }   // T-138: что кренится и падает — ложится сразу (в сохранение)
+    try { st.topple?.flush?.(); } catch (e) { console.error(e); }   // T-138: что кренится и падает — ложится сразу (в сохранение); новых тел больше нет — обрушение ниже кладёт как раньше
     try { st.debris?.flush?.(); st.debris?.dispose?.(); } catch (e) { console.error(e); }   // T-138 F4: обломки в полёте — блоком / вещью сразу
     try { st.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение, что считается и падает, — до конца (в сохранение)
     let saved = null;
@@ -794,6 +794,8 @@
     m.time = st.R?.lighting?.time ?? m.time;
     m.ents = st.ents?.save?.() || [];
     if (st.fire?.F) m.fireState = st.fire.save();   // огонь: что горит (чтобы продолжить с того же места)
+    // T-138 (ревью D2, S4): тела в полёте, повисшие и обломки — куда лягут (мир не меняется: крен идёт дальше); загрузка — X.restore
+    { let p = null; try { p = st.topple?.pending?.() || null; } catch (e) { console.error(e); } if (p) m.topple = p; else delete m.topple; }
     if (st.modRun) m.modData = st.modRun.data();
     return m;
   }
@@ -813,11 +815,12 @@
   // вкладку закрывают: синхронно в localStorage (журнал), база — как успеет
   function journalNow(){
     const st = S; if (!st || !st.ready || st.coopGuest) return;
-    try { st.topple?.flush?.(); st.debris?.flush?.(); } catch (e) { console.error(e); }   // T-138: крен, падение и обломки — до конца
+    // T-138 (ревью D2, S6): крен, падение, повисшее и обломки НЕ кладутся (вкладку скрыли — вернулись: всё идёт дальше); куда лягут —
+    // в журнал (metaSnap → meta.topple)
     try { st.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение — до конца, чтобы в журнал легло, как будет
     const V = VX(), recs = [];
     for (const k of st.unsaved) { const c = st.W.chunks.get(k); if (c && c.gen) { const r = chunkRec(c, st); recs.push({ cx: r.cx, cz: r.cz, e: V.store.b64(new Uint8Array(r.e.buffer)), t: r.t }); } }
-    const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData, ice: m.ice, snow: m.snow, fireState: m.fireState };
+    const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData, ice: m.ice, snow: m.snow, fireState: m.fireState, topple: m.topple || null };
     V.store.journal(st.meta.id, { recs, meta });
     saveAll(st).catch(() => {});
   }
@@ -900,7 +903,7 @@
       st.ents?.tick(1 / 20);
       st.sup?.step();   // обрушение: очередь падающих кусков (по бюджету шага; kubomir-support.js)
       st.topple?.tick();   // T-138: проверка этажей, крен, падение целым, рубка (такт мира — одинаково при любой частоте кадров)
-      st.debris?.tick(st.topple ? st.topple.left() : 0);   // T-138 F4: обломки — остаток общего потолка за такт (§5.x)
+      st.debris?.tick(st.topple ? st.topple.left() : -1);   // T-138 F4: обломки — остаток общего потолка за такт (§5.x; 0 — пол обломков, −1 — нет построек: вся доля)
       st.fire?.tick();   // огонь: такт ядра (D37E.fire), ветер и дождь погоды, лава и молния поджигают (kubomir-fire.js)
       if (!st.creative) survivalTick(st, 1 / 20);
       st.modRun?.tick(1 / 20);
@@ -1500,7 +1503,10 @@
     if (mining) {
       const key = hit.x + ',' + hit.y + ',' + hit.z, b = hit.ice ? V.blocks[V.ID.ice] : V.blocks[hit.v & 0xfff];   // лёд на озере — как блок льда
       if (st.mine.key !== key) { st.mine.key = key; st.mine.t = 0; st.mine.need = breakTime(st, b); st.mine.snd = 0; }
-      if (st.creative) { if (st.mine.cool <= 0) { breakBlock(st, hit); st.mine.cool = .18; st.mine.key = ''; } }
+      // T-138 (ревью D1): тело в крене / полёте / повисшее (его клетка в мире — воздух): ломать нечего; повисшее — удар (время блока,
+      // не дольше 1,5 с) — ложится блоками там, где висит (дорубить)
+      if (hit.body) { if (st.mine.cool <= 0 && (st.creative || (st.mine.t += dt) >= Math.min(st.mine.need, 1.5))) { st.topple?.knock?.(hit); st.mine.key = ''; st.mine.t = 0; st.mine.cool = .25; } }
+      else if (st.creative) { if (st.mine.cool <= 0) { breakBlock(st, hit); st.mine.cool = .18; st.mine.key = ''; } }
       else if (st.mine.need < Infinity) {
         st.mine.t += dt;
         st.mine.snd -= dt; if (st.mine.snd <= 0) { st.mine.snd = .24; st.AU?.play(digSound(b), { x: hit.x - st.ox + .5, y: hit.y + .5, z: hit.z - st.oz + .5, vol: .45, rate: .9 + Math.random() * .2 }); st.ents?.hitFx?.(hit.x, hit.y, hit.z, b.id, hit.nx | 0, hit.ny | 0, hit.nz | 0); }
@@ -1780,6 +1786,7 @@
   // поставить, съесть); tap — нажатие пальцем (еда тогда доедается сама). true — что-то сделали
   function use(st, hit, tap){
     const V = VX(), P = st.P, s = P.inv[P.sel];
+    if (hit && hit.body) hit = null;   // T-138: тело в полёте — к нему не ставят и его не открывают
     if (st.eat) return true;
     if (hit && !P.sneak) {
       const b = V.blocks[hit.v & 0xfff];

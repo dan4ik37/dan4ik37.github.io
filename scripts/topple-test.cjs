@@ -244,9 +244,15 @@ sec('рубка (D37E.fell): подруб решает сторону, недо�
   // тонкое: подруб с +z (3/8), запил с −z — падает на +z (к подрубу), где бы ни стоял игрок
   const a = swings(1, [[2, 3], [3, 8]]);
   ok(a.dir === 2 && a.kind === 1 && a.hinge <= 1, 'подруб с +z, запил с −z — падает к подрубу (+z), недопил ≤ 1/8', a);
-  // без подруба: рубит только с −x — дерево уходит от него (+x), когда почти насквозь
+  // без подруба: рубит только с −x — срез прошёл середину, центр масс над срезанным — дерево клонится к срезу (−x, как в жизни; ревью D10)
   const b = swings(1, [[1, 8]]);
-  ok(b.dir === 0 && b.kind === 2 && b.n === 7, 'рубит только с −x — падает от рубящего (+x), за 7 ударов', b);
+  ok(b.dir === 1 && b.kind === 2 && b.n === 5, 'рубит только с −x — за серединой ствола падает к срезу (−x), за 5 ударов', b);
+  // ревью D6: подруб решает, только если он настоящий (≥ ⅓): великан 2×2 — подруб 6/16 + запил → к подрубу; маленький подруб (2, 4)
+  // или без него — запил за середину валит дерево НАЗАД, на запиливающего; 3×3 — то же с подрубом 8 против 7
+  const d6 = [swings(2, [[0, 6], [1, 16]]), swings(2, [[0, 2], [1, 16]]), swings(2, [[0, 4], [1, 16]]), swings(2, [[1, 16]]), swings(3, [[0, 8], [1, 24]]), swings(3, [[0, 7], [1, 24]])];
+  ok(d6[0].dir === 0 && d6[0].kind === 1 && d6[1].dir === 1 && d6[2].dir === 1 && d6[3].dir === 1 && d6[4].dir === 0 && d6[4].kind === 1 && d6[5].dir === 1,
+    'великан: настоящий подруб (⅓) направляет падение к себе, маленький / никакого — падает назад, к запилу (2×2: 6 → +x, 2 / 4 / 0 → −x; 3×3: 8 → +x, 7 → −x)', d6.map(r => [r.n, r.dir, r.kind]));
+  NUM.notch = d6.map(r => r.n + ':' + (r.dir === 0 ? '+x' : '-x'));
   // недопил держит: подруб + запил не до конца — стоит
   const c = swings(1, [[0, 3], [1, 3]]);
   ok(!c.go, 'подруб и короткий запил (недопил 2/8) — ещё стоит', c);
@@ -256,9 +262,9 @@ sec('рубка (D37E.fell): подруб решает сторону, недо�
   ok(c1.dir === 0 && c2.dir === 0 && c3.dir === 0 && c2.time >= 3 * c1.time && c3.time >= 8 * c1.time, 'ствол 2×2 — ≥ 3× дольше, 3×3 — ≥ 8× (подруб ⅓ + запил)', { c1, c2, c3 });
   NUM.fellCost = { D1: c1, D2: c2, D3: c3 };
   // тяжёлая крона над глубоким срезом — кренится сама
-  const s = FL.state(1); for (let i = 0; i < 5; i++) FL.hit(s, 0, 1); FL.hit(s, 1, 1);
-  const o1 = FL.decide(s, null, {}), o2 = FL.decide(s, [16, 0], {});
-  ok(!o1.go && o2.go && o2.kind === 3 && o2.dir === 0, 'срез 5/8 с +x: прямая крона — стоит, крона клонится на +x (2 клетки) — пошло само (медленно)', { o1, o2 });
+  const s = FL.state(1); for (let i = 0; i < 4; i++) FL.hit(s, 0, 1);
+  const o1 = FL.decide(s, null, {}), o2 = FL.decide(s, [16, 0], {}), o3 = FL.decide(s, [-16, 0], {});
+  ok(!o1.go && o2.go && o2.kind === 3 && o2.dir === 0 && !o3.go, 'срез 4/8 с +x: прямая крона — стоит, крона клонится на +x (2 клетки) — пошло само (медленно), на −x — стоит', { o1, o2, o3 });
   // клетки сечения 2×2: подруб 10/8 с +x — столбик +x срублен насквозь, у второго снято 2/8
   const s2 = FL.state(2); for (let i = 0; i < 10; i++) FL.hit(s2, 0, 1);
   const cc = [0, 0, 0, 0], g1 = FL.cell(s2, 1, 0, cc), c1v = cc.slice(), g0 = FL.cell(s2, 0, 0, cc);
@@ -284,6 +290,46 @@ sec('падение дерева на недопиле; зависло на со
   const S2 = world(); ground(S2); S2.add2(0, 0, 0); for (let y = 0; y < 14; y++) S2.add2(4, y, 0);
   const A2 = simulate(S2, B, R, 60, { rate: Math.round(5 * TP.FINE_DEG / 80), kind: 'lean' }, 200);
   ok(A2.Wd.phase(A2.s) === TP.PH.HUNG && A2.Wd.th[A2.s] < 60 * TP.FINE_DEG, 'упало на соседнее дерево — повисло (' + deg(A2.Wd.th[A2.s]) + '°)', deg(A2.Wd.th[A2.s]));
+}
+
+sec('ревью T-138: центр масс ровно над осью — падает (толчок); земля не держит повисшее; соскальзывание с края; поза в клетках');
+{
+  // S1: столб 1×1×6, ось ровно под центром масс (pn = 4/8) — без толчка ω = 0 и тело стояло бы вне мира вечно
+  const col = bodyOf(box(0, 0, 0, 5, 0, 0), S0);
+  const R = TP.result(); R.dir = 0; R.pn = 4; R.py = 0;
+  const A = simulate(S0, col, R, 60, { kind: 'tip' }, 400);
+  const land = A.evs.find(e => e[1] === 2);
+  ok(land && land[0] < 200, 'S1: центр масс ровно над осью — тело падает (толчок), легло за ' + (land && land[0]) + ' тактов', A.evs.slice(0, 3));
+  NUM.balanced = land && land[0];
+  // D4: склон (земля, solid → 2) поднимается по 1 на клетку с 2 клеток — дерево-столб ложится на склон под углом, не виснет
+  const H = world(); ground(H); for (let x = 2; x < 30; x++) for (let y = 0; y <= x - 2; y++) H.add2(x, y, 0);
+  const Hs = { solid: (x, y, z) => H.solid(x, y, z) ? 2 : 0 };
+  const tree = bodyOf(box(0, 0, 0, 7, 0, 0), H);
+  const R2 = TP.result(); R2.dir = 0; R2.pn = 8; R2.py = 0;
+  const A2 = simulate(Hs, tree, R2, 60, { rate: Math.round(5 * TP.FINE_DEG / 80) }, 300);
+  const e2 = A2.evs.find(e => e[1] === 1 || e[1] === 2), ang = deg(A2.Wd.th[A2.s]);
+  const out = [0, 0, 0]; let inHill = 0; for (let y = 0; y < 8; y++) { A2.Wd.place(A2.s, 0, y, 0, out); if (H.solid(out[0], out[1], out[2])) inHill++; }
+  ok(e2 && e2[1] === 2 && ang > 5 && ang < 60 && inHill <= 1, 'D4: на склон — LAND под ' + ang + '° (не HANG), стоя на месте в клетках — в склоне ≤ 1 клетки', { ev: e2, ang, inHill });
+  NUM.hillLand = { deg: ang, inHill };
+  // твёрдое, что держит (solid → 1), — по-прежнему повисло
+  const Hh = { solid: (x, y, z) => H.solid(x, y, z) ? 1 : 0 };
+  const A3 = simulate(Hh, bodyOf(box(0, 0, 0, 7, 0, 0), H), R2, 60, { rate: Math.round(5 * TP.FINE_DEG / 80) }, 300);
+  ok(A3.Wd.phase(A3.s) === TP.PH.HUNG, 'держатель (solid → 1) — повисло, как раньше', A3.Wd.phase(A3.s));
+  // D5: соскальзывание: drop + slide 16/8 вдоль +x — сдвиг сетки и клетки «легло» на 2 клетки дальше
+  const Wd = TP.world({}), B5 = bodyOf(box(0, 0, 0, 3, 0, 0), S0), R5 = TP.result(); R5.dir = 0; R5.pn = 8; R5.py = 0;
+  const s5 = Wd.add(B5, R5, { ox: 0, oy: 0, oz: 0, kind: 'tip', w0: 40000 });
+  let t = 0; while (Wd.phase(s5) !== TP.PH.LANDED && t++ < 200) Wd.tick(() => 0);
+  const before = Wd.land(s5, 0, 3, 0, [0, 0, 0]).slice();
+  const sv = Wd.save(s5, new Int32Array(8));
+  Wd.drop(s5, 8, 16); let rest = 0; while (!rest && t++ < 400) { const n = Wd.tick(() => 0); for (let k = 0; k < n; k++) if (Wd.ev[k * 5 + 1] === 3) rest = 1; }
+  const after = Wd.land(s5, 0, 3, 0, [0, 0, 0]).slice(), of = Wd.offset(s5, [0, 0]);
+  ok(rest && after[0] === before[0] + 2 && after[1] === before[1] - 1 && of[0] === 16, 'D5: соскальзывание на 2 клетки (+x) и спуск на 1 — сетка и клетки «легло» сдвинуты', { before, after, of });
+  // Wd.save / Wd.load — вернуть как было (заглянуть вперёд без изменений)
+  Wd.load(s5, sv); const back = Wd.land(s5, 0, 3, 0, [0, 0, 0]);
+  ok(back[0] === before[0] && back[1] === before[1] && Wd.phase(s5) === TP.PH.LANDED, 'Wd.save / Wd.load — поза вернулась', { back, before });
+  // Wd.place на 90° (ось на краю клетки) = Wd.land
+  let same = true; for (let y = 0; y < 4; y++) { const a = Wd.land(s5, 0, y, 0, [0, 0, 0]), b = Wd.place(s5, 0, y, 0, [0, 0, 0]); if (a[0] !== b[0] || a[1] !== b[1] || a[2] !== b[2]) same = false; }
+  ok(same, 'Wd.place на 90° совпадает с Wd.land (клетки «легло»)');
 }
 
 console.log('цифры:', JSON.stringify(NUM));

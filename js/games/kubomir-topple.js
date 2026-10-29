@@ -21,9 +21,18 @@
 //     угол и сдвиг каждый такт / скрип / повисло / легло, обломки (kubomir-debris.js). Гость (X.netIn) повторяет их в том же
 //     порядке с постоянной задержкой в тактах; клетки мира — правками хозяина, как всегда. Гость сам ничего не решает (проверки этажей
 //     только у хозяина).
+//  Ревью 29.10 (owner / perf / state): тело в крене, полёте и повисшее — твёрдое (стоять, упираться, вещи лежат) и видно прицелом
+//     (W.bodyAt → voxel.js, KT.HIT); повисшее — дорубить: удар — ложится блоками там, где висит; висит дольше KT.HUNG_T или их
+//     больше KT.HUNG_MAX — самое старое ложится так же (слоты не кончаются). Упёрлось в землю (природное, не ствол) — ложится на
+//     склон под своим углом (KT.GROUND), не виснет. Легло краем, а центр масс за краем — соскальзывает и падает дальше (KT.SLIDE).
+//     Листва и тонкие ветки под падающим ломаются (ствол ложится, а не рассыпается вещами); занято — клетка выше. Надруб —
+//     коробка столкновений и луча без снятого (V.cutsOn). Сохранение (автосохранение, облако, экспорт, журнал вкладки) — тела в
+//     полёте и повисшие: куда лягут (X.pending → meta.topple; загрузка — X.restore); журнал вкладки больше НЕ кладёт их (раньше
+//     скрытая вкладка ставила крен обратно). Проверка этажей — по частям (≤ KT.CHECK_OPS за такт), большая постройка помнится.
 //   X = KubomirTopple.attach(st) → { mines(hit, b, need), mine(hit, b, M), hostHit(hit, b, need, by), hitCost(hit, b, need),
-//     cutsFor(cx, cz), group(cells, nat), tick(), left(), flush(), netPush(…), netTake(pv, enc), netIn(list, toLocal, dec), stats,
-//     bodies() } · откат каждой части — одна строка: KT.CUT / KT.LEAN / KT.FELL / KT.NET = false (всё выключено — как было).
+//     cutsFor(cx, cz), group(cells, nat), tick(), left(), flush(), knock(hit), overAt(x, y, z), pending(), restore(p), netPush(…),
+//     netTake(pv, enc), netIn(list, toLocal, dec), stats, bodies() } · откат каждой части — одна строка: KT.CUT / KT.LEAN /
+//     KT.FELL / KT.NET / KT.HIT / KT.GROUND / KT.SLIDE = false (всё выключено — как было).
 (() => {
   const KT = window.KubomirTopple = window.KubomirTopple || {};
   KT.CUT = true;    // F1: надрубы со стороны удара (false — копать как раньше)
@@ -34,7 +43,13 @@
   KT.CUT_MIN = .3;  // блоки быстрее (с), чем это, копаются как раньше (земля, песок): срез на них не виден и не нужен
   KT.MAXB = 1536;   // постройка больше — проверка этажей «не знаю» (стоит)
   KT.CHECK_OPS = 2048;
-  KT.LAND_CELLS = 48;   // легло — клеток в мир за такт (остальное — следующими тактами, сетка лежит на их месте)   // проверки этажей за такт мира: клеток обхода (доля общего потолка, §5.x)
+  KT.LAND_CELLS = 48;   // легло — клеток в мир за такт (остальное — следующими тактами, сетка лежит на их месте)
+  KT.HIT = true;        // ревью D1: тело в крене / полёте / повисшее — твёрдое для игрока, мобов и вещей, его видно прицелом (false — как было)
+  KT.GROUND = true;     // ревью D4: упёрлось в землю (природное, не ствол) — ложится на склон под своим углом, а не виснет (false — как было)
+  KT.SLIDE = true;      // ревью D5: легло краем, центр масс за краем — соскальзывает с края (false — как было: торчит над обрывом)
+  KT.HUNG_T = 60 * 20;  // ревью PERF-2: висит дольше (тактов мира) — ложится блоками там, где висит
+  KT.HUNG_MAX = 4;      // повисших сразу больше — самое старое ложится так же (слоты D37E.topple не кончаются)
+  KT.BIG_T = 200;       // ревью PERF-1: постройка больше KT.MAXB — помнится (тактов): поставленное к ней её снова не проверяет
   const VX = () => window.D37E.vox, TPm = () => window.D37E.topple, FLm = () => window.D37E.fell;
   const DEG = 46603 / 80;   // 1°/с — в долях угла за подшаг (2^24 на оборот, 80 подшагов в секунду)
 
@@ -45,6 +60,7 @@
     const Wd = TP.world({ slots: 16, smp: 64, reads: 2048 }), B = TP.body(4096), R = TP.result();
     const bodies = new Array(Wd.NS).fill(null), pend = [], CHK = [];
     let own = 0;
+    V.cutsOn = !!(KT.CUT || KT.FELL);   // ревью D7: надрубленный — коробка столкновений и луча без снятого (voxel.js)
     // звуки скрипа и удара синтезируются при первом проигрывании (~0,2 с, телефон ×4 — до 0,8 с): заранее, пока мир открывается
     if (KT.CUT || KT.LEAN || KT.FELL) { const f = () => { try { window.D37E.synth?.render?.('kb_creak'); window.D37E.synth?.render?.('kb_thud'); } catch (e) {} }; if (window.requestIdleCallback) window.requestIdleCallback(f, { timeout: 2500 }); else setTimeout(f, 1000); }
     const X = { Wd, stats: { checks: 0, checkNodes: 0, skipped: 0, tips: 0, leans: 0, hangs: 0, lands: 0, back: 0, cuts: 0, fells: 0, chips: 0, groups: 0, items: 0, maxTickMs: 0, tickMs: 0, ticks: 0, reads: 0, landReads: 0, queued: 0 } };
@@ -53,9 +69,17 @@
     function timed(k, f, a, b, c, d, e, g){ const t = now(); try { return f(a, b, c, d, e, g); } finally { const ms = now() - t; if (ms > X.stats.ms[k]) X.stats.ms[k] = ms; } }
     const solidT = t => V.T.solid[t] === 1 && V.T.shape[t] !== V.SHAPE.cross && !V.T.liquid[t];
     const isLeaf = v => st.ents?.treeKind ? st.ents.treeKind(v) === 3 : /^leaves_/.test(V.blocks[v & 0xfff]?.name || '');
-    // что останавливает падающее: твёрдое, кроме листвы и растений (сквозь крону падает, о ствол — упирается)
-    const stopAt = (x, y, z) => { const v = W.raw(x, y, z); if (v < 0) return true; if (!(v > 0)) return false; const t = v & 0xfff; return solidT(t) && !isLeaf(v); };
     const natural = (x, y, z) => { const c = W.chunkAt ? W.chunkAt(x, z) : null; if (!c) return true; return !(c.edits && c.edits.has(((x & 15) << 11) | ((z & 15) << 7) | y)); };
+    // что останавливает падающее: 0 — нет (воздух, листва, растения: сквозь крону падает), 1 — держит (ствол, постройка: о них
+    // упирается и виснет), 2 — земля (природное, не ствол: упёрлось — ложится на склон, не виснет; KT.GROUND)
+    const stopAt = (x, y, z) => { const v = W.raw(x, y, z); if (v < 0) return 1; if (!(v > 0)) return 0; const t = v & 0xfff; if (!solidT(t) || isLeaf(v)) return 0; return KT.GROUND && (st.ents?.treeKind ? st.ents.treeKind(v) : 0) === 0 && natural(x, y, z) ? 2 : 1; };
+    // падающий ствол ломает листву и тонкие ветки (свои и соседа): на них не ложится, они не держат (ревью D3)
+    const crush = v => v > 0 && (isLeaf(v) || st.ents?.treeKind?.(v) === 2);
+    const stopTree = (x, y, z) => { const v = W.raw(x, y, z); if (v < 0) return 1; if (!(v > 0) || crush(v)) return 0; return solidT(v & 0xfff) ? 1 : 0; };
+    // кто стоит в клетке: игрок, другие игроки (гости, kubomir-coop.js — ревью S2), мобы — туда блок не пишется
+    const inBox = (p, x, y, z) => !!p && !p.dead && p.x + .3 > x && p.x - .3 < x + 1 && p.z + .3 > z && p.z - .3 < z + 1 && p.y + 1.8 > y && p.y < y + 1;
+    const blockedAt = (x, y, z) => { if (inBox(st.P, x, y, z)) return true; const O = st.ents?.others; if (O) for (let i = 0; i < O.length; i++) if (inBox(O[i], x, y, z)) return true; return !!st.ents?.blocked?.(x, y, z); };
+    X.blockedAt = blockedAt;
     const touch = (x, z) => { const c = W.chunkAt ? W.chunkAt(x, z) : null; if (c && st.unsaved) st.unsaved.add(c.key); W.markTile?.(x, z); st.ST?.touch?.(x, z, 2); };
     const batch = keep => st.ents?.itemBatch ? st.ents.itemBatch(keep) : { add: (x, y, z, s) => st.ents?.addItem?.(x, y, z, s, false, null, false, keep), flush(){} };
 
@@ -89,7 +113,7 @@
     // какой удар: 0 — как раньше, 1 — срез (F1), 2 — рубка живого дерева (F3)
     const SIDE_OF = (nx, ny, nz) => nx > 0 ? 0 : nx < 0 ? 1 : ny > 0 ? 2 : ny < 0 ? 3 : nz > 0 ? 4 : 5;   // грань удара → сторона (порядок сетки)
     X.mines = (hit, b, need) => {
-      if (!hit || hit.ice || st.creative || (st.coopGuest && !(KT.NET && st.net?.reqCut)) || !b || b.hard <= 0) return 0;
+      if (!hit || hit.ice || hit.body || st.creative || (st.coopGuest && !(KT.NET && st.net?.reqCut)) || !b || b.hard <= 0) return 0;
       const v = hit.v | 0, t = v & 0xfff;
       if (KT.FELL && st.fellOn?.() !== false && st.ents?.treeKind?.(v) === 1 && ((v >>> 12) & 3) === 0 && natural(hit.x, hit.y, hit.z)) return 2;
       if (!KT.CUT || b.shape !== V.SHAPE.cube || !V.T.opaque[t] || b.ui || b.fall || V.T.liquid[t] || isLeaf(v)) return 0;
@@ -158,7 +182,7 @@
       const D = Math.max(x1 - x0, z1 - z0) + 1; if (D > 3) return null;
       return { xs, x0, z0, D };
     }
-    const LEAN_OUT = { go: 0, dir: 0, kind: 0, hinge: 0 }, CC = [0, 0, 0, 0];
+    const LEAN_OUT = { go: 0, dir: 0, kind: 0, hinge: 0 }, CC = [0, 0, 0, 0], SP = new Int32Array(12);
     const chop = (hit, b, M, by) => timed('chop', chop0, hit, b, M, by);
     function chop0(hit, b, M, by){
       const x = hit.x, y = hit.y, z = hit.z;
@@ -175,14 +199,23 @@
       let res = 0;
       while (M.t >= per && !res) {
         M.t -= per;
+        SP.set(S);
         FL.hit(S, side, FL.step(D));
         X.stats.chips++;
         st.ents?.debris?.(x, y, z, b.id, 4);
         if (!by && S[6] % 4 === 0) st.ktWear?.(1);   // инструмент тупится: раз в 4 удара (как один блок); у гостя — у него самого
         // крона: куда клонится (раз на дерево, когда срез глубже половины) — для «тяжёлое кренится само»
-        if (!(S[7] & 1) && S[side] * 2 >= 8 * D) { S[7] |= 1; const T = st.ents.treeAbove(xs, y); if (T) { const L = crownLean(T, x0, z0, D); S[10] = L[0]; S[11] = L[1]; } }
+        if (!(S[7] & 1) && S[side] * 2 >= 8 * D) { S[7] |= 1; const T = st.ents.treeAbove(xs, y, natural); if (T) { const L = crownLean(T, x0, z0, D); S[10] = L[0]; S[11] = L[1]; } }
         FL.decide(S, S[7] & 1 ? [S[10], S[11]] : null, LEAN_OUT);
-        if (LEAN_OUT.go) { const T = st.ents.treeAbove(xs, y); if (T && fell(T, S, xs, y, LEAN_OUT)) { res = 2; break; } }
+        if (LEAN_OUT.go) {
+          const T = st.ents.treeAbove(xs, y, natural);
+          // ревью D8: над срезом не дерево (держится природным — скалой) — как раньше: бревно ломается (зовущий — breakBlock), а не
+          // срез насквозь под висящим деревом; постройки игрока рядом дерево не держат (treeAbove их не считает — падает мимо / на них)
+          if (!T) { S.set(SP); return 1; }
+          // ревью PERF-2: все слоты заняты — недопил держит (удар не засчитан), следующий удар — снова
+          if (!fell(T, S, xs, y, LEAN_OUT)) { S.set(SP); X.stats.fellWait = (X.stats.fellWait | 0) + 1; break; }
+          res = 2; break;
+        }
         writeSection(S, xs, y, b);
       }
       if (res === 2) { writeSection(S, xs, y, b); return 2; }
@@ -221,7 +254,7 @@
       // ось — по недопилу: грань сечения со стороны падения минус подруб (восьмые от угла сечения), на верху слоя среза
       R.dir = d; R.py = 8; R.pn = d === 0 ? 8 * D - S[0] : d === 1 ? S[1] : d === 2 ? 8 * D - S[2] : S[3];
       const rate = Math.round((out.kind === 3 ? 1.5 : out.kind === 1 ? 5 : 8) * DEG);
-      const s = start('tree', cells, null, null, R, { ox: x0, oy: y, oz: z0, rate, kind: 'lean' });
+      const s = start('tree', cells, null, null, R, { ox: x0, oy: y, oz: z0, rate, kind: 'lean', noQueue: true });
       if (s < 0) return false;
       X.stats.fells++;
       return true;
@@ -229,60 +262,93 @@
 
     // ═══ F2: проверка этажей постройки у правки ═══
     // правка (x, y, z): was — что было (−1 — надруб: только «после»; иначе — правило «держалось до»: давно перегруженное от чужой правки
-    // не падает, как у нагрузки v2)
+    // не падает, как у нагрузки v2). Ревью PERF-1: обход постройки — по частям, не больше KT.CHECK_OPS операций за такт (дом на 1000+
+    // клеток — несколько тактов, а не 25–45 мс в одном на телефоне ×4); правка уже пройденной клетки — обход заново; постройка больше
+    // KT.MAXB — «не знаю» (стоит) и помнится KT.BIG_T тактов: поставленное к ней (и замена) её снова не обходит, снятое — обходит
+    // (кусок мог отделиться)
     function queueCheck(x, y, z, was){
+      if (CK.on && !CK.dirty) noteEdit(x, y, z);
       for (let i = 0; i < CHK.length; i += 4) if (CHK[i] === x && CHK[i + 1] === y && CHK[i + 2] === z) { if (was < 0) CHK[i + 3] = -1; return; }
       if (CHK.length >= 4 * 64) { X.stats.queued++; return; }
       CHK.push(x, y, z, was);
     }
+    // обход идёт, а рядом правка: пройденная клетка (или опора под пройденной) изменилась — обход заново; новая клетка рядом с
+    // постройкой (поставили) — в очередь обхода (её вес войдёт), без перезапуска: игрок строит — проверка всё равно доходит до конца
+    function noteEdit(x, y, z){
+      const k = key(x, y, z), vi = VIS.get(k), up = VIS.get(key(x, y + 1, z));
+      if ((vi !== undefined && vi >= 0) || (up !== undefined && up >= 0)) { CK.dirty = true; return; }
+      if (vi !== undefined) return;   // уже в очереди обхода — прочитается, когда дойдёт
+      for (let d = 0; d < 6; d++) if (VIS.has(key(x + (d === 0 ? 1 : d === 1 ? -1 : 0), y + (d === 2 ? 1 : d === 3 ? -1 : 0), z + (d === 4 ? 1 : d === 5 ? -1 : 0)))) { VIS.set(k, -1); Q.push(x, y, z); return; }
+    }
+    const BIGM = new Map();
+    const bigNear = (x, y, z) => { if (!BIGM.size) return false; const T = X.stats.ticks; for (let k = 0; k < 7; k++) { const e = BIGM.get(key(x + (k === 1 ? 1 : k === 2 ? -1 : 0), y + (k === 3 ? 1 : k === 4 ? -1 : 0), z + (k === 5 ? 1 : k === 6 ? -1 : 0))); if (e !== undefined && e > T) return true; } return false; };
     if (Array.isArray(W.listeners)) W.listeners.push((x, y, z, was, v) => {
       if (own) return;
       // клетку заменили чем-то другим (огонь, вода, чужая правка) — её надруб и рубка больше не её (иначе новый блок «надрублен»)
       if ((KT.CUT || KT.FELL) && ((was ^ v) & 0xfff) && W.tile) { const t = W.tile(x, y, z); if (t && (t.cut || t.fs)) { delete t.cut; delete t.fs; if (!Object.keys(t).length) W.dropTile(x, y, z); } }
-      if (!KT.LEAN || !st.sup || st.coopGuest) return;   // гость ничего не решает: крен и падение — у хозяина (его правки придут)
+      if (!KT.LEAN || !st.sup || st.coopGuest || X.closed) return;   // гость ничего не решает: крен и падение — у хозяина (его правки придут)
       const a = was > 0 ? st.sup.matOf(was & 0xfff) : 255, b = v > 0 ? st.sup.matOf(v & 0xfff) : 255;
       if (a === 255 && b === 255) return;
+      if (!(v === 0 && was > 0) && bigNear(x, y, z)) { if (CK.on && !CK.dirty) noteEdit(x, y, z); X.stats.memo = (X.stats.memo | 0) + 1; return; }
       queueCheck(x, y, z, was > 0 ? was : 0);
     });
     // обход постройки (клетки игрока, по 6 соседям) от правки: вмурована в природное сбоку / сверху, больше KT.MAXB, незагруженное —
-    // «не знаю» (стоит). Опора клетки — твёрдое под ней (своё или чужое) → этажи (TP.storeys)
+    // «не знаю» (стоит). Опора клетки — твёрдое под ней (своё или чужое) → этажи (TP.storeys). Буфер — свой (BC): между тактами его
+    // не трогают рубка и обрушение
     const VIS = new Map(), Q = [];
-    const R2 = TP.result(), BT = [], ZM = [];
-    const check = (x0, y0, z0, was) => timed('check', check0, x0, y0, z0, was);
-    function check0(x0, y0, z0, was){
-      const code = st.sup.code, P = st.sup.P;
-      VIS.clear(); Q.length = 0; B.reset();
+    const R2 = TP.result(), BT = [], ZM = [], BC = TP.body(KT.MAXB + 8);
+    const CK = { on: false, dirty: false, x0: 0, y0: 0, z0: 0, was: 0, h: 0 };
+    function ckBegin(x0, y0, z0, was){
+      const code = st.sup.code;
+      VIS.clear(); Q.length = 0; BC.reset();
+      CK.x0 = x0; CK.y0 = y0; CK.z0 = z0; CK.was = was; CK.h = 0; CK.dirty = false;
       const seed = (x, y, z) => { const c = code(x, y, z); if ((c & 3) === 2 && c !== 5 && !VIS.has(key(x, y, z))) { VIS.set(key(x, y, z), -1); Q.push(x, y, z); } };
       seed(x0, y0, z0); seed(x0 + 1, y0, z0); seed(x0 - 1, y0, z0); seed(x0, y0 + 1, z0); seed(x0, y0 - 1, z0); seed(x0, y0, z0 + 1); seed(x0, y0, z0 - 1);
-      if (!Q.length) return 0;
+      CK.on = Q.length > 0;
+      return 7;
+    }
+    // слишком большая — запомнить её клетки (поставленное к ней — без обхода, KT.BIG_T тактов)
+    function ckBig(){ const T = X.stats.ticks + KT.BIG_T; if (BIGM.size > 32768) BIGM.clear(); for (const k of VIS.keys()) BIGM.set(k, T); }
+    const ckStep = budget => timed('check', ckStep0, budget);
+    function ckStep0(budget){
+      const code = st.sup.code, P = st.sup.P, x0 = CK.x0, y0 = CK.y0, z0 = CK.z0;
       let ops = 0;
-      for (let h = 0; h < Q.length; h += 3) {
+      while (CK.h < Q.length && ops < budget) {
+        const h = CK.h; CK.h += 3;
         const x = Q[h], y = Q[h + 1], z = Q[h + 2], c = code(x, y, z);
         ops++;
         if ((c & 3) !== 2) continue;
-        if (B.n >= KT.MAXB) { X.stats.skipped++; return ops; }
+        if (BC.n >= KT.MAXB) { X.stats.skipped++; X.stats.big = (X.stats.big | 0) + 1; ckBig(); CK.on = false; return ops; }
         const m = c >> 2, cut = cutGet(x, y, z), left = cut ? FL.left(cut) : 512;
-        const i = B.push(x - x0, y - y0, z - z0, Math.max(1, Math.floor(P.mass[m] * left / 512)));
+        const i = BC.push(x - x0, y - y0, z - z0, Math.max(1, Math.floor(P.mass[m] * left / 512)));
         VIS.set(key(x, y, z), i);
         for (let k = 0; k < 6; k++) {
           const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0), ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0), nz = z + (k === 4 ? 1 : k === 5 ? -1 : 0);
           const nc = code(nx, ny, nz); ops++;
-          if (nc === 5) { X.stats.skipped++; return ops; }   // незагруженное рядом — не знаем
+          if (nc === 5) { X.stats.skipped++; CK.on = false; return ops; }   // незагруженное рядом — не знаем
           if ((nc & 3) === 2) { const kk = key(nx, ny, nz); if (!VIS.has(kk)) { VIS.set(kk, -1); Q.push(nx, ny, nz); } continue; }
-          if (k !== 3 && (nc === 1 || (nc & 3) === 3)) { X.stats.skipped++; return ops; }   // вмурована в землю / скалу — держится ею
+          if (k !== 3 && (nc === 1 || (nc & 3) === 3)) { X.stats.skipped++; CK.on = false; return ops; }   // вмурована в землю / скалу — держится ею
         }
         // опора снизу: что угодно твёрдое (своё — этаж внутри постройки, земля — основание); срез клетки сужает след
         const bc = code(x, y - 1, z);
-        if (bc === 5) { X.stats.skipped++; return ops; }
+        if (bc === 5) { X.stats.skipped++; CK.on = false; return ops; }
         if (bc === 1 || (bc & 3) >= 2) {
           const bm = (bc & 3) >= 2 ? bc >> 2 : m, bend = Math.min(P.bend[m], P.bend[bm]) * left / 512;
-          B.contact(i, Math.floor(bend), 8 * (x - x0) + FL.side(cut, 1), 8 * (x - x0) + 8 - FL.side(cut, 0), 8 * (z - z0) + FL.side(cut, 5), 8 * (z - z0) + 8 - FL.side(cut, 4));
+          BC.contact(i, Math.floor(bend), 8 * (x - x0) + FL.side(cut, 1), 8 * (x - x0) + 8 - FL.side(cut, 0), 8 * (z - z0) + FL.side(cut, 5), 8 * (z - z0) + 8 - FL.side(cut, 4));
         }
       }
-      X.stats.checks++; X.stats.checkNodes += B.n;
+      if (CK.h < Q.length) return ops;   // дальше — в следующем такте
+      CK.on = false;
+      ckEnd();
+      return ops;
+    }
+    // обход закончен: этажи, «держалось до», падает часть выше слабого этажа
+    function ckEnd(){
+      const P = st.sup.P, x0 = CK.x0, y0 = CK.y0, z0 = CK.z0, was = CK.was, code = st.sup.code;
+      X.stats.checks++; X.stats.checkNodes += BC.n;
       const SO = { sway: P.sway || 50 };
-      TP.storeys(B, SO, R);
-      if (R.kind < 2) return ops;
+      TP.storeys(BC, SO, R);
+      if (R.kind < 2) return;
       // «держалось до»: та же постройка без правки (снятую клетку — обратно, поставленную — без веса) тоже не держала — не трогаем
       // правки той же постройки из очереди (сломали / поставили несколько за такт) — одна проверка, «до» — до них всех
       BT.length = 0; BT.push(x0, y0, z0, was);
@@ -294,40 +360,40 @@
       }
       let cutEdit = false; for (let i = 3; i < BT.length; i += 4) if (BT[i] < 0) cutEdit = true;
       if (!cutEdit) {   // надруб — всегда «после» (это прямое действие игрока по этой постройке)
-        const n0 = B.n, rm = new Set(); ZM.length = 0;
+        const n0 = BC.n, rm = new Set(); ZM.length = 0;
         for (let i = 0; i < BT.length; i += 4) if (BT[i + 3] > 0 && !VIS.has(key(BT[i], BT[i + 1], BT[i + 2]))) rm.add(key(BT[i], BT[i + 1], BT[i + 2]));
         for (let i = 0; i < BT.length; i += 4) {
           const x = BT[i], y = BT[i + 1], z = BT[i + 2], w = BT[i + 3], at = VIS.get(key(x, y, z));
-          if (at !== undefined && at >= 0) { ZM.push(at, B.m[at], B.c[at]); B.m[at] = 0; B.c[at] = 0; continue; }   // поставили — «до» его не было
-          if (!(w > 0) || B.n >= B.max) continue;
+          if (at !== undefined && at >= 0) { ZM.push(at, BC.m[at], BC.c[at]); BC.m[at] = 0; BC.c[at] = 0; continue; }   // поставили — «до» его не было
+          if (!(w > 0) || BC.n >= BC.max) continue;
           const m = st.sup.matOf(w & 0xfff); if (m === 255) continue;
-          const j = B.push(x - x0, y - y0, z - z0, P.mass[m]), bc = code(x, y - 1, z);
-          if (bc === 1 || (bc & 3) >= 2 || rm.has(key(x, y - 1, z))) B.contact(j, Math.floor(P.bend[m]), 8 * (x - x0), 8 * (x - x0) + 8, 8 * (z - z0), 8 * (z - z0) + 8);
+          const j = BC.push(x - x0, y - y0, z - z0, P.mass[m]), bc = code(x, y - 1, z);
+          if (bc === 1 || (bc & 3) >= 2 || rm.has(key(x, y - 1, z))) BC.contact(j, Math.floor(P.bend[m]), 8 * (x - x0), 8 * (x - x0) + 8, 8 * (z - z0), 8 * (z - z0) + 8);
           const up = VIS.get(key(x, y + 1, z));   // клетка над снятой «до» стояла на ней (этаж внутри постройки)
-          if (up !== undefined && up >= 0 && !B.c[up]) { ZM.push(up, B.m[up], 0); B.contact(up, Math.floor(P.bend[m]), 8 * (x - x0), 8 * (x - x0) + 8, 8 * (z - z0), 8 * (z - z0) + 8); }
+          if (up !== undefined && up >= 0 && !BC.c[up]) { ZM.push(up, BC.m[up], 0); BC.contact(up, Math.floor(P.bend[m]), 8 * (x - x0), 8 * (x - x0) + 8, 8 * (z - z0), 8 * (z - z0) + 8); }
         }
-        TP.storeys(B, SO, R2);
-        B.n = n0; for (let i = 0; i < ZM.length; i += 3) { B.m[ZM[i]] = ZM[i + 1]; B.c[ZM[i]] = ZM[i + 2]; }
-        if (R2.kind >= 2) { X.stats.over = (X.stats.over | 0) + 1; return ops; }
-        TP.storeys(B, SO, R);   // отметки «выше этажа» — заново (их перезаписала проверка «до»)
-        if (R.kind < 2) return ops;
+        TP.storeys(BC, SO, R2);
+        BC.n = n0; for (let i = 0; i < ZM.length; i += 3) { BC.m[ZM[i]] = ZM[i + 1]; BC.c[ZM[i]] = ZM[i + 2]; }
+        if (R2.kind >= 2) { X.stats.over = (X.stats.over | 0) + 1; return; }
+        TP.storeys(BC, SO, R);   // отметки «выше этажа» — заново (их перезаписала проверка «до»)
+        if (R.kind < 2) return;
       }
       // падает часть выше слоя R.layer
-      const cells = [], up = B.up;
-      for (let i = 0; i < B.n; i++) if (up[i]) { const x = B.x[i] + x0, y = B.y[i] + y0, z = B.z[i] + z0; cells.push(x, y, z, W.raw(x, y, z)); }
+      const cells = [], up = BC.up;
+      for (let i = 0; i < BC.n; i++) if (up[i]) { const x = BC.x[i] + x0, y = BC.y[i] + y0, z = BC.z[i] + z0; cells.push(x, y, z, W.raw(x, y, z)); }
       // тело для слота — только эта часть (порядок клеток — как в обходе: одинаково у всех)
-      let j = 0; for (let i = 0; i < B.n; i++) if (up[i]) { B.x[j] = B.x[i]; B.y[j] = B.y[i]; B.z[j] = B.z[i]; B.m[j] = B.m[i]; j++; } B.n = j;
+      let j = 0; for (let i = 0; i < BC.n; i++) if (up[i]) { BC.x[j] = BC.x[i]; BC.y[j] = BC.y[i]; BC.z[j] = BC.z[i]; BC.m[j] = BC.m[i]; j++; } BC.n = j;
       const q = Math.max(0, Math.floor(R.over / Math.max(1, R.W)));
       const rate = Math.round(Math.min(6, 1.5 + q * .25) * DEG);
       if (R.kind === 2) X.stats.tips++; else X.stats.leans++;
-      start('build', cells, null, null, R, { ox: x0, oy: y0, oz: z0, rate, kind: R.kind === 2 ? 'tip' : 'lean' });
-      return ops;
+      start('build', cells, null, null, R, { ox: x0, oy: y0, oz: z0, rate, kind: R.kind === 2 ? 'tip' : 'lean', B: BC });
     }
     const key = (x, y, z) => (x * 4096 + z) * 512 + y;
 
     // ═══ F2: кусок обрушения (D37E.support), стоящий на чём-то: перевесил край — опрокинуть (иначе — как было, вниз) ═══
+    // нет свободного слота — false и не в очередь (зовущий кладёт кусок как раньше: в очереди он лёг бы второй раз — ревью PERF-3)
     X.group = (cells, nat) => {
-      if (!KT.LEAN || !cells.length || !st.sup) return false;
+      if (!KT.LEAN || !cells.length || !st.sup || X.closed) return false;
       const n = cells.length / 4; if (n > B.max || n < 2) return false;
       const P = st.sup.P, mine = new Set();
       for (let i = 0; i < cells.length; i += 4) mine.add(key(cells[i], cells[i + 1], cells[i + 2]));
@@ -343,7 +409,7 @@
       TP.analyze(B, { sway: P.sway || 50 }, R);
       if (R.kind < 2) return false;
       const rate = Math.round(3 * DEG);
-      if (start('build', cells, nat, null, R, { ox: x0, oy: y0, oz: z0, rate, kind: R.kind === 2 ? 'tip' : 'lean', loose: true }) < 0) return false;
+      if (start('build', cells, nat, null, R, { ox: x0, oy: y0, oz: z0, rate, kind: R.kind === 2 ? 'tip' : 'lean', loose: true, noQueue: true }) < 0) return false;
       X.stats.groups++;
       return true;
     };
@@ -352,9 +418,11 @@
     const PV = { x: 0, y: 0, z: 0, d: 0 }, DV = [{ x: 1, z: 0 }, { x: -1, z: 0 }, { x: 0, z: 1 }, { x: 0, z: -1 }];
     const start = (kind, cells, nat, tiles0, Rr, o) => timed('start', start0, kind, cells, nat, tiles0, Rr, o);
     function start0(kind, cells, nat, tiles0, Rr, o){
-      const tA = now(), s = Wd.add(B, Rr, o);
+      const tA = now(), Bx = o.B || B;
+      let s = Wd.add(Bx, Rr, o);
+      if (s < 0 && settleOldestHung()) s = Wd.add(Bx, Rr, o);   // ревью PERF-2: слоты заняты повисшими — самое старое ложится, слот — этому
       X.stats.ms.add = Math.max(X.stats.ms.add || 0, now() - tA);
-      if (s < 0) { pend.push([kind, cells, nat, Rr.dir]); return -1; }
+      if (s < 0) { if (!o.noQueue) pend.push([kind, cells[0], cells[1], cells[2]]); return -1; }
       const n = cells.length / 4, tiles = new Array(n).fill(null), ev = batch(true);
       own++;
       try {
@@ -362,7 +430,7 @@
         for (let i = 0; i < n; i++) {
           const x = cells[i * 4], y = cells[i * 4 + 1], z = cells[i * 4 + 2];
           const tl = W.dropTile ? W.dropTile(x, y, z) : null;
-          if (tl) { delete tl.cut; delete tl.fs; if (Object.keys(tl).length) { tiles[i] = tl; const U = st.ui; if (U?.isOpen?.() && U.pos && U.pos.x === x && U.pos.y === y && U.pos.z === z) U.close({ esc: true }); } }
+          if (tl) { delete tl.cut; delete tl.fs; if (Object.keys(tl).length) { tiles[i] = tl; const U = st.ui; if (U?.isOpen?.() && U.pos && U.pos.x === x && U.pos.y === y && U.pos.z === z) U.close({ esc: true }); st.net?.tileMoved?.(x, y, z, tl); } }   // ревью S5: окно гостя на сундуке — закрыть (его правки — в саму плитку)
           W.set(x, y, z, 0, { urgent: 2 });
         }
       } finally { own--; }
@@ -372,9 +440,11 @@
       const dv = DV[Rr.dir];
       const g = st.ents?.fallGroup ? st.ents.fallGroup(cells, { x: PV.x, y: PV.y, z: PV.z }, dv, { topple: true, fast: true, cap: 16, trunk: kind === 'tree' ? (v => st.ents.treeKind(v) === 1) : null }) : null;
       X.stats.ms.view = Math.max(X.stats.ms.view || 0, now() - tA);
-      bodies[s] = { kind, cells, nat, tiles, g, ox: o.ox, oy: o.oy, oz: o.oz, dir: Rr.dir, t: 0, hung: false, hold: [0, 0, 0], loose: !!o.loose, nid: 0, om: 0, lth: -1, lon: 0, loy: 0 };
+      bodies[s] = { kind, cells, nat, tiles, g, ox: o.ox, oy: o.oy, oz: o.oz, dir: Rr.dir, t: 0, hung: false, hungAt: 0, hold: [0, 0, 0], loose: !!o.loose, nid: 0, om: 0, lth: -1, lon: 0, loy: 0, mode: 'q', rest: null };
       if (netOn()) { const B2 = bodies[s]; B2.nid = ++X.nid; X.netPush('b', B2.nid, kind === 'tree' ? 1 : 0, Rr.dir, Math.round(PV.x * 8), Math.round(PV.y * 8), Math.round(PV.z * 8), cells); }
       if (kind === 'build') st.AU?.play('kb_creak', { x: PV.x - st.ox, y: PV.y + 2, z: PV.z - st.oz, vol: .8, rate: .7 });
+      if (g) { g.pth = g.th; g.pon = g.on; g.poy = g.oy; }
+      ovUpdate();
       return s;
     }
 
@@ -384,14 +454,26 @@
       const t0 = now();
       X.stats.ticks++;
       if (st.coopGuest) { guestTick(); return; }
+      if (X.closed) return;
       X.inTick = true; try { tick0(); } finally { X.inTick = false; }
       const ms = now() - t0; X.stats.tickMs += ms; if (ms > X.stats.maxTickMs) X.stats.maxTickMs = ms;
     };
     function tick0(){
       ceilWin();
       let ops = 0;
-      while (CHK.length && ops < KT.CHECK_OPS && st.sup && KT.LEAN) { const x = CHK.shift(), y = CHK.shift(), z = CHK.shift(), w = CHK.shift(); ops += check(x, y, z, w); }
-      for (let s = 0; s < Wd.NS; s++) { const b = bodies[s]; if (b && b.hung && !stopAt(b.hold[0], b.hold[1], b.hold[2])) { b.hung = false; Wd.resume(s, Math.round(4 * DEG)); } }
+      if (RQ.length) ops += restoreTick();
+      // проверки этажей: по частям, ≤ KT.CHECK_OPS за такт (ревью PERF-1)
+      while (ops < KT.CHECK_OPS && st.sup && KT.LEAN && (CK.on || CHK.length)) {
+        if (CK.on && CK.dirty) ops += ckBegin(CK.x0, CK.y0, CK.z0, CK.was);   // правка уже пройденной клетки — обход заново
+        if (!CK.on) { const x = CHK.shift(), y = CHK.shift(), z = CHK.shift(), w = CHK.shift(); ops += ckBegin(x, y, z, w); if (!CK.on) continue; }
+        ops += ckStep(KT.CHECK_OPS - ops);
+      }
+      const T = X.stats.ticks;
+      for (let s = 0; s < Wd.NS; s++) {
+        const b = bodies[s]; if (!b || !b.hung) continue;
+        if (!stopAt(b.hold[0], b.hold[1], b.hold[2])) { b.hung = false; Wd.resume(s, Math.round(4 * DEG)); }   // держатель ушёл — падает дальше
+        else if (T - b.hungAt >= KT.HUNG_T) settleHung(s, b);   // висит долго — ложится там, где висит
+      }
       const busy = Wd.busy();
       if (busy) {
         for (let s = 0; s < Wd.NS; s++) { const b = bodies[s]; if (b?.g) { b.g.pth = b.g.th; b.g.pon = b.g.on; b.g.poy = b.g.oy; } }
@@ -400,16 +482,21 @@
         for (let e = 0; e < ne; e++) {
           const s = Wd.ev[e * 5], type = Wd.ev[e * 5 + 1], b = bodies[s]; if (!b) continue;
           if (type === 1) onHang(s, b, Wd.ev[e * 5 + 2], Wd.ev[e * 5 + 3], Wd.ev[e * 5 + 4]);
-          else if (type === 2) { b.om = Wd.om[s]; Wd.drop(s, 8 * dropDist(s, b)); }
+          else if (type === 2) {
+            b.om = Wd.om[s];
+            if (Wd.th[s] < TP.F90) { b.mode = 'p'; b.landing = X.stats.ticks; X.stats.ground = (X.stats.ground | 0) + 1; land(s, b); }   // ревью D4: упёрлось в землю под углом — ложится там (склон)
+            else { const r = rest(s, b); b.rest = [r.drop, r.slide]; Wd.drop(s, 8 * r.drop, 8 * r.slide); }
+          }
           else if (type === 3) { b.landing = X.stats.ticks; land(s, b); }
           else if (type === 4) creak(s, b);
         }
         for (let s = 0; s < Wd.NS; s++) { const b = bodies[s]; if (b?.g) { b.g.th = Wd.angle(s); Wd.offset(s, OF); b.g.on = OF[0] / 8; b.g.oy = OF[1] / 8; if (b.nid && (b.lth !== Wd.th[s] || b.lon !== OF[0] || b.loy !== OF[1])) { b.lth = Wd.th[s]; b.lon = OF[0]; b.loy = OF[1]; X.netPush('s', b.nid, b.lth, b.lon, b.loy); } } }
       }
       for (let s = 0; s < Wd.NS; s++) { const b = bodies[s]; if (b?.landing && b.landing !== X.stats.ticks && b.L) land(s, b); }   // запись по частям (со следующего такта)
-      // ждущие свободного слота — по одному (никогда не теряются)
+      // ждущие свободного слота — по одному (никогда не теряются): проверка заново по миру как он есть (ревью PERF-3)
       if (pend.length && Wd.busy() < Wd.NS) retry(pend.shift());
       X.used = ops + Wd.used + landCells * 4; landCells = 0;
+      ovUpdate();
     }
     // §5.x: один потолок за такт (операции): постройки — проверки этажей, тела в полёте (их доля всегда есть: падение не замирает),
     // «легло»; обломкам (kubomir-debris.js) — остаток, не меньше их пола. Строка окна (20 тактов) — X.stats.ceilLine
@@ -424,11 +511,9 @@
     }
     X.stats.ceil = { cap: KT.CEIL, struct: 0, debris: 0, deferred: 0 };
     Object.defineProperty(X.stats, 'ceilLine', { enumerable: true, get(){ const C = X.stats.ceil; return 'потолок ' + C.cap + ' · постройки ' + C.struct + ' · обломки ' + C.debris + ' · отложено ' + C.deferred; } });
-    function retry(p){
-      const [kind, cells, nat, dir] = p;
-      // тело заново (как в group): клетки уже на месте — проверка решит снова
-      if (kind === 'build') X.group(cells, nat);
-    }
+    // тело ждало слот: клетки с тех пор могли сломать, переставить, обрушить — решает новая проверка этажей по миру как он есть (не
+    // старый список: иначе убрал бы, что стоит там теперь, и положил вторую копию)
+    function retry(p){ const [kind, x, y, z] = p; if (kind === 'build' && st.sup && KT.LEAN) queueCheck(x, y, z, -1); }
     function creak(s, b){
       if (b.nid) X.netPush('k', b.nid);
       Wd.pivot(s, PV);
@@ -438,60 +523,106 @@
     function onHang(s, b, hx, hy, hz){
       X.stats.hangs++;
       if (Wd.th[s] < TP.F5) { back(s, b); return; }   // крен меньше 5° — встало обратно (опёрлось сразу): клетки на место
-      b.hung = true; b.hold[0] = hx; b.hold[1] = hy; b.hold[2] = hz;
+      b.hung = true; b.hungAt = X.stats.ticks; b.hold[0] = hx; b.hold[1] = hy; b.hold[2] = hz;
       if (b.nid) X.netPush('h', b.nid);
       st.AU?.play('kb_creak', { x: hx - st.ox, y: hy, z: hz - st.oz, vol: .7, rate: .6 });
+      let n = 0; for (let k = 0; k < Wd.NS; k++) if (bodies[k]?.hung) n++;
+      if (n > KT.HUNG_MAX) settleOldestHung();   // ревью PERF-2: повисших не больше KT.HUNG_MAX
+    }
+    // повисшее ложится блоками там, где висит (под своим углом): удар игрока (X.knock), висит дольше KT.HUNG_T, повисших слишком много
+    function settleHung(s, b, now0){ b.hung = false; b.mode = 'p'; b.landing = X.stats.ticks; X.stats.settled = (X.stats.settled | 0) + 1; land(s, b, now0 ? Infinity : KT.LAND_CELLS); }
+    function settleOldestHung(){
+      let o = -1; for (let k = 0; k < Wd.NS; k++) { const b = bodies[k]; if (b?.hung && (o < 0 || b.hungAt < bodies[o].hungAt)) o = k; }
+      if (o < 0) return false;
+      settleHung(o, bodies[o], true);
+      return true;
     }
     // встало на место: клетки — туда же (занято — вещью)
     function back(s, b){
       X.stats.back++;
       const c = b.cells, n = c.length / 4, ev = batch(true), xyz = [];
       own++;
-      try { for (let i = 0; i < n; i++) put(c[i * 4], c[i * 4 + 1], c[i * 4 + 2], c[i * 4 + 3], b, i, ev, xyz); } finally { own--; }
+      try { for (let i = 0; i < n; i++) put(c[i * 4], c[i * 4 + 1], c[i * 4 + 2], c[i * 4 + 3], b, i, ev, xyz, true); } finally { own--; }
       if (b.kind === 'tree') for (let k = 0; k < xyz.length; k += 3) { const x = xyz[k], y = xyz[k + 1], z = xyz[k + 2], ch = W.chunkAt ? W.chunkAt(x, z) : null; ch?.edits?.delete(((x & 15) << 11) | ((z & 15) << 7) | y); }   // дерево на месте — снова живое (генератор даст то же)
       ev.flush();
       end(s, b, xyz, false);
     }
-    // сколько клеток вниз до опоры после поворота на четверть (по столбикам, ≤ 48)
-    function dropDist(s, b){
-      const c = b.cells, n = c.length / 4, low = new Map();
+    // где ляжет после поворота на четверть: спуск (клеток, по столбикам, ≤ 48) и сдвиг вдоль падения (ревью D5: легло краем, а центр
+    // масс за краем опоры — соскальзывает с края, пока центр масс не над опорой; ≤ 8 клеток). Ствол: листва и тонкие ветки — не
+    // опора и не вес (станут вещами / сломаются), чужие листва и тонкие ветки — тоже не опора (ревью D3)
+    const RST = { drop: 0, slide: 0 }, COLX = [], COLZ = [], COLY = [], COLA = [], COLN = [];
+    function rest(s, b){
+      const c = b.cells, n = c.length / 4, tree = b.kind === 'tree', stop = tree ? stopTree : stopAt, d = Wd.dir[s], sx = d === 0 ? 1 : d === 1 ? -1 : 0, sz = d === 2 ? 1 : d === 3 ? -1 : 0;
+      COLX.length = 0; let nc = 0, comN = 0, comS = 0;
+      const col = new Map();
       for (let i = 0; i < n; i++) {
-        if (b.kind === 'tree' && st.ents.treeKind(c[i * 4 + 3]) >= 2) continue;   // листва и тонкие ветки (станут вещами) не держат упавший ствол
+        if (tree && st.ents.treeKind(c[i * 4 + 3]) >= 2) continue;
         Wd.land(s, c[i * 4] - b.ox, c[i * 4 + 1] - b.oy, c[i * 4 + 2] - b.oz, LC);
-        const k = (LC[0] + 4096) * 8192 + (LC[2] + 4096), y = LC[1]; if (!low.has(k) || low.get(k) > y) low.set(k, y);
+        const x = LC[0] + b.ox, y = LC[1] + b.oy, z = LC[2] + b.oz, k = (x + 4096) * 8192 + (z + 4096);
+        let j = col.get(k);
+        if (j === undefined) { j = nc++; col.set(k, j); COLX[j] = x; COLZ[j] = z; COLY[j] = y; COLA[j] = sx ? x * sx : z * sz; COLN[j] = 0; }
+        if (y < COLY[j]) COLY[j] = y;
+        COLN[j]++; comN++; comS += COLA[j] + .5;
       }
-      let dmin = 48;
-      for (const [k, y] of low) {
-        const x = Math.floor(k / 8192) - 4096, z = k % 8192 - 4096;
-        let d = 0; while (d < dmin && b.oy + y - d - 1 >= 1 && !stopAt(b.ox + x, b.oy + y - d - 1, b.oz + z)) { d++; X.stats.landReads++; }   // y — от начала тела: дно мира — в мировых (было y − d − 1 ≥ 1 — ствол над пнём не опускался на землю)
-        if (d < dmin) dmin = d;
+      RST.drop = 0; RST.slide = 0;
+      if (!nc) return RST;
+      const com = comS / comN;
+      const fit = k => {   // сдвиг на k клеток вдоль падения → спуск (−1 — не пройти: там твёрдое), опора [a0, a1]
+        let dmin = 48;
+        for (let j = 0; j < nc; j++) {
+          const x = COLX[j] + k * sx, z = COLZ[j] + k * sz, y = COLY[j];
+          if (k && stop(x, y, z)) return -1;
+          let dd = 0; while (dd < dmin && y - dd - 1 >= 1 && !stop(x, y - dd - 1, z)) { dd++; X.stats.landReads++; }
+          if (dd < dmin) dmin = dd;
+        }
+        FIT.a0 = 1e9; FIT.a1 = -1e9;
+        for (let j = 0; j < nc; j++) { const x = COLX[j] + k * sx, z = COLZ[j] + k * sz, y = COLY[j] - dmin; if (y - 1 >= 1 && stop(x, y - 1, z)) { const a = COLA[j] + k; if (a < FIT.a0) FIT.a0 = a; if (a > FIT.a1) FIT.a1 = a; } }
+        return dmin;
+      };
+      let dm = fit(0);
+      RST.drop = Math.max(0, dm);
+      if (!KT.SLIDE || dm < 0 || dm >= 48 || FIT.a1 < FIT.a0 || (com >= FIT.a0 && com <= FIT.a1 + 1)) return RST;
+      const sg = com > FIT.a1 + 1 ? 1 : -1;
+      for (let k = 1; k <= 8; k++) {
+        const dk = fit(sg * k); if (dk < 0) break;
+        if (dk >= 48 || FIT.a1 < FIT.a0 || (com + sg * k >= FIT.a0 && com + sg * k <= FIT.a1 + 1)) { RST.drop = Math.min(48, dk); RST.slide = sg * k; X.stats.slides = (X.stats.slides | 0) + 1; return RST; }
       }
-      return dmin;
+      return RST;
     }
-    // лёг: клетки на бок (поворот на четверть + сдвиг), брёвна — поперёк, сундук — с вещами; дерево: брёвна лежат, листва — вещами
+    const FIT = { a0: 0, a1: 0 };
+    // лёг: клетки на бок (поворот на четверть + сдвиг), брёвна — поперёк, сундук — с вещами; дерево: брёвна лежат, листва — вещами.
+    // b.mode 'p' — лёг там, где он есть (повисшее, упёрлось в склон): клетки — под своим углом (Wd.place), брёвна поперёк — если ≥ 45°
     const land = (s, b, budget) => timed('land', land0, s, b, budget);
     // запись — по KT.LAND_CELLS клеток за такт (телефон ×4: 126 клеток разом — 37 мс в одном такте); пока пишется — сетка лежит на
     // месте клеток; budget = Infinity — сразу (сохранение)
+    const TG = { k: 0, x: 0, y: 0, z: 0, v: 0 };
+    // клетка i тела, когда ляжет → TG: k 0 — ничего, 1 — блок v в (x, y, z), 2 — вещь из блока v, 3 — листва (вещь по случаю)
+    function target(s, b, i, L){
+      const c = b.cells, v = c[i * 4 + 3], t = v & 0xfff, bl = V.blocks[t];
+      if (L.mode === 'p') Wd.place(s, c[i * 4] - b.ox, c[i * 4 + 1] - b.oy, c[i * 4 + 2] - b.oz, LC); else Wd.land(s, c[i * 4] - b.ox, c[i * 4 + 1] - b.oy, c[i * 4 + 2] - b.oz, LC);
+      TG.x = LC[0] + b.ox; TG.y = LC[1] + b.oy; TG.z = LC[2] + b.oz; TG.v = v; TG.k = 1;
+      if (b.kind === 'tree') {
+        const k = st.ents.treeKind(v);
+        if (k === 3) { TG.k = 3; return TG; }
+        if (k === 2) { TG.k = 2; return TG; }
+      }
+      if (V.T.axis[t]) { if (L.rot) TG.v = V.cell(t, (TP.rotAxis((v >>> 12) & 3, b.dir)) | ((v >>> 12) & ~3)); }
+      else if (L.rot && bl && bl.shape !== V.SHAPE.cube && bl.shape !== V.SHAPE.chest) { TG.k = 2; return TG; }   // без поворота (дверь и т. п.) — вещью
+      if (b.nat && b.nat[i]) { const r = bl?.name === 'stone' ? 'cobble' : bl?.name === 'grass' || bl?.name === 'snow_grass' ? 'dirt' : null; if (r && V.ID[r] !== undefined) TG.v = V.cell(V.ID[r], 0); }
+      return TG;
+    }
     function land0(s, b, budget = KT.LAND_CELLS){
-      if (!b.L) { X.stats.lands++; const c = b.cells, n = c.length / 4; b.L = { i: 0, ev: batch(b.kind !== 'tree'),   // дерево — вещи как у прежнего падения (исчезают со временем); постройка — «keep» (как обрушение)
- xyz: [], lk: Math.min(1, 150 / Math.max(1, n)), rng: V.rng ? V.rng(V.hash ? V.hash(W.seed | 0, c[0], c[1], c[2]) : 7) : Math.random, brk: null, sp: [] };
-        if (st.debris && window.KubomirDebris?.ON && budget !== Infinity) impact(s, b); }
+      if (!b.L) { X.stats.lands++; const c = b.cells, n = c.length / 4, mode = b.mode || 'q'; b.L = { i: 0, ev: batch(b.kind !== 'tree'),   // дерево — вещи как у прежнего падения (исчезают со временем); постройка — «keep» (как обрушение)
+ xyz: [], lk: Math.min(1, 150 / Math.max(1, n)), rng: V.rng ? V.rng(V.hash ? V.hash(W.seed | 0, c[0], c[1], c[2]) : 7) : Math.random, brk: null, sp: [], mode, rot: mode !== 'p' || Wd.th[s] >= TP.F90 / 2 };
+        if (st.debris && window.KubomirDebris?.ON && budget !== Infinity && mode !== 'p') impact(s, b); }
       const c = b.cells, n = c.length / 4, L = b.L, ev = L.ev, xyz = L.xyz, lk = L.lk, rng = L.rng, i1 = Math.min(n, L.i + budget);
       own++;
       try {
         for (let i = L.i; i < i1; i++) {
-          const v = c[i * 4 + 3], t = v & 0xfff, bl = V.blocks[t];
-          Wd.land(s, c[i * 4] - b.ox, c[i * 4 + 1] - b.oy, c[i * 4 + 2] - b.oz, LC);
-          const x = LC[0] + b.ox, y = LC[1] + b.oy, z = LC[2] + b.oz;
-          if (b.kind === 'tree') {
-            const k = st.ents.treeKind(v);
-            if (k === 3) { const id = st.ents.leafItem?.(v, rng(), lk); if (id) ev.add(x + .5, y + .5, z + .5, { id, n: 1 }); if ((i & 7) === 0) st.ents?.debris?.(x, y, z, t, 2); continue; }
-            if (k === 2) { const id = bl?.drop || bl?.name; if (id && V.item(id)) ev.add(x + .5, y + .5, z + .5, { id, n: 1 }); continue; }
-          }
-          let nv = v;
-          if (V.T.axis[t]) nv = V.cell(t, (TP.rotAxis((v >>> 12) & 3, b.dir)) | ((v >>> 12) & ~3));
-          else if (bl && bl.shape !== V.SHAPE.cube && bl.shape !== V.SHAPE.chest) { item(nv, x, y, z, ev); continue; }   // без поворота (дверь и т. п.) — вещью
-          if (b.nat && b.nat[i]) { const r = bl?.name === 'stone' ? 'cobble' : bl?.name === 'grass' || bl?.name === 'snow_grass' ? 'dirt' : null; if (r && V.ID[r] !== undefined) nv = V.cell(V.ID[r], 0); }
+          target(s, b, i, L);
+          const x = TG.x, y = TG.y, z = TG.z, nv = TG.v, t = nv & 0xfff;
+          if (TG.k === 3) { const id = st.ents.leafItem?.(nv, rng(), lk); if (id) ev.add(x + .5, y + .5, z + .5, { id, n: 1 }); if ((i & 7) === 0) st.ents?.debris?.(x, y, z, t, 2); continue; }
+          if (TG.k === 2) { if (b.kind === 'tree') { const bl = V.blocks[t], id = bl?.drop || bl?.name; if (id && V.item(id)) ev.add(x + .5, y + .5, z + .5, { id, n: 1 }); } else item(nv, x, y, z, ev); continue; }
           if (L.brk && L.brk.has(i) && !(b.tiles && b.tiles[i])) {   // F4: ударилось быстрее своей прочности — отломится и полетит вперёд (когда всё тело легло)
             const vt = Math.min(14, L.brk.get(i)), dv = DV[b.dir], h = V.hash ? V.hash(W.seed | 0, x, y, z) : 0, j = ((h & 1023) / 1023 - .5) * .2 * vt;   // вперёд — четверть скорости удара, вверх — отскок
             L.sp.push(x, y, z, nv, dv.x * vt * .25 + (dv.x ? 0 : j), vt * .15, dv.z * vt * .25 + (dv.z ? 0 : j), i, 0);
@@ -506,7 +637,7 @@
       if (L.sp.length) { own++; try { for (let k = 0; k < L.sp.length; k += 9) {
         const x = L.sp[k], y = L.sp[k + 1], z = L.sp[k + 2], v = L.sp[k + 3];
         if (st.debris?.spawnCell(x, y, z, v, L.sp[k + 4], L.sp[k + 5], L.sp[k + 6])) { if (L.sp[k + 8]) X.stats.slid = (X.stats.slid | 0) + 1; else X.stats.broke = (X.stats.broke | 0) + 1; continue; }
-        if (L.sp[k + 8]) item(v, x, y, z, ev); else put(x, y, z, v, b, L.sp[k + 7], ev, xyz);
+        if (L.sp[k + 8]) item(v, x, y, z, ev); else put(x, y, z, v, b, L.sp[k + 7], ev, xyz, true);
       } } finally { own--; } L.sp.length = 0; }
       ev.flush();
       end(s, b, xyz, true);
@@ -519,26 +650,32 @@
       const id = bl.name === 'door_oak' ? 'door' : bl.name === 'furnace_lit' ? 'furnace' : bl.drop || bl.name;
       if (id && V.item(id)) { ev.add(x + .5, y + .4, z + .5, { id, n: 1 }); X.stats.items++; }
     }
-    const blockedAt = (x, y, z) => { const p = st.P; if (p && !p.dead && p.x + .3 > x && p.x - .3 < x + 1 && p.z + .3 > z && p.z - .3 < z + 1 && p.y + 1.8 > y && p.y < y + 1) return true; return !!st.ents?.blocked?.(x, y, z); };
-    function put(x, y, z, v, b, i, ev, xyz){
-      const cur = W.raw(x, y, z), ct = cur > 0 ? cur & 0xfff : 0;
-      const free = cur >= 0 && y >= 1 && y < V.H - 1 && (cur === 0 || V.T.liquid[ct] || V.T.shape[ct] === V.SHAPE.cross || V.T.shape[ct] === V.SHAPE.torch || (V.blocks[ct]?.replace && !V.T.solid[ct]));
-      const tile = b.tiles ? b.tiles[i] : null;
-      if (free && !blockedAt(x, y, z)) {
-        if (cur > 0 && !V.T.liquid[ct]) item(cur, x, y, z, ev);
-        W.set(x, y, z, v, { urgent: 2 }); xyz.push(x, y, z);
-        if (tile) { W.tile?.(x, y, z, () => tile); if ('fuel' in tile || 'in' in tile) st.ents?.furnaces?.add(x + ',' + y + ',' + z); }
+    // свободна ли клетка для упавшего блока: воздух, вода, трава, факел, «заменяемое»; листва и тонкие ветки — ломаются (ревью D3)
+    const freeCell = (y, cur) => { const ct = cur > 0 ? cur & 0xfff : 0; return cur >= 0 && y >= 1 && y < V.H - 1 && (cur === 0 || V.T.liquid[ct] || V.T.shape[ct] === V.SHAPE.cross || V.T.shape[ct] === V.SHAPE.torch || (V.blocks[ct]?.replace && !V.T.solid[ct]) || crush(cur)); };
+    const spillTile = (tile, x, y, z, ev) => { for (const s2 of [...(tile.items || []), tile.in, tile.fuel, tile.out]) if (s2 && s2.n > 0) ev.add(x + .5, y + .5, z + .5, s2); };
+    // блок тела v лёг в (x, y, z): занято твёрдым (склон, куча, соседнее упавшее) — клетка выше (до 2: ложится поверх, а не
+    // рассыпается вещами — ревью D3); там кто-то стоит — не туда (вещью / обломком); exact — только туда (встало на место)
+    function put(x, y, z, v, b, i, ev, xyz, exact){
+      const tile = b.tiles ? b.tiles[i] : null, ox = b.cells[i * 4], oy = b.cells[i * 4 + 1], oz = b.cells[i * 4 + 2];
+      let yy = y, cur = W.raw(x, y, z);
+      if (!exact) for (let k = 0; k < 2 && cur > 0 && !freeCell(yy, cur); k++) { yy++; cur = W.raw(x, yy, z); }
+      if (freeCell(yy, cur) && !blockedAt(x, yy, z)) {
+        const ct = cur > 0 ? cur & 0xfff : 0;
+        if (cur > 0 && !V.T.liquid[ct] && !isLeaf(cur)) item(cur, x, yy, z, ev);   // факел, цветок, тонкая ветка под упавшим — вещью; листва — ломается
+        W.set(x, yy, z, v, { urgent: 2 }); xyz.push(x, yy, z);
+        if (tile) { W.tile?.(x, yy, z, () => tile); if ('fuel' in tile || 'in' in tile) st.ents?.furnaces?.add(x + ',' + yy + ',' + z); st.net?.tileMoved?.(ox, oy, oz, tile, [x, yy, z]); }   // ревью S5: окно гостя пишет в неё же — теперь она здесь
         return;
       }
       // F4: некуда лечь (занято) — обломок: сползает с кучи и ложится рядом блоком (сундук и т. п. — как было: вещами)
       if (!tile && b.kind !== 'tree' && st.debris && window.KubomirDebris?.ON && b.L && b.L.i < b.cells.length / 4) { b.L.sp.push(x, y, z, v, DV[b.dir].x * 1.5, 1.5, DV[b.dir].z * 1.5, i, 1); return; }
       item(v, x, y, z, ev);
-      if (tile) for (const s2 of [...(tile.items || []), tile.in, tile.fuel, tile.out]) if (s2 && s2.n > 0) ev.add(x + .5, y + .5, z + .5, s2);
+      if (tile && !st.net?.tileMoved?.(ox, oy, oz, tile, null, () => { const e = batch(true); spillTile(tile, x, y, z, e); e.flush(); })) spillTile(tile, x, y, z, ev);   // ревью S5: окно гостя открыто — высыпать, когда закроет
     }
     function end(s, b, xyz, loud){
       if (b.nid) X.netPush('e', b.nid, loud ? 1 : 0);
       if (b.g) st.ents?.groupEnd?.(b.g, xyz, loud);
       bodies[s] = null; Wd.free(s);
+      ovUpdate();
     }
 
     // ═══ F4: удар о землю — что отломится (скорость клетки ω·r выше прочности материала; не больше KubomirDebris.PER_LAND, самые
@@ -614,10 +751,15 @@
       if (gHead < GQ.length) {
         if (gOff === null) gOff = nowT - GQ[gHead][0] + 2;
         if (GQ[gHead][0] + gOff < nowT - 10) gOff = nowT - GQ[gHead][0];
+        // ревью PERF-4: часы гостя стояли (вкладка скрыта, тяжёлые кадры), а события хозяина шли — задержка выросла бы навсегда:
+        // новейшее событие дальше 12 тактов вперёд — снова 2 такта за ним (накопленное проиграется сразу, мир у гостя — уже правками)
+        const last = GQ[GQ.length - 1][0];
+        if (last + gOff > nowT + 12) { gOff = nowT - last + 2; X.stats.netResync = (X.stats.netResync | 0) + 1; }
         while (gHead < GQ.length && GQ[gHead][0] + gOff <= nowT) { try { gApply(GQ[gHead]); } catch (e) { console.error(e); } gHead++; }
         if (gHead > 256 || gHead === GQ.length) { GQ.splice(0, gHead); gHead = 0; }
       }
       if (GB.size) GB.forEach(gLerp);   // без итератора на такт (мусор)
+      ovUpdate();
     }
     function gLerp(G){ const g = G.g; g.pth = g.th; g.pon = g.on; g.poy = g.oy; g.th = G.th; g.on = G.on; g.oy = G.oy; }
     function gApply(e){
@@ -640,23 +782,139 @@
     X.netView = () => [...GB].map(([n, G]) => [n, G.thF | 0]);   // гость: тела хозяина на виду — [номер, угол (доли)]
 
     // сохранить / закрыть мир: что кренится и падает — ложится сразу (крен < 45° — встаёт обратно), висящее — тоже
+    // закрыть мир (kubomir.js stopWorld): всё в полёте ложится сразу (§5.x: начатое падение всегда заканчивается — крен и падение
+    // ложатся на бок, повисшее — там, где висит); после этого новых тел нет (X.closed: кусок обрушения из st.sup.flush — как раньше,
+    // вниз; ревью S3). Журнал вкладки и сохранения X.flush НЕ зовут — для них X.pending (ревью D2, S4, S6)
     X.flush = () => {
       if (st.coopGuest) { for (const [, G] of GB) st.ents?.groupEnd?.(G.g, null, false); GB.clear(); GQ.length = 0; return 0; }
       let n = 0;
       for (let s = 0; s < Wd.NS; s++) {
         const b = bodies[s]; if (!b) continue;
         n++;
-        if (!b.L && Wd.th[s] < TP.F90 / 2) { back(s, b); continue; }
-        Wd.th[s] = TP.F90; Wd.ph[s] = TP.PH.LANDED;
-        if (!b.L) { Wd.dropNow(s, 0); Wd.dropNow(s, 8 * dropDist(s, b)); }
+        if (!b.L) {
+          if (b.hung) { b.hung = false; b.mode = 'p'; }
+          else if (Wd.phase(s) === TP.PH.DROP || Wd.phase(s) === TP.PH.LANDED) { if (b.rest) Wd.dropNow(s, 8 * b.rest[0], 8 * b.rest[1]); }
+          else { Wd.th[s] = TP.F90; Wd.ph[s] = TP.PH.LANDED; Wd.dropNow(s, 0); const r = rest(s, b); Wd.dropNow(s, 8 * r.drop, 8 * r.slide); }
+        }
         land(s, b, Infinity);
       }
-      pend.length = 0; CHK.length = 0;
+      if (RQ.length) restoreTick(true);
+      pend.length = 0; CHK.length = 0; CK.on = false;
+      X.closed = true;
+      ovUpdate();
       return n;
+    };
+    // ═══ ревью D2, S4: сохранение без изменения мира — куда лягут тела в полёте и повисшие (то же, что сделал бы X.flush) ═══
+    // → { c: [x, y, z, имя, состояние, …], t: [[номер клетки, плитка], …], i: [x, y, z, вещь, n, …] } | null (нечего). Имена, не номера
+    // блоков: палитра мира при загрузке может быть другой. Обломки в полёте (kubomir-debris.js) — туда же
+    const SV8 = new Int32Array(8);
+    X.pending = () => {
+      if (st.coopGuest) return null;
+      const out = { c: [], t: [], i: [] };
+      const cell = (x, y, z, v, tile) => { const bl = V.blocks[v & 0xfff]; if (!bl) return; if (tile) out.t.push([out.c.length / 5, tile]); out.c.push(x, y, z, bl.name, v >>> 12); };
+      const itm = (x, y, z, v) => { const bl = V.blocks[v & 0xfff]; if (!bl || st.creative) return; const id = bl.name === 'door_oak' ? 'door' : bl.name === 'furnace_lit' ? 'furnace' : bl.drop || bl.name; if (id && V.item(id)) out.i.push(x, y, z, id, 1); };
+      for (let s = 0; s < Wd.NS; s++) {
+        const b = bodies[s]; if (!b) continue;
+        Wd.save(s, SV8);
+        try {
+          let L = b.L;
+          if (!L) {
+            let mode = 'q';
+            if (b.hung) mode = 'p';
+            else if (Wd.phase(s) === TP.PH.DROP || Wd.phase(s) === TP.PH.LANDED) { if (b.rest) Wd.dropNow(s, 8 * b.rest[0], 8 * b.rest[1]); }
+            else { Wd.th[s] = TP.F90; Wd.ph[s] = TP.PH.LANDED; Wd.dropNow(s, 0); const r = rest(s, b); Wd.dropNow(s, 8 * r.drop, 8 * r.slide); }
+            L = { i: 0, mode, rot: mode !== 'p' || Wd.th[s] >= TP.F90 / 2, sp: [] };
+          }
+          const n = b.cells.length / 4;
+          for (let i = L.i; i < n; i++) {
+            target(s, b, i, L);
+            if (TG.k === 1) cell(TG.x, TG.y, TG.z, TG.v, b.tiles ? b.tiles[i] : null);
+            else if (TG.k === 2 && b.kind !== 'tree') itm(TG.x, TG.y, TG.z, TG.v);
+          }
+          for (let k = 0; k < L.sp.length; k += 9) cell(L.sp[k], L.sp[k + 1], L.sp[k + 2], L.sp[k + 3], null);
+        } finally { Wd.load(s, SV8); }
+      }
+      st.debris?.pending?.((x, y, z, v) => cell(x, y, z, v, null));
+      for (const r of RQ) { if (r.v !== undefined) cell(r.x, r.y, r.z, r.v, r.tile); else out.i.push(r.x, r.y, r.z, r.id, r.n); }
+      return out.c.length || out.i.length ? out : null;
+    };
+    // загрузка мира (meta.topple): записать клетки тел, что были в полёте при сохранении, — когда их чанк загружен (≤ 64 за такт)
+    const RQ = [];
+    X.restore = p => {
+      if (!p || st.coopGuest) return 0;
+      const c = Array.isArray(p.c) ? p.c : [], tl = new Map(Array.isArray(p.t) ? p.t.filter(e => Array.isArray(e) && e[1] && typeof e[1] === 'object').map(e => [e[0] | 0, e[1]]) : []);
+      for (let k = 0; k + 4 < c.length && RQ.length < 65536; k += 5) {
+        const id = V.ID[c[k + 3]]; if (id === undefined || !Number.isFinite(c[k]) || !Number.isFinite(c[k + 1]) || !Number.isFinite(c[k + 2])) continue;
+        RQ.push({ x: c[k] | 0, y: c[k + 1] | 0, z: c[k + 2] | 0, v: V.cell(id, (c[k + 4] | 0) & 0xfffff), tile: tl.get(k / 5) || null });
+      }
+      const it = Array.isArray(p.i) ? p.i : [];
+      for (let k = 0; k + 4 < it.length && RQ.length < 65536; k += 5) if (typeof it[k + 3] === 'string' && V.item(it[k + 3]) && Number.isFinite(it[k])) RQ.push({ x: +it[k], y: +it[k + 1], z: +it[k + 2], id: it[k + 3], n: Math.max(1, Math.min(64, it[k + 4] | 0)) });
+      X.stats.restored = RQ.length;
+      return RQ.length;
+    };
+    function restoreTick(all){
+      let n = 0;
+      const ev = batch(true), xyz = [], RB = { tiles: null, cells: [0, 0, 0, 0], kind: 'build', L: null, dir: 0 };
+      own++;
+      try {
+        for (let k = 0; k < RQ.length && (all || n < 64); k++) {
+          const r = RQ[k];
+          if (!all && W.loaded && !W.loaded(r.x, r.z)) continue;
+          RQ.splice(k, 1); k--; n++;
+          if (r.v === undefined) { ev.add(r.x + .5, r.y + .4, r.z + .5, { id: r.id, n: r.n }); continue; }
+          RB.tiles = r.tile ? [r.tile] : null; RB.cells[0] = r.x; RB.cells[1] = r.y; RB.cells[2] = r.z;
+          put(r.x, r.y, r.z, r.v, RB, 0, ev, xyz);
+        }
+      } finally { own--; }
+      ev.flush();
+      if (xyz.length && st.sup?.recheck) st.sup.recheck(xyz);
+      return n * 4;
+    }
+    // ═══ ревью D1: тело в крене, полёте, повисшее — твёрдое и видно прицелом. W.bodyAt(x, y, z) (voxel.js: луч, moveBox) → блок
+    // тела в клетке мира (по позе сетки: обратный поворот центра клетки) или 0. Сетки на виду: у хозяина — свои тела, у гостя — тела
+    // хозяина. Удар по повисшему (X.knock) — ложится блоками там, где висит (дорубить) ═══
+    const VG = [];
+    let OVG = null;
+    function ovKeys(g){
+      const km = new Map(), c = g.cells; g.kx = Math.floor(g.px) - 1024; g.kz = Math.floor(g.pz) - 1024; let r2 = 0;
+      for (let i = 0; i < c.length; i += 4) { km.set(((c[i] - g.kx) * 2048 + (c[i + 2] - g.kz)) * 512 + c[i + 1], c[i + 3]); const ax = c[i] + .5 - g.px, ay = c[i + 1] + .5 - g.py, az = c[i + 2] + .5 - g.pz, d = ax * ax + ay * ay + az * az; if (d > r2) r2 = d; }
+      g.km = km; g.rad = Math.sqrt(r2) + 1.5;
+    }
+    function ovPose(g){
+      if (!g.km) ovKeys(g);
+      const on = g.on || 0, oy = g.oy || 0, r = g.rad;
+      g.oc = Math.cos(g.th); g.os = Math.sin(g.th); g.cx0 = g.px + g.dx * on; g.cy0 = g.py + oy; g.cz0 = g.pz + g.dz * on;
+      g.b0 = Math.floor(g.cx0 - r); g.b3 = Math.floor(g.cx0 + r); g.b1 = Math.floor(g.cy0 - r); g.b4 = Math.floor(g.cy0 + r); g.b2 = Math.floor(g.cz0 - r); g.b5 = Math.floor(g.cz0 + r);
+      VG.push(g);
+    }
+    const ovG = G => ovPose(G.g);
+    function ovUpdate(){
+      VG.length = 0;
+      if (KT.HIT) { for (let s = 0; s < Wd.NS; s++) { const b = bodies[s]; if (b?.g) ovPose(b.g); } if (GB.size) GB.forEach(ovG); }
+      W.bodyAt = VG.length ? overAt : null;
+    }
+    function overAt(x, y, z){
+      for (let i = 0; i < VG.length; i++) {
+        const g = VG[i];
+        if (x < g.b0 || x > g.b3 || y < g.b1 || y > g.b4 || z < g.b2 || z > g.b5) continue;
+        const rx = x + .5 - g.cx0, ry = y + .5 - g.cy0, rz = z + .5 - g.cz0, a1 = rx * g.dx + rz * g.dz, qx = rx - a1 * g.dx, qz = rz - a1 * g.dz;
+        const a = a1 * g.oc - ry * g.os, h = a1 * g.os + ry * g.oc;
+        const wx = Math.floor(g.px + a * g.dx + qx), wy = Math.floor(g.py + h), wz = Math.floor(g.pz + a * g.dz + qz);
+        if (wy < 0 || wy >= 512) continue;
+        const v = g.km.get(((wx - g.kx) * 2048 + (wz - g.kz)) * 512 + wy);
+        if (v !== undefined && v > 0) { OVG = g; return v; }
+      }
+      return 0;
+    }
+    X.overAt = overAt;
+    X.knock = hit => {
+      if (!hit || st.coopGuest || !overAt(hit.x, hit.y, hit.z)) return 0;
+      for (let s = 0; s < Wd.NS; s++) { const b = bodies[s]; if (b && b.g === OVG && b.hung) { X.stats.knocks = (X.stats.knocks | 0) + 1; settleHung(s, b); return 1; } }
+      return 0;
     };
     X.bodies = () => bodies.filter(Boolean).map((b, i) => ({ kind: b.kind, hung: b.hung, n: b.cells.length / 4 }));
     X.busy = () => Wd.busy() + pend.length + CHK.length / 4;
-    X.dispose = () => { for (let s = 0; s < Wd.NS; s++) { const b = bodies[s]; if (b?.g) st.ents?.groupEnd?.(b.g, null, false); bodies[s] = null; } Wd.clear(); pend.length = 0; CHK.length = 0; for (const [, G] of GB) st.ents?.groupEnd?.(G.g, null, false); GB.clear(); GQ.length = 0; NET.length = 0; };
+    X.dispose = () => { for (let s = 0; s < Wd.NS; s++) { const b = bodies[s]; if (b?.g) st.ents?.groupEnd?.(b.g, null, false); bodies[s] = null; } Wd.clear(); pend.length = 0; CHK.length = 0; CK.on = false; RQ.length = 0; for (const [, G] of GB) st.ents?.groupEnd?.(G.g, null, false); GB.clear(); GQ.length = 0; NET.length = 0; VG.length = 0; if (W.bodyAt) W.bodyAt = null; BIGM.clear(); };
     return X;
   };
 })();

@@ -10,10 +10,15 @@
 //   FL.hit(s, side, step)      — one swing on a side (0 +x · 1 −x · 2 +z · 3 −z): + step eighths; the first side that reaches the
 //                                notch depth (⌈8D/3⌉, a third of the trunk) becomes the notch → s
 //   FL.step(D, need)           — eighths per swing: a wider trunk takes more swings per eighth (wood ∝ width) → 1
-//   FL.decide(s, lean, out)    — does it go? out.go 0/1, out.dir (side it falls to), out.kind 1 notch + back cut (falls to the notch,
-//                                the hinge steers it) · 2 cut through without a notch (falls to the hinge side: away from the deeper
-//                                cut, or where the crown leans) · 3 heavy crown leans over a deep cut by itself (slow lean);
+//   FL.decide(s, lean, out)    — does it go? out.go 0/1, out.dir (side it falls to), out.kind 1 proper felling: a notch (≥ ⅓, cut
+//                                first) + a back cut from the other side down to the hinge — falls to the notch, the hinge steers it ·
+//                                2 the trunk's centre of mass is beyond the wood that is left (a one-sided cut past the middle falls
+//                                TOWARD the cut; a too-small notch with a deep back cut falls BACK, toward the back cut) or the axis is
+//                                cut (nearly) through without a proper notch (falls to the side the centre of mass is on) · 3 the
+//                                centre of mass with the crown lean is beyond it: a heavy crown leans over by itself (slow);
 //                                out.hinge — eighths of wood left. lean = [crown offset +x, +z in eighths × crown mass share ‰]
+//                                (owner: «огромным деревьям нужен большой угол» — the notch needs ⅓ of the trunk: 2×2 — 6/16, 3×3 —
+//                                8/24; a smaller one does not steer the fall)
 //   FL.cell(s, i, j, out)      — render cut of section cell (i along x, j along z, 0…D−1): out[0..3] = cut from +x, −x, +z, −z
 //                                (eighths 0…8) → true if the cell is cut through (removed)
 (() => {
@@ -36,28 +41,23 @@
   FL.decide = (s, lean, out = { go: 0, dir: 0, kind: 0, hinge: 0 }) => {
     const D = s[4], full = 8 * D, hmax = FL.hingeMax(D), n = s[5];
     out.go = 0; out.kind = 0; out.dir = 0; out.hinge = full;
-    // 1) notch + back cut: the hinge (wood between them) ≤ hmax → falls to the notch
+    // 1) proper felling: notch + back cut, the hinge (wood between them) ≤ hmax → falls to the notch
     if (n >= 0) {
       const o = FL.OPP[n], rem = full - s[n] - s[o];
       out.hinge = rem;
-      if (rem <= hmax) { out.go = 1; out.dir = s[o] > 0 ? n : o; out.kind = s[o] > 0 ? 1 : 2; return out; }   // no back cut: one deep cut — the wood left is behind it
+      if (s[o] > 0 && rem <= hmax) { out.go = 1; out.dir = n; out.kind = 1; return out; }
     }
-    // 2) an axis cut (nearly) through without a proper notch: falls to the side where the wood is left (away from the deeper cut);
-    //    equal cuts — to the crown lean along that axis, else the lowest side
+    // 2) / 3) the centre of mass over the wood that is left, per axis (eighths from the − face: wood [s[b], full − s[a]], trunk axis 4D,
+    //    with the crown lean 4D + lean): beyond an edge — tips that way (trunk alone — 2, only with the crown — 3, slow); cut (nearly)
+    //    through without a proper notch — to the side of the centre of mass (ties: the crown, the deeper cut, the lowest side)
+    let k3 = -1;
     for (let ax = 0; ax < 2; ax++) {
-      const a = ax * 2, b = a + 1, rem = full - s[a] - s[b];
-      if (rem > hmax || n === a || n === b) continue;   // the notch axis is handled above
-      const ln = lean ? lean[ax] : 0;
-      out.go = 1; out.kind = 2; out.hinge = rem;
-      out.dir = s[a] > s[b] ? b : s[b] > s[a] ? a : ln > 0 ? a : ln < 0 ? b : a;
-      return out;
+      const a = ax * 2, b = a + 1, lo = s[b], hi = full - s[a], rem = hi - lo, c0 = 4 * D, ln = lean ? lean[ax] : 0, c1 = c0 + ln;
+      if (c0 > hi || c0 < lo) { out.go = 1; out.kind = 2; out.hinge = Math.max(0, rem); out.dir = c0 > hi ? a : b; return out; }
+      if (rem <= hmax) { out.go = 1; out.kind = 2; out.hinge = Math.max(0, rem); const m2 = lo + hi; out.dir = 2 * c1 > m2 ? a : 2 * c1 < m2 ? b : s[a] > s[b] ? a : s[b] > s[a] ? b : a; return out; }
+      if (k3 < 0 && lean && ((c1 >= hi + D && s[a] > 0) || (c1 <= lo - D && s[b] > 0))) k3 = c1 > hi ? a : b;   // the crown: over the CUT side, beyond by ≥ 1/8 of the trunk (the wood bends a little; uncut — the roots hold a leaning tree)
     }
-    // 3) heavy crown over a deep cut: the cut side carries the crown's moment — leans over by itself (slow)
-    if (lean) for (let side = 0; side < 4; side++) {
-      const o = FL.OPP[side], ln = side === 0 ? lean[0] : side === 1 ? -lean[0] : side === 2 ? lean[1] : -lean[1];
-      const rem = full - s[side] - s[o];
-      if (ln >= 8 * D && s[side] * 2 >= full && rem * 3 <= full) { out.go = 1; out.dir = side; out.kind = 3; out.hinge = rem; return out; }
-    }
+    if (k3 >= 0) { const o = FL.OPP[k3]; out.go = 1; out.kind = 3; out.dir = k3; out.hinge = full - s[k3] - s[o]; }
     return out;
   };
   FL.cell = (s, i, j, out) => {

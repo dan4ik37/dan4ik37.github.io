@@ -20,13 +20,18 @@
 //   Wd = TP.world({ slots, smp, reads }) — simulation slots (typed arrays, no garbage per tick):
 //     s = Wd.add(B, R, o)         — start a body (o: { rate — lean speed, fine units per substep; w0 — initial ω; hang — max angle
 //                                   of a hang-up, binary }) → slot or −1 (all busy: the adapter queues, never drops).
-//     n = Wd.tick(solid)          — one world tick for every slot within the read budget (solid(x, y, z) → true for a world cell
-//                                   that stops the body); events in Wd.ev [slot, type, x, y, z] × n: 1 HANG (holder cell),
-//                                   2 LAND (≥ 60° contact or 90° reached: the adapter computes the drop and calls Wd.drop),
-//                                   3 REST (drop finished: write the cells), 4 CREAK (leaning, once per second).
-//     Wd.drop(s, eighths) · Wd.resume(s, ω) · Wd.free(s) · Wd.angle(s) (radians, for the view) · Wd.offset(s, out) (mesh origin
-//     shift after a re-pivot and the drop, eighths) · Wd.land(s, x, y, z, out) — landing cell of a body cell (quarter turn about
-//     the pivot + re-pivot shift + drop, integer).
+//     n = Wd.tick(solid)          — one world tick for every slot within the read budget (solid(x, y, z) → 0 free · 1 a cell that
+//                                   stops the body (a hang-up holder) · 2 ground (stops it, never holds a hang-up: ≥ 5° — LAND));
+//                                   events in Wd.ev [slot, type, x, y, z] × n: 1 HANG (holder cell), 2 LAND (≥ 60° contact, ground
+//                                   contact or 90° reached: the adapter computes the drop and calls Wd.drop), 3 REST (drop finished:
+//                                   write the cells), 4 CREAK (leaning, once per second).
+//     Wd.drop(s, eighths, slide) (slide — eighths along +dir: the body slides off an edge its centre of mass is beyond) ·
+//     Wd.resume(s, ω) · Wd.free(s) · Wd.angle(s) (radians, for the view) · Wd.offset(s, out) (mesh origin shift after a re-pivot,
+//     the slide and the drop, eighths) · Wd.land(s, x, y, z, out) — landing cell of a body cell (quarter turn about the pivot +
+//     re-pivot shift + slide + drop, integer) · Wd.place(s, x, y, z, out) — the cell under a body cell's centre at the current pose
+//     (any angle: a settle in place — hang-up, ground contact) · Wd.save(s, a) / Wd.load(s, a) — the slot's motion state (to look
+//     ahead without changing it).
+//   A body whose centre of mass is exactly over its pivot (thc = 0) gets a nudge (unstable balance: it never stands still at 0°).
 //   TP.rotAxis(axis, dir)         — axis state of a log (0 y, 1 x, 2 z) after a quarter turn toward dir.
 (() => {
   const root = typeof self !== 'undefined' ? self : globalThis;
@@ -165,6 +170,7 @@
     const rate = new Int32Array(NS), hangA = new Int32Array(NS), ticks = new Int32Array(NS), piv = new Int32Array(NS), nsmp = new Uint8Array(NS);
     const ox = new Int32Array(NS), oy = new Int32Array(NS), oz = new Int32Array(NS), pn = new Int32Array(NS), py = new Int32Array(NS);
     const pn2 = new Int32Array(NS), py2 = new Int32Array(NS), th1 = new Int32Array(NS), mon = new Int32Array(NS), moy = new Int32Array(NS), fy = new Int32Array(NS), fv = new Int32Array(NS), fd = new Int32Array(NS);
+    const fsl = new Int32Array(NS), fsd = new Int32Array(NS);   // slide along +dir (current, eighths << 4; target, eighths)
     const sn = new Int32Array(NS * SMP), sy = new Int32Array(NS * SMP), st = new Int32Array(NS * SMP);   // samples: along dir, up, across (eighths)
     const hx = new Int32Array(NS), hy = new Int32Array(NS), hz = new Int32Array(NS);
     const ev = new Int32Array(NS * 4 * 5 + 5);
@@ -182,7 +188,7 @@
       let s = -1; for (let i = 0; i < NS; i++) if (ph[i] === PH_FREE) { s = i; break; }
       if (s < 0) { Wd.stats.busy++; return -1; }
       const d = R.dir, P = d === 1 || d === 3 ? -R.pn : R.pn;   // pivot along +dir
-      ox[s] = a.ox | 0; oy[s] = a.oy | 0; oz[s] = a.oz | 0; dir[s] = d; pn[s] = R.pn; py[s] = R.py; pn2[s] = 0; py2[s] = 0; th1[s] = 0; piv[s] = 0; mon[s] = P; moy[s] = R.py; fy[s] = 0; fv[s] = 0; fd[s] = 0;
+      ox[s] = a.ox | 0; oy[s] = a.oy | 0; oz[s] = a.oz | 0; dir[s] = d; pn[s] = R.pn; py[s] = R.py; pn2[s] = 0; py2[s] = 0; th1[s] = 0; piv[s] = 0; mon[s] = P; moy[s] = R.py; fy[s] = 0; fv[s] = 0; fd[s] = 0; fsl[s] = 0; fsd[s] = 0;
       // mass sums about the pivot edge (masses shifted so Σm ≤ 2^20 — every product stays < 2^53)
       let W0 = 0; for (let i = 0; i < B.n; i++) W0 += B.m[i];
       let sh = 0; while ((W0 >> sh) > 1048576) sh++;
@@ -212,8 +218,12 @@
       nsmp[s] = ns;
       th[s] = 0; ticks[s] = 0;
       hangA[s] = (a.hang ?? 10923) << FB;   // 60°
-      if (thc[s] <= 0 || a.kind === 'tip') { ph[s] = PH_FALL; om[s] = a.w0 | 0; rate[s] = 0; }
-      else { ph[s] = PH_LEAN; rate[s] = Math.max(1, a.rate | 0 || Math.round(TP.FINE_DEG * 2 / 80)); om[s] = 0; }
+      // centre of mass beyond the pivot (thc < 0) — falls at once; exactly over it (thc = 0) — unstable balance: a nudge (without it
+      // ω stays 0 and the body, already out of the world, would stand still forever); inside (thc > 0) — leans first, also a «tip»
+      // whose rounding put the centre a hair inside (it would otherwise swing back to 0° and stop)
+      const r0 = Math.max(1, a.rate | 0 || Math.round(TP.FINE_DEG * 2 / 80));
+      if (thc[s] <= 0) { ph[s] = PH_FALL; om[s] = a.w0 | 0; if (thc[s] === 0 && om[s] <= 0) om[s] = r0; rate[s] = 0; }
+      else { ph[s] = PH_LEAN; rate[s] = r0; om[s] = 0; }
       Wd.stats.added++;
       return s;
     };
@@ -275,7 +285,8 @@
       const ns = nsmp[s];
       for (let k = 0; k < ns; k++) {
         probe(s, k, c, si);
-        if (!solid(C.x, C.y, C.z)) continue;
+        const sv = solid(C.x, C.y, C.z);
+        if (!sv) continue;
         const cx = C.x, cy = C.y, cz = C.z;
         // contact: below the pivot level and ahead of it — the ground under an overhang → roll over it (≤ 2 re-pivots)
         const base = piv[s] ? py2[s] : py[s];
@@ -284,8 +295,11 @@
           repivot(s, (th[s] - th1[s]) >> FB, cy);
           return ns;
         }
-        if (th[s] < hangA[s] || ph[s] === PH_LEAN) { th[s] = prev; om[s] = 0; ph[s] = PH_HUNG; hx[s] = cx; hy[s] = cy; hz[s] = cz; Wd.stats.hangs++; pushEv(s, 1, cx, cy, cz); return -1; }
-        th[s] = F90; ph[s] = PH_LANDED; Wd.stats.lands++; pushEv(s, 2, cx, cy, cz); return -1;
+        // ground (sv 2: terrain) never holds a hang-up — the body rests on it at this angle (LAND below 60°: the adapter settles it in place)
+        const early = th[s] < hangA[s] || ph[s] === PH_LEAN;
+        if (early && !(sv === 2 && prev >= F5)) { th[s] = prev; om[s] = 0; ph[s] = PH_HUNG; hx[s] = cx; hy[s] = cy; hz[s] = cz; Wd.stats.hangs++; pushEv(s, 1, cx, cy, cz); return -1; }
+        th[s] = early ? prev : F90; om[s] = early ? 0 : om[s];
+        ph[s] = PH_LANDED; Wd.stats.lands++; pushEv(s, 2, cx, cy, cz); return -1;
       }
       if (reached) { ph[s] = PH_LANDED; Wd.stats.lands++; pushEv(s, 2, 0, 0, 0); return -1; }
       return ns;
@@ -298,7 +312,10 @@
         if (p === PH_FREE || p === PH_HUNG || p === PH_LANDED) continue;
         if (p === PH_DROP) {
           fv[s] = Math.min(256, fv[s] + 10); fy[s] += fv[s];
-          if (fy[s] >= fd[s] << 4) { fy[s] = fd[s] << 4; ph[s] = PH_LANDED; pushEv(s, 3, 0, 0, 0); }
+          if (fy[s] >= fd[s] << 4) fy[s] = fd[s] << 4;
+          const sm = Math.abs(fsd[s]) << 4, sc = Math.abs(fsl[s]);   // slide: 1,5 cells per tick toward the target
+          if (sc < sm) fsl[s] = (fsd[s] < 0 ? -1 : 1) * Math.min(sm, sc + 192);
+          if (fy[s] === fd[s] << 4 && Math.abs(fsl[s]) === sm) { ph[s] = PH_LANDED; pushEv(s, 3, 0, 0, 0); }
           continue;
         }
         const need = nsmp[s] * TP.SUB;
@@ -310,8 +327,11 @@
       Wd.stats.reads += Wd.used; if (Wd.used > Wd.stats.maxReads) Wd.stats.maxReads = Wd.used;
       return Wd.nev;
     };
-    Wd.drop = (s, eighths) => { if (ph[s] !== PH_LANDED) return 0; fd[s] = Math.max(0, eighths | 0); fy[s] = 0; fv[s] = 0; ph[s] = PH_DROP; return fd[s]; };   // REST comes on the next tick
-    Wd.dropNow = (s, eighths) => { fd[s] = Math.max(0, eighths | 0); fy[s] = fd[s] << 4; fv[s] = 0; ph[s] = PH_LANDED; };   // save / close: lands at once
+    Wd.drop = (s, eighths, slide = 0) => { if (ph[s] !== PH_LANDED) return 0; fd[s] = Math.max(0, eighths | 0); fy[s] = 0; fv[s] = 0; fsd[s] = slide | 0; fsl[s] = 0; ph[s] = PH_DROP; return fd[s]; };   // REST comes on the next tick
+    Wd.dropNow = (s, eighths, slide = 0) => { fd[s] = Math.max(0, eighths | 0); fy[s] = fd[s] << 4; fv[s] = 0; fsd[s] = slide | 0; fsl[s] = fsd[s] << 4; ph[s] = PH_LANDED; };   // save / close: lands at once
+    // the slot's motion state (look ahead — e.g. where it would land — and put it back): a — Int32Array(8) or array
+    Wd.save = (s, a) => { a[0] = th[s]; a[1] = om[s]; a[2] = ph[s]; a[3] = fy[s]; a[4] = fv[s]; a[5] = fd[s]; a[6] = fsl[s]; a[7] = fsd[s]; return a; };
+    Wd.load = (s, a) => { th[s] = a[0]; om[s] = a[1]; ph[s] = a[2]; fy[s] = a[3]; fv[s] = a[4]; fd[s] = a[5]; fsl[s] = a[6]; fsd[s] = a[7]; };
     Wd.resume = (s, w = 0) => { if (ph[s] !== PH_HUNG) return; if (th[s] < thc[s]) { ph[s] = PH_LEAN; } else { ph[s] = PH_FALL; om[s] = Math.max(om[s], w | 0); } };
     Wd.free = s => { ph[s] = PH_FREE; };
     Wd.holder = (s, out) => { out[0] = hx[s]; out[1] = hy[s]; out[2] = hz[s]; return out; };
@@ -326,7 +346,7 @@
         const rn = mon[s] - pn2[s], ry = moy[s] - py2[s];
         dn = pn2[s] + Math.floor((rn * c + ry * si) / 16384) - P1n; dy = py2[s] + Math.floor((ry * c - rn * si) / 16384) - P1y;
       }
-      out[0] = dn; out[1] = dy - (fy[s] >> 4);
+      out[0] = dn + (fsl[s] >> 4); out[1] = dy - (fy[s] >> 4);
       return out;
     };
     // landing cell of body cell (x, y, z) (relative to the origin) — quarter turn about the first pivot snapped to a cell edge,
@@ -341,6 +361,19 @@
       na += Math.round(OF[0] / 8); ny += Math.round(OF[1] / 8);
       if (d === 0) { out[0] = na; out[2] = z; } else if (d === 1) { out[0] = -na - 1; out[2] = z; } else if (d === 2) { out[2] = na; out[0] = x; } else { out[2] = -na - 1; out[0] = x; }
       out[1] = ny;
+      return out;
+    };
+    // the cell under body cell (x, y, z)'s centre at the current pose (relative to the origin, like Wd.land): rotation by the whole angle
+    // about the first pivot plus the mesh origin shift (re-pivots, slide, drop) — the same pose the view draws; floor (any angle: settle in place)
+    const OF3 = [0, 0];
+    Wd.place = (s, x, y, z, out) => {
+      const d = dir[s], P1n = d === 1 || d === 3 ? -pn[s] : pn[s], a0 = along(d, x, z) - P1n, h0 = 8 * y + 4 - py[s];
+      const A = th[s] >> FB, c = TP.cos(A), si = TP.sin(A);
+      Wd.offset(s, OF3);
+      const an = P1n + OF3[0] + Math.floor((a0 * c + h0 * si) / 16384), ay = py[s] + OF3[1] + Math.floor((h0 * c - a0 * si) / 16384);
+      const wa = d === 1 || d === 3 ? -an : an, t = across(d, x, z);
+      if (d < 2) { out[0] = wa >> 3; out[2] = t >> 3; } else { out[2] = wa >> 3; out[0] = t >> 3; }
+      out[1] = ay >> 3;
       return out;
     };
     // world position of the mesh origin (the first pivot), floats for the view: along the dir axis, y; across — the body origin
