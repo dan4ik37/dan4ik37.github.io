@@ -156,17 +156,20 @@
     for (let x = 40; x < W; x += 40) ctx.fillRect(x, 0, 1, H);
     if (s.flash) { ctx.fillStyle = C.lost; ctx.fillRect(0, 0, W, H); }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 12px system-ui, sans-serif';
+    // цвет меняется только при смене (присваивание fillStyle — разбор строки цвета, дорого на телефоне)
+    let fs = '';
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const i = r * COLS + c, t = s.b[i];
       if (!t) continue;
       const x = X0 + c * PX, y = Y0 + r * PY;
-      ctx.fillStyle = t === 3 ? C.star : ROWC[r];
+      const f = t === 3 ? C.star : ROWC[r];
+      if (f !== fs) { fs = f; ctx.fillStyle = f; }
       ctx.fillRect(x, y, BW, BH);
       if (t === 2) {
-        ctx.fillStyle = C.crack;
+        ctx.fillStyle = C.crack; fs = C.crack;
         if (s.hp[i] === 2) { ctx.fillRect(x + 3, y + 3, BW - 6, 2); ctx.fillRect(x + 3, y + BH - 5, BW - 6, 2); }
         else { ctx.fillRect(x + 8, y + 2, 2, BH - 4); ctx.fillRect(x + 20, y + 4, 2, BH - 6); ctx.fillRect(x + 8, y + 7, 14, 2); }
-      } else if (t === 3) { ctx.fillStyle = C.starInk; ctx.fillText('★', x + BW / 2, y + BH / 2 + 1); }
+      } else if (t === 3) { ctx.fillStyle = C.starInk; fs = C.starInk; ctx.fillText('★', x + BW / 2, y + BH / 2 + 1); }
     }
     const px = s.over ? s.px : s.px0 + (s.px - s.px0) * a;
     ctx.fillStyle = s.wide ? C.padW : C.pad;

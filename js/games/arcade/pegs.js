@@ -140,18 +140,24 @@
     if (s.flash) { ctx.fillStyle = C.hit; ctx.fillRect(0, 0, W, H); }
     // корзинки
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 15px system-ui, sans-serif';
+    // подписи только у целей (текст на canvas дорогой на телефоне): прочие корзинки — 2 очка, точка
     for (let b = 0; b < NB; b++) {
       const t = s.tg[b];
       ctx.fillStyle = t === 2 ? C.b2 : t === 1 ? C.b1 : C.b0; ctx.fillRect(b * BW + 2, DIV + 6, BW - 4, H - DIV - 8);
-      ctx.fillStyle = t === 2 ? C.t2 : t === 1 ? C.t1 : C.t0; ctx.fillText(LBL[t], b * BW + BW / 2, DIV + 28);
-      if (t === 2) ctx.fillText('★', b * BW + BW / 2, DIV + 10);
+      ctx.fillStyle = t === 2 ? C.t2 : t === 1 ? C.t1 : C.t0;
+      if (t) ctx.fillText(LBL[t], b * BW + BW / 2, DIV + 26); else ctx.fillRect(b * BW + BW / 2 - 2, DIV + 24, 4, 4);
     }
     ctx.fillStyle = C.div;
     for (let d = 1; d < NB; d++) ctx.fillRect(d * BW - 2, DIV, 4, H - DIV);
     // гвоздики одним путём
-    ctx.fillStyle = C.peg; ctx.beginPath();
-    for (let n = 0; n < NPEG; n++) { ctx.moveTo(PX[n] + PR, PYS[n]); ctx.arc(PX[n], PYS[n], PR, 0, 6.2832); }
-    ctx.fill();
+    // гвоздики неподвижны: путь собирается один раз (Path2D), потом одна заливка за кадр
+    ctx.fillStyle = C.peg;
+    if (G.pegs === undefined) {
+      G.pegs = typeof Path2D === 'function' ? new Path2D() : null;
+      if (G.pegs) for (let n = 0; n < NPEG; n++) { G.pegs.moveTo(PX[n] + PR, PYS[n]); G.pegs.arc(PX[n], PYS[n], PR, 0, 6.2832); }
+    }
+    if (G.pegs) ctx.fill(G.pegs);
+    else { ctx.beginPath(); for (let n = 0; n < NPEG; n++) { ctx.moveTo(PX[n] + PR, PYS[n]); ctx.arc(PX[n], PYS[n], PR, 0, 6.2832); } ctx.fill(); }
     if (s.ball >= BAR || (s.ball === BAR - 1 && s.fly === 0)) { ctx.fillStyle = C.bar; ctx.fillRect(s.bar - BARL / 2, BARY - 3, BARL, 6); }
     // держатель и прицел
     if (!s.fly && !s.over) {
