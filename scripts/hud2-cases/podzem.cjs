@@ -51,6 +51,13 @@ module.exports = {
     async pose(T){
       const r = await T.ev(`(async () => { const A = GAME_IMPL.podzem.api, G = ${T0}.G; if (!A.pose) return 'нет позы'; const out = []; for (const k of ['sit', 'lie', 'crouch', 'wave']) { A.pose(k); await new Promise(r => setTimeout(r, 500)); out.push(k + '→' + G.pl.anim); } A.pose(null); await new Promise(r => setTimeout(r, 200)); out.push('встал→' + G.pl.anim); return out.join(' '); })()`);
       console.log('  поза:', r);
+      // компьютер: G — круг позы посередине; Esc — закрыть
+      if (T.prof === 'PC') console.log('  G:', await T.ev(`(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyG', key: 'g' })); await new Promise(r => setTimeout(r, 200)); const n = document.querySelectorAll('.pz-wrap > .e2-radial:not([hidden]) .e2-rad-it').length; window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape' })); await new Promise(r => setTimeout(r, 200)); return 'пунктов ' + n + ', после Esc открыт: ' + !!document.querySelector('.pz-wrap > .e2-radial:not([hidden])'); })()`));
+    },
+    // одно меню: ☰ «Подземья» — пункты игры и шапки (📣 📖 🔊 📱 ←), часы в заголовке
+    async menu(T){
+      const r = await T.ev(`(async () => { GAME_IMPL.podzem.api.pause(); await new Promise(r => setTimeout(r, 500)); const m = document.querySelector('.pz-wrap .gs-menu'); const out = m ? { head: m.querySelector('.gs-menu-head small')?.textContent?.slice(0, 40), items: [...m.querySelectorAll('.gs-menu-it')].map(b => b.textContent.trim().slice(0, 16)) } : null; GAME_IMPL.podzem.api.resume(); await new Promise(r => setTimeout(r, 300)); return out; })()`);
+      console.log('  ☰:', JSON.stringify(r));
     },
   },
 };

@@ -569,6 +569,7 @@
     document.removeEventListener('visibilitychange', st.onHide);
     root.removeEventListener('pagehide', flushBeacon);
     st.ro?.disconnect?.();
+    st.bt?.off?.(); st.prevBt?.off?.();   // T-123: клавиши боя (keydown на window) — снять и при выходе из игры посреди боя (было +1 слушатель за открытие)
     if (v2()) root.D37Shell?.own?.(false);
     S = null;
     try { root.dispatchEvent(new CustomEvent('d37:base')); } catch (e) {}   // мир перечитает свою базу (армия, добыча)

@@ -318,7 +318,7 @@
     const on = (t, ev, f, o) => { t.addEventListener(ev, f, o); offs.push(() => t.removeEventListener(ev, f, o)); };
     // HUD 2.0 (T-123): лоток вещей, круг позы и круг ⛏, лист эмоций (D37E — js/engine/ui.js); v2 решается один раз (HUD2.podzem)
     const v2 = hud2On();
-    let tray = null, rad = null, emoSheet = null, fade = null, vitT = 0, goalT = 0, insetK = '';
+    let tray = null, rad = null, emoSheet = null, fade = null, vitT = 0, goalT = 0, hintT = 0, insetK = '';
     let kVit = '', kBuf = '', kHot = '', kBtn = '';   // экран игры пишем по частям — только то, что поменялось
     const hudReset = () => { lastHud = kVit = kBuf = kHot = kBtn = ''; };
     // открылось окно (вещи, меню, нокаут) — отпустить всё, что держали пальцем: кнопки под окном не видны
@@ -460,7 +460,9 @@
       touchUI = !!v;
       root?.classList.toggle('pz-t', touchUI);
       if (touchEl) touchEl.hidden = !touchUI;
-      if (v2 && touchUI && !fade && wrap) fade = window.D37E.fade?.(wrap, wrap) || null;   // 4 с без касаний — кнопки бледнеют
+      if (v2 && touchUI && !fade && wrap) {
+        fade = window.D37E.fade?.(wrap, wrap) || null;   // 4 с без касаний — кнопки бледнеют
+      }
       hudReset(); U.layout(LW, LH);
     }
     // ═══ Раскладка по размеру окна игры (зовёт resize игры): ячейки панели, где она, высота «шапки» ═══
@@ -581,6 +583,8 @@
       }
       // пальцем: подпись большой кнопки, крюк, ✋ рядом с дверью / сундуком / кроватью / Проводником
       if (touchUI) {
+        // 2.0: подсказка про жесты — один раз на устройство, в первые секунды игры (потом — в «❓ Как играть»)
+        if (v2 && !hintT && G.state === 'play') hintT = window.D37TouchLayout?.hintOnce?.('podzem', 'h-gest') ? setTimeout(() => { if (root) API.toast('⬇ Удержи — сесть, лечь, эмоции · ⛏ смахни вверх — кирка, блок, ✛ точно · лоток вещей: смахни, удержи', 'info'); }, 1500) : -1;
         const ul = useLabel(), near = (v2 ? API.nearKind?.() : API.nearAct?.()) || '', pz = v2 ? API.poseNow?.() || '' : '', tk = ul.join() + '|' + near + '|' + (hook ? 1 : 0) + '|' + pz;
         if (tk !== kBtn) {
           kBtn = tk;
@@ -1086,6 +1090,7 @@
           <li><b>✋ Открыть</b> — дверь, сундук, Проводник рядом (кнопка светится, когда есть что открыть). <b>🎒 Вещи</b> — вещи и крафт</li>
           <li><b>Палец по миру</b>: держи — копать или ставить там, коротко — открыть дверь, сундук, поговорить</li>
           <li><b>✛ Точно</b> — крестик: двигай его пальцем, <b>✓ Сюда</b> — копать или ставить ровно в нём</li>
+          ${v2 ? '<li><b>⬇ Поза</b>: нажми — присесть или встать, удержи — сесть, лечь, эмоции. <b>⛏ смахни вверх</b> — кирку или блок в руку, ✛ точно, лечиться. <b>Вещи вверху</b>: смахни — соседняя, нажми — все и 🎒, удержи — круг вещей. ✋ появляется у двери, сундука, кровати, Проводника</li>' : ''}
           <li>Лёжа удобнее: <b>☰ Меню</b> → «Во весь экран» или «🔄 Повернуть экран». Размер кнопок, «для левши» и «🎮 Настроить кнопки» (переставить пальцем) — ☰ Меню → ⚙️ Настройки → «⛏ Подземье»</li></ul>`],
         pad: ['🎮 Геймпад', `<ul><li>Левый стик — идти (к стене — схватиться за край), <b>A</b> — прыжок, правый стик — прицел, <b>RT</b> — копать/бить/ставить, <b>X</b> — открыть, <b>B</b> — крюк, <b>Y</b> — вещи, <b>LB/RB</b> — ячейки, <b>LT</b> — лечение, крестовина ↑ — зелья, <b>Start</b> — меню</li></ul>`],
       };
@@ -1444,7 +1449,7 @@
 
     U.dispose = () => {
       offs.forEach(f => f()); offs.length = 0;
-      clearInterval(koT); clearTimeout(selNameT); clearTimeout(vitT); clearTimeout(goalT);
+      clearInterval(koT); clearTimeout(selNameT); clearTimeout(vitT); clearTimeout(goalT); clearTimeout(hintT);
       tray?.dispose(); tray = null; rad?.dispose(); rad = null; emoSheet?.dispose(); emoSheet = null; fade?.dispose(); fade = null;
       if (v2) window.D37Shell?.own?.(false);
       closePause();
