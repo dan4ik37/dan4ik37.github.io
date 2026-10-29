@@ -4,7 +4,11 @@
 //  meshes — js/engine/terra-mesh.js. World coordinates: METERS, f64, Y up (the core's units); the game converts with E.UNIT and
 //  its floating anchor. Plan: E:\d37-core\spec\PLAN.md (T1 / W1).
 // ═══════════════════════════════════════
-// TS = D37E.terra.create({ seed, radius: 5, caveRadius: 2, workers, cap, wasm: true, wasmUrl, workerUrl })
+// TS = D37E.terra.create({ seed, gen: 1, rules: 0, param: 0, radius: 5, caveRadius: 2, workers, cap, wasm: true, wasmUrl, workerUrl })
+//   gen 2 — logical biomes (T-116, generator v2: climate by latitude, height, sea and wind); rules (WORLD_RULES §2, need gen 2):
+//   0 earth, 1 mono (param = biome), 2 patchwork, 3 absurd (floating islands), 4 inverted (ground above). Heights are the same.
+//   TS.flatten(x, y, z, r) — a level pad at y (W2 towns; edit mode 2); TS.climate(x, z, out) → biome (out: tb, m, hs, phi, ts, tp, h, biome)
+//   TS.ceiling(x, z, y) → the lowest terrain above y (cave roofs; Infinity — open sky)
 //   TS.update(x, y, z)            — where the player is (m); schedules column probes and block builds (nearest first, budgets)
 //   TS.takeReady() → block | null — a built block for upload: { key, cx, cy, cz, q, buf, wi, … } (terra-mesh copies it, then TS.recycle(b))
 //   TS.onRelease = b => …         — a shown block left the ring (terra-mesh returns its geometry to the pool)
@@ -26,13 +30,23 @@
   const Q64 = v => Math.round(v * 64) / 64;
   TE.quant = Q64;
   // blocks whose mesh an edit can change (the core's own predicate: edit_touches)
-  TE.affected = (x, y, z, r, out = []) => {
-    const T1 = core(), m = r + 6, e = [x, y, z, r, 0];
+  // inverted worlds (rules 4) test the mirrored edit against the mirrored (earth) block ~cy, as the core does
+  TE.affected = (x, y, z, r, out = [], mode = 0, rules = 0) => {
+    const T1 = core(), e = [x, rules === 4 ? -1 - y : y, z, r, mode], m = T1.reachH(e, 0) + 6, mv = T1.reachV(e, 0) + 6, ey = e[1];
     for (let cx = Math.floor((x - m) / 32); cx <= Math.floor((x + m) / 32); cx++)
       for (let cz = Math.floor((z - m) / 32); cz <= Math.floor((z + m) / 32); cz++)
-        for (let cy = Math.floor((y - m) / 32); cy <= Math.floor((y + m) / 32); cy++)
-          if (T1.touches(e, 0, cx * 32, cy * 32, cz * 32)) out.push([cx, cy, cz]);
+        for (let cy = Math.floor((ey - mv) / 32); cy <= Math.floor((ey + mv) / 32); cy++)
+          if (T1.touches(e, 0, cx * 32, cy * 32, cz * 32)) out.push([cx, rules === 4 ? ~cy : cy, cz]);
     return out;
+  };
+  // does edit e of a flat list touch world block (cx, cy, cz)? (inverted: mirrored, like the core)
+  const TT = new Float64Array(5);
+  TE.touchesW = (ed, e, cx, cy, cz, rules) => {
+    const T1 = core();
+    if (rules !== 4) return T1.touches(ed, e, cx * 32, cy * 32, cz * 32);
+    for (let k = 0; k < 5; k++) TT[k] = ed[e * 5 + k];
+    TT[1] = -1 - TT[1];
+    return T1.touches(TT, 0, cx * 32, ~cy * 32, cz * 32);
   };
 
   TE.create = function (o = {}){
@@ -40,9 +54,13 @@
     if (!T1) throw new Error('terra: terra-core.js is not loaded');
     const ver = typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1';
     const seed = (o.seed ?? 1337) | 0, cap = o.cap || T1.DEFAULT_CAP;
+    const gen = o.gen === 2 ? 2 : 1, rules = gen === 2 ? (o.rules | 0) : 0, param = o.param | 0;
+    // point queries by the world rules (rules 0: the plain v1 field — the same bits)
+    const dens = rules ? (x, y, z, ops, n) => T1.densityR(seed, x, y, z, ops, n, rules) : (x, y, z, ops, n) => T1.density(seed, x, y, z, ops, n);
+    const hgt = rules === 4 ? (x, z) => T1.heightR(seed, x, z, 4) : (x, z) => T1.height(seed, x, z);
     const mob = !!E.isMobile?.(), cores = (root.navigator && navigator.hardwareConcurrency) || 4;
     const TS = {
-      seed, radius: o.radius ?? (mob ? 4 : 5), caveRadius: o.caveRadius ?? 2, keep: 0, dead: false,
+      seed, gen, rules, param, radius: o.radius ?? (mob ? 4 : 5), caveRadius: o.caveRadius ?? 2, keep: 0, dead: false,
       blocks: new Map(), cols: new Map(), onRelease: null,
       st: { built: 0, empty: 0, buildMs: 0, buildMax: 0, colMs: 0, cols: 0, sent: 0, stale: 0, errors: 0, fallbacks: 0, kind: '', edits: 0,
         respawns: 0, local: 0, maxQueue: 0, trunc: 0, quads: 0 },
@@ -70,7 +88,7 @@
         if (TS.st.respawns < 3) { TS.st.respawns++; setTimeout(() => { if (!TS.dead) { try { W[slot] = spawn(slot); replay(W[slot]); } catch (e) {} } }, 300); }
       };
       // absolute (the worker resolves against its own folder); document.baseURI respects <base href="/"> on /play/… addresses
-      w.postMessage({ t: 'init', wasm: wasmUrl ? new URL(wasmUrl, root.document?.baseURI || root.location?.href || 'http://x/').href : null, cap });
+      w.postMessage({ t: 'init', wasm: wasmUrl ? new URL(wasmUrl, root.document?.baseURI || root.location?.href || 'http://x/').href : null, cap, gen, rules, param });
       return K;
     }
     function replay(K){ if (ne) K.w.postMessage({ t: 'edits', list: ed.slice(0, ne * 5), n: ne }); }
@@ -78,7 +96,7 @@
     catch (e) { console.warn('terra: no workers — building on the page', e); }
     // fallback: a builder on the page (one job per update, small budget) when workers are missing or all died
     let local = null;
-    const localCore = () => local || (local = T1.js(cap));
+    const localCore = () => { if (!local) { local = T1.js(cap); local.setGen(gen, rules, param); } return local; };
 
     function requeue(id){
       const j = jobs.get(id); jobs.delete(id);
@@ -148,8 +166,9 @@
         if (!c) { c = { key: ck, cx, cz, st: 0, hmin: 0, hmax: 0 }; TS.cols.set(ck, c); }
         if (c.st === 0) { qpush('col', ck, cx, 0, cz, d2 * 4); continue; }
         if (c.st !== 2) continue;
-        const lo = Math.floor(Math.floor(c.hmin) / 32), hi = Math.floor(Math.floor(c.hmax) / 32), y0 = d2 <= RC * RC + RC ? Math.min(lo, -1) : lo;
-        for (let cy = y0; cy <= hi; cy++) {
+        const near = d2 <= RC * RC + RC, lo = Math.floor(Math.floor(c.hmin) / 32), hi = Math.floor(Math.floor(c.hmax) / 32);
+        const y0 = near && rules !== 4 ? Math.min(lo, -1) : lo, y1 = near && rules === 4 ? Math.max(hi, 0) : hi;   // caves: below (inverted: above)
+        for (let cy = y0; cy <= y1; cy++) {
           const b = blockOf(cx, cy, cz, true);
           if (b.st !== 0 || b.retryAt > t) continue;
           b.qs = qstamp;
@@ -217,9 +236,9 @@
       if (!b || b.st !== 0) return;
       b.st = 1; const id = ++jobId; b.job = id;
       const fox = it.cx * 32, foy = it.cy * 32, foz = it.cz * 32;
-      let n = 0; for (let e = 0; e < ne; e++) if (T1.touches(ed, e, fox, foy, foz)) n++;
+      let n = 0; for (let e = 0; e < ne; e++) if (TE.touchesW(ed, e, it.cx, it.cy, it.cz, rules)) n++;
       const buf = L.edits(n); let k = 0;
-      for (let e = 0; e < ne && k < n; e++) if (T1.touches(ed, e, fox, foy, foz)) { buf.set(ed.subarray(e * 5, e * 5 + 5), k * 5); k++; }
+      for (let e = 0; e < ne && k < n; e++) if (TE.touchesW(ed, e, it.cx, it.cy, it.cz, rules)) { buf.set(ed.subarray(e * 5, e * 5 + 5), k * 5); k++; }
       const q = L.build(seed, it.cx, it.cy, it.cz, n), o = L.out();
       let ab = null;
       if (q > 0) { ab = new ArrayBuffer(q * T1.BLOCK_BYTES); new Float32Array(ab, 0, q * 12).set(o.pos.subarray(0, q * 12)); new Int8Array(ab, q * 48, q * 16).set(o.nrm.subarray(0, q * 16)); new Uint8Array(ab, q * 64, q * 16).set(o.col.subarray(0, q * 16)); T1.physPack(o.pos, q, ab); }
@@ -250,7 +269,7 @@
       bucketAdd(ne - 1);
       const msg = { t: 'edit', e: [x, y, z, r, mode] };
       for (const K of W) if (K && !K.dead) K.w.postMessage(msg);
-      const list = TE.affected(x, y, z, r);
+      const list = TE.affected(x, y, z, r, [], mode, rules);
       for (const [cx, cy, cz] of list) {
         const b = blockOf(cx, cy, cz, inRing({ cx, cz }));
         if (!b) continue;
@@ -265,13 +284,14 @@
     }
     TS.dig = (x, y, z, r = 2.5) => edit(x, y, z, r, 0);
     TS.fill = (x, y, z, r = 2) => edit(x, y, z, r, 1);
+    TS.flatten = (x, y, z, r = 6) => edit(x, y, z, r, 2);   // a level pad at y (cut above, embankment below; 45° sides, ±16 m)
     TS.editCount = () => ne;
     TS.edits = () => ed.slice(0, ne * 5);
 
     // ── edits by 32 m column cell (xz bounds ± (r + 3), order kept): rays, column probes and point tests read only these ──
     const EB = new Map();   // colKey → [edit index, …] (ascending = edit order)
     function bucketAdd(e){
-      const o = e * 5, m = ed[o + 3] + 3;
+      const o = e * 5, m = T1.reachH(ed, e) + 3;
       for (let cx = Math.floor((ed[o] - m) / 32); cx <= Math.floor((ed[o] + m) / 32); cx++)
         for (let cz = Math.floor((ed[o + 2] - m) / 32); cz <= Math.floor((ed[o + 2] + m) / 32); cz++) {
           const k = TE.colKey(cx, cz); let L = EB.get(k);
@@ -287,15 +307,15 @@
       const L = EB.get(TE.colKey(Math.floor(x / 32), Math.floor(z / 32)));
       let n = 0;
       if (L) for (let i = 0; i < L.length; i++) {
-        const o = L[i] * 5, r = ed[o + 3];
-        if (Math.abs(x - ed[o]) > r || Math.abs(y - ed[o + 1]) > r || Math.abs(z - ed[o + 2]) > r) continue;
+        const o = L[i] * 5, r = T1.reachH(ed, L[i]), rv = T1.reachV(ed, L[i]);
+        if (Math.abs(x - ed[o]) > r || Math.abs(y - ed[o + 1]) > rv || Math.abs(z - ed[o + 2]) > r) continue;
         if (rops.length < (n + 1) * 5) { const a = new Float64Array(rops.length * 2); a.set(rops); rops = a; }
         for (let k = 0; k < 5; k++) rops[n * 5 + k] = ed[o + k];
         n++;
       }
       return n;
     }
-    const solidAt = (x, y, z) => T1.density(seed, x, y, z, rops, signOps(x, y, z)) > 0;
+    const solidAt = (x, y, z) => dens(x, y, z, rops, signOps(x, y, z)) > 0;
     // surface normal of the field at a point (−∇density, central differences; the edits of the point's 32 m cell — every edit
     // within r + 3 of it, so magnitudes near an edit are right): a dig crater's rim is a wall, not a 50° heightfield slope
     let cops = new Float64Array(5 * 16), ncops = 0;
@@ -308,7 +328,7 @@
         const o = L[i] * 5; for (let k = 0; k < 5; k++) cops[ncops * 5 + k] = ed[o + k];
         ncops++;
       }
-      const e = 0.1, f = (a, b, c) => T1.density(seed, a, b, c, cops, ncops);
+      const e = 0.1, f = (a, b, c) => dens(a, b, c, cops, ncops);
       const gx = f(x + e, y, z) - f(x - e, y, z), gy = f(x, y + e, z) - f(x, y - e, z), gz = f(x, y, z + e) - f(x, y, z - e);
       const l = Math.hypot(gx, gy, gz);
       if (!(l > 1e-12)) return false;
@@ -404,7 +424,7 @@
         if (!c || c.st !== 2) return false;
         if (c.hmax + 1 > y1) y1 = c.hmax + 1;
         const L = EB.get(ck);
-        if (L) for (let i = 0; i < L.length; i++) { const o = L[i] * 5; if (ed[o + 4] !== 0 && ed[o + 1] + ed[o + 3] + 1 > y1) y1 = ed[o + 1] + ed[o + 3] + 1; }
+        if (L) for (let i = 0; i < L.length; i++) { const o = L[i] * 5, top = ed[o + 4] === 2 ? ed[o + 1] + 1 : ed[o + 1] + ed[o + 3] + 1; if (ed[o + 4] !== 0 && top > y1) y1 = top; }
       }
       const cyA = Math.floor((y0 - 32) / 32), cyB = Math.floor((y1 + 1) / 32);
       for (let kz = 0; kz <= ez; kz++) for (let kx = 0; kx <= ex; kx++) {
@@ -484,7 +504,7 @@
       const L = EB.get(TE.colKey(Math.floor(ix / 32), Math.floor(iz / 32)));
       if (!L) return;
       for (let i = 0; i < L.length; i++) {
-        const o = L[i] * 5, r = ed[o + 3] + 1;
+        const o = L[i] * 5, r = T1.reachH(ed, L[i]) + 1;
         if (Math.abs(ed[o] - ix) > r || Math.abs(ed[o + 2] - iz) > r) continue;
         if (ops.length < (nops + 1) * 5) { const a = new Float64Array(ops.length * 2); a.set(ops); ops = a; }
         ops.set(ed.subarray(o, o + 5), nops * 5); nops++;
@@ -507,7 +527,7 @@
     function dAt(c, ix, y, iz){
       const i = y + 128;
       if (i >= 0 && i < 256) { const v = c.d[i]; if (v === v) return v; }
-      let v = T1.density(seed, ix, y, iz, c.ops, c.nops);
+      let v = dens(ix, y, iz, c.ops, c.nops);
       if (i >= 0 && i < 256) c.d[i] = v;
       return v;
     }
@@ -549,8 +569,22 @@
     // all crossings of a vertical line with the shown mesh (tests, tools): [[y, up], …] or null when a block is not shown
     TS.meshHits = (x, z, y0, y1) => { if (!lineHits(x, z, y0, y1)) return null; const r = []; for (let i = 0; i < nh; i++) r.push([HY[i], HU[i]]); return r.sort((a, b) => a[0] - b[0]); };
     TS.water = (x, z) => (phCol(Math.round(x), Math.round(z)).h < -0.3 ? 0 : -Infinity);
-    TS.height = (x, z) => T1.height(seed, x, z);
-    TS.density = (x, y, z) => T1.density(seed, x, y, z, ed, ne);   // the core's point density (every edit; exact magnitude)
+    TS.height = hgt;
+    TS.density = (x, y, z) => dens(x, y, z, ed, ne);   // the core's point density (every edit; exact magnitude)
+    // climate at a point (gen 2: logical climate by rules; gen 1: the v1 biome only) → biome id; out[8] as T1.climate
+    const CLO = new Float64Array(8);
+    TS.climate = (x, z, out = CLO) => { if (gen === 2) return T1.climate(seed, x, z, rules, param, out); out.fill(NaN); out[6] = T1.height(seed, x, z); return (out[7] = T1.biome(seed, x, z)); };
+    // the lowest terrain above y on the vertical line (x, z) — cave roofs, overhangs, fills: the down-facing crossing of the shown
+    // mesh; not shown yet → the density field in 0.25 m steps (≤ 8 m); Infinity — nothing within 8 m (or open sky)
+    TS.ceiling = (x, z, y) => {
+      if (TS.meshPhysics && lineHits(x, z, y - 0.5, y + 8)) {
+        let best = Infinity;
+        for (let i = 0; i < nh; i++) if (!HU[i] && HY[i] > y && HY[i] < best) best = HY[i];
+        return best;
+      }
+      for (let t = 0.25; t <= 8; t += 0.25) if (solidAt(x, y + t, z)) { let lo = y + t - 0.25, hi = y + t; for (let i = 0; i < 6; i++) { const m = (lo + hi) / 2; if (solidAt(x, m, z)) hi = m; else lo = m; } return hi; }
+      return Infinity;
+    };
     TS.solid = solidAt;                                              // the same sign, from the edits of one cell (fast)
     // ray march through the density field (m); first crossing into solid. Only signs are tested → signOps (one cell's edits)
     TS.ray = (ox, oy, oz, dx, dy, dz, maxT = 60) => {

@@ -23,8 +23,8 @@ const GOLDEN_EDITS = [10, 5, -20, 6, 0, 10, 14, -20, 4, 1, -300, -10, 400, 9, 0]
   const J = T1.js(T1.DEFAULT_CAP);
   check(W.kind === 'wasm' && J.kind === 'js', 'cores');
   const lines = fs.readFileSync(path.join(__dirname, 'terra-golden.txt'), 'utf8').split('\n');
-  let edits2 = null;
-  const cnt = { H: 0, I: 0, D: 0, E: 0, Q: 0 };
+  let edits2 = null, edits3 = null;
+  const cnt = { H: 0, I: 0, D: 0, E: 0, Q: 0, G: 0, R: 0, Q2: 0 };
   const fill = (core, list) => { const n = list.length / 5, e = core.edits(n); for (let i = 0; i < list.length; i++) e[i] = list[i]; return n; };
   for (const line of lines) {
     const l = line.trim();
@@ -32,6 +32,44 @@ const GOLDEN_EDITS = [10, 5, -20, 6, 0, 10, 14, -20, 4, 1, -300, -10, 400, 9, 0]
     const p = l.split(/\s+/);
     if (p[0] === 'V') { check(+p[1] === T1.ABI, 'ABI ' + p[1]); continue; }
     if (p[0] === 'EDITS') { edits2 = p.slice(1).map(Number); continue; }
+    if (p[0] === 'EDITS3') { edits3 = p.slice(1).map(Number); continue; }
+    // ABI 2 (T-116 generator v2, world rules, flatten pads)
+    if (p[0] === 'G') {
+      const seed = +p[1], rules = +p[2], param = +p[3], x = +p[4], z = +p[5], out = new Float64Array(8);
+      const bj = T1.climate(seed, x, z, rules, param, out);
+      check(bj === +p[13] && [0, 1, 2, 3, 4, 5, 6].every(k => bitsHex(out[k]) === p[6 + k]), `G js ${l}`);
+      for (const core of [J, W]) {
+        check(core.setGen(2, rules, param) === 0, 'setGen');
+        const b2 = core.climate(seed, x, z), v = core.climv();
+        check(b2 === +p[13] && [0, 1, 2, 3, 4, 5, 6].every(k => bitsHex(v[k]) === p[6 + k]), `G ${core.kind} ${l}`);
+        core.setGen(1, 0, 0);
+      }
+      cnt.G++; continue;
+    }
+    if (p[0] === 'R') {
+      const seed = +p[1], rules = +p[2], x = +p[3], y = +p[4], z = +p[5];
+      check(bitsHex(T1.densityR(seed, x, y, z, edits3, edits3.length / 5, rules)) === p[6], `R js ${l}`);
+      for (const core of [J, W]) {
+        check(core.setGen(rules ? 2 : 1, rules, 0) === 0, 'setGen');
+        const n = fill(core, edits3);
+        check(bitsHex(core.density(seed, x, y, z, n)) === p[6], `R ${core.kind} ${l}`);
+        core.setGen(1, 0, 0);
+      }
+      cnt.R++; continue;
+    }
+    if (p[0] === 'Q2') {
+      const [gen, rules, param, seed, cx, cy, cz, ed] = p.slice(1, 9).map(Number), list = ed === 1 ? GOLDEN_EDITS : ed === 2 ? edits2 : ed === 3 ? edits3 : [];
+      for (const core of [J, W]) {
+        check(core.setGen(gen, rules, param) === 0, 'setGen');
+        const n = fill(core, list.length ? list : [0, 0, 0, 0, 0]);
+        const q = core.build(seed, cx, cy, cz, list.length ? n : 0), o = core.out();
+        check(q === +p[9], `Q2 ${core.kind} quads ${q} != ${p[9]} (${l})`);
+        if (q > 0) check(T1.meshHash(o, q) === p[10], `Q2 ${core.kind} hash (${l})`);
+        check(bitsHex(o.info[0]) === p[11] && bitsHex(o.info[1]) === p[12], `Q2 ${core.kind} hmin/hmax (${l})`);
+        core.setGen(1, 0, 0);
+      }
+      cnt.Q2++; continue;
+    }
     const seed = +p[1];
     if (p[0] === 'H') {
       const x = +p[2], z = +p[3];
@@ -41,7 +79,7 @@ const GOLDEN_EDITS = [10, 5, -20, 6, 0, 10, 14, -20, 4, 1, -300, -10, 400, 9, 0]
     } else if (p[0] === 'I') {
       const x = +p[2], z = +p[3];
       check(bitsHex(T1.temperature01(seed, x, z)) === p[4] && bitsHex(T1.moisture01(seed, x, z)) === p[5] && bitsHex(T1.entrance(seed, x, z)) === p[6] && T1.biome(seed, x, z) === +p[7], `I js ${l}`);
-      check(bitsHex(W.climate(seed, x, z, 0)) === p[4] && bitsHex(W.climate(seed, x, z, 1)) === p[5] && bitsHex(W.climate(seed, x, z, 2)) === p[6] && W.climate(seed, x, z, 3) === +p[7], `I wasm ${l}`);
+      check(bitsHex(W.climate1(seed, x, z, 0)) === p[4] && bitsHex(W.climate1(seed, x, z, 1)) === p[5] && bitsHex(W.climate1(seed, x, z, 2)) === p[6] && W.climate1(seed, x, z, 3) === +p[7], `I wasm ${l}`);
       cnt.I++;
     } else if (p[0] === 'D' || p[0] === 'E') {
       const x = +p[2], y = +p[3], z = +p[4], ops = p[0] === 'E' ? GOLDEN_EDITS : null, n = ops ? 3 : 0;
@@ -66,8 +104,9 @@ const GOLDEN_EDITS = [10, 5, -20, 6, 0, 10, 14, -20, 4, 1, -300, -10, 400, 9, 0]
       cnt.Q++;
     }
   }
-  console.log(`golden: H ${cnt.H}, I ${cnt.I}, D ${cnt.D}, E ${cnt.E}, Q ${cnt.Q} — wasm and JS compared bit by bit`);
+  console.log(`golden: H ${cnt.H}, I ${cnt.I}, D ${cnt.D}, E ${cnt.E}, Q ${cnt.Q}, G ${cnt.G}, R ${cnt.R}, Q2 ${cnt.Q2} — wasm and JS compared bit by bit`);
   check(cnt.H >= 60 && cnt.Q >= 60, 'golden coverage');
+  check(cnt.G === 200 && cnt.R === 72 && cnt.Q2 >= 40, 'golden coverage ABI 2 (generator v2, rules, flatten)');
 
   // ── edit → re-mesh: a block's mesh changes ⇒ it is in TE.affected(); blocks outside stay bit-identical ──
   {

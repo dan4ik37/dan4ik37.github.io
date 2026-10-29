@@ -18,7 +18,7 @@
 //   T1.meshHash(out, q) (FNV-1a 64 hex), T1.B, T1.ABI, T1.CAVE_MIN_Y
 (function (root) {
   'use strict';
-  const B = 32, S = 34, C = 33, CAVE_MIN_Y = -28, ABI = 1, DEFAULT_CAP = 24000, NONE = 0xFFFFFFFF, COLS = 32, TMAX = 512;
+  const B = 32, S = 34, C = 33, CAVE_MIN_Y = -28, ABI = 2, DEFAULT_CAP = 24000, NONE = 0xFFFFFFFF, COLS = 32, TMAX = 512;
 
   // ─── scalar helpers (twins of lib.rs) ───
   const cl01 = t => (t < 0 ? 0 : t > 1 ? 1 : t);
@@ -101,8 +101,113 @@
     return m > 0.5 ? 3 : 2;
   }
   const biome = (s, x, z) => classify(temperature01(s, x, z), moisture01(s, x, z), height(s, x, z));
+
+  // ─── generator v2 (T-116): logical climate, E:\d37-core\spec\WORLD_RULES.md §1. Heights, caves and edits are the v1 field;
+  //     only the biome (the surface colour) changes. Smooth fields on a 16 m node grid, bilinear between nodes:
+  //     tb — sea-level temperature 0…1 = latitude (a triangle wave along a warped z: equator → pole 4096 m, the origin sits at
+  //          mid-latitude) + low noise (±0.05) + sea moderation; ts = tb − 0.006·hs (smoothed height), tp = tb − 0.006·h (the snow
+  //          line by altitude); m — moisture 0…1 = air moisture carried along the prevailing wind (6 upwind samples 64…2048 m:
+  //          recharged over the sea, drying over land, rain shadow behind mountains) + the latitude belt (wet tropics, dry
+  //          subtropics, wet mid-latitudes, dry poles) + rivers + low noise. Whittaker table (classify2): a hot biome never touches a
+  //          frozen one (T bands are separated by whole bands). Biomes 11 Steppe and 12 Jungle exist only in v2.
+  //     rules (WORLD_RULES §2 presets): 0 earth, 1 mono (param = biome), 2 patchwork (hard Voronoi cells 96 m), 3 absurd (hot poles,
+  //     warmer with height, floating islands 40…100 m), 4 inverted (the earth world mirrored around y = −0.5: ground above).
+  const CN = 16, CNI = 0.0625, LAT_F = 0.0001220703125, WARP_F = 0.000244140625, LAPSE = 0.004, TAU = 6.283185307179586, HPI = 1.5707963267948966;
+  const UPW = [64, 128, 256, 512, 1024, 2048], DRYK = [0.03, 0.03, 0.06, 0.12, 0.2, 0.3];
+  const ISL_Y0 = 40, ISL_Y1 = 100, FLAT_UP = 16, FLAT_DN = 16, R45 = 0.7071067811865476;
+  const ccos = x => sinp(x + HPI);
+  function latPhi(s, x, z){   // 0 equator … 1 pole
+    const w = (value2(s, x * WARP_F + 811, z * WARP_F - 377) - 0.5) * 800;
+    const u = (z + w) * LAT_F + 0.25;
+    const f = u - Math.floor(u + 0.5);
+    return (f < 0 ? -f : f) * 2;
+  }
+  // node (x, z) → o[k] = tb, o[k + 1] = m, o[k + 2] = hs, o[k + 3] = phi
+  function climNode(s, x, z, o, k){
+    const phi = latPhi(s, x, z);
+    const c0 = fbm2(s, x * 0.0025, z * 0.0025, 2);
+    const r0 = 1 - Math.abs(fbm2(s, x * 0.006 - 200, z * 0.006 + 300, 2) * 2 - 1);
+    let hs = (c0 - 0.45) * 90 + 7 + r0 * r0 * r0 * c0 * 40;
+    if (hs < 0) hs = 0;
+    const wx = -ccos(phi * TAU), wl = Math.sqrt(wx * wx + 0.09);
+    const ux = -wx / wl, uz = -0.3 / wl;
+    let q = 0.3, sea1 = 0;
+    for (let i = 5; i >= 0; i--) {
+      const d = UPW[i], px = x + ux * d, pz = z + uz * d;
+      const c = fbm2(s, px * 0.0025, pz * 0.0025, 2);
+      const r = 1 - Math.abs(fbm2(s, px * 0.006 - 200, pz * 0.006 + 300, 2) * 2 - 1);
+      const h = (c - 0.45) * 90 + 7 + r * r * r * c * 40;
+      const sea = sstep(0.47, 0.41, c);
+      q = q + (1 - q) * sea * 0.5;
+      q = q * (1 - (1 - sea) * DRYK[i]);
+      q = q * (1 - 0.5 * sstep(20, 50, h));
+      if (i === 0) sea1 = sea;
+    }
+    const seaH = sstep(0.47, 0.41, c0);
+    q = q + (1 - q) * seaH * 0.5;
+    const mLat = 0.5 + 0.22 * ccos(phi * 9.42477796076938);
+    const rv = Math.abs(fbm2(s, x * 0.0045 + 700, z * 0.0045 - 520, 3) * 2 - 1);
+    const riv = (1 - sstep(0, 0.1, rv)) * 0.12;
+    const nm = (fbm2(s, x * 0.001 + 999, z * 0.001 - 444, 2) - 0.5) * 0.12;
+    const m = cl01(q * 0.65 + mLat * 0.35 + riv + nm);
+    const nt = (fbm2(s, x * 0.001 + 400, z * 0.001 - 250, 2) - 0.5) * 0.1;
+    let tb = 1 - 1.27 * phi + 0.27 * phi * phi + nt;
+    const sn = seaH > sea1 ? seaH : sea1;
+    tb = tb + (0.5 - tb) * 0.2 * sn;
+    o[k] = tb; o[k + 1] = m; o[k + 2] = hs; o[k + 3] = phi;
+  }
+  // Whittaker table: 0 Water, 1 Beach, 2 Plains, 3 Forest, 4 Taiga, 5 Desert, 6 Savanna, 7 Swamp, 8 Tundra, 9 Rock, 10 Snow, 11 Steppe, 12 Jungle
+  function classify2(tb, m, hs, h){
+    if (h < 0) return 0;
+    const ts = hs > 8 ? tb - (hs - 8) * LAPSE : tb;
+    if (ts < 0.07) return 10;
+    if (h < 1.6) return ts < 0.22 ? 8 : 1;
+    if (ts < 0.22 && hs > 40) return 9;
+    if (ts < 0.22) return 8;
+    if (ts < 0.40) return m < 0.40 ? 11 : 4;
+    if (ts < 0.62) return m < 0.30 ? 11 : m < 0.52 ? 2 : (m > 0.74 && hs < 8) ? 7 : 3;
+    return m < 0.30 ? 5 : m < 0.52 ? 6 : (m > 0.74 && hs < 8) ? 7 : 12;
+  }
+  function patchBiome(s, x, z){   // rules 2: the nearest of jittered 96 m cells, any land biome, hard borders
+    const gx = fl(x / 96), gz = fl(z / 96);
+    let best = Infinity, id = 2;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const cx = (gx + dx) | 0, cz = (gz + dz) | 0, h = hash2(s ^ 0x2a5f, cx, cz);
+      const fx = (cx + (h & 1023) / 1024) * 96, fz = (cz + ((h >> 10) & 1023) / 1024) * 96;
+      const ddx = x - fx, ddz = z - fz, dd = ddx * ddx + ddz * ddz;
+      if (dd < best) { best = dd; id = 2 + ((h >> 20) & 4095) % 11; }
+    }
+    return id;
+  }
+  // biome from interpolated node values and the column height, by rules
+  function biomeOf(rules, param, s, x, z, tb, m, hs, h){
+    if (rules === 1) return h < 0 ? 0 : param;
+    if (rules === 2) return h < 0 ? 0 : patchBiome(s, x, z);
+    if (rules === 3) return classify2(hs > 8 ? 1 - tb + 2 * LAPSE * (hs - 8) : 1 - tb, m, hs, h);
+    return classify2(tb, m, hs, h);
+  }
+  const NB = new Float64Array(16), CL = new Float64Array(8);
+  // point query (v2): out[0] tb, [1] m, [2] hs, [3] phi, [4] ts, [5] tp, [6] h, [7] biome; returns the biome
+  function climate(s, x, z, rules, param, out){
+    out = out || CL;
+    const gx = x * CNI, gz = z * CNI, i0 = fl(gx), k0 = fl(gz), fx = gx - i0, fz = gz - k0;
+    climNode(s, i0 * CN, k0 * CN, NB, 0); climNode(s, (i0 + 1) * CN, k0 * CN, NB, 4);
+    climNode(s, i0 * CN, (k0 + 1) * CN, NB, 8); climNode(s, (i0 + 1) * CN, (k0 + 1) * CN, NB, 12);
+    for (let j = 0; j < 4; j++) out[j] = lerp(lerp(NB[j], NB[4 + j], fx), lerp(NB[8 + j], NB[12 + j], fx), fz);
+    const h = height(s, x, z);
+    out[4] = out[2] > 8 ? out[0] - (out[2] - 8) * LAPSE : out[0]; out[5] = h > 8 ? out[0] - (h - 8) * LAPSE : out[0]; out[6] = h;
+    const b = biomeOf(rules | 0, param | 0, s, x, z, out[0], out[1], out[2], h);
+    out[7] = b;
+    return b;
+  }
+  // floating islands (rules 3): solid > 0
+  function islands(s, x, y, z){
+    if (y < ISL_Y0 || y > ISL_Y1) return -1000;
+    const t = (y - 70) / 30, taper = 1 - t * t;
+    return (fbm3(s, x * 0.012 + 77, y * 0.03, z * 0.012 - 33, 2) - 0.62) * 40 * taper - (1 - taper) * 4;
+  }
   const GC = [null, [0.86, 0.80, 0.56], [0.40, 0.65, 0.27], [0.18, 0.45, 0.20], [0.20, 0.38, 0.30], [0.88, 0.76, 0.50], [0.70, 0.64, 0.30],
-    [0.25, 0.34, 0.22], [0.55, 0.58, 0.52], [0.45, 0.45, 0.46], [0.95, 0.95, 0.98]];
+    [0.25, 0.34, 0.22], [0.55, 0.58, 0.52], [0.45, 0.45, 0.46], [0.95, 0.95, 0.98], [0.66, 0.63, 0.38], [0.12, 0.40, 0.15]];
   const G3 = new Float64Array(3);
   function groundColor(b, h, slope, jitter){   // → G3
     let c0, c1, c2;
@@ -149,11 +254,25 @@
     return caveCombine(a, b, n3, fade);
   }
   // ops: flat array [x, y, z, r, mode]*n (mode 0 dig, else fill), applied in order
+  // mode 0 dig (sphere), 2 flatten (T-115, W2 towns: a pad at y of radius r — cut above with 45° walls up to +16 m, embankment
+  // below with 45° slopes down to −16 m), any other mode fill (sphere)
   function applyOps(d, x, y, z, ops, n){
     for (let e = 0; e < n; e++) {
-      const o = e * 5, dx = x - ops[o], dy = y - ops[o + 1], dz = z - ops[o + 2];
+      const o = e * 5, dx = x - ops[o], dy = y - ops[o + 1], dz = z - ops[o + 2], mode = ops[o + 4];
+      if (mode === 2) {
+        const hd = Math.sqrt(dx * dx + dz * dz) - ops[o + 3];
+        let cut = (hd - dy) * R45;
+        if (cut < -dy) cut = -dy;
+        if (cut < dy - FLAT_UP) cut = dy - FLAT_UP;
+        if (cut < d) d = cut;
+        let fill = (-dy - hd) * R45;
+        if (fill > -dy) fill = -dy;
+        if (fill > dy + FLAT_DN) fill = dy + FLAT_DN;
+        if (fill > d) d = fill;
+        continue;
+      }
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) - ops[o + 3];
-      if (ops[o + 4] === 0) { if (dist < d) d = dist; } else if (-dist > d) d = -dist;
+      if (mode === 0) { if (dist < d) d = dist; } else if (-dist > d) d = -dist;
     }
     return d;
   }
@@ -164,9 +283,31 @@
     if (c < d) d = c;
     return ops && n ? applyOps(d, x, y, z, ops, n) : d;
   }
+  // by world rules: 3 absurd — + floating islands; 4 inverted — the earth field at y' = −1 − y, edits mirrored the same way
+  let IOPS = new Float64Array(5 * 16);
+  function densityR(s, x, y, z, ops, n, rules){
+    n = ops ? n | 0 : 0;
+    if (rules === 4) {
+      if (IOPS.length < n * 5) IOPS = new Float64Array(Math.max(n * 5, IOPS.length * 2));
+      for (let e = 0; e < n * 5; e += 5) { IOPS[e] = ops[e]; IOPS[e + 1] = -1 - ops[e + 1]; IOPS[e + 2] = ops[e + 2]; IOPS[e + 3] = ops[e + 3]; IOPS[e + 4] = ops[e + 4]; }
+      return density(s, x, -1 - y, z, IOPS, n);
+    }
+    if (rules !== 3) return density(s, x, y, z, ops, n);
+    const h = height(s, x, z);
+    let d = h - y;
+    const c = caveField(s, x, y, z, h, entrance(s, x, z));
+    if (c < d) d = c;
+    const isl = islands(s, x, y, z);
+    if (isl > d) d = isl;
+    return n ? applyOps(d, x, y, z, ops, n) : d;
+  }
+  const heightR = (s, x, z, rules) => (rules === 4 ? -1 - height(s, x, z) : height(s, x, z));
+  // horizontal reach of an edit around its centre and the vertical range it can change (m)
+  const reachH = (ops, e) => ops[e * 5 + 3] + (ops[e * 5 + 4] === 2 ? FLAT_UP : 0);
+  const reachV = (ops, e) => (ops[e * 5 + 4] === 2 ? FLAT_UP : ops[e * 5 + 3]);
   function touches(ops, e, fox, foy, foz){
-    const o = e * 5, r = ops[o + 3] + 3, bf = B;
-    return !(ops[o] + r < fox - 3 || ops[o] - r > fox + bf + 3 || ops[o + 1] + r < foy - 3 || ops[o + 1] - r > foy + bf + 3 || ops[o + 2] + r < foz - 3 || ops[o + 2] - r > foz + bf + 3);
+    const o = e * 5, r = reachH(ops, e) + 3, rv = reachV(ops, e) + 3, bf = B;
+    return !(ops[o] + r < fox - 3 || ops[o] - r > fox + bf + 3 || ops[o + 1] + rv < foy - 3 || ops[o + 1] - rv > foy + bf + 3 || ops[o + 2] + r < foz - 3 || ops[o + 2] - r > foz + bf + 3);
   }
 
   // ─── lattice tables (per block) ───
@@ -203,9 +344,11 @@
     this.kind = 'js'; this.cap = cap;
     this.ed = new Float64Array(5 * 64);
     this.ops = new Float64Array(5 * 64); this.nops = 0;
-    this.cols = []; for (let i = 0; i < COLS; i++) this.cols.push({ seed: 0, cx: 0, cz: 0, used: 0, valid: false, hc: new Float64Array(S * S), ent: new Float64Array(S * S), bm: new Uint8Array(S * S), hmin: 0, hmax: 0 });
+    this.cols = []; for (let i = 0; i < COLS; i++) this.cols.push({ seed: 0, cx: 0, cz: 0, used: 0, valid: false, hc: new Float64Array(S * S), ent: new Float64Array(S * S), bm: new Uint8Array(S * S), cn: new Float64Array(100), cnOk: false, hmin: 0, hmax: 0 });
     this.tick = 0;
     this.hc = new Float64Array(S * S); this.ent = new Float64Array(S * S); this.bm = new Uint8Array(S * S);
+    this.cn = new Float64Array(100); this.cnOk = false;   // v2 climate nodes of the column: 5 × 5 × (tb, m, hs, phi)
+    this.gen = 1; this.rules = 0; this.param = 0;
     this.d = new Float64Array(S * S * S); this.vidx = new Uint32Array(C * C * C);
     this.cpos = new Float64Array(C * C * C * 3); this.cnrm = new Float64Array(C * C * C * 3);
     this.tabs = []; for (let i = 0; i < 6; i++) this.tabs.push(new Tab());
@@ -219,17 +362,34 @@
     return this.ed.subarray(0, n);
   };
   JsCore.prototype.out = function (){ return this._out; };
-  JsCore.prototype.height = (s, x, z) => height(s, x, z);
-  JsCore.prototype.density = function (s, x, y, z, n){ return density(s, x, y, z, this.ed, Math.min(n | 0, this.ed.length / 5)); };
+  // generator version and world rules of this builder (t1_gen): gen 1 | 2, rules 0…4 (> 0 needs gen 2), param — the biome of rules 1
+  JsCore.prototype.setGen = function (g, r, p){
+    g = g | 0; r = r | 0; p = p | 0;
+    if (g < 1 || g > 2 || r < 0 || r > 4 || p < 0 || p > 12 || (r > 0 && g < 2)) return -1;
+    if (g !== this.gen || r !== this.rules || p !== this.param) { for (let i = 0; i < COLS; i++) this.cols[i].valid = false; }
+    this.gen = g; this.rules = r; this.param = p;
+    return 0;
+  };
+  JsCore.prototype.height = function (s, x, z){ return heightR(s, x, z, this.rules); };
+  JsCore.prototype.density = function (s, x, y, z, n){ return densityR(s, x, y, z, this.ed, Math.min(n | 0, this.ed.length / 5), this.rules); };
+  JsCore.prototype.climate = function (s, x, z){ return climate(s, x, z, this.rules, this.param, this.climv()); };
+  JsCore.prototype.climv = function (){ return this.clim || (this.clim = new Float64Array(8)); };
+  JsCore.prototype.climate1 = (s, x, z, k) => (k === 0 ? temperature01(s, x, z) : k === 1 ? moisture01(s, x, z) : k === 2 ? entrance(s, x, z) : k === 3 ? biome(s, x, z) : NaN);
   JsCore.prototype.dispose = function (){};
-  JsCore.prototype.colInfo = function (s, cx, cz){ this.info.fill(0); return this.column(s | 0, cx | 0, cz | 0) ? 1 : 0; };
+  // column range as the world shows it: islands reach ISL_Y1 (rules 3); inverted (rules 4) — mirrored
+  JsCore.prototype.range = function (){
+    const info = this.info;
+    if (this.rules === 3 && info[1] < ISL_Y1) info[1] = ISL_Y1;
+    else if (this.rules === 4) { const a = info[0]; info[0] = -1 - info[1]; info[1] = -1 - a; }
+  };
+  JsCore.prototype.colInfo = function (s, cx, cz){ this.info.fill(0); const r = this.column(s | 0, cx | 0, cz | 0) ? 1 : 0; this.range(); return r; };
   JsCore.prototype.column = function (s, cx, cz){
     const info = this.info;
     this.tick++;
     for (let i = 0; i < COLS; i++) {
       const c = this.cols[i];
       if (c.valid && c.seed === s && c.cx === cx && c.cz === cz) {
-        c.used = this.tick; this.hc.set(c.hc); this.ent.set(c.ent); this.bm.set(c.bm);
+        c.used = this.tick; this.hc.set(c.hc); this.ent.set(c.ent); this.bm.set(c.bm); this.cn.set(c.cn); this.cnOk = c.cnOk;
         info[0] = c.hmin; info[1] = c.hmax; return true;
       }
     }
@@ -241,13 +401,13 @@
       if (h > hmax) hmax = h;
       if (h < hmin) hmin = h;
     }
-    this.bm.fill(255);
+    this.bm.fill(255); this.cnOk = false;
     info[0] = hmin; info[1] = hmax;
     let best = 0;
     for (let i = 0; i < COLS; i++) { const c = this.cols[i]; if (!c.valid) { best = i; break; } if (c.used < this.cols[best].used) best = i; }
     const c = this.cols[best];
     c.seed = s; c.cx = cx; c.cz = cz; c.used = this.tick; c.valid = true; c.hmin = hmin; c.hmax = hmax;
-    c.hc.set(this.hc); c.ent.set(this.ent); c.bm.set(this.bm);
+    c.hc.set(this.hc); c.ent.set(this.ent); c.bm.set(this.bm); c.cnOk = false;
     return false;
   };
   JsCore.prototype.fbm3t = function (n, s, x, y, z){
@@ -262,19 +422,42 @@
   JsCore.prototype.build = function (s, cx, cy, cz, nEd){
     s |= 0; cx |= 0; cy |= 0; cz |= 0;
     if (!(nEd >= 0)) return -1;
+    if (this.rules !== 4) { const q = this.buildE(s, cx, cy, cz, nEd, false); this.range(); return q; }
+    const q = this.buildE(s, cx, ~cy, cz, nEd, true);   // inverted: the earth block −1 − cy, mirrored
+    if (q > 0) this.flipOut(q);
+    this.range();
+    return q;
+  };
+  // mirror the output around the block's local y = 15.5 (world y' = −1 − y): y → 31 − y, normal y → −y, winding reversed (1 ↔ 3)
+  JsCore.prototype.flipOut = function (q){
+    const P = this.pos, N = this.nrm;
+    for (let k = 0; k < q; k++) {
+      for (let m = 0; m < 4; m++) { const o = (k * 4 + m) * 3 + 1; P[o] = 31 - P[o]; N[(k * 4 + m) * 4 + 1] = -N[(k * 4 + m) * 4 + 1]; }
+      const a = (k * 4 + 1) * 3, b = (k * 4 + 3) * 3;
+      for (let j = 0; j < 3; j++) { const t = P[a + j]; P[a + j] = P[b + j]; P[b + j] = t; }
+      const an = (k * 4 + 1) * 4, bn = (k * 4 + 3) * 4;
+      for (let j = 0; j < 4; j++) { const t = N[an + j]; N[an + j] = N[bn + j]; N[bn + j] = t; }
+    }
+  };
+  JsCore.prototype.buildE = function (s, cx, cy, cz, nEd, flip){
     const info = this.info, d = this.d, bf = B;
     const fox = cx * 32, foy = cy * 32, foz = cz * 32;
     info.fill(0);
-    // edits touching the block (order kept)
+    this.ccx = cx; this.ccz = cz;
+    // edits touching the block (order kept); inverted worlds mirror them into the earth block first
     const n = Math.min(nEd | 0, (this.ed.length / 5) | 0), ed = this.ed;
     if (this.ops.length < n * 5) this.ops = new Float64Array(Math.max(n * 5, this.ops.length * 2));
     let no = 0;
-    for (let e = 0; e < n; e++) if (touches(ed, e, fox, foy, foz)) { this.ops.set(ed.subarray(e * 5, e * 5 + 5), no * 5); no++; }
+    for (let e = 0; e < n; e++) {
+      this.ops.set(ed.subarray(e * 5, e * 5 + 5), no * 5);
+      if (flip) this.ops[no * 5 + 1] = -1 - this.ops[no * 5 + 1];
+      if (touches(this.ops, no, fox, foy, foz)) no++;
+    }
     this.nops = no; info[5] = no;
     const hit = this.column(s, cx, cz);
     info[7] = hit ? 1 : 0;
-    const hmax = info[1];
-    if (no === 0 && (foy > hmax + 2 || foy + bf < CAVE_MIN_Y - 2)) return 0;
+    const hmax = info[1], isl = this.rules === 3, hmaxB = isl && hmax < ISL_Y1 ? ISL_Y1 : hmax;
+    if (no === 0 && (foy > hmaxB + 2 || foy + bf < CAVE_MIN_Y - 2)) return 0;
     const caves = !(foy + bf < CAVE_MIN_Y || foy - 1 > hmax + 4);
     if (caves) {
       for (let ni = 0; ni < 3; ni++) {
@@ -302,6 +485,7 @@
           const c = caveCombine(a, b, n3, fade);
           if (c < v) v = c;
         } else if (1000 < v) v = 1000;
+        if (isl) { const w = islands(s, wx, y, wz); if (w > v) v = w; }
         if (no) v = applyOps(v, wx, y, wz, ops, no);
         d[(k * S + j) * S + i] = v;
         if (v > 0) anyPos = true; else anyNeg = true;
@@ -360,7 +544,7 @@
         q++;
       }
     }
-    if (q > 0) for (let i = 0; i < COLS; i++) { const c = this.cols[i]; if (c.valid && c.seed === s && c.cx === cx && c.cz === cz) { c.bm.set(this.bm); break; } }
+    if (q > 0) for (let i = 0; i < COLS; i++) { const c = this.cols[i]; if (c.valid && c.seed === s && c.cx === cx && c.cz === cz) { c.bm.set(this.bm); c.cn.set(this.cn); c.cnOk = this.cnOk; break; } }
     info[2] = q; info[3] = trunc ? 1 : 0;
     return q;
   };
@@ -394,6 +578,23 @@
     for (let m = 0; m < 4; m++) { const o = (q * 4 + m) * 4; col[o] = r; col[o + 1] = g; col[o + 2] = bb; col[o + 3] = 255; }
   };
   const QC = new Uint8Array(3);
+  // v2 biome of column sample (ci, ck): the column's 5 × 5 climate nodes (computed once per column) interpolated — the same values as
+  // the point query climate() at that sample
+  JsCore.prototype.biome2 = function (s, ci, ck, cwx, cwz, h){
+    const cn = this.cn;
+    if (!this.cnOk) {
+      const bx = this.ccx * 2 - 1, bz = this.ccz * 2 - 1;
+      for (let k = 0; k < 5; k++) for (let i = 0; i < 5; i++) climNode(s, (bx + i) * CN, (bz + k) * CN, cn, (k * 5 + i) * 4);
+      this.cnOk = true;
+    }
+    const a = ci - 1, la = a >= 0 ? a >> 4 : -1, fx = (a - la * 16) * CNI;
+    const b = ck - 1, lb = b >= 0 ? b >> 4 : -1, fz = (b - lb * 16) * CNI;
+    const o00 = ((lb + 1) * 5 + la + 1) * 4, o10 = o00 + 4, o01 = o00 + 20, o11 = o00 + 24;
+    const tb = lerp(lerp(cn[o00], cn[o10], fx), lerp(cn[o01], cn[o11], fx), fz);
+    const m = lerp(lerp(cn[o00 + 1], cn[o10 + 1], fx), lerp(cn[o01 + 1], cn[o11 + 1], fx), fz);
+    const hs = lerp(lerp(cn[o00 + 2], cn[o10 + 2], fx), lerp(cn[o01 + 2], cn[o11 + 2], fx), fz);
+    return biomeOf(this.rules, this.param, s, cwx, cwz, tb, m, hs, h);
+  };
   JsCore.prototype.quadColor = function (s, px, py, pz, n1, fox, foy, foz){
     const ci = clampi((rnd(px) | 0) + 1, 0, S - 1), ck = clampi((rnd(pz) | 0) + 1, 0, S - 1);
     const h = this.hc[ck * S + ci];
@@ -418,7 +619,7 @@
     const surf = 1 - sstep(1.2, 2.8, depth);
     if (surf > 0) {
       const bi = ck * S + ci;
-      if (this.bm[bi] === 255) { const cwx = fox + ci - 1, cwz = foz + ck - 1; this.bm[bi] = classify(temperature01(s, cwx, cwz), moisture01(s, cwx, cwz), h); }
+      if (this.bm[bi] === 255) { const cwx = fox + ci - 1, cwz = foz + ck - 1; this.bm[bi] = this.gen >= 2 ? this.biome2(s, ci, ck, cwx, cwz, h) : classify(temperature01(s, cwx, cwz), moisture01(s, cwx, cwz), h); }
       let slope;
       if (n1 < 0.1) slope = 5; else { const t = 1 - n1 * n1; slope = Math.sqrt(t > 0 ? t : 0) / n1; }
       const g = groundColor(this.bm[bi], h, slope, jit01);
@@ -443,7 +644,7 @@
       const o = core._out;
       o.pos = new Float32Array(buf, x.t1_pos(b), cap * 12); o.nrm = new Int8Array(buf, x.t1_nrm(b), cap * 16);
       o.col = new Uint8Array(buf, x.t1_col(b), cap * 16); o.info = new Float64Array(buf, x.t1_info(b), 8);
-      core._ev = null;
+      core._ev = null; core._cv = null;
     };
     core.edits = n => {
       n = Math.max(1, n | 0);
@@ -456,9 +657,14 @@
     core.build = (s, cx, cy, cz, n) => { const q = x.t1_build(b, s | 0, cx | 0, cy | 0, cz | 0, n | 0); views(); return q; };
     core.out = () => { views(); return core._out; };
     core.colInfo = (s, cx, cz) => { const r = x.t1_column(b, s | 0, cx | 0, cz | 0); views(); return r; };
-    core.height = (s, xx, z) => x.t1_height(s | 0, xx, z);
-    // k: 0 temperature01, 1 moisture01, 2 cave entrance, 3 biome (wasm built before 2026-10-29 has no t1_climate → NaN)
-    core.climate = x.t1_climate ? (s, xx, z, k) => x.t1_climate(s | 0, xx, z, k | 0) : () => NaN;
+    core.height = (s, xx, z) => x.t1_bheight(b, s | 0, xx, z);   // by the builder's world rules (rules 4: the mirrored ceiling)
+    // ABI 2: generator version / world rules of this builder; v2 point climate → [tb, m, hs, phi, ts, tp, h, biome] (a view of wasm memory)
+    core.gen = core.rules = 0;
+    core.setGen = (g, r, p) => { const rc = x.t1_gen(b, g | 0, r | 0, p | 0); if (!rc) { core.gen = g | 0; core.rules = r | 0; } return rc; };
+    core.climate = (s, xx, z) => { const bi = x.t1_clim(b, s | 0, xx, z); views(); return bi; };
+    core.climv = () => { views(); return core._cv || (core._cv = new Float64Array(x.memory.buffer, x.t1_climv(b), 8)); };
+    // v1 climate fields — k: 0 temperature01, 1 moisture01, 2 cave entrance, 3 biome
+    core.climate1 = (s, xx, z, k) => x.t1_climate(s | 0, xx, z, k | 0);
     core.density = (s, xx, y, z, n) => x.t1_density(b, s | 0, xx, y, z, n | 0);
     core.dispose = () => { if (core.b) { x.t1_free(core.b); core.b = 0; } };
     views();
@@ -488,7 +694,9 @@
   const PHYS_Q = 1927, BLOCK_BYTES = 104;
   function physPack(pos, q, ab){ const d = new Uint16Array(ab, q * 80, q * 12); for (let i = 0; i < q * 12; i++) d[i] = Math.round((pos[i] + 1) * PHYS_Q); }
   const T1 = { B, S, C, ABI, CAVE_MIN_Y, DEFAULT_CAP, js: cap => new JsCore(cap), wasm, height, density, biome, entrance, temperature01, moisture01,
-    touches, meshHash, sinp, hash2, hash3, PHYS_Q, BLOCK_BYTES, physPack };
+    touches, meshHash, sinp, hash2, hash3, PHYS_Q, BLOCK_BYTES, physPack,
+    densityR, heightR, reachH, reachV, FLAT_UP, ISL_Y1, climate, classify2, climNode, latPhi, patchBiome, islands, GEN_MAX: 2, RULES: ['earth', 'mono', 'patchwork', 'absurd', 'inverted'],
+    BIOMES: ['water', 'beach', 'plains', 'forest', 'taiga', 'desert', 'savanna', 'swamp', 'tundra', 'rock', 'snow', 'steppe', 'jungle'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = T1;
   const E = root.D37E = root.D37E || {};
   E.terraCore = T1;

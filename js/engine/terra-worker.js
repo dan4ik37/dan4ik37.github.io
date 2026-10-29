@@ -2,7 +2,7 @@
 //  D37 TERRAIN — worker: builds 32³ blocks with the T1 core (js/engine/terra.wasm, JS fallback terra-core.js)
 // ═══════════════════════════════════════
 // new Worker('js/engine/terra-worker.js?v=…') — loads terra-core.js with the same ?v=.
-// Messages (in): { t: 'init', wasm: url | null, cap } → { t: 'ready', kind: 'wasm' | 'js', err }
+// Messages (in): { t: 'init', wasm: url | null, cap, gen, rules, param } → { t: 'ready', kind: 'wasm' | 'js', err }   (gen / rules: T1 ABI 2)
 //   { t: 'edit', e: [x, y, z, r, mode] } — append (order = the main thread's order)   { t: 'edits', list: Float64Array, n } — replace all
 //   { t: 'col', id, seed, cx, cz } → { t: 'col', id, cx, cz, hmin, hmax, ms }
 //   { t: 'build', id, seed, cx, cy, cz, ne } (ne — how many edits the main thread had) → { t: 'built', id, q, buf, hmin, hmax, trunc, ms, kind, ne }
@@ -16,7 +16,15 @@
   const q = (self.location && self.location.search) || '';
   importScripts('terra-core.js' + q);
   const T1 = self.D37E.terraCore;
-  let core = null, kind = 'none', ready = false, cap = 24000, fallbacks = 0;
+  let core = null, kind = 'none', ready = false, cap = 24000, fallbacks = 0, gen = 1, rules = 0, param = 0;
+  const TT = new Float64Array(5);
+  // does edit e touch world block (cx, cy, cz)? inverted worlds test the mirrored edit against the mirrored block (as the core)
+  function touchesW(e, cx, cy, cz){
+    if (rules !== 4) return T1.touches(ed, e, cx * 32, cy * 32, cz * 32);
+    for (let k = 0; k < 5; k++) TT[k] = ed[e * 5 + k];
+    TT[1] = -1 - TT[1];
+    return T1.touches(TT, 0, cx * 32, ~cy * 32, cz * 32);
+  }
   const waiting = [];
   let ed = new Float64Array(5 * 256), ne = 0;
   const pool = new Map();
@@ -34,6 +42,7 @@
   }
   async function init(d){
     cap = d.cap || 24000;
+    gen = d.gen === 2 ? 2 : 1; rules = gen === 2 ? d.rules | 0 : 0; param = d.param | 0;
     let err = '';
     if (d.wasm) {
       // a stalled download must not leave the worker "not ready" forever: after wasmMs (6 s) → the JS core
@@ -52,6 +61,7 @@
       finally { clearTimeout(timer); }
     }
     if (!core) { core = T1.js(cap); kind = 'js'; }
+    if (core.setGen(gen, rules, param) !== 0) { err = (err ? err + '; ' : '') + 'gen ' + gen + '/' + rules; core.setGen(1, 0, 0); }
     ready = true;
     self.postMessage({ t: 'ready', kind, err });
     while (waiting.length) handle(waiting.shift());
@@ -60,15 +70,16 @@
     fallbacks++;
     try { core && core.dispose(); } catch (x) {}
     core = T1.js(cap); kind = 'js';
+    core.setGen(gen, rules, param);
     self.postMessage({ t: 'fallback', kind, err: String(e && e.message || e), fallbacks });
   }
   function build(d){
     const t0 = now(), fox = d.cx * 32, foy = d.cy * 32, foz = d.cz * 32, lim = Math.min(d.ne | 0, ne);
     let n = 0;
-    for (let e = 0; e < lim; e++) if (T1.touches(ed, e, fox, foy, foz)) n++;
+    for (let e = 0; e < lim; e++) if (touchesW(e, d.cx, d.cy, d.cz)) n++;
     const buf = core.edits(n);
     let k = 0;
-    for (let e = 0; e < lim && k < n; e++) if (T1.touches(ed, e, fox, foy, foz)) { buf.set(ed.subarray(e * 5, e * 5 + 5), k * 5); k++; }
+    for (let e = 0; e < lim && k < n; e++) if (touchesW(e, d.cx, d.cy, d.cz)) { buf.set(ed.subarray(e * 5, e * 5 + 5), k * 5); k++; }
     const qn = core.build(d.seed, d.cx, d.cy, d.cz, n);
     if (qn < 0) throw new Error('build ' + qn);
     const o = core.out();
