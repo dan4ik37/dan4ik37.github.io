@@ -181,7 +181,11 @@
   // движка погоды; у «всегда зимы» — всегда, у «зимы нет» — никогда), чанк cx, cz (у соседних чанков выбор клеток одинаковый):
   // такие клетки листвы — воздух для света (под голым деревом светлее) и для сетки (ветви видны, грани соседей рисуются). Блоки
   // мира не меняются — только картинка и свет чанка; reg — свой буфер задания (его можно портить)
-  V.meshChunk = (reg, light, T, tint, zone) => {
+  // cuts (T-138 F1, необязательно): Int32Array [rx, y, rz, значение клетки, срез, …] в координатах области (центр — 16…31) — такие
+  // клетки уже убраны из reg (V.applyCuts до света: свет и грани соседей видят их пустыми), рисуются коробкой в конце; нет — как было
+  V.applyCuts = (reg, cuts) => { if (!cuts) return; for (let k = 0; k + 4 < cuts.length; k += 5) { const rx = cuts[k], y = cuts[k + 1], rz = cuts[k + 2]; if (rx >= 0 && rx < RW && rz >= 0 && rz < RW && y >= 0 && y < H) reg[(rx * RW + rz) * H + y] = 0; } };
+  const CBX = [0, 0, 0, 1, 1, 1];
+  V.meshChunk = (reg, light, T, tint, zone, cuts) => {
     const sky = light.sky, lr = light.r, lg = light.g, lb = light.b, opaque = T.opaque, shape = T.shape, layerT = T.layer, cull = T.cullSelf, tintT = T.tint, liquid = T.liquid;
     const glowL = T.glowL || null, emit = T.emit, sT = T.stream || null;
     const gl = l => glowL && l >= 0 && l < glowL.length ? glowL[l] : 0;
@@ -333,6 +337,27 @@
             liquidFace(s, d, x, y, z, HC, lay, cellLt(ri, ny < H ? ri + D.n : -1), c, lq === 1 ? 2 : 0, gl(lay), wq, wsb);
           }
         }
+      }
+    }
+    // ── надрубленные клетки (T-138 F1): кубик без снятого со сторон (восьмые клетки) — коробка; срез бревна — торцом (кольца) ──
+    if (cuts) for (let k = 0; k + 4 < cuts.length; k += 5) {
+      const rx = cuts[k], y = cuts[k + 1], rz = cuts[k + 2], cv = cuts[k + 3], c = cuts[k + 4];
+      if (rx < 16 || rx >= 32 || rz < 16 || rz >= 32 || y < 0 || y >= H) continue;
+      const t = cv & TYPE, st = cv >>> 12; if (shape[t] !== 1) continue;
+      const x = rx - 16, z = rz - 16, ri = (rx * RW + rz) * H + y;
+      CBX[0] = (c >>> 4 & 15) / 8; CBX[3] = 1 - (c & 15) / 8; CBX[1] = (c >>> 12 & 15) / 8; CBX[4] = 1 - (c >>> 8 & 15) / 8; CBX[2] = (c >>> 20 & 15) / 8; CBX[5] = 1 - (c >>> 16 & 15) / 8;
+      if (CBX[0] >= CBX[3] || CBX[1] >= CBX[4] || CBX[2] >= CBX[5]) continue;
+      const lay0 = sT ? sT[t] : layerT[t] === 2 ? 1 : 0, s = streams[lay0], tk = tintT[t];
+      ZA = zone ? (zone[x * 16 + z] & 3) * 64 : 0;
+      for (let d = 0; d < 6; d++) {
+        const D = DIRS[d], ny = y + (d === 2 ? 1 : d === 3 ? -1 : 0), ax = d >> 1, hi = (d & 1) === 0;
+        const onEdge = hi ? CBX[ax + 3] >= 1 : CBX[ax] <= 0;
+        let li = -1;
+        if (onEdge) { if (ny < 0) continue; if (ny < H) { const nt = reg[ri + D.n] & TYPE; if (opaque[nt]) continue; li = ri + D.n; } }
+        const lay = !onEdge && T.axis[t] ? T.tex[t * 7] : texFor(T, t, st, d);   // срез бревна поперёк — торец с кольцами
+        if (lay < 0) continue;
+        const col = tk && !(tk === 1 && d !== 2) ? tintOf(tint, x, z, tk, TC) : WHITE;
+        boxFace(s, d, x, y, z, CBX, lay, cellLt(ri, li), col, 0, gl(lay));
       }
     }
     // выход: копии нужной длины (буферы потока остаются)
