@@ -22,7 +22,7 @@ const only = v => (v === undefined || v === '' || v === 'all' ? IDS : v === 'non
 const LEAK = only(process.env.E2E_LEAK), DUEL = only(process.env.E2E_DUEL), HUD = only(process.env.E2E_HUD), CORE = process.env.E2E_CORE !== 'none';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
-const ok = (c, name, extra) => { if (c) pass++; else { fail++; } console.log(c ? 'ok  ' : 'FAIL', name, extra === undefined ? '' : JSON.stringify(extra).slice(0, 700)); };
+const ok = (c, name, extra) => { if (c) pass++; else { fail++; } console.log(c ? 'ok  ' : 'FAIL', name, extra === undefined ? '' : JSON.stringify(extra).slice(0, +process.env.E2E_EXTRA || 700)); };
 const NOISE = /Failed to fetch|NetworkError|_vercel|ERR_|net::|ResizeObserver|adsbygoogle|googlesyndication|pagead|favicon/;
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -100,6 +100,8 @@ const PHONE = { width: 412, height: 915, deviceScaleFactor: 2.625, mobile: true 
 const KEYS = { Space: [' ', 32], Enter: ['Enter', 13], ArrowLeft: ['ArrowLeft', 37], ArrowUp: ['ArrowUp', 38], ArrowRight: ['ArrowRight', 39], ArrowDown: ['ArrowDown', 40] };
 const keyEv = (B, type, code) => { const [key, kc] = KEYS[code]; return B.send('Input.dispatchKeyEvent', { type, code, key, windowsVirtualKeyCode: kc, nativeVirtualKeyCode: kc, text: type === 'keyDown' && key.length === 1 ? key : type === 'keyDown' && code === 'Enter' ? '\r' : undefined }); };
 const press = async (B, code) => { await keyEv(B, 'keyDown', code); await sleep(40); await keyEv(B, 'keyUp', code); };
+// DevTools: touchPoints — пальцы, что ДЕРЖАТ после события (пропал из списка — отпущен); touchEnd / touchCancel — без точек
+// (с точками Chrome мог «залипнуть», и следующие касания на странице не приходили вовсе)
 const touch = (B, type, pts) => B.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(p => ({ x: p.x, y: p.y, id: p.id, radiusX: 4, radiusY: 4, force: 1 })) });
 async function openGame(B, BASE, id){
   await B.go(`${BASE}/#/games/${id}`);
@@ -123,7 +125,7 @@ async function coreE2E(A, BASE){
       const L = await c(10 + i * 2), Rr = await c(11 + i * 2);
       await touch(A, 'touchStart', [{ ...L, id: 1 }]); await sleep(40);
       await touch(A, 'touchStart', [{ ...L, id: 1 }, { ...Rr, id: 2 }]); await sleep(40);
-      await touch(A, 'touchEnd', [{ ...Rr, id: 2 }]); await sleep(40);
+      await touch(A, 'touchMove', [{ ...L, id: 1 }]); await sleep(40);   // 2-й палец отпущен, 1-й ещё держит (touchEnd — без точек)
       await touch(A, 'touchEnd', []); await sleep(60);
     }
     await sleep(200);
@@ -132,6 +134,67 @@ async function coreE2E(A, BASE){
     const kb = (await pops()) - single - two;
     ok(single === 6 && two === 12 && kb === 1, 'core: «Поп-ит» — 6 одиночных тапов = 6, два пальца внахлёст 12 из 12, Enter с клавиатуры — 1', { single, two, kb });
   } else ok(false, 'core: «Поп-ит» открылся');
+  // D1: остальные DOM-игры (pick 'tap' по умолчанию) — два пальца внахлёст тоже считаются оба (браузер не шлёт click),
+  // одиночный тап — ровно один, свайп по полю листает страницу и нажатием не считается, Enter с клавиатуры — нажатие
+  const thumbs = async (a, b) => {
+    await touch(A, 'touchStart', [{ ...a, id: 1 }]); await sleep(40);
+    await touch(A, 'touchStart', [{ ...a, id: 1 }, { ...b, id: 2 }]); await sleep(40);
+    await touch(A, 'touchMove', [{ ...a, id: 1 }]); await sleep(40);   // 2-й палец отпущен, 1-й ещё держит
+    await touch(A, 'touchEnd', []); await sleep(80);
+  };
+  const center = (sel, i) => A.ev(`(() => { const r = document.querySelectorAll(${JSON.stringify(sel)})[${i}].getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  if (await openGame(A, BASE, 'parking')) {
+    // «▶ Начать» не нажимается в первые 350 мс после показа (поздний тап из игры) — подождать
+    await sleep(400); await A.ev(`document.querySelector('.ak-go').click(), 1`); await sleep(400);
+    const act = () => A.ev(`(${CUR('parking')}.gone + ${CUR('parking')}.bumps)`), a0 = await act();
+    await thumbs(await center('.ak-dom [data-k]', 0), await center('.ak-dom [data-k]', 1)); await sleep(300);
+    ok((await act()) - a0 === 2 && await A.ev(RUN('parking')), 'core: «Парковка» — два пальца внахлёст по двум машинам — два действия', { actions: (await act()) - a0 });
+  } else ok(false, 'core: «Парковка» открылась');
+  // «Свет в окнах» — события указателя из страницы (CDP-касания в headless Chrome после двух мультитач-жестов во вкладке
+  // перестают доходить до страницы вовсе — это эмуляция, не игра; настоящие касания по «Свету» — scripts в отчёте T-140):
+  // тап (down + up + click detail 1) = 1, два пальца внахлёст (click нет) = 2, свайп (pointercancel) = 0, увёл палец с окна = 0
+  if (await openGame(A, BASE, 'lights')) {
+    await sleep(400); await A.ev(`document.querySelector('.ak-go').click(), 1`); await sleep(400);
+    const mv = () => A.ev(`${CUR('lights')}.moves`), m0 = await mv();
+    const P = (type, i, id, dx = 0) => A.ev(`(() => { const b = document.querySelectorAll('.lt-win')[${i}], r = b.getBoundingClientRect();
+      const o = { clientX: r.left + r.width / 2 + ${dx}, clientY: r.top + r.height / 2, bubbles: true, cancelable: true, pointerId: ${id}, pointerType: 'touch', isPrimary: ${id} === 21, button: ${type === 'pointermove' ? -1 : 0} };
+      b.dispatchEvent('${type}' === 'click' ? new MouseEvent('click', { ...o, detail: 1 }) : new PointerEvent('${type}', o)); return 1; })()`);
+    await P('pointerdown', 0, 21); await P('pointerup', 0, 21); await P('click', 0, 21); await sleep(150);
+    const m1 = await mv();
+    await P('pointerdown', 2, 21); await P('pointerdown', 6, 22); await P('pointerup', 6, 22); await P('pointerup', 2, 21); await sleep(150);
+    const m2 = await mv();
+    await P('pointerdown', 4, 21); await P('pointercancel', 4, 21); await sleep(100);
+    await P('pointerdown', 4, 21); await P('pointerup', 4, 21, 300); await sleep(150);
+    const m3 = await mv();
+    await A.ev(`document.querySelectorAll('.lt-win')[8].focus(), 1`); await press(A, 'Enter'); await sleep(250);
+    const m4 = await mv();
+    ok(m1 - m0 === 1 && m2 - m1 === 2 && m3 === m2 && m4 - m3 === 1, 'core: «Свет в окнах» — тап = 1 ход, два пальца внахлёст = 2, свайп / увёл палец — не ход, Enter = 1', { single: m1 - m0, two: m2 - m1, swipe: m3 - m2, kb: m4 - m3 });
+  } else ok(false, 'core: «Свет в окнах» открылся');
+  // «Повтори мелодию» (pick 'down'): нота — при касании; два пальца внахлёст — обе ноты по порядку касаний (палец, что
+  // отпустили раньше, не «обгоняет»), сердечки целы
+  if (await openGame(A, BASE, 'repeat')) {
+    await sleep(400); await A.ev(`document.querySelector('.ak-go').click(), 1`);
+    const S = CUR('repeat');
+    const P = (type, i, id) => A.ev(`(() => { const b = document.querySelectorAll('.rp-k')[${i}], r = b.getBoundingClientRect();
+      b.dispatchEvent(new PointerEvent('${type}', { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true, pointerId: ${id}, pointerType: 'touch', isPrimary: ${id} === 31, button: 0 })); return 1; })()`);
+    let res = null;
+    for (let round = 1; round <= 6 && !res; round++) {
+      if (!await A.waitFor(`${S}.phase === 2 && ${S}.round === ${round}`, 20000)) break;
+      const seq = await A.ev(`Array.from(${S}.seq.subarray(0, ${round}))`);
+      let j = -1; for (let i = 0; i + 1 < seq.length; i++) if (seq[i] !== seq[i + 1]) { j = i; break; }
+      for (let i = 0; i < seq.length; i++) {
+        if (i === j) {
+          const h0 = await A.ev(`${S}.hearts`);
+          await P('pointerdown', seq[i], 31); await sleep(30); await P('pointerdown', seq[i + 1], 32); await sleep(30); await P('pointerup', seq[i + 1], 32); await P('pointerup', seq[i], 31);
+          await sleep(200);
+          res = { round, j, notes: [seq[i], seq[i + 1]], hearts: [h0, await A.ev(`${S}.hearts`)], pos: await A.ev(`${S}.pos`), now: await A.ev(`${S}.round`) };
+          break;
+        }
+        await P('pointerdown', seq[i], 31); await P('pointerup', seq[i], 31); await sleep(120);
+      }
+    }
+    ok(res && res.hearts[0] === res.hearts[1] && (res.now > res.round || res.pos === res.j + 2), 'core: «Повтори мелодию» — две ноты двумя пальцами внахлёст засчитаны по порядку касаний, сердечки целы', res);
+  } else ok(false, 'core: «Повтори мелодию» открылась');
   // P4: окно сайта поверх игры — соло на паузе («⏸ Пауза»), закрыл — «▶ Продолжить»: 📖 правила (GameKit) в «Дроне»,
   // ☰ меню игры и ⚙️ настройки в «Чёрной дыре»
   if (await openGame(A, BASE, 'drone')) {
@@ -182,6 +245,23 @@ async function coreE2E(A, BASE){
     await keyEv(A, 'keyUp', 'ArrowLeft');
     ok(k1 !== 0 && b.keys === 0 && Math.abs(b.px - p1) < 1e-6 && b.run, 'core: потеря фокуса с зажатой ← — клавиша отпущена, дощечка стоит, игра идёт', { k1, p1, b });
   } else ok(false, 'core: «Кирпичики» открылись');
+  // D5: ⚔️ (партия идёт под окнами сайта) — зажал ←, открыл ☰, отпустил ← под меню, закрыл: клавиша не «залипла»
+  // (под окном keyup игре не идёт — ядро отпускает клавиши, как только окно открылось). Соревнование здесь — та же партия
+  // с флагом duel (без второго браузера): ветка tick() та же
+  if (await openGame(A, BASE, 'bricks')) {
+    await A.ev(`(document.activeElement?.blur?.(), 1)`); await press(A, 'Space'); await sleep(300);
+    await A.ev(`(() => { const I = GAME_IMPL.bricks._test.inst(); I.duel = true; I.run.real = true; return 1; })()`);
+    await keyEv(A, 'keyDown', 'ArrowLeft'); await sleep(200);
+    const k1 = await A.ev(`GAME_IMPL.bricks._test.inst().run.inp.keys`), st0 = await A.ev(`GAME_IMPL.bricks._test.inst().run.steps`);
+    await A.ev(`(window.__m = D37Shell.menu(), 1)`); await sleep(400);
+    const u = await A.ev(`({ keys: GAME_IMPL.bricks._test.inst().run.inp.keys, run: ${RUN('bricks')}, steps: GAME_IMPL.bricks._test.inst().run.steps, menu: !!document.querySelector('.gs-menu') })`);
+    await keyEv(A, 'keyUp', 'ArrowLeft'); await sleep(150);
+    await A.ev(`(window.__m?.close(), 1)`); await sleep(300);
+    const p1 = await A.ev(`${CUR('bricks')}.px`); await sleep(300);
+    const b = await A.ev(`({ keys: GAME_IMPL.bricks._test.inst().run.inp.keys, px: ${CUR('bricks')}.px, run: ${RUN('bricks')} })`);
+    ok(k1 !== 0 && u.menu && u.run && u.steps > st0 + 10 && u.keys === 0 && b.keys === 0 && Math.abs(b.px - p1) < 1e-6,
+      'core: ⚔️ — ← отпущена под ☰ меню: партия шла, клавиша не залипла после меню, дощечка стоит', { k1, st0, u, p1, b });
+  } else ok(false, 'core: «Кирпичики» (⚔️) открылись');
   await A.send('Emulation.setDeviceMetricsOverride', PHONE);
   await A.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
 }

@@ -24,8 +24,9 @@
 //   step(s, dt, inp) — one fixed step (dt = 1/60 s); inp = action state { down, x, y, keys (bit mask) }
 //   draw(G, s, alpha) — canvas: G = { ctx, W, H, theme, now }; dom: G = { host, theme } and draw only when s.v changed
 //   build(G, s) — dom: build the field for a new state;   keys: { KeyD: 0, ArrowLeft: 1, … } → ev.k / inp.keys bit
-//   drag: true — also send MOVE / UP (default: DOWN only);   pick: 'click' | 'down' — dom event for [data-k] elements
-//     ('down' — pointerdown: several fingers at once, the tap counts at touch; keyboard Enter / Space still work via click)
+//   drag: true — also send MOVE / UP (default: DOWN only);   pick: 'tap' | 'down' — when a press on a [data-k] element
+//     counts: 'tap' (default) — at pointerup of that finger (a swipe that scrolls the page is not a press), 'down' — at
+//     pointerdown; both count every finger of a multi-touch (two thumbs); keyboard Enter / Space still work via click
 //   hud(s) → string, hudKey(s) → number (hud() is called only when the key changes — no string garbage per frame)
 //   win(s) → bool (solo «победа» → XP);   result(s) → { title, text };   intro, controls, title — overlay / note texts
 //   scoreName — HUD label of the score ('Очки' by default)
@@ -257,7 +258,7 @@
   function mount(spec, root, api){
     css();
     const I = { spec, root, api, dead: false, duel: false, hooks: null, run: null, s: null, raf: 0, timers: new Set(),
-      el: null, cv: null, ctx: null, G: null, rect: null, lastScore: -1, lastKey: NaN, lastV: -1, needNew: false, shownAt: 0, rngFn: null };
+      el: null, cv: null, ctx: null, G: null, rect: null, lastScore: -1, lastKey: NaN, lastV: -1, needNew: false, shownAt: 0, rngFn: null, blk: false };
 
     I.later = (fn, ms) => { const t = setTimeout(() => { I.timers.delete(t); if (!I.dead) fn(); }, ms); I.timers.add(t); return t; };
     I.tick = () => tick(I);
@@ -341,19 +342,43 @@
       I.cv.addEventListener('contextmenu', e => e.preventDefault());
     } else {
       const dom = I.G.host = el.querySelector('.ak-dom');
-      // pick: 'down' — the press counts at pointerdown: browsers fire no click for overlapping multi-touch taps (two thumbs);
-      // the click that follows a pointer press is skipped (detail ≥ 1), keyboard Enter / Space clicks (detail 0) still count
+      // Browsers fire NO click for overlapping multi-touch taps (two thumbs: the 2nd finger lands before the 1st lifts),
+      // so a pointer press never relies on click (check T-140 D1: repeat / lights / parking lost both taps):
+      //   pick 'tap' (default) — the press counts at pointerup of THAT finger, if it was not a scroll (pointercancel) and
+      //     the finger is still on the same [data-k] element (as a click would be); the field keeps page scroll by swipe;
+      //   pick 'down' — counts at pointerdown (the fastest: pop-it).
+      // A click with detail ≥ 1 follows a pointer press and is skipped; keyboard Enter / Space clicks (detail 0) count.
       const down = sp.pick === 'down';
-      const pick = e => {
-        if (e.type === 'pointerdown' ? e.button !== 0 : down && e.detail !== 0) return;
-        const b = e.target.closest?.('[data-k]');
-        if (!b || !dom.contains(b) || !I.run || !I.run.on) return;
-        if (e.type === 'pointerdown') e.preventDefault();
-        unlock();
-        I.run.push(T.PICK, 0, 0, +b.dataset.k, performance.now());
-      };
-      dom.addEventListener('click', pick);
-      if (down) dom.addEventListener('pointerdown', pick);
+      const target = e => { const b = e.target.closest?.('[data-k]'); return b && dom.contains(b) ? b : null; };
+      const fire = b => { if (!I.run || !I.run.on) return; unlock(); I.run.push(T.PICK, 0, 0, +b.dataset.k, performance.now()); };
+      // fingers held on [data-k] elements: pointerId → element (at most 10 fingers; a slot is reused, no garbage per tap)
+      const pid = new Int32Array(10).fill(-1), pel = new Array(10).fill(null);
+      const slot = id => { for (let i = 0; i < 10; i++) if (pid[i] === id) return i; return -1; };
+      dom.addEventListener('click', e => { if (e.detail !== 0) return; const b = target(e); if (b) fire(b); });
+      dom.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        const b = target(e);
+        if (!b || !I.run || !I.run.on) return;
+        if (down) { e.preventDefault(); fire(b); return; }
+        let i = slot(e.pointerId);
+        if (i < 0) i = slot(-1);
+        if (i < 0) i = 0;   // 11th finger: the oldest slot is reused
+        pid[i] = e.pointerId; pel[i] = b;
+      });
+      if (!down) {
+        const drop = i => { pid[i] = -1; pel[i] = null; };
+        dom.addEventListener('pointerup', e => {
+          const i = slot(e.pointerId);
+          if (i < 0) return;
+          const b = pel[i];
+          drop(i);
+          if (!b.isConnected) return;   // the field was rebuilt under the finger (a new level) — no press
+          const r = b.getBoundingClientRect(), x = e.clientX, y = e.clientY;
+          if (x < r.left - 8 || x > r.right + 8 || y < r.top - 8 || y > r.bottom + 8) return;   // slid off the button
+          fire(b);
+        });
+        dom.addEventListener('pointercancel', e => { const i = slot(e.pointerId); if (i >= 0) drop(i); });   // a scroll, not a tap
+      }
     }
     fresh(I);
     size(I);
@@ -453,7 +478,10 @@
     I.raf = 0;
     const R = I.run;
     if (I.dead || !R || !R.on) return;
-    if (!I.duel && blocked(I)) return pause(I);
+    // a window over the game: solo pauses; ⚔️ runs on, but held keys / fingers are let go at once (T.CANCEL) — under the
+    // window key() takes no keyup, so a key let go there stayed «held» after the window closed (check T-140 D5)
+    if (blocked(I)) { if (!I.duel) return pause(I); if (!I.blk) { I.blk = true; R.push(T.CANCEL, 0, 0, 0, performance.now()); } }
+    else I.blk = false;
     R.frame(performance.now());
     paint(I, R.tm[2], false);
     hud(I);
