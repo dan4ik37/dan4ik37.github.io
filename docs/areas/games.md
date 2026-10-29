@@ -25,7 +25,10 @@
   `js/games/arcade/<id>.js` + карточка `<id>.json` (каталог, SEO, правила, ключи сервера) + тесты `scripts/arcade/<id>.cjs`.
   Общие места (GAMES, GAME_TAGS, GAME_AGE, games-seo-arcade.js, game_score_cap/game_win_xp, превью, rules-data) собирает
   `node scripts/make-arcade.mjs` между маркерами «arcade» — руками не править. Проверки: `node scripts/arcade-test.cjs`,
-  `node scripts/arcade-e2e.cjs <id>` (Chrome, телефон ×4, ⚔️ двумя браузерами). Первые: «Чёрные плитки» (tiles), «Свет в окнах» (lights).
+  `node scripts/arcade-e2e.cjs <id,id> [сек]` (Chrome, телефон ×4, ⚔️ двумя браузерами; E2E_LEAK / E2E_DUEL=id,id|none — 20 открытий и ⚔️
+  только для этих). 34 игры (29.10, слияние b1–b3): tiles lights · fifteen repeat popit watersort parking pet riddles evolve spinner flip ·
+  drone tower cuberun colorjump lock zigzag darts twolanes road jumper descent · bricks gates hole shield slice planets pour bubbles
+  pegs sling cannon. Прототипы mines / blast не взяты (есть «Сапёр» и «Блоки»).
 - Рекорды: «За неделю» (`game_top_week`, по game_log) / «За всё время» (`game_top`); «Чемпионы дуэлей» (`duel_top`) —
   победы в `%_duel` и `%_online` во всех играх.
 - Задание дня: `daily_quest_code()` (12 заданий по кругу от даты по МСК), прогресс — по `game_log` (пишет game_result,

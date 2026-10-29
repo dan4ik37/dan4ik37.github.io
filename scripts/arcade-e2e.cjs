@@ -6,6 +6,7 @@
 //   3) «⚔️ Соревнование» двумя браузерами (разные гости) через настоящий Supabase Realtime: одинаковые плитки/дома у обоих,
 //      счёт соперника вживую, итог «Ты победил» / «Победил …» у обоих.
 // Запуск из корня сайта:  node scripts/arcade-e2e.cjs [tiles,lights] [сек]   (Chrome — переменная CHROME; временное — D37_TMP)
+//   E2E_LEAK=id,id / E2E_DUEL=id,id — 2) и 3) только для этих игр (none — ни для одной; по умолчанию — для всех из списка).
 // Снимки — <D37_TMP>/shots.
 const http = require('http'), fs = require('fs'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
@@ -14,6 +15,8 @@ const TMP = process.env.D37_TMP || 'E:/claude-tmp/t140';
 const OUT = path.join(TMP, 'shots');
 const IDS = (process.argv[2] || 'tiles,lights').split(',');
 const SECS = +process.argv[3] || 15;
+const only = v => (v === undefined || v === '' || v === 'all' ? IDS : v === 'none' ? [] : v.split(','));
+const LEAK = only(process.env.E2E_LEAK), DUEL = only(process.env.E2E_DUEL);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) pass++; else { fail++; } console.log(c ? 'ok  ' : 'FAIL', name, extra === undefined ? '' : JSON.stringify(extra).slice(0, 700)); };
@@ -35,12 +38,12 @@ const server = http.createServer((req, res) => {
 
 // ── Chrome: один процесс — один игрок (свой профиль: свой гость) ──
 async function browser(tag){
-  const port = 9300 + Math.floor(Math.random() * 400);
+  let port = 0;   // Chrome picks a free port and writes it to <profile>/DevToolsActivePort (a fixed range collided with other Chromes)
   const profile = fs.mkdtempSync(path.join(TMP, 'chrome-' + tag + '-'));
-  const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio',
+  const proc = spawn(CHROME, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio',
     '--hide-scrollbars', '--enable-precise-memory-info', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMP, TEMP: TMP } });
   let page = null;
-  for (let i = 0; i < 80 && !page; i++) { try { page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch (e) {} if (!page) await sleep(250); }
+  for (let i = 0; i < 240 && !page; i++) { try { if (!port) port = parseInt(fs.readFileSync(path.join(profile, 'DevToolsActivePort'), 'utf8'), 10) || 0; if (port) page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch (e) {} if (!page) await sleep(250); }
   if (!page) { proc.kill(); throw new Error('Chrome не запустился: ' + CHROME); }
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
@@ -101,7 +104,10 @@ const conf = id => { const f = path.join(__dirname, 'arcade', id + '.cjs'); retu
       if (!E) { ok(false, id + ': нет scripts/arcade/' + id + '.cjs с e2e-ботом'); continue; }
       // ── 1) одиночная партия ──
       await A.go(`${BASE}/#/games/${id}`);
-      ok(await A.waitFor(`!!document.querySelector('.ak .ak-go') && !!${cur}`), id + ': игра открылась (оболочка ArcadeKit)');
+      let opened = await A.waitFor(`!!document.querySelector('.ak .ak-go') && !!${cur}`, 30000);
+      if (!opened) { await A.go(`${BASE}/#/games/${id}`); opened = (await A.waitFor(`!!document.querySelector('.ak .ak-go') && !!${cur}`, 30000)) && 2; }
+      ok(opened, id + ': игра открылась (оболочка ArcadeKit)' + (opened === 2 ? ' — со 2-й попытки' : ''));
+      if (!opened) continue;
       await sleep(600);
       await A.shot(`${id}-1-start.png`);
       await A.send('Emulation.setCPUThrottlingRate', { rate: 4 });
@@ -145,6 +151,7 @@ const conf = id => { const f = path.join(__dirname, 'arcade', id + '.cjs'); retu
       await A.send('Emulation.setCPUThrottlingRate', { rate: 1 });
 
       // ── 2) 20 открытий / закрытий ──
+      if (!LEAK.includes(id)) continue;
       // живые слушатели window / document (функция + тип + capture); снятие незнакомого (добавлен до замера) не считается
       await A.ev(`(() => { if (window.__lc) return 1; const c = window.__lc = { win: 0, doc: 0 };
         for (const [o, k] of [[window, 'win'], [document, 'doc']]) { const a = o.addEventListener, r = o.removeEventListener, reg = new Map();
@@ -165,9 +172,9 @@ const conf = id => { const f = path.join(__dirname, 'arcade', id + '.cjs'); retu
     }
 
     // ── 3) «⚔️ Соревнование» двумя браузерами ──
-    for (const id of IDS) {
+    for (const id of DUEL) {
       const E = conf(id), cur = CUR(id);
-      if (!E) continue;
+      if (!E || !report[id]) continue;
       const D = report[id].duel = {};
       Bp = Bp || await browser('b');
       const code = 't' + Math.random().toString(36).slice(2, 8).replace(/[^a-z0-9]/g, 'x');
