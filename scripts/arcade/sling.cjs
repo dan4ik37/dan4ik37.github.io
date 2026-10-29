@@ -53,6 +53,9 @@ module.exports = {
     const stepN = (s, n) => { for (let i = 0; i < n && !s.over; i++) spec.step(s, K.STEP, inp); };
     const standing = s => { let n = 0; for (let i = 0; i < C.NC; i++) n += s.st[i] === 1; return n; };
     const shoot = (s, dx, dy) => { send(s, T.DOWN, 200, 200); send(s, T.MOVE, 200 + dx, 200 + dy); send(s, T.UP, 200 + dx, 200 + dy); };
+    // пауза / потеря фокуса с натянутой резинкой (T.CANCEL) — без выстрела, камешек на месте (проверка T-140)
+    { const c = spec.create(K.rng(40)); stepN(c, 5); const st0 = c.stones; send(c, T.DOWN, 200, 200); send(c, T.MOVE, 140, 240); send(c, T.CANCEL, 0, 0); send(c, T.UP, 140, 240); stepN(c, 5);
+      ok(c.pull === 0 && !c.fly && c.stones === st0 && c.px === C.AX && c.py === C.AY, 'sling: пауза с натянутой резинкой — без выстрела, резинка назад', { pull: c.pull, fly: c.fly, stones: c.stones }); }
 
     // старт: 2 места с банками, одна золотая; без нажатий ничего не летит, игра идёт
     let s = spec.create(K.rng(41));

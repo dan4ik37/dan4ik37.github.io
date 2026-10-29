@@ -7,7 +7,8 @@
 // Очки: пупырка +1, ✨ +5, весь лист +10. Время одно на всех — 40 с.
 // Исправлено против прототипа: время по Date.now и «меньше — лучше» без конца партии → общий предел 40 с и счёт (больше —
 // лучше); перезапуск через setTimeout сам по себе → оверлей ядра «↻ Ещё раз»; звук через Math.random и свой AudioContext →
-// целые ноты через общий звук ядра; инлайн-стили всего поля при каждом нажатии → классы, перерисовка только изменений.
+// целые ноты через общий звук ядра; инлайн-стили всего поля при каждом нажатии → классы, перерисовка только изменений;
+// (проверка T-140) пупырка лопается при касании (pick: 'down'): браузер не шлёт click, когда два пальца нажимают внахлёст.
 (() => {
   const T = ArcadeKit.T;
   const COLS = 5, ROWS = 6, N = COLS * ROWS;
@@ -50,7 +51,7 @@
     s.goldT = GOLD; s.v++;
   }
 
-  const CSS = '.pp{display:flex;flex-direction:column;align-items:center;gap:.6rem;padding:.9rem .7rem .8rem;border-radius:14px;background:linear-gradient(160deg,#241a3a,#151024)}'
+  const CSS = '.pp{touch-action:none;display:flex;flex-direction:column;align-items:center;gap:.6rem;padding:.9rem .7rem .8rem;border-radius:14px;background:linear-gradient(160deg,#241a3a,#151024)}'
     + '.pp-g{width:100%;max-width:330px;display:grid;grid-template-columns:repeat(5,1fr);gap:9px;padding:12px;border-radius:26px;background:var(--bd,#3a2a5c);box-shadow:inset 0 -6px 0 rgba(0,0,0,.25);transition:transform .2s}'
     + '.pp.flip .pp-g{transform:rotateY(90deg)}'
     + '.pp-b{aspect-ratio:1;border:0;border-radius:50%;padding:0;cursor:pointer;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.55),rgba(255,255,255,0) 45%),var(--c);'
@@ -91,7 +92,7 @@
   }
 
   ArcadeKit.define('popit', {
-    kind: 'dom', W: 320, H: 400, maxW: 400,
+    kind: 'dom', W: 320, H: 400, maxW: 400, pick: 'down',
     title: '🟣 Поп-ит',
     intro: 'Лопай пупырки как можно быстрее — у тебя 40 секунд. Весь лист — +10 и он переворачивается. ✨ Золотая пупырка — +5, но живёт всего полторы секунды.',
     controls: 'Нажимай на пупырки пальцем или мышью (можно двумя пальцами). На клавиатуре — Tab по пупыркам и Enter.',

@@ -38,7 +38,7 @@
     const t = e.type;
     if (t === T.DOWN) { s.hold = true; s.fx = e.x; s.fy = e.y; s.fd = 1; s.still = 0; }
     else if (t === T.MOVE) { if (s.hold) { s.fx = e.x; s.fy = e.y; s.fm = 1; } }
-    else if (t === T.UP) s.hold = false;   // последний отрезок свайпа (fm) шаг ещё досчитает
+    else if (t === T.UP || t === T.CANCEL) s.hold = false;   // последний отрезок свайпа (fm) шаг ещё досчитает
     else if (t === T.KEY && e.k === 0) { s.w += s.w < 0 ? -FLICK : FLICK; s.snd = 330; }   // клавиша — толчок в сторону вращения
   }
 

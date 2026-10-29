@@ -75,6 +75,7 @@
     if (!s.started) { if (e.type === T.DOWN || e.type === T.KEY) { s.started = true; s.skipUp = e.type === T.DOWN; s.snd = 'move'; } return; }   // первый тап — старт
     let d = -1;
     if (e.type === T.DOWN) { s.press = true; s.px = e.x; s.py = e.y; return; }
+    if (e.type === T.CANCEL) { s.press = false; s.skipUp = false; return; }   // пауза / потеря фокуса — свайп без шага
     if (e.type === T.UP) {
       if (s.skipUp) { s.skipUp = false; s.press = false; return; }
       if (!s.press) return;

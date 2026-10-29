@@ -173,6 +173,7 @@
     } else if (e.type === T.MOVE && s.held) aim(s, e.x, e.y);
     else if (e.type === T.UP && s.held) { s.held = 0; aim(s, e.x, e.y); s.want = 1; }
     else if (e.type === T.KEY) { if (e.k === 2) s.want = 1; else if (e.k === 3) swap(s); }
+    else if (e.type === T.CANCEL) s.held = 0;   // пауза / потеря фокуса — прицел отпущен без выстрела
   }
 
   function fire(s){

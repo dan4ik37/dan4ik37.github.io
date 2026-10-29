@@ -81,6 +81,7 @@
     if (e.type === T.DOWN) { if (s.fly || s.stones <= 0 || s.next) return; s.pull = 1; s.ox = e.x; s.oy = e.y; s.px = AX; s.py = AY; }
     else if (e.type === T.MOVE && s.pull === 1) pullTo(s, AX + e.x - s.ox, AY + e.y - s.oy);
     else if (e.type === T.UP && s.pull === 1) { pullTo(s, AX + e.x - s.ox, AY + e.y - s.oy); fire(s); }
+    else if (e.type === T.CANCEL && s.pull === 1) { s.pull = 0; s.px = AX; s.py = AY; }   // пауза / потеря фокуса — резинка назад, без выстрела
     else if (e.type === T.KEY && e.k === 4) { if (!s.fly && s.stones > 0) { aimKeys(s); fire(s); } }
   }
 

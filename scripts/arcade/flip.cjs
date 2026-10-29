@@ -24,6 +24,9 @@ module.exports = {
     const fly = s => { let n = 0; while (s.phase === 2 && n < 1000) { spec.step(s, K.STEP, null); n++; } return n; };
     const throwAt = (s, p) => { send(s, T.DOWN); s.p = p; send(s, T.UP); return fly(s); };
     const next = s => stepN(s, C.SHOW);
+    // пауза / потеря фокуса посреди замаха (T.CANCEL) — бутылка не летит, замах сброшен (проверка T-140)
+    { const c = spec.create(K.rng(40)); send(c, T.DOWN); stepN(c, 20); send(c, T.CANCEL); stepN(c, 5); send(c, T.UP); stepN(c, 5);
+      ok(c.phase === 0 && c.i === 0 && c.score === 0, 'flip: пауза посреди замаха — без броска, можно замахнуться снова', { phase: c.phase }); }
 
     let s = spec.create(K.rng(121));
     ok(Array.from(s.ty).every(y => y >= 225 && y < 345) && Array.from(s.tw).every(w => w >= 56 && w <= 84), 'flip: 10 табуретов — разной высоты и ширины');

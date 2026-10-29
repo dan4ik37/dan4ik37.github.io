@@ -51,7 +51,7 @@
       s.ink -= d;
       addPoint(s, x, y, s.drawing === 1 ? 1 : 0);
       s.drawing = 1;
-    } else if (e.type === T.UP) s.drawing = 0;
+    } else if (e.type === T.UP || e.type === T.CANCEL) s.drawing = 0;
   }
 
   function spawn(s, i){

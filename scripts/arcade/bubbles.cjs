@@ -46,6 +46,9 @@ module.exports = {
     const sh = (s, r) => ((r + s.par) & 1) === 1, X = (s, r, c) => C.X0 + C.R + c * C.D + (sh(s, r) ? C.R : 0), Y = r => C.Y0 + C.R + r * C.RH;
     const count = s => { let n = 0; for (let i = 0; i < s.g.length; i++) n += s.g[i] >= 0 ? 1 : 0; return n; };
     const shoot = (s, x, y) => { send(s, T.DOWN, x, y); send(s, T.UP, x, y); let n = 0; stepN(s, 1); while (s.shot && n < 300) { stepN(s, 1); n++; } };
+    // пауза / потеря фокуса с пальцем на прицеле (T.CANCEL) — выстрела нет, прицел отпущен (проверка T-140)
+    { const c = spec.create(K.rng(40)); send(c, T.DOWN, 100, 200); send(c, T.CANCEL, 0, 0); stepN(c, 5); send(c, T.UP, 0, 0); stepN(c, 5);
+      ok(c.held === 0 && c.want === 0 && !c.shot && c.shots === 0, 'bubbles: пауза с пальцем на прицеле — без выстрела (и поздний UP не стреляет)', { shot: c.shot, shots: c.shots }); }
 
     // старт: 5 рядов, без нажатий ничего не летит и игра идёт; просто тап — один выстрел, не конец
     let s = spec.create(K.rng(61));

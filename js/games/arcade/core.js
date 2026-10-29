@@ -9,24 +9,34 @@
 //   - seeded rng (Versus.rng — mulberry32): solo — a new seed per run, ⚔️ competition — the host's seed for both;
 //   - start / pause / game-over overlay, HUD line, records (api.report), ⚔️ competition through js/games/versus.js;
 //   - sound (one shared AudioContext with games.js gameSfx) and short vibration; theme colours from CSS tokens;
-//   - pause when the tab is hidden (solo), unmount removes every listener / rAF / timer;
+//   - solo: pause when the tab is hidden or a window of the site covers the game (☰ menu, 📖 rules, ⚙️ settings);
+//     ⚔️ competition: no pause and no lost time — hidden time is caught up (one clock for both players);
+//   - a held key / finger is let go on pause and on focus loss (T.CANCEL); Space / arrows do not scroll the page in a run;
+//   - unmount removes every listener / rAF / timer;
 //   - ArcadeKit.sim(spec, opts) — the same runner headless with a fake clock (node tests: scripts/arcade-test.cjs).
 // spec (all functions except draw/build must be PURE and use only the rng given to create — no Math.random, no Date):
 //   kind: 'canvas' | 'dom', W, H — logical field size (canvas: drawing units; dom: aspect only)
 //   create(rng, opt) → state s   (s.score — number, bigger is better; s.over — true ends the run; s.snd — sound request:
 //     'ok' | 'bad' | 'win' | 'tick' | 'move' (games.js gameSfx) or an INTEGER frequency in Hz (a tone; integers — no boxed doubles))
-//   input(s, ev, inp) — one queued event: ev.type (ArcadeKit.T), ev.x / ev.y (field units), ev.k (key index / data-k)
+//   input(s, ev, inp) — one queued event: ev.type (ArcadeKit.T), ev.x / ev.y (field units), ev.k (key index / data-k);
+//     T.CANCEL — every held finger / key was let go WITHOUT an action (pause, a window over the game, focus loss): drop
+//     «held» state (aiming, charging, pulling, drawing), never fire the release action
 //   step(s, dt, inp) — one fixed step (dt = 1/60 s); inp = action state { down, x, y, keys (bit mask) }
 //   draw(G, s, alpha) — canvas: G = { ctx, W, H, theme, now }; dom: G = { host, theme } and draw only when s.v changed
 //   build(G, s) — dom: build the field for a new state;   keys: { KeyD: 0, ArrowLeft: 1, … } → ev.k / inp.keys bit
 //   drag: true — also send MOVE / UP (default: DOWN only);   pick: 'click' | 'down' — dom event for [data-k] elements
+//     ('down' — pointerdown: several fingers at once, the tap counts at touch; keyboard Enter / Space still work via click)
 //   hud(s) → string, hudKey(s) → number (hud() is called only when the key changes — no string garbage per frame)
 //   win(s) → bool (solo «победа» → XP);   result(s) → { title, text };   intro, controls, title — overlay / note texts
 //   scoreName — HUD label of the score ('Очки' by default)
 (() => {
   if (window.ArcadeKit) return;
   const STEP_MS = 1000 / 60, STEP = 1 / 60, MAX_STEPS = 5;
-  const T = { DOWN: 1, MOVE: 2, UP: 3, KEY: 4, KEYUP: 5, PICK: 6 };
+  const T = { DOWN: 1, MOVE: 2, UP: 3, KEY: 4, KEYUP: 5, PICK: 6, CANCEL: 7 };
+  // ⚔️: at most this many steps per frame while catching up hidden time (2 s of game per frame — a few frames after a return)
+  const CATCH = 120;
+  // keys that scroll the page: when the game does not use them, no page scroll during a run (the run would go on off-screen)
+  const SCROLL = { Space: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, PageUp: 1, PageDown: 1 };
   const games = {};
 
   // ── seeded rng: the same generator as Versus.rng (mulberry32); a copy for node tests where versus.js is not loaded ──
@@ -47,44 +57,62 @@
   // ── input queue: a fixed ring of pooled events (no allocation per event); handlers must not keep ev ──
   // x / y / t start as doubles (0.5) and are then zeroed: the fields are «double» from birth, so V8 never re-types them
   // later (a Smi → double change deoptimizes the runner and makes it box numbers for a while)
-  function Queue(size){
-    const b = [];
-    for (let i = 0; i < size; i++) { const e = { type: 0, x: 0.5, y: 0.5, k: 0, t: 0.5 }; e.x = e.y = e.t = 0; b.push(e); }
-    const q = {
-      h: 0, n: 0,
-      push(type, x, y, k, t){
-        if (q.n === size) { q.h = (q.h + 1) % size; q.n--; }   // overflow: the oldest is dropped
-        const e = b[(q.h + q.n) % size];
-        e.type = type; e.x = x; e.y = y; e.k = k; e.t = t; q.n++;
-      },
-      peek(){ return q.n ? b[q.h] : null; },
-      shift(){ const e = b[q.h]; q.h = (q.h + 1) % size; q.n--; return e; },
-      clear(){ q.h = 0; q.n = 0; },
-    };
-    return q;
+  class Ring {
+    constructor(size){
+      this.size = size; this.h = 0; this.n = 0; this.b = [];
+      for (let i = 0; i < size; i++) { const e = { type: 0, x: 0.5, y: 0.5, k: 0, t: 0.5 }; e.x = e.y = e.t = 0; this.b.push(e); }
+    }
+    push(type, x, y, k, t){
+      const size = this.size;
+      if (this.n === size) { this.h = (this.h + 1) % size; this.n--; }   // overflow: the oldest is dropped
+      const e = this.b[(this.h + this.n) % size];
+      e.type = type; e.x = x; e.y = y; e.k = k; e.t = t; this.n++;
+    }
+    peek(){ return this.n ? this.b[this.h] : null; }
+    shift(){ const e = this.b[this.h]; this.h = (this.h + 1) % this.size; this.n--; return e; }
+    clear(){ this.h = 0; this.n = 0; }
   }
+  const Queue = size => new Ring(size);
 
   // ── fixed-step runner. Step k starts at wall time off + k·STEP_MS; an event with time t is applied before the first
   // step whose start ≥ t — so the result depends on event times only, not on the frame rate. hooks.before(s, k) — test
   // bots (R.pushNow stamps an event with the time of this step), hooks.after(s) — after each step (sounds). ──
-  // Hot-path hardening (T-140 integration): every double of the runner lives in the Float64Array tm (typed-array stores
-  // never box and have no field types), R has one fixed shape built in one literal (methods included), steps is a Smi —
-  // so the optimized frame() is not thrown away by «field type changed» deopts when a new run / game starts.
-  function Runner(spec, s, hooks){
-    // tm[0] off — wall time of step 0, tm[1] lim — wall time of the current step, tm[2] alpha — draw interpolation
-    const tm = new Float64Array(3), q = Queue(64), inp = { down: false, x: 0.5, y: 0.5, keys: 0 };
-    inp.x = inp.y = 0;
-    tm[2] = 1;
-    const before = hooks && hooks.before, after = hooks && hooks.after;
-    const R = { s, steps: 0, on: false, tm, q, inp, start, stop, push, pushNow, frame };
-    function start(now){ R.on = true; tm[0] = now - R.steps * STEP_MS; q.clear(); }   // also «continue» after a pause
-    function stop(){ R.on = false; q.clear(); }
-    function push(type, x, y, k, t){ if (R.on) q.push(type, x, y, k, t); }
-    function pushNow(type, x, y, k){ if (R.on) q.push(type, x, y, k, tm[1]); }   // for bots inside hooks.before
-    function drain(){
+  // Hot-path hardening (T-140): a class — the methods live once on the prototype (one feedback vector: a new run / game
+  // creates no new closures, so the optimized frame() is not thrown away and does not box numbers for a while); every
+  // double of the runner lives in the Float64Array tm (typed-array stores never box); every field has one type from birth
+  // (no hook → noop, not null); steps is a Smi.
+  const noop = () => {};
+  class Run {
+    constructor(spec, s, hooks){
+      this.spec = spec; this.s = s; this.steps = 0; this.on = false;
+      this.real = false;   // ⚔️ one clock: lag is never dropped, it is caught up (at most CATCH steps per frame); solo drops it
+      // tm[0] off — wall time of step 0, tm[1] lim — wall time of the current step, tm[2] alpha — draw interpolation
+      this.tm = new Float64Array(3); this.tm[2] = 1;
+      this.q = new Ring(64);
+      const inp = this.inp = { down: false, x: 0.5, y: 0.5, keys: 0 };
+      inp.x = inp.y = 0;
+      const rel = this.rel = { type: T.CANCEL, x: 0.5, y: 0.5, k: 0, t: 0.5 };   // the pooled T.CANCEL event of release()
+      rel.x = rel.y = rel.t = 0;
+      this.before = (hooks && hooks.before) || noop;
+      this.after = (hooks && hooks.after) || noop;
+    }
+    start(now){ this.on = true; this.tm[0] = now - this.steps * STEP_MS; this.q.clear(); }   // also «continue» after a pause
+    stop(){ this.on = false; this.q.clear(); this.release(); }
+    // let go of every held finger / key now (a key released while paused never reaches the runner, alt-tab never sends
+    // keyup): inp is cleared and the game gets one T.CANCEL — it drops aiming / charging, no release action
+    release(){
+      const inp = this.inp;
+      if (!inp.down && !inp.keys) return;
+      inp.down = false; inp.keys = 0;
+      if (this.spec.input && !this.s.over) this.spec.input(this.s, this.rel, inp);
+    }
+    push(type, x, y, k, t){ if (this.on) this.q.push(type, x, y, k, t); }
+    pushNow(type, x, y, k){ if (this.on) this.q.push(type, x, y, k, this.tm[1]); }   // for bots inside hooks.before
+    drain(){
+      const q = this.q, inp = this.inp, sp = this.spec;
       while (q.n) {
         const e = q.peek();
-        if (e.t > tm[1]) break;
+        if (e.t > this.tm[1]) break;
         q.shift();
         const ty = e.type;
         if (ty === T.DOWN) { inp.down = true; inp.x = e.x; inp.y = e.y; }
@@ -92,31 +120,38 @@
         else if (ty === T.UP) { inp.down = false; inp.x = e.x; inp.y = e.y; }
         else if (ty === T.KEY) inp.keys |= 1 << e.k;
         else if (ty === T.KEYUP) inp.keys &= ~(1 << e.k);
-        if (spec.input) spec.input(R.s, e, inp);
-        if (R.s.over) return;
+        else if (ty === T.CANCEL) { if (!inp.down && !inp.keys) continue; inp.down = false; inp.keys = 0; }
+        if (sp.input) sp.input(this.s, e, inp);
+        if (this.s.over) return;
       }
     }
-    function frame(now){
-      if (!R.on) return 0;
+    frame(now){
+      if (!this.on) return 0;
+      const tm = this.tm, sp = this.spec;
       let target = Math.floor((now - tm[0]) / STEP_MS);
-      // lag (slow phone, hidden tab): at most MAX_STEPS per frame, the rest of the time is dropped — no catch-up storm
-      if (target - R.steps > MAX_STEPS) { tm[0] += (target - R.steps - MAX_STEPS) * STEP_MS; target = R.steps + MAX_STEPS; }
-      let n = 0;
-      while (R.steps < target) {
-        tm[1] = tm[0] + R.steps * STEP_MS;   // wall time of this step (typed array, not an argument: no boxed double per call)
-        if (before) before(R.s, R.steps);
-        drain();
-        if (!R.s.over) spec.step(R.s, STEP, inp);
-        R.steps++; n++;
-        if (after) after(R.s);
-        if (R.s.over) { R.on = false; break; }
+      // lag (slow phone, hidden tab): solo — at most MAX_STEPS per frame, the rest of the time is dropped (no catch-up
+      // storm; a hidden tab pauses anyway). ⚔️ (real) — time is never dropped: a hidden tab must not stop the clock
+      // (riddles' question timer, the run's time limit); it is caught up at most CATCH steps per frame
+      if (target - this.steps > MAX_STEPS) {
+        if (this.real) { if (target - this.steps > CATCH) target = this.steps + CATCH; }
+        else { tm[0] += (target - this.steps - MAX_STEPS) * STEP_MS; target = this.steps + MAX_STEPS; }
       }
-      const a = (now - tm[0]) / STEP_MS - R.steps;
-      tm[2] = !R.on ? 1 : a < 0 ? 0 : a > 1 ? 1 : a;
+      let n = 0;
+      while (this.steps < target) {
+        tm[1] = tm[0] + this.steps * STEP_MS;   // wall time of this step (typed array, not an argument: no boxed double per call)
+        this.before(this.s, this.steps);
+        this.drain();
+        if (!this.s.over) sp.step(this.s, STEP, this.inp);
+        this.steps++; n++;
+        this.after(this.s);
+        if (this.s.over) { this.on = false; break; }
+      }
+      const a = (now - tm[0]) / STEP_MS - this.steps;
+      tm[2] = !this.on ? 1 : a < 0 ? 0 : a > 1 ? 1 : a;
       return n;
     }
-    return R;
   }
+  const Runner = (spec, s, hooks) => new Run(spec, s, hooks);
 
   // ── headless run (node tests, e2e): the same Runner with a fake clock ──
   // o: { seed, fps, maxMs, opt, events: [{ t, type, x, y, k }] (sorted by t), bot(s, step, push), draw: G | null }
@@ -226,14 +261,15 @@
     I.onKey = e => key(I, e, true);
     I.onKeyUp = e => key(I, e, false);
     I.onResize = () => { if (I.el) { size(I); paint(I, 1, true); } };
-    I.onVis = () => {
-      if (!document.hidden || I.duel || !I.run || !I.run.on) return;
-      halt(I);   // solo: pause; ⚔️ — no pause (common time), the runner just drops the hidden time (MAX_STEPS)
-      overlay(I, '⏸ Пауза', 'Игра ждёт тебя.', '▶ Продолжить', () => resume(I));
-    };
+    // solo: pause; ⚔️ — no pause: the runner catches the hidden time up (R.real), the clock is the same for both players
+    I.onVis = () => { if (document.hidden && !I.duel && I.run && I.run.on) pause(I); };
+    // focus lost (alt-tab, a click into an ad frame): keyup / pointerup never come — let go of held keys and fingers
+    I.onBlur = () => { if (I.run && I.run.on) I.run.push(T.CANCEL, 0, 0, 0, performance.now()); };
+    I.menus = document.getElementsByClassName('gs-menu');   // live: the game's ☰ menu (D37Settings.menu) is open — no query per frame
     window.addEventListener('keydown', I.onKey);
     window.addEventListener('keyup', I.onKeyUp);
     window.addEventListener('resize', I.onResize);
+    window.addEventListener('blur', I.onBlur);
     document.addEventListener('visibilitychange', I.onVis);
 
     if (window.GameRoom && window.Versus && GameRoom.validCode(api.param)) {
@@ -253,9 +289,10 @@
       window.removeEventListener('keydown', I.onKey);
       window.removeEventListener('keyup', I.onKeyUp);
       window.removeEventListener('resize', I.onResize);
+      window.removeEventListener('blur', I.onBlur);
       document.removeEventListener('visibilitychange', I.onVis);
       I.stopDuel?.(); I.stopDuel = null;
-      I.run = I.s = I.G = I.el = I.cv = I.ctx = I.hooks = I.rngFn = null;
+      I.run = I.s = I.G = I.el = I.cv = I.ctx = I.hooks = I.rngFn = I.menus = null;
       I.root = null;
     };
     return I;
@@ -300,14 +337,19 @@
       I.cv.addEventListener('contextmenu', e => e.preventDefault());
     } else {
       const dom = I.G.host = el.querySelector('.ak-dom');
+      // pick: 'down' — the press counts at pointerdown: browsers fire no click for overlapping multi-touch taps (two thumbs);
+      // the click that follows a pointer press is skipped (detail ≥ 1), keyboard Enter / Space clicks (detail 0) still count
+      const down = sp.pick === 'down';
       const pick = e => {
+        if (e.type === 'pointerdown' ? e.button !== 0 : down && e.detail !== 0) return;
         const b = e.target.closest?.('[data-k]');
         if (!b || !dom.contains(b) || !I.run || !I.run.on) return;
         if (e.type === 'pointerdown') e.preventDefault();
         unlock();
         I.run.push(T.PICK, 0, 0, +b.dataset.k, performance.now());
       };
-      dom.addEventListener(sp.pick === 'down' ? 'pointerdown' : 'click', pick);
+      dom.addEventListener('click', pick);
+      if (down) dom.addEventListener('pointerdown', pick);
     }
     fresh(I);
     size(I);
@@ -375,6 +417,7 @@
     if (I.needNew) { fresh(I); paint(I, 1, true); }
     I.over.hidden = true;
     I.run = Runner(I.spec, I.s, { after: I.after });
+    I.run.real = I.duel;
     I.run.start(performance.now());
     cancelAnimationFrame(I.raf);
     I.raf = requestAnimationFrame(I.tick);
@@ -390,11 +433,23 @@
     cancelAnimationFrame(I.raf); I.raf = 0;
     if (I.run) I.run.stop();
   }
+  // solo pause: the steps stop, held keys / fingers are let go (stop → release), «▶ Продолжить» goes on
+  function pause(I){
+    halt(I);
+    overlay(I, '⏸ Пауза', 'Игра ждёт тебя.', '▶ Продолжить', () => resume(I));
+  }
+  // a window of the site is over the game: ☰ menu, 📖 rules / «точно?» (GameKit), ⚙️ settings — the game must not run on
+  // behind it (solo pauses) and must not take keys meant for it
+  function blocked(I){
+    const GK = window.GameKit, ST = window.D37Settings;
+    return !!((I.menus && I.menus.length) || (GK && GK.isOpen && GK.isOpen()) || (ST && ST.isOpen && ST.isOpen()));
+  }
 
   function tick(I){
     I.raf = 0;
     const R = I.run;
     if (I.dead || !R || !R.on) return;
+    if (!I.duel && blocked(I)) return pause(I);
     R.frame(performance.now());
     paint(I, R.tm[2], false);
     hud(I);
@@ -424,12 +479,18 @@
   function key(I, e, down){
     if (I.dead || !I.el) return;
     if (e.target?.closest?.('input,textarea,select,[contenteditable="true"]')) return;
-    if (window.GameKit?.isOpen?.()) return;
+    if (blocked(I)) return;
     if (down && !I.over.hidden && !I.go.hidden && (e.code === 'Space' || e.code === 'Enter') && !e.target?.closest?.('button')) {
       e.preventDefault(); unlock(); if (performance.now() - I.shownAt >= 350) I.goFn?.(); return;
     }
     const k = I.spec.keys ? I.spec.keys[e.code] : undefined;
-    if (k === undefined || !I.run || !I.run.on) return;
+    if (k === undefined) {
+      // not the game's key: Space / arrows / PageUp / PageDown would scroll the page and the run would go on off-screen
+      // (Space on a focused button presses it — that stays)
+      if (down && SCROLL[e.code] === 1 && I.run && I.run.on && !(e.code === 'Space' && e.target?.closest?.('button,a,[role="button"]'))) e.preventDefault();
+      return;
+    }
+    if (!I.run || !I.run.on) return;
     e.preventDefault();
     if (down && e.repeat) return;
     if (down) unlock();

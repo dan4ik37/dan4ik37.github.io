@@ -76,7 +76,7 @@
       const j = s.th++ % NTR;
       s.tx[j] = e.x; s.tyy[j] = e.y; s.tt[j] = s.t;
       s.lx = e.x; s.ly = e.y;
-    } else if (e.type === T.UP) s.sw = 0;
+    } else if (e.type === T.UP || e.type === T.CANCEL) s.sw = 0;
   }
 
   function step(s, dt){

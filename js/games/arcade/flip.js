@@ -67,6 +67,7 @@
     const t = e.type;
     if (t === T.DOWN || (t === T.KEY && e.k === 0)) charge(s);
     else if (t === T.UP || (t === T.KEYUP && e.k === 0)) release(s);
+    else if (t === T.CANCEL && s.phase === 1) s.phase = 0;   // пауза / потеря фокуса — замах сброшен, без броска
   }
 
   function step(s, dt){

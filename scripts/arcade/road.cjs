@@ -49,6 +49,9 @@ module.exports = {
     const C = spec.consts, E = evHelper(spec, K), M = C.RING - 1;
     const tap = s => { E.tap(s, 160, 300); E.up(s, 160, 300); };
     const swipe = (s, dx, dy) => { E.tap(s, 160, 300); E.up(s, 160 + dx, 300 + dy); };
+    // пауза / потеря фокуса посреди свайпа (T.CANCEL) — шага нет (проверка T-140)
+    { const c = spec.create(K.rng(40)); tap(c); E.steps(c, 30); const r0 = c.row, c0 = c.col; E.tap(c, 160, 300); spec.input(c, { type: K.T.CANCEL, x: 0, y: 0, k: 0, t: 0 }, null); E.up(c, 160, 100); E.steps(c, 30);
+      ok(c.row === r0 && c.col === c0 && !c.press, 'road: пауза посреди свайпа — ёжик стоит (поздний UP не шагает)', { row: c.row, r0 }); }
     const carX = (s, j, c, t) => { const P = s.rp[j]; let x = (s.ro[j * 3 + c] + s.rv[j] * t) % P; if (x < 0) x += P; return x - (P - C.W); };
     let s = spec.create(K.rng(111));
     E.steps(s, 300);
