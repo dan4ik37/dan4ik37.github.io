@@ -11,8 +11,17 @@
 // возрождения; больше очков — победа. Очки = секунды × 10 + убийства + уровень × 20 (+3000 за победу).
 // Симуляция — шаг 1/60 с (step), рисование отдельно (draw). Проверять в node: GAME_IMPL.horde._test.
 // Ключи сервера: horde / horde_duel (games-more.sql). Победа для XP — продержаться 5:00.
+// «Ум толпы» (T-127, AI LOD P1, E:\d37-core\spec\AI_LOD.md §10.2): игра одинакова на телефоне и ПК — один предел врагов CAP
+// (решение владельца D1, 29.10), один радиус появления SPAWN_R (не от размера экрана; экран шире — картинка чуть крупнее, чтобы
+// враги всё равно появлялись за краем), зерно забега — от номера забега (без Math.random в симуляции); расталкивание — общая
+// сетка D37E.shash, не больше SEP_K ближайших (было — все пары в клетке 64, у толпы ~O(k²)); «кто рядом» для оружия — та же сетка.
 (() => {
   const DT = 1 / 60, RUN_TIME = 600, WIN_TIME = 300, VIEW = 560, CELL = 64, TAU = Math.PI * 2;
+  const LOD = true;        // T-127: false — откат одной строкой (предел 170 / 260 по body.low, радиус от экрана, сетка-словарь, Math.random-зерно)
+  const CAP = 260;         // D1: один предел врагов для всех устройств (вдвоём × 1,25); замер телефона ×4 — docs/progress.md 29.10
+  const SPAWN_R = 600;     // радиус появления и возврата отставших (× 1,6), профиль site_solo — как у ПК в окне
+  const SEP_K = 6, SEP_R = 21;   // расталкивание: ≤ 6 касающихся пар на врага; 21 — самый большой не босс (босса обходим отдельно)
+  const hseed = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) || 1; };
   const EF = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
 
   function mulberry(seed){
@@ -148,7 +157,7 @@
       en: [], pr: [], eb: [], gems: [], items: [], zones: [], waves: [], later: [], fx: [], nums: [],
       grid: new Map(), gridUsed: [], eid: 0, pid: 0, gemI: 0, kills: 0, coins: 0, level: 1, xp: 0, next: xpNeed(1), pend: 0,
       boss: null, banner: null, vacuum: 0, shake: 0, evI: 0, spawnT: .5, over: false, won: false, luck: 1,
-      viewW: VIEW, viewH: VIEW * 1.4, spawnR: 0, maxEnemies: Math.round((o.low ? 170 : 260) * (o.coop ? 1.25 : 1)),
+      viewW: VIEW, viewH: VIEW * 1.4, spawnR: 0, maxEnemies: Math.round((LOD ? CAP : o.low ? 170 : 260) * (o.coop ? 1.25 : 1)), seed, H: LOD && window.D37E?.shash ? window.D37E.shash({ cell: 44, cap: 512 }) : null,
       players: [], me: 0, revived: false, duel: !!o.duel, numsOn: !o.low,
       coop: !!o.coop, nMul: o.coop ? 1.6 : 1, hpMul: o.coop ? 1.35 : 1, fxLog: o.coop ? [] : null, pwVer: 0,
     };
@@ -159,7 +168,7 @@
     } else G.players.push(newPlayer(0, o.hero, o.up));
     return G;
   }
-  function setView(G, w, h){ G.viewW = w; G.viewH = h; G.spawnR = Math.hypot(w / 2, h / 2) + 50; }
+  function setView(G, w, h){ G.viewW = w; G.viewH = h; G.spawnR = LOD ? SPAWN_R : Math.hypot(w / 2, h / 2) + 50; }   // LOD: радиус — один для всех (профиль), не от экрана
   function newPlayer(idx, hero, up){
     const h = HEROES.find(x => x.id === hero) || HEROES[0];
     const p = { idx, hero: h.id, hand: h.hand, look: null, nick: '', rez: 0, gone: false, x: 0, y: 0, r: 13, in: { x: 0, y: 0 }, fx: 1, fy: 0, hx: 1, inv: 0, dead: false, kills: 0, weapons: [], pass: {}, up: up || {}, hp: 0, maxHp: 0, moving: false };
@@ -337,8 +346,50 @@
     }
   }
   function enemyBullet(G, x, y, vx, vy, dmg, big){ if (G.eb.length < 160) G.eb.push({ x, y, vx, vy, dmg, r: big ? 8 : 6, life: 4.5, dead: false, big }); }
-  // Монстры не слипаются: расталкиваем внутри клетки сетки
+  // Монстры не слипаются (T-127): общая сетка, клетка 44 (больше двух самых больших радиусов не-боссов — 21 + 21), каждая пара
+  // касающихся — один раз (своя клетка + 4 «вперёд»), у каждого — не больше SEP_K таких пар: в густой толпе O(k·n), а не O(n²)
+  // на клетку, и соседи через границу клетки тоже расталкиваются (раньше — только внутри клетки 64). Каждый из пары — на
+  // четверть перекрытия, как раньше; расстояния — по снимку позиций на начало прохода (порядок обхода не важен).
+  // Боссы и демоны не сдвигаются, но толкают других; призраки и стая не участвуют.
+  const sepI = new Int32Array(SEP_K), sepD = new Float64Array(SEP_K);
   function separate(G){
+    if (!G.H) return separateV1(G);
+    const H = G.H, X = H.x, Y = H.y, ref = H.ref, tag = H.tag, n = H.n;
+    for (let i = 0; i < n; i++) {
+      if (!(tag[i] & 1)) continue;
+      const e = ref[i];
+      if (e.dead) continue;
+      const k = H.pairs(i, SEP_K, 1, sepI, sepD);
+      const me = !e.d.boss && !e.elite;
+      for (let j = 0; j < k; j++) {
+        const q = sepI[j], o = ref[q];
+        if (o.dead) continue;
+        const rr = e.r + o.r, d2 = sepD[j];
+        let dx = X[q] - X[i], dy = Y[q] - Y[i];
+        if (d2 < .01) { dx = (e.id & 1) ? .1 : -.1; dy = .1; }
+        const d = Math.sqrt(dx * dx + dy * dy), push = (rr - d) / d * .25;
+        if (me) { e.x -= dx * push; e.y -= dy * push; }
+        if (!o.d.boss && !o.elite) { o.x += dx * push; o.y += dy * push; }
+      }
+    }
+    // босс (r 30–32 — больше радиуса поиска соседей): сам расталкивает тех, кто влез в него
+    const b = G.boss;
+    if (b && !b.dead) {
+      const out = H.buf(n, 0), c = H.query(b.x, b.y, b.r + SEP_R, out);
+      for (let q = 0; q < c; q++) {
+        const o = ref[out[q]];
+        if (o === b || o.dead || o.d.boss || o.elite || !(tag[out[q]] & 1)) continue;
+        let dx = o.x - b.x, dy = o.y - b.y;
+        const rr = b.r + o.r, d2 = dx * dx + dy * dy;
+        if (d2 >= rr * rr) continue;
+        if (d2 < .01) { dx = .1; dy = .1; }
+        const d = Math.sqrt(dx * dx + dy * dy), push = (rr - d) / d * .25;
+        o.x += dx * push; o.y += dy * push;
+      }
+    }
+  }
+  // как было до T-127 (откат LOD = false): пары внутри клетки сетки
+  function separateV1(G){
     for (const a of G.gridUsed) {
       for (let i = 0; i < a.length; i++) {
         const e = a[i];
@@ -368,6 +419,11 @@
   // ── Сетка для быстрых «кто рядом» ──
   const gkey = (cx, cy) => (cx + 32768) * 65536 + (cy + 32768);
   function gridBuild(G){
+    if (G.H) {   // T-127: общая сетка (типизированные массивы, без словаря и массивов на клетку)
+      const H = G.H; H.clear();
+      for (let i = 0; i < G.en.length; i++) { const e = G.en[i]; if (!e.dead) H.add(e.x, e.y, e, e.d.ghost || e.swarm ? 2 : 1, e.r); }
+      return;
+    }
     for (const a of G.gridUsed) a.length = 0;
     G.gridUsed.length = 0;
     for (const e of G.en) {
@@ -380,7 +436,21 @@
     }
     if (G.tick % 900 === 0) for (const [k, a] of G.grid) if (!a.length) G.grid.delete(k);
   }
+  let nearDepth = 0;   // near() внутри near() (взрыв от удара) — свой список на каждой глубине
   function near(G, x, y, r, fn){
+    if (G.H) {
+      const H = G.H, out = H.buf(H.n, nearDepth++);
+      try {
+        const c = H.cand(x, y, r + 40, out);
+        for (let q = 0; q < c; q++) {
+          const e = H.ref[out[q]];
+          if (e.dead) continue;
+          const dx = e.x - x, dy = e.y - y, rr = r + e.r;
+          if (dx * dx + dy * dy < rr * rr) fn(e);
+        }
+      } finally { nearDepth--; }
+      return;
+    }
     const m = r + 40;
     const x0 = Math.floor((x - m) / CELL), x1 = Math.floor((x + m) / CELL), y0 = Math.floor((y - m) / CELL), y1 = Math.floor((y + m) / CELL);
     for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
@@ -849,7 +919,9 @@
     cssW = w; cssH = h;
     cv.style.height = h + 'px';
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-    scale = Math.min(w, h) / VIEW; k = scale * dpr;
+    scale = Math.min(w, h) / VIEW;
+    if (LOD) scale = Math.max(scale, Math.hypot(w, h) / 2 / (SPAWN_R - 30));   // T-127: радиус появления один — очень широкий экран чуть крупнее
+    k = scale * dpr;
     sprites.clear();
     if (G) setView(G, w / scale, h / scale);
     draw();
@@ -1237,12 +1309,13 @@
     const hero = selHero();
     const up = o.duel ? {} : Object.fromEntries(UPS.map(([id]) => [id, C().upLevel(id)]));
     look = CH()?.look() || null;
-    G = newGame({ seed: o.seed ?? Math.floor(Math.random() * 2 ** 31), hero, up, duel: !!o.duel, low: document.body.classList.contains('low') });
+    runId = 'h' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+    // зерно: своё (дуэль) или от номера забега — забег можно повторить по номеру (T-127: без Math.random в симуляции)
+    G = newGame({ seed: o.seed ?? (LOD ? hseed(runId) : Math.floor(Math.random() * 2 ** 31)), hero, up, duel: !!o.duel, low: document.body.classList.contains('low') });
     G.k4 = !o.duel && C().perks();
     setView(G, cssW / scale, cssH / scale);
     petX = G.players[0].x - 30; petY = G.players[0].y;
     trail = [];
-    runId = 'h' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
     hideOv(); hud.hidden = false;
     hud.querySelector('[data-act=pause]').hidden = false;
     mode = 'run'; acc = 0; lastProg = 0;
@@ -1489,7 +1562,7 @@
       G.players.forEach((p, i) => { p.look = m.l[i]; p.nick = m.n[i]; });
       G.me = 0;
       setView(G, cssW / scale, cssH / scale);
-      G.spawnR = Math.max(G.spawnR, Math.hypot(VIEW * .9, VIEW * .9 * 1.6) / 2 + 50);   // напарник может видеть больше — спавн за краем у обоих
+      if (!LOD) G.spawnR = Math.max(G.spawnR, Math.hypot(VIEW * .9, VIEW * .9 * 1.6) / 2 + 50);   // напарник может видеть больше — спавн за краем у обоих (LOD: радиус и так один)
       CO.gin = { x: G.players[1].x, y: G.players[1].y, hx: 1, mv: 0 };
     } else {
       // Мир напарника — по снимкам. Свой герой — свой (двигается сразу, без задержки)
@@ -1844,6 +1917,6 @@
       input.keys = {}; input.on = false;
       root = null; cv = null; ctx = null; ov = null; hud = null; wrap = null;
     },
-    _test: { newGame, step, lvOptions, apply, optInfo, score, setView, xpNeed, encodeSnap, decodeSnap, WEAPONS, PASSIVES, HEROES, EN, WAVES, EVENTS },
+    _test: { live: () => G, spawnEnemy, LOD, CAP, SPAWN_R, SEP_K, newGame, step, lvOptions, apply, optInfo, score, setView, xpNeed, encodeSnap, decodeSnap, WEAPONS, PASSIVES, HEROES, EN, WAVES, EVENTS },
   };
 })();
