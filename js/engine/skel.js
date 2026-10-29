@@ -165,8 +165,9 @@
     crouch: { v: 1.4, T: 1.12, beta: .64, land: .28, sHeel: .1, sToe: .58, heel: 8, toe: 30, clear: .06, kick: .05, bob: .01, sway: .02, hipK: .7, yawP: 3, listP: 2, tiltP: 24, lean: 12, arm: 8, elbow: 32, elbowSw: 6, out: 14, width: 1, blend: [.25, .25], crouch: 1 },
     carry: { v: 1.2, T: 1.05, beta: .62, land: .3, sHeel: .14, sToe: .52, heel: 12, toe: 50, clear: .05, kick: .06, bob: .014, sway: .02, hipK: .98, yawP: 2, listP: 2, tiltP: 0, lean: -3, arm: 0, elbow: 0, elbowSw: 0, out: 8, width: .95, blend: [.3, .3], carry: 1 },
   };
-  // directions: d = travel in the character frame [x (left), z (forward)], speed and cadence factors, roll on/off
-  const DIRS = { fwd: { d: [0, 1], kv: 1, kT: 1, roll: 1 }, back: { d: [0, -1], kv: .72, kT: .94, roll: 0 }, left: { d: [1, 0], kv: .5, kT: .85, roll: 0 }, right: { d: [-1, 0], kv: .5, kT: .85, roll: 0 } };
+  // directions: d = travel in the character frame [x (left), z (forward)], speed and cadence factors, roll on/off, kL = landing
+  // offset factor (strafes: quick short side steps landing near the hip — a long cycle and the forward landing offset made lunges)
+  const DIRS = { fwd: { d: [0, 1], kv: 1, kT: 1, roll: 1 }, back: { d: [0, -1], kv: .72, kT: .94, roll: 0 }, left: { d: [1, 0], kv: .5, kT: .65, kL: .45, roll: 0 }, right: { d: [-1, 0], kv: .5, kT: .65, kL: .45, roll: 0 } };
   const LIST = [];
   const SPEC = {};
   const add = (name, s) => { SPEC[name] = s; LIST.push(name); };
@@ -255,7 +256,7 @@
   function gaitPlanner(sk, spec){
     const g0 = GAIT[spec.gait], dr = DIRS[spec.dir], k = sk.k, sq = Math.sqrt(k);
     const kv = spec.dir === 'fwd' ? 1 : dr.kv * (spec.gait === 'sprint' ? .85 : 1);
-    const g = { ...g0, v: g0.v * kv * sq, T: g0.T * dr.kT * sq };
+    const g = { ...g0, v: g0.v * kv * sq, T: g0.T * dr.kT * sq, land: g0.land * (dr.kL || 1) };
     const roll = dr.roll ? 1 : 0, d = dr.d, dz = d[1], lat = Math.abs(d[0]);
     const T = g.T, beta = g.beta, v = g.v, D = v * beta * T;
     const prof = spec.prof || 'loop', ofs = [0, .5];

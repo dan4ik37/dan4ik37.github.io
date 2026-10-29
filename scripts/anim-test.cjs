@@ -18,7 +18,7 @@ const load = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'
 globalThis.window = globalThis;
 load('js/engine/core.js'); load('js/engine/skel.js'); load('js/engine/model.js');
 const E = globalThis.D37E, S = E.skel, M = E.models, U = E.UNIT;
-const GOLDEN = '62071f8b';   // FNV of all first-batch clips on BaseBody_Male (update together with a deliberate generator change)
+const GOLDEN = '6aa82b01';   // FNV of all first-batch clips on BaseBody_Male (update together with a deliberate generator change)
 
 // ═══ 1. generator ═══
 const sk = S.reference();
@@ -55,6 +55,13 @@ for (const [nm, ph] of [['loco.walk.stop_l', 0], ['loco.walk.stop_r', .5]]) {
   const travel = Math.hypot(c.root[(c.n - 1) * 3], c.root[(c.n - 1) * 3 + 1]);
   ok(Math.abs(c.sync - ph) < 1e-6 && dq < .5 && sp(2) < .98 * walk.speed && still !== null && still <= 1 && travel < 1, nm + ': entered at loop phase ' + ph + ' (pose = walk there), slows down at once, still ≤ 1 s', { sync: c.sync, dq: +dq.toFixed(2), v2: +sp(2).toFixed(3), still, travel: +travel.toFixed(3) });
 }
+// strafes (review 29.10): side steps, not lunges — feet ≤ 0.72 m apart, hips ≤ 8% below rest, legs never cross
+{ const st = { gap: 0, drop: 0, cross: 9 };
+  for (const c of A.filter(x => /\.(left|right)$/.test(x.name) && x.action.startsWith('loco.'))) for (let i = 0; i < c.n; i++) {
+    const w = S.sample(sk, c, i / c.fps, { inplace: true }), gx = w.P[S.IDX.LeftFoot][0] - w.P[S.IDX.RightFoot][0], kx = w.P[S.IDX.LeftLowerLeg][0] - w.P[S.IDX.RightLowerLeg][0];
+    st.gap = Math.max(st.gap, gx); st.cross = Math.min(st.cross, gx, kx); st.drop = Math.max(st.drop, 1 - w.P[S.IDX.Hips][1] / sk.hipH);
+  }
+  ok(st.gap <= .72 && st.drop <= .08 && st.cross >= .09, 'strafes: feet ≤ 0.72 m apart, hips ≤ 8% below rest, legs never cross', { gap: +st.gap.toFixed(3), drop: +st.drop.toFixed(3), cross: +st.cross.toFixed(3) }); }
 const tall = S.reference({ height: 2.2 }), cT = S.generate(tall, 'loco.walk.fwd');
 ok(cT.slide.max <= .01 && cT.speed > walk.speed && cT.dur > walk.dur, 'a 2.2 m skeleton: plants hold, longer/faster gait (dynamic similarity)', [cT.speed, cT.dur]);
 const fem = S.batch(S.reference({ sex: 'f' }));
