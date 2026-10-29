@@ -70,6 +70,9 @@
       this.cols = new Set();
       this.seq = 0;
       this.qmark = 0;
+      // рельеф: { sample(x, z) → высота } (+ по желанию col — «тело» рельефа: тогда за его края хватаются руки (паркур);
+      // blocked(x, z, y0, y1, r) — рельеф в цилиндре (влезет ли тело: встать, залезть на край); normal(x, y, z, out) → true и
+      // out.nx/ny/nz — настоящая нормаль в точке попадания луча вместо разностей высот). Без col/blocked/normal — как было
       this.terrain = null;
       this.watchers = [];
       this.onPush = null;                   // (ch, тело, nx, nz, скорость в тело) — для rigid.js
@@ -305,6 +308,8 @@
         if (Phys.circleHit(c, x, z, r)) { res = c; break; }
       }
       this._qr(2, list);
+      const T = this.terrain;
+      if (!res && T && T.blocked && T.blocked(x, z, y0, y1, r)) res = T.col || T;
       return res;
     }
     // Вытолкнуть из стен (2 прохода) и погасить скорость в стену — скольжение вдоль
@@ -360,7 +365,7 @@
     // ── Луч: от (ox, oy, oz) по (dx, dy, dz) (нормирован), ближайшее твёрдое тело или земля ──
     raycast(ox, oy, oz, dx, dy, dz, maxT = 500, filter){
       let bt = maxT, bc = null, bnx = 0, bny = 1, bnz = 0;
-      if (this.terrain) { if (rayTerrain(this.terrain, ox, oy, oz, dx, dy, dz, maxT) && RH.t < bt) { bt = RH.t; bnx = RH.nx; bny = RH.ny; bnz = RH.nz; } }
+      if (this.terrain) { if (rayTerrain(this.terrain, ox, oy, oz, dx, dy, dz, maxT) && RH.t < bt) { bt = RH.t; bnx = RH.nx; bny = RH.ny; bnz = RH.nz; bc = this.terrain.col || null; } }
       else if (this.ground != null && dy < -1e-6) { const t = (this.ground - oy) / dy; if (t >= 0 && t < bt) { bt = t; bnx = 0; bny = 1; bnz = 0; } }
       // по ячейкам сетки вдоль луча (грубо: прямоугольник проекции отрезка)
       const ex = ox + dx * Math.min(maxT, bt), ez = oz + dz * Math.min(maxT, bt);
@@ -486,6 +491,7 @@
         let lo = a, hi = b;
         for (let k = 0; k < 10; k++) { const m = (lo + hi) / 2; if (tf(T, ox, oy, oz, dx, dy, dz, m) < 0) hi = m; else lo = m; }
         const t = hi, x = ox + dx * t, z = oz + dz * t, e = .25;
+        if (T.normal && T.normal(x, oy + dy * t, z, RH, dx, dy, dz)) { RH.t = t; return true; }   // рельеф знает свою нормаль (край ямы — стенка)
         const gx = T.sample(x + e, z) - T.sample(x - e, z), gz = T.sample(x, z + e) - T.sample(x, z - e), l = Math.sqrt(gx * gx + 4 * e * e + gz * gz);
         RH.t = t; RH.nx = -gx / l; RH.ny = 2 * e / l; RH.nz = -gz / l;
         return true;

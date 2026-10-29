@@ -112,7 +112,7 @@
       if (d.trunc) TS.st.trunc++;
       if (d.ne < b.need) { TS.st.stale++; give(); b.st = 0; dirtyQ = true; return; }   // an edit came while it was being built
       TS.st.built++; if (!d.q) TS.st.empty++;
-      b.st = 2; b.ne = d.ne; b.q = d.q; b.buf = d.buf; b.wi = K ? K.slot : -1;
+      b.st = 2; b.ne = d.ne; b.q = d.q; b.buf = d.buf; b.pk = d.pk | 0; b.wi = K ? K.slot : -1;
       ready.push(b);
     }
     const ready = [];
@@ -135,7 +135,7 @@
     function blockOf(cx, cy, cz, create){
       const k = TE.key(cx, cy, cz);
       let b = TS.blocks.get(k);
-      if (!b && create) { b = { key: k, cx, cy, cz, st: 0, need: 0, ne: -1, q: 0, buf: null, wi: -1, job: 0, mesh: null, shown: false, fails: 0, retryAt: 0, qs: 0 }; TS.blocks.set(k, b); }
+      if (!b && create) { b = { key: k, cx, cy, cz, st: 0, need: 0, ne: -1, q: 0, buf: null, wi: -1, job: 0, mesh: null, shown: false, fails: 0, retryAt: 0, qs: 0, pd: null, pk: 0 }; TS.blocks.set(k, b); }
       return b;
     }
     // blocks of a known column: the surface range; near the player also the cave blocks down to −32 m (caves end at −28 m)
@@ -175,6 +175,7 @@
     function drop(b){
       if (b.st === 2 && b.buf) { giveBack(b); }
       if (b.shown && TS.onRelease) TS.onRelease(b);
+      pdFree(b.pd); b.pd = null;
       b.shown = false; b.st = -1;
     }
     function giveBack(b){
@@ -221,8 +222,8 @@
       for (let e = 0; e < ne && k < n; e++) if (T1.touches(ed, e, fox, foy, foz)) { buf.set(ed.subarray(e * 5, e * 5 + 5), k * 5); k++; }
       const q = L.build(seed, it.cx, it.cy, it.cz, n), o = L.out();
       let ab = null;
-      if (q > 0) { ab = new ArrayBuffer(q * 80); new Float32Array(ab, 0, q * 12).set(o.pos.subarray(0, q * 12)); new Int8Array(ab, q * 48, q * 16).set(o.nrm.subarray(0, q * 16)); new Uint8Array(ab, q * 64, q * 16).set(o.col.subarray(0, q * 16)); }
-      gotBlock(null, { key: it.key }, { id, q, buf: ab, hmin: o.info[0], hmax: o.info[1], trunc: o.info[3], ms: now() - t0, ne });
+      if (q > 0) { ab = new ArrayBuffer(q * T1.BLOCK_BYTES); new Float32Array(ab, 0, q * 12).set(o.pos.subarray(0, q * 12)); new Int8Array(ab, q * 48, q * 16).set(o.nrm.subarray(0, q * 16)); new Uint8Array(ab, q * 64, q * 16).set(o.col.subarray(0, q * 16)); T1.physPack(o.pos, q, ab); }
+      gotBlock(null, { key: it.key }, { id, q, buf: ab, pk: 1, hmin: o.info[0], hmax: o.info[1], trunc: o.info[3], ms: now() - t0, ne });
     }
 
     TS.update = (x, y, z) => {
@@ -237,8 +238,8 @@
       return null;
     };
     TS.readyCount = () => ready.length;
-    // the mesh copied the data — buffer back to its worker; the block is shown
-    TS.recycle = b => { giveBack(b); b.st = 3; b.shown = true; };
+    // the mesh copied the data — buffer back to its worker; the block is shown (and from now on it is also the physics ground)
+    TS.recycle = b => { setPd(b); giveBack(b); b.st = 3; b.shown = true; };
     // ── edits ──
     function edit(x, y, z, r, mode){
       x = Q64(x); y = Q64(y); z = Q64(z); r = Q64(r);
@@ -246,6 +247,7 @@
       if (ed.length < (ne + 1) * 5) { const a = new Float64Array(ed.length * 2); a.set(ed); ed = a; }
       ed[ne * 5] = x; ed[ne * 5 + 1] = y; ed[ne * 5 + 2] = z; ed[ne * 5 + 3] = r; ed[ne * 5 + 4] = mode;
       ne++; TS.st.edits = ne;
+      bucketAdd(ne - 1);
       const msg = { t: 'edit', e: [x, y, z, r, mode] };
       for (const K of W) if (K && !K.dead) K.w.postMessage(msg);
       const list = TE.affected(x, y, z, r);
@@ -266,15 +268,223 @@
     TS.editCount = () => ne;
     TS.edits = () => ed.slice(0, ne * 5);
 
-    // ── physics: surface under yRef from the density field at integer columns (cached; cleared by edits) ──
+    // ── edits by 32 m column cell (xz bounds ± (r + 3), order kept): rays, column probes and point tests read only these ──
+    const EB = new Map();   // colKey → [edit index, …] (ascending = edit order)
+    function bucketAdd(e){
+      const o = e * 5, m = ed[o + 3] + 3;
+      for (let cx = Math.floor((ed[o] - m) / 32); cx <= Math.floor((ed[o] + m) / 32); cx++)
+        for (let cz = Math.floor((ed[o + 2] - m) / 32); cz <= Math.floor((ed[o + 2] + m) / 32); cz++) {
+          const k = TE.colKey(cx, cz); let L = EB.get(k);
+          if (!L) { L = []; EB.set(k, L); }
+          L.push(e);
+        }
+    }
+    let rops = new Float64Array(5 * 16);
+    // the edits whose sphere box holds (x, y, z) — exactly those that can change the SIGN of the density there (an edit whose
+    // sphere misses the point keeps the sign of what it is applied to, in any order), so a solid/air test with them equals the
+    // test with every edit. Cost: the edits of one 32 m cell, not all of them.
+    function signOps(x, y, z){
+      const L = EB.get(TE.colKey(Math.floor(x / 32), Math.floor(z / 32)));
+      let n = 0;
+      if (L) for (let i = 0; i < L.length; i++) {
+        const o = L[i] * 5, r = ed[o + 3];
+        if (Math.abs(x - ed[o]) > r || Math.abs(y - ed[o + 1]) > r || Math.abs(z - ed[o + 2]) > r) continue;
+        if (rops.length < (n + 1) * 5) { const a = new Float64Array(rops.length * 2); a.set(rops); rops = a; }
+        for (let k = 0; k < 5; k++) rops[n * 5 + k] = ed[o + k];
+        n++;
+      }
+      return n;
+    }
+    const solidAt = (x, y, z) => T1.density(seed, x, y, z, rops, signOps(x, y, z)) > 0;
+    // surface normal of the field at a point (−∇density, central differences; the edits of the point's 32 m cell — every edit
+    // within r + 3 of it, so magnitudes near an edit are right): a dig crater's rim is a wall, not a 50° heightfield slope
+    let cops = new Float64Array(5 * 16), ncops = 0;
+    const NF = { nx: 0, ny: 1, nz: 0 };
+    function fieldNormal(x, y, z, out){
+      const L = EB.get(TE.colKey(Math.floor(x / 32), Math.floor(z / 32)));
+      ncops = 0;
+      if (L) for (let i = 0; i < L.length; i++) {
+        if (cops.length < (ncops + 1) * 5) { const a = new Float64Array(cops.length * 2); a.set(cops); cops = a; }
+        const o = L[i] * 5; for (let k = 0; k < 5; k++) cops[ncops * 5 + k] = ed[o + k];
+        ncops++;
+      }
+      const e = 0.1, f = (a, b, c) => T1.density(seed, a, b, c, cops, ncops);
+      const gx = f(x + e, y, z) - f(x - e, y, z), gy = f(x, y + e, z) - f(x, y - e, z), gz = f(x, y, z + e) - f(x, y, z - e);
+      const l = Math.hypot(gx, gy, gz);
+      if (!(l > 1e-12)) return false;
+      out.nx = -gx / l; out.ny = -gy / l; out.nz = -gz / l;
+      return true;
+    }
+    // TS.normal(x, y, z, out[, ray dx, dy, dz]) — Phys's terrain.normal hook. A horizontal ray (a wall probe of the parkour
+    // finder) gets the normal of the FACE under the hit: the steepest of the hit and the face 0.3 m lower along the same ray.
+    // Surface Nets rounds every rim over ~1 m, so 3 cm under a rim the slope is gentle even on a 2 m vertical face; this way the
+    // rounded rim of a steep face is a ledge (crater, bank, fill) and a gentle slope is not.
+    TS.normal = (x, y, z, out, dx, dy, dz) => {
+      if (!fieldNormal(x, y, z, out)) return false;
+      if (dx === undefined || !(Math.abs(dy) < 0.35) || Math.abs(out.ny) <= 0.3) return true;
+      const hl = Math.hypot(dx, dz);
+      if (!(hl > 1e-6)) return true;
+      const ux = dx / hl, uz = dz / hl, y2 = y - 0.3;
+      let a = -1.0;   // from 1 m before the hit, at the lower height, along the same horizontal direction
+      if (solidAt(x + ux * a, y2, z + uz * a)) return true;
+      for (let t = -0.9; t <= 0.6; t += 0.1) {
+        if (!solidAt(x + ux * t, y2, z + uz * t)) { a = t; continue; }
+        let lo = a, hi = t;
+        for (let i = 0; i < 6; i++) { const m = (lo + hi) / 2; if (solidAt(x + ux * m, y2, z + uz * m)) hi = m; else lo = m; }
+        if (fieldNormal(x + ux * hi, y2, z + uz * hi, NF) && Math.abs(NF.ny) < Math.abs(out.ny)) { out.nx = NF.nx; out.ny = NF.ny; out.nz = NF.nz; }
+        return true;
+      }
+      return true;
+    };
+
+    // ── physics, path 1: the SHOWN mesh. A block's triangles become its physics when terra-mesh shows it (TS.recycle), so the
+    //    feet stand on the drawn surface — at dig craters, fills and steep river banks too — and a re-mesh swaps both at once.
+    //    Positions are kept as Uint16 ((v + 1) · 1927: 0.52 mm, local range [−1, 33]); the xz cell index (34 × 34) is built on the
+    //    first query of the block. ──
+    const QS = T1.PHYS_Q || 1927, PQ = 1 / QS, G = 34, PD_EMPTY = { q: 0, p: null, up: null, off: null, ids: null };
+    const PDP = new Map();   // pooled position arrays by quad class (≤ 2 MB kept)
+    let pdPooled = 0;
+    const pdCls = q => { let c = 256; while (c < q) c *= 2; return c; };
+    function pdFree(pd){
+      if (!pd || pd === PD_EMPTY || !pd.p) return;
+      const c = pd.p.length / 12;
+      if (pdPooled + pd.p.byteLength <= 2097152) { let L = PDP.get(c); if (!L) { L = []; PDP.set(c, L); } L.push(pd.p); pdPooled += pd.p.byteLength; }
+      pd.p = null; pd.up = null; pd.off = null; pd.ids = null;
+    }
+    function setPd(b){
+      const old = b.pd;
+      if (b.q > 0 && b.buf) {
+        const q = b.q, c = pdCls(q), L = PDP.get(c);
+        let p = L && L.pop();
+        if (p) pdPooled -= p.byteLength; else p = new Uint16Array(c * 12);
+        if (b.pk) p.set(new Uint16Array(b.buf, q * 80, q * 12));   // the worker packed it (T1.physPack): memcpy
+        else { const f = new Float32Array(b.buf, 0, q * 12); for (let i = 0; i < q * 12; i++) p[i] = Math.round((f[i] + 1) * QS); }
+        b.pd = { q, p, up: null, off: null, ids: null };
+      } else b.pd = PD_EMPTY;
+      if (old && old !== b.pd) pdFree(old);
+    }
+    const gcell = u => { const g = Math.floor(u * PQ); return g < 0 ? 0 : g > 33 ? 33 : g; };   // quantized local coordinate → cell 0…33
+    function pdIndex(pd){
+      const q = pd.q, p = pd.p, off = new Uint32Array(G * G + 1);
+      for (let pass = 0; pass < 2; pass++) {
+        const cur = pass ? off.slice(0, G * G) : null;
+        for (let i = 0; i < q; i++) {
+          const o = i * 12;
+          let x0 = p[o], x1 = x0, z0 = p[o + 2], z1 = z0;
+          for (let m = 3; m < 12; m += 3) { const x = p[o + m], z = p[o + m + 2]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+          const gx0 = gcell(x0), gx1 = gcell(x1), gz0 = gcell(z0), gz1 = gcell(z1);
+          for (let gz = gz0; gz <= gz1; gz++) for (let gx = gx0; gx <= gx1; gx++) {
+            if (pass) pd.ids[cur[gz * G + gx]++] = i; else off[gz * G + gx + 1]++;
+          }
+        }
+        if (!pass) { for (let k = 0; k < G * G; k++) off[k + 1] += off[k]; pd.ids = q <= 65535 ? new Uint16Array(off[G * G]) : new Uint32Array(off[G * G]); }
+      }
+      pd.off = off;
+    }
+    // block (cx, cy, cz) as physics: its shown mesh, PD_EMPTY (column known, the block is not part of the drawn set), null — unknown
+    function pdOf(cx, cy, cz){
+      const b = TS.blocks.get(TE.key(cx, cy, cz));
+      if (b) return b.pd;
+      const c = TS.cols.get(TE.colKey(cx, cz));
+      return c && c.st === 2 ? PD_EMPTY : null;
+    }
+    const HY = new Float64Array(128), HU = new Uint8Array(128);
+    let nh = 0;
+    // every crossing of the vertical line (x, z) with the shown mesh from y0 up to the open sky → HY (world y, ascending) / HU (1 =
+    // up-facing: air above); false — a block or a column on the way is not known yet. Facing: along a vertical line solid and air
+    // alternate and above the column's top (its highest sample, fills included) there is only air, so the topmost crossing faces
+    // up and the rest alternate — exact even on near-vertical faces and overhang lips, where one quad's own normal is not.
+    function lineHits(x, z, y0, y1){
+      nh = 0;
+      const bx = Math.floor(x / 32), bz = Math.floor(z / 32);
+      // a block's quads span local [−1, 32]: the east / north neighbour reaches 1 m back into this block
+      const ex = x - bx * 32 >= 31 ? 1 : 0, ez = z - bz * 32 >= 31 ? 1 : 0;
+      for (let kz = 0; kz <= ez; kz++) for (let kx = 0; kx <= ex; kx++) {   // the open sky: above every surface of these columns
+        const ck = TE.colKey(bx + kx, bz + kz), c = TS.cols.get(ck);
+        if (!c || c.st !== 2) return false;
+        if (c.hmax + 1 > y1) y1 = c.hmax + 1;
+        const L = EB.get(ck);
+        if (L) for (let i = 0; i < L.length; i++) { const o = L[i] * 5; if (ed[o + 4] !== 0 && ed[o + 1] + ed[o + 3] + 1 > y1) y1 = ed[o + 1] + ed[o + 3] + 1; }
+      }
+      const cyA = Math.floor((y0 - 32) / 32), cyB = Math.floor((y1 + 1) / 32);
+      for (let kz = 0; kz <= ez; kz++) for (let kx = 0; kx <= ex; kx++) {
+        const cx = bx + kx, cz = bz + kz, Lx = x - cx * 32, Lz = z - cz * 32;
+        const g = gcell((Lz + 1) * QS) * G + gcell((Lx + 1) * QS);
+        for (let cy = cyA; cy <= cyB; cy++) {
+          const pd = pdOf(cx, cy, cz);
+          if (!pd) return false;
+          if (!pd.q) continue;
+          if (!pd.off) pdIndex(pd);
+          const p = pd.p, ids = pd.ids, oy = cy * 32;
+          for (let k = pd.off[g], ke = pd.off[g + 1]; k < ke; k++) {
+            const o = ids[k] * 12;
+            for (let t = 0; t < 2; t++) {   // triangles (0, 1, 2) and (0, 2, 3)
+              const ob = o + (t ? 6 : 3), oc = o + (t ? 9 : 6);
+              const ax = p[o] * PQ - 1, az = p[o + 2] * PQ - 1, bxv = p[ob] * PQ - 1, bzv = p[ob + 2] * PQ - 1, cxv = p[oc] * PQ - 1, czv = p[oc + 2] * PQ - 1;
+              const d = (bzv - czv) * (ax - cxv) + (cxv - bxv) * (az - czv);
+              if (d > -1e-12 && d < 1e-12) continue;   // vertical triangle: no height over a point
+              const w0 = ((bzv - czv) * (Lx - cxv) + (cxv - bxv) * (Lz - czv)) / d, w1 = ((czv - az) * (Lx - cxv) + (ax - cxv) * (Lz - czv)) / d, w2 = 1 - w0 - w1;
+              if (w0 < -1e-9 || w1 < -1e-9 || w2 < -1e-9) continue;
+              const y = oy + w0 * (p[o + 1] * PQ - 1) + w1 * (p[ob + 1] * PQ - 1) + w2 * (p[oc + 1] * PQ - 1);
+              if (y < y0 || y > y1 || nh >= HY.length) continue;
+              HY[nh++] = y;
+            }
+          }
+        }
+      }
+      orient();
+      return true;
+    }
+    // sort the crossings, merge the duplicates of one crossing (where two triangles meet), then the topmost faces up, the rest alternate
+    function orient(){
+      for (let i = 1; i < nh; i++) {   // insertion sort by y (≤ 128, no garbage)
+        const y = HY[i];
+        let j = i - 1;
+        while (j >= 0 && HY[j] > y) { HY[j + 1] = HY[j]; j--; }
+        HY[j + 1] = y;
+      }
+      let m = 0;
+      for (let i = 0; i < nh; i++) { if (m && HY[i] - HY[m - 1] < 1e-6) continue; HY[m++] = HY[i]; }
+      nh = m;
+      for (let i = 0; i < nh; i++) HU[i] = (nh - 1 - i) & 1 ? 0 : 1;
+    }
+    // floor under yTop (the highest up-facing crossing ≤ yTop); inside solid (the nearest crossing above is up-facing, ≤ 8 m) —
+    // its top, as the density path did; NaN — unknown or nothing within 28 m below
+    function meshGround(x, z, yTop){
+      if (!lineHits(x, z, yTop - 28, yTop + 8)) return NaN;
+      let best = -Infinity, above = Infinity, aboveUp = 0;
+      for (let i = 0; i < nh; i++) {
+        const y = HY[i];
+        if (y <= yTop) { if (HU[i] && y > best) best = y; }
+        else if (y < above) { above = y; aboveUp = HU[i]; }
+      }
+      if (above < Infinity && aboveUp) return above <= yTop + 8 ? above : yTop + 8;   // as the density path: up by at most 8 m per query
+      return best > -Infinity ? best : NaN;
+    }
+    // is there terrain in the vertical segment (x, z, y0…y1)? 1 / 0, −1 unknown
+    function meshBlocked(x, z, y0, y1){
+      if (!lineHits(x, z, y0 - 8, y1 + 8)) return -1;
+      let above = Infinity, aboveUp = 0;
+      for (let i = 0; i < nh; i++) {
+        const y = HY[i];
+        if (y > y0 && y < y1) return 1;
+        if (y >= y1 && y < above) { above = y; aboveUp = HU[i]; }
+      }
+      return aboveUp;   // no crossing inside: all solid if the surface above has air over it
+    }
+
+    // ── physics, path 2 (block not shown yet, or no workers/mesh at all): the density field at integer columns (cached; cleared
+    //    by edits), bilinear between columns ──
     const PH = new Map(), DP = [];   // column key → { h, d: Float64Array(256) for y −128…127 (NaN = not computed) }; DP — pool of d
     const phClear = () => { for (const c of PH.values()) if (DP.length < 4096) DP.push(c.d); PH.clear(); };
     const PK = (ix, iz) => (ix + 33554432) * 67108864 + (iz + 33554432);
     let ops = new Float64Array(5 * 16), nops = 0;
-    function colOps(ix, iz){   // edits that can reach this column (horizontal test), order kept
+    function colOps(ix, iz){   // edits that can reach this column (horizontal test, from its 32 m cell), order kept
       nops = 0;
-      for (let e = 0; e < ne; e++) {
-        const o = e * 5, r = ed[o + 3] + 1;
+      const L = EB.get(TE.colKey(Math.floor(ix / 32), Math.floor(iz / 32)));
+      if (!L) return;
+      for (let i = 0; i < L.length; i++) {
+        const o = L[i] * 5, r = ed[o + 3] + 1;
         if (Math.abs(ed[o] - ix) > r || Math.abs(ed[o + 2] - iz) > r) continue;
         if (ops.length < (nops + 1) * 5) { const a = new Float64Array(ops.length * 2); a.set(ops); ops = a; }
         ops.set(ed.subarray(o, o + 5), nops * 5); nops++;
@@ -310,27 +520,50 @@
       for (let k = j; k < j + 8; k++) { const b = dAt(c, ix, k + 1, iz); if (b <= 0) { const a = dAt(c, ix, k, iz); return k + a / (a - b); } }
       return j + 8;
     }
+    TS.st.phMesh = 0; TS.st.phDens = 0;
+    TS.meshPhysics = o.meshPhysics !== false;   // false → always the density path (the old behaviour)
     TS.ground = (x, z, yRef) => {
+      const yt = yRef + 1.1;
+      if (TS.meshPhysics) { const m = meshGround(x, z, yt); if (m === m) { TS.st.phMesh++; return m; } }
+      TS.st.phDens++;
+      return TS.densityGround(x, z, yRef);
+    };
+    TS.densityGround = (x, z, yRef) => {
       const x0 = Math.floor(x), z0 = Math.floor(z), fx = x - x0, fz = z - z0, yt = yRef + 1.1;
       const a = surface(x0, z0, yt), b = surface(x0 + 1, z0, yt), c = surface(x0, z0 + 1, yt), d = surface(x0 + 1, z0 + 1, yt);
       return (a * (1 - fx) + b * fx) * (1 - fz) + (c * (1 - fx) + d * fx) * fz;
     };
+    // terrain in the vertical cylinder (x, z, r) between y0 and y1 (m): the centre and 4 points at 0.7 r (parkour "room on top",
+    // crouch / stand checks through Phys.blocked)
+    TS.blocked = (x, z, y0, y1, r = 0) => {
+      const k = r * 0.7;
+      for (let i = 0; i < 5; i++) {
+        const px = x + (i === 1 ? k : i === 2 ? -k : 0), pz = z + (i === 3 ? k : i === 4 ? -k : 0);
+        const m = TS.meshPhysics ? meshBlocked(px, pz, y0, y1) : -1;
+        if (m === 1) return true;
+        if (m === -1 && (solidAt(px, y0 + 0.05, pz) || solidAt(px, (y0 + y1) / 2, pz) || solidAt(px, y1 - 0.05, pz))) return true;
+        if (!(r > 0)) break;
+      }
+      return false;
+    };
+    // all crossings of a vertical line with the shown mesh (tests, tools): [[y, up], …] or null when a block is not shown
+    TS.meshHits = (x, z, y0, y1) => { if (!lineHits(x, z, y0, y1)) return null; const r = []; for (let i = 0; i < nh; i++) r.push([HY[i], HU[i]]); return r.sort((a, b) => a[0] - b[0]); };
     TS.water = (x, z) => (phCol(Math.round(x), Math.round(z)).h < -0.3 ? 0 : -Infinity);
     TS.height = (x, z) => T1.height(seed, x, z);
-    TS.density = (x, y, z) => T1.density(seed, x, y, z, ed, ne);
-    // ray march through the density field (m); first crossing into solid
+    TS.density = (x, y, z) => T1.density(seed, x, y, z, ed, ne);   // the core's point density (every edit; exact magnitude)
+    TS.solid = solidAt;                                              // the same sign, from the edits of one cell (fast)
+    // ray march through the density field (m); first crossing into solid. Only signs are tested → signOps (one cell's edits)
     TS.ray = (ox, oy, oz, dx, dy, dz, maxT = 60) => {
       const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
-      let a = 0, fa = T1.density(seed, ox, oy, oz, ed, ne);
-      if (fa > 0) return { t: 0, x: ox, y: oy, z: oz };
+      let a = 0;
+      if (solidAt(ox, oy, oz)) return { t: 0, x: ox, y: oy, z: oz };
       for (let t = 0.35; t <= maxT; t += 0.35) {
-        const fb = T1.density(seed, ox + dx * t, oy + dy * t, oz + dz * t, ed, ne);
-        if (fb > 0) {
+        if (solidAt(ox + dx * t, oy + dy * t, oz + dz * t)) {
           let lo = a, hi = t;
-          for (let i = 0; i < 8; i++) { const m = (lo + hi) / 2; if (T1.density(seed, ox + dx * m, oy + dy * m, oz + dz * m, ed, ne) > 0) hi = m; else lo = m; }
+          for (let i = 0; i < 8; i++) { const m = (lo + hi) / 2; if (solidAt(ox + dx * m, oy + dy * m, oz + dz * m)) hi = m; else lo = m; }
           return { t: hi, x: ox + dx * hi, y: oy + dy * hi, z: oz + dz * hi };
         }
-        a = t; fa = fb;
+        a = t;
       }
       return null;
     };

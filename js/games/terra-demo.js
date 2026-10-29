@@ -84,7 +84,14 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     // физика: земля и вода — из плотности ядра (пещеры: пол той пещеры, в которой стоишь); координаты физики — ед. от якоря
     const ph = st.ph = new E.Phys({ ground: null });
     st.refY = sp.h + 1;
-    ph.terrain = { sample: (x, z) => TS.ground(st.ax + x / U, st.az + z / U, st.refY) * U };
+    // земля — нарисованные треугольники (TS.ground по показанной сетке; блок ещё не показан — плотность). col — рельеф как «тело»:
+    // за края ям, обрывов и насыпей хватаются руки (паркур player.js); blocked — встать/залезть не сквозь рельеф и не под свод пещеры
+    ph.terrain = {
+      sample: (x, z) => TS.ground(st.ax + x / U, st.az + z / U, st.refY) * U,
+      blocked: (x, z, y0, y1, r) => TS.blocked(st.ax + x / U, st.az + z / U, y0 / U, y1 / U, (r || 0) / U),
+      normal: (x, y, z, out, dx, dy, dz) => TS.normal(st.ax + x / U, y / U, st.az + z / U, out, dx, dy, dz),
+      col: { terrain: true, solid: true },
+    };
     ph.waterLevel = (x, z) => TS.water(st.ax + x / U, st.az + z / U) === 0 ? 0 : -Infinity;
     const x0 = (sp.x - st.ax) * U, z0 = (sp.z - st.az) * U;
     const Pl = st.Pl = E.player(ph, { x: x0, z: z0, yaw: 0 });

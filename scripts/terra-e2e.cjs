@@ -79,6 +79,8 @@ const summary = f => {
   };
   const workers = async () => { const t = await send('Target.getTargets'); return t.targetInfos.filter(x => x.type === 'worker' || x.type === 'dedicated_worker').length; };
   const heap = () => ev(`+(performance.memory.usedJSHeapSize / 1048576).toFixed(1)`);
+  // heap after GC, the least of 3 tries 0.5 s apart: a close still finishing (worker replies, last frame) is not counted as a leak
+  const heapMin = async () => { let m = Infinity; for (let k = 0; k < 3; k++) { await ev('window.gc && window.gc()'); await sleep(500); m = Math.min(m, await heap()); } return m; };
   const stats = () => ev(`${T}.stats()`);
   const measure = async during => {
     await ev(`(window.__trS.f = [], window.__trS.on = true)`);
@@ -152,7 +154,7 @@ const summary = f => {
       await setLs({});
       await open(); await settle(60000); await go('#/games'); await sleep(1500);
       await ev('window.gc && window.gc()'); await sleep(300);
-      const base = { heap: await heap(), canvases: await ev(`document.querySelectorAll('canvas').length`), workers: await workers(), ...(await countObjs()) };
+      const base = { heap: await heapMin(), canvases: await ev(`document.querySelectorAll('canvas').length`), workers: await workers(), ...(await countObjs()) };
       out.base = base; out.cycles = []; console.log('  base (after 1st close)', JSON.stringify(base));
       for (let i = 0; i < n; i++) {
         await go('#/games/terra'); await ready(); await sleep(2500);
@@ -160,7 +162,7 @@ const summary = f => {
         await go('#/games'); await sleep(900);
         if (i % 5 === 4) {
           await ev('window.gc && window.gc()'); await sleep(400);
-          const c = { i: i + 1, heap: await heap(), canvases: await ev(`document.querySelectorAll('canvas').length`), workers: await workers(), ...(await countObjs()) };
+          const c = { i: i + 1, heap: await heapMin(), canvases: await ev(`document.querySelectorAll('canvas').length`), workers: await workers(), ...(await countObjs()) };
           out.cycles.push(c); console.log('  ', JSON.stringify(c));
         }
       }
@@ -188,6 +190,23 @@ const summary = f => {
   } catch (e) { failed = true; console.log('ERROR', e.message); out.error = e.message; }
   out.logs = logs.slice(0, 40);
   out.errorCount = logs.filter(l => !/X3595/.test(l)).length;
+  // verdict: a run that only prints numbers can never fail CI (T-111 review). Fail on console errors/warnings in every mode;
+  // leak — heap after GC grew by more than LEAK_MB (default 6) over the base, a worker survived the close, or the three.js object
+  // counts / canvases differ from the base; perf / soak — terrain errors (worker build errors) in the stats.
+  const why = [];
+  if (out.errorCount) why.push(out.errorCount + ' console errors/warnings');
+  if (MODE === 'leak' && out.base) {
+    const last = out.cycles && out.cycles[out.cycles.length - 1], lim = +(process.env.LEAK_MB || 6);
+    if (!last) why.push('no leak cycle measured');
+    else {
+      if (last.heap - out.base.heap > lim) why.push(`heap +${(last.heap - out.base.heap).toFixed(1)} MB > ${lim} MB`);
+      if (last.workers > 0) why.push(last.workers + ' workers alive after close');
+      for (const k of ['canvases', 'renderers', 'geometries', 'materials']) if (last[k] !== out.base[k]) why.push(`${k} ${out.base[k]} → ${last[k]}`);
+    }
+  }
+  if (MODE === 'perf') for (const p of [out.wasm, out.js]) if (p && p.totals && p.totals.errors) why.push(`${p.label}: ${p.totals.errors} terrain errors`);
+  if (MODE === 'soak' && out.minutes && out.minutes.length) { const m = out.minutes[out.minutes.length - 1]; if (m.tsErr) why.push(m.tsErr + ' terrain errors'); }
+  if (why.length) { failed = true; out.fail = why; console.log('FAIL:', why.join('; ')); }
   const file = path.join(OUT, `terra-${MODE}-${PC ? 'pc' : 'phone'}.json`);
   fs.writeFileSync(file, JSON.stringify(out, null, 1));
   console.log('written:', file, '· log errors/warnings:', out.errorCount);
