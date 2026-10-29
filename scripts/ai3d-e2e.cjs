@@ -49,7 +49,7 @@ function selfRows(){
 const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * q))] : 0;
 
 (async () => {
-  fs.mkdirSync(path.join(OUT, 'shots'), { recursive: true });
+  fs.mkdirSync(path.join(OUT, 'shots'), { recursive: true }); fs.mkdirSync(path.join(OUT, 'glb'), { recursive: true });   // smoke writes glb/textured-chrome.glb
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const BASE = 'http://localhost:' + server.address().port, port = 9300 + Math.floor(Math.random() * 500);
   const profile = fs.mkdtempSync(path.join(OUT, 'chrome-' + MODE + '-'));
