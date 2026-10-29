@@ -40,6 +40,7 @@
       if (why) { g.toast?.(why === 'day' ? (was ? '🛏 Это твой дом. Спать можно только ночью' : '🛏 Дом здесь: после нокаута и по свитку — сюда. Спать — ночью') : E().sleep.TEXT.monsters + (was ? '' : ' (дом — здесь)')); return true; }
       if (sleep) return true;
       sleep = { t: 0, x: P.x, z: P.z, wait: false, hp: P.hp };
+      if (st.v2) st.kbSleep = { x: hit.x + .5, y: hit.y + 1, z: hit.z + .5 };   // интерфейс 2.0 (T-123): человечек лежит на лежанке (поза world3d 13, глаза закрыты)
       g.sound?.('kb_place', { vol: .3, rate: .7 });
       overlay(true, '💤');
       if (st.coopGuest) st.net?.sleep?.(true);
@@ -61,7 +62,7 @@
     }
     function wake(msg){
       if (!sleep) return;
-      const was = sleep; sleep = null;
+      const was = sleep; sleep = null; st.kbSleep = null;
       overlay(false, msg === 'morning' ? '☀️' : '');
       if (st.coopGuest) st.net?.sleep?.(false);
       if (msg === 'morning') { g.toast?.(E().sleep.TEXT.morning, true); P.hp = Math.max(P.hp, 14); X.emit('wake', was.t); }
@@ -101,7 +102,7 @@
       const total = st.net.players().length, need = E().sleep.need(total, st.meta?.rules?.sleep || 'half');
       if (n >= need) { morning(); g.toast?.('☀️ Друзья проспали ночь — утро', true); }
     };
-    f.dispose = () => { ov?.remove(); ov = null; if (sleep && st.coopGuest) st.net?.sleep?.(false); sleep = null; };
+    f.dispose = () => { ov?.remove(); ov = null; if (sleep && st.coopGuest) st.net?.sleep?.(false); sleep = null; st.kbSleep = null; };
 
     // ── вещи: ведро, свиток ──
     const hand = which => which === 'off' ? P.off : P.inv[P.sel];
