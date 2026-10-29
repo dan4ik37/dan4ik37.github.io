@@ -436,8 +436,9 @@ penumbra moving across the ground (~2 min of totality at a point). World clock: 
 (the live server needs the update below; until then the clock quietly uses Supabase).
 **Weather hook (for the weather track, BIOME_WEATHER.md v2 §WX2).** One call: `V.setWeather(wx)` (planet-demo.js `planetWx` passes the engine
 weather's visual state 4×/s) — besides `cloud, rain, fog, storm, snowCover, wet` it takes `dust` 0…1, `tint` [r, g, b] or '#rrggbb' (sRGB),
-`vis` (visibility, u: the distance fades into the tint) and `flat` 0…1 (whiteout). The terrain shader branches are uniform-gated (0 cost when
-unused).
+`vis` (visibility, u: the distance fades into the tint) and `flat` 0…1 (whiteout); the sky dome around the camera takes the tint too (the
+shell seen from orbit does not: weather is local). Terrain and sky branches are uniform-gated (0 cost when unused). Screenshots: sandstorm,
+whiteout, smoke — E:/claude-tmp/t145/planet/wx2/shots; eclipse — E:/claude-tmp/t145/planet/ecl/shots.
 **Not done:** real phone check (owner); the old v1 path still drops a face to its root chunk for ~0.1 s when a new leaf is not ready yet while
 walking (pre-existing; v2 does not) — v1 is only the rollback now.
 
