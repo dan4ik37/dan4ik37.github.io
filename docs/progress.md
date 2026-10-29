@@ -475,3 +475,23 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
 - Частота — как в проекте (песчаная буря раз в 1–2 дня летом в пустыне, буран почти каждый зимний день в степи); при «редко» —
   сильные явления вдвое реже, но в полную силу.
 
+
+
+## 29.10 — T-124: structure v2 «не на палке» (SH0.1, SH0.2, SH1; STRUCTURE_HAZARDS.md)
+- Take: v1 pinned by a hash (support-hash.js) — every later change must keep old worlds identical; v2 only for worlds with load: 1.
+- Take: soft load capacities × 2, not × 3 (with × 3 a 5-long wood cantilever out of a cliff stood in soft; G7 wants it to fall).
+- Take: until S1.T (SH3) an overturning (storey) failure only refuses placement and is reported as a tip; cuts act on joints / hang / crush
+  (a straight drop cannot move what rests on its support — it would only re-place blocks and knock torches off).
+- Take: per-adapter build weight (Kubomir 16 ops per node: world reads), SOLVE_BUDGET stays 4,096 — the in-page phone ×4 number is
+  not confirmed yet (machine contended during the run); the budget is the coordinator's to sign.
+- Take: collapse / hazard items are «keep» (never despawn, never evicted); items of one event merge into ≤ 32 stacks; a chest moves with its block.
+- Skip (not this step): UI toggles for load (SH0.5b, HUD lane), co-op hello field `load` (SH0.5a), tipping (SH3), Mir (SH1m).
+- Take (review): side supporters with strictly higher support only (equal — fallback); spec §2.1 "before" uses the key for the pass
+  order only — spec update needed on the d37-core side (not touched here).
+- Take (review): v1 groups fall right after both pass-1 solves (early); only load failures wait for the whole job. The spec's "3–5
+  ticks for 2,267 cells" is not reachable at 4,096 weighted ops (≈ 70 per node); early release gives ~12 ticks (Kubomir build weight).
+- Take (review): creak only when a load failure is coming (J.warn), not for every job longer than a tick (spec says "longer than one
+  tick" — to discuss with the spec owner).
+- Take (review): JIT warm-up in idle ticks (time-limited, not game state) — the first jobs of a page were 5–10× slower per op.
+- Take (review): tint = v1 level at once (cheap estimate, 0.1 s, as v1 worlds) + load level when the tick estimate for that cell is ready.
+- Take (review): co-op chest moved by a collapse — guest window closes ('shut'), edits follow the tile, a spill waits for the close.

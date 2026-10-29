@@ -200,7 +200,7 @@
   // ═══════════════════════ ХОЗЯИН ═══════════════════════
   function host(st, hooks){
     const V = VX(), meta = st.meta, MOBS = window.KubomirEnts.MOBS, MOB_I = new Map(Object.keys(MOBS).map((k, i) => [k, i]));
-    const H = { st, isHost: true, code: '', R: null, guests: new Map(), pidOf: new Map(), edited: new Set(), editQ: new Map(), editN: 0, t0: now(), closed: false, banned: new Set(), locks: new Map(), view: null,
+    const H = { st, isHost: true, code: '', R: null, guests: new Map(), pidOf: new Map(), edited: new Set(), editQ: new Map(), editN: 0, t0: now(), closed: false, banned: new Set(), locks: new Map(), ltile: new Map(), lat: new Map(), pend: new Map(), view: null,
       stats: { snaps: 0, snapBytes: 0, edits: 0, editBytes: 0, chunks: 0, chunkBytes: 0, reqs: 0, denied: 0, joins: 0, leaves: 0 }, editT: 0, extraT: 0, items: null, itemIdx: null };
     const W8 = writer(16384), WS = writer(4096);
     const items = () => { if (!H.items) { H.items = V.items.map(i => i.name); H.itemIdx = new Map(H.items.map((n, i) => [n, i + 1])); } return H.itemIdx; };
@@ -431,6 +431,7 @@
           if (G.lock && G.lock !== k) unlock(G.lock, G);
           H.locks.set(k, G.id); G.lock = k;
           const tile = W.tile(x, y, z, () => kind === 'chest' ? { items: new Array(27).fill(null) } : { in: null, fuel: null, out: null, burn: 0, burnMax: 0, cook: 0 });
+          H.ltile.set(k, tile);   // правки гостя — в эту плитку, даже если обрушение её сдвинет (T-124)
           sendJ(G, { t: 'tile', x, y, z, ok: true, kind, tile: JSON.parse(JSON.stringify(tile)) });
           return;
         }
@@ -473,18 +474,39 @@
     function setTile(x, y, z, t){
       if (!t || typeof t !== 'object') return;
       const V2 = VX(), stack = s => s && V2.item(s.id) && Number.isInteger(s.n) && s.n > 0 ? { id: s.id, n: Math.min(s.n, V2.item(s.id).stack), d: clamp(s.d | 0, 0, 100000) } : null;
-      const cur = st.W.tile(x, y, z); if (!cur) return;
+      const k = x + '|' + y + '|' + z, cur = H.ltile.get(k) || st.W.tile(x, y, z); if (!cur) return;
       if (Array.isArray(cur.items)) { if (Array.isArray(t.items)) for (let i = 0; i < cur.items.length; i++) cur.items[i] = stack(t.items[i]); }
       else { cur.in = stack(t.in); cur.fuel = stack(t.fuel); cur.out = stack(t.out); cur.burn = clamp(+t.burn || 0, 0, 1e4); cur.burnMax = clamp(+t.burnMax || 0, 0, 1e4); cur.cook = clamp(+t.cook || 0, 0, 1e3); }
-      st.W.markTile(x, z);
-      const c = st.W.chunkAt(x, z); if (c) st.unsaved.add(c.key);
+      if (H.pend.has(k)) return;   // плитку обрушение высыпет, когда гость закроет окно (в мире её нет)
+      const at = H.lat.get(k), p = at ? at.split('|').map(Number) : null, mx = p ? p[0] : x, mz = p ? p[2] : z;   // сдвинуло — она там
+      st.W.markTile(mx, mz);
+      const c = st.W.chunkAt(mx, mz); if (c) st.unsaved.add(c.key);
     }
     function unlock(k, G){
-      if (H.locks.get(k) === (G ? G.id : 'host')) H.locks.delete(k);
+      const who = G ? G.id : 'host';
+      if (H.locks.get(k) === who) H.locks.delete(k);
       if (G && G.lock === k) G.lock = null;
+      const a = H.lat.get(k); if (a) { H.lat.delete(k); if (H.locks.get(a) === who) H.locks.delete(a); }
+      H.ltile.delete(k);
+      const pd = H.pend.get(k); if (pd) { H.pend.delete(k); try { pd.spill(); } catch (e) { console.error(e); } }   // окно закрыто — высыпать (с правками гостя)
       const [x, y, z] = k.split('|').map(Number);
       const v = st.W.raw(x, y, z); if (v > 0 && /^furnace/.test(V.blocks[v & 0xfff].name)) st.ents?.furnaces?.add(x + ',' + y + ',' + z);   // печь — снова греет у хозяина
     }
+    // ── обрушение сдвинуло плитку (kubomir-support.js, T-124): окно гостя на ней закрывается (сообщение 'shut'), его правки идут в саму
+    // плитку (H.ltile); to: undefined — плитку взяли (кусок падает), [x, y, z] — легла там (там тоже «занято», пока окно открыто),
+    // null — высыпается: spill() — когда гость закроет окно (или уйдёт; не дольше 10 с) → true (высыпать сейчас не надо) ──
+    H.tileMoved = (x, y, z, tile, to, spill) => {
+      if (H.closed) return false;
+      const k = x + '|' + y + '|' + z, L = H.locks.get(k);
+      if (!L || L === 'host') return false;
+      const G = H.guests.get(L); if (!G) return false;
+      if (tile && !H.ltile.has(k)) H.ltile.set(k, tile);
+      if (to === undefined) { sendJ(G, { t: 'shut', x, y, z }); return false; }
+      if (to) { const k2 = to[0] + '|' + to[1] + '|' + to[2]; H.lat.set(k, k2); if (!H.locks.has(k2)) H.locks.set(k2, L); return false; }
+      if (typeof spill !== 'function') return false;
+      H.pend.set(k, { spill, t: now() }); sendJ(G, { t: 'shut', x, y, z });
+      return true;
+    };
     // своё окно сундука или печи: занято гостем — нельзя; открыл — моё, пока окно открыто
     H.tileBusy = (x, y, z) => { const L = H.locks.get(x + '|' + y + '|' + z); return L && L !== 'host' ? (H.guests.get(L)?.nick || 'другой игрок') : ''; };
     H.lockHost = (x, y, z) => { const k = x + '|' + y + '|' + z; if (H.locks.has(k) && H.locks.get(k) !== 'host') return false; H.locks.set(k, 'host'); H.hostLock = k; return true; };
@@ -596,6 +618,8 @@
       }
       // своё окно закрыл — сундук свободен
       if (H.hostLock && !st.ui?.isOpen()) { unlock(H.hostLock, null); H.hostLock = null; }
+      // высыпать после обрушения: гость не закрыл окно за 10 с — высыпать без его последних правок (дальше правки не принимаются)
+      if (H.pend.size) for (const [k, p] of H.pend) if (t - p.t > 10000) { const L = H.locks.get(k), G = L && L !== 'host' ? H.guests.get(L) : null; if (G) unlock(k, G); else { H.pend.delete(k); H.ltile.delete(k); try { p.spill(); } catch (e) { console.error(e); } } }
       H.R.flush();
     };
     H.frame = (dt, t) => { if (!H.closed) H.view?.frame(dt, t); };
@@ -617,6 +641,8 @@
       if (E) { E.others.length = 0; E.hookHurtRemote = null; E.hookGiveRemote = null; E.hookKill = H.kill0; if (H.fall0) E.fallGroup = H.fall0; if (H.shoot0) E.shoot = H.shoot0; E.isLocked = null; }
       if (st.ST) st.ST.extra = [];
       H.view?.clear();
+      for (const p of H.pend.values()) try { p.spill(); } catch (e) { console.error(e); }
+      H.pend.clear(); H.ltile.clear(); H.lat.clear();
       H.guests.clear(); H.pidOf.clear(); H.locks.clear();
       hooks.changed?.();
     };
@@ -787,6 +813,7 @@
         case 'give': { if (m.e) st.ents?.clientCollect?.(m.e); if (m.s && V.item(m.s.id)) { const left = hooks.give?.({ id: m.s.id, n: clamp(m.s.n | 0, 1, 999), d: m.s.d | 0 }) | 0; if (left > 0) G.reqDrop({ id: m.s.id, n: left, d: m.s.d | 0 }, [st.P.x, st.P.y + 1, st.P.z], null); } return; }
         case 'hurt': { const mob = st.ents?.clientMobById?.(m.m) || (fin(m.x) ? { x: m.x, z: m.z } : null); hooks.hurt?.(clamp(m.n | 0, 1, 20), mob); return; }
         case 'tile': { const w = G.opens.get(m.x + '|' + m.y + '|' + m.z); if (w) { G.opens.delete(m.x + '|' + m.y + '|' + m.z); w(m); } return; }
+        case 'shut': { if (G.lock && G.lock[0] === m.x && G.lock[1] === m.y && G.lock[2] === m.z && st.ui?.isOpen()) { st.ui.close({ esc: true }); hooks.toast?.('📦 Сундук сдвинуло обвалом — окно закрыто'); } return; }   // T-124: закрыл — уходит 'close' с плиткой
         case 'mk': st.ents?.clientKill?.(m.id, +m.kx || 0, +m.kz || 0); return;
         case 'ice': if (Number.isInteger(m.x) && Number.isInteger(m.y) && Number.isInteger(m.z)) st.WX?.hole?.(m.x, m.y, m.z, fin(m.at) ? m.at : Date.now()); return;
         case 'fell': {

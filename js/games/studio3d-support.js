@@ -12,6 +12,9 @@
 // Destroy, Support.Break, открепления) — открепляется и падает настоящей физикой (rigid.js + Rapier); «■ Стоп» — мир как был.
 // Скрипты (у того, кто считает мир): Support.Mode, Support.Holds(part), Support.Get(part) (0…100), Support.Break(part),
 // Support.Collapsed — по одному вызову на упавшую деталь.
+// Нагрузка (v2, T-124): SC.settings.phys = { load: 1 } (и D37E.support.LOAD) — у деталей есть вес (материал × объём), держит площадь
+// касания: тяжёлое на тонкой балке, длинная консоль ломаются; «держалось до» — от посторонней правки не падает; подсветка в
+// редакторе — по держанию и нагрузке. settings.support (режим, показ) не трогаем — свой ключ phys.
 (() => {
   const E = window.D37E = window.D37E || {};
   const S = E.support;
@@ -28,7 +31,7 @@
   const takes = o => (o.cls === 'Part' || o.cls === 'Spawn' || o.cls === 'Mesh') && o.anchored !== false && o.smat !== 'none' && Array.isArray(o.pos) && Array.isArray(o.size);
   let api = null, papi = null, btn = null, box = null, lastBuild = null, ov = null, ovT = 0, offEv = [], hiT = 0;
   const ED = () => api?.ed || papi?.ed || null;
-  const cfg = () => { const s = (api?.ed?.SC || papi?.SC || ED()?.SC)?.settings?.support || {}; return { mode: S.MODES[s.mode] ? s.mode : 'off', show: s.show !== false }; };
+  const cfg = () => { const st = (api?.ed?.SC || papi?.SC || ED()?.SC)?.settings, s = st?.support || {}; return { mode: S.MODES[s.mode] ? s.mode : 'off', show: s.show !== false, load: !!(S.LOAD && B.collapse2 && (st?.phys?.load === 1 || st?.phys?.load === true)) }; };
   const B = S.boxes({ max: 4096 });
 
   // ── описанная коробка детали (поворот YXZ в градусах, как в Roblox) ──
@@ -81,6 +84,8 @@
     const T = R.T;
     const L = build(ed.SC, ed.ph), Pm = P(c.mode);
     B.solve(Pm);
+    const LDs = c.load ? B.loads(Pm) : null;   // v2: нагрузка (‰) — подсветка = худшее из держания и нагрузки
+    if (LDs) B.solve(Pm);   // B.loads пересчитал держание теми же числами; подсветка читает B.g.sup
     const n = L.list.length;
     if (!ov || ov.userData.cap < n) {
       if (ov) { R.scene.remove(ov); ov.geometry.dispose(); ov.material.dispose(); }
@@ -95,7 +100,9 @@
       const b = B.bx, o6 = i * 6;
       M.compose(V.set((b[o6] + b[o6 + 3]) / 2, (b[o6 + 1] + b[o6 + 4]) / 2, (b[o6 + 2] + b[o6 + 5]) / 2), Q, Sc.set(b[o6 + 3] - b[o6] + .05, b[o6 + 4] - b[o6 + 1] + .05, b[o6 + 5] - b[o6 + 2] + .05));
       ov.setMatrixAt(i, M);
-      const lv = S.level(B.g.sup[i], B.g.mat[i], Pm, B.g.gnd[i]); if (lv === 4) bad++;
+      let lv = S.level(B.g.sup[i], B.g.mat[i], Pm, B.g.gnd[i]);
+      if (LDs && !LDs.unk[i]) { const r = LDs.ra[i], ll = r <= 0 ? 0 : r <= 500 ? 1 : r <= 800 ? 2 : r <= 1000 ? 3 : 4; if (ll > lv) lv = ll; }
+      if (lv === 4) bad++;
       ov.setColorAt(i, C.setHex(S.COLORS[lv]));
     }
     ov.count = n; ov.instanceMatrix.needsUpdate = true; if (ov.instanceColor) ov.instanceColor.needsUpdate = true;
@@ -213,8 +220,10 @@
     } else if (pend.gone.length) {   // сломали опору: «до» — с ней, «после» — без неё
       const gone = pend.gone.splice(0);
       const L = build(SC, ed.ph, gone);
-      const ng = B.collapse(Pm, L.broken), list = [];
-      for (let k = 0; k < ng; k++) for (const i of B.groups(k)) if (i < L.list.length - gone.length) list.push(L.list[i]);
+      const ld = !!cfg().load, ng = ld ? B.collapse2(Pm, L.broken) : B.collapse(Pm, L.broken), list = [], nOwn = L.list.length - gone.length;   // v2: с нагрузкой
+      for (let k = 0; k < ng; k++) for (const i of B.groups(k)) if (i < nOwn) list.push(L.list[i]);
+      // v2: раздавленные детали (их нет в группах) — тоже вниз (T-124: раньше перегруженная колонна оставалась стоять)
+      const cr = ld ? B.g.L?.crushed : null; if (cr) for (let i = 0; i < nOwn; i++) if (cr[i] && !B.g.fall[i]) list.push(L.list[i]);
       fell = drop(list);
       if (fell.length) papi.print?.(`🧱 Обрушилось деталей: ${fell.length}`, 'sys');
     } else return;

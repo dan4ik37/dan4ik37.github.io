@@ -7,7 +7,8 @@
 // KB_MODE=perf — замер в профиле телефона (412 × 915, ЦП ×4 медленнее, пресет из аргумента — «средняя» = mid): ясно, снег, дождь —
 //   ЦП мс на кадр (среднее, 95 %, худший), FPS, вызовы, память JS; «до» — SITE_DIR=выгрузка прошлого коммита
 // KB_MODE=support — обрушение (T-022a), мир «реализм»: пересчёт в доме из 1000+ блоков, срез дома, балка падает куском (время
-//   кадра), 12 кругов — память, рамка постройки цветом; KB_PHONE=1 — профиль телефона (ЦП ×4); KB_SUPPORT=1 KB_MODE=soak — 10 мин в таком мире
+//   кадра), 12 кругов — память, рамка постройки цветом; KB_PHONE=1 — профиль телефона (ЦП ×4); KB_SUPPORT=1 KB_MODE=soak — 10 мин в таком мире;
+//   KB_LOAD=1 — мир с нагрузкой (T-124, meta.load = 1: вес и рычаг, пересчёт заданием по кусочкам в такте мира; KB_MODE=support / soak / reopen)
 // KB_MODE=soak — 10 мин игры (KB_MIN — другое число минут): ходит, прыгает, плавает и лезет на стены, ставит и ломает блоки,
 //   погода и время суток меняются, телепорты, бой (меч, щит, лук) — ошибок и исключений в консоли нет, игрок ходит (ввод не заперт),
 //   память JS после сборки мусора — не растёт
@@ -29,7 +30,8 @@ const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [label = 'now', preset = 'ultra', angle = 'd3d11'] = process.argv.slice(2);
 const MODE = process.env.KB_MODE || '';
 const PHONE = MODE === 'perf' || !!process.env.KB_PHONE;
-const SUPPORT = MODE === 'support' || !!process.env.KB_SUPPORT;   // мир «Обрушение: реализм» (T-022a; KB_SUPPORT=1 — и для soak)
+const SUPPORT = MODE === 'support' || !!process.env.KB_SUPPORT || !!process.env.KB_LOAD;   // мир «Обрушение: реализм» (T-022a; KB_SUPPORT=1 — и для soak)
+const LOAD = !!process.env.KB_LOAD;   // T-124: + нагрузка (meta.load = 1)
 const FIRE = MODE === 'fire' || MODE === 'firecycle' || !!process.env.KB_FIRE;   // мир «Огонь распространяется» (T-022d; KB_FIRE=1 — и для soak / reopen)
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
@@ -69,6 +71,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
   const res = {};
   const heap = async () => ev(`(async () => { for (let i = 0; i < 3; i++) { window.gc?.(); await new Promise(r => setTimeout(r, 300)); } return performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null; })()`, 30000);
   const idle = () => ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); for (let i = 0; i < 160; i++) { const s = S.ST?.stats; if (S.ready && s && !s.jobs && !s.pend) break; await new Promise(r => setTimeout(r, 500)); } return true; })()`, 120000);
+  const SUPWAIT = `const supIdle = async (ms = 8000) => { const t = performance.now(); while (S.sup?.jobs && performance.now() - t < ms) { const j = S.sup.jobs(); if (!j.busy && !j.queued) break; await new Promise(r => setTimeout(r, 50)); } };`;
   async function runMode(){
     if (MODE === 'swim') {
       // плавание (T-019, жалоба владельца 22.10: «как будто он ходит по воде» и «он наверху, а показывает в воде»): озеро 5 блоков глубиной,
@@ -141,7 +144,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       // ~200 блоков падает куском — время кадра; 12 кругов «построил — подрубил — упало — убрал» — память; рамка постройки цветом
       await idle();
       const SETUP = `const wait = ms => new Promise(r => setTimeout(r, ms)), S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, ID = V.ID;
-        const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(ID[n]) : 0, { urgent: 1 });`;
+        const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(ID[n]) : 0, { urgent: 1 }); ${SUPWAIT}`;
       res.sup0 = await ev(`(async () => { ${SETUP}
         if (!S.sup) return { none: true, meta: S.meta.support };
         const P = S.P, cx = Math.floor(P.x) + 5, cz = Math.floor(P.z) - 6, gy = Math.floor(P.y);
@@ -159,14 +162,15 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const dry = `(async () => { ${SETUP}
         const { cx, cz, gy } = S._sup, t = [];
         for (let r = 0; r < 3; r++) for (let k = 1; k < 11; k++) { const x = cx + k, y = gy + 1, c = S.sup.code(x, y, cz); W.set(x, y, cz, 0, { urgent: 1, silent: true }); t.push(S.sup.dry(x, y, cz, c)); W.set(x, y, cz, V.cell(ID.planks_oak), { urgent: 1, silent: true }); await wait(30); }
-        const ms = t.map(q => q.ms).sort((a, b) => a - b);
-        return { n: t.length, nodes: t[0].nodes, medMs: +ms[ms.length >> 1].toFixed(2), maxMs: +ms[ms.length - 1].toFixed(2), wouldFall: t.reduce((s, q) => s + q.fall, 0) };
+        const ms = t.map(q => q.ms).sort((a, b) => a - b), tk = t.map(q => q.maxTick || 0).sort((a, b) => a - b);
+        return { n: t.length, nodes: t[0].nodes, medMs: +ms[ms.length >> 1].toFixed(2), maxMs: +ms[ms.length - 1].toFixed(2), wouldFall: t.reduce((s, q) => s + q.fall, 0), load: !!S.sup.load, tickMed: +tk[tk.length >> 1].toFixed(3), tickMax: +tk[tk.length - 1].toFixed(3), ticks: t[0].ticks || 0, ops: t[0].ops || 0, budget: D37E.support.SOLVE_BUDGET, worstPhases: t.map(q => q.worstPhase ?? '-').join(''), phaseMs: t[t.length >> 1].phaseMs || null, phaseOps: t[t.length >> 1].phaseOps || null };
       })()`;
       res.supDry1 = await ev(dry, 120000);
       if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
       res.supDry4 = await ev(dry, 120000);
       console.log('ОБРУШЕНИЕ пересчёт по клетке (дом 1000+): ЦП ×1', JSON.stringify(res.supDry1), '· ЦП ×4', JSON.stringify(res.supDry4));
       ok(res.supDry4.nodes > 1000, 'пересчёт идёт по всему дому (больше 1000 блоков в куске)', res.supDry4);
+      if (LOAD) ok(res.supDry4.load && res.supDry4.ticks > 1 && (!PHONE || res.supDry4.tickMax <= 2.5), 'нагрузка: задание по ' + res.supDry4.budget + ' шагов — ' + res.supDry4.ticks + ' тактов, худший такт ' + res.supDry4.tickMax + ' мс' + (PHONE ? ' (ЦП ×4)' : ''), res.supDry4);
       // срез низа дома целиком: всё, что выше, держалось через срез — падает (много — ложится сразу, без анимации)
       res.supSlice = await ev(`(async () => { ${SETUP}
         const { cx, cz, gy } = S._sup, st = S.sup.stats, g0 = st.groups, c0 = st.cells; st.maxMs = 0;
@@ -175,7 +179,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         const t0 = performance.now();
         for (let x = cx; x < cx + 12; x++) for (let z = cz; z < cz + 12; z++) { const e = x === cx || x === cx + 11 || z === cz || z === cz + 11; if (!e) continue; const c = S.sup.code(x, gy + 1, z); W.set(x, gy + 1, z, 0, { urgent: 1 }); S.sup.removed(x, gy + 1, z, c); }
         const ms = performance.now() - t0;
-        await wait(5000); run = false;
+        await supIdle(20000); await wait(5000); run = false;
         const a = cpu.slice(0, before), b = cpu.slice(before), avg = q => q.reduce((s, v) => s + v, 0) / Math.max(1, q.length);
         b.sort((x, y) => x - y);
         return { cutMs: +ms.toFixed(1), maxSolveMs: +st.maxMs.toFixed(2), groups: st.groups - g0, cells: st.cells - c0, cpuBefore: +avg(a).toFixed(2), cpuAfter: +avg(b).toFixed(2), p95After: +(b[Math.floor(b.length * .95)] || 0).toFixed(2) };
@@ -191,6 +195,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         const cpu = []; let run = true; const tick = () => { if (!run) return; cpu.push(S.R.stats.cpuFrame); requestAnimationFrame(tick); }; requestAnimationFrame(tick);
         await wait(1000); const before = cpu.length;
         const c = S.sup.code(bx, by + 1, bz); W.set(bx, by + 1, bz, 0, { urgent: 1 }); S.sup.removed(bx, by + 1, bz, c);
+        if (S.sup.load) { const t = performance.now(); while (!S.ents.groups.length && performance.now() - t < 6000) await wait(25); }   // v2: группы — когда задание закончится (в такте мира)
         const groups = S.ents.groups.length, cells = S.ents.groups[0]?.n || 0;
         for (let i = 0; i < 40 && S.ents.groups.length; i++) await wait(100);
         await wait(600); run = false;
@@ -218,9 +223,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         await wait(1500); return 1; })()`);
       res.supPreview = {};
       for (const [name, tx, ty, tz] of [['pillar', 0.5, 1.5, 1.02], ['end', 4.98, 2.5, 0.5]]) {
-        await ev(`(async () => { const T = GAME_IMPL.kubomir._test, S = T.state(), v = S._pv; T.aim(v.px + ${tx}, v.gy + ${ty}, v.pz + ${tz}); T.hud(false); await new Promise(r => setTimeout(r, 1200)); return 1; })()`);
+        await ev(`(async () => { const T = GAME_IMPL.kubomir._test, S = T.state(), v = S._pv; if (S.sup?.stats) S.sup.stats.maxTickMs = 0; T.aim(v.px + ${tx}, v.gy + ${ty}, v.pz + ${tz}); T.hud(false); await new Promise(r => setTimeout(r, 1200)); return 1; })()`);   // T-124: худший такт — с оценкой рамки (блок в руке)
         await shot('support-preview-' + name);
-        res.supPreview[name] = await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); const m = S.VR.previewMesh?.(); return { place: S.placeAt && { x: S.placeAt.x, y: S.placeAt.y, z: S.placeAt.z, tint: S.placeAt.tint && S.placeAt.tint.map(v => +v.toFixed(2)) }, color: m && m.visible ? m.material.color.getHexString() : null, lv: S.sup.level() }; })()`);
+        res.supPreview[name] = await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); const m = S.VR.previewMesh?.(); return { place: S.placeAt && { x: S.placeAt.x, y: S.placeAt.y, z: S.placeAt.z, tint: S.placeAt.tint && S.placeAt.tint.map(v => +v.toFixed(2)) }, color: m && m.visible ? m.material.color.getHexString() : null, lv: S.sup.level(), tickMax: +(S.sup.stats.maxTickMs || 0).toFixed(2), estOps: S.sup.stats.estOps | 0 }; })()`);
       }
       console.log('ОБРУШЕНИЕ рамка', JSON.stringify(res.supPreview));
       ok(res.supPreview.pillar?.color && res.supPreview.end?.color && res.supPreview.pillar.color !== res.supPreview.end.color && res.supPreview.end.lv >= 3, 'рамка постройки — цветом устойчивости: у столба и на конце балки разная, на конце — красная', res.supPreview);
@@ -278,7 +283,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const h1 = await heap(), errs = logs.slice(ex0).filter(l => !/X3595|DevTools|favicon/i.test(l));
       // мир «Обрушение» (KB_SUPPORT=1): сколько было пересчётов и обрушений — что прогон их правда задел
       const fireSt = FIRE ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.fire; return X?.F ? { burnt: X.stats.burnt, ignited: X.F.stats.ignited, out: X.F.stats.out, peak: X.F.stats.peak, blocks: X.blocks.n } : null; })()`, 10000).catch(() => null) : undefined;
-      const sup = SUPPORT ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.sup, s = X?.stats; return s ? { mode: X.mode, solves: s.solves, avgMs: +(s.ms / Math.max(1, s.solves)).toFixed(2), maxMs: +s.maxMs.toFixed(1), groups: s.groups, cells: s.cells | 0, refused: s.refused } : null; })()`, 10000).catch(() => null) : undefined;
+      const sup = SUPPORT ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.sup, s = X?.stats; return s ? { mode: X.mode, load: !!X.load, solves: s.solves, avgMs: +(s.ms / Math.max(1, s.solves)).toFixed(2), maxMs: +s.maxMs.toFixed(1), groups: s.groups, cells: s.cells | 0, refused: s.refused, jobs: s.jobs, restarts: s.restarts, crushed: s.crushed, tickAvgMs: s.ticks ? +(s.tickMs / s.ticks).toFixed(3) : 0, maxTickMs: +(s.maxTickMs || 0).toFixed(2) } : null; })()`, 10000).catch(() => null) : undefined;
       res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6), sup, fire: fireSt };
       console.log('ЗАМЕР soak', JSON.stringify(res.soak));
       ok(!errs.length, MIN + ' мин игры — без ошибок и исключений в консоли', errs.slice(0, 6));
@@ -590,7 +595,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       // пожаре (среднее, 95 %, худший), вызовы отрисовки, сколько горит; снимки днём и ночью, после пожара; шейдеры собрались, консоль чистая
       await idle();
       const SETUP = `const wait = ms => new Promise(r => setTimeout(r, ms)), S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, ID = V.ID;
-        const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(ID[n]) : 0, { urgent: 1 });`;
+        const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(ID[n]) : 0, { urgent: 1 }); ${SUPWAIT}`;
       res.fire0 = await ev(`(async () => { ${SETUP}
         if (!S.fire?.F) return { none: true, fire: S.meta.fire };
         const P = S.P, cx = Math.floor(P.x) + 6, cz = Math.floor(P.z) - 14, gy = Math.floor(P.y);
@@ -711,10 +716,12 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         await ev(`(() => { const b = document.querySelector('.kb-world [data-w="play"]'); b && b.click(); return !!b; })()`);
         let up = false; for (let k = 0; k < 240 && !up; k++) { await sleep(500); up = await ev(`!!(GAME_IMPL.kubomir?._test?.state()?.ready)`, 3000).catch(() => false); }
         if (!up) { ok(false, 'мир снова открылся (' + (i + 1) + ')'); break; }
+        if (LOAD && !(await ev(`!!GAME_IMPL.kubomir._test.state()?.sup?.load`, 5000).catch(() => false))) res.loadLost = (res.loadLost | 0) + 1;   // T-124: нагрузка — поле мира, сохраняется
       }
       await idle(); await new Promise(r => setTimeout(r, 2000)); hs.push(await heap());
       res.reopen = hs; console.log('ЗАМЕР reopen, память JS после сборки мусора (МБ):', hs.join(' → '));
       ok(hs.length >= 8 && hs[hs.length - 1] - hs[1] < 25, 'закрыть/открыть мир ' + (hs.length - 1) + ' раз — память не растёт', hs);
+      if (LOAD) ok(!res.loadLost, 'мир с нагрузкой после каждого открытия — с нагрузкой (meta.load сохраняется)', res.loadLost | 0);
       return;
     }
   }
@@ -740,6 +747,10 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     if (!kb) { await shot('debug-open'); console.log('  состояние:', JSON.stringify(await ev(`(() => { const S = GAME_IMPL.kubomir?._test?.state(); return S ? { ready: S.ready, wx: !!S.WX, view: document.querySelector('.kb-screen')?.textContent?.slice(0, 200) } : { none: true, html: document.querySelector('.kb-screen')?.innerText?.slice(0, 300) }; })()`).catch(e => e.message))); }
     ok(kb, '«Кубомир»: мир открылся');
     if (!kb) throw new Error('мир не открылся');
+    if (LOAD) {   // T-124: нагрузка — поле мира (пока без кнопки при создании: SH0.5b), переходник заново
+      const l = await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); ${process.env.KB_BUDGET ? `D37E.support.SOLVE_BUDGET = ${+process.env.KB_BUDGET};` : ''} S.meta.load = 1; S.sup = window.KubomirSupport.attach(S); return { load: !!S.sup?.load, mode: S.sup?.mode, budget: D37E.support.SOLVE_BUDGET }; })()`);
+      ok(l && l.load && l.mode === 'real', 'мир с нагрузкой (meta.load = 1)', l);
+    }
     if (MODE) { await runMode(); throw new Error('__готово'); }
     // ── сцена: ровная площадка, озеро, берёзы (одинаково «до» и «после»: только публичное — st.W, st.P, st.rig) ──
     // сцена — в обычной климатической зоне (снег и лёд зимой; у новых версий — зоны «всегда зима» / «зимы нет»), рядом с началом
