@@ -105,8 +105,9 @@ const conf = id => { const f = path.join(__dirname, 'arcade', id + '.cjs'); retu
       // ── 1) одиночная партия ──
       await A.go(`${BASE}/#/games/${id}`);
       let opened = await A.waitFor(`!!document.querySelector('.ak .ak-go') && !!${cur}`, 30000);
+      if (!opened) R.diag = await A.ev(`({ href: location.href, impl: !!window.GAME_IMPL?.['${id}'], ak: !!document.querySelector('.ak'), stage: (document.querySelector('#gamesStageBox')?.innerText || '').slice(0, 120), pending: performance.getEntriesByType('resource').filter(r => !r.responseEnd).map(r => r.name.split('/').slice(-2).join('/')), scripts: [...document.scripts].filter(x => x.src.includes('/arcade/')).map(x => x.src.split('/').pop()), heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : 0 })`).catch(e => String(e));
       if (!opened) { await A.go(`${BASE}/#/games/${id}`); opened = (await A.waitFor(`!!document.querySelector('.ak .ak-go') && !!${cur}`, 30000)) && 2; }
-      ok(opened, id + ': игра открылась (оболочка ArcadeKit)' + (opened === 2 ? ' — со 2-й попытки' : ''));
+      ok(opened, id + ': игра открылась (оболочка ArcadeKit)' + (opened === 2 ? ' — со 2-й попытки' : ''), opened === true ? undefined : R.diag);
       if (!opened) continue;
       await sleep(600);
       await A.shot(`${id}-1-start.png`);
