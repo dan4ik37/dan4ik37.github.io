@@ -393,7 +393,7 @@
   function newPlayer(x, feet){
     return { x: x - PL_W / 2, y: feet - PL_H, w: PL_W, h: PL_H, vx: 0, vy: 0, ground: false, stepUp: 1.05, dir: 1, drop: false, dropT: 0,
       coyote: 0, jumpBuf: 0, jumpHold: 0, jumps: 0, climb: false, inLq: 0, lqT: 0, fallY: feet - PL_H, iframes: 0, hurtT: 0, useT: 0, swing: 0, swingId: 0, swingDur: .3,
-      mine: null, anim: 'idle', animT: 0, stepOff: 0, regenT: 0, manaT: 0, potionT: 0, recallT: 0, dead: 0, airT: 0, lastStep: 0, ledge: null, ledgeCD: 0 };
+      mine: null, anim: 'idle', animT: 0, pose: null, poseT: 0, stepOff: 0, regenT: 0, manaT: 0, potionT: 0, recallT: 0, dead: 0, airT: 0, lastStep: 0, ledge: null, ledgeCD: 0 };
   }
   const hasAcc = key => G.CH.inv.some(s => s && s.id === key);
   const selItem = () => G.CH.inv[G.CH.sel] || null;
@@ -1138,9 +1138,10 @@
       p.recallT -= dt; part(p.x + rand() * p.w, p.y + rand() * p.h, 0, -2, .5, .14, 0xff8af0, 0, 1);
       if (p.recallT <= 0) { const s = G.W.bed || G.W.spawn; p.x = s.x + .5 - p.w / 2; p.y = s.y - p.h; p.vx = p.vy = 0; p.fallY = p.y; G.cam.x = p.x; G.cam.y = p.y; stream(true); snd('magic'); }
     }
-    // анимация
+    // анимация; поза (T-123, круг позы) — только картинка: пошёл, прыгнул, ударил, полез, поплыл — встал; эмоция — 5 с
     p.animT += dt;
-    const a = p.ledge ? (p.ledge.up ? 'ledge' : 'hang') : p.swing > 0 ? 'use' : p.climb ? 'climb' : p.inLq === 2 ? 'swim' : !p.ground ? (p.vy < 0 ? 'jump' : 'fall') : Math.abs(p.vx) > 5 ? 'run' : Math.abs(p.vx) > .4 ? 'walk' : 'idle';
+    if (p.pose) { p.poseT += dt; if (Math.abs(p.vx) > .4 || !p.ground || p.swing > 0 || p.climb || p.ledge || p.inLq === 2 || p.recallT > 0 || (p.poseT > 5 && !POSE_STAY[p.pose])) p.pose = null; }
+    const a = p.ledge ? (p.ledge.up ? 'ledge' : 'hang') : p.swing > 0 ? 'use' : p.climb ? 'climb' : p.inLq === 2 ? 'swim' : !p.ground ? (p.vy < 0 ? 'jump' : 'fall') : p.pose ? p.pose : Math.abs(p.vx) > 5 ? 'run' : Math.abs(p.vx) > .4 ? 'walk' : 'idle';
     if (a !== p.anim) { p.anim = a; p.animT = 0; }
     useInput(dt, I);
     // глубина и путь
@@ -2321,7 +2322,9 @@
     const leadX = clamp(p.vx * .24, -3.2, 3.2), leadY = p.vy > 12 && !p.inLq ? Math.min(4, (p.vy - 12) * .14) : 0;
     G.cam.lx = (G.cam.lx || 0) + (leadX - (G.cam.lx || 0)) * (1 - Math.exp(-3 * dtr));
     G.cam.ly = (G.cam.ly || 0) + (leadY - (G.cam.ly || 0)) * (1 - Math.exp(-4 * dtr));
-    const tx = p.x + p.w / 2 + G.cam.lx, ty = p.y + p.h / 2 - (p.stepOff || 0) + G.cam.ly;
+    // открыт лист «Вещи» (HUD 2.0) — центр кадра в свободной части окна (G.camOff, px): герой виден; камера едет плавно, как всегда
+    const co = G.camOff, tpx = G.cam.tile / G.res;
+    const tx = p.x + p.w / 2 + G.cam.lx + (co ? co[0] / tpx : 0), ty = p.y + p.h / 2 - (p.stepOff || 0) + G.cam.ly + (co ? co[1] / tpx : 0);
     G.cam.x += (tx - G.cam.x) * (1 - Math.exp(-9 * dtr)); G.cam.y += (ty - G.cam.y) * (1 - Math.exp(-(p.vy < -1 ? 6 : 11) * dtr));
     if (Math.abs(tx - G.cam.x) > 40 || Math.abs(ty - G.cam.y) > 40) { G.cam.x = tx; G.cam.y = ty; }
     G.cam.y = Math.max(G.cam.y, vh / 2 - 30);
@@ -2929,6 +2932,7 @@
       else if (e.code === 'KeyH') quickHeal();
       else if (e.code === 'KeyB') quickBuff();
       else if (e.code === 'KeyP') pause();
+      else if (e.code === 'KeyG') G.U?.poseRadial?.();   // T-123: круг позы (сесть, лечь, присесть, эмоции) — новая клавиша, старые те же
       else if (e.code === 'Slash' || (e.code === 'Enter' && !G.U?.modal())) { G.U?.command(); e.preventDefault(); }
     });
     on(window, 'keyup', e => {
@@ -2939,12 +2943,32 @@
     on(window, 'blur', () => setShift(false));
   }
   // кнопка «✋ Открыть» светится, когда рядом дверь, сундук, кровать или Проводник
+  // рядом есть с чем «✋»: 'npc' | 'door' | 'chest' | 'bed' (ближайшее; кнопка 2.0 показывает значок глагола) или false
   function nearAct(){
     const p = G.pl; if (!p || p.dead) return false;
-    for (const n of G.npcs) if (Math.hypot(n.x - p.x, n.y - p.y) < 4) return true;
+    for (const n of G.npcs) if (Math.hypot(n.x - p.x, n.y - p.y) < 4) return 'npc';
     const cx = Math.floor(p.x + p.w / 2), cy = Math.floor(p.y + p.h / 2);
-    for (let y = cy - 3; y <= cy + 3; y++) for (let x = cx - 3; x <= cx + 3; x++) { const f = fgAt(x, y); if (f === T.DOOR || f === T.DOOROPEN || f === T.CHEST || f === T.LOOT || f === T.BED) return true; }
-    return false;
+    let best = false, bd = 99;
+    for (let y = cy - 3; y <= cy + 3; y++) for (let x = cx - 3; x <= cx + 3; x++) {
+      const f = fgAt(x, y), k = f === T.DOOR || f === T.DOOROPEN ? 'door' : f === T.CHEST || f === T.LOOT ? 'chest' : f === T.BED ? 'bed' : '';
+      if (k) { const d = (x - cx) * (x - cx) + (y - cy) * (y - cy); if (d < bd) { bd = d; best = k; } }
+    }
+    return best;
+  }
+  // ── Поза (T-123, круг позы): 'crouch' | 'sit' | 'lie' | эмоция (анимация char2d: 'wave', 'dance'…) | null — встать.
+  //    Только картинка: рост, удары и столкновения те же. Лечь у кровати — «спокойной ночи» и возрождение здесь (как ✋ у кровати) ──
+  const POSE_STAY = { crouch: 1, sit: 1, lie: 1 };
+  function setPose(k){
+    const p = G?.pl; if (!p || p.dead || G.state !== 'play') return false;
+    if (!k || p.pose === k) { p.pose = null; return true; }
+    if (!p.ground || p.climb || p.ledge || p.inLq === 2) { toast('Сначала встань на землю', 'info'); return false; }
+    if (!POSE_STAY[k] && !window.D37Sprite?.ANIMS?.[k]) return false;
+    p.pose = k; p.poseT = 0;
+    if (k === 'lie') {
+      const cx = Math.floor(p.x + p.w / 2), cy = Math.floor(p.y + p.h / 2);
+      for (let y = cy - 2; y <= cy + 2; y++) for (let x = cx - 3; x <= cx + 3; x++) if (fgAt(x, y) === T.BED) { const [ax, ay] = objAnchor(x, y); G.W.bed = { x: ax + 1, y: ay + 1 }; toast('😴 Спокойной ночи — проснёшься здесь', 'good'); return true; }
+    }
+    return true;
   }
   // коротко для экрана игры: время и глубина
   function clockText(){
@@ -3128,7 +3152,10 @@
     aimTouch, tapTouch, interactNear, useItem: () => useItem(), runCommand, toast, snd, isNight, statusText,
     sortInv, quickStack, quickHeal, quickBuff, toggleHook, attackStart, attackEnd, buildMode, buildMove, buildSet, setSmart, escKey,
     buffs: () => G?.CH?.buffs || {}, hasHook: () => !!(G?.CH && count('hook')), goal: () => (G?.CH && G.W && G.pl ? goalNow() : undefined), GOALS,
-    foeNear: () => !!(G?.pl && G.state === 'play' && nearestFoe(9)), nearAct: () => !!(G?.pl && G.state === 'play' && nearAct()), clockText: () => (G?.W ? clockText() : ''),
+    foeNear: () => !!(G?.pl && G.state === 'play' && nearestFoe(9)), nearAct: () => !!(G?.pl && G.state === 'play' && nearAct()),
+    nearKind: () => (G?.pl && G.state === 'play' ? nearAct() || '' : ''),
+    pose: k => setPose(k), poseNow: () => G?.pl?.pose || '',
+    camOffset: (x, y) => { if (G) G.camOff = x || y ? [x, y] : null; }, clockText: () => (G?.W ? clockText() : ''),
     useSlot, unstuck: () => (G?.pl ? unstuck() : null), stuckWait: () => (G ? stuckWait() : 0),
     setCell, fgAt, wallAt, lqAt, ltAt, tileKey, dropItem, burst: (x, y, n, col, sp, life, size, grav, glow) => burst(x, y, n, col, sp, life, size, grav, glow), floatText,
     spawnMob, spawnBoss, rgbInt, last: () => { try { return JSON.parse(lsGet(LS_LAST) || 'null'); } catch (e) { return null; } },

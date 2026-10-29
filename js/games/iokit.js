@@ -714,7 +714,42 @@
       <div class="ct-note io-note">${escH(o.note || '')}</div>
     </div>`;
     const q = s => el.querySelector(s);
-    return { el, wrap: q('.io-wrap'), cv: q('.io-cv'), hud: q('.io-hud'), ov: q('.io-ov'), lb: q('.io-lb'), sc: q('.io-sc'), rank: q('.io-rank'), time: q('.io-time'), net: q('.io-net'), emos: q('.io-emos'), pad: q('.io-pad') };
+    const ui = { el, wrap: q('.io-wrap'), cv: q('.io-cv'), hud: q('.io-hud'), ov: q('.io-ov'), lb: q('.io-lb'), sc: q('.io-sc'), rank: q('.io-rank'), time: q('.io-time'), net: q('.io-net'), emos: q('.io-emos'), pad: q('.io-pad'), v2: hud2() };
+    if (ui.v2) shell2(ui, o);
+    return ui;
+  }
+  // ═══ Интерфейс 2.0 (T-123, docs/HUD_V2.md §9.7; откат — HUD2.io = 0 в js/core/config.js) ═══
+  // Таблица лидеров — 3 лучших и ты (нажал — 10 лучших на 5 с); вверху 😀 · ☰ (🔗 «Позвать друга», «Выйти из раунда» и пункты
+  // шапки игры 📣 📖 🔊 ⚙️ 📱 ⛶ ← — в одном ☰, своего ☰ у шапки нет, пока идёт раунд); кнопки 56/64 px, попадание 68/80 px;
+  // мини-карта — справа вверху под таблицей (игры рисуют её по ui.v2), не под пальцем, что рулит.
+  const hud2 = () => typeof HUD2 !== 'undefined' && !!HUD2.kit && !!HUD2.io;
+  function shell2(ui, o){
+    ui.el.firstElementChild.classList.add('io-v2');
+    const lb = ui.lb; let lbT = 0;
+    lb.classList.add('mini'); lb.title = 'Нажми — 10 лучших';
+    lb.addEventListener('click', () => { lb.classList.toggle('mini', false); clearTimeout(lbT); lbT = setTimeout(() => lb.classList.toggle('mini', true), 5000); });
+    // ☰ — одно меню: перехватываем нажатие до игры (её «☰ — в меню игры» — пункт «Выйти из раунда»)
+    const mb = ui.hud.querySelector('[data-io="menu"]'), ib = ui.hud.querySelector('[data-io="invite"]');
+    let pass = false, m = null;
+    const fire = b => { pass = true; try { b?.click(); } finally { pass = false; } };
+    const items = () => [{ id: 'io-go', icon: '▶', text: 'Играть дальше', primary: true },
+      { id: 'io-inv', icon: '🔗', text: 'Позвать друга', group: 'Раунд' }, { id: 'io-out', icon: '🏠', text: 'Выйти из раунда', group: 'Раунд' },
+      ...((root.D37Shell?.items?.() || []).map(it => it.id === 'sh-back' ? it : Object.assign({ group: 'Игра' }, it)))];
+    mb?.addEventListener('click', e => {
+      if (pass) return;
+      e.stopPropagation(); e.preventDefault();
+      if (!root.D37Settings?.menu) { fire(mb); return; }
+      m?.close?.();
+      m = root.D37Settings.menu(ui.wrap, { title: '☰ ' + (o.title || 'Меню'), items, onClose: () => { m = null; }, onPick: id => {
+        if (id === 'io-go') { m?.close(); return; }
+        if (id === 'io-inv') { m?.close(); fire(ib); return; }
+        if (id === 'io-out') { m?.close(); fire(mb); return; }
+        root.D37Shell?.pick?.(id, m);
+      } });
+    }, true);
+    // идёт раунд (экран игры виден) — у шапки своего ☰ нет (D37Shell.own); раунд кончился — есть (из меню игры можно уйти)
+    const own = () => root.D37Shell?.own?.(!ui.hud.hidden && ui.el.isConnected);
+    new MutationObserver(own).observe(ui.hud, { attributes: true, attributeFilter: ['hidden'] });
   }
   // Высота поля: во весь экран — всё место; телефон — почти весь экран; ПК — по ширине
   function fitHeight(wrap){
@@ -910,6 +945,22 @@ body.high .io-ov.ko{animation:ioDark .7s ease-out}
 @media(max-width:520px){.io-lb{min-width:112px;font-size:.62rem;padding:4px 6px}.io-lb li:nth-child(n+6){display:none}.io-lb li.me{display:flex}.io-sc{font-size:1.05rem}.io-title{font-size:1.4rem}.io-skins{grid-template-columns:repeat(6,1fr)}}
 @media(hover:hover) and (pointer:fine){.io-pad.touch-only{display:none}}
 body.low .io-ov{-webkit-backdrop-filter:none;backdrop-filter:none}
+/* ── интерфейс 2.0 (T-123, HUD2.io): таблица — 3 лучших и ты (нажал — 10 на 5 с), вверху 😀 · ☰, кнопки 56/64 (попадание 68/80) ── */
+.io-v2 .io-hud{contain:layout paint}
+.io-v2 .io-lb{contain:layout paint;pointer-events:auto;cursor:pointer;min-width:0;width:max-content;max-width:min(44%,190px)}
+.io-v2 .io-lb.mini li:nth-child(n+4):not(.me){display:none}
+.io-v2 .io-lb.solo li:not(.me){display:none}
+.io-v2 .io-lb.solo:not(:has(li.me)){display:none}
+.io-v2 .io-row{gap:8px}
+.io-v2 .io-row [data-io="invite"]{display:none}
+.io-v2 .io-ib{position:relative}
+.io-v2 .io-ib::after{content:'';position:absolute;inset:-4px;border-radius:14px}
+.io-v2 .io-big{position:relative;width:56px;height:56px;font-size:0}
+.io-v2 .io-big.big{width:64px;height:64px}
+.io-v2 .io-big b{font-size:1.45rem}
+.io-v2 .io-big::after{content:'';position:absolute;inset:-6px;border-radius:50%}
+.io-v2 .io-big.big::after{inset:-8px}
+.io-v2 .io-pad{gap:18px}
 `;
   function css(){ if (!root.document || document.getElementById('ioCss')) return; const s = document.createElement('style'); s.id = 'ioCss'; s.textContent = CSS; document.head.appendChild(s); }
 
