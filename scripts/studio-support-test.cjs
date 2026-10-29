@@ -79,6 +79,30 @@ sec('без крыши: убрали колонны под балкой — ба
   SS.play.stop();
 }
 
+// ═══ T-124 SH1: нагрузка (settings.phys.load = 1) — вес деталей и площадь касания ═══
+sec('нагрузка: бетон на балке между стенами — убрали стену, балка с бетоном падает (без нагрузки — висит, как раньше)');
+{
+  const mk = load => { const SC = scene('real'); if (load) SC.settings.phys = { load: 1 };
+    SC.add({ id: 'wa', pos: [0, 1.5, 0], size: [.3, 3, 1] }); SC.add({ id: 'wb', pos: [4.3, 1.5, 0], size: [.3, 3, 1] });
+    SC.add({ id: 'beam', pos: [2.15, 2.75, 0], size: [4, .5, 1], mat: 'wood' }); SC.add({ id: 'block', pos: [2.15, 3.3, 0], size: [.6, .6, 1] });
+    SC.add({ id: 'shed', pos: [9, 1, 0], size: [1, 2, 1] }); SC.add({ id: 'shedTop', pos: [9, 2.25, 0], size: [3, .5, 1], mat: 'wood' });
+    return SC; };
+  const run = load => { const SC = mk(load), P = papiOf(SC); SS.play.start(P); SS.play.world(); SS.play.step(1 / 60);
+    const start = ['beam', 'block'].every(k => SC.get(k).anchored !== false);
+    SC.remove(SC.get('wb')); SS.play.step(1 / 60);
+    const r = { start, beam: SC.get('beam').anchored, block: SC.get('block').anchored, shed: SC.get('shedTop').anchored };
+    SS.play.stop(); return r; };
+  const v2 = run(true), v1 = run(false);
+  ok(v2.start && v2.beam === false && v2.block === false && v2.shed !== false, 'нагрузка: убрали стену — балка с бетоном стала консолью и упала', v2);
+  ok(v1.start && v1.beam !== false && v1.block !== false, 'без нагрузки (старые миры) — как было: балка держится вбок от одной стены', v1);
+  // «держалось до»: перегруженное от посторонней правки не падает
+  const SC = mk(true); SC.add({ id: 'lead', pos: [2.15, 3.9, 0], size: [.6, .6, 1], mat: 'metal' });   // металл сверху — балка перегружена ещё «до»
+  const P = papiOf(SC); SS.play.start(P); SS.play.world(); SS.play.step(1 / 60);
+  SC.remove(SC.get('shed')); SS.play.step(1 / 60);
+  ok(SC.get('beam').anchored !== false && SC.get('lead').anchored !== false && SC.get('shedTop').anchored === false, 'перегруженная балка (металл сверху) от посторонней правки (сломали сарай рядом) не падает; крыша сарая — падает', { beam: SC.get('beam').anchored, lead: SC.get('lead').anchored, shed: SC.get('shedTop').anchored });
+  SS.play.stop();
+}
+
 sec('мягкое держит дольше; гость не считает; выкл — как было');
 {
   const mk = mode => { const SC = scene(mode); SC.add({ id: 'post', pos: [0, 2, 0], size: [1, 4, 1] }); for (let i = 1; i <= 7; i++) SC.add({ id: 'b' + i, pos: [i, 3.75, 0], size: [1, .5, 1], mat: 'wood' }); return SC; };
