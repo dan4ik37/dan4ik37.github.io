@@ -173,7 +173,7 @@
     F.skyInto = wx => { const K = F.K; wx.dust = K.dust; wx.tintK = K.tintK; wx.flat = K.flat; wx.vis = K.vis < 509 ? K.vis : 0; wx.tint = K.tint; return wx; };
     F.active = () => F.K.tintK > .005 || F.K.dust > .005 || F.K.vis < 500 || F.K.flat > .005;
     // hosts that darken the sky themselves (Kubomir): only the special's numbers, at most 4 times a second, null when it is over
-    let pushAt = 0;
+    let pushAt = -1e9;   // the first push goes at once (performance.now() starts near 0)
     F.pushSky = (Rr = R) => {
       const now = performance.now(), K = F.K, s = F.sent;
       if (now - pushAt < 250) return;
