@@ -28,6 +28,7 @@ body.a3-on #readProgress,body.a3-on #pwaBanner,body.a3-on #cursorTrail,body.a3-o
 .a3-lost[hidden]{display:none}
 #a3-panel{background:var(--panel);border-top:1px solid var(--line);padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));max-height:52%;overflow-y:auto;
   display:flex;flex-direction:column;gap:8px;flex:none;overscroll-behavior:contain}
+#a3-panel>*{flex:none}   /* the panel scrolls; its children keep their size (the phone squeezed the command box to 53 px) */
 .a3 textarea{width:100%;box-sizing:border-box;height:110px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px;
   font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;resize:vertical}
 .a3-row{display:flex;flex-wrap:wrap;gap:6px}
