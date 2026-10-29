@@ -99,6 +99,8 @@ Russian). Read only the area file(s) your task needs — never all of them.
 - Pointer lock only via the game's own D37E.input `I.lock()` / `I.unlock()`.
 - Built-in browser: no service worker; rAF, IntersectionObserver, transitions stall while the pane is hidden; old js is cached
   (`fetch(url, {cache:'reload'})`). Verify game loops in node or headless Chrome scripts (scripts/*-e2e.cjs).
+- Chrome e2e must never download: `Page.setDownloadBehavior {behavior:'deny'}` after Page.enable (29.10 the AI3D «Экспорт GLB»
+  click left 26 model.glb in the owner's C:\Users\…\Downloads). Never click export/download buttons in the built-in browser.
 - Foreign text (nicks, chat, names, peers' strings, files) only via `esc()` / `jsAttr()` / `textContent`;
   `node scripts/xss-test.cjs` guards it (allowlist scripts/xss-allowlist.json).
 - If the permission checker (auto mode) fails several times in a row — stop and ask the owner to switch the mode.

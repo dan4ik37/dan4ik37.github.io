@@ -50,6 +50,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
   const heap = async () => { await send('HeapProfiler.collectGarbage'); await sleep(300); await send('HeapProfiler.collectGarbage'); return +((await ev('performance.memory.usedJSHeapSize')) / 1e6).toFixed(1); };
   try {
     await send('Page.enable'); await send('Runtime.enable'); await send('HeapProfiler.enable');
+    await send('Page.setDownloadBehavior', { behavior: 'deny' }).catch(() => {});   // никаких загрузок в «Загрузки» на C
     if (PC) await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
     else { await send('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: 2, mobile: true }); await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }); }
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_age: JSON.stringify({ y: 2000, at: Date.now() - 864e6 }), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_s3_learn: 'done' };

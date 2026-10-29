@@ -170,6 +170,8 @@ function wsBridge(){
 
   try {
     await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable'); await send('Network.enable');
+    // кнопка «Экспорт GLB» качает model.glb — в тестах никаких загрузок (иначе они падают в «Загрузки» на диске C)
+    await send('Page.setDownloadBehavior', { behavior: 'deny' }).catch(() => {});
     await send('Network.setBlockedURLs', { urls: BLOCK });
     if (PC) await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
     else {
