@@ -1127,21 +1127,34 @@ function geo(t,s){s=s||[];
  }
  throw new Error('Неизвестный тип: '+t+'. Доступны: box, sphere, cylinder, cone, torus, plane');
 }
+// site: build() reuses a mesh (with its material and outline hull) when its geometry and material inputs are unchanged. «Играть», undo/redo
+// and the AI 'sheet' change only pos/rot/scale/shape weights, but every frame made new meshes and materials and disposed the old ones before
+// the next render — three then destroyed and relinked the shader programs each frame (phone: dog 10 fps, ~2 links per frame). Replaced
+// materials are disposed after the next main render (__oldM), so a program that is still in use is never dropped.
+const __oldM=[];function __flushOld(){for(const x of __oldM)x.dispose();__oldM.length=0}
+const __mkey=(o,P)=>[P.color,P.vertexColors?1:0,P.map?P.map.uuid:'',P.roughness,P.metalness,P.opacity,o.card||'',o.toon?1:0,o.outline&&!o.card?o.outline:'',o.bump?o.bump.k+','+o.bump.sc+','+o.bump.st:'',scene.environment?1:0].join('|');
 function build(){dirty=true;
- while(group.children.length){const m=group.children[0];group.remove(m);if(!__noDisp){m.material.dispose();m.children.forEach(c=>c.material&&c.material.dispose())}}__noDisp=false;   // site: not after a context loss
+ const old=group.children.slice(),pool=new Map(),used=new Set(),D=Math.PI/180;if(!__noDisp)old.forEach(m=>{if(m.userData.mk!==undefined)pool.set(m.name,m)});
+ while(group.children.length)group.remove(group.children[0]);
  state.filter(o=>!o.hidden&&layerOn(o)).forEach(o=>{
-  const m=new THREE.Mesh(cgeo(o),mkMat(o,{color:((o.type==='mesh'&&o.size.c)||(o.texid&&TEXS[o.texid]))?'#ffffff':(o.color||'#b0b0b0'),vertexColors:!!(o.type==='mesh'&&o.size.c&&!(o.texid&&TEXS[o.texid])),map:(o.texid&&TEXS[o.texid])?TEXS[o.texid].tex:null,morphTargets:!!(o.type==='mesh'&&o.size.sk),roughness:o.rough??.7,metalness:o.metal||0,transparent:(o.opacity??1)<1,opacity:o.opacity??1,side:THREE.DoubleSide}));
-  if(o.type==='mesh'&&o.size.sk)m.morphTargetInfluences=Object.keys(o.size.sk).map(k=>(o.w&&o.w[k])||0);m.userData.g0=m.geometry;m.position.set(...(o.pos||[0,0,0]));m.scale.setScalar(o.scale||1);
-  m.rotation.set(...(o.rot||[0,0,0]).map(d=>d*Math.PI/180));
+  const g=cgeo(o),P={color:((o.type==='mesh'&&o.size.c)||(o.texid&&TEXS[o.texid]))?'#ffffff':(o.color||'#b0b0b0'),vertexColors:!!(o.type==='mesh'&&o.size.c&&!(o.texid&&TEXS[o.texid])),map:(o.texid&&TEXS[o.texid])?TEXS[o.texid].tex:null,morphTargets:!!(o.type==='mesh'&&o.size.sk),roughness:o.rough??.7,metalness:o.metal||0,transparent:(o.opacity??1)<1,opacity:o.opacity??1,side:THREE.DoubleSide},mk=__mkey(o,P);
+  let m=pool.get(o.name);
+  if(m&&m.userData.g0===g&&m.userData.mk===mk&&!used.has(m))used.add(m);
+  else{m=new THREE.Mesh(g,mkMat(o,P));m.userData.g0=g;m.userData.mk=mk;
+   if(o.outline&&!o.card){try{const t=o.outline,hm=new THREE.MeshBasicMaterial({color:'#1b1420',side:THREE.BackSide});hm.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','vec3 transformed=position+normalize(normal)*'+t.toFixed(5)+';')};hm.customProgramCacheKey=()=>'a3ol'+t.toFixed(5);const hull=new THREE.Mesh(m.geometry,hm);hull.castShadow=false;hull.userData.outline=1;m.add(hull)}catch(e){}}
+   if(m.material&&scene.environment)m.material.envMapIntensity=.6;
+   if(o.bump&&g.attributes.uv){try{m.material.bumpMap=bumpTex(o.bump.k,o.bump.sc);m.material.bumpScale=o.bump.st}catch(e){}}}
+  if(o.type==='mesh'&&o.size.sk){const ks=Object.keys(o.size.sk),w=o.w;let mi=m.morphTargetInfluences;if(!mi||mi.length!==ks.length)mi=m.morphTargetInfluences=new Array(ks.length);for(let i=0;i<ks.length;i++)mi[i]=(w&&w[ks[i]])||0}
+  const p=o.pos,r=o.rot;if(p)m.position.set(p[0],p[1],p[2]);else m.position.set(0,0,0);m.scale.setScalar(o.scale||1);if(r)m.rotation.set(r[0]*D,r[1]*D,r[2]*D);else m.rotation.set(0,0,0);
   m.renderOrder=o.ro||0;m.name=o.name;m.castShadow=m.receiveShadow=SET.shadows&&!(o.opacity<1)&&!o.card;
-  if(o.outline&&!o.card){try{const t=o.outline,hm=new THREE.MeshBasicMaterial({color:'#1b1420',side:THREE.BackSide});hm.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','vec3 transformed=position+normalize(normal)*'+t.toFixed(5)+';')};hm.customProgramCacheKey=()=>'a3ol'+t.toFixed(5);const hull=new THREE.Mesh(m.geometry,hm);hull.castShadow=false;hull.userData.outline=1;m.add(hull)}catch(e){}}
- if(m.material&&scene.environment)m.material.envMapIntensity=.6;
-  if(o.bump&&m.geometry.attributes.uv){try{m.material.bumpMap=bumpTex(o.bump.k,o.bump.sc);m.material.bumpScale=o.bump.st}catch(e){}}
   group.add(m);
  });
+ if(!__noDisp)old.forEach(m=>{if(!used.has(m)){__oldM.push(m.material);m.children.forEach(c=>c.material&&__oldM.push(c.material))}});__noDisp=false;   // site: after a context loss the old objects are dropped, not disposed
+ if(__oldM.length>3000)__flushOld();   // nothing rendered for a long time (hidden tab, node tests)
  fitShadow();__gcPrune();__texPrune();
 }
-function __texPrune(){const ids=Object.keys(TEXS);if(ids.length<9)return;const used=new Set();state.forEach(o=>{if(o.texid)used.add(o.texid)});let un=ids.filter(id=>!used.has(id));if(un.length<9)return;   // site
+let __tpSig='';function __texPrune(){const ids=Object.keys(TEXS);if(ids.length<9)return;const used=new Set();state.forEach(o=>{if(o.texid)used.add(o.texid)});let un=ids.filter(id=>!used.has(id));if(un.length<9)return;   // site
+ const sig=ids.length+','+un.length+','+hist.length+','+redo.length+','+(hist.length?hist[hist.length-1].length:0);if(sig===__tpSig)return;__tpSig=sig;   // site: nothing changed since the last check («Играть» builds every frame)
  let defs='';try{defs=JSON.stringify(Object.values(CUSTOM).map(f=>f()))}catch(e){return}
  un.filter(id=>!defs.includes(id)&&!hist.some(s=>s.includes(id))&&!redo.some(s=>s.includes(id))).forEach(id=>{const T=TEXS[id];if(T.tex&&!__noDisp)T.tex.dispose();delete TEXS[id]})}
 function __gcPrune(){const cap=Math.max(60,state.length+20);if(GC.size<=cap)return;const used=new Set();group.children.forEach(m=>used.add(m.userData.g0||m.geometry));   // site
@@ -1624,7 +1637,7 @@ const __FR=new Float32Array(4096);let __frN=0,__rend=false,__tick=0,__cost=0;   
  if(!(dirty||playing||!SET.onDemand))return;
  const t0=performance.now();{const b=bg();if(b!==__bgSet){__bgSet=b;R.setClearColor(b)}}place();   // site
  if(SET.lod||SET.cull){lodOn=true;lodUpdate(false)}else if(lodOn){lodUpdate(true);lodOn=false}
- R.render(scene,cam);dirty=false;if(__lodPend){__lodPend=false;dirty=true}const __c=performance.now()-t0;__FR[__frN++&4095]=__c;__cost=__cost*.9+__c*.1;__rend=true;lastT=t0;
+ R.render(scene,cam);dirty=false;if(__oldM.length)__flushOld();if(__lodPend){__lodPend=false;dirty=true}const __c=performance.now()-t0;__FR[__frN++&4095]=__c;__cost=__cost*.9+__c*.1;__rend=true;lastT=t0;
  if(SET.adaptive){const mx=Math.min(devicePixelRatio,2);if(ft>30&&PR>.6&&__cost<ft*.6){PR=Math.max(.6,PR-.1);fit()}else if(ft<20&&PR<mx){PR=Math.min(mx,PR+.1);fit()}}   // site
 })();
 
@@ -1731,12 +1744,13 @@ function __dispose(){if(!__alive)return;__alive=false;cancelAnimationFrame(__raf
  clearTimeout(__wsT);if(__ws){try{__ws.onclose=null;__ws.close()}catch(e){}__ws=null}
  if(!__ctxGen){
  while(group.children.length){const m=group.children[0];group.remove(m);m.material.dispose();m.children.forEach(c=>c.material&&c.material.dispose())}
+ __flushOld();
  GC.forEach(g=>{g.dispose();const L=LODC.get(g);if(L)L.forEach(x=>x.dispose())});
  Object.keys(TEXS).forEach(k=>{if(TEXS[k].tex)TEXS[k].tex.dispose()});BT.forEach(t=>t.dispose());if(TG)TG.dispose();
  scene.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(mt=>{if(mt.map)mt.map.dispose();mt.dispose()})});
  if(scene.environment)scene.environment.dispose();if(dl.shadow&&dl.shadow.map)dl.shadow.map.dispose();
  }
- while(group.children.length)group.remove(group.children[0]);GC.clear();Object.keys(TEXS).forEach(k=>delete TEXS[k]);BT.clear();TG=null;scene.environment=null;if(dl.shadow)dl.shadow.map=null;
+ while(group.children.length)group.remove(group.children[0]);__oldM.length=0;GC.clear();Object.keys(TEXS).forEach(k=>delete TEXS[k]);BT.clear();TG=null;scene.environment=null;if(dl.shadow)dl.shadow.map=null;
  if(__SRenv){__SRenv.dispose();__SRenv=null}
  try{R.dispose();R.forceContextLoss()}catch(e){}if(__SR){try{__SR.dispose();__SR.forceContextLoss()}catch(e){}__SR=null}
  if(__cm&&'legacyMode' in __cm)__cm.legacyMode=__cmL;

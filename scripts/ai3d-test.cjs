@@ -193,6 +193,16 @@ function threeDir(){
   for (const D of DEMOS) D.cmds.forEach(x => reached.add(x.op));
   for (const [, c] of extra) c.forEach(x => reached.add(x.op));
   ok(allOps.size === 63 && [...allOps].every(o => reached.has(o)), 'every op of run() is exercised (63)', { ops: allOps.size, missing: [...allOps].filter(o => !reached.has(o)) });
+  // «Играть» / undo / sheet: a frame that changes only pos/rot/scale/shape weights keeps the same meshes and materials (no new materials →
+  // no shader relink); a colour change makes a new material and the old one waits for the next render (__oldM) before it is disposed
+  S.reset(); S.run(DEMOS[1].cmds);
+  const pl = vm.runInThisContext(`(() => { const m0 = group.children.slice(), mats0 = m0.map(m => m.material), A = ANIM[Object.keys(ANIM)[0]], p0 = JSON.stringify(state.map(o => o.pos));
+    let same = true; for (let f = 1; f <= 30; f++) { sampleInto(A, f / 30); build(); settle(); same = same && group.children.length === m0.length && group.children.every((m, i) => m === m0[i] && m.material === mats0[i]); }
+    const moved = JSON.stringify(state.map(o => o.pos)) !== p0, nm = state.find(o => !o.hidden).name, before = __oldM.length, old = group.children.find(m => m.name === nm).material;
+    run([{ op: 'set', name: nm, color: '#123456' }]); const now = group.children.find(m => m.name === nm).material;
+    const deferred = __oldM.includes(old) && __oldM.length === before + 1; __flushOld();
+    return { same, moved, n: m0.length, newMat: now !== old && now.color.getHexString() === '123456', deferred, flushed: __oldM.length === 0, othersKept: group.children.filter(m => m.name !== nm).every(m => mats0.includes(m.material)) }; })()`);
+  ok(pl.same && pl.moved && pl.newMat && pl.deferred && pl.flushed && pl.othersKept, 'play frames reuse meshes and materials; a colour change → one new material, the old one disposed after the next render', pl);
   // the geometry cache follows the scene: after selftest() (hundreds of objects) and an empty scene it is back to ≤ 60
   S.reset(); globalThis.AI3D.selftest(); const gcBig = vm.runInThisContext('GC.size'); S.reset(); S.run(DEMOS[0].cmds);
   const gcNow = vm.runInThisContext('GC.size');
