@@ -14,7 +14,8 @@
 //     (the editor writes raw sRGB numbers into them); colour textures are tagged sRGB (glTF baseColorTexture is sRGB).
 //  Also: full-detail geometry (the editor may be showing an LOD copy), culled objects are exported too, outline hulls are skipped,
 //  COLOR_0 only when the material uses vertex colours (glTF always multiplies it in), only standard attributes, normals normalized,
-//  TRS nodes (animated nodes must not use a matrix), the editor's own geometries are never modified.
+//  TRS nodes (animated nodes must not use a matrix), the editor's own geometries are never modified, equal materials are written once
+//  (the editor has one per mesh; Studio 3D merges parts by glTF material).
 // D37AI3DGltf: exportGLB(group, clips, o) → Promise<ArrayBuffer>; toStudio(buf, name) → model (D37E.models compile + save, the
 // same way the photo editor sends pictures); toModule(src) — for node tests; setExporter(cls) — node tests inject the class.
 (function(){
@@ -92,15 +93,18 @@
       for (const gr of g0.groups || []) g.addGroup(gr.start, gr.count, gr.materialIndex);
       geos.set(k, g); made.push(g); return g;
     }
+    // The editor makes a new material for every mesh (dog: 41 materials, 3 different). Equal materials → ONE glTF material, so Studio 3D's
+    // compile (js/engine/model.js bake() merges parts by material index) makes a few parts, not one draw call per mesh.
     function mat(m){
-      if (mats.has(m)) return mats.get(m);
+      const basic = !!m.isMeshBasicMaterial, map = tex(m.map);
       const p = { name: m.name || '', color: m.color ? linColor(m.color) : new T.Color(1, 1, 1), opacity: m.opacity, transparent: !!m.transparent,
-        alphaTest: m.alphaTest || 0, side: m.side, vertexColors: !!m.vertexColors, map: tex(m.map) };
-      let o;
-      if (m.isMeshBasicMaterial) o = new T.MeshBasicMaterial(p);   // → KHR_materials_unlit (drawn cards)
-      else o = new T.MeshStandardMaterial(Object.assign(p, { roughness: m.roughness != null ? m.roughness : .9, metalness: m.metalness || 0,
-        emissive: m.emissive ? linColor(m.emissive) : new T.Color(0, 0, 0) }));
-      mats.set(m, o); made.push(o); return o;
+        alphaTest: m.alphaTest || 0, side: m.side, vertexColors: !!m.vertexColors, map };
+      if (!basic) Object.assign(p, { roughness: m.roughness != null ? m.roughness : .9, metalness: m.metalness || 0, emissive: m.emissive ? linColor(m.emissive) : new T.Color(0, 0, 0) });
+      const key = [basic ? 'b' : 's', p.name, p.color.r, p.color.g, p.color.b, p.opacity, p.transparent, p.alphaTest, p.side, p.vertexColors, map ? map.uuid : '',
+        p.roughness, p.metalness, p.emissive ? p.emissive.r + ',' + p.emissive.g + ',' + p.emissive.b : ''].join('|');
+      if (mats.has(key)) return mats.get(key);
+      const o = basic ? new T.MeshBasicMaterial(p) : new T.MeshStandardMaterial(p);   // basic → KHR_materials_unlit (drawn cards)
+      mats.set(key, o); made.push(o); return o;
     }
     const sc = new T.Group(); sc.name = 'AI3D';
     for (const m of group.children) {

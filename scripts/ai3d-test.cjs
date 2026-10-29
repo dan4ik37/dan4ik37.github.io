@@ -131,6 +131,8 @@ function threeDir(){
     ok(!/"g0"|"aux"|"outline"/.test(jsonTxt), D.id + ': no editor userData in JSON');
     ok(g.jl < Math.min(300e3, Math.max(40e3, buf.byteLength * .2)), D.id + ': JSON chunk small (was 97% extras)', { json: g.jl, total: buf.byteLength });
     const meshNodes = J.nodes.filter(n => n.mesh !== undefined);
+    const nMats = (J.materials || []).length, msig = new Set((J.materials || []).map(m => JSON.stringify(m)));
+    ok(msig.size === nMats && nMats <= meshNodes.length, D.id + ': equal materials written once (the editor has one per mesh)', { materials: nMats, distinct: msig.size, meshes: meshNodes.length });
     ok(meshNodes.length === live.filter(m => m.isMesh).length, D.id + ': every editor mesh exported (incl. culled)', { nodes: meshNodes.length, live: live.length, culled });
     ok(J.nodes.every(n => !n.matrix), D.id + ': TRS nodes (no matrix)');
     let gTris = 0; for (const n of meshNodes) for (const p of J.meshes[n.mesh].primitives) gTris += (p.indices !== undefined ? J.accessors[p.indices].count : J.accessors[p.attributes.POSITION].count) / 3;
@@ -170,10 +172,11 @@ function threeDir(){
     const tComp = performance.now() - tc;
     if (model) {
       ok(model.tris > 0 && model.parts.length > 0, D.id + ': D37E.models.compile accepts it');
+      ok(model.parts.length <= Math.max(2, nMats * 2) && (meshNodes.length < 10 || model.parts.length * 3 <= meshNodes.length), D.id + ': Studio 3D merges the meshes into a few parts (draw calls)', { meshes: meshNodes.length, materials: nMats, parts: model.parts.length });
       if (D.id === 'table') ok(model.mats.some(m => Math.abs(m.c[0] - 0.392) < .001), 'table: Studio 3D material colour linear 0.392', model.mats.map(m => m.c.map(v => +v.toFixed(3))));
     }
     sizes[D.id] = { run: Math.round(tRun), meshes: meshNodes.length, tris: Math.round(tris), lodOnScreen: lodNow, culledOnScreen: culled, anims: (J.animations || []).length,
-      glbKB: Math.round(buf.byteLength / 1024), jsonKB: +(g.jl / 1024).toFixed(1), exportMs: Math.round(tExp), compileMs: Math.round(tComp), studioTris: model && model.tris, studioKB: model && Math.round((model.bytes || 0) / 1024) };
+      glbKB: Math.round(buf.byteLength / 1024), jsonKB: +(g.jl / 1024).toFixed(1), exportMs: Math.round(tExp), compileMs: Math.round(tComp), materials: nMats, studioParts: model && model.parts.length, studioTris: model && model.tris, studioKB: model && Math.round((model.bytes || 0) / 1024) };
     console.log(D.id.padEnd(7), JSON.stringify(sizes[D.id]));
   }
   // the ops the self-test rows and demos do not reach (scripts/ai3d/ops-extra.json — the e2e smoke runs them in Chrome too)

@@ -295,7 +295,8 @@ The owner's own 3D editor AI3D (from his package ai3d-mcp: ai3d.html, author —
   no userData extras (dog JSON chunk 3.36 MB → 88 KB, GLB 4.4 MB → 1.1 MB; fox 6.3 → 1.5 MB; island 13.8 → 2.6 MB); factors sRGB → linear while
   ColorManagement.legacyMode is on ('#a8754a' → 0.392), COLOR_0 always linear and only when the material uses vertex colours; textures tagged
   sRGB; full-detail geometry (the screen may show LOD copies / culled meshes); outline hulls skipped; TRS nodes; animations kept; the editor's
-  geometries are never touched. «📦 В Студию 3D» = this GLB → `D37E.models.compile` + `save` (IndexedDB «d37e») → «🧩 Модели» in Studio 3D,
+  geometries are never touched; equal materials are written once (the editor makes one per mesh: dog 41 → 3 glTF materials, so Studio 3D
+  compile, which merges parts by glTF material, gives 4 parts instead of 41; fox 56 → 6). «📦 В Студию 3D» = this GLB → `D37E.models.compile` + `save` (IndexedDB «d37e») → «🧩 Модели» in Studio 3D,
   the same path as the photo editor. AI3D itself does not import GLB (OBJ only).
 - **Fixed after the first real browser run.** r149 toon gradient (LuminanceFormat failed in WebGL2 texStorage → black gradient, dark anime faces)
   → RGBA; one offscreen renderer for snapshots / reference compare (each call made a new WebGL context); outline program per thickness; LOD
@@ -324,5 +325,5 @@ The owner's own 3D editor AI3D (from his package ai3d-mcp: ai3d.html, author —
   D37E model.js has no skin/animation playback yet. A3: colliders/mass/joints → glTF extension D37_physics (AI3D manifestOf has colliders).
   A4: terrain from core T1 instead of AI3D's own value noise; scatter → batch.js instancing, not one merged mesh. A5: command layer like the
   photo editor (D37Tools «d37 v1»: schema per op, per-step undo; AI3D now has whole-state rollback and no ANIM/CON rollback), short guide topics,
-  MCP server. Also: materials are one per mesh (exporter does not merge identical ones; Studio compile does); inverted-hull outlines do not show
+  MCP server. Also: inverted-hull outlines do not show
   on hard-edged boxes (face normals) — a classic limitation.
