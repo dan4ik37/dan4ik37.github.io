@@ -716,10 +716,12 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         await ev(`(() => { const b = document.querySelector('.kb-world [data-w="play"]'); b && b.click(); return !!b; })()`);
         let up = false; for (let k = 0; k < 240 && !up; k++) { await sleep(500); up = await ev(`!!(GAME_IMPL.kubomir?._test?.state()?.ready)`, 3000).catch(() => false); }
         if (!up) { ok(false, 'мир снова открылся (' + (i + 1) + ')'); break; }
+        if (LOAD && !(await ev(`!!GAME_IMPL.kubomir._test.state()?.sup?.load`, 5000).catch(() => false))) res.loadLost = (res.loadLost | 0) + 1;   // T-124: нагрузка — поле мира, сохраняется
       }
       await idle(); await new Promise(r => setTimeout(r, 2000)); hs.push(await heap());
       res.reopen = hs; console.log('ЗАМЕР reopen, память JS после сборки мусора (МБ):', hs.join(' → '));
       ok(hs.length >= 8 && hs[hs.length - 1] - hs[1] < 25, 'закрыть/открыть мир ' + (hs.length - 1) + ' раз — память не растёт', hs);
+      if (LOAD) ok(!res.loadLost, 'мир с нагрузкой после каждого открытия — с нагрузкой (meta.load сохраняется)', res.loadLost | 0);
       return;
     }
   }

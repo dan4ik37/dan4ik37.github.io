@@ -372,7 +372,7 @@
     }
     // ── замер без последствий (v2): задание целиком по кусочкам бюджета — сколько тактов и худший такт (мс) ──
     function dry2(x, y, z, code){
-      if (J.busy) return null;
+      while (J.busy || JQ.length) loadTick();   // замер — на пустой очереди (идущее задание доводим до конца)
       const t0 = nowMs(); fresh(); J.start('rm', [x, y, z, code], read, BO);
       let maxT = 0, nt = 0, wph = -1; const ph = [0, 0, 0, 0, 0, 0, 0, 0], po = [0, 0, 0, 0, 0, 0, 0, 0];
       for (;;) { const p = J.phase, o0 = J.ops, a = nowMs(); fresh(); const fin = J.step(S.SOLVE_BUDGET); const d = nowMs() - a; nt++; ph[p] += d; po[p] += J.ops - o0; if (d > maxT) { maxT = d; wph = p; } if (fin) break; }
