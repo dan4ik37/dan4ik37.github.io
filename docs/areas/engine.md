@@ -322,3 +322,58 @@
   `location.href` gave /play/js/… → 404 → silent JS fallback). Chrome CPU throttling does NOT slow workers (worker ms = desktop).
 - Tests: terra-test (golden, edit re-mesh, worker protocol in worker_threads, wasm vs JS timing); Chrome:
   `node scripts/terra-e2e.cjs perf | leak [N] | soak [min] | shots` (PC=1 — desktop).
+
+## 🧠 AI LOD P1 — «ум толпы» on the site (T-127, 29.10.2026, GAMES_VER 148; spec E:\d37-core\spec\AI_LOD.md §10.2, §12 P1)
+- Owner decisions (docs/progress.md 29.10): D1 Horde — one enemy cap for every device; D4 Mir — the same 16 residents on phone
+  and PC, phones draw the extra ones as simple figures; D5 Studio survival — ≤ 64 zombies alive at once across waves.
+- `js/engine/shash.js` (D37E.shash, new, loaded before npc.js / horde.js in GAMES scripts): one uniform grid on typed arrays,
+  rebuilt per step (`clear` / `add(x, y, ref, tag, rad)`), queries `cand` / `query` / `knear` / `touching` / `pairs` (each touching
+  pair once: own cell + 4 forward cells; cell ≥ 2 × the largest radius). No garbage after the first growth.
+- `js/engine/npc.js` (flag `LOD`, rollback `const LOD = false`): brain state in typed arrays (SoA, slot `e.i`), think (nearest
+  player, new wander target) every 8 steps in the least-loaded phase (64 NPCs → 8 per phase), steering / contact / facing every
+  step; per-NPC mulberry32 stream seeded by FNV-1a(seed || id) — no Math.random; player.js bodies from a pool (≤ 64; `wake`
+  reuses, `remove` / `stop` return); B3 sleep — idle + grounded + not on a rigid body + speed < 0.02 for 30 steps → no body
+  update; wakes on a move intent, a push (velocity), leaving the ground, or a collider change near it (`ph.watch`, unwatched on
+  stop / dispose; without `ph.watch` nobody sleeps). `N.stats()` → { n, awake, asleep, pool, phases }. Public API unchanged
+  (N.list entries keep o / P / key / near).
+- player.js / physics.js: `Math.hypot` → `hyp = sqrt(x² + y²)` in the hot paths (the builtin returns a heap number every call;
+  sqrt is correctly rounded on every engine, hypot is not — phone Safari and desktop Chrome now compute the same); the wish
+  vector is one object per player; `ladderHere` / trigger events skip Set iteration when empty.
+  Gap: an awake player.js body still allocates ~38 B per step (V8 keeps the doubles of P / ch fields as heap numbers, field
+  representation "Any") — needs player.js on typed arrays (P2/P3); sleeping NPCs allocate ~0.
+- `js/engine/actors.js` V2 figures: `A.impostors({ cap, far })` — actors added with `{ npc: true }` (npc.js does it) get a full
+  rig only for the `cap` nearest to the camera within `far` (4 m bonus for an existing rig — no flip-flop); the rest are simple
+  figures (legs / torso / head in the human's colours, `World3D.impColors`) drawn by three shared InstancedMesh (3 draw calls for
+  all, frustumCulled off, disposed in `A.dispose`). A new NPC starts as a figure (no K.build), ≤ 1 rig build per 0.25 s pass.
+  `A.tierOf(key)` → V0 / V1 / V2, `A.impCount()`.
+- Mir (`mir-zones.js npcCaps`, rollback `MIR_LOD = false`): NPC_CAP 16 / RES_CAP 7 / NPC_ADD 2 on every device; RIG_CAP 8 phone or
+  «low», 16 PC, RIG_FAR 56; `npcTick` reuses its rows (no arrays per tick), `npcPick` is the pure choice.
+- Horde (`horde.js`, rollback `const LOD = false`): `CAP` 260 for all (coop × 1.25); `SPAWN_R` 600 (spawn / relocation × 1.6 no
+  longer from the viewport); the canvas zoom keeps the visible half-diagonal ≤ SPAWN_R − 30 (very wide / tall screens zoom in a
+  bit so enemies still appear off screen); run seed = FNV-1a(runId) when none is given; separation = touching pairs from the
+  shash (cell 44, ≤ SEP_K 6 per enemy, half the enemies per step by id parity with a doubled push) + a boss pass; weapons'
+  `near()` uses the same hash.
+  Gap (not changed, needs a decision): the bomb pickup and lightning still use the device's view rectangle (`G.viewW/H`) — a
+  wider screen hits more enemies.
+- Studio 3D survival (`studio3d-play.js`, rollback `Z_LOD = false`): a wave of n queues; ≤ `Z_MAX` 64 alive, 2 spawns per host
+  step, the wave is cleared only when alive + queue = 0; positions and looks from E.rng(FNV-1a('zw:' + round + ':' + wave)).
+  Phones / «low»: 16 rigs, the rest figures (`studio3d.js`). Gap: the queue is not in the host snapshot (a host change mid-wave
+  drops the queued rest).
+- Tests (in ci-run): `npc-lod-test` (digest 30 / 60 / 144 FPS, no Math.random, phases, sleep / push / floor removed, pool, 0 B per
+  step for 200 sleepers, rollback, shash vs brute force), `horde-lod-test` (one cap / radius, the same run at 30 / 60 / 144 FPS and on
+  phone / wide PC, no Math.random, crowd spreads better than the old in-cell pairs, near-linear 1 000 vs 260, rollback),
+  `studio-waves-test` (fake studio: 7 waves, 64 alive + queue, same seeds twice, rollback = 30), `mir-npc-lod-test` (caps equal,
+  the same 16 chosen, 8 rigs + 8 figures on phone, ≤ 1 build per frame, rollback). Bench: `node --expose-gc scripts/ailod-bench.cjs`;
+  Chrome phone ×4: `node scripts/ailod-e2e.cjs mir,horde,studio phone` (SITE_DIR / D37_OVERRIDE for the "before" column).
+- Numbers (node 24 desktop, render stubbed, p95 ms per 60 Hz step, two runs; phone reference ≈ × 4). npc.js residents
+  (wander, Mir-like) N 16 / 64 / 260 / 1 000: before 0.05 / 0.16–0.20 / 0.42–0.54 / 1.82–1.91 → after 0.02 / 0.08–0.09 / 0.26–0.37 /
+  0.79–0.93 (about half asleep); zombies (follow + bite, Studio-like): 0.03 / 0.13–0.14 / 0.40 / 1.50–1.91 → 0.03 / 0.11–0.12 /
+  0.31–0.35 / 1.18–1.32; GC events per 600 steps residents 13–23 → 4–8. Horde crowd (enemies held, no weapons) 170 / 260 / 1 000:
+  0.06–0.07 / 0.06–0.07 / 0.33–0.42 → 0.07 / 0.09 / 0.35 (separation now also across cell borders, half the enemies per step —
+  fewer deep overlaps: 260 → 46 vs 101, 1 000 → 414 vs 619), heap per step at 260: 12.4 KB → 2.7 KB.
+  Chrome phone 412 × 915, CPU × 4, «mid» (scripts/ailod-e2e.cjs; render.js CPU ms per frame; absolute numbers drift ± 50 % between
+  runs on this PC, so the same-page A/B decides): Mir Big City — NPC step 0.18–0.19 → 0.015–0.025 ms, frame 10.2–10.4 → 6.3–12.2,
+  A/B figures on / off 6.3 / 7.8 ms. Horde late wave at 260 — main-thread task 5.8–6.7 → 6.7–7.2 ms per frame, frame p50 7.5 / p95
+  8.0 → 8.1 (D1: 260 fits, ≈ 40 % of a 60 Hz frame). Studio survival wave 6 — before 30 alive (old cap) 20.3–25.4 ms, 479–514 draw
+  calls → after 64 alive (16 rigs + 48 figures) 10.8–14.0 ms, ≈ 320 calls; A/B at 64: figures off 34.1 ms / 1 174 calls, on 14.0 /
+  328. 20 × open / close (world-reopen-e2e, PC): Mir and Studio — 0 FAIL, heap + 2.9 / + 1.6 MB, listeners / intervals / WebGL equal.
