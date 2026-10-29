@@ -39,6 +39,10 @@ Russian). Read only the area file(s) your task needs — never all of them.
   status only (site_config 'donate_rewards'). Blocked until the owner decides: money intake, VIP/💎 for money, subscriptions,
   marketplace/auctions, player video/music, 18+ verification provider — ship such code switched off.
 - Big features behind a flag with one-line rollback. Mobile version always. Dark and light themes.
+- Game HUD (owner 29.10, mostly plays on a phone): few always-visible buttons, nothing over the character's face, no half-screen
+  clutter. ONE pose button → a radial (crouch, sit, lie down, emotes…); the inventory → a radial quick-select (like a weapon
+  wheel) instead of a big bar; one contextual action button; debug panels hidden by default. Spec: docs/HUD_V2.md. Hazards
+  (quake, tsunami, tornado) come WITHOUT phone warnings.
 - Never brand our tech as RTX/DLSS (NVIDIA trademarks); NIS is genuine NVIDIA (MIT).
 - Reuse permissive open source (MIT, Apache-2.0, BSD, ISC — not GPL/AGPL/non-commercial: the site has ads): license notice
   in the file, load from jsDelivr with an exact version. Committing third-party code/assets needs the owner's permission.
