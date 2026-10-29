@@ -66,5 +66,12 @@ function play(lod = true, poison = true){
   const o = play(false, false);
   ok(o.maxAlive === 30, 'откат Z_LOD = false: как было — не больше 30 за волну', o.maxAlive);
 }
+// ═══ Review #6: Studio's simple figures have their own one-line rollback S3_IMP ═══
+{
+  const src = fs.readFileSync(path.join(SITE, 'js/games/studio3d.js'), 'utf8'), NL = String.fromCharCode(10);
+  const lines = src.split(NL), line = lines.find(l => l.includes('ed.NPC.A.impostors'));
+  ok(lines.some(l => l.trim().startsWith('const S3_IMP = true;')), 'откат фигурок «Студии 3D» — строка S3_IMP = true на месте');
+  ok(!!line && line.includes('if (S3_IMP && ('), 'фигурки включаются только при S3_IMP (S3_IMP = false — все подробные на любом устройстве)', line && line.trim().slice(0, 90));
+}
 console.log(`${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);
