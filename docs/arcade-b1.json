@@ -56,7 +56,28 @@
         "js/games/arcade/fifteen.js",
         "js/games/arcade/fifteen.json",
         "scripts/arcade/fifteen.cjs"
-      ]
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.071,
+          "p95": 0.2,
+          "p99": 1.5
+        },
+        "botRun": {
+          "score": 616,
+          "title": "🏆 Все доски собраны!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 483
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 620 : 100",
+          "b": "😔 Победил Гость 609 100 : 620"
+        }
+      }
     },
     {
       "id": "repeat",
@@ -111,7 +132,28 @@
         "js/games/arcade/repeat.js",
         "js/games/arcade/repeat.json",
         "scripts/arcade/repeat.cjs"
-      ]
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.015,
+          "p95": 0,
+          "p99": 0.5
+        },
+        "botRun": {
+          "score": 90,
+          "title": "🎵 Мелодия ушла"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 484
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 90 : 13",
+          "b": "😔 Победил Гость 609 13 : 90"
+        }
+      }
     },
     {
       "id": "popit",
@@ -164,7 +206,28 @@
         "js/games/arcade/popit.js",
         "js/games/arcade/popit.json",
         "scripts/arcade/popit.cjs"
-      ]
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.028,
+          "p95": 0.2,
+          "p99": 0.6
+        },
+        "botRun": {
+          "score": 455,
+          "title": "🔥 Пальцы-пулемёт!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 471
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 467 : 20",
+          "b": "😔 Победил Гость 769 20 : 467"
+        }
+      }
     },
     {
       "id": "watersort",
@@ -218,7 +281,28 @@
         "js/games/arcade/watersort.js",
         "js/games/arcade/watersort.json",
         "scripts/arcade/watersort.cjs"
-      ]
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.044,
+          "p95": 0.1,
+          "p99": 1.2
+        },
+        "botRun": {
+          "score": 628,
+          "title": "🏆 Все краски разложены!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 44
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 632 : 90",
+          "b": "😔 Победил Гость 609 90 : 632"
+        }
+      }
     },
     {
       "id": "parking",
@@ -272,7 +356,28 @@
         "js/games/arcade/parking.js",
         "js/games/arcade/parking.json",
         "scripts/arcade/parking.cjs"
-      ]
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.056,
+          "p95": 0,
+          "p99": 1.4
+        },
+        "botRun": {
+          "score": 606,
+          "title": "🏆 Ни одного БИП!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 488
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 618 : 110",
+          "b": "😔 Победил Гость 150 110 : 618"
+        }
+      }
     },
     {
       "id": "pet",
@@ -328,7 +433,28 @@
         "js/games/arcade/pet.js",
         "js/games/arcade/pet.json",
         "scripts/arcade/pet.cjs"
-      ]
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.053,
+          "p95": 0.1,
+          "p99": 0.8
+        },
+        "botRun": {
+          "score": 465,
+          "title": "🌟 Лучший друг Буси!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 473
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 465 : 50",
+          "b": "😔 Победил Гость 265 50 : 465"
+        }
+      }
     },
     {
       "id": "riddles",
@@ -383,7 +509,28 @@
         "js/games/arcade/riddles.js",
         "js/games/arcade/riddles.json",
         "scripts/arcade/riddles.cjs"
-      ]
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.014,
+          "p95": 0,
+          "p99": 0.3
+        },
+        "botRun": {
+          "score": 1096,
+          "title": "🏆 Ни одного подвоха не пропустил!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 506
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 1 100 : 220",
+          "b": "😔 Победил Гость 265 220 : 1 100"
+        }
+      }
     },
     {
       "id": "evolve",
@@ -436,7 +583,28 @@
         "js/games/arcade/evolve.js",
         "js/games/arcade/evolve.json",
         "scripts/arcade/evolve.cjs"
-      ]
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.037,
+          "p95": 0,
+          "p99": 0.4
+        },
+        "botRun": {
+          "score": 522,
+          "title": "🐉 Повелитель драконов!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 476
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 522 : 74",
+          "b": "😔 Победил Гость 609 74 : 522"
+        }
+      }
     },
     {
       "id": "spinner",
@@ -491,7 +659,28 @@
         "js/games/arcade/spinner.js",
         "js/games/arcade/spinner.json",
         "scripts/arcade/spinner.cjs"
-      ]
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.413,
+          "p95": 0.9,
+          "p99": 1.9
+        },
+        "botRun": {
+          "score": 541,
+          "title": "🌀 Мастер вращения!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 551
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 593 : 44",
+          "b": "😔 Победил Гость 769 44 : 593"
+        }
+      }
     },
     {
       "id": "flip",
@@ -547,7 +736,33 @@
         "js/games/arcade/flip.js",
         "js/games/arcade/flip.json",
         "scripts/arcade/flip.cjs"
-      ]
+      ],
+      "e2e": {
+        "phoneFrameMs": {
+          "avg": 0.373,
+          "p95": 0.9,
+          "p99": 2.4
+        },
+        "botRun": {
+          "score": 235,
+          "title": "🎉 Отличные броски!"
+        },
+        "openClose20": {
+          "winListeners": 0,
+          "docListeners": 0,
+          "akNodes": 0,
+          "heapKB": 563
+        },
+        "duel": {
+          "a": "🏆 Ты победил! 235 : 32",
+          "b": "😔 Победил Гость 609 32 : 235"
+        }
+      }
     }
-  ]
+  ],
+  "tests": {
+    "unit": "node scripts/arcade-test.cjs → 269 ok, 0 fail (bots identical at 30/60/144 FPS, recorded taps replayed identically, same seed → same game, Math.random/Date throw, scenarios incl. prototype-bug regressions, allocations per step)",
+    "chrome": "scripts/arcade-e2e.cjs, phone 412×915, touch, CPU ×4, two browsers over real Supabase Realtime: every game passed all 14 checks (start does not end the run, pause on hidden tab, frame budget, end overlay + record + «Ещё раз», 20 open/close, ⚔️ same field / live opponent score / result on both sides), 0 console errors. Numbers per game in games[].e2e.",
+    "harnessFlakes": "With several batches running Chrome at once, scripts/arcade-e2e.cjs failed 3 ways that were not game bugs: (1) the debug port is 9300 + random(400) and b2/b3/t138 Chromes sat in the same range; (2) Chrome took ~16 s to start (the loop allows 20 s); (3) local files took ~8 s each, so the page showed the static home markup with no site JS and «игра открылась» timed out. Each affected game passed when rerun. Suggested harness fix (not applied, shared file): --remote-debugging-port=0 + read <profile>/DevToolsActivePort, a 60 s start wait, one retry of the first open."
+  }
 }
