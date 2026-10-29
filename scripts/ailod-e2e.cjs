@@ -24,9 +24,10 @@ const server = http.createServer((req, res) => {
 });
 server.keepAliveTimeout = 1000;
 // in the page before the site's scripts: frame counter, long frames, NPC step timer (wrapped when a game creates D37E.npcs)
-const INSTR = `(() => { if (window.__ai) return; const T = window.__ai = { fr: 0, long: 0, last: 0, npcMs: 0, npcN: 0, npcMax: 0 };
-  const tick = t => { if (T.last && t - T.last > 50) T.long++; T.last = t; T.fr++; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
-  T.reset = () => { T.fr = 0; T.long = 0; T.npcMs = 0; T.npcN = 0; T.npcMax = 0; };
+const INSTR = `(() => { if (window.__ai) return; const T = window.__ai = { fr: 0, long: 0, last: 0, npcMs: 0, npcN: 0, npcMax: 0, dts: new Float32Array(4096), nd: 0 };
+  const tick = t => { if (T.last) { const d = t - T.last; if (d > 50) T.long++; if (T.nd < 4096) T.dts[T.nd++] = d; } T.last = t; T.fr++; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+  T.reset = () => { T.fr = 0; T.long = 0; T.npcMs = 0; T.npcN = 0; T.npcMax = 0; T.nd = 0; };
+  T.pct = q => { if (!T.nd) return null; const a = Array.from(T.dts.subarray(0, T.nd)).sort((x, y) => x - y); return +a[Math.min(a.length - 1, Math.floor(q * a.length))].toFixed(1); };
   T.wrap = N => { if (!N || N.__aiw) return N; N.__aiw = 1; const s = N.step; N.step = (dt, pl) => { const a = performance.now(); s(dt, pl); const d = performance.now() - a; T.npcMs += d; T.npcN++; if (d > T.npcMax) T.npcMax = d; }; return N; };
   let hooked = false; const hook = () => { const E = window.D37E; if (!E || !E.npcs || hooked) return; hooked = true; const f = E.npcs; E.npcs = function(R, ph){ return T.wrap(f(R, ph)); }; Object.assign(E.npcs, f); };
   const iv = setInterval(() => { hook(); if (hooked) clearInterval(iv); }, 20);
@@ -59,7 +60,7 @@ const INSTR = `(() => { if (window.__ai) return; const T = window.__ai = { fr: 0
     const m0 = await metric(); await sleep(ms); const m1 = await metric();
     const s = await ev(`(() => { const R = ${statsExpr || 'null'}, ST = R?.stats, n = Math.max(1, ST?.frames || 0), T = __ai;
       return { frames: T.fr, long: T.long, cpu: ST ? +(ST.sumCpu / n).toFixed(2) : null, cpuMax: ST ? +ST.maxCpu.toFixed(1) : null, calls: ST?.calls ?? null,
-        npcMs: T.npcN ? +(T.npcMs / T.npcN).toFixed(3) : null, npcMax: +T.npcMax.toFixed(2), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null, ...(${extraExpr || '{}'}) }; })()`);
+        frameP50: T.pct(.5), frameP95: T.pct(.95), npcMs: T.npcN ? +(T.npcMs / T.npcN).toFixed(3) : null, npcMax: +T.npcMax.toFixed(2), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null, ...(${extraExpr || '{}'}) }; })()`);
     s.fps = +(s.frames / (ms / 1000)).toFixed(1);
     s.taskMsFrame = +((m1.task - m0.task) * 1000 / Math.max(1, s.frames)).toFixed(2);
     s.scriptMsFrame = +((m1.script - m0.script) * 1000 / Math.max(1, s.frames)).toFixed(2);
