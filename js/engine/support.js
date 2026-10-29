@@ -489,7 +489,8 @@
       fk: new Uint8Array(max), fr: new Int32Array(max), ord: new Int32Array(max), rank: new Int32Array(max), tmp: new Int32Array(max), cnt: new Int32Array(1024),
       edis: new Uint8Array(ne), adis: new Uint8Array(max), crushed: new Uint8Array(max), cutv: new Uint8Array(max), dn: new Uint8Array(max),
       spt: new Int32Array(max * 6), spn: new Uint8Array(max), vis: new Uint8Array(max), cq: new Int32Array(max), cutOf: new Int32Array(max), cutR: new Float64Array(max), cutD: new Int8Array(max), cutS: new Int32Array(max + 1), cutM: new Int32Array(max), nCut: 0,
-      E6: new Int32Array(6), SK: new Uint8Array(32), SW: new Int32Array(32), SD: new Int8Array(32), SE: new Int32Array(32), SA: new Float64Array(32), SF: new Int32Array(32), SCX: new Int32Array(32), SCZ: new Int32Array(32), unkA: new Uint8Array(max),
+      E6: new Int32Array(6), SK: new Uint8Array(32), SW: new Int32Array(32), SD: new Int8Array(32), SE: new Int32Array(32), SA: new Float64Array(32), SF: new Int32Array(32), SCX: new Int32Array(32), SCZ: new Int32Array(32), unkA: new Uint8Array(max), ef: new Uint8Array(max),
+      anyCut: 0, nCrushed: 0, tips: 0, tipD: -1, tipCut: -1,   // scalars declared here: one map for every L (no transitions — no deopts, no garbage)
     };
     if (!g.estv) g.estv = new Uint16Array(max * 6);
     return L;
@@ -497,15 +498,18 @@
   // one load job per graph (grid or boxes); geo — the grid / boxes object (lprep, isGrid, HU)
   const NOO = Object.freeze({});
   function job(geo){
-    const g = geo.g, J = { busy: false, done: false, phase: 0, ops: 0, round: 0, kind: 'rm', res: null, P: null };
-    const RES = { ng: 0, nf: 0, n: 0, over: 0, unk: 0, crushed: 0, worst: 0, rounds: 0, ops: 0, ticks: 0, full: false, tips: 0, tipD: -1 };   // one result object per job (read it before the next start)
-    let wb = 4, L = null, P = null, kind = 'rm', ci = 0, cj = 0, side = 0, oPass = 0, oSub = 0, sv = 0, sPh = 0, qh = 0, qt = 0, cutStart = -1, gat = 0, kg = 1000, stopAt = 0;
-    const PH_BUILD = 0, PH_PREP = 1, PH_SOLVE = 2, PH_ORDER = 3, PH_LOAD = 4, PH_STOREY = 5, PH_SELECT = 6, PH_GROUPS = 7, PH_DONE = 8;
+    const g = geo.g, J = { busy: false, done: false, phase: 0, ops: 0, round: 0, kind: 'rm', res: null, P: null, early: 0, warn: 0, skipped: false, ticks: 0 };
+    const RES = { ng: 0, nf: 0, n: 0, over: 0, unk: 0, crushed: 0, worst: 0, rounds: 0, ops: 0, ticks: 0, full: false, tips: 0, tipD: -1, ng0: 0, nf0: 0 };   // one result object per job (read it before the next start)
+    let wb = 4, L = null, P = null, kind = 'rm', ci = 0, cj = 0, side = 0, oPass = 0, oSub = 0, sv = 0, sPh = 0, qh = 0, qt = 0, cutStart = -1, gat = 0, kg = 1000, stopAt = 0, early = false, yieldNow = false;
+    const PH_BUILD = 0, PH_PREP = 1, PH_SOLVE = 2, PH_ORDER = 3, PH_LOAD = 4, PH_STOREY = 5, PH_SELECT = 6, PH_GROUPS = 7, PH_DONE = 8, PH_E0 = 9, PH_E1 = 10, PH_EG = 11;
     // ── start: kind 'rm' (seeds were removed: before = with them) | 'add' (seeds were added: before = without them) ──
     J.start = (k, seeds, read, b, o = NOO) => {
       kind = J.kind = k === 'add' || k === 'now' ? k : 'rm'; P = J.P = b.P; L = loadState(g); kg = o.kg ?? 1000; stopAt = o.ratiosOnly ? 1 : 0;   // 'now' — как есть (до = после)
+      // o.early — the v1 groups (held before, not after by pass 1) are published as soon as both pass-1 solves are done (J.early =
+      // their count, G.groups(k) until the next J.step; then the job goes on for the load failures, which exclude them)
+      early = !!o.early && !stopAt && k !== 'now'; J.early = 0; J.warn = 0; J.skipped = false; yieldNow = false;
       wb = Math.max(1, b.opb | 0 || OPW.build);   // build weight per node: the game's world read is part of it (a constant per adapter — the same on every device)
-      J.busy = true; J.done = false; J.ops = 0; J.round = 0; J.res = null; J.ticks = 0;
+      J.busy = true; J.done = false; J.ops = 0; J.round = 0; J.res = null; J.ticks = 0; RES.ng0 = 0; RES.nf0 = 0;
       if (geo.isGrid) { geo.begin(seeds, read, b); J.phase = PH_BUILD; } else { J.phase = PH_PREP; }
       ci = 0; side = 0;
       return J;
@@ -517,6 +521,7 @@
       while (budget > 0 && J.busy) {
         const used = run(budget);
         budget -= used; J.ops += used;
+        if (yieldNow) { yieldNow = false; break; }   // early groups published: the caller takes them before the next step
       }
       return !J.busy;
     };
@@ -536,14 +541,26 @@
           geo.lprep(L, P, ci, e, kg);
           const off = g.off, edis = L.edis;
           for (let i = ci; i < e; i++) { L.adis[i] = 0; L.crushed[i] = 0; for (let k = off[i], k1 = off[i + 1]; k < k1; k++) edis[k] = 0; }
+          for (let i = ci; i < e; i++) L.ef[i] = 0;
           const used = (e - ci) * OPW.prep; ci = e;
           if (ci >= n) {
             for (let i = 0; i < n; i++) g.seed[i] = g.seed[i] ? 1 : 0;
-            side = 0; beginSolve(); J.phase = PH_SOLVE;
+            // placement estimate on a piece cut off by the grid size (G.full): the load verdict is "allowed" anyway (J.refuses) —
+            // only the after-side pass 1 (the new block's support), no load passes
+            if (stopAt && geo.full) { J.skipped = true; side = 1; beginSolve(); J.phase = PH_SOLVE; }
+            else if (early) { side = 0; beginSolve(); J.phase = PH_E0; }
+            else { side = 0; beginSolve(); J.phase = PH_SOLVE; }
           }
           return Math.max(used, 1);
         }
-        case PH_SOLVE: { const u = solveMore(budget); if (sPh === 2) { beginOrder(); J.phase = PH_ORDER; } return u; }
+        case PH_SOLVE: { const u = solveMore(budget); if (sPh === 2) { if (J.skipped) finishSkipped(); else { beginOrder(); J.phase = PH_ORDER; } } return u; }
+        case PH_E0: {   // early: pass 1 before, then pass 1 after, then the v1 groups
+          const u = solveMore(budget);
+          if (sPh === 2) { const n = g.n; for (let i = 0; i < n; i++) g.sup0[i] = g.sup[i]; side = 1; beginSolve(); J.phase = PH_E1; return u + Math.ceil(n / 4) * OPW.prep; }
+          return u;
+        }
+        case PH_E1: { const u = solveMore(budget); if (sPh === 2) { ci = 0; beginGroups(); J.phase = PH_EG; } return u; }
+        case PH_EG: { const u = groupsMore(budget); return u; }
         case PH_ORDER: { const u = orderMore(budget); if (oPass > 4) { ci = g.n - 1; beginLoad(); J.phase = PH_LOAD; } return u; }
         case PH_LOAD: { const u = loadMore(budget); if (ci < 0) { unkUp(); ci = 0; cutStart = -1; L.nCut = 0; L.cutS[0] = 0; L.vis.fill(0, 0, g.n); J.phase = PH_STOREY; } return u; }
         case PH_STOREY: {
@@ -730,6 +747,7 @@
         // crush: the load standing on u
         if (!nat && C[u] > 0) { const r = ratio(C[u], Math.floor(comp[m] * geo.topArea(u))); if (r > rmax) { rmax = r; rk = 3; rf = -1; } }
         L.rw[u] = rmax; L.rj[u] = rmax; L.fk[u] = rk; L.fr[u] = rf;
+        if (side === 1 && !J.warn && !nat && rmax > 1000 && L.rbj[u] <= 1000 && !unk[u] && !L.unkA[u]) J.warn = 1;   // a load failure is coming (creak)
       }
       return Math.max(1, used);
     }
@@ -839,11 +857,11 @@
     }
     // ── groups: v1 rule (held before, not after) + crushed cells; links cut by a failure split groups ──
     function beginGroups(){
-      const n = g.n, fall = g.fall, gid = g.gid, sup = g.sup, sup0 = g.sup0, seed = g.seed, mat = g.mat, min = P.min, cr = L.crushed;
+      const n = g.n, fall = g.fall, gid = g.gid, sup = g.sup, sup0 = g.sup0, seed = g.seed, mat = g.mat, min = P.min, cr = L.crushed, ef = L.ef;
       let nf = 0, nc = 0;
       for (let i = 0; i < n; i++) {
         const m = mat[i], was = kind === 'rm' ? !seed[i] && sup0[i] >= min[m] : (seed[i] || sup0[i] >= min[m]);
-        fall[i] = !cr[i] && was && (g.dis[i] ? 0 : sup[i] < min[m]) ? 1 : 0; gid[i] = -1; nf += fall[i]; nc += cr[i];
+        fall[i] = !cr[i] && !ef[i] && was && (g.dis[i] ? 0 : sup[i] < min[m]) ? 1 : 0; gid[i] = -1; nf += fall[i]; nc += cr[i];
       }
       g.ng = 0; g.nf = nf; gat = 0; ci = 0; qh = qt = 0; L.nCrushed = nc;
     }
@@ -854,7 +872,7 @@
         if (qh >= qt) {
           if (qt) { g.ng++; qh = qt = 0; }
           while (ci < n && (!fall[ci] || gid[ci] >= 0)) ci++;
-          if (ci >= n) { gOff[g.ng] = gat; finish(); return Math.max(1, used); }
+          if (ci >= n) { gOff[g.ng] = gat; if (J.phase === PH_EG) endEarly(); else finish(); return Math.max(1, used); }
           gOff[g.ng] = gat; q[qt++] = ci; gid[ci] = g.ng;
         }
         while (qh < qt && left > 0) {
@@ -863,6 +881,17 @@
         }
       }
       return Math.max(1, used);
+    }
+    // early v1 groups ready: mark them (the final groups exclude them), publish the count, yield; then the normal job from side 0
+    function endEarly(){
+      const n = g.n, fall = g.fall, ef = L.ef;
+      for (let i = 0; i < n; i++) ef[i] = fall[i];
+      J.early = g.ng; RES.ng0 = g.ng; RES.nf0 = g.nf; yieldNow = g.ng > 0;
+      side = 0; beginSolve(); J.phase = PH_SOLVE;
+    }
+    function finishSkipped(){
+      const R = J.res = RES; R.ng = 0; R.nf = 0; R.n = g.n; R.over = 0; R.unk = 0; R.crushed = 0; R.worst = 0; R.rounds = 0; R.ops = J.ops; R.ticks = J.ticks; R.full = true; R.tips = 0; R.tipD = -1;
+      J.busy = false; J.done = true; J.phase = PH_DONE;
     }
     function finish(){
       const n = g.n;
@@ -874,19 +903,20 @@
     }
     // placement verdict after a ratiosOnly 'add' run: refuse when any node goes ≤ 1000 → > 1000 ‰, or an overloaded node gets more
     J.refuses = () => {
-      if (geo.full) return false;
+      if (geo.full || J.skipped) return false;
       const n = g.n, mat = g.mat;
       for (let i = 0; i < n; i++) { if (L.unk[i] || P.lnone[mat[i]]) continue; const a = L.ra[i], b = L.rb[i]; if ((b <= 1000 && a > 1000) || (b > 1000 && a > b)) return true; }
       return false;
     };
     // load level for the build tint: worst after-ratio among nodes the edit raised (0 / ≤ 50 / ≤ 80 / ≤ 100 / > 100 %)
     J.loadLevel = () => {
+      if (J.skipped) return 0;
       const n = g.n; let w = 0;
       for (let i = 0; i < n; i++) if (!L.unk[i] && !P.lnone[g.mat[i]] && L.ra[i] > L.rb[i] && L.ra[i] > w) w = L.ra[i];
       return w <= 0 ? 0 : w <= 500 ? 1 : w <= 800 ? 2 : w <= 1000 ? 3 : 4;
     };
     J.L = () => L;
-    J.crushedList = out => { out.length = 0; const n = g.n; for (let i = 0; i < n; i++) if (L.crushed[i]) out.push(i); return out; };
+    J.crushedList = out => { out.length = 0; if (J.skipped) return out; const n = g.n; for (let i = 0; i < n; i++) if (L.crushed[i]) out.push(i); return out; };
     J.reset = () => { if (L) { L.edis.fill(0); L.adis.fill(0); L.crushed.fill(0); } };
     return J;
   }

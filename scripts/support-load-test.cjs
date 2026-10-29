@@ -168,6 +168,9 @@ sec('поставить: тяжёлый блок на консоль — нел�
   const big = world([...post(5, 'metal'), ...slab(5, -6, 6, -6, 6, 'metal')]);
   const f = S.placeCheck(Gt, 6, 6, 6, (M.metal << 2) | 2, big.read, { r: 96, rn: 13, P, max: 64 });
   ok(f.ok && Gt.full, 'кусок не влез в оценку (G.full) — можно', { ...f, full: Gt.full });
+  // T-124 review: when the estimate piece is cut off (G.full) the load verdict is "allowed" anyway — the load passes are skipped
+  // (only the after-side pass 1: the new block's support for the tint), the click costs about a v1 estimate
+  { const J = Gt.loadJob(); ok(J.skipped && J.res.full && J.res.ops < 64 * 30 && f.load === 0, 'G.full: нагрузку не считаем (вердикт и так «можно») — ' + J.res.ops + ' шагов на ' + Gt.g.n + ' узлов', { ops: J.res.ops, n: Gt.g.n, skipped: J.skipped }); }
 }
 
 // ═══ 5. Boundary anchors: unloaded (code 5) and the piece edge absorb load unchecked, unk never fails; v1 treats 5 as 1 ═══
@@ -273,6 +276,45 @@ function houseTA(){
   };
   const a = run(30), b = run(60), c = run(144);
   ok(a.doneTick > 1 && a.doneTick === b.doneTick && b.doneTick === c.doneTick && a.ops === c.ops, 'кусок ' + a.n + ' узлов: закончил на ' + a.doneTick + '-м такте при 30 / 60 / 144 кадрах', [a, b, c]);
+}
+// T-124 review: early release — the v1 groups (held before, not after by pass 1) are published as soon as both pass-1 solves are
+// done (o.early); the load failures come later and exclude them. Union of early + final = the groups of a job without early.
+sec('ранний сброс: v1-куски падают сразу после двух проходов 1 (не ждут нагрузку); вместе с остальным — то же, что без него');
+{
+  const rng = S.rng(77), MATS = ['wood', 'stone', 'metal', 'brick', 'glass', 'concrete'];
+  const GA = S.grid({ dims: 3, down: -1, max: 4096 }), GB = S.grid({ dims: 3, down: -1, max: 4096 });
+  const cellsOf = (Gx, k0, k1, set) => { for (let k = k0; k < k1; k++) { const a = Gx.groups(k); for (let i = 0; i < a.length; i += 3) set.add(key(a[i], a[i + 1], a[i + 2])); } };
+  let runs = 0, bad = 0, withEarly = 0, withLate = 0;
+  for (let sc = 0; sc < (FAST ? 120 : 300); sc++) {
+    const map = new Map(), N = 6 + Math.floor(rng() * 8), K = key;
+    for (let p = 0; p < 2 + Math.floor(rng() * 4); p++) { const x = Math.floor(rng() * N), z = Math.floor(rng() * N), h = 2 + Math.floor(rng() * 6), m = MATS[Math.floor(rng() * 6)]; for (let y = 0; y < h; y++) map.set(K(x, y, z), M[m]); }
+    for (let s = 0; s < 1 + Math.floor(rng() * 3); s++) { const y = 2 + Math.floor(rng() * 5), x0 = Math.floor(rng() * N), z0 = Math.floor(rng() * N), w = 1 + Math.floor(rng() * 6), d = 1 + Math.floor(rng() * 6), m = MATS[Math.floor(rng() * 6)]; for (let x = x0; x < x0 + w; x++) for (let z = z0; z < z0 + d; z++) map.set(K(x, y, z), M[m]); }
+    const read = (x, y, z) => { if (y < 0) return 1; const m = map.get(K(x, y, z)); return m === undefined ? 0 : (m << 2) | 2; };
+    const cells = [...map.keys()], seeds = [];
+    for (let k = 0; k < 1 + Math.floor(rng() * 3); k++) { const c = cells[Math.floor(rng() * cells.length)].split(',').map(Number); if (map.has(K(c[0], c[1], c[2]))) { seeds.push(c[0], c[1], c[2], read(c[0], c[1], c[2])); map.delete(K(c[0], c[1], c[2])); } }
+    const mode = rng() < .5 ? 'soft' : 'real', b = { r: 64, rn: 10, P: S.prof(mode) };
+    const JA = GA.loadJob(); JA.start('rm', seeds, read, b); JA.run();
+    const ref = new Set(); cellsOf(GA, 0, GA.g.ng, ref); const refSig = [...ref].sort().join(';') + '|' + JA.res.crushed + '|' + JA.res.over + '|' + JA.res.worst;
+    for (const bud of [1 << 30, 4096, 97, 1]) {
+      const JB = GB.loadJob(); JB.start('rm', seeds, read, b, { early: true });
+      const got = new Set(); let e = 0, guard = 0;
+      while (!JB.step(bud)) { if (JB.early) { cellsOf(GB, 0, JB.early, got); e += JB.early; JB.early = 0; } if (++guard > 5e6) throw new Error('stuck'); }
+      const late = GB.g.ng; cellsOf(GB, 0, late, got); runs++;
+      if (e) withEarly++; if (late) withLate++;
+      const sig = [...got].sort().join(';') + '|' + JB.res.crushed + '|' + JB.res.over + '|' + JB.res.worst;
+      if (sig !== refSig || JB.res.ng0 !== e) { bad++; if (bad < 4) console.log('    early mismatch', sc, bud, refSig.slice(0, 160), '/', sig.slice(0, 160)); }
+    }
+  }
+  ok(bad === 0 && withEarly > 20, 'ранний сброс: ' + runs + ' прогонов (бюджеты 2^30 / 4096 / 97 / 1) — упало то же, что без него (v1-куски раньше: ' + withEarly + ', по нагрузке потом: ' + withLate + ')', { bad, withEarly, withLate });
+  // latency: a cut house (Kubomir build weight 16 per node) — the v1 part falls after build + 2 solves, not after the whole job
+  const n = 24, h = 16, set = new Set();
+  for (let y = 0; y < h; y++) for (let x = 0; x < n; x++) for (let z = 0; z < n; z++) if (x === 0 || z === 0 || x === n - 1 || z === n - 1 || y % 4 === 3) set.add(key(x, y, z));
+  const rd = (x, y, z) => { if (y < -8) return 1; if (set.has(key(x, y, z))) return (M.stone << 2) | 2; if (y < 0) return (M.rock << 2) | 3; return 0; };
+  set.delete(key(0, 0, 5));   // a stone keep 24 × 24 × 16 with floors: one base cell out — the cells it held fall (v1)
+  const J = G.loadJob(); J.start('rm', [0, 0, 5, (M.stone << 2) | 2], rd, { r: 96, rn: 13, P: S.prof('real'), opb: 16 }, { early: true });
+  let t = 0, te = -1, ne = 0; for (;;) { t++; const fin = J.step(S.SOLVE_BUDGET); if (J.early && te < 0) { te = t; ne = J.early; J.early = 0; } if (fin) break; }
+  const bound = Math.ceil(G.g.n * 24 / S.SOLVE_BUDGET) + 1;
+  ok(te > 0 && ne > 0 && te <= bound && te * 3 <= t, 'дом ' + G.g.n + ' узлов, проём пробит: v1-куски падают на ' + te + '-м такте (' + (te / 20).toFixed(2) + ' с), задание целиком — ' + t + ' тактов (' + (t / 20).toFixed(2) + ' с)', { te, t, ne, bound, n: G.g.n });
 }
 
 // ═══ 10. Per-tick time: v1 synchronous vs v2 slices of SOLVE_BUDGET (PC; "phone" ×4) ═══
