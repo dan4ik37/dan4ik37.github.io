@@ -263,6 +263,9 @@
         if (this.terrain && ch.grounded) {   // склон круче ~55° — упор (как обрыв)
           const g = this.groundAt(ch.x, ch.z), rise = g - Math.max(ch.y, this.groundAt(ox, oz));
           if (rise > seg * 1.43 + .05 && g > ch.y + .05) { ch.x = ox; ch.z = oz; ch.vx *= .3; ch.vz *= .3; continue; }
+          // свод ниже головы (пещера сужается) — упор, как в стену; присел — проходит ниже
+          const T = this.terrain;
+          if (T.ceiling) { const cy = T.ceiling(ch.x, ch.z, Math.max(ch.y, g) + .3); if (cy < Math.max(ch.y, g) + ch.h - .02) { ch.x = ox; ch.z = oz; ch.vx *= .3; ch.vz *= .3; continue; } }
         }
         this.pushOut(ch);
       }
@@ -290,6 +293,10 @@
             if (c.bottom >= ch.y + ch.h - 1e-3 && ny + ch.h > c.bottom && Phys.circleHit(c, ch.x, ch.z, ch.r * .8)) { ny = c.bottom - ch.h; ch.vy = 0; }
           }
           this._qr(4, list);
+          // потолок рельефа (свод пещеры, нависание): крючок terrain.ceiling(x, z, y) — самое низкое над y (Infinity — небо); только у
+          // игр, что его дали («Терра»), остальные — как раньше
+          const T = this.terrain;
+          if (T && T.ceiling && ch.vy > 0) { const cy = T.ceiling(ch.x, ch.z, ch.y + ch.h - .05); if (ny + ch.h > cy) { ny = Math.max(ch.y, cy - ch.h); ch.vy = 0; } }
         }
         this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; this._ymax = Math.max(ch.y, ny) + (ch.vy <= 0 ? .05 : 0); this._qskip = null; this._supportQ();
         const sy = this._sy;

@@ -347,6 +347,82 @@ const GOLDEN_EDITS = [10, 5, -20, 6, 0, 10, 14, -20, 4, 1, -300, -10, 400, 9, 0]
     }
   }
 
+  // ── T-145 (T-115): compact blocks (u16 positions = the physics numbers, octahedral normals, rgb), flatten pads, cave roofs ──
+  {
+    const J3 = T1.js(T1.DEFAULT_CAP);
+    J3.colInfo(7, 5, -4); const cy = Math.floor(J3.out().info[1] / 32) - 1;
+    const q = J3.build(7, 5, cy, -4, 0), o = J3.out();
+    const ab = new ArrayBuffer(q * T1.COMPACT_BYTES), old = new ArrayBuffer(q * T1.BLOCK_BYTES);
+    T1.compactPack(o, q, ab); T1.physPack(o.pos, q, old);
+    const P = new Uint16Array(ab, 0, q * 12), P0 = new Uint16Array(old, q * 80, q * 12), N = new Uint8Array(ab, q * 24, q * 8), C3 = new Uint8Array(ab, q * 32, q * 12);
+    let samePos = true; for (let i = 0; i < q * 12; i++) if (P[i] !== P0[i]) { samePos = false; break; }
+    let worst = 0, sameCol = true;
+    for (let v = 0; v < q * 4; v++) {
+      // the vertex shader's decode
+      const fx = N[v * 2] / 255 * 2 - 1, fz = N[v * 2 + 1] / 255 * 2 - 1;
+      let x = fx, y = 1 - Math.abs(fx) - Math.abs(fz), z = fz;
+      if (y < 0) { const nx = (1 - Math.abs(z)) * (x >= 0 ? 1 : -1), nz = (1 - Math.abs(x)) * (z >= 0 ? 1 : -1); x = nx; z = nz; }
+      const l = Math.hypot(x, y, z), ax = o.nrm[v * 4] / 127, ay = o.nrm[v * 4 + 1] / 127, az = o.nrm[v * 4 + 2] / 127, la = Math.hypot(ax, ay, az) || 1;
+      const ang = Math.acos(Math.min(1, (x * ax + y * ay + z * az) / l / la)) * 180 / Math.PI;
+      if (ang > worst) worst = ang;
+      for (let k = 0; k < 3; k++) if (C3[v * 3 + k] !== o.col[v * 4 + k]) sameCol = false;
+    }
+    check(q > 500 && samePos && sameCol, `compact block: positions = physics u16, colours exact (${q} quads)`);
+    check(worst < 1.5, 'compact normals: worst angle ' + worst.toFixed(2) + '°');
+    console.log(`compact block: ${T1.COMPACT_BYTES} B per quad on the page and GPU (was 80 B geometry + 24 B physics = 104 B; GPU 80 B), normals worst ${worst.toFixed(2)}°`);
+
+    // TS with compact blocks on the page builder: the physics reads the mesh's own array → the same ground as before
+    const PE = { localStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
+    if (!ctx.D37E.Phys) for (const f of ['core', 'physics']) vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'js/engine', f + '.js'), 'utf8'), Object.assign(ctx, PE), { filename: f + '.js' });
+    const mk = compact => ctx.D37E.terra.create({ seed: 7, workers: 0, wasm: false, radius: 2, caveRadius: 1, gen: 2, compact });
+    const show = (TS, compact) => { let b; while ((b = TS.takeReady())) TS.recycle(b, compact && b.q > 0 ? Uint16Array.from(new Uint16Array(b.buf, 0, b.q * 12)) : undefined); };
+    const run2 = async (TS, compact, x, y, z) => { for (let i = 0; i < 6000; i++) { TS.update(x, y, z); show(TS, compact); if (i % 8 === 7) await new Promise(r => setTimeout(r, 1)); let busy = 0; for (const B of TS.blocks.values()) if (B.st !== 3 || B.ne < B.need) busy++; if (!busy && TS.blocks.size && !TS.stats().queued && i > 50) break; } };
+    const px = 5 * 32 + 16, pz = -4 * 32 + 16, py = T1.height(7, px, pz);
+    const A = mk(false), Bc = mk(true);
+    await run2(A, false, px, py, pz); await run2(Bc, true, px, py, pz);
+    let maxd = 0, n = 0;
+    for (let i = 0; i < 300; i++) { const x = px - 20 + (i * 7.31) % 40, z = pz - 20 + (i * 3.77) % 40, g1 = A.ground(x, z, py + 10), g2 = Bc.ground(x, z, py + 10); if (g1 === g1 && g2 === g2) { maxd = Math.max(maxd, Math.abs(g1 - g2)); n++; } }
+    check(n > 250 && maxd === 0, `compact physics = old physics (${n} points, max diff ${maxd})`);
+    // flatten pad (W2): a 6 m pad at the ground height → ground inside the pad within 2 cm of it, no water in pits on land
+    const fy = Math.round(T1.height(7, px + 3, pz + 2) * 64) / 64;
+    Bc.flatten(px + 3, fy, pz + 2, 6);
+    await run2(Bc, true, px, py, pz);
+    let pad = 0, padN = 0;
+    for (let k = 0; k < 40; k++) { const a = k * 0.157, x = px + 3 + 4.5 * Math.cos(a), z = pz + 2 + 4.5 * Math.sin(a), g = Bc.ground(x, z, fy + 20); if (g === g) { pad = Math.max(pad, Math.abs(g - fy)); padN++; } }
+    check(padN >= 38 && pad < 0.05, `flatten pad: ground within ${pad.toFixed(3)} m of the pad height (${padN} points, r 4.5 of 6 m)`);
+    console.log(`flatten pad r 6 m: ground inside within ${pad.toFixed(3)} m of the pad (${padN} points)`);
+    // cave roof: the ceiling above a point inside an air pocket under the surface matches the density field
+    let roofs = 0, roofErr = 0, roofMesh = 0;
+    for (let i = 0; i < 400 && roofs < 20; i++) {
+      const x = px - 30 + (i * 5.13) % 60, z = pz - 30 + (i * 2.71) % 60, h = T1.height(7, x, z);
+      for (let y = h - 4; y > -26; y -= 1) {
+        if (Bc.density(x, y, z) > 0 || Bc.density(x, y - 0.6, z) <= 0) continue;   // standing in a cave on its floor
+        const c = Bc.ceiling(x, z, y + 0.2);
+        if (!(c < Infinity) || c > y + 8) break;
+        let t = y + 0.2; while (t < c + 1 && Bc.density(x, t, z) <= 0) t += 0.02;
+        const mh = Bc.meshHits(x, z, y, y + 8), down = mh && mh.find(([yy, up]) => !up && yy > y + 0.2);
+        if (!down || Math.abs(down[0] - c) > 1e-9) roofMesh++;
+        roofErr = Math.max(roofErr, Math.abs(t - c)); roofs++; break;
+      }
+    }
+    // the roof is the DRAWN one (the head stops where the player sees rock); Surface Nets rounds it ≤ ~0.4 m off the field, like floors
+    check(roofs >= 5 && roofMesh === 0 && roofErr < 0.5, `cave roofs: TS.ceiling = the drawn roof (${roofMesh} off), field within ${roofErr.toFixed(3)} m (${roofs} caves)`);
+    console.log(`cave roofs: ${roofs} found, TS.ceiling vs density field max ${roofErr.toFixed(3)} m`);
+    A.dispose(); Bc.dispose();
+    // Phys ceiling hook (opt-in): a jump under a roof 2.6 units above the floor stops the head there; without the hook — as before;
+    // walking under a roof lower than the head is blocked, crouch height passes
+    const EP = ctx.D37E, phA = new EP.Phys({ ground: null }), phB = new EP.Phys({ ground: null });
+    phA.terrain = { sample: () => 0 }; phB.terrain = { sample: () => 0, ceiling: (x, z, y) => (x > 3 ? 1.2 : 2.6) };
+    const mkCh = () => ({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, r: 0.4, h: 2.1, step: 0.5, g: 30, jumpV: 11, grounded: true, airT: 0, accG: 46, accA: 16, inside: new Set() });
+    const top = ph => { const ch = mkCh(); let hi = 0; ph.move(ch, 1 / 60, { x: 0, z: 0 }, 0, true); for (let i = 0; i < 120; i++) { ph.move(ch, 1 / 60, { x: 0, z: 0 }, 0, false); hi = Math.max(hi, ch.y + ch.h); } return hi; };
+    const hA = top(phA), hB = top(phB);
+    check(hA > 3 && hB <= 2.6 + 1e-9 && hB > 2.4, `ceiling hook: head peak ${hA.toFixed(2)} without, ${hB.toFixed(2)} under a 2.6 roof`);
+    const walk = (ph, h) => { const ch = mkCh(); ch.h = h; for (let i = 0; i < 90; i++) ph.move(ch, 1 / 60, { x: 1, z: 0 }, 4, false); return ch.x; };
+    const xs = walk(phB, 2.1), xc = walk(phB, 1.1);
+    check(xs < 3.2 && xc > 4, `low roof ahead: standing stops at x ${xs.toFixed(2)}, crouching passes to ${xc.toFixed(2)}`);
+    console.log(`ceiling hook: jump peak ${hA.toFixed(2)} → ${hB.toFixed(2)} under a 2.6 roof; low roof: stand stops at ${xs.toFixed(2)}, crouch passes to ${xc.toFixed(2)}`);
+  }
+
   // ── chunk-local: the same block built by a fresh core and by a core that built far blocks first — identical ──
   {
     const A = await T1.wasm(fs.readFileSync(path.join(ROOT, 'js/engine/terra.wasm')), 4000);

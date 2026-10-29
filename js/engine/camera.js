@@ -27,6 +27,7 @@
       minP: .08, maxP: 1.38, maxLook: 85 * DEG, tx: o.x || 0, ty: 1.5, tz: o.z || 0, cur: o.dist ?? 11, lift: o.lift ?? 1.5,
       motion: E.clamp(store('d37_cam_motion', 1), 0, 1), sens: E.clamp(store('d37_cam_sens', 1), .2, 3), fovFirst: 72,
       autoFirst: !!o.autoFirst, zoomFirst: true, onMode: null, floorY: 0,
+      climb: !!o.climb, climbP: 0, climbT: 0, climbW: 0,   // climb (опция игры, «Терра»): в яме камера поднимается над краем, а не в затылок
     };
     // «Ощущение тела»
     const F = { t: 0, bobPh: 0, bobW: 0, dip: 0, dipV: 0, roll: 0, kick: 0, kickRoll: 0, shUntil: 0, shDur: 0, shStr: 0, shSeed: 0 };
@@ -155,7 +156,25 @@
       if (!first) {
         const lift = rig.lift - (isP ? (P.crouchW || 0) * .6 : 0);
         rig.tx = E.damp(rig.tx, ch.x, 12, dt); rig.ty = E.damp(rig.ty, ch.y + sy + lift, 8, dt); rig.tz = E.damp(rig.tz, ch.z, 12, dt);
-        const cp = Math.cos(rig.pitch), dx = Math.sin(rig.yaw) * cp, dy = Math.sin(rig.pitch), dz = Math.cos(rig.yaw) * cp;
+        // в воронке, яме, расщелине (rig.climb): луч назад упирается в стену близко — ищем (раз в 0,2 с, 3 луча) наклон круче, при
+        // котором до камеры чисто, и плавно поднимаем камеру над краем; вылез — плавно возвращаем наклон игрока
+        if (rig.climb && phys && (rig.climbT -= dt) <= 0) {
+          rig.climbT = .2;
+          const c0 = Math.cos(rig.pitch), h0 = phys.raycast(rig.tx, rig.ty, rig.tz, Math.sin(rig.yaw) * c0, Math.sin(rig.pitch), Math.cos(rig.yaw) * c0, rig.dist + .4, camOnly);
+          let want = 0;
+          if (h0 && h0.t - .4 < rig.dist * .6) {
+            want = Math.min(1.45, rig.pitch + .9) - rig.pitch;
+            for (let k = 1; k <= 3; k++) {
+              const p = Math.min(1.45, rig.pitch + k * .3), c2 = Math.cos(p);
+              const h2 = phys.raycast(rig.tx, rig.ty, rig.tz, Math.sin(rig.yaw) * c2, Math.sin(p), Math.cos(rig.yaw) * c2, rig.dist + .4, camOnly);
+              if (!h2 || h2.t - .4 >= rig.dist * .85) { want = p - rig.pitch; break; }
+            }
+          }
+          rig.climbW = want;
+        }
+        if (rig.climb) rig.climbP = E.damp(rig.climbP, rig.climbW, rig.climbW > rig.climbP ? 5 : 2, dt);
+        const pe = rig.climb ? Math.min(1.45, rig.pitch + rig.climbP) : rig.pitch;
+        const cp = Math.cos(pe), dx = Math.sin(rig.yaw) * cp, dy = Math.sin(pe), dz = Math.cos(rig.yaw) * cp;
         let d = rig.dist;
         if (phys) {
           const hit = phys.raycast(rig.tx, rig.ty, rig.tz, dx, dy, dz, d + .4, camOnly);

@@ -16,7 +16,7 @@
   const q = (self.location && self.location.search) || '';
   importScripts('terra-core.js' + q);
   const T1 = self.D37E.terraCore;
-  let core = null, kind = 'none', ready = false, cap = 24000, fallbacks = 0, gen = 1, rules = 0, param = 0;
+  let core = null, kind = 'none', ready = false, cap = 24000, fallbacks = 0, gen = 1, rules = 0, param = 0, compact = false;
   const TT = new Float64Array(5);
   // does edit e touch world block (cx, cy, cz)? inverted worlds test the mirrored edit against the mirrored block (as the core)
   function touchesW(e, cx, cy, cz){
@@ -42,7 +42,7 @@
   }
   async function init(d){
     cap = d.cap || 24000;
-    gen = d.gen === 2 ? 2 : 1; rules = gen === 2 ? d.rules | 0 : 0; param = d.param | 0;
+    gen = d.gen === 2 ? 2 : 1; rules = gen === 2 ? d.rules | 0 : 0; param = d.param | 0; compact = !!d.compact;
     let err = '';
     if (d.wasm) {
       // a stalled download must not leave the worker "not ready" forever: after wasmMs (6 s) → the JS core
@@ -84,14 +84,15 @@
     if (qn < 0) throw new Error('build ' + qn);
     const o = core.out();
     let ab = null;
-    if (qn > 0) {
+    if (qn > 0 && compact) { ab = take(qn * T1.COMPACT_BYTES); T1.compactPack(o, qn, ab); }   // T-115: q·44 B (pos = physics)
+    else if (qn > 0) {
       ab = take(qn * T1.BLOCK_BYTES);
       new Float32Array(ab, 0, qn * 12).set(o.pos.subarray(0, qn * 12));
       new Int8Array(ab, qn * 48, qn * 16).set(o.nrm.subarray(0, qn * 16));
       new Uint8Array(ab, qn * 64, qn * 16).set(o.col.subarray(0, qn * 16));
       T1.physPack(o.pos, qn, ab);   // + the physics copy (Uint16) — the page keeps it with a memcpy
     }
-    const msg = { t: 'built', id: d.id, q: qn, buf: ab, pk: 1, hmin: o.info[0], hmax: o.info[1], trunc: o.info[3], ms: now() - t0, kind, ne: lim };
+    const msg = { t: 'built', id: d.id, q: qn, buf: ab, pk: compact ? 2 : 1, hmin: o.info[0], hmax: o.info[1], trunc: o.info[3], ms: now() - t0, kind, ne: lim };
     self.postMessage(msg, ab ? [ab] : []);
   }
   function handle(d){

@@ -54,13 +54,13 @@
     if (!T1) throw new Error('terra: terra-core.js is not loaded');
     const ver = typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1';
     const seed = (o.seed ?? 1337) | 0, cap = o.cap || T1.DEFAULT_CAP;
-    const gen = o.gen === 2 ? 2 : 1, rules = gen === 2 ? (o.rules | 0) : 0, param = o.param | 0;
+    const gen = o.gen === 2 ? 2 : 1, rules = gen === 2 ? (o.rules | 0) : 0, param = o.param | 0, compact = !!o.compact;
     // point queries by the world rules (rules 0: the plain v1 field — the same bits)
     const dens = rules ? (x, y, z, ops, n) => T1.densityR(seed, x, y, z, ops, n, rules) : (x, y, z, ops, n) => T1.density(seed, x, y, z, ops, n);
     const hgt = rules === 4 ? (x, z) => T1.heightR(seed, x, z, 4) : (x, z) => T1.height(seed, x, z);
     const mob = !!E.isMobile?.(), cores = (root.navigator && navigator.hardwareConcurrency) || 4;
     const TS = {
-      seed, gen, rules, param, radius: o.radius ?? (mob ? 4 : 5), caveRadius: o.caveRadius ?? 2, keep: 0, dead: false,
+      seed, gen, rules, param, compact, radius: o.radius ?? (mob ? 4 : 5), caveRadius: o.caveRadius ?? 2, keep: 0, dead: false,
       blocks: new Map(), cols: new Map(), onRelease: null,
       st: { built: 0, empty: 0, buildMs: 0, buildMax: 0, colMs: 0, cols: 0, sent: 0, stale: 0, errors: 0, fallbacks: 0, kind: '', edits: 0,
         respawns: 0, local: 0, maxQueue: 0, trunc: 0, quads: 0 },
@@ -88,7 +88,7 @@
         if (TS.st.respawns < 3) { TS.st.respawns++; setTimeout(() => { if (!TS.dead) { try { W[slot] = spawn(slot); replay(W[slot]); } catch (e) {} } }, 300); }
       };
       // absolute (the worker resolves against its own folder); document.baseURI respects <base href="/"> on /play/… addresses
-      w.postMessage({ t: 'init', wasm: wasmUrl ? new URL(wasmUrl, root.document?.baseURI || root.location?.href || 'http://x/').href : null, cap, gen, rules, param });
+      w.postMessage({ t: 'init', wasm: wasmUrl ? new URL(wasmUrl, root.document?.baseURI || root.location?.href || 'http://x/').href : null, cap, gen, rules, param, compact });
       return K;
     }
     function replay(K){ if (ne) K.w.postMessage({ t: 'edits', list: ed.slice(0, ne * 5), n: ne }); }
@@ -241,8 +241,9 @@
       for (let e = 0; e < ne && k < n; e++) if (TE.touchesW(ed, e, it.cx, it.cy, it.cz, rules)) { buf.set(ed.subarray(e * 5, e * 5 + 5), k * 5); k++; }
       const q = L.build(seed, it.cx, it.cy, it.cz, n), o = L.out();
       let ab = null;
-      if (q > 0) { ab = new ArrayBuffer(q * T1.BLOCK_BYTES); new Float32Array(ab, 0, q * 12).set(o.pos.subarray(0, q * 12)); new Int8Array(ab, q * 48, q * 16).set(o.nrm.subarray(0, q * 16)); new Uint8Array(ab, q * 64, q * 16).set(o.col.subarray(0, q * 16)); T1.physPack(o.pos, q, ab); }
-      gotBlock(null, { key: it.key }, { id, q, buf: ab, pk: 1, hmin: o.info[0], hmax: o.info[1], trunc: o.info[3], ms: now() - t0, ne });
+      if (q > 0 && compact) { ab = new ArrayBuffer(q * T1.COMPACT_BYTES); T1.compactPack(o, q, ab); }
+      else if (q > 0) { ab = new ArrayBuffer(q * T1.BLOCK_BYTES); new Float32Array(ab, 0, q * 12).set(o.pos.subarray(0, q * 12)); new Int8Array(ab, q * 48, q * 16).set(o.nrm.subarray(0, q * 16)); new Uint8Array(ab, q * 64, q * 16).set(o.col.subarray(0, q * 16)); T1.physPack(o.pos, q, ab); }
+      gotBlock(null, { key: it.key }, { id, q, buf: ab, pk: compact ? 2 : 1, hmin: o.info[0], hmax: o.info[1], trunc: o.info[3], ms: now() - t0, ne });
     }
 
     TS.update = (x, y, z) => {
@@ -258,7 +259,8 @@
     };
     TS.readyCount = () => ready.length;
     // the mesh copied the data — buffer back to its worker; the block is shown (and from now on it is also the physics ground)
-    TS.recycle = b => { setPd(b); giveBack(b); b.st = 3; b.shown = true; };
+    // posU16 (compact blocks): the mesh's own position array (the same u16 numbers) — the physics reads it, no second copy
+    TS.recycle = (b, posU16) => { setPd(b, posU16); giveBack(b); b.st = 3; b.shown = true; };
     // ── edits ──
     function edit(x, y, z, r, mode){
       x = Q64(x); y = Q64(y); z = Q64(z); r = Q64(r);
@@ -367,17 +369,20 @@
     const pdCls = q => { let c = 256; while (c < q) c *= 2; return c; };
     function pdFree(pd){
       if (!pd || pd === PD_EMPTY || !pd.p) return;
+      if (pd.shared) { pd.p = null; pd.up = null; pd.off = null; pd.ids = null; return; }   // the mesh owns it
       const c = pd.p.length / 12;
       if (pdPooled + pd.p.byteLength <= 2097152) { let L = PDP.get(c); if (!L) { L = []; PDP.set(c, L); } L.push(pd.p); pdPooled += pd.p.byteLength; }
       pd.p = null; pd.up = null; pd.off = null; pd.ids = null;
     }
-    function setPd(b){
+    function setPd(b, shared){
       const old = b.pd;
-      if (b.q > 0 && b.buf) {
+      if (b.q > 0 && shared) b.pd = { q: b.q, p: shared, up: null, off: null, ids: null, shared: true };
+      else if (b.q > 0 && b.buf) {
         const q = b.q, c = pdCls(q), L = PDP.get(c);
         let p = L && L.pop();
         if (p) pdPooled -= p.byteLength; else p = new Uint16Array(c * 12);
-        if (b.pk) p.set(new Uint16Array(b.buf, q * 80, q * 12));   // the worker packed it (T1.physPack): memcpy
+        if (b.pk === 2) p.set(new Uint16Array(b.buf, 0, q * 12));   // compact block: positions first
+        else if (b.pk) p.set(new Uint16Array(b.buf, q * 80, q * 12));   // the worker packed it (T1.physPack): memcpy
         else { const f = new Float32Array(b.buf, 0, q * 12); for (let i = 0; i < q * 12; i++) p[i] = Math.round((f[i] + 1) * QS); }
         b.pd = { q, p, up: null, off: null, ids: null };
       } else b.pd = PD_EMPTY;

@@ -693,8 +693,24 @@
   // buffer — pos f32 q·48 B | nrm q·16 | col q·16 | phys u16 q·24 = q·104 B; made in the worker, the page only copies it (memcpy)
   const PHYS_Q = 1927, BLOCK_BYTES = 104;
   function physPack(pos, q, ab){ const d = new Uint16Array(ab, q * 80, q * 12); for (let i = 0; i < q * 12; i++) d[i] = Math.round((pos[i] + 1) * PHYS_Q); }
+  // compact block (T-115, ×2.4 less memory on the page): pos u16 q·24 B ((v + 1) · 1927 — the SAME numbers the physics uses, so the
+  // page keeps one array for both) | normal octahedral u8×2 q·8 B (y-major: up-facing terrain keeps the most precision) | colour u8×3
+  // q·12 B = q·44 B. Decode (terra-mesh vertex shader): p = n·2 − 1, v = (p.x, 1 − |p.x| − |p.y|, p.y); v.y < 0 → v.xz =
+  // (1 − |v.zx|)·sign(v.xz); normalize.
+  const COMPACT_BYTES = 44;
+  function compactPack(out, q, ab){
+    const P = new Uint16Array(ab, 0, q * 12), N = new Uint8Array(ab, q * 24, q * 8), Cc = new Uint8Array(ab, q * 32, q * 12), pos = out.pos, nrm = out.nrm, col = out.col;
+    for (let i = 0; i < q * 12; i++) P[i] = Math.round((pos[i] + 1) * PHYS_Q);
+    for (let v = 0; v < q * 4; v++) {
+      const x = nrm[v * 4], y = nrm[v * 4 + 1], z = nrm[v * 4 + 2], l1 = (x < 0 ? -x : x) + (y < 0 ? -y : y) + (z < 0 ? -z : z) || 1;
+      let px = x / l1, pz = z / l1;
+      if (y < 0) { const ax = 1 - (pz < 0 ? -pz : pz), az = 1 - (px < 0 ? -px : px); px = px >= 0 ? ax : -ax; pz = pz >= 0 ? az : -az; }
+      N[v * 2] = Math.round((px * 0.5 + 0.5) * 255); N[v * 2 + 1] = Math.round((pz * 0.5 + 0.5) * 255);
+      Cc[v * 3] = col[v * 4]; Cc[v * 3 + 1] = col[v * 4 + 1]; Cc[v * 3 + 2] = col[v * 4 + 2];
+    }
+  }
   const T1 = { B, S, C, ABI, CAVE_MIN_Y, DEFAULT_CAP, js: cap => new JsCore(cap), wasm, height, density, biome, entrance, temperature01, moisture01,
-    touches, meshHash, sinp, hash2, hash3, PHYS_Q, BLOCK_BYTES, physPack,
+    touches, meshHash, sinp, hash2, hash3, PHYS_Q, BLOCK_BYTES, physPack, COMPACT_BYTES, compactPack,
     densityR, heightR, reachH, reachV, FLAT_UP, ISL_Y1, climate, classify2, climNode, latPhi, patchBiome, islands, GEN_MAX: 2, RULES: ['earth', 'mono', 'patchwork', 'absurd', 'inverted'],
     BIOMES: ['water', 'beach', 'plains', 'forest', 'taiga', 'desert', 'savanna', 'swamp', 'tundra', 'rock', 'snow', 'steppe', 'jungle'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = T1;
