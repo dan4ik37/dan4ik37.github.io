@@ -72,7 +72,7 @@
     },
     resetRound(){ for (const c of st.coins.splice(0)) backCoin(c); st.zhp.clear(); },
     zombies(n, wave){ spawnZombies(n, wave); },
-    clearZombies(){ for (const id of st.zIds) { const o = SC().get(id); if (o) SC().remove(o); } st.zIds.clear(); st.zhp.clear(); },
+    clearZombies(){ for (const id of st.zIds) { const o = SC().get(id); if (o) SC().remove(o); } st.zIds.clear(); st.zhp.clear(); st.zq = 0; },
     coinTaken(){},
   };
   function spawnOne(id, at){
@@ -97,7 +97,34 @@
   function backCoin(c){ const S = SC(); for (const d of c.data) { if (S.get(d.id)) continue; try { S.add(d.cls, d, d.parent && S.get(d.parent) ? d.parent : null, d.id); } catch (e) {} } }
 
   // ── Зомби «Выживания»: в 🟥 зонах (touch: zspawn) или кольцом вокруг старта ──
+  // T-127 (AI LOD P1, решение владельца D5): живых зомби — не больше Z_MAX за раз (волна больше — остальные выходят, когда падают
+  // первые; волна не кончится, пока очередь не пуста); места и внешность — по зерну (раунд, волна, номер): у всех одинаково, без
+  // Math.random; выходят по Z_STEP за шаг хозяина (сборка человечка — несколько мс). Откат одной строкой: Z_LOD = false.
+  const Z_LOD = true, Z_MAX = 64, Z_STEP = 2;
+  const zseed = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) || 1; };
   function spawnZombies(n, wave){
+    if (!Z_LOD) return spawnZombiesV1(n, wave);
+    st.zq = Math.max(0, n | 0); st.zw = wave; st.zk = 0; st.zr = E.rng(zseed('zw:' + (M?.round || 0) + ':' + wave));
+    zTop();
+  }
+  // очередь волны: выпустить, пока живых меньше Z_MAX (зовётся каждый шаг хозяина)
+  function zTop(){
+    if (!Z_LOD || !(st.zq > 0)) return;
+    let alive = zombiesAlive(), k = 0;
+    if (alive >= Z_MAX) return;
+    const S = SC(), zones = S.all().filter(o => o.cls === 'Part' && o.touch === 'zspawn'), ph = A.ed.ph, sp = A.spawnPoint(), rnd = st.zr;
+    while (st.zq > 0 && alive < Z_MAX && k < Z_STEP) {
+      const i = st.zk++;
+      let x, z, y;
+      if (zones.length) { const zo = zones[i % zones.length], b = S.box(zo); x = b.min.x + rnd() * (b.max.x - b.min.x); z = b.min.z + rnd() * (b.max.z - b.min.z); y = b.max.y + .05; }
+      else { const a = rnd() * Math.PI * 2, d = 20 + rnd() * 8; x = sp[0] + Math.cos(a) * d; z = sp[2] + Math.sin(a) * d; y = ph.supportAt(x, z, .4, 1e6).y + .05; }
+      const o = S.add('NPC', { name: 'Зомби', look: 'zombie', act: 'follow', damage: M?.cfg.zdmg || 15, speed: Math.min(1.6, .78 + st.zw * .06), seed: 'z' + (M?.round || 0) + '-' + st.zw + '-' + i, text: '', pos: [+x.toFixed(2), +y.toFixed(2), +z.toFixed(2)] });
+      st.zIds.add(o.id); st.zhp.set(o.id, 100);
+      st.zq--; alive++; k++;
+    }
+  }
+  // как было до T-127 (Z_LOD = false): не больше 30 за волну, Math.random
+  function spawnZombiesV1(n, wave){
     const S = SC(), zones = S.all().filter(o => o.cls === 'Part' && o.touch === 'zspawn'), ph = A.ed.ph, sp = A.spawnPoint();
     for (let i = 0; i < Math.min(30, n); i++) {
       let x, z, y;
@@ -268,7 +295,7 @@
       // чужой мир по ссылке (редактор и его раскладка не подключались): узкий экран — компактное табло
       const box = papi.ed?.box;
       if (box && papi.ed.player && (box.clientWidth <= 760 || box.clientHeight <= 500)) box.classList.add('s3-compact', box.clientWidth > box.clientHeight ? 's3-land' : 's3-port');
-      st = { now: 0, view: null, viewAt: performance.now(), frozen: false, blind: false, coins: [], zIds: new Set(), zhp: new Map(), atk: new Map(), checks: [], sentAt: 0, camT: 0, hudT: 0, myIdWas: myId() };
+      st = { now: 0, view: null, viewAt: performance.now(), frozen: false, blind: false, coins: [], zIds: new Set(), zhp: new Map(), zq: 0, zw: 0, zk: 0, zr: null, atk: new Map(), checks: [], sentAt: 0, camT: 0, hudT: 0, myIdWas: myId() };
       const P = pl();
       V = E.views?.create(papi.R.camera, P.rig, { T: papi.R.T }) || null;
       // колесо/щипок до упора сменили вид (camera.js rig.autoFirst): прицел и мышь — как у клавиши V
@@ -316,7 +343,7 @@
           for (const s of all) { const S2 = M.player(idOf(s.id)); if (S2?.role !== 'seeker') continue; for (const h of all) { const H2 = M.player(idOf(h.id)); if (H2?.role === 'hider' && Math.hypot(s.pos[0] - h.pos[0], s.pos[2] - h.pos[2]) < E.modes.TAG_R && Math.abs(s.pos[1] - h.pos[1]) < 2.4) near.push([S2.id, H2.id]); } }
           ctx.near = near;
         }
-        if (M.cfg.mode === 'survival') ctx.zombies = zombiesAlive();
+        if (M.cfg.mode === 'survival') { zTop(); ctx.zombies = zombiesAlive() + (st.zq || 0); }   // очередь волны — тоже «живые» (T-127)
         M.step(dt, ctx);
         // монетки возвращаются
         for (const c of st.coins.slice()) if (c.at <= st.now) { st.coins.splice(st.coins.indexOf(c), 1); backCoin(c); }
