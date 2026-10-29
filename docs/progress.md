@@ -407,3 +407,13 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
 - SQL (char_save — вещи вида 5, очки магии, бестиарий; evo.sql; строка games-more.sql) — позже одним списком, когда дойдут S3/S4/S6.
 - Предупреждения о стихиях в телефоне — НЕ делаем (владелец 29.10); стихии видны по миру (STRUCTURE_HAZARDS.md, CLAUDE.md b624c25).
 
+
+## 29.10 — T-124: structure v2 «не на палке» (SH0.1, SH0.2, SH1; STRUCTURE_HAZARDS.md)
+- Take: v1 pinned by a hash (support-hash.js) — every later change must keep old worlds identical; v2 only for worlds with load: 1.
+- Take: soft load capacities × 2, not × 3 (with × 3 a 5-long wood cantilever out of a cliff stood in soft; G7 wants it to fall).
+- Take: until S1.T (SH3) an overturning (storey) failure only refuses placement and is reported as a tip; cuts act on joints / hang / crush
+  (a straight drop cannot move what rests on its support — it would only re-place blocks and knock torches off).
+- Take: per-adapter build weight (Kubomir 16 ops per node: world reads), SOLVE_BUDGET stays 4,096 — the in-page phone ×4 number is
+  not confirmed yet (machine contended during the run); the budget is the coordinator's to sign.
+- Take: collapse / hazard items are «keep» (never despawn, never evicted); items of one event merge into ≤ 32 stacks; a chest moves with its block.
+- Skip (not this step): UI toggles for load (SH0.5b, HUD lane), co-op hello field `load` (SH0.5a), tipping (SH3), Mir (SH1m).

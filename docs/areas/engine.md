@@ -232,6 +232,10 @@
 - SH0.2 (all worlds): chest / furnace contents (W.tile) move with a collapsing group (or spill as keep items); keep items never
   despawn or get evicted; `ents.itemBatch(keep)` merges an event's items into stacks (≤ 32 entities; felled trees too); Podzem — a
   chest on a collapsed build spills keep items instead of hanging.
+- Numbers (29.10): node, house 1,932 nodes — v1 sync 0.4–1.3 ms, v2 worst 4,096-op tick 0.15–0.34 ms, 23–29 ticks. Chrome kernel
+  (typed world, 2,816 nodes, quiet run) ×4: worst tick median 1.3 ms, max 2.1 (v1 sync 3.5 ms). Kubomir page (house 2,269 nodes):
+  v1 sync ×4 13.4 ms median; v2 ×1 worst tick median 0.8–1.2 ms, 29–35 ticks; v2 ×4 in-page not measured cleanly (machine contended:
+  8–22 ms) — re-measure on a quiet machine before signing SOLVE_BUDGET; the Kubomir world read makes the in-page cost ~2–4× the kernel.
 - Tests: support-load-test.cjs (G7 + §3 verdicts = T-120 prototype numbers, props, held-before, placement, 5 seeds, code 5, landing,
   boxes, ticks 30/60/144, per-tick time, alloc), kubomir-hand-test §12, podzem-support-test, studio-support-test; Chrome: kubomir-e2e
   `KB_LOAD=1` (support / soak / reopen), podzem-support-e2e `PZ_LOAD=1`.
