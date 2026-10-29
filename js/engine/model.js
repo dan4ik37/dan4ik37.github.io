@@ -520,7 +520,7 @@
   M.dispose = () => { for (const id of [...shared.keys()]) disposeShared(id); };
   function sharedOf(R, model){
     let s = shared.get(model.id);
-    if (s && s.q === R.q && s.T === R.T) return s;
+    if (s && s.q === R.q && s.T === R.T && s.r === R.r) return s;   // новый рендерер (студию открыли снова) — свои копии: старые держали бы его слушателями dispose
     if (s) disposeShared(model.id);
     const T = R.T, low = R.q === 'low';
     const texs = (model.tex || []).map(t => {
@@ -551,7 +551,7 @@
       if (p.j) g.boundingSphere.radius *= 1.6;   // анимация уводит вершины от позы покоя
       return g;
     });
-    s = { geos, mats, texs, q: R.q, T: R.T };
+    s = { geos, mats, texs, q: R.q, T: R.T, r: R.r };
     shared.set(model.id, s);
     return s;
   }
@@ -858,6 +858,7 @@
     if (h.g.userData.anim === h) h.g.userData.anim = null;
   };
   M.live = () => live.length;
+  M.releaseAll = () => { for (let i = live.length - 1; i >= 0; i--) M.release(live[i]); };   // закрыли игру/редактор — страховка
   // раз в кадр: ближние — каждый кадр, дальние и невидимые — реже (накопленным временем); без мусора в кадре
   M.animate = (dt, camera) => {
     frameNo++;

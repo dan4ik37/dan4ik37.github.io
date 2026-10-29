@@ -264,6 +264,8 @@ async function ai3dChain(T, R, cam){
   const nodeNames = new Set(json.nodes.map(x => x.name));
   ok(['Hips', 'LeftUpperArm', 'RightFoot', 'LeftToes', 'Head'].every(x => nodeNames.has(x)), 'bones named with Mecanim humanoid names');
   console.warn = warn;
+  const tmpRoot = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : null);   // for scripts/anim-e2e.cjs (not on CI)
+  if (tmpRoot) try { const out = path.join(tmpRoot, 't138'); fs.mkdirSync(out, { recursive: true }); fs.writeFileSync(path.join(out, 'hm.glb'), Buffer.from(buf)); } catch (e) {}
   const m = await M.compile([{ name: 'hm.glb', data: buf }]);
   ok(m.skin && m.skin.n >= 28 && M.actions(m).humanoid, 'compiled: skeleton, humanoid', m.skin && m.skin.n);
   ok(m.anims.some(x => x.name === 'loco.walk.fwd' && x.meta && x.meta.loop) && m.anims.some(x => x.name === 'hmwalk'), 'compiled clips with metadata');
@@ -283,7 +285,6 @@ async function ai3dChain(T, R, cam){
     if (prev) maxV = Math.max(maxV, p.distanceTo(prev) * fps / U);
     prev = p;
   }
-  if (process.env.DBG) for (let k = 0; k <= 30; k += 2) { const t = k / 30; hA.mixer.setTime(t); scn.updateMatrixWorld(true); const p = new T.Vector3().setFromMatrixPosition(foot.matrixWorld); const hp = new T.Vector3().setFromMatrixPosition(gA.getObjectByName('Hips').matrixWorld); console.log('DBG', t.toFixed(3), 'foot', p.x.toFixed(3), p.y.toFixed(3), (p.z + sp * t).toFixed(3), 'hips', hp.y.toFixed(3), hp.z.toFixed(3), 'sp', sp.toFixed(3), 'dur', dur.toFixed(3), 'window', (plant[0]*scale).toFixed(3), (plant[3]*scale).toFixed(3)); }
   ok(prev && maxV <= .015, 'exported walk on three: planted (flat) foot ≤ 0.015 m/s in the world (export → glTF → model.js → mixer)', +maxV.toFixed(4));
   console.log(`AI3D chain: ${m.skin.n} bones, ${m.anims.length} clips, GLB ${(buf.byteLength / 1024).toFixed(0)} KB, flat-foot speed ${maxV.toFixed(4)} m/s`);
   M.release(hA);

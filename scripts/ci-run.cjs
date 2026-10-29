@@ -61,6 +61,7 @@ const TESTS = [
   { f: 'render-test.cjs', args: ['{THREE}'], needs: 'three', t: 240 }, { f: 'sprite-test.cjs', args: ['{THREE}'], needs: 'three' },
   { f: 'studio-modes-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'worldmap-test.cjs', args: ['{THREE}'], needs: 'three' },
   { f: 'ai3d-test.cjs', args: ['{THREE}'], needs: 'three', t: 240 },   // T-112: AI3D /tools/3d — проверки владельца, настоящий three r149, GLB (двоичный, без extras, линейные цвета), D37E.models
+  { f: 'anim-test.cjs', args: ['{THREE}'], needs: 'three', t: 180 },   // T-131: общий скелет и действия (skel.js), модели со скелетом (model.js), экспорт AI3D со скелетом
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
   { f: 'war-hud-e2e.cjs', e2e: true, t: 600 },   // боевая зона: панель оружия отвечает (телефон, планшет, ПК)
