@@ -960,7 +960,7 @@
     return { G, J: G.loadJob(), read, cell, I, D, b: { r: 64, rn: 10, P }, EO: { early: true }, reps, r: 0, st: 0, ci: -1, c0: 0,
       seeds: [[6, yOf(0), z0], [12, yOf(2), dims === 2 ? 0 : 6], [20, yOf(0), z0], [10, yOf(5), z0]], px: 8, py: yOf(top + 1), pz: zp, ay: yOf(top) };
   }
-  function warmStep(W){   // one slice (509 or 4096 ops: both shapes of a slice) or one stage change → true when every round is done
+  function warmStep(W){   // one slice (509 ops: a cold slice stays short even on a phone ×4) or one stage change → true when every round is done
     const J = W.J, G = W.G;
     switch (W.st) {
       case 0: {
@@ -969,11 +969,11 @@
         W.ci = W.I(s[0], -s[1] * W.D, s[2]); W.c0 = W.cell[W.ci]; W.cell[W.ci] = 0;
         J.start('rm', [s[0], s[1], s[2], code], W.read, W.b, W.EO); W.st = 1; return false;
       }
-      case 1: if (J.step(W.r & 1 ? 509 : 4096)) { W.cell[W.ci] = W.c0; W.ci = -1; W.st = 2; } else J.early = 0; return false;
+      case 1: if (J.step(509)) { W.cell[W.ci] = W.c0; W.ci = -1; W.st = 2; } else J.early = 0; return false;
       case 2: S.placeStart(G, W.px + (W.r % 5), W.py, W.pz, (MAT.metal << 2) | 2, W.read, W.b); W.st = 3; return false;
-      case 3: if (J.step(4096)) { S.placeResult(G, (MAT.metal << 2) | 2); W.st = 4; } return false;
+      case 3: if (J.step(509)) { S.placeResult(G, (MAT.metal << 2) | 2); W.st = 4; } return false;
       case 4: J.start('add', [W.px, W.ay, W.pz, W.read(W.px, W.ay, W.pz)], W.read, W.b); W.st = 5; return false;
-      default: if (J.step(4096)) { W.r++; W.st = 0; } return false;
+      default: if (J.step(509)) { W.r++; W.st = 0; } return false;
     }
   }
   S.warmTick = (G, ms = 1, reps = 4) => {
