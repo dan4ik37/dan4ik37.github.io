@@ -1421,7 +1421,7 @@
   }
   // можно ли поставить блок предмета it в (tx, ty) — без побочных эффектов (умный курсор и превью тоже спрашивают):
   // '' — можно, иначе причина (пустая строка подсказки — молча нельзя)
-  function canPlace(it, tx, ty){
+  function canPlace(it, tx, ty, real){   // real — настоящая постановка (клик), не курсор и превью: обрушение проверяет нагрузку только тут
     const id = it.tileId || PZ.TILE[it.tile]?.id; if (!id) return '-';
     if (!inReach(tx, ty)) return '-';
     const k = P.KIND[id], s = P.SOLID[id];
@@ -1441,7 +1441,7 @@
     if (id === T.ROPE && !(P.SOLID[fgAt(tx, ty - 1)] || fgAt(tx, ty - 1) === T.ROPE)) return 'Верёвку вешают под блок или другую верёвку';
     if (P.SUP[id] === 1 && !(P.SOLID[fgAt(tx, ty + 1)] === 1)) return '-';
     if (!anySupport(tx, ty) && id !== T.ROPE) return '-';
-    if (G.sup && !G.sup.canPlace(id, tx, ty)) return 'Не удержится — поставь опору ближе (колонну или стену)';   // обрушение
+    if (G.sup && !G.sup.canPlace(id, tx, ty, real)) return 'Не удержится — поставь опору ближе (колонну или стену)';   // обрушение
     return '';
   }
   function canWall(it, tx, ty){
@@ -1454,7 +1454,7 @@
     const id = it.tileId || PZ.TILE[it.tile]?.id; if (!id) return;
     if (!inReach(tx, ty)) return;
     p.useT = .12;
-    const why = canPlace(it, tx, ty);
+    const why = canPlace(it, tx, ty, true);
     if (why) { if (why !== '-') hint(why); return; }
     const k = P.KIND[id], s = P.SOLID[id];
     if (k === 1) {
@@ -2723,6 +2723,7 @@
   // уходят со вкладки / закрывают: в базу (может не успеть) + журнал в localStorage (успеет точно)
   function journal(){
     if (!G?.W || !G.CH || G.state === 'menu') return;
+    try { G.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение, что считается и падает, — до конца (в журнал)
     const dirty = [...G.dirtySave].filter(c => c.mod);
     const j = { w: G.W.id, at: Date.now(), world: worldRecord(), char: charRecord(), chunks: {} };
     let size = 0;
@@ -2868,7 +2869,7 @@
   }
   async function stopWorld(save){
     if (!G.W) { G.state = 'menu'; return; }
-    if (save) await saveAll();
+    if (save) { try { G.sup?.flush?.(); } catch (e) { console.error(e); } await saveAll(); }   // T-124: обрушение — до конца, потом сохранить
     if (!G?.W) return;
     reportDepth();
     G.modsStop?.();

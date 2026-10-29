@@ -127,9 +127,86 @@ const sec = t => console.log('— ' + t);
     for (let y = Y0 - 2; y <= Y0; y++) placeAt(G, X0 - 2, y, PLANKS);
     T.tp(X0 + 11, Y0 - 2);
     const lv5 = (() => { G.sup.level(PLANKS, X0 + 5, Y0 - 6); for (let i = 0; i < 9; i++) G.sup.step(1 / 60); return G.sup.level(PLANKS, X0 + 5, Y0 - 6); })();
-    ok(!G.sup.canPlace(PLANKS, X0 + 5, Y0 - 6) && !G.sup.canPlace(PLANKS, X0 + 1, Y0 - 7) && G.sup.canPlace(PLANKS, X0 - 1, Y0) && lv5 === 4, 'поставить: 5-я доска консоли — нельзя; на перегруженную консоль сверху — нельзя (нагрузка вырастет); на пол у столба — можно; рамка в такте — тёмно-красная', { lv5 });
+    ok(!G.sup.canPlace(PLANKS, X0 + 5, Y0 - 6, true) && !G.sup.canPlace(PLANKS, X0 + 1, Y0 - 7, true) && G.sup.canPlace(PLANKS, X0 - 1, Y0, true) && lv5 === 4, 'поставить: 5-я доска консоли — нельзя; на перегруженную консоль сверху — нельзя (нагрузка вырастет); на пол у столба — можно; рамка в такте — тёмно-красная', { lv5 });
     T.breakTile(X0 - 2, Y0 - 2); await sim.frames(2);
     ok([1, 2, 3, 4].every(k => T.fgAt(X0 + k, Y0 - 6) === PLANKS) && G.sup.stats.groups === 0, 'перегруженная консоль (как из импорта): сломал соседний столбик — ничего не упало', G.sup.stats);
+  }
+
+  // ═══ T-124, разбор SH1: исправления (номера — из разбора) ═══
+  sec('нагрузка: разбор SH1 — умный курсор, раздавленное, опору вернули, сохранение, ранний сброс, разогрев, рамка');
+  const now = () => Number(process.hrtime.bigint()) / 1e6;
+  // (7) плитка в руке, умный курсор у стены из 1000 плиток: полной проверки нагрузки на каждую клетку курсора нет (только на клик),
+  // шаг — как в старом мире
+  const smart = async load => {
+    const G = await world('real', 'курсор', load); await site(G, X0, Y0);
+    fill(X0 - 10, Y0 - 40, X0 + 50, Y0, 0); fill(X0 - 10, Y0 + 1, X0 + 50, Y0 + 1, STONE);
+    for (let x = X0; x < X0 + 40; x++) for (let y = Y0 - 24; y <= Y0; y++) placeAt(G, x, y, PLANKS);
+    T.tp(X0 + 20, Y0 - 27); await sim.frames(2);
+    for (let i = 0; i < 300 && (G.sup.jobs?.().busy || G.sup.jobs?.().queued); i++) await sim.frames(.1);
+    T.give('wood', 50); G.CH.sel = G.CH.inv.findIndex(s => s && s.id === 'wood'); G.opt.smart = true;
+    sim.aimAt(X0 + 20.5, Y0 - 25.5); await sim.frames(.5);
+    const st = G.sup.stats, c0 = st.checks | 0, ts = [], orig = G.sup.canPlace; let calls = 0; G.sup.canPlace = (...a) => { calls++; return orig(...a); };
+    for (let i = 0; i < 120; i++) { sim.aimAt(X0 + 20.5 + (i % 7) - 3, Y0 - 24.5); const t0 = now(); T.step(1 / 60); ts.push(now() - t0); }
+    G.sup.canPlace = orig; ts.sort((a, b) => a - b);
+    return { checks: (st.checks | 0) - c0, med: ts[60], p95: ts[114], calls: calls / 120 };
+  };
+  {
+    const v1 = await smart(false), v2 = await smart(true);
+    console.log('  умный курсор у стены 1000 плиток: шаг v1 медиана ' + v1.med.toFixed(3) + ' мс (p95 ' + v1.p95.toFixed(3) + '), с нагрузкой ' + v2.med.toFixed(3) + ' мс (p95 ' + v2.p95.toFixed(3) + '); полных проверок за 120 шагов: ' + v2.checks + ' (вызовов canPlace за шаг ' + v2.calls.toFixed(1) + ')');
+    ok(v2.calls >= 5 && v2.checks === 0 && v2.med <= v1.med * 1.5 + .3, 'умный курсор в мире с нагрузкой: полной проверки на каждую клетку нет, шаг — как в старом мире (было 14 мс медиана, 122 мс худший)', { v1, v2 });
+  }
+  // (2) нагрузка раздавила плитку: факел сбоку (держался только за неё) отпал, а не висит в воздухе
+  {
+    const G = await world('real', 'раздавило', true); await site(G, X0, Y0);
+    fill(X0 - 8, Y0 - 50, X0 + 8, Y0, 0); fill(X0 - 8, Y0 + 1, X0 + 8, Y0 + 6, STONE);   // пол — толща скалы (опора)
+    for (let y = Y0 - 50; y <= Y0; y++) for (let x = X0 - 8; x <= X0 + 8; x++) T.setCell(x, y, null, null, 0);   // без стен фона
+    for (let y = Y0 - 3; y <= Y0; y++) placeAt(G, X0, y, STONE);   // столбик
+    placeAt(G, X0, Y0 - 4, PLANKS);   // доска на нём
+    for (let y = Y0 - 26; y <= Y0 - 5; y++) placeAt(G, X0, y, STONE);   // 22 камня на доске (держит)
+    T.setCell(X0 + 1, Y0 - 4, ID('torch'), 0, 0);   // факел сбоку доски
+    T.tp(X0 + 6, Y0 - 1); await sim.frames(.5);
+    const torch0 = T.fgAt(X0 + 1, Y0 - 4) === ID('torch');
+    const xyz = []; for (let y = Y0 - 32; y <= Y0 - 27; y++) { placeAt(G, X0, y, STONE); xyz.push(X0, y, 0); }   // легло ещё 6 сверху
+    G.sup.recheck(xyz);
+    for (let i = 0; i < 400 && (G.sup.jobs().busy || G.sup.jobs().queued || G.sup.groups.length); i++) await sim.frames(.1);
+    const r = { torch0, crushed: G.sup.stats.crushed, plank: T.fgAt(X0, Y0 - 4), torch: T.fgAt(X0 + 1, Y0 - 4), torchItem: itemsOf(G, 'torch') };
+    ok(torch0 && r.crushed >= 1 && r.torch !== ID('torch') && r.torchItem >= 1, 'нагрузка раздавила доску — факел, державшийся за неё, отпал вещью (не висит)', r);
+  }
+  // (11) сломал опору и сразу вернул (задание ещё не досчитано) — ничего не падает; (6) сломал и сразу ушёл — досчитано до сохранения
+  const bridge = async (seed, then) => {
+    const G = await world('real', seed, true); await site(G, X0, Y0);
+    fill(X0 - 10, Y0 - 30, X0 + 50, Y0, 0); fill(X0 - 10, Y0 + 1, X0 + 50, Y0 + 1, STONE);
+    for (let x = X0 + 10; x < X0 + 40; x++) for (let y = Y0 - 24; y <= Y0; y++) placeAt(G, x, y, PLANKS);   // 750 плиток — задание на несколько тактов
+    for (let y = Y0 - 6; y <= Y0; y++) placeAt(G, X0, y, PLANKS); for (let x = X0 + 1; x < X0 + 10; x++) placeAt(G, x, Y0, PLANKS);   // столб и пол до стены
+    for (let x = X0 + 1; x <= X0 + 3; x++) placeAt(G, x, Y0 - 6, PLANKS);   // балка 3 на столбе
+    T.tp(X0 + 45, Y0 - 27); await sim.frames(1);
+    for (let i = 0; i < 300 && (G.sup.jobs().busy || G.sup.jobs().queued); i++) await sim.frames(.1);
+    const st = G.sup.stats, g0 = st.groups + st.early;
+    T.breakTile(X0, Y0 - 6, true);
+    const r = await then(G);
+    r.beam = [1, 2, 3].filter(k => T.fgAt(X0 + k, Y0 - 6) === PLANKS).length; r.fell = st.groups + st.early - g0; r.st = { jobs: st.jobs, early: st.early, skipped: st.skipped, restarts: st.restarts, lastTicks: st.lastTicks };
+    return r;
+  };
+  {
+    const back = await bridge('вернул', async G => { placeAt(G, X0, Y0 - 6, PLANKS); for (let i = 0; i < 300 && (G.sup.jobs().busy || G.sup.jobs().queued || G.sup.groups.length); i++) await sim.frames(.1); return {}; });
+    ok(back.beam === 3 && back.fell === 0, 'сломал столб под балкой и сразу поставил обратно — балка стоит (семена задания — по миру сейчас)', back);
+    let tFall = -1;
+    const left = await bridge('не вернул', async G => { let t = 0; for (; t < 600 && (G.sup.jobs().busy || G.sup.jobs().queued || G.sup.groups.length); t++) { T.step(1 / 60); if (tFall < 0 && G.sup.groups.length) tFall = t; } return { steps: t }; });
+    ok(left.beam === 0 && left.st.early >= 1 && tFall >= 0 && tFall < left.st.lastTicks * 3, 'не вернул — балка падает сразу после двух проходов 1 (шаг ' + tFall + ', задание целиком — ' + left.st.lastTicks + ' тактов = ' + left.st.lastTicks * 3 + ' шагов)', { left, tFall });
+    const fl = await bridge('ушёл', async G => { const q = G.sup.jobs().queued; G.sup.flush(); return { q, busy: G.sup.jobs().busy, queued: G.sup.jobs().queued, groups: G.sup.groups.length }; });
+    ok(fl.q === 1 && !fl.busy && !fl.queued && !fl.groups && fl.beam === 0, 'сломал и сразу сохранил / ушёл (flush) — задание досчитано, балка легла до сохранения', fl);
+  }
+  // (12) разогрев ядра в тактах без заданий; (10) рамка — сразу цвет новой клетки, не старой
+  {
+    const G = await world('real', 'разогрев', true); await site(G, X0, Y0);
+    fill(X0 - 8, Y0 - 16, X0 + 14, Y0, 0); fill(X0 - 8, Y0 + 1, X0 + 14, Y0 + 1, STONE);
+    for (let y = Y0 - 6; y <= Y0; y++) placeAt(G, X0, y, PLANKS);
+    for (let x = X0 + 1; x <= X0 + 3; x++) placeAt(G, x, Y0 - 6, PLANKS);
+    let t = 0; for (; t < 2000 && !G.sup.jobs().warm; t++) T.step(1 / 60);
+    ok(G.sup.jobs().warm && G.sup.stats.maxTickMs < 25, 'разогрев ядра: ' + t + ' шагов без заданий (не дольше 1 мс за такт), потом — готово', { t, maxTick: G.sup.stats.maxTickMs });
+    const tip = G.sup.level(PLANKS, X0 + 4, Y0 - 6); for (let i = 0; i < 30; i++) { G.sup.level(PLANKS, X0 + 4, Y0 - 6); T.step(1 / 60); }
+    const lA = G.sup.level(PLANKS, X0 + 4, Y0 - 6), lB0 = G.sup.level(PLANKS, X0 - 1, Y0);
+    ok(lA >= 3 && lB0 <= 1, 'рамка: конец консоли — красная; перевёл курсор к полу — сразу цвет новой клетки (держание v1), не старой', { tip, lA, lB0 });
   }
 
   sec('поставить то, что не удержится, — нельзя; цвет рамки');
