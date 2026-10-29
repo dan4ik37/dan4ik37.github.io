@@ -8,6 +8,8 @@
 //          node scripts/planet-perf.cjs reopen [раз=20]    — открыть/закрыть страницу планеты N раз: холсты, потоки, память
 //          node scripts/planet-perf.cjs map [раз=20]       — T-079: карта «🪐 Система» и телескоп N раз: узлы, слушатели, память
 //          node scripts/planet-perf.cjs ab [раундов=3]       — T-145: наборы флагов (AB) по кругу в одном Chrome, на земле: стоим и бежим
+//          node scripts/planet-perf.cjs trace [раундов=3]    — T-145: ЦП главного потока на кадр (tdur задач rAF из трассы Chrome — без
+//                                                          вытеснения соседними процессами: A/B держится и на загруженной машине); AB, TMS
 //          node scripts/planet-perf.cjs golden             — T-079: «золотые» значения O.m / рельсов / неба в Chrome = в node (до бита)
 // Переменные: RATE (замедление ЦП, 4), Q (качество, mid), PC=1 — компьютер 1280 × 720 без замедления, CHROME, D37_TMP (временное — на E:).
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
@@ -66,6 +68,8 @@ const summary = f => {
   ws.onmessage = m => {
     const d = JSON.parse(m.data);
     if (d.id && cb.has(d.id)) { const [a, b] = cb.get(d.id); cb.delete(d.id); d.error ? b(new Error(d.error.message)) : a(d.result); return; }
+    if (d.method === 'Tracing.dataCollected') { (globalThis.__tr = globalThis.__tr || []).push(...d.params.value); return; }   // режим trace
+    if (d.method === 'Tracing.tracingComplete') { globalThis.__trDone && globalThis.__trDone(); return; }
     if (d.method === 'Runtime.exceptionThrown') logs.push('exception: ' + (d.params.exceptionDetails?.exception?.description || d.params.exceptionDetails?.text || '').slice(0, 300));
     if (d.method === 'Runtime.consoleAPICalled' && (d.params.type === 'error' || d.params.type === 'warning')) logs.push(d.params.type + ': ' + d.params.args.map(a => a.value ?? a.description ?? '').join(' ').slice(0, 300));
   };
@@ -193,6 +197,49 @@ const summary = f => {
         await ev(`${T}.look(['luna', 'desert'][${i} % 2])`); await sleep(250); await ev(`${T}.untele()`);
         if (i % 5 === 4) { await ev('window.gc && window.gc()'); await sleep(300); out.cycles.push({ i: i + 1, ...(await probe()), keydown: await lis() }); console.log('  ', JSON.stringify(out.cycles[out.cycles.length - 1])); }
       }
+    } else if (MODE === 'trace') {
+      const sets = process.env.AB ? JSON.parse(process.env.AB) : [['off', '0', ''], ['on', '1', '']], rounds = +ARG || 3, MS = +process.env.TMS || 6000;
+      await open(); await sleep(2000);
+      const res = {};
+      const traceRun = async ms => {
+        globalThis.__tr = [];
+        const done = new Promise(r => { globalThis.__trDone = r; });
+        await send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline', transferMode: 'ReportEvents', options: 'record-as-much-as-possible' });
+        await ev(`(window.__plS.f = [], window.__plS.on = true)`);
+        await sleep(ms);
+        const f = await ev(`(() => { window.__plS.on = false; const f = window.__plS.f; window.__plS.f = []; return f; })()`);
+        await send('Tracing.end'); await Promise.race([done, sleep(20000)]);
+        const evs = globalThis.__tr; globalThis.__tr = [];
+        const main = new Map(); for (const e of evs) if (e.name === 'thread_name' && e.args && e.args.name === 'CrRendererMain') main.set(e.pid + ':' + e.tid, 1);
+        let tdur = 0, dur = 0, n = 0;
+        for (const e of evs) if (e.ph === 'X' && e.name === 'FireAnimationFrame' && main.has(e.pid + ':' + e.tid)) { tdur += (e.tdur || 0); dur += (e.dur || 0); n++; }
+        const sm = summary(f), frames = Math.max(1, sm.frames || 1);
+        return { cpuAvg: sm.cpuAvg, fps: sm.fps, frames, rafTasks: n, threadMsPerFrame: +(tdur / 1000 / frames).toFixed(3), wallMsPerFrame: +(dur / 1000 / frames).toFixed(3) };
+      };
+      for (let r = 0; r < rounds; r++) for (const [name, v2, pf] of sets) {
+        await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        await ev(`(() => { try { ${v2 ? `localStorage.setItem('d37_planet_v2', '${v2}')` : `localStorage.removeItem('d37_planet_v2')`}; ${pf ? `localStorage.setItem('d37_planet_flags', ${JSON.stringify(pf)})` : `localStorage.removeItem('d37_planet_flags')`}; } catch (e) {} location.hash = '#/games'; })()`);
+        await sleep(700); await ev(`location.hash = '#/games/planet'`);
+        let ok = false; for (let q = 0; q < 80 && !ok; q++) { await sleep(400); try { ok = await ev(`!!(window.GAME_IMPL?.planet?._test?.S?.V)`, 5000); } catch (e) {} }
+        if (!ok) throw new Error('планета не открылась (' + name + ')');
+        await ev(SAMPLER);
+        await ev(`${T}.goto(29, 81, 30)`); await sleep(1500); await ev(`${T}.land()`); await sleep(2000);
+        let calm = 0; for (let w = 0; w < 45 && calm < 2; w++) { await sleep(1000); const q = await stats(); calm = q.queued + q.building + q.ready === 0 ? calm + 1 : 0; }
+        await send('Emulation.setCPUThrottlingRate', { rate: RATE }); await sleep(1500);
+        const g = await traceRun(MS);
+        await ev(`${T}.move(0.4, 1, true)`); await sleep(800);
+        const run = await traceRun(MS);
+        await ev(`${T}.move(0, 0, false)`);
+        const s1 = await stats();
+        const row = { r, ground: g, run, shown: s1.shown, errors: s1.errors };
+        (res[name] = res[name] || []).push(row);
+        console.log('  ', name.padEnd(8), 'ground thread', g.threadMsPerFrame, 'wall', g.cpuAvg, '| run thread', run.threadMsPerFrame, 'wall', run.cpuAvg, '| shown', s1.shown, 'fps', g.fps, run.fps);
+      }
+      await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      const med = a => { const b = [...a].sort((x, y) => x - y); return +b[Math.floor(b.length / 2)].toFixed(3); };
+      out.trace = res; out.traceSum = {};
+      for (const k in res) { const L = res[k]; out.traceSum[k] = { groundThread: med(L.map(x => x.ground.threadMsPerFrame)), runThread: med(L.map(x => x.run.threadMsPerFrame)), groundWall: med(L.map(x => x.ground.cpuAvg)), runWall: med(L.map(x => x.run.cpuAvg)) }; console.log('МЕДИАНА', k.padEnd(8), JSON.stringify(out.traceSum[k])); }
+      out.guard = await guard();
     } else if (MODE === 'ab') {
       // T-145: A/B в ОДНОМ Chrome, наборы флагов по кругу (меньше шума от соседних задач): AB='[["off","0",""],["on","1",""]]',
       // раундов — ARG (3). На земле (29, 81): стоим 6 с, бежим 10 с; ЦП мс на кадр, вызовы, заливки чисел материала
