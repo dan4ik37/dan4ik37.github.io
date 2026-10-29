@@ -55,7 +55,7 @@ function threeDir(){
     FileReader: class { readAsArrayBuffer(b){ b.arrayBuffer().then(a => { this.result = a; this.onloadend && this.onloadend(); }); } readAsDataURL(b){ b.arrayBuffer().then(a => { this.result = 'data:application/octet-stream;base64,' + Buffer.from(a).toString('base64'); this.onloadend && this.onloadend(); }); } } });
   const src = fs.readFileSync(path.join(SITE, 'js/apps/ai3d/ai3d-core.js'), 'utf8');
   const a = src.indexOf('/*@ai3d-body*/'), b = src.indexOf('/*@ai3d-body-end*/');
-  ok(a > 0 && b > a && /\nreturn __site;\n\}\nwindow\.D37AI3DCore=\{create\};/.test(src.slice(b)), 'core: body markers and factory');
+  ok(a > 0 && b > a && /\r?\nreturn __site;\r?\n\}\r?\nwindow\.D37AI3DCore=\{create\};/.test(src.slice(b)), 'core: body markers and factory');
   const body = '"use strict";\n' + src.slice(a + 14, b);   // strict: an implicit global anywhere throws (in the browser it would leak onto window)
   const t0 = performance.now();
   try { vm.runInThisContext(body, { filename: 'ai3d-core.js' }); } catch (e) { console.log('BODY LOAD ERROR', e.stack.split('\n').slice(0, 4).join('\n')); process.exit(1); }
