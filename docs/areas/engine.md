@@ -358,6 +358,15 @@
   (new, in ci-run), Rust `cargo test` (v2 adjacency / distance / patches / column == point / inverted mirror / flatten / 0 allocations
   for every rule), C# tests. Chrome: `node scripts/terra-e2e.cjs t145` (phone ×4: biome, inland crater stays dry, camera climb on/off,
   flatten pad level; Page.setDownloadBehavior deny).
+- Numbers 29.10 (Chrome headless, phone 412×915×2, CPU ×4, «mid», before = 2412cc0 / after, machine shared with other agents):
+  wasm walk frame CPU 4.68 → 3.26 ms (p95 9.3 → 5.0), fly 4.10 → 4.37 ms (p95 8.6 → 9.5); JS core walk 4.43 → 3.76, fly 4.12 → 4.09;
+  worker block 5.3 / 6.3 → 4.9 / 7.2 ms (walk / fly); upload per block 0.50 → 0.48 ms; GPU 37.1 → 20.1 MB; page heap after the run
+  77.4 → 46.7 MB (wasm), 125.4 → 66.1 MB (JS). 20× open / close: heap 14.2 → 15.1 MB (flat after 10), workers 0, renderers 1,
+  geometries 43, materials 18 — equal; 10 min soak: 287 edits, 11 540 blocks, heap 35–51 MB without growth, 0 errors, 0 fallbacks.
+  Crater (inland, 20 m deep, below the sea): no sea tile over it; camera 7.5 m from the head with climb, 3.1 m without. Flatten pad
+  r 6 m: ground inside within 0.001 m in Chrome (0.015 m in node). SSAO angle bias (post.js AO_ANGLE 0.2, rollback 0): AO darkening
+  on open terrain at «high» −40…50 % (mean 3.7 → 2.2 %, 1.2 → 0.6 %, 2.0 → 1.2 % in three close-ups); the bands themselves did not
+  show in headless shots — check on a real phone.
 
 ## 🧠 AI LOD P1 — «ум толпы» on the site (T-127, 29.10.2026, GAMES_VER 148, review fixes 149; spec E:\d37-core\spec\AI_LOD.md §10.2, §12 P1)
 - Owner decisions (docs/progress.md 29.10): D1 Horde — one enemy cap for every device; D4 Mir — the same 16 residents on phone

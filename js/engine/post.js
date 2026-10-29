@@ -47,7 +47,14 @@ void main(){ vec2 d = uTexel; vec3 c = texture2D(tSrc, vUv).rgb * 4.0;
   // травинки давали тёмное пятно вокруг каждого кустика. Только «телефонно-безопасное»: чтение кода — textureLod (как глубина,
   // уже проверено на телефонах), без continue и texelFetch, вклад травы — умножением на маску (после «чёрной земли» 15.10).
   // Без D37_FOL (страж графики выключил: P.setFol(false)) fol() — ноль, и шейдер — ровно прежний, проверенный на телефонах
+  // Угловой порог AO (T-145, T-115): заслонка засчитывается, только если она выше касательной плоскости больше чем на ~11° (как
+  // «angle bias» у HBAO). Иначе гладкий рельеф из треугольников по 1 м (новая земля, «Терра», «высокая») — каждый пологий вогнутый
+  // стык давал тёмную полосу; углы 90° (стены, блоки «Кубомира», дома «Мира») — как были. Откат — AO_ANGLE = 0 (шейдер — прежний)
+  const AO_ANGLE = 0.2;
   const FS_AO = `#include <packing>
+#ifndef AO_ANG
+#define AO_ANG 0.0
+#endif
 uniform sampler2D tDepth; uniform vec2 uFull; uniform vec4 uProj; uniform vec4 uAO; uniform vec4 uCS; uniform float uPx; varying vec2 vUv;
 float vz(vec2 uv){ return perspectiveDepthToViewZ(textureLod(tDepth, uv, 0.0).x, uProj.z, uProj.w); }   // textureLod: в циклах с выходом — без производных
 vec3 vpos(vec2 uv){ float z = vz(uv); return vec3((uv * 2.0 - 1.0) * uProj.xy * -z, z); }
@@ -79,7 +86,7 @@ void main(){
       vec2 su = vUv + vec2(cos(a), sin(a)) * t * rPx * uFull;
       vec3 v = vpos(su) - p;
       float vv = dot(v, v), f = max(r2 - vv, 0.0);
-      occ += (1.0 - fol(su)) * f * f * f * max((dot(v, n) - bias) / (vv + 0.01), 0.0);   // травинка — не заслонка
+      occ += (1.0 - fol(su)) * f * f * f * max((dot(v, n) - bias - AO_ANG * sqrt(vv)) / (vv + 0.01), 0.0);   // травинка — не заслонка
     }
     ao = clamp(1.0 - occ * uAO.z * 5.0 / (r2 * r2 * r2 * ns), 0.0, 1.0);
   }
@@ -784,6 +791,7 @@ void main(){
       M.ao = mk(FS_AO, { tDepth: { value: null }, uFull: { value: new T.Vector2() }, uProj: { value: new T.Vector4() }, uAO: { value: new T.Vector4() }, uCS: { value: new T.Vector4() }, uPx: { value: 1 },
         tColor: { value: null } });
       M.ao.defines = { D37_FOL: '' };   // трава и листва — без AO (P.setFol)
+      if (AO_ANGLE > 0) M.ao.defines.AO_ANG = AO_ANGLE.toFixed(3);
       M.aob = mk(FS_AOB, tx());
       M.ssr = mk(FS_SSR, { tColor: { value: null }, tDepth: { value: null }, uFull: { value: new T.Vector2() }, uProj: { value: new T.Vector4() }, uSSR: { value: new T.Vector4() },
         uStride: { value: 3 }, uSSR2: { value: new T.Vector4(1, 0, 0, 0) }, uView: { value: new T.Matrix4() }, uViewInv: { value: new T.Matrix4() } });
