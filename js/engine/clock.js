@@ -52,7 +52,27 @@
     if (!RT_CLOCK) return '';
     try { const D = root.D37RT; return D && D.enabled && D.enabled() ? String((D.stats && D.stats().url) || '') : ''; } catch (e) { return ''; }
   };
-  const noRt = () => { const k = ss.get('d37_clock_nort'); return !!(k && Date.now() - k < 1800000 && Date.now() >= k); };
+  // «у сервера нет /time» на полчаса: в этой вкладке (память) и в сеансе (sessionStorage)
+  let nortAt = 0;
+  const noRt = () => { const k = Math.max(nortAt, +ss.get('d37_clock_nort') || 0); return !!(k && Date.now() - k < 1800000 && Date.now() >= k); };
+  const markNoRt = () => { nortAt = Date.now(); ss.set('d37_clock_nort', nortAt); };
+  // есть ли у сервера /time — спросить /health (он с CORS и у старого сервера; новый отвечает time: 1). Старый сервер на /time
+  // отвечает 404 БЕЗ CORS: браузер даёт TypeError и две ошибки в консоль на каждую сверку — поэтому /time не трогаем, пока /health
+  // не сказал «есть» (T-145, проверка). Ответ помнится полчаса
+  let rth = null;
+  async function rtHasTime(u, f){
+    const k = rth || ss.get('d37_clock_rth');
+    if (k && k.u === u && Date.now() - k.at < 1800000 && Date.now() >= k.at) return !!k.yes;
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    const tm = setTimeout(() => { try { if (ac) ac.abort(); } catch (e) {} }, 4000);
+    let yes = false;
+    try {
+      const r = await f(u + '/health', ac ? { cache: 'no-store', signal: ac.signal } : { cache: 'no-store' });
+      if (r && r.ok) { const j = await r.json(); yes = !!(j && j.ok !== false && (j.time === 1 || j.time === true)); }
+    } finally { clearTimeout(tm); }
+    rth = { u, yes, at: Date.now() }; ss.set('d37_clock_rth', rth);
+    return yes;
+  }
   const rtOk = () => !!rtUrl() && !noRt();
   async function sampleRt(u){
     const f = C._fetch || root.fetch;
@@ -87,11 +107,16 @@
     return { off: v + rtt / 2 - wall, rtt };
   }
   let busy = null, tm = 0, refs = 0, fails = 0, hidAt = 0;
-  C.sync = () => busy || (busy = (async () => {
+  // busy снимается на ЛЮБОМ выходе (раньше ответ своего сервера оставлял busy: все следующие сверки возвращали старый ответ)
+  C.sync = () => busy || (busy = (async () => { try {
     const u = rtUrl();
     if (u && !noRt()) {
-      try { const s = await median3(() => sampleRt(u)); set(s.off, s.rtt, 'rt'); fails = 0; C.err = C.errRt = ''; return true; }
-      catch (e) { C.errRt = String((e && e.message) || e); if (e && e.status === 404) ss.set('d37_clock_nort', Date.now()); }
+      try {
+        if (!(await rtHasTime(u, C._fetch || root.fetch))) { const er = new Error('rt: нет /time (старый сервер)'); er.status = 404; throw er; }
+        const s = await median3(() => sampleRt(u)); set(s.off, s.rtt, 'rt'); fails = 0; C.err = C.errRt = ''; return true;
+      }
+      // 404, нет /time или сеть / CORS (TypeError) — свой сервер не спрашиваем полчаса: Supabase
+      catch (e) { C.errRt = String((e && e.message) || e); if (e && (e.status === 404 || e.name === 'TypeError' || e.name === 'AbortError')) markNoRt(); }
     }
     if (C.state === 'nosql' && noSql()) { fails++; return false; }   // planet.sql не запущен — Supabase не спрашиваем до конца получаса
     try {
@@ -103,8 +128,8 @@
       if (e && (e.code === 'PGRST202' || e.status === 404)) { C.state = 'nosql'; ss.set('d37_clock_nosql', Date.now()); }
       else { fails++; if (C.state !== 'sync') C.state = 'local'; }
       return false;
-    } finally { busy = null; }
-  })());
+    }
+  } finally { busy = null; } })());
   // уточнение с другого источника (T-045, net.js): время сервера в миг ответа и путь туда-обратно
   C.feed = (serverMs, rtt = 0, src = 'feed') => {
     if (!Number.isFinite(serverMs) || !Number.isFinite(rtt) || rtt < 0) return false;

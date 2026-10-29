@@ -564,32 +564,52 @@ sec('часы мира (clock.js): медиана трёх, RTT/2, нет planet
     s2(); ok(C.users() === 0, 'все ушли — таймера нет');
     await wait(50);
   }
-  // T-145: свой игровой сервер (RT_URL, GET /time) — первым; Supabase — запасной
+  // T-145: свой игровой сервер (RT_URL, GET /time) — первым; Supabase — запасной. /time — только если /health сказал time: 1
+  // (старый сервер отвечает на /time 404 без CORS: в браузере это TypeError и две ошибки в консоли)
+  const H_NEW = { ok: true, rooms: true, proto: 1, time: 1 }, H_OLD = { ok: true, rooms: true, proto: 1 };
   {
     const C = fresh(); const seen = [];
     C._rtUrl = 'https://rt.test';
-    C._fetch = async (url, o) => { seen.push(url); await wait(10); const srv = Date.now() + 7000; await wait(10); return url.endsWith('/time') ? resp(200, { t: srv }) : resp(200, srv - 99999); };
-    ok(await C.sync() && C.src === 'rt' && Math.abs(C.off - 7000) < 25 && seen.length === 3 && seen.every(u => u === 'https://rt.test/time'), 'свой сервер: 3 × /time, медиана, Supabase не спрашиваем', { off: C.off, src: C.src, seen });
+    C._fetch = async (url, o) => { seen.push(url); if (url.endsWith('/health')) return resp(200, H_NEW); await wait(10); const srv = Date.now() + 7000; await wait(10); return url.endsWith('/time') ? resp(200, { t: srv }) : resp(200, srv - 99999); };
+    ok(await C.sync() && C.src === 'rt' && Math.abs(C.off - 7000) < 25 && seen.length === 4 && seen[0] === 'https://rt.test/health' && seen.slice(1).every(u => u === 'https://rt.test/time'), 'свой сервер: /health (time: 1), 3 × /time, медиана, Supabase не спрашиваем', { off: C.off, src: C.src, seen });
+    seen.length = 0;
+    ok(await C.sync() && seen.length === 3 && seen.every(u => u.endsWith('/time')), 'ответ /health помнится: вторая сверка — сразу /time', seen);
   }
   {
+    // старый сервер (на проде до обновления): /health без time → /time не трогаем вообще, Supabase; полчаса свой сервер не спрашиваем
     const C = fresh(); const seen = [];
     C._rtUrl = 'https://rt.test';
-    C._fetch = async url => { seen.push(url); if (url.endsWith('/time')) return resp(404, { error: 'not found' }); return resp(200, Date.now() + 4000); };
-    ok(await C.sync() && C.src === 'sb' && Math.abs(C.off - 4000) < 25 && seen[0].endsWith('/time') && seen.filter(u => /world_now$/.test(u)).length === 3 && /404/.test(C.errRt), 'старый сервер без /time (404) — Supabase world_now', { src: C.src, err: C.errRt, n: seen.length });
+    C._fetch = async url => { seen.push(url); if (url.endsWith('/health')) return resp(200, H_OLD); if (url.endsWith('/time')) throw new TypeError('Failed to fetch'); return resp(200, Date.now() + 4000); };
+    ok(await C.sync() && C.src === 'sb' && Math.abs(C.off - 4000) < 25 && !seen.some(u => u.endsWith('/time')) && seen.filter(u => /world_now$/.test(u)).length === 3, 'старый сервер (без time в /health): /time не спрашиваем (нет ошибок CORS в консоли) — Supabase world_now', { src: C.src, err: C.errRt, seen });
+    seen.length = 0;
+    ok(await C.sync() && !seen.some(u => u.startsWith('https://rt.test')), 'старый сервер: следующие сверки — сразу Supabase (полчаса)', seen);
+  }
+  {
+    // /health «есть», но /time — 404 без CORS (как браузер: TypeError) → полчаса без своего сервера, не каждые 10 минут
+    const C = fresh(); const seen = [];
+    C._rtUrl = 'https://rt.test';
+    C._fetch = async url => { seen.push(url); if (url.endsWith('/health')) return resp(200, H_NEW); if (url.endsWith('/time')) throw new TypeError('Failed to fetch'); return resp(200, Date.now() - 2500); };
+    ok(await C.sync() && C.src === 'sb' && Math.abs(C.off + 2500) < 25, 'свой сервер не отвечает (TypeError) — Supabase', { src: C.src, off: C.off });
+    const n1 = seen.filter(u => u.endsWith('/time')).length;
+    await C.sync();
+    ok(n1 === 1 && seen.filter(u => u.endsWith('/time')).length === 1, 'после TypeError /time полчаса не спрашиваем (одна ошибка, а не по две на каждую сверку)', { n1, seen });
   }
   {
     const C = fresh();
     C._rtUrl = 'https://rt.test';
-    C._fetch = async url => { if (url.endsWith('/time')) throw new TypeError('Failed to fetch'); return resp(200, Date.now() - 2500); };
-    ok(await C.sync() && C.src === 'sb' && Math.abs(C.off + 2500) < 25, 'свой сервер не отвечает — Supabase', { src: C.src, off: C.off });
-    C._fetch = async url => url.endsWith('/time') ? resp(200, { t: 'нет' }) : resp(200, Date.now());
+    C._fetch = async url => url.endsWith('/health') ? resp(200, H_NEW) : url.endsWith('/time') ? resp(200, { t: 'нет' }) : resp(200, Date.now());
     ok(await C.sync() && C.src === 'sb', 'свой сервер ответил не временем — не берём, Supabase');
   }
   {
     const C = fresh();
     C._rtUrl = 'https://rt.test';
-    C._fetch = async url => url.endsWith('/time') ? resp(200, { t: Date.now() + 1500 }) : resp(404, { code: 'PGRST202' });
+    C._fetch = async url => url.endsWith('/health') ? resp(200, H_NEW) : url.endsWith('/time') ? resp(200, { t: Date.now() + 1500 }) : resp(404, { code: 'PGRST202' });
     ok(await C.sync() && C.state === 'sync' && C.src === 'rt', 'planet.sql не запущен, а свой сервер есть — время с него');
+  }
+  {
+    // сервер (server/rt/src/server.js): /health говорит time: 1, 404 и 405 — с CORS (браузер видит ответ, а не «ошибку сети»)
+    const src = fs.readFileSync(path.join(SITE, 'server/rt/src/server.js'), 'utf8');
+    ok(/proto: C\.PROTO, time: 1/.test(src) && /json\(res, 404, \{ error: 'not found' \}, cors\)/.test(src) && /json\(res, 405, \{ error: 'method' \}, cors\)/.test(src), 'сервер: /health с time: 1, ответы 404 / 405 с CORS');
   }
   // ═══ 11. planet.sql ═══
   sec('planet.sql: часы мира (сама проверка в PGlite — scripts/planet-sql-test.mjs)');

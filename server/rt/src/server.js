@@ -1,7 +1,8 @@
 'use strict';
 // d37 realtime relay — own WebSocket server for the site's game rooms (broadcast + presence like Supabase Realtime), TURN
 // credentials for WebRTC, health and metrics. Runs behind Caddy (TLS) on the owner's Oracle VM; see docs/SERVER.md.
-//   GET  /health   → { ok, rooms, v, up, conns, load }  (no secrets; ok:false = maintenance / out of memory → the site uses Supabase)
+//   GET  /health   → { ok, rooms, v, up, conns, load, time }  (no secrets; ok:false = maintenance / out of memory → the site uses Supabase;
+//                    time: 1 — this server has /time: the site's clock asks /time only then, an old server's 404 had no CORS)
 //   GET  /time     → { t }                              (server clock, ms since 1970: the site's world clock D37E.clock; CORS)
 //   GET  /turn     → { iceServers, ttl }                 (time-limited coturn credentials; CORS for the site)
 //   GET  /metrics  → counters (Authorization: Bearer ADMIN_TOKEN)
@@ -79,7 +80,7 @@ function start(){
   const health = () => ({
     ok: !C.MAINTENANCE && !hub.mem.hard && !hub.shuttingDown,
     rooms: watcher ? watcher.ok() : true,
-    v: C.VERSION, proto: C.PROTO,
+    v: C.VERSION, proto: C.PROTO, time: 1,
     up: Math.round((Date.now() - T0) / 1000),
     conns: hub.counts().conns,
     load: cpu,
@@ -108,7 +109,7 @@ function start(){
     const origin = req.headers.origin;
     const cors = origin && C.originOk(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : { Vary: 'Origin' };
     if (req.method === 'OPTIONS') { res.writeHead(204, Object.assign({ 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '600' }, cors)); res.end(); return; }
-    if (req.method !== 'GET' && req.method !== 'HEAD') { json(res, 405, { error: 'method' }); return; }
+    if (req.method !== 'GET' && req.method !== 'HEAD') { json(res, 405, { error: 'method' }, cors); return; }
     if (path === '/health') { json(res, 200, health(), cors); return; }
     if (path === '/time') {
       // world clock (js/engine/clock.js): 3 samples on open, then every 10 min — 12 at once, then one per 2 s per address
@@ -137,7 +138,7 @@ function start(){
       return;
     }
     if (path === '/') { json(res, 200, { name: 'd37-rt', ok: health().ok }, cors); return; }
-    json(res, 404, { error: 'not found' });
+    json(res, 404, { error: 'not found' }, cors);   // with CORS: the site's fetch sees a 404, not a network error (and no console noise)
   }
 
   function onUpgrade(req, socket, head){

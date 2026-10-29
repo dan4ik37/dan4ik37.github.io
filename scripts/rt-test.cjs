@@ -127,6 +127,9 @@ async function protocol(){
     let n429 = 0; for (let i = 0; i < 14; i++) { const q = await fetch(S.url + '/time'); if (q.status === 429) n429++; await q.text(); }
     ok(n429 >= 2, '/time: больше 12 подряд — 429', n429); }
   r = await fetch(S.url + '/nope'); ok(r.status === 404, 'неизвестный адрес — 404');
+  // T-145 (проверка): /health говорит «есть /time» (часы сайта спрашивают /time только тогда); 404 — с CORS для сайта (браузер видит ответ, не «ошибку сети»)
+  { const h = await (await fetch(S.url + '/health')).json(); ok(h.time === 1, '/health: time: 1 (у сервера есть /time)', h);
+    r = await fetch(S.url + '/nope', { headers: { origin: 'https://dan4ik37.vercel.app' } }); ok(r.status === 404 && r.headers.get('access-control-allow-origin') === 'https://dan4ik37.vercel.app', '404 — с CORS для сайта'); await r.text(); }
   r = await fetch(S.url + '/health', { method: 'POST' }); ok(r.status === 405, 'POST /health — 405');
   // TURN
   r = await fetch(S.url + '/turn', { headers: { origin: 'http://localhost:5571' } });
