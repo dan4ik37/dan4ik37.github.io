@@ -208,6 +208,7 @@
     };
     const ch = P.ch;
     const emit = (e, d) => ev?.emit(e, d);
+    const hears = e => !!ev && ev.has(e);   // шаги и приземления у NPC никто не слушает — объект события не собираем (T-127 ревью: мусор)
     P.sync = () => { ch.g = P.gravity; ch.jumpV = Math.sqrt(2 * P.gravity * P.jumpH); ch.r = P.r; };
     P.sync(); ch.accG = 60; ch.accA = 30;
     // множитель времени паркура от выносливости. Не геттером на P (T-085): свой геттер у каждого игрока V8 держит в общей «форме»
@@ -229,6 +230,9 @@
     const ladderHere = () => { if (!ch.inside.size) return null; for (const c of ch.inside) if (c.data?.ladder) return c.data.ladder; return null; };
     // желаемое направление — в одном объекте игрока (T-127: без мусора на каждом шаге; его никто не хранит дольше шага)
     const WISH = { x: 0, z: 0 };
+    // желание × скорость — в ph.move со скоростью 1 (T-127 ревью: дробная скорость аргументом — число в куче на каждом шаге каждого
+    // тела, когда V8 не встроил move; x · speed · 1 = x · speed — то же движение до бита)
+    const MV = { x: .5, z: .5 };
     function wishOf(C, cam){
       const m = C ? C.move : ZERO;
       const cy = cam ? cam.yaw : P.yaw + Math.PI;
@@ -304,18 +308,24 @@
         ch.grounded = false; ch.airT = 0; P._jumped = true; P._buf = 0;
         emit('jump', { x: ch.x, y: ch.y, z: ch.z });
       }
-      ph.move(ch, dt, wl > 1e-3 ? w : ZERO, speed, false);
-      if (ch.impact > 0) { const k = PK.landK(ch.impact); emit('land', { v: ch.impact, k, hard: k > 0, floor: floorOf(), x: ch.x, y: ch.y, z: ch.z }); }
+      if (wl > 1e-3) { MV.x = w.x * speed; MV.z = w.z * speed; } else MV.x = MV.z = 0;
+      ph.move(ch, dt, MV, 1, false);
+      if (ch.impact > 0 && hears('land')) { const k = PK.landK(ch.impact); emit('land', { v: ch.impact, k, hard: k > 0, floor: floorOf(), x: ch.x, y: ch.y, z: ch.z }); }
       P.speed = hyp(ch.vx, ch.vz);
       P.moving = P.speed > .35;
       P._sprint = P.running && P.speed > .5;
       // куда смотрит тело: от 1-го лица — куда камера, от 3-го — куда идёт
       if (P.first && cam) P.yaw = cam.yaw + Math.PI;
-      else if (wl > .1 && P.speed > .3) P.yaw = angTo(P.yaw, Math.atan2(w.x, w.z), P.turn, dt);
+      else if (wl > .1 && P.speed > .3) {   // = angTo(P.yaw, atan2, P.turn, dt) по шагам (тот же результат до бита): вызов angTo, который V8 не встроил, — 3 числа в куче на шаг (T-127 ревью)
+        let d = Math.atan2(w.x, w.z) - P.yaw;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        P.yaw = P.yaw + d * (1 - Math.exp(-P.turn * dt));
+      }
       // шаги (вприсядку не слышно): 0,4 с, на бегу в 1,5 раза чаще
       if (ch.grounded && P.speed > .5 && !P.crouch) {
         P._stepT -= dt;
-        if (P._stepT <= 0) { emit('step', { floor: floorOf(), run: P.running, x: ch.x, y: ch.y, z: ch.z }); P._stepT = .4 / (P.running ? 1.5 : 1); }
+        if (P._stepT <= 0) { if (hears('step')) emit('step', { floor: floorOf(), run: P.running, x: ch.x, y: ch.y, z: ch.z }); P._stepT = .4 / (P.running ? 1.5 : 1); }
       } else P._stepT = 0;
     }
 
@@ -340,7 +350,8 @@
       const target = P.dive ? Math.max(bottom + .05, lvl - 3 * U) : lvl + (wv ? wv.y : 0) - .55 * U, maxV = 2.6 * U;
       ch.vy = Math.max(-maxV, Math.min(maxV, (target - ch.y) * 3.5)) + ch.g * dt;   // + тяжесть шага: её снимет fall()
       ch.grounded = false; ch.airT = 0;
-      ph.move(ch, dt, wl > 1e-3 ? w : ZERO, speed, false);
+      if (wl > 1e-3) { MV.x = w.x * speed; MV.z = w.z * speed; } else MV.x = MV.z = 0;
+      ph.move(ch, dt, MV, 1, false);
       if (wv && (wv.vx || wv.vz)) ph.slide(ch, wv.vx * .45 * dt, wv.vz * .45 * dt);
       ch.impact = 0;
       P.speed = hyp(ch.vx, ch.vz); P.moving = P.speed > .3; P._sprint = P.running && P.speed > .5;

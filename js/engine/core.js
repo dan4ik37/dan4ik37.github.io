@@ -35,6 +35,7 @@
     return {
       on(e, f){ if (!m.has(e)) m.set(e, new Set()); m.get(e).add(f); return () => m.get(e)?.delete(f); },
       emit(e, d){ m.get(e)?.forEach(f => { try { f(d); } catch (er) { console.error(er); } }); },
+      has(e){ const s = m.get(e); return !!s && s.size > 0; },   // слушает ли кто-то (не собирать событие зря — T-127)
       clear(){ m.clear(); },
     };
   };

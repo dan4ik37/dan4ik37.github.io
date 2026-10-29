@@ -188,9 +188,10 @@
           P.update(dt, C, CAM);
         }
         // стоит — поворачивается к игроку рядом; никого — снова как стоял (уже смотрит туда — не трогаем: число в поле объекта — мусор)
-        if (l < 1e-3) {
-          const ty = best && bd < 6 * U ? Math.atan2(best.x - ch.x, best.z - ch.z) : o.act === 'idle' ? e.homeYaw : null;
-          if (ty !== null && Math.abs(E.wrap(ty - P.yaw)) > 1e-4) P.yaw = E.dampAngle(P.yaw, ty, ty === e.homeYaw && !(best && bd < 6 * U) ? 2.5 : 6, dt);
+        if (l < 1e-3) {   // ty — число без null (число | null V8 держит в куче: у каждого стоящего рядом с игроком — мусор, T-127 ревью)
+          const look = !!best && bd < 6 * U, home = !look && o.act === 'idle';
+          const ty = look ? Math.atan2(best.x - ch.x, best.z - ch.z) : home ? e.homeYaw : 0;
+          if ((look || home) && Math.abs(E.wrap(ty - P.yaw)) > 1e-4) P.yaw = E.dampAngle(P.yaw, ty, home ? 2.5 : 6, dt);
         }
         // урон при касании (зомби): раз в секунду
         if ((o.damage || 0) > 0 && best && bd < 1.5 * U && Math.abs(best.y - ch.y) < 2 * U) { if ((hitT[i] -= dt) <= 0) { hitT[i] = 1; cb?.onHit?.(e, o.damage, best); } }

@@ -22,6 +22,49 @@ function engine(lod = true){
   vm.runInContext(src, box, { filename: 'npc.js' });
   return { E, box };
 }
+// --alloc (child of the "0 garbage per step" check below): the engine in the MAIN context, as on the page. In a vm context
+// `Math` is looked up through the sandbox (and here it is Object.create(Math) to poison random) — V8 cannot inline Math.sqrt /
+// atan2 / exp there and boxes every result, so a vm measurement shows garbage the browser never makes. Three scenes in turn:
+// 200 sleeping idlers near the player, 64 awake zombies chasing him, 64 wanderers; each — warm-up, gc, best of 3 windows.
+// The parent runs it with a 64 MB young generation: no scavenge inside a window, so the heap delta is ALL the garbage made.
+if (process.argv.includes('--alloc')) {
+  global.window = global; global.localStorage = { getItem: () => null, setItem(){}, removeItem(){} };
+  for (const fl of ['core', 'physics', 'controls', 'player', 'shash']) vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine', fl + '.js'), 'utf8'), { filename: fl + '.js' });
+  const E = global.D37E;
+  E.actors = () => ({ list: new Map(), add(){ return {}; }, remove(){}, get(){ return { x: 0, y: 0, z: 0 }; }, setLook(){}, pose(){ return null; }, update(){}, top(){ return 1.8; }, dispose(){} });
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/npc.js'), 'utf8'), { filename: 'npc.js' });
+  const gcs = [], out = {};
+  const ob = new PerformanceObserver(l => { for (const en of l.getEntries()) gcs.push(en.startTime); }); ob.observe({ entryTypes: ['gc'] });
+  const wins = [];
+  for (const kind of ['idle', 'follow', 'wander']) {
+    const ph = new E.Phys({ ground: 0 }), N = E.npcs({}, ph), n = kind === 'idle' ? 200 : 64;
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.39996, r = 20 + (i % 9);
+      const pos = kind === 'idle' ? [(i % 20) * 3, 0, Math.floor(i / 20) * 3] : kind === 'follow' ? [Math.cos(a) * r, 0, Math.sin(a) * r] : [((i * 13) % 160) - 80, 0, ((i * 29) % 160) - 80];
+      N.add({ id: 'g' + i, pos, rot: [0, 0, 0], act: kind, radius: 8, speed: 1, damage: kind === 'follow' ? 15 : 0, seed: 'g' + i, text: '' });
+    }
+    N.start({ onHit(){}, onSay(){} });
+    const pl = [{ x: kind === 'idle' ? 30 : 0, y: 0, z: kind === 'idle' ? 15 : 0 }];
+    let k = 0;
+    const step = () => { if (kind !== 'idle') { pl[0].x = Math.sin(k / 90) * 6; pl[0].z = Math.cos(k / 90) * 6; } N.step(1 / 60, pl); k++; };
+    for (let i = 0; i < 3600; i++) step();   // fall asleep (0,5 s) + JIT warm-up
+    for (let trial = 0; trial < 3; trial++) {
+      global.gc();
+      const t0 = performance.now(), h0 = process.memoryUsage().heapUsed;
+      for (let i = 0; i < 2000; i++) step();
+      wins.push({ kind, per: (process.memoryUsage().heapUsed - h0) / 2000, t0, t1: performance.now() });
+    }
+    out[kind] = { st: N.stats() };
+    N.dispose();
+  }
+  setTimeout(() => {
+    ob.disconnect();
+    for (const w of wins) { w.gcs = gcs.filter(t => t >= w.t0 && t <= w.t1).length; const o = out[w.kind]; (o.perStepB = o.perStepB || []).push(Math.round(w.per)); (o.gcs = o.gcs || []).push(w.gcs); if (w.gcs === 0 && !(o.best <= w.per)) o.best = Math.round(w.per); }
+    console.log(JSON.stringify(out));
+    process.exit(0);
+  }, 50);
+  return;
+}
 // a scene: wanderers, followers (biters), fleeing, idle on boxes; one player walking a circle
 function scene(E, n = 40){
   const ph = new E.Phys({ ground: 0 });
@@ -101,23 +144,19 @@ function runAt(fps, steps, lod = true, poison = true){
   ok(made === m0 && N.stats().awake === 2, 'снова старт — те же тела', [made - m0, N.stats()]);
   N.dispose();
 }
-// ═══ 0 garbage per step: 200 sleeping NPCs, a player near (heap delta, no GC events) ═══
+// ═══ 0 garbage per step (spec AI_LOD §12 P1): sleeping, chasing and wandering NPCs (heap delta, no GC events) ═══
+// T-127 review #1 / #4: measured in a child process (see --alloc above) with the engine in the main context. Before the review the
+// check ran here after other vm contexts (megamorphic shared code) with a 600-step warm-up: it failed in 5 of 14 runs, and it
+// covered sleepers only. Awake bodies made 200–290 B per NPC per step (Set.clear, double arguments of calls V8 did not inline,
+// step-event objects nobody listened to) — now under 1 B.
 {
-  const { E } = engine();
-  const ph = new E.Phys({ ground: 0 }), N = E.npcs({}, ph);
-  for (let i = 0; i < 200; i++) N.add({ id: 'g' + i, pos: [(i % 20) * 3, 0, Math.floor(i / 20) * 3], rot: [0, 0, 0], act: 'idle', seed: 'g' + i });
-  N.start({});
-  const pl = [{ x: 30, y: 0, z: 15 }];
-  for (let k = 0; k < 600; k++) N.step(1 / 60, pl);
-  let gcs = 0; const ob = new PerformanceObserver(l => { gcs += l.getEntries().length; }); ob.observe({ entryTypes: ['gc'] });
-  const steps = 3000, h0 = process.memoryUsage().heapUsed;
-  for (let k = 0; k < steps; k++) N.step(1 / 60, pl);
-  const per = (process.memoryUsage().heapUsed - h0) / steps;
-  setTimeout(() => {
-    ob.disconnect();
-    ok(gcs === 0 && per < 64, '200 спящих рядом с игроком: без мусора на шаге (< 64 Б, 0 сборок)', { perStepB: Math.round(per), gcs, st: N.stats() });
-    finish();
-  }, 50);
+  const r = require('child_process').spawnSync(process.execPath, ['--expose-gc', '--min-semi-space-size=64', '--max-semi-space-size=64', __filename, '--alloc'], { encoding: 'utf8', timeout: 150000 });
+  let res = null; try { res = JSON.parse(String(r.stdout).trim().split(String.fromCharCode(10)).pop()); } catch (e) {}
+  const good = k => !!res && res[k] && res[k].best < 64;
+  ok(good('idle') && res.idle.st.asleep === 200, '200 спящих рядом с игроком: без мусора на шаге (< 64 Б, 0 сборок)', res ? res.idle : { code: r.status, err: String(r.stderr).slice(0, 300) });
+  ok(good('follow') && res.follow.st.awake === 64, '64 зомби гонятся за игроком: без мусора на шаге (< 64 Б на всех, 0 сборок)', res ? res.follow : null);
+  ok(good('wander') && res.wander.st.awake + res.wander.st.asleep === 64, '64 бродят: без мусора на шаге (< 64 Б на всех, 0 сборок)', res ? res.wander : null);
+  setTimeout(finish, 0);
 }
 // ═══ Rollback: LOD = false — как было (гонится и кусает) ═══
 {

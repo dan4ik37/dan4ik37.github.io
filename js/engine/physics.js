@@ -40,6 +40,7 @@
       this._lists = [[], [], [], [], [], [], []];   // свои списки для запросов (без new [] на каждый шаг)
       this._pool = []; this._pi = 0; this._reusing = false; this._emitting = 0;
       this._scol = null;
+      this._cx = this._cz = this._cr = this._ymax = this._sy = this._b0 = this._b1 = this._b2 = this._b3 = .5; this._qskip = null;   // дробные — сразу «Double» у V8 (_supportQ, _queryB)
     }
     // ── Добавить/убрать тело ──
     addBox(o){ return this._make('box', o); }
@@ -135,7 +136,11 @@
       return h;
     }
     // Все тела, чей прямоугольник в плане задевает область (без повторов)
-    query(minx, minz, maxx, maxz, out = []){
+    query(minx, minz, maxx, maxz, out = []){ this._b0 = minx; this._b1 = minz; this._b2 = maxx; this._b3 = maxz; return this._queryB(out); }
+    // то же, область — в полях this._b0…_b3 (minx, minz, maxx, maxz). T-127 ревью: вызов, который V8 не встроил, кладёт в кучу каждое
+    // дробное число аргумента (fall → _support → _q → query: 64 Б на шаг у каждого тела); дробные поля объекта пишутся на месте
+    _queryB(out){
+      const minx = this._b0, minz = this._b1, maxx = this._b2, maxz = this._b3;
       const mark = ++this.qmark, gx1 = cellOf(maxx), gz0 = cellOf(minz), gz1 = cellOf(maxz);
       for (let gx = cellOf(minx); gx <= gx1; gx++)
         for (let gz = gz0; gz <= gz1; gz++) {
@@ -150,10 +155,10 @@
       return out;
     }
     // Свой список для запроса (если он занят — вложенный вызов — новый)
-    _q(slot, minx, minz, maxx, maxz){
-      const l = this._lists[slot];
-      return this.query(minx, minz, maxx, maxz, l.length ? [] : l);
-    }
+    _q(slot, minx, minz, maxx, maxz){ this._b0 = minx; this._b1 = minz; this._b2 = maxx; this._b3 = maxz; return this._qB(slot); }
+    // круг this._cx, _cz, _cr (без чисел в аргументах — см. _queryB)
+    _qc(slot){ const x = this._cx, z = this._cz, r = this._cr; this._b0 = x - r; this._b1 = z - r; this._b2 = x + r; this._b3 = z + r; return this._qB(slot); }
+    _qB(slot){ const l = this._lists[slot]; return this._queryB(l.length ? [] : l); }
 
     // ── Круг (x, z, r) против следа тела в плане: { d: глубина, nx, nz: куда выталкивать } или null (объект общий!) ──
     static circleHit(c, x, z, r){
@@ -198,9 +203,14 @@
     }
     // Высота опоры под кругом (x, z, r): самая высокая крыша не выше yMax (и земля)
     supportAt(x, z, r, yMax, skip){ const y = this._support(x, z, r, yMax, skip); return { y, col: this._scol }; }
-    _support(x, z, r, yMax, skip){
+    _support(x, z, r, yMax, skip){ this._cx = x; this._cz = z; this._cr = r; this._ymax = yMax; this._qskip = skip || null; this._supportQ(); return this._sy; }
+    // то же без чисел в аргументах: круг — this._cx / _cz / _cr, верх — this._ymax, ответ — this._sy (и this._scol). Вызов, который
+    // V8 не встроил, кладёт в кучу каждое дробное число аргумента — fall() звал _support(ch.x, …) и терял 64 Б на шаг у каждого
+    // тела (T-127 ревью); поля объекта с дробными числами пишутся на месте
+    _supportQ(){
+      const x = this._cx, z = this._cz, r = this._cr, yMax = this._ymax, skip = this._qskip;
       let best = this.groundAt(x, z, r), col = null;
-      const list = this._q(0, x - r, z - r, x + r, z + r);
+      const list = this._qc(0);
       for (let i = 0; i < list.length; i++) {
         const c = list[i];
         if (c.trigger || !c.solid || c === skip || c.kick) continue;   // мелочь (c.kick) — не опора, её пинают
@@ -209,8 +219,7 @@
         if (Phys.circleHit(c, x, z, r * .7) || Phys.inside(c, x, z)) { best = top; col = c; }
       }
       list.length = 0;
-      this._scol = col;
-      return best;
+      this._scol = col; this._sy = best;
     }
     // Один шаг движения персонажа: wish — желаемое направление (x, z, длина 0…1), speed, jump
     move(ch, dt, wish = { x: 0, z: 0 }, speed = 0, jump = false){
@@ -244,7 +253,8 @@
       ch.landed = 0; ch.impact = 0;
       if (this.onChar) this.onChar(ch);
       if (ch.grounded) {
-        const sy = this._support(ch.x, ch.z, ch.r, ch.y + ch.step);
+        this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; this._ymax = ch.y + ch.step; this._qskip = null; this._supportQ();
+        const sy = this._sy;
         if (sy >= ch.y - ch.step - 1e-4) { ch.y = sy; ch.vy = 0; ch.onCol = this._scol; }   // ступенька вверх/вниз — идём по ней
         else { ch.grounded = false; ch.vy = Math.min(ch.vy, 0); ch.airT = 0; }          // шагнули с края — падаем
       }
@@ -253,7 +263,7 @@
         ch.vy -= ch.g * dt;
         let ny = ch.y + ch.vy * dt;
         if (ch.vy > 0) {   // потолок: тело над головой
-          const list = this._q(4, ch.x - ch.r, ch.z - ch.r, ch.x + ch.r, ch.z + ch.r);
+          this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; const list = this._qc(4);
           for (let i = 0; i < list.length; i++) {
             const c = list[i];
             if (c.trigger || !c.solid) continue;
@@ -261,7 +271,8 @@
           }
           list.length = 0;
         }
-        const sy = this._support(ch.x, ch.z, ch.r, Math.max(ch.y, ny) + (ch.vy <= 0 ? .05 : 0));
+        this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; this._ymax = Math.max(ch.y, ny) + (ch.vy <= 0 ? .05 : 0); this._qskip = null; this._supportQ();
+        const sy = this._sy;
         if (ch.vy <= 0 && ny <= sy) { ch.impact = -ch.vy; ch.landed = Math.min(1, -ch.vy / 25); ny = sy; ch.vy = 0; ch.grounded = true; ch.onCol = this._scol; }
         ch.y = ny;
         if (this.ground != null && ch.y < this.groundAt(ch.x, ch.z) - 60) { ch.y = this.groundAt(ch.x, ch.z, ch.r); ch.vy = 0; ch.grounded = true; }   // упал за край мира — обратно
@@ -269,7 +280,7 @@
     }
     // Есть ли твёрдое тело в вертикальном цилиндре (x, z, r) от y0 до y1 (влезет ли тело: присесть, встать, залезть)
     blocked(x, z, y0, y1, r, skip){
-      const list = this._q(2, x - r, z - r, x + r, z + r);
+      this._cx = x; this._cz = z; this._cr = r; const list = this._qc(2);
       let res = null;
       for (let i = 0; i < list.length; i++) {
         const c = list[i];
@@ -283,7 +294,7 @@
     pushOut(ch){
       for (let it = 0; it < 3; it++) {
         let moved = false;
-        const list = this._q(1, ch.x - ch.r, ch.z - ch.r, ch.x + ch.r, ch.z + ch.r);
+        this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; const list = this._qc(1);
         for (let i = 0; i < list.length; i++) {
           const c = list[i];
           if (c.trigger || !c.solid) continue;
@@ -312,8 +323,8 @@
     // Зоны-триггеры: ch.inside — где сейчас; события enter/exit — в ch.events (их забирает игра)
     triggers(ch){
       const now = ch._spare || new Set();
-      now.clear();
-      const list = this._q(3, ch.x - ch.r, ch.z - ch.r, ch.x + ch.r, ch.z + ch.r);
+      if (now.size) now.clear();   // Set.clear() выделяет новую таблицу даже у пустого (≈ 120 Б на шаг у каждого тела, T-127 ревью)
+      this._cx = ch.x; this._cz = ch.z; this._cr = ch.r; const list = this._qc(3);
       for (let i = 0; i < list.length; i++) {
         const c = list[i];
         if (!c.trigger || c.top < ch.y || c.bottom > ch.y + ch.h) continue;
