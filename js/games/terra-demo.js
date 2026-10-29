@@ -362,6 +362,8 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     }
     st.A.update(dt, performance.now() / 1000, cam.position);
     if (st.seaG) seaUpdate(st, dt); else st.sea.position.set(Math.round(cam.position.x / 8) * 8, 0, Math.round(cam.position.z / 8) * 8);
+    // камера ниже моря в сухой яме у берега (плитка моря 32 м накрывает и её): гладь не рисуем — иначе из ямы «под водой» (T-145)
+    if (st.seaG) { const dry = cam.position.y < 0 && st.TS.water(st.ax + cam.position.x / U, st.az + cam.position.z / U) !== 0; if (st.sea.visible === dry) st.sea.visible = !dry; }
     if (st.wx) try { st.wx.frame(dt); } catch (e) { console.warn('терра: погода', e); try { st.wx.dispose(); } catch (e2) {} st.wx = null; }
     I.frameEnd(); C.frameEnd();
     const mob = !!window.D37E.isMobile?.();

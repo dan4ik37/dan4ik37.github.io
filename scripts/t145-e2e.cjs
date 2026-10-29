@@ -84,6 +84,7 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
       const t0 = Date.now();
       await ev(`location.hash = '#/games/${gid}'`);
       let up = false; for (let i = 0; i < maxS * 4 * Math.max(1, RATE / 2) && !up; i++) { await sleep(250); up = await ev(`!!(${ready})`, 5000).catch(() => false); }
+      if (!up) { const d = await ev(`(() => ({ route: D37Route.hash(), loc: location.href, impl: Object.keys(window.GAME_IMPL || {}), st: (() => { try { const t = window.GAME_IMPL?.['${gid}']?._test; return t ? { s: !!t.state(), stats: t.stats() } : null; } catch (e) { return String(e); } })(), text: (document.querySelector('#games-page')?.innerText || '').slice(0, 300) }))()`).catch(e => String(e)); console.log('  не открылась:', JSON.stringify(d).slice(0, 900), errs.slice(-8)); }
       return up ? Date.now() - t0 : -1;
     };
     const close = async () => { await ev(`location.hash = '#/home'`); await sleep(1500); };
@@ -94,7 +95,7 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
       ok(cat.planet && cat.terra && !cat.test && cat.hid && !cat.hid.includes('planet') && !cat.hid.includes('terra'), 'каталог: «Планета» и «Новая земля» видны всем, без «(проверка)»', cat);
     }
     // ═══ «Планета» ═══
-    const planetReady = `window.GAME_IMPL?.planet?._test?.state() && GAME_IMPL.planet._test.stats()?.shown > 20`;
+    const planetReady = `window.GAME_IMPL?.planet?._test?.state() && GAME_IMPL.planet._test.stats()?.shown >= 8`;
     if (WHAT === 'all' || WHAT === 'planet') {
       const ms = await open('planet', planetReady);
       ok(ms > 0, 'Планета открылась', ms);
@@ -103,7 +104,7 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         ok(await ev(`!!(window.D37E?.wx && window.D37E?.wxfx && ${T.planet}.S.wx && ${T.planet}.S.wx.wfx)`), 'планета: ядро погоды по биомам и картинка бурь загружены и подключены');
         ok(await ev(`!!document.querySelector('.pl-st')?.hidden`), 'планета: строка отладки скрыта (F3)');
         // a desert latitude: the planet's own climate by latitude
-        const des = await ev(`(() => { const S = ${T.planet}.S; for (let lat = 0; lat <= 60; lat += 2) for (const lon of [10, 81, 150, -60]) { if (S.P.climateAt(S.P.dirFromLatLon(lat, lon)) === 'desert') return [lat, lon]; } return null; })()`);
+        const des = await ev(`(() => { const S = ${T.planet}.S; let any = null; for (let lat = 0; lat <= 60; lat += 2) for (let lon = -180; lon < 180; lon += 15) { const d = S.P.dirFromLatLon(lat, lon); if (S.P.climateAt(d) !== 'desert') continue; any = any || [lat, lon]; const h = S.P.localHour(d, S.t); if (h > 9 && h < 15) return [lat, lon]; } return any; })()`);
         ok(!!des, 'планета: есть пустынная широта', des);
         const ll = des || [29, 81];
         await ev(`${T.planet}.goto(${ll[0]}, ${ll[1]}, 30)`); await sleep(2500); await ev(`${T.planet}.land()`); await sleep(6000);
@@ -111,6 +112,9 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         ok(g0.mode === 'walk', 'планета: сели на землю в пустыне', g0);
         res.planetGround = await ev(`(${MEASURE})(${T.planet}.S.R, ${phone ? 150 : 300})`, 240000);
         console.log('  планета, земля (' + PROF + ' ×' + RATE + '):', JSON.stringify(res.planetGround));
+        // A/B on the same page: without the specials core and visuals (D37E.climate.SPECIAL / D37E.wxfx.ON — the one-line rollbacks)
+        res.planetGroundOff = await ev(`(async () => { D37E.climate.SPECIAL = false; D37E.wxfx.ON = false; await new Promise(r => setTimeout(r, 1500)); const m = await (${MEASURE})(${T.planet}.S.R, ${phone ? 150 : 300}); D37E.climate.SPECIAL = true; D37E.wxfx.ON = true; return m; })()`, 240000);
+        console.log('  планета, земля без особой погоды (откат):', JSON.stringify(res.planetGroundOff));
         await ev(`${T.planet}.S.wx.force('sandstorm')`); await sleep(9000);
         const sd = await ev(`(() => { const S = ${T.planet}.S, d = S.V._dbg && S.V._dbg(), n = d && d.showList.find(n => n.ch && n.ch.mesh), U = n ? n.ch.mesh.material.uniforms : {}, K = S.wx.wfx.K; return { special: S.wx.state.special, dust: +K.dust.toFixed(2), vis: Math.round(K.vis), grains: S.wx.wfx.stats().grains,
           uWv: U.uWv ? +U.uWv.value.x.toFixed(5) : null, uWt: U.uWt ? [+U.uWt.value.x.toFixed(2), +U.uWt.value.y.toFixed(2), +U.uWt.value.z.toFixed(2), U.uWt.value.w] : null }; })()`);
@@ -139,16 +143,20 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
       if (ms > 0) {
         res.terraOpenMs = ms;
         await sleep(3000);
+        await shot('terra-open-' + PROF);
         const w0 = await ev(`${T.terra}.wx()`);
         ok(w0 && w0.region && Number.isInteger(w0.region.cls), 'новая земля: погода подключена, запись места — из логичных биомов', w0 && { state: w0.state, region: w0.region });
         res.terraWalk = await ev(`(async () => { ${T.terra}.move(0, -1, false); const m = await (${MEASURE})(${T.terra}.S.R, ${phone ? 150 : 300}); ${T.terra}.move(0, 0, false); return m; })()`, 240000);
         console.log('  новая земля, ходьба (' + PROF + ' ×' + RATE + '):', JSON.stringify(res.terraWalk));
         // digging: 6 digs, edits applied
+        const pS = s => s && { mode: s.mode, y: +s.player.y.toFixed(1), grounded: s.player.grounded, swim: s.player.swim, wx: Math.round(s.player.wx), wz: Math.round(s.player.wz) };
+        console.log('  после ходьбы:', JSON.stringify(pS(await ev(`${T.terra}.state()`))), JSON.stringify(await ev(`${T.terra}.t145()`)));
         const e0 = (await ev(`${T.terra}.state().edits`)) || 0;
         for (let i = 0; i < 6; i++) { await ev(`${T.terra}.dig()`); await sleep(700); }
         await sleep(2500);
         const e1 = (await ev(`${T.terra}.state().edits`)) || 0, ts = await ev(`${T.terra}.stats().ts`);
         ok(e1 > e0, 'новая земля: копаем — правки применились', { before: e0, after: e1, coreEdits: ts.edits });
+        console.log('  после копания:', JSON.stringify(pS(await ev(`${T.terra}.state()`))));
         await shot('terra-dig-' + PROF);
         await ev(`${T.terra}.S.wx.force('sandstorm')`); await sleep(9000);
         const sd = await ev(`${T.terra}.wx()`);
@@ -157,7 +165,11 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         await shot('terra-sandstorm-' + PROF);
         res.terraStorm = await ev(`(async () => { ${T.terra}.move(0, -1, false); const m = await (${MEASURE})(${T.terra}.S.R, ${phone ? 150 : 300}); ${T.terra}.move(0, 0, false); return m; })()`, 240000);
         console.log('  новая земля, ходьба в бурю:', JSON.stringify(res.terraStorm));
-        await ev(`${T.terra}.S.wx.force(null)`);
+        await ev(`${T.terra}.S.wx.force(null)`); await sleep(6000);
+        res.terraClear = await ev(`(async () => { ${T.terra}.move(0, -1, false); const m = await (${MEASURE})(${T.terra}.S.R, ${phone ? 150 : 300}); ${T.terra}.move(0, 0, false); return m; })()`, 240000);
+        await ev(`(() => { const S = ${T.terra}.S; S.wx.dispose(); S.wx = null; return 1; })()`); await sleep(1500);
+        res.terraNoWx = await ev(`(async () => { ${T.terra}.move(0, -1, false); const m = await (${MEASURE})(${T.terra}.S.R, ${phone ? 150 : 300}); ${T.terra}.move(0, 0, false); return m; })()`, 240000);
+        console.log('  новая земля, ясно с погодой / без погоды (TERRA_WX = false):', JSON.stringify(res.terraClear), JSON.stringify(res.terraNoWx));
         const e = ourErr(); ok(!e.length, 'новая земля: 0 ошибок', e.slice(0, 5));
       }
       await close();
