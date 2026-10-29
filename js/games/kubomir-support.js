@@ -194,8 +194,9 @@
       }
       const pivot = { x: (x0 + x1) / 2 + .5, y: y0, z: (z0 + z1) / 2 + .5 };
       const landed = [];   // где легли блоками: потом — держатся ли сами (лёг краем на столб — остальное свалится дальше)
-      const onSettle = (v, x, y, z, i) => { if (settle(v, x, y, z, nat[i], tiles ? tiles[i] : null, ev)) landed.push(x, y, z); };
-      const onLanded = () => { ev.flush(); recheck(landed, depth + 1); };
+      let moved = false;   // v2: лёг на том же месте (стоял на опоре, сдвига нет) — нагрузка та же, проверять снова незачем
+      const onSettle = (v, x, y, z, i) => { if (y !== cells[i * 4 + 1]) moved = true; if (settle(v, x, y, z, nat[i], tiles ? tiles[i] : null, ev)) landed.push(x, y, z); };
+      const onLanded = () => { ev.flush(); if (moved || !LD) recheck(landed, depth + 1); };
       const nc = cells.length / 4;   // 1–3 блока — без сетки и анимации: осыпаются сразу (пыль), иначе — куском
       const g = !instant && nc > 3 && nc <= PART ? st.ents?.fallGroup?.(cells, pivot, { x: 1, z: 0 }, { drop: true, cap: 8, onSettle, onLanded }) : null;
       if (g) return;

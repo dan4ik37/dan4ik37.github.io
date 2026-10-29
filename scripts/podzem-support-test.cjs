@@ -14,9 +14,10 @@ const sec = t => console.log('— ' + t);
   for (const f of ['js/engine/support.js', 'js/games/podzem-support.js']) vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
   const { A, T } = sim, PZ = globalThis.PZ, ID = k => PZ.TILE[k].id;
   const PLANKS = ID('planks'), STONE = ID('stone');
-  async function world(support, seed = 'обрушение'){
+  async function world(support, seed = 'обрушение', load){
     if (T.G.state !== 'menu') await A.stopWorld(false);
     const w = A.newWorldRecord('Проверка', seed, [], support), c = A.newCharRecord('Герой');
+    if (load) w.load = 1;   // T-124: нагрузка (v2)
     await A.put('worlds', w); await A.put('chars', c);
     await A.play(w.id, c.id);
     for (let i = 0; i < 400 && T.G.state !== 'play'; i++) await sim.frames(.05);
@@ -92,6 +93,43 @@ const sec = t => console.log('— ' + t);
     await sim.frames(.1);
     const left = G.items.filter(i => i.keep).length;
     ok(left === r.keep && G.items.every(i => i.keep), 'прошло 5 минут — обычные вещи пропали, «keep» лежат', { left, was: r.keep, all: G.items.length });
+  }
+
+  // ═══ T-124 SH1: нагрузка (W.load = 1) ═══
+  sec('нагрузка: консоль на лесах — убираем леса, ломается у столба; «импорт» от посторонней правки не падает; поставить — по нагрузке; 30 / 60 / 144');
+  async function scaffold(hz){
+    const G = await world('real', 'нагрузка', true);
+    await site(G, X0, Y0);
+    fill(X0 - 6, Y0 - 16, X0 + 14, Y0, 0); fill(X0 - 6, Y0 + 1, X0 + 14, Y0 + 1, STONE);
+    for (let y = Y0 - 6; y <= Y0; y++) placeAt(G, X0, y, PLANKS);
+    for (let x = X0 + 1; x <= X0 + 5; x++) placeAt(G, x, Y0 - 6, PLANKS);
+    for (let x = X0 + 2; x <= X0 + 5; x++) for (let y = Y0 - 5; y <= Y0; y++) placeAt(G, x, y, PLANKS);   // леса под консолью
+    T.tp(X0 + 11, Y0 - 2);
+    const before = count(G, X0 - 6, Y0 - 16, X0 + 14, Y0, PLANKS); let rootStep = -1;
+    for (const x of [X0 + 5, X0 + 4, X0 + 3, X0 + 2]) { T.breakTile(x, Y0); await sim.frames(1.5, hz); if (rootStep < 0 && T.fgAt(X0 + 1, Y0 - 6) !== PLANKS) rootStep = x - X0; }
+    await sim.frames(2, hz);
+    const after = count(G, X0 - 6, Y0 - 16, X0 + 14, Y0, PLANKS), items = itemsOf(G, 'planks') + itemsOf(G, 'wood');
+    const tops = []; for (let x = X0; x <= X0 + 6; x++) { let y = Y0 - 16; while (y <= Y0 && T.fgAt(x, y) !== PLANKS) y++; tops.push(y); }
+    return { load: G.sup.load, rootStep, beam: [1, 2, 3, 4, 5].filter(k => T.fgAt(X0 + k, Y0 - 6) === PLANKS).length, before, after, items, tops, st: { ...G.sup.stats }, jobs: G.sup.jobs() };
+  }
+  {
+    const a = await scaffold(60), b = await scaffold(30), c = await scaffold(144);
+    ok(a.load && a.rootStep > 0 && a.beam === 0 && !a.jobs.busy && a.st.jobs >= 4, 'убираем леса с конца — консоль 5 ломается у столба и падает (задание в такте мира)', a);
+    ok(a.after + a.items >= a.before - 4, 'ничего не пропало: плитки на месте или вещами (минус 4 выбитых)', a);
+    ok(JSON.stringify(a.tops) === JSON.stringify(b.tops) && JSON.stringify(a.tops) === JSON.stringify(c.tops) && a.st.jobs === c.st.jobs, 'легло одинаково при 30 / 60 / 144 кадрах', [a.tops, b.tops, c.tops]);
+    console.log(`  нагрузка: заданий ${a.st.jobs}, тактов ${a.st.ticks}, последнее — ${a.st.lastTicks} такт., худший такт ${a.st.maxTickMs.toFixed(2)} мс`);
+    // «импорт»: консоль 4 (перегружена) — сломал соседний столб — ничего не падает
+    const G = await world('real', 'нагрузка2', true);
+    await site(G, X0, Y0);
+    fill(X0 - 6, Y0 - 16, X0 + 14, Y0, 0); fill(X0 - 6, Y0 + 1, X0 + 14, Y0 + 1, STONE);
+    for (let y = Y0 - 6; y <= Y0; y++) placeAt(G, X0, y, PLANKS);
+    for (let x = X0 + 1; x <= X0 + 4; x++) placeAt(G, x, Y0 - 6, PLANKS);
+    for (let y = Y0 - 2; y <= Y0; y++) placeAt(G, X0 - 2, y, PLANKS);
+    T.tp(X0 + 11, Y0 - 2);
+    const lv5 = (() => { G.sup.level(PLANKS, X0 + 5, Y0 - 6); for (let i = 0; i < 9; i++) G.sup.step(1 / 60); return G.sup.level(PLANKS, X0 + 5, Y0 - 6); })();
+    ok(!G.sup.canPlace(PLANKS, X0 + 5, Y0 - 6) && !G.sup.canPlace(PLANKS, X0 + 1, Y0 - 7) && G.sup.canPlace(PLANKS, X0 - 1, Y0) && lv5 === 4, 'поставить: 5-я доска консоли — нельзя; на перегруженную консоль сверху — нельзя (нагрузка вырастет); на пол у столба — можно; рамка в такте — тёмно-красная', { lv5 });
+    T.breakTile(X0 - 2, Y0 - 2); await sim.frames(2);
+    ok([1, 2, 3, 4].every(k => T.fgAt(X0 + k, Y0 - 6) === PLANKS) && G.sup.stats.groups === 0, 'перегруженная консоль (как из импорта): сломал соседний столбик — ничего не упало', G.sup.stats);
   }
 
   sec('поставить то, что не удержится, — нельзя; цвет рамки');
