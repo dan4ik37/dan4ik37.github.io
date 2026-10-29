@@ -20,6 +20,9 @@
   // клетка сетки — целое число (без строк gx + ',' + gz): x — старшие разряды, z — младшие (|g| ≤ 16383, ключ — малое целое)
   const cellOf = v => { const g = Math.floor(v * INV); return g < -LIM ? -LIM : g > LIM ? LIM : g; };
   const keyOf = (gx, gz) => gx * 32768 + gz;
+  // T-127: не Math.hypot — встроенная функция возвращает число в куче (мусор на каждом шаге каждого тела) и её точность своя у
+  // каждого движка JS; sqrt округляет одинаково везде (телефон и ПК считают одно и то же)
+  const hyp = (x, y) => Math.sqrt(x * x + y * y);
   const HIT = { d: 0, nx: 0, nz: 0 };              // общий ответ circleHit
   const RH = { t: 0, nx: 0, ny: 0, nz: 0 };         // общий ответ лучей против тел
 
@@ -155,7 +158,7 @@
     // ── Круг (x, z, r) против следа тела в плане: { d: глубина, nx, nz: куда выталкивать } или null (объект общий!) ──
     static circleHit(c, x, z, r){
       if (c.type === 'cyl') {
-        const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz), rr = r + c.r;
+        const dx = x - c.x, dz = z - c.z, d = hyp(dx, dz), rr = r + c.r;
         if (d >= rr) return null;
         if (d < 1e-6) { HIT.d = rr; HIT.nx = 1; HIT.nz = 0; return HIT; }
         HIT.d = rr - d; HIT.nx = dx / d; HIT.nz = dz / d;
@@ -165,7 +168,7 @@
       const px = x - c.x, pz = z - c.z;
       const lx = c.cos * px - c.sin * pz, lz = c.sin * px + c.cos * pz;
       const cx = Math.max(-c.hx, Math.min(c.hx, lx)), cz = Math.max(-c.hz, Math.min(c.hz, lz));
-      const dx = lx - cx, dz = lz - cz, d = Math.hypot(dx, dz);
+      const dx = lx - cx, dz = lz - cz, d = hyp(dx, dz);
       let nlx, nlz, depth;
       if (d > 1e-6) {
         if (d >= r) return null;
@@ -182,7 +185,7 @@
     }
     // Точка (x, z) внутри следа тела, с запасом pad (pad > 0 — шире)
     static inside(c, x, z, pad = 0){
-      if (c.type === 'cyl') return Math.hypot(x - c.x, z - c.z) <= c.r + pad;
+      if (c.type === 'cyl') return hyp(x - c.x, z - c.z) <= c.r + pad;
       const px = x - c.x, pz = z - c.z, lx = c.cos * px - c.sin * pz, lz = c.sin * px + c.cos * pz;
       return Math.abs(lx) <= c.hx + pad && Math.abs(lz) <= c.hz + pad;
     }
@@ -224,7 +227,7 @@
     }
     // По горизонтали на (mx, mz) — короткими шажками, чтобы не проскочить тонкую стену; упёрся — скользит вдоль
     slide(ch, mx, mz){
-      const n = Math.max(1, Math.ceil(Math.hypot(mx, mz) / (ch.r * .5))), seg = Math.hypot(mx, mz) / n;
+      const n = Math.max(1, Math.ceil(hyp(mx, mz) / (ch.r * .5))), seg = hyp(mx, mz) / n;
       for (let i = 0; i < n; i++) {
         const ox = ch.x, oz = ch.z;
         ch.x += mx / n; ch.z += mz / n;
@@ -317,9 +320,11 @@
         if (Phys.inside(c, ch.x, ch.z)) now.add(c);
       }
       list.length = 0;
-      const ev = ch.events || (ch.events = []);
-      for (const c of now) if (!ch.inside.has(c)) ev.push({ type: 'enter', col: c });
-      for (const c of ch.inside) if (!now.has(c)) ev.push({ type: 'exit', col: c });
+      if (now.size || ch.inside.size) {   // обход Set — только если есть зоны (T-127: без мусора на каждом шаге)
+        const ev = ch.events || (ch.events = []);
+        for (const c of now) if (!ch.inside.has(c)) ev.push({ type: 'enter', col: c });
+        for (const c of ch.inside) if (!now.has(c)) ev.push({ type: 'exit', col: c });
+      }
       ch._spare = ch.inside; ch.inside = now;
     }
 
@@ -433,7 +438,7 @@
     if (Math.abs(fd) < 1e-9) { if (fo > 0) return false; }
     else {
       const tp = -fo / fd;
-      if (fd < 0) { if (tp > W0) { W0 = tp; const l = Math.hypot(1, k); n0 = 0; n1 = 1 / l; n2 = k / l; has = true; } }
+      if (fd < 0) { if (tp > W0) { W0 = tp; const l = hyp(1, k); n0 = 0; n1 = 1 / l; n2 = k / l; has = true; } }
       else if (tp < W1) W1 = tp;
     }
     if (W0 > W1 || W0 < 0 || !has) return false;
@@ -452,7 +457,7 @@
         let lo = a, hi = b;
         for (let k = 0; k < 10; k++) { const m = (lo + hi) / 2; if (tf(T, ox, oy, oz, dx, dy, dz, m) < 0) hi = m; else lo = m; }
         const t = hi, x = ox + dx * t, z = oz + dz * t, e = .25;
-        const gx = T.sample(x + e, z) - T.sample(x - e, z), gz = T.sample(x, z + e) - T.sample(x, z - e), l = Math.hypot(gx, 2 * e, gz);
+        const gx = T.sample(x + e, z) - T.sample(x - e, z), gz = T.sample(x, z + e) - T.sample(x, z - e), l = Math.sqrt(gx * gx + 4 * e * e + gz * gz);
         RH.t = t; RH.nx = -gx / l; RH.ny = 2 * e / l; RH.nz = -gz / l;
         return true;
       }
@@ -499,7 +504,7 @@
     return null;
   }
   function lineFree(g, x1, z1, x2, z2){
-    const d = Math.hypot(x2 - x1, z2 - z1), n = Math.ceil(d / (g.cell * .5));
+    const d = hyp(x2 - x1, z2 - z1), n = Math.ceil(d / (g.cell * .5));
     for (let k = 1; k < n; k++) {
       const [i, j] = navCell(g, x1 + (x2 - x1) * k / n, z1 + (z2 - z1) * k / n);
       if (!navFree(g, i, j)) return false;

@@ -53,7 +53,7 @@
     // настоящая стенка в этом месте (край мог повернуть)
     const w = ray(ph, lip.x + n.x * .5, lip.y - .03, lip.z + n.z * .5, -n.x, 0, -n.z, .8);
     if (!w || Math.abs(w.ny) > .3 || !w.col) return null;
-    let nx = w.nx, nz = w.nz; const nl = Math.hypot(nx, nz); if (nl < 1e-6) return null; nx /= nl; nz /= nl;
+    let nx = w.nx, nz = w.nz; const nl = hyp(nx, nz); if (nl < 1e-6) return null; nx /= nl; nz /= nl;
     const along = { x: -nz, z: nx }, half = .2 * U * s;
     const probe = (px, pz) => {
       const h = ray(ph, px - nx * .06, lip.y + .3, pz - nz * .06, 0, -1, 0, .45);
@@ -66,7 +66,7 @@
   }
   // Край впереди (fwd) в окне [minH, maxH] м над ногами: плоская крыша и стенка к нам (через стену не хватаемся)
   function findLedge(ph, feet, fwd, minH, maxH, s = 1){
-    const fl = Math.hypot(fwd.x, fwd.z); if (fl < 1e-6) return null;
+    const fl = hyp(fwd.x, fwd.z); if (fl < 1e-6) return null;
     const fx = fwd.x / fl, fz = fwd.z / fl;
     const lo = feet.y + minH * U * s, hi = feet.y + maxH * U * s;
     let startY = hi + .3 * U;
@@ -80,7 +80,7 @@
       // стенка: луч ОТ ТЕЛА на 3 см ниже крыши — стена между нами попадётся раньше
       const wall = ray(ph, feet.x, top.y - .03, feet.z, fx, 0, fz, d + .06);
       if (!wall || !wall.col || Math.abs(wall.ny) > .3) continue;
-      let nx = wall.nx, nz = wall.nz; const nl = Math.hypot(nx, nz); if (nl < 1e-6) continue; nx /= nl; nz /= nl;
+      let nx = wall.nx, nz = wall.nz; const nl = hyp(nx, nz); if (nl < 1e-6) continue; nx /= nl; nz /= nl;
       if (-nx * fx - nz * fz < .5) continue;   // вскользь — не перед нами
       const L = ledgeAt(ph, { x: wall.x, y: top.y, z: wall.z }, { x: nx, z: nz }, s);
       if (!L) continue;
@@ -91,7 +91,7 @@
   }
   // Перелезть (стол, перила, стойка): невысоко и неглубоко, за ним — пол не ниже 1 м, сверху и на приземлении есть место
   function findVault(ph, feet, fwd, s = 1){
-    const fl = Math.hypot(fwd.x, fwd.z); if (fl < 1e-6) return null;
+    const fl = hyp(fwd.x, fwd.z); if (fl < 1e-6) return null;
     const fx = fwd.x / fl, fz = fwd.z / fl;
     const L = findLedge(ph, feet, { x: fx, z: fz }, PK.VaultMinH, PK.VaultMaxH, s);
     if (!L) return null;
@@ -183,6 +183,10 @@
   };
 
   // ═══ Игрок ═══
+  const ZERO = Object.freeze({ x: 0, z: 0 });   // «стоим» (только читают)
+  // T-127: не Math.hypot — встроенная функция возвращает число в куче (мусор на каждом шаге каждого тела) и её точность своя у
+  // каждого движка JS; sqrt округляет одинаково везде (телефон и ПК считают одно и то же)
+  const hyp = (x, y) => Math.sqrt(x * x + y * y);
   E.player = function (ph, o = {}){
     const ev = E.emitter ? E.emitter() : null;
     const P = {
@@ -222,12 +226,15 @@
 
     const roomToStand = () => !ph.blocked(ch.x, ch.z, ch.y + P.crouchH - .05, ch.y + P.standH, ch.r * .9);
     const floorOf = () => ch.onCol?.data?.floor || (ch.onCol ? 'concrete' : P.floorAt?.(ch.x, ch.z) || P.groundFloor);
-    const ladderHere = () => { for (const c of ch.inside) if (c.data?.ladder) return c.data.ladder; return null; };
+    const ladderHere = () => { if (!ch.inside.size) return null; for (const c of ch.inside) if (c.data?.ladder) return c.data.ladder; return null; };
+    // желаемое направление — в одном объекте игрока (T-127: без мусора на каждом шаге; его никто не хранит дольше шага)
+    const WISH = { x: 0, z: 0 };
     function wishOf(C, cam){
-      const m = C ? C.move : { x: 0, z: 0 };
+      const m = C ? C.move : ZERO;
       const cy = cam ? cam.yaw : P.yaw + Math.PI;
       const fx = -Math.sin(cy), fz = -Math.cos(cy), rx = Math.cos(cy), rz = -Math.sin(cy);
-      return { x: rx * m.x + fx * m.z, z: rz * m.x + fz * m.z };
+      WISH.x = rx * m.x + fx * m.z; WISH.z = rz * m.x + fz * m.z;
+      return WISH;
     }
 
     // ── Шаг ──
@@ -253,20 +260,21 @@
       P._lastY = ch.y; P._wasG = ch.grounded;
     };
 
+    const dirOf = (w, wl) => wl > .2 ? { x: w.x / wl, z: w.z / wl } : { x: Math.sin(P.yaw), z: Math.cos(P.yaw) };
     function tickMove(dt, C, w, cam){
-      const wl = Math.hypot(w.x, w.z), fwd = { x: Math.sin(P.yaw), z: Math.cos(P.yaw) };
-      const dir = wl > .2 ? { x: w.x / wl, z: w.z / wl } : fwd;
+      // направление (новый объект — кувырок и паркур его хранят) — только когда нужно, не каждый шаг (T-127)
+      const wl = hyp(w.x, w.z);
       // лестница: в её зоне и идём к ней — лезем
       const lad = ladderHere();
       if (lad && wl > .3 && (w.x * -lad.fx + w.z * -lad.fz) / wl > .5) { startLadder(lad); return; }
       // паркур: прыжок перед уступом (или в воздухе, держа прыжок и двигаясь к краю) — перелезть, подтянуться, повиснуть
       const jumpDown = !!C?.down('jump');
-      if (jumpDown || (!ch.grounded && wl > .3 && C?.held('jump'))) if (tryParkour(dir, wl > .3)) return;
+      if (jumpDown || (!ch.grounded && wl > .3 && C?.held('jump'))) if (tryParkour(dirOf(w, wl), wl > .3)) return;
       // кувырок: на бегу — «присесть»; с шага — «бег» и «присесть» вместе; или своя клавиша
       if (ch.grounded && C) {
-        const runningNow = C.held('run') && Math.hypot(ch.vx, ch.vz) > P.walk * .9;
+        const runningNow = C.held('run') && hyp(ch.vx, ch.vz) > P.walk * .9;
         if (C.down('roll') || (runningNow && C.down('crouch') && !P.crouch) || (wl > .2 && C.chordDown('run', 'crouch')))
-          if (startRoll(wl > .2 ? dir : null, cam)) return;
+          if (startRoll(wl > .2 ? dirOf(w, wl) : null, cam)) return;
       }
       // присед (держать); встать — только если над головой есть место
       if (C?.held('crouch')) P.crouch = true;
@@ -296,9 +304,9 @@
         ch.grounded = false; ch.airT = 0; P._jumped = true; P._buf = 0;
         emit('jump', { x: ch.x, y: ch.y, z: ch.z });
       }
-      ph.move(ch, dt, wl > 1e-3 ? w : { x: 0, z: 0 }, speed, false);
+      ph.move(ch, dt, wl > 1e-3 ? w : ZERO, speed, false);
       if (ch.impact > 0) { const k = PK.landK(ch.impact); emit('land', { v: ch.impact, k, hard: k > 0, floor: floorOf(), x: ch.x, y: ch.y, z: ch.z }); }
-      P.speed = Math.hypot(ch.vx, ch.vz);
+      P.speed = hyp(ch.vx, ch.vz);
       P.moving = P.speed > .35;
       P._sprint = P.running && P.speed > .5;
       // куда смотрит тело: от 1-го лица — куда камера, от 3-го — куда идёт
@@ -332,10 +340,10 @@
       const target = P.dive ? Math.max(bottom + .05, lvl - 3 * U) : lvl + (wv ? wv.y : 0) - .55 * U, maxV = 2.6 * U;
       ch.vy = Math.max(-maxV, Math.min(maxV, (target - ch.y) * 3.5)) + ch.g * dt;   // + тяжесть шага: её снимет fall()
       ch.grounded = false; ch.airT = 0;
-      ph.move(ch, dt, wl > 1e-3 ? w : { x: 0, z: 0 }, speed, false);
+      ph.move(ch, dt, wl > 1e-3 ? w : ZERO, speed, false);
       if (wv && (wv.vx || wv.vz)) ph.slide(ch, wv.vx * .45 * dt, wv.vz * .45 * dt);
       ch.impact = 0;
-      P.speed = Math.hypot(ch.vx, ch.vz); P.moving = P.speed > .3; P._sprint = P.running && P.speed > .5;
+      P.speed = hyp(ch.vx, ch.vz); P.moving = P.speed > .3; P._sprint = P.running && P.speed > .5;
       if (P.first && cam) P.yaw = cam.yaw + Math.PI;
       else if (wl > .1 && P.speed > .3) P.yaw = angTo(P.yaw, Math.atan2(w.x, w.z), P.turn * .7, dt);
       if (P.moving) { P._strokeT -= dt; if (P._strokeT <= 0) { emit('swim', { x: ch.x, y: lvl, z: ch.z, run: P.running }); P._strokeT = P.running ? .5 : .75; } } else P._strokeT = 0;
@@ -345,7 +353,7 @@
     function startRoll(dir, cam){
       if (P.mode !== 'move' || !ch.grounded || P.armsFull) return false;
       if (P.stamina < P.rollCost * .5) return false;   // совсем без сил — не катится
-      if (!dir) { const v = Math.hypot(ch.vx, ch.vz); dir = v > .3 ? { x: ch.vx / v, z: ch.vz / v } : { x: Math.sin(P.yaw), z: Math.cos(P.yaw) }; }
+      if (!dir) { const v = hyp(ch.vx, ch.vz); dir = v > .3 ? { x: ch.vx / v, z: ch.vz / v } : { x: Math.sin(P.yaw), z: Math.cos(P.yaw) }; }
       let back = false;
       if (P.first && cam) { const vx = -Math.sin(cam.yaw), vz = -Math.cos(cam.yaw); back = dir.x * vx + dir.z * vz < -.5; }   // > 120° от взгляда
       P.spendPartial(P.rollCost * P.staminaMul);
@@ -504,7 +512,7 @@
     }
     function exitLadder(){ P.mode = 'move'; P.ladder = null; ch.grounded = false; ph.fall(ch, 1 / 60); }
     function tickLadder(dt, C, w){
-      const L = P.ladder, wl = Math.hypot(w.x, w.z);
+      const L = P.ladder, wl = hyp(w.x, w.z);
       const toward = wl > .1 ? (w.x * -L.fx + w.z * -L.fz) : 0;
       if (C?.down('jump')) {   // спрыгнуть назад
         P.mode = 'move'; P.ladder = null;
@@ -548,7 +556,7 @@
     // → место, на которое сел/лёг, или null
     const nearSeat = (list, beds, R, free) => {
       let best = null, bd = R;
-      for (const sp of list || []) { if (!!sp.bed !== beds || (free && !free(sp))) continue; const d = Math.hypot(sp.x - ch.x, sp.z - ch.z) + Math.abs(sp.y - ch.y) * 2; if (d < bd) { bd = d; best = sp; } }
+      for (const sp of list || []) { if (!!sp.bed !== beds || (free && !free(sp))) continue; const d = hyp(sp.x - ch.x, sp.z - ch.z) + Math.abs(sp.y - ch.y) * 2; if (d < bd) { bd = d; best = sp; } }
       return best;
     };
     P.sitHere = (list, free) => {
@@ -562,7 +570,7 @@
       const sp = bed ? Object.assign({}, bed, { lie: true, bed: true }) : { x: ch.x, y: ch.y + .02, z: ch.z, yaw: P.yaw, ground: true, lie: true, name: 'Лечь' };
       return P.sitOn(sp) ? sp : null;
     };
-    function tickSit(dt, C, w){ if (Math.hypot(w.x, w.z) > .3 || C?.down('jump') || C?.down('crouch') || C?.down('interact')) P.standUp(); }
+    function tickSit(dt, C, w){ if (hyp(w.x, w.z) > .3 || C?.down('jump') || C?.down('crouch') || C?.down('interact')) P.standUp(); }
     P.standUp = () => {
       const s = P.seat; if (!s) return;
       P.seat = null; P.mode = 'move';
