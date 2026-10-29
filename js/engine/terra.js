@@ -7,6 +7,8 @@
 // TS = D37E.terra.create({ seed, gen: 1, rules: 0, param: 0, radius: 5, caveRadius: 2, workers, cap, wasm: true, wasmUrl, workerUrl })
 //   gen 2 — logical biomes (T-116, generator v2: climate by latitude, height, sea and wind); rules (WORLD_RULES §2, need gen 2):
 //   0 earth, 1 mono (param = biome), 2 patchwork, 3 absurd (floating islands), 4 inverted (ground above). Heights are the same.
+//   NOTE: the mesh physics (ground / blocked / ceiling) assumes the sky ABOVE (facing by parity from the open sky) — rules 4 here
+//   streams and draws correctly, its walking physics is for the host game (Backrooms) to define.
 //   TS.flatten(x, y, z, r) — a level pad at y (W2 towns; edit mode 2); TS.climate(x, z, out) → biome (out: tb, m, hs, phi, ts, tp, h, biome)
 //   TS.ceiling(x, z, y) → the lowest terrain above y (cave roofs; Infinity — open sky)
 //   TS.update(x, y, z)            — where the player is (m); schedules column probes and block builds (nearest first, budgets)

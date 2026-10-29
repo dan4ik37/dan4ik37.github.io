@@ -6,6 +6,9 @@
 //                                                     workers, three.js objects
 //         node scripts/terra-e2e.cjs soak [10]       — N minutes: walk, fly, dig, fill at random; errors and heap per minute
 //         node scripts/terra-e2e.cjs shots           — screenshots (walk, fly, crater) into D37_TMP/t111/shots
+//         node scripts/terra-e2e.cjs t145            — T-145 track L: logical biome under the player, a deep pit on land stays dry (no sea
+//                                                     tile over it), the camera climbs out of the pit (not into the head), a flatten pad is
+//                                                     level, a jump under a fill stops at its underside; shots (pit, pad, ao-high close-up)
 // Profiles: phone (default) — 412 × 915 × 2, CPU ×4 (RATE), quality "mid" (Q); PC=1 — 1280 × 720, no throttle, "high".
 // NOTE: Chrome's CPU throttling does not slow workers down — worker build times are desktop numbers (×4 for a phone estimate).
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
@@ -62,6 +65,7 @@ const summary = f => {
     if (d.method === 'Runtime.consoleAPICalled' && (d.params.type === 'error' || d.params.type === 'warning')) logs.push(d.params.type + ': ' + d.params.args.map(a => a.value ?? a.description ?? '').join(' ').slice(0, 300));
   };
   const send = (method, params = {}) => new Promise((a, b) => { const i = ++id; cb.set(i, [a, b]); ws.send(JSON.stringify({ id: i, method, params })); });
+  try { await send('Page.setDownloadBehavior', { behavior: 'deny' }); } catch (e) {}   // never save files into Downloads on C:
   const ev = async (expr, ms = 120000) => { const r = await Promise.race([send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }), sleep(ms).then(() => ({ result: { value: '__timeout' } }))]); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
   const shot = async name => { const { data } = await send('Page.captureScreenshot', { format: 'jpeg', quality: 72 }); fs.writeFileSync(path.join(OUT, 'shots', name + '.jpg'), Buffer.from(data, 'base64')); };
   const countObjs = async () => {
@@ -149,6 +153,53 @@ const summary = f => {
       await ev(`${T}.fly(true)`); await ev(`${T}.vert(1)`); await sleep(3000); await ev(`${T}.vert(0)`); await ev(`${T}.look(0.4, -0.35)`);
       await settle(30000); await sleep(1000); await shot('fly-high');
       out.state = await ev(`${T}.state()`); out.stats = await stats();
+    } else if (MODE === 't145') {
+      await setLs({});
+      await open(); await settle(60000); await throttle();
+      const st0 = await ev(`${T}.t145()`);
+      out.start = { gen: st0.gen, biome: st0.biome, compact: st0.compact, seaTiles: st0.seaTiles };
+      await shot('t145-start');
+      // a crater on land, inland (a column whose own terrain never dips under the sea): 5 digs r 3.5 m stepping down → ~6 m deep
+      const U = 2.1 / 1.8;
+      const spot = await ev(`(() => { const S = ${T}.S, px = S.ax + S.Pl.ch.x / ${U}, pz = S.az + S.Pl.ch.z / ${U}; let best = null;
+        for (const c of S.TS.cols.values()) { if (c.st !== 2 || c.hmin < 3 || c.hmax > 40) continue; const d = Math.hypot(c.cx * 32 + 16 - px, c.cz * 32 + 16 - pz); if (!best || d < best.d) best = { d, x: c.cx * 32 + 16, z: c.cz * 32 + 16 }; }
+        return best; })()`);
+      console.log('  inland spot', JSON.stringify(spot));
+      if (spot) { await ev(`${T}.tp(${spot.x}, ${spot.z})`); await settle(30000); await sleep(1200); }
+      for (let i = 0; i < 5; i++) { await ev(`(() => { const S = ${T}.S, x = S.ax + S.Pl.ch.x / ${U}, z = S.az + S.Pl.ch.z / ${U}, y = S.Pl.ch.y / ${U}; S.TS.dig(x, y - 0.8, z, 3.5); return 1; })()`); await sleep(700); }
+      await settle(30000); await sleep(1500); console.log('  crater dug');
+      const cam = () => ev(`(() => { const S = ${T}.S, cam = S.R.camera.position, ch = S.Pl.ch, U = ${U}; return { camDist: +(Math.hypot(cam.x - ch.x, cam.y - ch.y - 1.5 * U, cam.z - ch.z) / U).toFixed(2), climbP: +S.rig.climbP.toFixed(3), cur: +(S.rig.cur / U).toFixed(2) }; })()`);
+      await ev(`${T}.look(0.6)`); await ev(`(${T}.S.rig.pitch = 0.3, 1)`); await sleep(2500);
+      const climbOn = await cam();
+      await ev(`(${T}.S.rig.climb = false, ${T}.S.rig.climbP = 0, 1)`); await sleep(2500);
+      const climbOff = await cam(); console.log('  camera', JSON.stringify({ climbOn, climbOff }));
+      await shot('t145-crater-noclimb');
+      await ev(`(${T}.S.rig.climb = true, 1)`); await sleep(2500);
+      out.pit = await ev(`(() => { const S = ${T}.S, U = ${U}, x = S.ax + S.Pl.ch.x / U, z = S.az + S.Pl.ch.z / U, c = S.TS.cols.get(D37E.terra.colKey(Math.floor(x / 32), Math.floor(z / 32)));
+        return { spot: ${JSON.stringify(spot)}, feet: +(S.Pl.ch.y / U).toFixed(2), ground0: +S.TS.height(x, z).toFixed(2), colHmin: c && +c.hmin.toFixed(2), seaTileOver: !!(c && c.hmin < 0), seaTiles: S.seaN }; })()`);
+      out.pitCam = { climbOn, climbOff };
+      await shot('t145-pit');
+      // flatten pad next to the pit edge: walk out (teleport back to the start), flatten, measure
+      const s0 = await ev(`${T}.state()`);
+      await ev(`${T}.tp(${s0.player.wx + 24}, ${s0.player.wz + 6})`); await settle(30000); await sleep(800);
+      await ev(`${T}.look(0.3, 0.7)`); await ev(`${T}.flat()`); await sleep(400); await settle(30000); await sleep(1200);
+      out.pad = await ev(`(() => { const S = ${T}.S, n = S.TS.editCount(), e = S.TS.edits(), o = (n - 1) * 5; if (n < 1 || e[o + 4] !== 2) return { none: true };
+        let mx = 0, k = 0; for (let i = 0; i < 24; i++) { const a = i * 0.2618, g = S.TS.ground(e[o] + 4 * Math.cos(a), e[o + 2] + 4 * Math.sin(a), e[o + 1] + 10); if (g === g) { mx = Math.max(mx, Math.abs(g - e[o + 1])); k++; } }
+        return { padY: e[o + 1], r: e[o + 3], maxDev: +mx.toFixed(3), points: k }; })()`);
+      await shot('t145-pad');
+      out.stats = await stats(); out.errors = logs.length;
+      failed = !!(out.pit.seaTileOver || out.pad.none || out.pad.maxDev > 0.05 || !(out.pitCam.climbOn.camDist > out.pitCam.climbOff.camDist) || logs.some(l => l.startsWith('exception')));
+    } else if (MODE === 'ao') {   // close-up shots for SSAO (PC=1 SETTINGS='{"ao":"high"}'; SITE_DIR — another checkout for "before")
+      await setLs({});
+      await open(); await settle(60000);
+      await ev(`(${T}.S.rig.dist = 3.4, ${T}.S.rig.pitch = 0.22, 1)`); await sleep(2500);
+      await shot('ao-' + (process.env.LABEL || 'x') + '-1');
+      await ev(`${T}.look(2.4)`); await ev(`(${T}.S.rig.pitch = 0.5, 1)`); await sleep(2500);
+      await shot('ao-' + (process.env.LABEL || 'x') + '-2');
+      // a hilly column (rolling slopes are where the bands were): teleport, close camera, low pitch
+      const hill = await ev(`(() => { const S = ${T}.S; let b = null; for (const c of S.TS.cols.values()) { if (c.st !== 2 || c.hmin < 2) continue; const r = c.hmax - c.hmin; if (!b || r > b.r) b = { r, x: c.cx * 32 + 16, z: c.cz * 32 + 16 }; } return b; })()`);
+      if (hill) { await ev(`${T}.tp(${hill.x}, ${hill.z})`); await settle(30000); await ev(`(${T}.S.rig.dist = 3.4, ${T}.S.rig.pitch = 0.3, 1)`); await ev(`${T}.look(1.1)`); await sleep(3000); await shot('ao-' + (process.env.LABEL || 'x') + '-3'); }
+      out.ao = await ev(`(() => { const R = ${T}.S.R; return { ao: R.post?.ao?.mode, on: R.post?.ao?.on }; })()`);
     } else if (MODE === 'leak') {
       const n = +ARG || 20;
       await setLs({});
