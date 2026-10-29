@@ -66,7 +66,7 @@ export function page({ title, description = '', url = '', image = '', ld = null,
 ${/^#\/[\w/-]+$/.test(spa) ? `<script>try{if(sessionStorage.getItem('d37_spa'))location.replace(${JSON.stringify('/' + spa)})}catch(e){}</script>` : ''}
 <title>${esc(title)}</title>
 ${description ? `<meta name="description" content="${esc(description)}">` : ''}
-${noindex ? '<meta name="robots" content="noindex">' : ''}
+<meta name="robots" content="${noindex ? 'noindex' : 'max-image-preview:large'}">
 ${url ? `<link rel="canonical" href="${esc(url)}">` : ''}
 <meta name="theme-color" content="#ff2d55">
 <link rel="icon" href="/favicon.ico" sizes="any">

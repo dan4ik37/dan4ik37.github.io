@@ -262,7 +262,7 @@ function browser(startUrl, routing){
     B.R.meta(M('profile')); const d = B.document;
     ok(d.title === 'Профиль — dan4ik37' && d.head.querySelector('meta[name="robots"]')?.attrs.content === 'noindex', 'meta: заголовок и noindex');
     B.R.meta(M('chat'));
-    ok(!d.head.querySelector('meta[name="robots"]') && d.head.querySelector('link[rel="canonical"]').attrs.href === 'https://dan4ik37.vercel.app/chat'
+    ok(d.head.querySelector('meta[name="robots"]')?.attrs.content === 'max-image-preview:large' && d.head.querySelector('link[rel="canonical"]').attrs.href === 'https://dan4ik37.vercel.app/chat'
       && d.head.querySelector('meta[property="og:url"]').attrs.content === 'https://dan4ik37.vercel.app/chat' && d.head.querySelector('meta[name="description"]'), 'meta: noindex снят, canonical и og:url — раздел');
     B.R.meta({ title: 'Тема <b>x</b> — форум dan4ik37' });
     ok(d.title === 'Тема <b>x</b> — форум dan4ik37' && d.head.querySelector('meta[property="og:title"]').attrs.content === 'Тема <b>x</b> — форум dan4ik37', 'meta({ title }) — текстом (без разметки)');

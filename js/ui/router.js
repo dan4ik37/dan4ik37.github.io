@@ -254,8 +254,8 @@ const D37Route = (() => {
     }
     if ('noindex' in o) {
       const r = hd.querySelector('meta[name="robots"]');
-      if (o.noindex) (r || tag('name', 'robots')).setAttribute('content', 'noindex');
-      else r?.remove();
+      // можно в поиск — большие превью картинок (без этого Google Discover не берёт страницу)
+      (r || tag('name', 'robots')).setAttribute('content', o.noindex ? 'noindex' : 'max-image-preview:large');
     }
   }
   // Просмотр раздела для статистики. Первый — сами счётчики при загрузке. Режим адресов: Vercel Analytics видит pushState сам,
