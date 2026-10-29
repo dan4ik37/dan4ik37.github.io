@@ -106,7 +106,8 @@
       X.stats.burnt++;
       if (!st.creative) {
         const tile = W.dropTile ? W.dropTile(x, y, z) : null;
-        if (tile) for (const q of [...(tile.items || []), tile.in, tile.fuel, tile.out]) if (q && q.n > 0) st.ents?.addItem(x + .5, y + .5, z + .5, q, false, null, false, true);   // содержимое сундука в пожаре — «keep» (T-124: не пропадает)
+        const out = () => { for (const q of [...(tile.items || []), tile.in, tile.fuel, tile.out]) if (q && q.n > 0) st.ents?.addItem(x + .5, y + .5, z + .5, q, false, null, false, true); };   // содержимое сундука в пожаре — «keep» (T-124: не пропадает)
+        if (tile) { const U = st.ui; if (U?.isOpen?.() && U.pos && U.pos.x === x && U.pos.y === y && U.pos.z === z) U.close({ esc: true }); if (!st.net?.tileMoved?.(x, y, z, tile, null, out)) out(); }   // окно на нём закрыть; у гостя открыт — высыпать, когда закроет (T-124: не двоится)
         const cc = coalChance(m);
         if (cc && (FI.hash(x, y, z, 0xc0a1, X.F.T) & 1023) < cc * 1024) { st.ents?.addItem(x + .5, y + .4, z + .5, { id: 'coal', n: 1 }); X.stats.coal++; }
       }
