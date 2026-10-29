@@ -599,3 +599,23 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
   humanoid retarget (Mixamo/Biped/A-pose); Studio 3D `act` reuses the NPC key (NET_EXTRA full); FBX pack for Backrooms in
   E:\d37-core\anim. Skip — quadruped shared gaits, look.aim action row (PROPOSED to the Backrooms lead), skinned instancing.
 - 29.10 T-131 review: take all 7 findings — toes no snap into the floor, Biped/Rocketbox retarget by the model's own parents (+ position tracks), stop_l/stop_r entered at phase 0/0.5, M.play one-shots once + unknown name → idle + 'none' → rest, FBX default pose = T-pose, clips.csv dir_right/dir_fwd/turn_left_deg, strafes as side steps (not lunges).
+
+## 29.10 — T-135 (T-145 track W): weather by biome WX0–WX2 (BIOME_WEATHER.md v2; docs/areas/engine.md «Weather by biome»)
+- Take: the core in a separate js/engine/wx.js (spec §4) with a ~25-line hook in climate.js — index.html loads climate.js on every page,
+  the 50 KB core loads only in games. Old fields bit-identical outside the specials' windows (golden vs pre-T-135 climate.js).
+- Take: Layer-1 tables in the site repo (data/wx/*.csv → wx.js by make-wx.mjs); copying them into E:\d37-core\spec\data waits for the
+  Backrooms lead's OK of the columns (spec WX0 «done when»).
+- Take (coordinator 29.10 «град вредит по-настоящему»): hail harms — wx_levels.csv hail table (shared and kids ‰ per 10 s, kids floor
+  50 % = never a knockout, crop damage, dents); rows 20, 22 `crop_damage+dents` (spec had crop_pause). Body effects themselves are WX5.
+- Take (realism with rare exceptions): rows 49–53 — desert winter precipitation mostly virga (700 ‰) or cold rain (297 ‰), desert snow
+  3 ‰ on winter nights (≈ 0.2 per game year), tropical thunderstorms without hail (985 ‰), tropical hail 15 ‰ (≈ 0.01 per summer day).
+- Take: duststorm visibility 60–110 u (spec 80–150: at Mir's scale 150 u looked clear); 'snow' (can hold snow) in the steppe and
+  temperate default surfaces, else позёмка never forms in the steppe.
+- Take: own lazy pools in wx-fx.js (grains + low streaks, ≤ 2 draws, hidden = 0) instead of recolouring precip's snow pool (spec §5):
+  a buран needs both falling snow and blowing snow at once; Kubomir keeps its own rain/snow path and gets the same wx-fx layer.
+- Take: AI visibility now — npc.js follow/flee radius capped by WX.limitAt (creatures never see farther than the player's fog).
+- Spec errata (report to the spec owner): §2.11 steppe summer dry thunderstorm 0.18/day — with the spec's own recurrence (thunder resets
+  the dry count) the expected value is 0.089; measured 0.093. All other §2.11 rows within ±4 %.
+- Skip (later steps): wall band, funnels, tumbleweeds (WX3); aurora/halo/haze/mirage/drift shaders (WX4); body effects — push, hail
+  damage, glaze friction (WX5); AI core call d37_mind_set_wx (WX6); links (WX7); Studio settings/props/API, Podzem layer, Backrooms
+  port, Mir mir_regions.csv features (WX8); the phone «Погода» showing stateX (phone.js — not this track).

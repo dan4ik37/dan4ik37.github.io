@@ -80,6 +80,25 @@
   }
   // Солнечный городок (0+) с запасом 40 и местом роста: грозы там нет — только дождь (storm: false)
   const mirKids = (x, z) => { const MZ = window.MirZones; return !!MZ?.ZONES?.kids && (MZ.inRect(MZ.ZONES.kids, x, z, 40) || MZ.EXPAND.some(e => e.zone === 'kids' && MZ.inRect(e, x, z, 40))); };
+  // Особая погода по биому (T-135, js/engine/wx.js): запись места — класс климата, поверхности, приметы, детский городок — по
+  // клетке 64×64 (у всех игроков одна: зоны и карта высот одинаковы). Степь (почти вся дикая земля): пыльные бури весной и летом,
+  // перекати-поле осенью и зимой, буран и позёмка зимой; горы — туман, град; море и боевое побережье — морской туман, шквалы,
+  // смерчи над водой; столица и города — иней, ледяной дождь, туман в низинах. В Солнечном городке сильных явлений нет (kc).
+  // Пустыни и снегов в «Мире» пока нет — появятся с логичными биомами (T-116). Биом из T-116 подключается в D37E.wx.biomeAt
+  const WX_SURF = { temperate: 0x60e | 0x20, steppe: 0x206 | 0x20, mountain: 0x34 | 0x6, sea: 0x81 | 0x200 };   // поверхности (биты wx.js SURF)
+  const wxRegs = new Map();   // клетка → запись (карта и зоны не меняются; 256 клеток — 16 км²)
+  function mirWxRegion(x, z){
+    const key = Math.floor(x / 64) * 65536 + Math.floor(z / 64), hit = wxRegs.get(key);
+    if (hit) return hit;
+    if (wxRegs.size > 256) wxRegs.clear();
+    const r = mirWxRegion0(x, z); wxRegs.set(key, r); return r;
+  }
+  function mirWxRegion0(x, z){
+    const cx = (Math.floor(x / 64) + .5) * 64, cz = (Math.floor(z / 64) + .5) * 64, ck = mirClimate(cx, cz);
+    const cls = ck === 'steppe' ? 1 : ck === 'mountain' ? 2 : ck === 'sea' ? 4 : 0;
+    const h = ck === 'mountain' ? window.MirZones?.worldMap?.()?.height(cx, cz) : null;
+    return { cls, smask: WX_SURF[ck] || WX_SURF.temperate, F: ck === 'sea' ? 1 : ck === 'mountain' ? 8 : ck === 'temperate' ? 64 : 0, alt: h != null ? Math.round(-.12 * h) : 0, kc: mirKids(cx, cz) ? 1 : 0 };
+  }
   const ICE_PTS = [[0, 0], [2.5, 0], [-2.5, 0], [0, 2.5], [0, -2.5]];
   // Жители (NPC): стоят на своём месте у всех игроков, поворачиваются к подошедшему и говорят по очереди; [E] — поговорить.
   const FOLK = [
@@ -804,7 +823,7 @@
     }
     const REF = [[F.ocean, -540, 280, WM ? WM.SEA : 0], [F.lake, 0, 0, 0], [F.canal, 215, 258, -2.4], [F.pond, POND.x, POND.z, POND.wl]];
     let W = null;
-    try { W = C?.world ? C.world({ seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour }) : null; } catch (e) {}
+    try { W = C?.world ? C.world({ seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour, wxRegionAt: mirWxRegion }) : null; } catch (e) {}
     let tq = 0, forced = null;
     // прибой (T-085): шум у ближней мели моря (узел сетки глубиной 0,1…2,4 — там и пена прибоя в шейдере, waves.js) — петля
     // amb_water пониже (synth.js: тише издалека, сторона — по камере), громче в шторм; нет волн или мели рядом — тишина
@@ -861,7 +880,7 @@
     const ch = P.ch, WH = [0, 0, 0];
     try {
       return C.attach(R, {
-        world: { seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour },
+        world: { seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour, wxRegionAt: mirWxRegion },   // + особая погода по биому (wx.js)
         // где игрок: не выше 6 над землёй (своя крыша — да; небоскрёб и самолёт — как у земли, иначе снег на весь город)
         where: () => { const g = ph.groundAt(ch.x, ch.z); WH[0] = ch.x; WH[1] = Math.max(g, Math.min(ch.y, g + 6)); WH[2] = ch.z; return WH; },
         // где кончается небо: верх самого высокого тела в столбе (крыши, навесы, машины) или земля — без луча по рельефу (дорого)

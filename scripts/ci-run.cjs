@@ -34,7 +34,7 @@ const TESTS = [
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
   { f: 'ads-test.cjs' }, { f: 'ad-direct-test.cjs' }, { f: 'pay-test.cjs' }, { f: 'referral-test.cjs' }, { f: 'economy-test.cjs' },
   { f: 'community-test.cjs' }, { f: 'settings-test.cjs' }, { f: 'ui-test.cjs' }, { f: 'touch-layout-test.cjs' }, { f: 'radial-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },
-  { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'planet-test.cjs' }, { f: 'planet-lod-test.cjs', args: ['--fast'], t: 240 }, { f: 'orbit-test.cjs' }, { f: 'planet-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },   // orbit, planet-sql — T-079: небесная механика, часы мира; planet-lod-test — T-075: LOD v2 (скачки, покрытие, 2 : 1)
+  { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'wx-test.cjs', t: 240 }, { f: 'wxfx-test.cjs' }, { f: 'make-wx.mjs', args: ['--check'], t: 60 }, { f: 'planet-test.cjs' }, { f: 'planet-lod-test.cjs', args: ['--fast'], t: 240 }, { f: 'orbit-test.cjs' }, { f: 'planet-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },   // orbit, planet-sql — T-079: небесная механика, часы мира; planet-lod-test — T-075: LOD v2 (скачки, покрытие, 2 : 1)
   { f: 'physics-test.cjs', soft: 'rapier' }, { f: 'tiles-test.cjs' }, { f: 'mirplay-test.cjs' }, { f: 'kubomir-input-test.cjs' },
   { f: 'world-zones-test.cjs' }, { f: 'world-leak-test.cjs' }, { f: 'city-test.cjs' }, { f: 'city-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'city-sim.cjs', args: ['--days', '60', '--players', '20,100'], t: 180 },
   { f: 'vehicle-test.cjs' }, { f: 'waves-test.cjs', retry: 1 }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' }, { f: 'cloud-test.cjs' },
@@ -79,6 +79,7 @@ const TESTS = [
   { f: 'ui-e2e.cjs', args: ['ci'], e2e: true, t: 600 },   // T-086: мини-карточка и профиль без утечек, тема до первого кадра (без «вспышки»), откат флагами   // фоторедактор: все команды, кнопки, отмена (fabric.js с jsDelivr)
   { f: 'city-e2e.cjs', e2e: true, needs: 'pglite', t: 900 },   // «Живой город»: работа с сервера (city.sql в PGlite), банк, окно экономики, два игрока
   { f: 'rt-e2e.cjs', e2e: true, needs: 'rt', t: 600 },   // свой сервер: два Chrome, io-игра и стол, сервер убит посреди партии → Supabase
+  { f: 'wx-e2e.cjs', args: ['pc', 'all'], e2e: true, t: 1500 },   // T-135: погода по биомам — бури в «Мире» и «Кубомире» (картинка, видимость, замер), 0 ошибок
 ];
 
 // ═══ Откуда брать пакеты ═══
