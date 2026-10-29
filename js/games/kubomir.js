@@ -1968,9 +1968,22 @@
   // ═══ Кадр: подгрузка, камера, персонаж, вещь в руке, экран ═══
   const CAMP = { ch: { x: 0, y: 0, z: 0, vx: 0, vz: 0, h: PH, grounded: true }, mode: 'move', running: false, crouchW: 0, stepOff: 0 };
   const PHYS = { raycast(ox, oy, oz, dx, dy, dz, maxT){ const st = S; if (!st) return null; const V = VX(); const h = V.raycast(st.W, ox + st.ox, oy, oz + st.oz, dx, dy, dz, maxT, t => V.T.opaque[t] === 1); return h ? { t: h.t } : null; } };
+  // T-138 (ревью PERF-5): первая вещь на земле и первая крошка блока за страницу собирали в игре 3 программы шейдеров (вещь «кубик»,
+  // вещь-картинка — материалы VR.itemMesh с D37_ACT, точки крошки) — кадр 0,34–0,54 с на телефоне ×4 (то самое «первое падение»).
+  // Мир открылся — один раз нарисовать их под землёй (2 кадра, крошечные): программы собраны, пока игрок ещё осматривается
+  function warmFx(st){
+    st.warmFx = { n: 3, ms: [] };
+    try {
+      const V = VX(), VR = st.VR, R = st.R, P = st.P;
+      if (VR?.itemMesh && R?.scene) for (const n of ['cobble', 'stick', 'leaves_oak']) { if (!V.item(n)) continue; const m = VR.itemMesh(n, 15 << 12); m.scale.setScalar(.01); m.castShadow = false; m.frustumCulled = false; m.position.set(P.x - st.ox, P.y - 3, P.z - st.oz); R.scene.add(m); st.warmFx.ms.push(m); }
+      st.ents?.debris?.(Math.floor(P.x), Math.floor(P.y) - 3, Math.floor(P.z), V.ID.stone, 1);
+    } catch (e) { console.error(e); }
+  }
+  function warmEnd(st){ const w = st.warmFx; if (!w || w.n < 0 || --w.n > 0) return; for (const m of w.ms) { m.parent?.remove(m); m.geometry?.dispose(); } w.ms.length = 0; w.n = -1; }
   function frame(dt, alpha){
     const st = S; if (!st) return;
     const { R, P, rig, I, C, VR, A } = st, V = VX(), t = now() / 1000;
+    if (st.ready) { if (!st.warmFx) warmFx(st); else warmEnd(st); }   // ревью PERF-5: программы вещей и крошки — заранее
     // мобы, вещи и песок считаются 20 раз в секунду (каждый 3-й шаг логики) — рисуем их плавно: доля пути до следующего такта
     if (st.ents) st.ents.frac = P.dead || !st.ready ? 1 : Math.min(1, ((st.steps % 3) + (alpha || 0)) / 3);   // такты стоят — рисуем как есть
     const f = rig.fwd();

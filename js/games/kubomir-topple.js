@@ -465,7 +465,7 @@
       // проверки этажей: по частям, ≤ KT.CHECK_OPS за такт (ревью PERF-1)
       while (ops < KT.CHECK_OPS && st.sup && KT.LEAN && (CK.on || CHK.length)) {
         if (CK.on && CK.dirty) ops += ckBegin(CK.x0, CK.y0, CK.z0, CK.was);   // правка уже пройденной клетки — обход заново
-        if (!CK.on) { const x = CHK.shift(), y = CHK.shift(), z = CHK.shift(), w = CHK.shift(); ops += ckBegin(x, y, z, w); if (!CK.on) continue; }
+        if (!CK.on) { if (!CHK.length) break; const x = CHK.shift(), y = CHK.shift(), z = CHK.shift(), w = CHK.shift(); ops += ckBegin(x, y, z, w); if (!CK.on) continue; }
         ops += ckStep(KT.CHECK_OPS - ops);
       }
       const T = X.stats.ticks;

@@ -17,6 +17,8 @@
 //   кадров в секунду, худший такт крена, время событий; KB_N кругов (20) — память не растёт; KB_PHONE=1 — профиль телефона, ЦП ×4.
 //   KB_TOPPLE=1 KB_MODE=soak — 10 мин игры, каждый 4-й шаг рядом падают башня и дерево. Шаг 2 (обломки): KB_AB=1 — круги через один
 //   с обломками и без (честное A/B на той же странице), KB_NO_DEBRIS=1 — вся сцена без обломков, KB_SCENE_ONLY=1 — без T-138 (память сцены)
+//   Ревью: KB_PROF=1 — профиль первого падения за страницу (собственное время) и какие программы шейдеров собрались за него;
+//   KB_WARM=item|fall|both — до первого падения уже была вещь / маленькое падение (сравнить с холодным)
 // KB_MODE=fire — огонь (T-022d), мир «Огонь распространяется»: лес 6 × 6 и дом из досок — ЦП на кадр без огня и в пожаре (среднее, 95 %,
 //   худший, вызовы), снимки днём, ночью и после пожара; KB_PHONE=1 — профиль телефона (ЦП ×4); KB_FIRE=1 KB_MODE=soak / reopen — с пожаром
 // KB_MODE=firecycle — дом из досок сгорает на одном месте KB_N раз (по умолчанию 12): память JS после сборки мусора не растёт (без
@@ -295,7 +297,24 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       res.tpScene = await ev(scene, 120000);
       ok(res.tpScene.sup && res.tpScene.topple && res.tpScene.mode === 'real', 'мир «реализм» с T-138 (крен и рубка подключены)', res.tpScene);
       if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      // ревью PERF-5 (диагностика): KB_WARM=item — до первого падения уже лежит вещь (её сетка и материал готовы), KB_WARM=fall — уже было
+      // одно маленькое падение (сетка T-138 и её тень готовы), KB_WARM=both — оба: первый круг сравнить с холодным
+      if (process.env.KB_WARM) res.tpWarm = await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), wait = ms => new Promise(r => setTimeout(r, ms)), W = S.W, V = D37E.vox, ID = V.ID, P = S.P, t0 = performance.now(), m = '${process.env.KB_WARM}';
+        if (m === 'item' || m === 'both') { S.ents.addItem(P.x + 1.5, P.y + 1, P.z, { id: 'cobble', n: 1 }); S.ents.addItem(P.x + 1.5, P.y + 1, P.z + 1, { id: 'stick', n: 1 }); await wait(1500); }
+        if (m === 'fall' || m === 'both') { const g = S.ents.fallGroup([Math.floor(P.x) + 2, Math.floor(P.y), Math.floor(P.z) + 2, V.cell(ID.log_oak), Math.floor(P.x) + 2, Math.floor(P.y) + 1, Math.floor(P.z) + 2, V.cell(ID.leaves_oak)], { x: P.x + 2, y: P.y, z: P.z + 2 }, { x: 1, z: 0 }, { topple: true, fast: true, cap: 16 }); await wait(1500); if (g) S.ents.groupEnd(g, null, false); await wait(500); }
+        for (const it of S.ents.items.splice(0)) { it.mesh?.parent?.remove(it.mesh); it.mesh?.geometry?.dispose(); }
+        return { m, ms: Math.round(performance.now() - t0) }; })()`, 60000);
+      if (process.env.KB_PROF) { await send('Profiler.enable'); await send('Profiler.setSamplingInterval', { interval: 200 }); await send('Profiler.start'); }   // первое падение за страницу — где время (KB_PROF=1)
+      const progs = () => ev(`(() => { const r = GAME_IMPL.kubomir._test.state().R.r; return (r.info.programs || []).map(p => p.name + ' #' + p.id + ' ' + String(p.cacheKey).length + ' ' + String(p.cacheKey)); })()`);
+      const pg0 = process.env.KB_PROF ? await progs() : null;
       res.tp = await ev(run, 120000);
+      if (process.env.KB_PROF) { const pg1 = await progs(); console.log('программы шейдеров, собранные за первое падение:', JSON.stringify(pg1.filter(p => !pg0.includes(p)))); console.log('программы до:', JSON.stringify(pg0)); }
+      if (process.env.KB_PROF) {
+        const { profile: pf } = await send('Profiler.stop'), self = new Map(), byId = new Map(pf.nodes.map(n => [n.id, n]));
+        const dt = pf.timeDeltas, sm = pf.samples; for (let i = 0; i < sm.length; i++) { const n = byId.get(sm[i]); const k = (n.callFrame.functionName || '(anon)') + ' ' + n.callFrame.url.split('/').pop() + ':' + (n.callFrame.lineNumber + 1); self.set(k, (self.get(k) || 0) + (dt[i] || 0)); }
+        const tot = [...self.values()].reduce((a, b) => a + b, 0);
+        console.log('ПРОФИЛЬ первого падения (собственное время, мс и %; всего ' + (tot / 1000).toFixed(0) + ' мс):\n' + [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, v]) => '  ' + (v / 1000).toFixed(1).padStart(7) + ' ' + (v / tot * 100).toFixed(1).padStart(5) + '  ' + k).join('\n'));
+      }
       if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
       console.log('T-138 башня и великан падают' + (PHONE ? ' (телефон, ЦП ×4)' : ''), JSON.stringify(res.tp));
       await shot('topple-after');
