@@ -44,9 +44,12 @@
   const sbUrl = () => { try { if (typeof SB_URL !== 'undefined' && SB_URL) return SB_URL; } catch (e) {} return root.SB_URL || 'https://zdisuowyjgqirhvcyjfq.supabase.co'; };
   const sbKey = () => { try { if (typeof SB_KEY !== 'undefined' && SB_KEY) return SB_KEY; } catch (e) {} return root.SB_KEY || 'sb_publishable_55GhvJbDxDQA1JEawZRQ6g_ozx_cgMV'; };
   const pnow = () => root.performance && root.performance.now ? root.performance.now() : Date.now();
-  // свой сервер: адрес — у D37RT (js/core/rt.js: RT_URL, ?rt=0, на localhost — d37_rt_url); в проверках — C._rtUrl
+  // свой сервер: адрес — у D37RT (js/core/rt.js: RT_URL, ?rt=0, на localhost — d37_rt_url); в проверках — C._rtUrl.
+  // ОТКАТ ОДНОЙ СТРОКОЙ: RT_CLOCK = false — часы снова только от Supabase world_now()
+  const RT_CLOCK = true;
   const rtUrl = () => {
     if (C._rtUrl !== undefined) return C._rtUrl || '';
+    if (!RT_CLOCK) return '';
     try { const D = root.D37RT; return D && D.enabled && D.enabled() ? String((D.stats && D.stats().url) || '') : ''; } catch (e) { return ''; }
   };
   const noRt = () => { const k = ss.get('d37_clock_nort'); return !!(k && Date.now() - k < 1800000 && Date.now() >= k); };
