@@ -1793,7 +1793,7 @@
       } else if (cat === 13) {   // лежит на спине: тело назад (голова — к −z места), середина тела — над местом, руки вдоль тела, дышит
         const k = (ch.top || 2.3) / 2.3, br = Math.sin(t * 1.6 + ch.seed);
         Pt[J.BX] = -1.5; Pt[J.BY] = .2 * k; Pt[J.BZ] = .9 * k;
-        Pt[J.HX] = -.06; Pt[J.HZ] = Math.sin(t * .4 + ch.seed) * .05;
+        Pt[J.HX] = -.06; Pt[J.HZ] = Math.sin(t * 1.6 + ch.seed + 1.2) * .04;   // частота = дыхание (цикл спрайта «lie» = TAU/1.6 замкнут)
         Pt[J.ALX] = -.08; Pt[J.ARX] = -.08; Pt[J.ALZ] = -.2; Pt[J.ARZ] = .2; Pt[J.EL] = Pt[J.ER] = -.18;
         Pt[J.LLX] = Pt[J.LRX] = .02; Pt[J.LLZ] = -.05; Pt[J.LRZ] = .05; Pt[J.KL] = Pt[J.KR] = .06;
         Pt[J.TS] = 1 + br * .02;
