@@ -55,7 +55,9 @@
     for (const p of A.players()) M.join(idOf(p.id), p.name);
     // новый хозяин: зомби прежнего хозяина уже в мире (пришли по сети) — они наши (волна не «отбита» сама собой)
     if (restore) for (const o of SC().all()) if (o.cls === 'NPC' && o.look === 'zombie' && o.name === 'Зомби' && !st.zIds.has(o.id)) { st.zIds.add(o.id); st.zhp.set(o.id, 100); }
-    if (!(restore && st.view && M.restore(st.view))) M.start();
+    const back = !!(restore && st.view && M.restore(st.view));
+    if (!back) M.start();
+    else if (Z_LOD && Array.isArray(st.view.zq)) zRestore(st.view.zq);   // очередь волны прежнего хозяина (T-127 ревью #7)
     st.sentAt = 0; broadcast(true);
   }
   const hooks = {
@@ -123,6 +125,17 @@
       st.zq--; alive++; k++;
     }
   }
+  // новый хозяин: очередь из снимка [сколько в очереди, волна, сколько вышло]. Снимок мог отстать (шлётся не чаще раза в 1,5 с):
+  // кто вышел после него — уже в мире (пришли по сети, номер — в seed «z<раунд>-<волна>-<номер>»), их вычитаем; зерно — то же, что у
+  // прежнего хозяина, сдвинутое на 2 числа за каждого вышедшего — дальше те же места, что вышли бы у него
+  function zRestore(q){
+    const n = Math.max(0, q[0] | 0), w = Math.max(0, q[1] | 0), k0 = Math.max(0, q[2] | 0), pre = 'z' + (M?.round || 0) + '-' + w + '-';
+    let k = k0;
+    for (const id of st.zIds) { const s = SC().get(id)?.seed; if (typeof s === 'string' && s.startsWith(pre)) { const i = +s.slice(pre.length); if (Number.isInteger(i) && i >= k) k = i + 1; } }
+    st.zw = w; st.zk = k; st.zq = Math.max(0, n - (k - k0));
+    st.zr = E.rng(zseed('zw:' + (M?.round || 0) + ':' + w));
+    for (let i = 0; i < 2 * k; i++) st.zr();
+  }
   // как было до T-127 (Z_LOD = false): не больше 30 за волну, Math.random
   function spawnZombiesV1(n, wave){
     const S = SC(), zones = S.all().filter(o => o.cls === 'Part' && o.touch === 'zspawn'), ph = A.ed.ph, sp = A.spawnPoint();
@@ -176,6 +189,7 @@
   function broadcast(force){
     if (!A?.live()) return;
     const v = M ? M.view() : null;
+    if (v && Z_LOD && st.zq > 0) v.zq = [st.zq, st.zw, st.zk];   // очередь волны — в снимок: уйдёт хозяин — новый продолжит (T-127 ревью #7)
     st.view = v;
     if (M && !force && !M.take() && st.now - st.sentAt < 1.5) return;
     st.sentAt = st.now;

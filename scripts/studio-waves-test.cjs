@@ -1,6 +1,8 @@
 // «Студия 3D» «Выживание» — AI LOD P1 (T-127, решение владельца D5) в node, с поддельным миром студии (js/games/studio3d-play.js +
 // js/engine/modes.js): живых зомби не больше 64 за раз; волна больше — остальные выходят, когда падают первые, и волна не кончается,
 // пока очередь не пуста; места и внешность — по зерну (два прогона одинаковы, без Math.random); откат Z_LOD = false — как было (30).
+// Review #7: the queue is in the host snapshot — a new host mid-wave (from a stale snapshot) brings out exactly the zombies the old
+// host would have (same seeds and places, none lost, none twice).
 // Запуск из корня сайта: node scripts/studio-waves-test.cjs
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = path.join(__dirname, '..');
@@ -30,7 +32,7 @@ function world(lod = true){
     sendAll(){}, sendTo(){}, sendHost(){}, toast(){}, msg(){}, sound(){}, respawn(){}, scriptEvent(){} };
   mod.start(papi); mod.world(false);
   const zombies = () => SC.all().filter(o => o.cls === 'NPC' && o.name === 'Зомби');
-  return { box, mod, SC, zombies, T: E.s3play._test };
+  return { box, mod, SC, zombies, papi, T: E.s3play._test };
 }
 // прогон: шаги хозяина по 1/60; kill(n) — убрать n зомби (как удар игрока); пишет, сколько живых было на каждом шаге
 function play(lod = true, poison = true){
@@ -65,6 +67,34 @@ function play(lod = true, poison = true){
 {
   const o = play(false, false);
   ok(o.maxAlive === 30, 'откат Z_LOD = false: как было — не больше 30 за волну', o.maxAlive);
+}
+// ═══ Review #7: the wave queue survives a host change ═══
+// wave 7 = 80 zombies (64 alive + 16 queued); kill 10, 3 steps, the last snapshot the guests got is up to 1.5 s old; then a new host
+function wave7(change){
+  const W = world(); let last = null;
+  W.papi.sendAll = (t, d) => { if (t === 'mode' && d && 'v' in d) last = d.v; };
+  const out = [], add = W.SC.add;
+  W.SC.add = (cls, p) => { const o = add.call(W.SC, cls, p); if (cls === 'NPC' && o.name === 'Зомби' && /^z[0-9]+-7-/.test(String(o.seed))) out.push(o.seed + '@' + o.pos.join(',')); return o; };
+  const step = n => { for (let i = 0; i < n; i++) W.mod.step(1 / 60, true); };
+  const kill = n => { for (const o of W.zombies().slice(0, n)) W.SC.remove(o); };
+  for (let wave = 1; wave < 7; wave++) { for (let i = 0; i < 20 * 60 && W.T.state().M.wave < wave; i++) step(1); step(60); for (let g = 0; g < 40 && (W.zombies().length || W.T.state().st.zq); g++) { kill(10); step(3); } }
+  for (let i = 0; i < 20 * 60 && W.T.state().M.wave < 7; i++) step(1);
+  step(60); kill(10); step(3);
+  const before = W.T.state().st.zq;
+  let after = null; const snapQ = last?.zq || null;
+  if (change) {   // хозяин ушёл: новый — с пустым состоянием режима и последним полученным снимком
+    W.mod.stop(); W.mod.start(W.papi); W.mod.guestEvent('mode', { v: last }); W.mod.world(true);
+    after = W.T.state().st.zq;
+  }
+  for (let g = 0; g < 40 && (W.zombies().length || W.T.state().st.zq); g++) { kill(10); step(3); }
+  return { out, before, after, snapQ, wave: W.T.state().M.wave };
+}
+{
+  const a = wave7(false), b = wave7(true);
+  ok(a.out.length === 80 && new Set(a.out).size === 80, 'волна 7 без смены хозяина: вышли все 80', a.out.length);
+  ok(Array.isArray(b.snapQ) && b.snapQ[1] === 7, 'очередь волны — в снимке для гостей ([очередь, волна, вышло])', b.snapQ);
+  ok(b.after === b.before && b.before === 10, 'новый хозяин продолжил очередь (10), снимок отставал — вышедших после него не повторил', [b.before, b.after, b.snapQ]);
+  ok(b.out.length === 80 && b.out.join(';') === a.out.join(';'), 'со сменой хозяина — те же 80 зомби (места и внешность), никто не потерян и не вышел дважды', [b.out.length, new Set(b.out).size]);
 }
 // ═══ Review #6: Studio's simple figures have their own one-line rollback S3_IMP ═══
 {
