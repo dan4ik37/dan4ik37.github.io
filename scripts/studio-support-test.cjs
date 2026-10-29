@@ -80,6 +80,20 @@ sec('без крыши: убрали колонны под балкой — ба
 }
 
 // ═══ T-124 SH1: нагрузка (settings.phys.load = 1) — вес деталей и площадь касания ═══
+// разбор SH1 (4): металлическая плита на двух деревянных столбиках — убрали один, плита падает, а перегруженный второй (раздавлен) —
+// тоже вниз (раньше оставался стоять: раздавленных нет в группах)
+sec('нагрузка: раздавленная деталь тоже падает (её нет в группах)');
+{
+  const SC = scene('real'); SC.settings.phys = { load: 1 };
+  SC.add({ id: 'pa', pos: [.3, 1.5, .3], size: [.6, 3, .6], mat: 'wood' }); SC.add({ id: 'pb', pos: [3.7, 1.5, .3], size: [.6, 3, .6], mat: 'wood' });
+  SC.add({ id: 'slab', pos: [2, 3.15, 2], size: [4, .3, 4], mat: 'metal' });
+  const P = papiOf(SC); SS.play.start(P); SS.play.world(); SS.play.step(1 / 60);
+  const start = ['pa', 'pb', 'slab'].map(k => SC.get(k).anchored !== false);
+  SC.remove(SC.get('pb')); SS.play.step(1 / 60);
+  const r = { start, slab: SC.get('slab').anchored, pa: SC.get('pa').anchored, crushed: SS.B.loadJob().res?.crushed };
+  ok(r.start.every(Boolean) && r.slab === false && r.pa === false && r.crushed >= 1, 'плита на двух столбиках: убрали один — плита падает, раздавленный второй столбик — тоже', r);
+  SS.play.stop();
+}
 sec('нагрузка: бетон на балке между стенами — убрали стену, балка с бетоном падает (без нагрузки — висит, как раньше)');
 {
   const mk = load => { const SC = scene('real'); if (load) SC.settings.phys = { load: 1 };

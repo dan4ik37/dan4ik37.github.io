@@ -220,8 +220,10 @@
     } else if (pend.gone.length) {   // сломали опору: «до» — с ней, «после» — без неё
       const gone = pend.gone.splice(0);
       const L = build(SC, ed.ph, gone);
-      const ng = cfg().load ? B.collapse2(Pm, L.broken) : B.collapse(Pm, L.broken), list = [];   // v2: с нагрузкой
-      for (let k = 0; k < ng; k++) for (const i of B.groups(k)) if (i < L.list.length - gone.length) list.push(L.list[i]);
+      const ld = !!cfg().load, ng = ld ? B.collapse2(Pm, L.broken) : B.collapse(Pm, L.broken), list = [], nOwn = L.list.length - gone.length;   // v2: с нагрузкой
+      for (let k = 0; k < ng; k++) for (const i of B.groups(k)) if (i < nOwn) list.push(L.list[i]);
+      // v2: раздавленные детали (их нет в группах) — тоже вниз (T-124: раньше перегруженная колонна оставалась стоять)
+      const cr = ld ? B.g.L?.crushed : null; if (cr) for (let i = 0; i < nOwn; i++) if (cr[i] && !B.g.fall[i]) list.push(L.list[i]);
       fell = drop(list);
       if (fell.length) papi.print?.(`🧱 Обрушилось деталей: ${fell.length}`, 'sys');
     } else return;
