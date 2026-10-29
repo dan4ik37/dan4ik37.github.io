@@ -44,6 +44,8 @@
   KT.MAXB = 1536;   // постройка больше — проверка этажей «не знаю» (стоит)
   KT.CHECK_OPS = 2048;
   KT.LAND_CELLS = 48;   // легло — клеток в мир за такт (остальное — следующими тактами, сетка лежит на их месте)
+  KT.DROP_STEP = 48;    // T138-V3: «где ляжет» — спуск ищется до стольких клеток за раз (не нашли опору — падает на столько и ищет дальше)
+  KT.REST_OPS = 2048;   // T138-V5: поиск «где ляжет» — не больше стольких чтений за такт (и не дальше общего потолка KT.CEIL)
   KT.HIT = true;        // ревью D1: тело в крене / полёте / повисшее — твёрдое для игрока, мобов и вещей, его видно прицелом (false — как было)
   KT.GROUND = true;     // ревью D4: упёрлось в землю (природное, не ствол) — ложится на склон под своим углом, а не виснет (false — как было)
   KT.SLIDE = true;      // ревью D5: легло краем, центр масс за краем — соскальзывает с края (false — как было: торчит над обрывом)
@@ -113,7 +115,7 @@
     // какой удар: 0 — как раньше, 1 — срез (F1), 2 — рубка живого дерева (F3)
     const SIDE_OF = (nx, ny, nz) => nx > 0 ? 0 : nx < 0 ? 1 : ny > 0 ? 2 : ny < 0 ? 3 : nz > 0 ? 4 : 5;   // грань удара → сторона (порядок сетки)
     X.mines = (hit, b, need) => {
-      if (!hit || hit.ice || hit.body || st.creative || (st.coopGuest && !(KT.NET && st.net?.reqCut)) || !b || b.hard <= 0) return 0;
+      if (!hit || hit.ice || hit.body || st.creative || (st.coopGuest && !(KT.NET && st.net?.reqCut && st.net.kt >= 1)) || !b || b.hard <= 0) return 0;   // T138-V2: хозяин без 'kc' — копать как раньше
       const v = hit.v | 0, t = v & 0xfff;
       if (KT.FELL && st.fellOn?.() !== false && st.ents?.treeKind?.(v) === 1 && ((v >>> 12) & 3) === 0 && natural(hit.x, hit.y, hit.z)) return 2;
       if (!KT.CUT || b.shape !== V.SHAPE.cube || !V.T.opaque[t] || b.ui || b.fall || V.T.liquid[t] || isLeaf(v)) return 0;
@@ -440,7 +442,7 @@
       const dv = DV[Rr.dir];
       const g = st.ents?.fallGroup ? st.ents.fallGroup(cells, { x: PV.x, y: PV.y, z: PV.z }, dv, { topple: true, fast: true, cap: 16, trunk: kind === 'tree' ? (v => st.ents.treeKind(v) === 1) : null }) : null;
       X.stats.ms.view = Math.max(X.stats.ms.view || 0, now() - tA);
-      bodies[s] = { kind, cells, nat, tiles, g, ox: o.ox, oy: o.oy, oz: o.oz, dir: Rr.dir, t: 0, hung: false, hungAt: 0, hold: [0, 0, 0], loose: !!o.loose, nid: 0, om: 0, lth: -1, lon: 0, loy: 0, mode: 'q', rest: null };
+      bodies[s] = { kind, cells, nat, tiles, g, ox: o.ox, oy: o.oy, oz: o.oz, dir: Rr.dir, t: 0, hung: false, hungAt: 0, hold: [0, 0, 0], loose: !!o.loose, nid: 0, om: 0, lth: -1, lon: 0, loy: 0, mode: 'q', rest: null, rs: null, more: false };
       if (netOn()) { const B2 = bodies[s]; B2.nid = ++X.nid; X.netPush('b', B2.nid, kind === 'tree' ? 1 : 0, Rr.dir, Math.round(PV.x * 8), Math.round(PV.y * 8), Math.round(PV.z * 8), cells); }
       if (kind === 'build') st.AU?.play('kb_creak', { x: PV.x - st.ox, y: PV.y + 2, z: PV.z - st.oz, vol: .8, rate: .7 });
       if (g) { g.pth = g.th; g.pon = g.on; g.poy = g.oy; }
@@ -461,7 +463,10 @@
     function tick0(){
       ceilWin();
       let ops = 0;
+      restUsed = 0;
       if (RQ.length) ops += restoreTick();
+      // T138-V5: «где ляжет», не уложившееся в прошлый такт, — первым (начатое падение заканчивается), в тот же потолок
+      for (let s = 0; s < Wd.NS; s++) { const b = bodies[s]; if (b?.rs) ops += restRun(s, b, restLeft(ops)); }
       // проверки этажей: по частям, ≤ KT.CHECK_OPS за такт (ревью PERF-1)
       while (ops < KT.CHECK_OPS && st.sup && KT.LEAN && (CK.on || CHK.length)) {
         if (CK.on && CK.dirty) ops += ckBegin(CK.x0, CK.y0, CK.z0, CK.was);   // правка уже пройденной клетки — обход заново
@@ -485,9 +490,9 @@
           else if (type === 2) {
             b.om = Wd.om[s];
             if (Wd.th[s] < TP.F90) { b.mode = 'p'; b.landing = X.stats.ticks; X.stats.ground = (X.stats.ground | 0) + 1; land(s, b); }   // ревью D4: упёрлось в землю под углом — ложится там (склон)
-            else { const r = rest(s, b); b.rest = [r.drop, r.slide]; Wd.drop(s, 8 * r.drop, 8 * r.slide); }
+            else { b.rs = restInit(s, b); ops += restRun(s, b, restLeft(ops + Wd.used + landCells * 4)); }
           }
-          else if (type === 3) { b.landing = X.stats.ticks; land(s, b); }
+          else if (type === 3) { if (b.more) { b.rs = restInit(s, b); ops += restRun(s, b, restLeft(ops + Wd.used + landCells * 4)); } else { b.landing = X.stats.ticks; land(s, b); } }   // T138-V3: глубже — падает дальше
           else if (type === 4) creak(s, b);
         }
         for (let s = 0; s < Wd.NS; s++) { const b = bodies[s]; if (b?.g) { b.g.th = Wd.angle(s); Wd.offset(s, OF); b.g.on = OF[0] / 8; b.g.oy = OF[1] / 8; if (b.nid && (b.lth !== Wd.th[s] || b.lon !== OF[0] || b.loy !== OF[1])) { b.lth = Wd.th[s]; b.lon = OF[0]; b.loy = OF[1]; X.netPush('s', b.nid, b.lth, b.lon, b.loy); } } }
@@ -547,49 +552,91 @@
       ev.flush();
       end(s, b, xyz, false);
     }
-    // где ляжет после поворота на четверть: спуск (клеток, по столбикам, ≤ 48) и сдвиг вдоль падения (ревью D5: легло краем, а центр
-    // масс за краем опоры — соскальзывает с края, пока центр масс не над опорой; ≤ 8 клеток). Ствол: листва и тонкие ветки — не
-    // опора и не вес (станут вещами / сломаются), чужие листва и тонкие ветки — тоже не опора (ревью D3)
-    const RST = { drop: 0, slide: 0 }, COLX = [], COLZ = [], COLY = [], COLA = [], COLN = [];
-    function rest(s, b){
-      const c = b.cells, n = c.length / 4, tree = b.kind === 'tree', stop = tree ? stopTree : stopAt, d = Wd.dir[s], sx = d === 0 ? 1 : d === 1 ? -1 : 0, sz = d === 2 ? 1 : d === 3 ? -1 : 0;
-      COLX.length = 0; let nc = 0, comN = 0, comS = 0;
-      const col = new Map();
+    // где ляжет после поворота на четверть: спуск по столбикам и сдвиг вдоль падения (ревью D5: легло краем, а центр масс за краем
+    // опоры — соскальзывает с края, пока центр масс не над опорой; ≤ 8 клеток). Ствол: листва и тонкие ветки — не опора и не вес
+    // (станут вещами / сломаются), чужие листва и тонкие ветки — тоже не опора (ревью D3). T138-V3: спуск ищется до KT.DROP_STEP (48)
+    // клеток за раз; опоры не нашли — тело падает на столько и ищет дальше от нового места (над пропастью глубже 48 ничего не висит).
+    // T138-V5: поиск — по частям, его чтения — в общий потолок за такт (§5.x): шаг — одна примерка (сдвиг k), ≤ столбики · (dcap + 3)
+    // чтений; бюджет такта кончился — следующий такт (тело ждёт повёрнутым); ждало такт — шаг с dcap = 1 всё равно (поиск кончается)
+    function restInit(s, b){
+      const c = b.cells, n = c.length / 4, tree = b.kind === 'tree', d = Wd.dir[s], sx = d === 0 ? 1 : d === 1 ? -1 : 0, sz = d === 2 ? 1 : d === 3 ? -1 : 0;
+      const col = new Map(), CX = [], CZ = [], CY = [], CA = [];
+      let nc = 0, comN = 0, comS = 0;
       for (let i = 0; i < n; i++) {
         if (tree && st.ents.treeKind(c[i * 4 + 3]) >= 2) continue;
         Wd.land(s, c[i * 4] - b.ox, c[i * 4 + 1] - b.oy, c[i * 4 + 2] - b.oz, LC);
         const x = LC[0] + b.ox, y = LC[1] + b.oy, z = LC[2] + b.oz, k = (x + 4096) * 8192 + (z + 4096);
         let j = col.get(k);
-        if (j === undefined) { j = nc++; col.set(k, j); COLX[j] = x; COLZ[j] = z; COLY[j] = y; COLA[j] = sx ? x * sx : z * sz; COLN[j] = 0; }
-        if (y < COLY[j]) COLY[j] = y;
-        COLN[j]++; comN++; comS += COLA[j] + .5;
+        if (j === undefined) { j = nc++; col.set(k, j); CX[j] = x; CZ[j] = z; CY[j] = y; CA[j] = sx ? x * sx : z * sz; }
+        if (y < CY[j]) CY[j] = y;
+        comN++; comS += CA[j] + .5;
       }
-      RST.drop = 0; RST.slide = 0;
-      if (!nc) return RST;
-      const com = comS / comN;
-      const fit = k => {   // сдвиг на k клеток вдоль падения → спуск (−1 — не пройти: там твёрдое), опора [a0, a1]
-        let dmin = 48;
-        for (let j = 0; j < nc; j++) {
-          const x = COLX[j] + k * sx, z = COLZ[j] + k * sz, y = COLY[j];
-          if (k && stop(x, y, z)) return -1;
-          let dd = 0; while (dd < dmin && y - dd - 1 >= 1 && !stop(x, y - dd - 1, z)) { dd++; X.stats.landReads++; }
-          if (dd < dmin) dmin = dd;
-        }
-        FIT.a0 = 1e9; FIT.a1 = -1e9;
-        for (let j = 0; j < nc; j++) { const x = COLX[j] + k * sx, z = COLZ[j] + k * sz, y = COLY[j] - dmin; if (y - 1 >= 1 && stop(x, y - 1, z)) { const a = COLA[j] + k; if (a < FIT.a0) FIT.a0 = a; if (a > FIT.a1) FIT.a1 = a; } }
-        return dmin;
-      };
-      let dm = fit(0);
-      RST.drop = Math.max(0, dm);
-      if (!KT.SLIDE || dm < 0 || dm >= 48 || FIT.a1 < FIT.a0 || (com >= FIT.a0 && com <= FIT.a1 + 1)) return RST;
-      const sg = com > FIT.a1 + 1 ? 1 : -1;
-      for (let k = 1; k <= 8; k++) {
-        const dk = fit(sg * k); if (dk < 0) break;
-        if (dk >= 48 || FIT.a1 < FIT.a0 || (com + sg * k >= FIT.a0 && com + sg * k <= FIT.a1 + 1)) { RST.drop = Math.min(48, dk); RST.slide = sg * k; X.stats.slides = (X.stats.slides | 0) + 1; return RST; }
-      }
-      return RST;
+      return { nc, X: Int32Array.from(CX), Z: Int32Array.from(CZ), Y: Int32Array.from(CY), A: Int32Array.from(CA), com: nc ? comS / comN : 0, sx, sz, stop: tree ? stopTree : stopAt,
+        k: 0, sg: 0, dm: 0, drop: 0, slide: 0, more: false, done: !nc, wait: 0, a0: 0, a1: 0 };
     }
-    const FIT = { a0: 0, a1: 0 };
+    // примерка: сдвиг на k клеток вдоль падения → спуск (−1 — не пройти: там твёрдое; dcap — опоры не нашли), опора [R0.a0, R0.a1]
+    function fit(R0, k, dcap){
+      const stop = R0.stop, sx = R0.sx, sz = R0.sz, nc = R0.nc;
+      let dmin = dcap;
+      for (let j = 0; j < nc; j++) {
+        const x = R0.X[j] + k * sx, z = R0.Z[j] + k * sz, y = R0.Y[j];
+        if (k) { RR.n++; if (stop(x, y, z)) return -1; }
+        let dd = 0; while (dd < dmin && y - dd - 1 >= 1) { RR.n++; if (stop(x, y - dd - 1, z)) break; dd++; }
+        if (dd < dmin) dmin = dd;
+      }
+      R0.a0 = 1e9; R0.a1 = -1e9;
+      for (let j = 0; j < nc; j++) { const x = R0.X[j] + k * sx, z = R0.Z[j] + k * sz, y = R0.Y[j] - dmin; if (y - 1 >= 1) { RR.n++; if (stop(x, y - 1, z)) { const a = R0.A[j] + k; if (a < R0.a0) R0.a0 = a; if (a > R0.a1) R0.a1 = a; } } }
+      return dmin;
+    }
+    const RR = { n: 0 };
+    // один шаг поиска (dcap — глубина этой примерки) → чтений
+    function restStep(R0, dcap){
+      const r0 = RR.n, com = R0.com;
+      const fin = (drop, slide, more) => { R0.drop = Math.max(0, drop); R0.slide = slide; R0.more = more; R0.done = true; if (slide) X.stats.slides = (X.stats.slides | 0) + 1; };
+      if (!R0.k) {
+        const dm = fit(R0, 0, dcap);
+        if (dm >= dcap) fin(dcap, 0, true);
+        else if (!KT.SLIDE || dm < 0 || R0.a1 < R0.a0 || (com >= R0.a0 && com <= R0.a1 + 1)) fin(dm, 0, false);
+        else { R0.dm = dm; R0.sg = com > R0.a1 + 1 ? 1 : -1; R0.k = 1; }
+        return RR.n - r0;
+      }
+      const k = R0.k, sg = R0.sg, dk = fit(R0, sg * k, dcap);
+      if (dk < 0) fin(R0.dm, 0, false);
+      else if (dk >= dcap) fin(dcap, sg * k, true);
+      else if (R0.a1 < R0.a0 || (com + sg * k >= R0.a0 && com + sg * k <= R0.a1 + 1)) fin(dk, sg * k, false);
+      else if (++R0.k > 8) fin(R0.dm, 0, false);
+      return RR.n - r0;
+    }
+    // поиск тела s по бюджету такта (чтений) → чтений; кончил — тело падает (Wd.drop, продолжение — Wd.more)
+    function restRun(s, b, budget){
+      const R0 = b.rs; let used = 0;
+      while (!R0.done) {
+        let dcap = Math.min(KT.DROP_STEP, Math.floor((budget - used) / R0.nc) - 3);
+        if (dcap < 1) { if (used || R0.wait < 1) { R0.wait++; X.stats.restWait = (X.stats.restWait | 0) + 1; break; } dcap = 1; }
+        used += restStep(R0, dcap); R0.wait = 0;
+      }
+      X.stats.landReads += used; restUsed += used;
+      if (R0.done) {
+        if (b.rest) { Wd.more(s, 8 * R0.drop, 8 * R0.slide); b.rest[0] += R0.drop; b.rest[1] += R0.slide; X.stats.deep = (X.stats.deep | 0) + 1; }
+        else { Wd.drop(s, 8 * R0.drop, 8 * R0.slide); b.rest = [R0.drop, R0.slide]; }
+        b.more = R0.more; b.rs = null;
+      }
+      return used;
+    }
+    let restUsed = 0;
+    const restLeft = used => Math.max(0, Math.min(KT.REST_OPS - restUsed, KT.CEIL - (st.debris ? window.KubomirDebris?.FLOOR | 0 : 0) - used));
+    // сохранение / закрыть мир: где ляжет — сразу, без потолка (с продолжением над пропастью); поза слота — там (Wd.dropNow). b не меняет
+    function restNow(s, b){
+      let d = 0, sl = 0, more = true;
+      if (b.rest) { d = b.rest[0]; sl = b.rest[1]; more = !!b.more; }
+      Wd.dropNow(s, 8 * d, 8 * sl);
+      for (let g = 0; more && g < 8; g++) {
+        const R0 = restInit(s, b);
+        while (!R0.done) restStep(R0, KT.DROP_STEP);
+        d += R0.drop; sl += R0.slide; more = R0.more;
+        Wd.dropNow(s, 8 * d, 8 * sl);
+      }
+    }
     // лёг: клетки на бок (поворот на четверть + сдвиг), брёвна — поперёк, сундук — с вещами; дерево: брёвна лежат, листва — вещами.
     // b.mode 'p' — лёг там, где он есть (повисшее, упёрлось в склон): клетки — под своим углом (Wd.place), брёвна поперёк — если ≥ 45°
     const land = (s, b, budget) => timed('land', land0, s, b, budget);
@@ -793,8 +840,8 @@
         n++;
         if (!b.L) {
           if (b.hung) { b.hung = false; b.mode = 'p'; }
-          else if (Wd.phase(s) === TP.PH.DROP || Wd.phase(s) === TP.PH.LANDED) { if (b.rest) Wd.dropNow(s, 8 * b.rest[0], 8 * b.rest[1]); }
-          else { Wd.th[s] = TP.F90; Wd.ph[s] = TP.PH.LANDED; Wd.dropNow(s, 0); const r = rest(s, b); Wd.dropNow(s, 8 * r.drop, 8 * r.slide); }
+          else if (Wd.phase(s) === TP.PH.DROP || Wd.phase(s) === TP.PH.LANDED) restNow(s, b);
+          else { Wd.th[s] = TP.F90; Wd.ph[s] = TP.PH.LANDED; restNow(s, b); }
         }
         land(s, b, Infinity);
       }
@@ -821,8 +868,8 @@
           if (!L) {
             let mode = 'q';
             if (b.hung) mode = 'p';
-            else if (Wd.phase(s) === TP.PH.DROP || Wd.phase(s) === TP.PH.LANDED) { if (b.rest) Wd.dropNow(s, 8 * b.rest[0], 8 * b.rest[1]); }
-            else { Wd.th[s] = TP.F90; Wd.ph[s] = TP.PH.LANDED; Wd.dropNow(s, 0); const r = rest(s, b); Wd.dropNow(s, 8 * r.drop, 8 * r.slide); }
+            else if (Wd.phase(s) === TP.PH.DROP || Wd.phase(s) === TP.PH.LANDED) restNow(s, b);
+            else { Wd.th[s] = TP.F90; Wd.ph[s] = TP.PH.LANDED; restNow(s, b); }
             L = { i: 0, mode, rot: mode !== 'p' || Wd.th[s] >= TP.F90 / 2, sp: [] };
           }
           const n = b.cells.length / 4;

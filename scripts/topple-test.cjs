@@ -5,6 +5,8 @@
 // зависание на соседе, одинаково при 30 / 60 / 144 кадрах, бюджет чтений за такт, мусор за шаг; рубка: подруб решает сторону,
 // великану нужно больше ударов, недопил держит, тяжёлая крона кренится сама.
 const fs = require('fs'), path = require('path');
+// T138-V4: мусор за шаг меряется всегда (и в ci-run без --expose-gc): gc — через флаги v8
+if (typeof globalThis.gc !== 'function') { try { require('v8').setFlagsFromString('--expose-gc'); globalThis.gc = require('vm').runInNewContext('gc'); } catch (e) {} }
 const SITE = path.join(__dirname, '..');
 globalThis.window = globalThis; globalThis.self = globalThis;
 for (const f of ['js/engine/topple.js', 'js/engine/fell.js']) require(path.join(SITE, f));
@@ -221,7 +223,7 @@ sec('мусор за шаг (тела в полёте, ровный режим) 
     const W2 = TP.world({}); for (let k = 0; k < 8; k++) W2.add(MB, MR, { ox: (k - 4) * 30, oy: 0, oz: 0, rate: 100 });
     const st2 = () => { W2.tick(solid); };
     for (let k = 0; k < 300; k++) st2();   // прогрев JIT (медленный крен: 8 тел всё время в работе)
-    for (let a = 0; a < 3 && !(bytes < 64); a++) {   // лучшая из 3 попыток: поздняя компиляция JIT иногда попадает в замер (не мусор шага)
+    for (let a = 0; a < 3 && (bytes === null || bytes >= 64); a++) {   // лучшая из 3 попыток: поздняя компиляция JIT иногда попадает в замер (не мусор шага); T138-V4: было !(null < 64) — ни одной попытки
       gc(); const h0 = process.memoryUsage().heapUsed;
       for (let k = 0; k < 200; k++) st2();
       gc(); const h1 = process.memoryUsage().heapUsed;
@@ -229,7 +231,7 @@ sec('мусор за шаг (тела в полёте, ровный режим) 
     }
     let busy = 0; for (let k = 0; k < 16; k++) if (W2.ph[k] === 1 || W2.ph[k] === 2) busy++;
     ok(busy === 8, '8 тел всё ещё кренятся во время замера', busy);
-    ok(bytes < 64, 'мусор за такт ~0 Б (8 тел в полёте)', bytes);
+    ok(bytes !== null && bytes < 64, 'мусор за такт ~0 Б (8 тел в полёте) — замерено: ' + (bytes === null ? 'нет' : bytes.toFixed(2) + ' Б'), bytes);
   } else console.log('  (без --expose-gc мусор не меряется)');
   const t0 = process.hrtime.bigint(); let n = 0;
   for (let k = 0; k < 2000; k++) { step(); if (k % 40 === 0) refill(); n++; }
@@ -324,6 +326,15 @@ sec('ревью T-138: центр масс ровно над осью — пад
   Wd.drop(s5, 8, 16); let rest = 0; while (!rest && t++ < 400) { const n = Wd.tick(() => 0); for (let k = 0; k < n; k++) if (Wd.ev[k * 5 + 1] === 3) rest = 1; }
   const after = Wd.land(s5, 0, 3, 0, [0, 0, 0]).slice(), of = Wd.offset(s5, [0, 0]);
   ok(rest && after[0] === before[0] + 2 && after[1] === before[1] - 1 && of[0] === 16, 'D5: соскальзывание на 2 клетки (+x) и спуск на 1 — сетка и клетки «легло» сдвинуты', { before, after, of });
+  // T138-V3: Wd.more — падает дальше после REST (опоры не нашли за один поиск): скорость не сбрасывается, итог — сумма; сдвиг назад — плавно
+  { const W3 = TP.world({}), s3 = W3.add(B5, R5, { ox: 0, oy: 0, oz: 0, kind: 'tip', w0: 40000 }); let t3 = 0, fy = [], rests = 0;
+    while (W3.phase(s3) !== TP.PH.LANDED && t3++ < 200) W3.tick(() => 0);
+    const b0 = W3.land(s3, 0, 3, 0, [0, 0, 0]).slice();
+    W3.drop(s3, 8 * 6, 8 * 2);
+    for (let k = 0; k < 200 && rests < 2; k++) { const n = W3.tick(() => 0); fy.push(-W3.offset(s3, [0, 0])[1]); for (let e = 0; e < n; e++) if (W3.ev[e * 5 + 1] === 3) { rests++; if (rests === 1) W3.more(s3, 8 * 5, -8); } }
+    const b1 = W3.land(s3, 0, 3, 0, [0, 0, 0]), steps = fy.slice(1).map((v, i) => v - fy[i]);
+    let mono = true, jump = 0; for (let i = 0; i < steps.length; i++) { if (steps[i] < 0) mono = false; if (steps[i] > jump) jump = steps[i]; }
+    ok(rests === 2 && b1[1] === b0[1] - 11 && b1[0] === b0[0] + 1 && mono && jump <= 16, 'Wd.more: 6 клеток, потом ещё 5 (и сдвиг 2, потом −1) — легло на 11 ниже и на 1 вперёд, спуск без рывков вверх', { b0, b1, rests, jump }); }
   // Wd.save / Wd.load — вернуть как было (заглянуть вперёд без изменений)
   Wd.load(s5, sv); const back = Wd.land(s5, 0, 3, 0, [0, 0, 0]);
   ok(back[0] === before[0] && back[1] === before[1] && Wd.phase(s5) === TP.PH.LANDED, 'Wd.save / Wd.load — поза вернулась', { back, before });

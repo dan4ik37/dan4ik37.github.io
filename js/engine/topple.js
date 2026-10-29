@@ -26,6 +26,7 @@
 //                                   contact or 90° reached: the adapter computes the drop and calls Wd.drop), 3 REST (drop finished:
 //                                   write the cells), 4 CREAK (leaning, once per second).
 //     Wd.drop(s, eighths, slide) (slide — eighths along +dir: the body slides off an edge its centre of mass is beyond) ·
+//     Wd.more(s, eighths, slide) (after REST: fall further from here — the adapter found no ground within one search; speed kept) ·
 //     Wd.resume(s, ω) · Wd.free(s) · Wd.angle(s) (radians, for the view) · Wd.offset(s, out) (mesh origin shift after a re-pivot,
 //     the slide and the drop, eighths) · Wd.land(s, x, y, z, out) — landing cell of a body cell (quarter turn about the pivot +
 //     re-pivot shift + slide + drop, integer) · Wd.place(s, x, y, z, out) — the cell under a body cell's centre at the current pose
@@ -313,9 +314,9 @@
         if (p === PH_DROP) {
           fv[s] = Math.min(256, fv[s] + 10); fy[s] += fv[s];
           if (fy[s] >= fd[s] << 4) fy[s] = fd[s] << 4;
-          const sm = Math.abs(fsd[s]) << 4, sc = Math.abs(fsl[s]);   // slide: 1,5 cells per tick toward the target
-          if (sc < sm) fsl[s] = (fsd[s] < 0 ? -1 : 1) * Math.min(sm, sc + 192);
-          if (fy[s] === fd[s] << 4 && Math.abs(fsl[s]) === sm) { ph[s] = PH_LANDED; pushEv(s, 3, 0, 0, 0); }
+          const tg = fsd[s] << 4;   // slide: 1,5 cells per tick toward the target (either way: Wd.more may add the other way)
+          if (fsl[s] !== tg) fsl[s] = fsl[s] < tg ? Math.min(tg, fsl[s] + 192) : Math.max(tg, fsl[s] - 192);
+          if (fy[s] === fd[s] << 4 && fsl[s] === tg) { ph[s] = PH_LANDED; pushEv(s, 3, 0, 0, 0); }
           continue;
         }
         const need = nsmp[s] * TP.SUB;
@@ -328,6 +329,7 @@
       return Wd.nev;
     };
     Wd.drop = (s, eighths, slide = 0) => { if (ph[s] !== PH_LANDED) return 0; fd[s] = Math.max(0, eighths | 0); fy[s] = 0; fv[s] = 0; fsd[s] = slide | 0; fsl[s] = 0; ph[s] = PH_DROP; return fd[s]; };   // REST comes on the next tick
+    Wd.more = (s, eighths, slide = 0) => { if (ph[s] !== PH_LANDED) return 0; fd[s] += Math.max(0, eighths | 0); fsd[s] += slide | 0; ph[s] = PH_DROP; return fd[s]; };   // REST again when this part is done
     Wd.dropNow = (s, eighths, slide = 0) => { fd[s] = Math.max(0, eighths | 0); fy[s] = fd[s] << 4; fv[s] = 0; fsd[s] = slide | 0; fsl[s] = fsd[s] << 4; ph[s] = PH_LANDED; };   // save / close: lands at once
     // the slot's motion state (look ahead — e.g. where it would land — and put it back): a — Int32Array(8) or array
     Wd.save = (s, a) => { a[0] = th[s]; a[1] = om[s]; a[2] = ph[s]; a[3] = fy[s]; a[4] = fv[s]; a[5] = fd[s]; a[6] = fsl[s]; a[7] = fsd[s]; return a; };

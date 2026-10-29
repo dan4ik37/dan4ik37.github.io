@@ -1646,7 +1646,7 @@ function fakeWorld(sky, blk, walls = new Set()){
     const pair = (build, o = {}) => {
       const Wh = mkW(), Wg = mkW(); build(Wh); build(Wg);
       const reqs = [], edits = [];   // edits: [такт хозяина, фаза, x, y, z, v]
-      const H = mkS2(Wh, 'real', { x: 40.5, y: 10, z: 40.5 }, { net: { host: true } }), G = mkS2(Wg, 'real', { x: 40.5, y: 10, z: 40.5 }, { guest: true, net: { reqCut: (...a) => reqs.push(a) } });
+      const H = mkS2(Wh, 'real', { x: 40.5, y: 10, z: 40.5 }, { net: { host: true } }), G = mkS2(Wg, 'real', { x: 40.5, y: 10, z: 40.5 }, { guest: true, net: { reqCut: (...a) => reqs.push(a), kt: 1 } });
       let hT = 0, ph = 0;
       Wh.listeners.push((x, y, z, was, v) => edits.push(hT, ph, x, y, z, v));
       const enc = u => Buffer.from(u).toString('base64'), dec = s => new Uint8Array(Buffer.from(s, 'base64'));
@@ -1920,6 +1920,90 @@ function fakeWorld(sky, blk, walls = new Set()){
         X.dispose(); D.dispose(); }
     }
     console.log('  цифры T-138 ревью:', JSON.stringify(NUM16));
+
+    // ═══ 17. T-138 проверка 30.10 (T138-V1…V5): сросшиеся деревья, гость у старого хозяина, глубокий обрыв, потолок «где ляжет» ═══
+    sec('T-138 проверка: дерево, сросшееся с соседним, падает своей частью (сосед цел); гость у старого хозяина копает как раньше; над пропастью ничего не висит; «где ляжет» — в потолке такта');
+    const NUM17 = {};
+    {
+      const logsAt = (W, x, z) => { let n = 0; for (let y = 10; y < 30; y++) if ((W.raw(x, y, z) & 0xfff) === ID.log_oak) n++; return n; };
+      // V1: два дуба в 3 клетках, сросшиеся природными брёвнами на высоте 15; подруб −x и запил +x у A — A падает своей частью от B, у B все 8 брёвен
+      const bridge = (link = true) => { const W = mkW(); plantTree(W, 50, 50, 8); plantTree(W, 53, 50, 8); if (link) { W.set(51, 15, 50, LOG, { nat: true }); W.set(52, 15, 50, LOG, { nat: true }); } return W; };
+      { const W = bridge(), { X, S14 } = mkS2(W, null, { x: 50.5, y: 10, z: 46.5 }), T = S14.topple; S14._D = 1;
+        const b0 = logsAt(W, 53, 50);
+        const r = [mineHits(S14, 50, 11, 50, -1, 0, 3), mineHits(S14, 50, 11, 50, 1, 0, 5)];
+        const body = T.bodies();
+        for (let i = 0; i < 1500 && T.bodies().length; i++) tick2(S14);
+        const b1 = logsAt(W, 53, 50); let west = 0; for (let x = 40; x < 50; x++) for (let y = 10; y <= 12; y++) if ((W.raw(x, y, 50) & 0xfff) === ID.log_oak) west++;
+        ok(r[1] === 2 && body.length === 1 && b0 === 8 && b1 === 8 && west >= 5 && !T.bodies().length, 'V1: A срублено (подруб −x + запил) — упало своей частью к −x (' + (body[0]?.n | 0) + ' клеток, лежит ' + west + ' брёвен), у соседа B все ' + b1 + ' брёвен из ' + b0 + ' (было: 2)', { r, body, b0, b1, west });
+        NUM17.bridge = { body: body[0]?.n | 0, neighbourLogs: b0 + '→' + b1 };
+        X.dispose(); S14.debris.dispose(); }
+      // V1: дерево B ниже среза A не «земля» больше не бывает: прямой вызов — тело A без клеток столбика B; без перемычки — то же дерево
+      { const W = bridge(), { X } = mkS2(W, null), T = X.treeAbove([50, 50], 11, null), W2 = bridge(false), X2 = mkS2(W2, null).X, T2 = X2.treeAbove([50, 50], 11, null);
+        let inB = 0; if (T) for (let i = 0; i < T.cells.length; i += 4) if (T.cells[i] === 53 && T.cells[i + 2] === 50 && (T.cells[i + 3] & 0xfff) === ID.log_oak) inB++;
+        ok(T && T.nLog === 8 && T.split === 8 && inB === 0 && T2 && T2.nLog === 6, 'V1: treeAbove — своя часть: 6 брёвен ствола над срезом + перемычка (ближе к срезу, чем к земле соседа) = 8, соседу — его ствол целиком (' + (T && T.split) + '), из столбика B — 0; без перемычки — 6', { nLog: T && T.nLog, split: T && T.split, inB, alone: T2 && T2.nLog });
+        X.dispose(); X2.dispose(); }
+      // V1: корни (брёвна не стоймя) у среза — свой пень (дерево падает); чужой ствол стоймя рядом — держит свою ветку, дерево падает без неё
+      { const W = mkW(); plantTree(W, 50, 50, 8); const R1 = V.cell(ID.log_oak, 1); W.set(51, 10, 50, R1, { nat: true }); W.set(52, 10, 50, R1, { nat: true }); W.set(51, 11, 50, R1, { nat: true });
+        const { X } = mkS2(W, null), T = X.treeAbove([50, 50], 10, null);
+        const W2 = mkW(); plantTree(W2, 50, 50, 8); W2.set(51, 10, 50, LOG, { nat: true }); W2.set(51, 11, 50, LOG, { nat: true }); W2.set(51, 12, 50, LOG, { nat: true }); W2.set(51, 13, 50, LOG, { nat: true });
+        const X2 = mkS2(W2, null).X, T2 = X2.treeAbove([50, 50], 10, null);
+        let own51 = 0; if (T2) for (let i = 0; i < T2.cells.length; i += 4) if (T2.cells[i] === 51 && T2.cells[i + 2] === 50 && (T2.cells[i + 3] & 0xfff) === ID.log_oak) own51++;
+        ok(T && T.nLog === 8 && T2 && T2.split === 4 && own51 === 0, 'V1: корни у среза — свой пень (дерево ' + (T && T.nLog) + ' брёвен падает); сросшийся столбик-сосед стоймя — держит своё, дерево падает без него', { a: T && T.nLog, split: T2 && T2.split, own51 });
+        X.dispose(); X2.dispose(); }
+      // V1: держится скалой выше среза — по-прежнему не дерево (ревью D8)
+      { const W = mkW(); plantTree(W, 50, 50, 8); W.set(51, 13, 50, STN, { nat: true }); const { X } = mkS2(W, null), T = X.treeAbove([50, 50], 11, null);
+        ok(!T, 'V1: ствол выше среза касается скалы — не дерево (как было, D8)', !!T); X.dispose(); }
+
+      // V2: гость у хозяина без 'kc' (старый код: в 'wel' нет kt) — копает как раньше (разом, 'brk'); хозяин умеет (kt 1) — через хозяина
+      { const W = mkW(); W.set(40, 12, 40, STN); plantTree(W, 50, 50, 8);
+        const old = mkS2(W, null, { x: 30.5, y: 10, z: 30.5 }, { guest: true, net: { reqCut(){} } }), neu = mkS2(W, null, { x: 30.5, y: 10, z: 30.5 }, { guest: true, net: { reqCut(){}, kt: 1 } });
+        const hs = { x: 40, y: 12, z: 40, v: STN, nx: 1, ny: 0, nz: 0 }, ht = { x: 50, y: 11, z: 50, v: LOG, nx: 1, ny: 0, nz: 0 }, bs = V.blocks[ID.stone], bt = V.blocks[ID.log_oak];
+        const mOld = [old.S14.topple.mines(hs, bs, 1), old.S14.topple.mines(ht, bt, 1)], mNew = [neu.S14.topple.mines(hs, bs, 1), neu.S14.topple.mines(ht, bt, 1)];
+        old.S14.mine = { t: 1.01, need: 1 }; const rOld = old.S14.topple.mine(hs, bs, old.S14.mine);
+        ok(mOld.join() === '0,0' && rOld === 1 && mNew.join() === '1,2', 'V2: гость у старого хозяина — камень и ствол копаются как раньше (сломать — ' + rOld + '), у нового — надруб и рубка через хозяина', { mOld, rOld, mNew });
+        const src = fs.readFileSync(path.join(SITE, 'js/games/kubomir-coop.js'), 'utf8');
+        ok(/G\.wel = \{ t: 'wel', v: PROTO, kt: window\.KubomirTopple\?\.NET \? KT_NET : 0/.test(src) && /G\.kt = Number\.isInteger\(m\.kt\)/.test(src), "V2: хозяин пишет в 'wel' kt (умеет 'kc'), гость его запоминает; PROTO прежний — старые и новые играют вместе");
+        old.X.dispose(); neu.X.dispose(); old.S14.debris.dispose(); neu.S14.debris.dispose(); }
+
+      // V3: дуб на краю обрыва глубиной 20 / 60 (мир «как есть», обрушение выкл.) валится в пропасть — брёвна на дне, ни одного в воздухе
+      const cliff = (DEEP, saveAt) => { const FL0 = 70, W = mkW(FL0);
+        for (let x = 52; x < 75; x++) for (let z = 40; z <= 60; z++) for (let y = FL0 - DEEP; y < FL0; y++) W.set(x, y, z, 0, { nat: true, silent: true });
+        for (let y = FL0; y < FL0 + 7; y++) W.set(50, y, 50, LOG, { nat: true });
+        for (let y = FL0 + 4; y <= FL0 + 7; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) if (W.raw(50 + dx, y, 50 + dz) === 0) W.set(50 + dx, y, 50 + dz, LEAF, { nat: true });
+        const { X, S14 } = mkS2(W, null, { x: 46.5, y: FL0, z: 50.5 }), T = S14.topple, b = V.blocks[ID.log_oak];
+        const swing = (nx, n) => { let r = 0; for (let k = 0; k < n && r === 0; k++) { S14.mine = { t: 1 / 8 + 1e-9, need: 1 }; r = T.mine({ x: 50, y: FL0 + 1, z: 50, v: W.raw(50, FL0 + 1, 50), nx, ny: 0, nz: 0 }, b, S14.mine); } return r; };
+        let r = swing(1, 3); if (!r) r = swing(-1, 5);
+        let t = 0, pend = null; for (; t < 2000 && T.bodies().length; t++) { tick2(S14); if (saveAt && t === saveAt) pend = T.pending(); }
+        const logs = []; for (const [k, v] of W.cells) if ((v & 0xfff) === ID.log_oak) { const [x, y, z] = k.split(',').map(Number); if (x >= 51) logs.push([x, y, z]); }
+        const floating = logs.filter(([x, y, z]) => !(W.raw(x, y - 1, z) > 0)).length;
+        let pFloat = -1; if (pend) { pFloat = 0; for (let k = 0; k < pend.c.length; k += 5) if (pend.c[k + 3] === 'log_oak' && pend.c[k] >= 51 && pend.c[k + 1] > FL0 - DEEP + 1) pFloat++; }
+        const res = { deep: DEEP, r, ticks: t, logs: logs.length, ys: [...new Set(logs.map(l => l[1]))], floor: FL0 - DEEP, floating, deepParts: T.stats.deep | 0, pFloat };
+        X.dispose(); S14.debris.dispose(); return res; };
+      { const c20 = cliff(20), c60 = cliff(60), cS = cliff(60, 40);
+        ok(c20.r === 2 && c20.logs === 5 && c20.floating === 0 && c20.ys.join() === '50' && c20.deepParts === 0, 'V3: обрыв 20 — 5 брёвен на дне (y 50), одним спуском', c20);
+        ok(c60.r === 2 && c60.logs === 5 && c60.floating === 0 && c60.ys.join() === '10' && c60.deepParts >= 1, 'V3: обрыв 60 (глубже 48) — падает дальше (' + c60.deepParts + ' продолжений), 5 брёвен на дне (y 10), в воздухе 0 (было 5 на y 26)', c60);
+        ok(cS.pFloat === 0 && cS.floating === 0, 'V3: сохранили, пока летит над пропастью (X.pending) — клетки на дне, не в воздухе', cS);
+        NUM17.cliff = { d20: c20.ticks, d60: c60.ticks, parts60: c60.deepParts }; }
+
+      // V5: дуб 2×2 у обрыва 45 — чтения «где ляжет» в X.used того же такта; за такт ≤ KT.REST_OPS; тесный бюджет (300) — по частям, лёг так же без висящих
+      const giant = (restOps) => { const FL0 = 60, DEEP = 45, W = mkW(FL0), sv = KT.REST_OPS; if (restOps) KT.REST_OPS = restOps;
+        for (let x = 53; x < 90; x++) for (let z = 30; z <= 70; z++) for (let y = FL0 - DEEP; y < FL0; y++) W.set(x, y, z, 0, { nat: true, silent: true });
+        for (let y = FL0; y < FL0 + 16; y++) for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) W.set(50 + i, y, 50 + j, LOG, { nat: true });
+        for (let y = FL0 + 10; y <= FL0 + 17; y++) for (let dx = -4; dx <= 5; dx++) for (let dz = -4; dz <= 5; dz++) if (W.raw(50 + dx, y, 50 + dz) === 0) W.set(50 + dx, y, 50 + dz, LEAF, { nat: true });
+        const { X, S14 } = mkS2(W, null, { x: 46.5, y: FL0, z: 46.5 }), T = S14.topple, b = V.blocks[ID.log_oak], sec4 = [[50, 50], [51, 50], [50, 51], [51, 51]];
+        let r = 0; const side = (nx, n) => { for (let i = 0; i < n && r !== 2; i++) { const c = sec4.find(c => (W.raw(c[0], FL0 + 1, c[1]) & 0xfff) === ID.log_oak); if (!c) return; S14.mine = { t: 2 / 8 + 1e-9, need: 1 }; r = T.mine({ x: c[0], y: FL0 + 1, z: c[1], v: W.raw(c[0], FL0 + 1, c[1]), nx, ny: 0, nz: 0 }, b, S14.mine); } };
+        side(1, 6); side(-1, 16);
+        let worst = 0, under = 0, maxUsed = 0, prev = T.stats.landReads, t = 0;
+        for (; t < 900 && T.bodies().length; t++) { tick2(S14); const lr = T.stats.landReads - prev; prev = T.stats.landReads; if (lr > worst) worst = lr; if (T.used < lr) under++; if (T.used > maxUsed) maxUsed = T.used; }
+        let floating = 0, lying = 0; for (const [k, v] of W.cells) if ((v & 0xfff) === ID.log_oak) { const [x, y, z] = k.split(',').map(Number); if (x >= 53) { lying++; if (!(W.raw(x, y - 1, z) > 0)) floating++; } }
+        const res = { r, ticks: t, worstRestReads: worst, under, maxUsed, waits: T.stats.restWait | 0, deep: T.stats.deep | 0, lying, floating, ceilMax: T.stats.ceilMax | 0 };
+        KT.REST_OPS = sv; X.dispose(); S14.debris.dispose(); return res; };
+      { const A = giant(), B = giant(300);
+        ok(A.r === 2 && A.under === 0 && A.worstRestReads <= KT.REST_OPS && A.maxUsed <= KT.CEIL && A.lying > 0 && A.floating === 0, 'V5: «где ляжет» — в общем потолке: худший такт ' + A.worstRestReads + ' чтений (≤ ' + KT.REST_OPS + '), в X.used того же такта всегда, X.used ≤ ' + KT.CEIL, A);
+        ok(B.r === 2 && B.under === 0 && B.worstRestReads <= 300 + 4 * 40 && (B.waits > 0 || B.deep > 0) && B.lying > 0 && B.floating === 0, 'V5: бюджет 300 за такт — поиск по частям (ждал ' + B.waits + ', продолжений ' + B.deep + '), худший такт ' + B.worstRestReads + ', легло без висящих (' + B.lying + ' брёвен)', B);
+        NUM17.restReads = { full: A.worstRestReads, tight: B.worstRestReads, waits: B.waits, deep: B.deep, ticks: [A.ticks, B.ticks] }; }
+    }
+    console.log('  цифры T-138 проверка:', JSON.stringify(NUM17));
   }
 
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);

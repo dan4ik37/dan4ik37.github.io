@@ -18,6 +18,10 @@
 (() => {
   const VX = () => window.D37E.vox, CO = () => window.D37Coop, CBk = () => window.D37E?.combat;
   const PROTO = 1, MAX = 8, GAME = 'kubomir';
+  // T138-V2: что хозяин умеет сверх PROTO (в 'wel'): 1 — удары гостя 'kc' и события физики 'kt' (T-138). Гость рубит через хозяина,
+  // только если хозяин это умеет; у старого хозяина (поля нет) — копает как раньше ('brk'). Старый гость у нового хозяина — тоже как
+  // раньше (шлёт 'brk', новые сообщения хозяина ему неизвестны и пропускаются): PROTO не меняется, игра вместе после выкладки не рвётся
+  const KT_NET = 1;
   const T_JSON = 1, T_EDITS = 2, T_CHUNK = 3, T_SNAP = 16, T_ST = 17;
   const SNAP_MS = 100, SNAP_RELAY_MS = 333, ST_MS = 66, ST_RELAY_MS = 333, EDIT_MS = 50, INV_MS = 10000, HOST_SILENT_MS = 15000;
   const MOB_R = 64, ITEM_R = 40, REACH = 5, REACH_C = 6.5, SLACK = 2.5;
@@ -279,7 +283,7 @@
         for (const k of H.edited) { const [a, b] = k.split('|'); keys[i++] = +a; keys[i++] = +b; }
         const P = st.P, saved = meta.coopPlayers?.[pk] || null;
         G.nonce = m.nonce;
-        G.wel = { t: 'wel', v: PROTO, pid, proof, pub: meta.coop.key.pub, code: H.code,
+        G.wel = { t: 'wel', v: PROTO, kt: window.KubomirTopple?.NET ? KT_NET : 0, pid, proof, pub: meta.coop.key.pub, code: H.code,
           host: { pid: 0, nick: myNick(), look: myLook() }, players: ready().filter(o => o !== G).map(o => ({ pid: o.pid, nick: o.nick, look: o.look })),
           world: { name: meta.name, seed: meta.seed, genVer: meta.genVer || 1, mode: meta.mode, diff: meta.diff, gen: meta.gen || null, mc: meta.mc || null, palette: meta.palette, spawn: meta.spawn, time: st.R.lighting.time, day: meta.day || 1, seasons: st.seasons, ice: meta.ice || null, snow: meta.snow || null, wf: st.WX?.force ?? null, cheats: !!meta.cheats, support: meta.support || null },
           items: H.items, you: saved, at: { x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2) }, edited: b64(new Uint8Array(keys.buffer)) };
@@ -703,7 +707,7 @@
       if (!ok) { G.R?.markFake(G.hostId); hooks.status?.('wait'); return; }   // не хозяин этого мира — ждём настоящего
       const w = m.world || {};
       if (typeof w.seed !== 'string' && typeof w.seed !== 'number') return;
-      G.pid = m.pid | 0; G.items = Array.isArray(m.items) ? m.items.map(String) : [];
+      G.pid = m.pid | 0; G.items = Array.isArray(m.items) ? m.items.map(String) : []; G.kt = Number.isInteger(m.kt) ? m.kt : 0;
       try { const u = unb64(m.edited || ''), a = new Int16Array(u.buffer, u.byteOffset, u.byteLength >> 1); for (let i = 0; i + 1 < a.length; i += 2) G.edited.add(a[i] + '|' + a[i + 1]); } catch (e) {}
       G.meta = { id: 'coop-' + code, coop: { guest: true, code }, name: String(w.name || 'Мир друга').slice(0, 40), seed: w.seed, mode: w.mode === 'creative' ? 'creative' : 'survival', diff: ['peaceful', 'easy', 'normal', 'hard'].includes(w.diff) ? w.diff : 'easy',
         genVer: w.genVer === 3 ? 3 : w.genVer === 2 ? 2 : 1, gen: w.gen === 'void' ? 'void' : undefined, mc: w.mc && Array.isArray(w.mc.blocks) ? { blocks: w.mc.blocks.slice(0, 2000).map(String) } : undefined,

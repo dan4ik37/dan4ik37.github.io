@@ -921,19 +921,59 @@
     // и своего пня, и своя листва (как fellFrom) → { cells [x, y, z, v, …], n, nLog, leaves, thin } или null (не дерево). sec — [x, z, …]
     // nat(x, y, z) — природная клетка (не правка игрока): брёвна игрока и всё построенное рядом — не часть дерева и его не держат
     // (дерево падает мимо / на них: упрётся — повиснет); держит только природное твёрдое (скала) — ревью D8
+    // Свой пень (T138-V1): ниже среза не опора только столбики сечения и корни (брёвна не стоймя). Чужой ствол ниже среза (стоймя,
+    // не в сечении) — в обход: дошёл до земли — держит. Дерево, сросшееся ветками с соседним, падает СВОЕЙ частью: брёвна делятся по
+    // шагам (кто ближе по брёвнам — к срезу или к земле соседа; ничья — соседу), перемычка ломается, сосед стоит целым. Держится
+    // природным выше среза (скала, земля склона, незагруженное) — не дерево, как было (ревью D8)
     X.treeAbove = (sec, yc, nat) => {
       treeFlags();
       const Vx = V(), Tt = Vx.T, seeds = [];
       for (let i = 0; i < sec.length; i += 2) { const v = W.raw(sec[i], yc + 1, sec[i + 1]); if (v > 0 && LOGF[v & 0xfff] && (!nat || nat(sec[i], yc + 1, sec[i + 1]))) seeds.push([sec[i], yc + 1, sec[i + 1]]); }
       if (!seeds.length) return null;
       const soft = t => !Tt.solid[t] || LEAFF[t] || Tt.liquid[t] || Tt.shape[t] === Vx.SHAPE.cross || Tt.shape[t] === Vx.SHAPE.torch;
-      const C = Vx.component(W, seeds, { take: (v, x, y, z) => y > yc && LOGF[v & 0xfff] === 1 && (!nat || nat(x, y, z)), edge: (v, x, y, z) => (v < 0 ? 2 : v === 0 || soft(v & 0xfff) || (y <= yc && LOGF[v & 0xfff]) || (nat && !nat(x, y, z)) ? 0 : 2), max: 480 });
-      if (!C || C.touch || C.grounded) return null;
+      const inSec = (x, z) => { for (let i = 0; i < sec.length; i += 2) if (sec[i] === x && sec[i + 1] === z) return true; return false; };
+      const stump = (v, x, y, z) => y <= yc && LOGF[v & 0xfff] === 1 && (((v >>> 12) & 3) !== 0 || inSec(x, z));
+      const take = (v, x, y, z) => LOGF[v & 0xfff] === 1 && !stump(v, x, y, z) && (!nat || nat(x, y, z));
+      const edge = (v, x, y, z) => (v < 0 ? 2 : v === 0 || soft(v & 0xfff) || stump(v, x, y, z) || (nat && !nat(x, y, z)) ? 0 : 2);
+      let C = Vx.component(W, seeds, { take, edge, max: TREE_LINK_MAX });
+      if (!C || C.grounded) return null;
+      if (C.touch) { C = ownPart(C, seeds, yc, edge); if (!C) return null; }
+      else if (C.n > 480) return null;
       let thin = 0; for (let i = 0; i < C.cells.length; i += 4) if (THINF[C.cells[i + 3] & 0xfff]) thin++;
       const Lf = ownLeaves(C); if (!Lf) return null;
       const leaves = Lf.n - C.n; if (leaves < 3 && thin < 2) return null;
-      return { cells: Lf.cells, n: Lf.n, nLog: C.n, leaves, thin };
+      return { cells: Lf.cells, n: Lf.n, nLog: C.n, leaves, thin, split: C.split | 0 };
     };
+    const TREE_LINK_MAX = 1440;   // сросшиеся деревья: обход до стольких брёвен (своя часть — не больше 480, как у одного дерева)
+    // своя часть куска C: держащие клетки (сосед по edge — 2) — «чужие» (выше среза — null: держится природным), от них и от seeds —
+    // обход в ширину по клеткам куска (чужие — первыми: ничья — соседу) → { cells, n, box, split: сколько брёвен осталось соседу } | null
+    function ownPart(C, seeds, yc, edge){
+      const SK = V().supportKey, n = C.n, c = C.cells, at = new Map(), lab = new Uint8Array(n), q = [];
+      for (let i = 0; i < n; i++) at.set(SK(c[i * 4], c[i * 4 + 1], c[i * 4 + 2]), i);
+      for (let i = 0; i < n; i++) {
+        const x = c[i * 4], y = c[i * 4 + 1], z = c[i * 4 + 2];
+        for (let d = 0; d < 6; d++) {
+          const nx = x + (d === 0 ? 1 : d === 1 ? -1 : 0), ny = y + (d === 2 ? 1 : d === 3 ? -1 : 0), nz = z + (d === 4 ? 1 : d === 5 ? -1 : 0);
+          if (at.has(SK(nx, ny, nz)) || edge(W.raw(nx, ny, nz), nx, ny, nz) !== 2) continue;
+          if (y > yc) return null;
+          lab[i] = 2; q.push(i); break;
+        }
+      }
+      for (const s of seeds) { const i = at.get(SK(s[0], s[1], s[2])); if (i !== undefined && !lab[i]) { lab[i] = 1; q.push(i); } }
+      for (let h = 0; h < q.length; h++) {
+        const i = q[h], x = c[i * 4], y = c[i * 4 + 1], z = c[i * 4 + 2];
+        for (let d = 0; d < 6; d++) { const j = at.get(SK(x + (d === 0 ? 1 : d === 1 ? -1 : 0), y + (d === 2 ? 1 : d === 3 ? -1 : 0), z + (d === 4 ? 1 : d === 5 ? -1 : 0))); if (j !== undefined && !lab[j]) { lab[j] = lab[i]; q.push(j); } }
+      }
+      const cells = [], box = [1e9, 1e9, 1e9, -1e9, -1e9, -1e9];
+      let m = 0;
+      for (let i = 0; i < n; i++) {
+        if (lab[i] !== 1) continue;
+        const x = c[i * 4], y = c[i * 4 + 1], z = c[i * 4 + 2]; cells.push(x, y, z, c[i * 4 + 3]); m++;
+        if (x < box[0]) box[0] = x; if (y < box[1]) box[1] = y; if (z < box[2]) box[2] = z; if (x > box[3]) box[3] = x; if (y > box[4]) box[4] = y; if (z > box[5]) box[5] = z;
+      }
+      if (!m || m > 480) return null;
+      return { cells, n: m, grounded: false, touch: false, box, split: n - m };
+    }
     X.treeKind = v => { treeFlags(); const t = v & 0xfff; return LOGF[t] ? (THINF[t] ? 2 : 1) : LEAFF[t] ? 3 : 0; };   // 1 бревно · 2 тонкая ветка · 3 листва
     // что выпадает из листвы упавшего дерева (как у fellFrom): росток / палка / яблоко по случаю r (0…1), lk — доля (большие — меньше)
     X.leafItem = (v, r, lk) => { const Vx = V(), b = Vx.blocks[v & 0xfff]; if (!b) return null; if (r < .05 * lk && Vx.item(SAPLING_OF(b.name))) return SAPLING_OF(b.name); if (r < .07 * lk) return 'stick'; if (r < .08 * lk && b.name === 'leaves_oak') return 'apple'; return null; };
