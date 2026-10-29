@@ -6,6 +6,11 @@
 // кто мешает (та машина качается) — это −5 очков; машины уезжают с анимацией.
 // Очки: машина уехала +10, стоянка пуста +30, все три — бонус 2 за каждую оставшуюся секунду; врезался — −5 (не ниже 0).
 // Стоянка строится так, что машины всегда можно выпустить (в порядке, обратном постановке) — бот так и делает.
+// Проверка T-140 (D3): нажимать все машины подряд, не думая, выигрывало каждую партию (40 из 40, в среднем 501–574 очка
+// против 599 у решателя): −5 за БИП (не ниже 0) почти ничего не стоило, а 3/4 машин на старте уже были свободны.
+// Теперь (1) 3 БИП на одной стоянке — 🚛 эвакуатор: оставшиеся машины увозят (за них 0 и нет +30), дальше следующая
+// стоянка; бонус за время — только если все три стоянки пусты; (2) стоянка строится «плотнее»: из следующих TRY мест
+// (порядок — rng) берётся то, что перекрывает путь больше всего уже стоящих машин (на старте свободна ~половина).
 // Исправлено против прототипа: Math.random → rng (у соперников одинаковые стоянки); время по Date.now и «меньше — лучше»
 // без конца партии → очки и общий предел времени; нажатие на запертую машину ничего не стоило — теперь штраф и подсказка;
 // filter/flatMap всех клеток на каждое нажатие → сетка занятости Int8Array.
@@ -13,6 +18,7 @@
   const T = ArcadeKit.T;
   const S = 6, LOTS = [8, 10, 13], MC = 16;
   const TIME = 120 * 60, WAIT = 45, OUT = 24, HONK = 40;   // шагов
+  const TOW = 3, TRY = 12;   // БИП на стоянку до эвакуатора; из скольких свободных мест выбирается самое «мешающее»
   const PAL = ['#ff4d6d', '#ff9f1c', '#ffd60a', '#2ec27e', '#3a86ff', '#b15cff', '#ff6fd8', '#22d3ee'];
 
   // путь машины i до края (по её стрелке): первая занятая клетка → номер машины-помехи, иначе −1
@@ -49,24 +55,55 @@
       r >>>= 8;
       P[i] = P[j]; P[j] = t;
     }
-    let K = 0;
-    for (let n = 0; n < NC && K < LOTS[L]; n++) {
-      const c = P[n] * 5, h = CAND[c], len = CAND[c + 1], x = CAND[c + 2], y = CAND[c + 3], d = CAND[c + 4];
-      let free = true;
-      for (let i = 0; i < len && free; i++) if (occ[(h ? y : y + i) * S + (h ? x + i : x)] >= 0) free = false;
-      if (!free) continue;
-      s.x[K] = x; s.y[K] = y; s.len[K] = len; s.h[K] = h; s.d[K] = d;
-      if (blocker(s, K) >= 0) continue;
+    // место P[m] годно для машины K: клетки свободны и путь до края свободен (место, негодное сейчас, не станет годным —
+    // машин только прибавляется, поэтому начало перестановки можно пропускать насовсем); USED — место уже занято машиной
+    let K = 0, n = 0;
+    while (K < LOTS[L]) {
+      while (n < NC && (P[n] === USED || !fits(s, P[n], K))) n++;
+      if (n >= NC) break;
+      let best = n, most = -1;
+      for (let m = n, seen = 0; m < NC && seen < TRY; m++) {
+        if (P[m] === USED || !fits(s, P[m], K)) continue;
+        seen++;
+        const b = closes(s, P[m], K);
+        if (b > most) { most = b; best = m; }
+      }
+      fits(s, P[best], K);   // s.x[K] … s.d[K] — выбранное место
+      const h = s.h[K], len = s.len[K], x = s.x[K], y = s.y[K];
       for (let i = 0; i < len; i++) occ[(h ? y : y + i) * S + (h ? x + i : x)] = K;
-      s.lx[o + K] = x; s.ly[o + K] = y; s.ll[o + K] = len; s.lh[o + K] = h; s.ld[o + K] = d;
+      s.lx[o + K] = x; s.ly[o + K] = y; s.ll[o + K] = len; s.lh[o + K] = h; s.ld[o + K] = s.d[K];
+      P[best] = USED;
       K++;
     }
     s.ln[L] = K;
   }
+  const USED = 255;   // NC = 216 мест — 255 не номер места
+  // ставит машину K на место c (поля s.x[K] … s.d[K]) и отвечает, годно ли оно
+  function fits(s, c, K){
+    const q = c * 5, h = CAND[q], len = CAND[q + 1], x = CAND[q + 2], y = CAND[q + 3];
+    for (let i = 0; i < len; i++) if (s.occ[(h ? y : y + i) * S + (h ? x + i : x)] >= 0) return false;
+    s.x[K] = x; s.y[K] = y; s.len[K] = len; s.h[K] = h; s.d[K] = CAND[q + 4];
+    return blocker(s, K) < 0;
+  }
+  // сколько уже стоящих машин 0…K−1 потеряют свободный путь, если встать на место c
+  function closes(s, c, K){
+    const q = c * 5, h = CAND[q], len = CAND[q + 1], x = CAND[q + 2], y = CAND[q + 3];
+    let b = 0;
+    for (let j = 0; j < K; j++) {
+      const hj = s.h[j], dj = s.d[j], xj = s.x[j], yj = s.y[j], lj = s.len[j];
+      let on = 0;
+      for (let i = 0; i < len && !on; i++) {
+        const cx = h ? x + i : x, cy = h ? y : y + i;
+        on = hj ? (cy === yj && (dj > 0 ? cx >= xj + lj : cx < xj) ? 1 : 0) : (cx === xj && (dj > 0 ? cy >= yj + lj : cy < yj) ? 1 : 0);
+      }
+      b += on;
+    }
+    return b;
+  }
 
   function load(s, L){
     const o = L * MC, n = s.ln[L];
-    s.lot = L; s.n = n; s.cars = n; s.occ.fill(-1); s.out = -1; s.outT = 0; s.honk = -1; s.honkT = 0; s.who = -1;
+    s.lot = L; s.n = n; s.cars = n; s.occ.fill(-1); s.out = -1; s.outT = 0; s.honk = -1; s.honkT = 0; s.who = -1; s.lb = 0; s.tw = 0;
     for (let i = 0; i < MC; i++) {
       s.alive[i] = i < n ? 1 : 0;
       if (i >= n) continue;
@@ -77,7 +114,7 @@
   }
 
   function create(rng){
-    const s = { rng, lot: 0, n: 0, cars: 0, out: -1, outT: 0, honk: -1, honkT: 0, who: -1, score: 0, gone: 0, bumps: 0, solved: 0,
+    const s = { rng, lot: 0, n: 0, cars: 0, out: -1, outT: 0, honk: -1, honkT: 0, who: -1, score: 0, gone: 0, bumps: 0, solved: 0, lb: 0, tw: 0, towed: 0,
       bonus: 0, left: TIME, wait: 0, over: false, v: 0, snd: 0,
       x: new Int8Array(MC), y: new Int8Array(MC), len: new Int8Array(MC), h: new Int8Array(MC), d: new Int8Array(MC), alive: new Uint8Array(MC),
       occ: new Int8Array(S * S), perm: new Uint8Array(NC),
@@ -94,9 +131,10 @@
     if (!(i >= 0 && i < s.n) || !s.alive[i]) return;
     const b = blocker(s, i);
     s.v++;
-    if (b >= 0) {   // путь занят: БИП, помеха качается, −5
-      s.honk = b; s.honkT = HONK; s.who = i; s.bumps++;
+    if (b >= 0) {   // путь занят: БИП, помеха качается, −5; TOW-й БИП на стоянке — эвакуатор
+      s.honk = b; s.honkT = HONK; s.who = i; s.bumps++; s.lb++;
       s.score = Math.max(0, s.score - 5); s.snd = 'bad';
+      if (s.lb >= TOW) { s.tw = 1; s.towed += s.cars; s.wait = WAIT; }   // оставшиеся увозят: 0 очков за них, без +30
       return;
     }
     s.alive[i] = 0; s.cars--; s.gone++;
@@ -114,8 +152,9 @@
     if (s.wait) {
       if (--s.wait) return;
       if (s.lot + 1 < LOTS.length) { load(s, s.lot + 1); return; }
-      s.bonus = 2 * Math.ceil(s.left / 60);
-      s.score += s.bonus; s.over = true; s.snd = 'win'; s.v++;
+      const all = s.solved === LOTS.length;   // бонус за время — только за три пустые стоянки
+      s.bonus = all ? 2 * Math.ceil(s.left / 60) : 0;
+      s.score += s.bonus; s.over = true; s.snd = all ? 'win' : 'ok'; s.v++;
       return;
     }
     if (--s.left <= 0) { s.left = 0; s.over = true; s.snd = 'bad'; s.v++; }
@@ -138,6 +177,7 @@
     + '.pk-c.who i::before{content:"БИП!";position:absolute;top:-2px;left:50%;transform:translate(-50%,-100%);font:800 11px system-ui,sans-serif;color:#ffd60a;background:#000a;padding:1px 4px;border-radius:5px;white-space:nowrap}'
     + '.pk-c:focus-visible{outline:3px solid #7dd3fc;outline-offset:-2px}'
     + '.pk-msg{font-size:.8rem;color:#dfe3ea;min-height:1.2em;font-variant-numeric:tabular-nums}'
+    + '.pk-c.tw i{filter:grayscale(1);opacity:.45}'
     + 'body.low .pk-c{transition:none}body.low .pk-c.hk i{animation:none}';
   const ARR = ['◀', '▶', '▲', '▼'];
 
@@ -169,11 +209,12 @@
       c.classList.toggle('gone', !s.alive[i] && s.out !== i);
       c.classList.toggle('hk', s.honk === i);
       c.classList.toggle('who', s.who === i);
+      c.classList.toggle('tw', s.tw === 1 && s.alive[i] === 1);
       c.disabled = !s.alive[i];
     }
-    G.msg.textContent = s.wait ? 'Стоянка ' + (s.lot + 1) + ' пуста! +30'
-      : s.over ? (s.solved === LOTS.length ? 'Все стоянки пусты! Бонус за время: +' + s.bonus : 'Время вышло')
-        : s.honk >= 0 ? 'Путь занят — мешает машина, которая качается (−5)' : 'Машин осталось: ' + s.cars;
+    G.msg.textContent = s.over ? (s.solved === LOTS.length ? 'Все стоянки пусты! Бонус за время: +' + s.bonus : s.left ? 'Стоянки кончились' : 'Время вышло')
+      : s.wait ? (s.tw ? '🚛 Эвакуатор: ' + TOW + ' БИП — оставшиеся машины увезли' : 'Стоянка ' + (s.lot + 1) + ' пуста! +30')
+        : s.honk >= 0 ? 'Путь занят — мешает машина, которая качается (−5, БИП ' + s.lb + ' из ' + TOW + ')' : 'Машин осталось: ' + s.cars;
   }
 
   const clock = n => { const sec = Math.ceil(n / 60); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
@@ -181,17 +222,18 @@
   ArcadeKit.define('parking', {
     kind: 'dom', W: 320, H: 380, maxW: 400,
     title: '🚗 Парковка',
-    intro: 'Выпусти все машины со стоянки. Нажми машину — она поедет по стрелке, если путь до края свободен. Врезался — БИП и −5. Три стоянки за 2 минуты.',
+    intro: 'Выпусти все машины со стоянки. Нажми машину — она поедет по стрелке, если путь до края свободен. Врезался — БИП и −5, три БИП на одной стоянке — приедет эвакуатор. Три стоянки за 2 минуты.',
     controls: 'Нажимай на машины пальцем или мышью. На клавиатуре — Tab по машинам и Enter.',
     duelTitle: 'Одинаковые стоянки у обоих',
     create, input, step, draw, build,
-    hudKey: s => s.lot * 1e6 + s.cars * 1000 + Math.ceil(s.left / 60),
-    hud: s => '🅿️ ' + (s.lot + 1) + '/' + LOTS.length + ' · 🚗 ' + s.cars + ' · ⏱ ' + clock(s.left),
+    hudKey: s => s.lot * 1e7 + s.lb * 1e6 + s.cars * 1000 + Math.ceil(s.left / 60),
+    hud: s => '🅿️ ' + (s.lot + 1) + '/' + LOTS.length + ' · 🚗 ' + s.cars + (s.lb ? ' · БИП ' + s.lb + '/' + TOW : '') + ' · ⏱ ' + clock(s.left),
     win: s => s.solved === LOTS.length,
     result: s => ({
-      title: s.solved === LOTS.length ? (s.bumps ? '🏁 Все уехали!' : '🏆 Ни одного БИП!') : '⏰ Время вышло',
-      text: 'стоянок: ' + s.solved + '/' + LOTS.length + ' · машин: ' + s.gone + (s.bumps ? ' · БИП: ' + s.bumps : '') + (s.bonus ? ' · за время +' + s.bonus : ''),
+      title: s.solved === LOTS.length ? (s.bumps ? '🏁 Все уехали!' : '🏆 Ни одного БИП!') : s.left ? '🚛 Не все уехали' : '⏰ Время вышло',
+      text: 'стоянок: ' + s.solved + '/' + LOTS.length + ' · машин: ' + s.gone + (s.bumps ? ' · БИП: ' + s.bumps : '') + (s.towed ? ' · увёз эвакуатор: ' + s.towed : '')
+        + (s.bonus ? ' · за время +' + s.bonus : ''),
     }),
-    consts: { S, LOTS, MC, TIME, WAIT, OUT, HONK, blocker },
+    consts: { S, LOTS, MC, TIME, WAIT, OUT, HONK, TOW, TRY, blocker },
   });
 })();

@@ -2,14 +2,15 @@
 // последняя поставленная из оставшихся машин всегда свободна; запертая — первая, у которой путь занят
 const lastFree = s => { for (let i = s.n - 1; i >= 0; i--) if (s.alive[i]) return i; return -1; };
 module.exports = {
-  // выпускает машины в обратном порядке постановки; каждое 5-е нажатие — по запертой машине (БИП, −5)
+  // выпускает машины в обратном порядке постановки; каждое 7-е нажатие — по запертой машине (БИП, −5; меньше 3 на стоянку —
+  // эвакуатор не приезжает, бот проходит все три стоянки)
   bot(K, spec, gap = 15){
     const T = K.T, C = spec.consts;
     let last = -1e9, cnt = 0;
     return (s, k, push) => {
       if (s.over || s.wait || k - last < gap) return;
       last = k;
-      if (++cnt % 5 === 0) for (let i = 0; i < s.n; i++) if (s.alive[i] && C.blocker(s, i) >= 0) { push(T.PICK, 0, 0, i); return; }
+      if (++cnt % 7 === 0) for (let i = 0; i < s.n; i++) if (s.alive[i] && C.blocker(s, i) >= 0) { push(T.PICK, 0, 0, i); return; }
       const i = lastFree(s);
       if (i >= 0) push(T.PICK, 0, 0, i);
     };
@@ -44,6 +45,25 @@ module.exports = {
     let total = 0;
     for (let L = 0; L < 3; L++) { ok(s.lot === L, 'parking: стоянка ' + (L + 1)); total += s.n; stepN(s, 60); clear(s); stepN(s, C.WAIT); }
     ok(s.over && s.score === 10 * total + 90 + 2 * Math.ceil((C.TIME - 180) / 60) && spec.win(s), 'parking: 3 стоянки — 10 × машин + 90 + 2 × секунды', { score: s.score, total });
+    // проверка T-140 (D3): TOW БИП на одной стоянке — эвакуатор: оставшиеся увезли (0 за них, без +30), следующая стоянка;
+    // бонус за время — только за три пустые стоянки
+    s = spec.create(K.rng(75));
+    { const f0 = lastFree(s); pick(s, f0); let lk = -1; for (let i = 0; i < s.n; i++) if (s.alive[i] && C.blocker(s, i) >= 0) { lk = i; break; }
+      for (let t = 0; t < C.TOW - 1; t++) pick(s, lk);
+      ok(!s.wait && s.lb === C.TOW - 1 && s.score === 0, 'parking: ' + (C.TOW - 1) + ' БИП — стоянка ещё открыта', { lb: s.lb, score: s.score });
+      const left = s.cars; pick(s, lk);
+      ok(s.wait === C.WAIT && s.tw === 1 && s.towed === left && s.solved === 0 && s.score === 0, 'parking: ' + C.TOW + '-й БИП — эвакуатор: машины увезли, +30 нет', { towed: s.towed, left, score: s.score });
+      pick(s, lastFree(s)); ok(s.gone === 1, 'parking: пока эвакуатор — нажатия не считаются');
+      stepN(s, C.WAIT); ok(s.lot === 1 && s.lb === 0 && s.tw === 0 && !s.over, 'parking: после эвакуатора — следующая стоянка, БИП с нуля'); }
+    { const z = spec.create(K.rng(76)); for (let L = 0; L < 3; L++) { if (L < 2) clear(z); else { let lk = -1; for (let i = 0; i < z.n; i++) if (C.blocker(z, i) >= 0) { lk = i; break; } for (let t = 0; t < C.TOW; t++) pick(z, lk); } stepN(z, C.WAIT); }
+      ok(z.over && z.solved === 2 && z.bonus === 0 && !spec.win(z), 'parking: последнюю стоянку увёз эвакуатор — без бонуса за время и не победа', { solved: z.solved, bonus: z.bonus }); }
+    // нажимать подряд все машины, не думая (было: 40 из 40 побед, 501–574 очка против 599 у решателя) — ни одной победы
+    // и меньше трети очков того, кто думает 2 с над каждой машиной
+    { const T2 = K.T, sim = mk => { let w = 0, sc = 0; for (let seed = 1; seed <= 40; seed++) { const r = K.sim(spec, { seed, fps: 60, maxMs: 200000, bot: mk() }); w += spec.win(r.s) ? 1 : 0; sc += r.score; } return { w, mean: Math.round(sc / 40) }; };
+      const spam = {};
+      for (const gap of [10, 20, 45]) spam[gap] = sim(() => (q, k, push) => { if (k % gap === 0) push(T2.PICK, 0, 0, (k / gap) % 13); });
+      const think = sim(() => { let last = -1e9; return (q, k, push) => { if (q.over || q.wait || k - last < 120) return; last = k; for (let i = 0; i < q.n; i++) if (q.alive[i] && C.blocker(q, i) < 0) { push(T2.PICK, 0, 0, i); return; } }; });
+      ok(Object.values(spam).every(v => v.w === 0 && v.mean * 3 < think.mean) && think.w === 40, 'parking: все машины подряд без раздумий — 0 побед из 40 и меньше трети очков того, кто думает 2 с на машину', { spam, think }); }
     // время вышло
     s = spec.create(K.rng(74)); stepN(s, C.TIME + 5);
     ok(s.over && s.score === 0 && !spec.win(s), 'parking: 2 минуты без машин — конец');
