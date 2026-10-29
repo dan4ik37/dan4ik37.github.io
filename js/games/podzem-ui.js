@@ -266,6 +266,7 @@
 .pz-v2 .pz-goal{position:relative;align-self:flex-start;min-height:30px;padding:4px 10px;border-radius:12px;background:var(--e2-bg,rgba(14,12,28,.42));border:1.5px solid rgba(255,216,74,.5);
   box-shadow:var(--e2-shadow,none);opacity:var(--e2-fade,1);transition:opacity .3s}
 .pz-v2 .pz-goal::after{content:'';position:absolute;inset:-7px -2px}
+.pz-v2.pz-t .pz-goal{pointer-events:none}.pz-v2.pz-t .pz-goal::after{content:none}   /* телефон: цель — плашка, не кнопка (≤ 5 кнопок, §2.1); все цели — ☰ → «🎯 Цели» */
 .pz-v2 .pz-goal:not(.wide) span{display:none}
 .pz-v2 .pz-goal.wide{max-width:min(320px,100%)}
 .pz-v2 .pz-clock{display:none!important}

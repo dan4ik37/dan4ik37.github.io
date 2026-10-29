@@ -485,6 +485,9 @@
     const V2 = !!S.hud2;
     if (V2) hud.classList.add('e2');
     let tray = null, hpChip = null, scChip = null, scSheet = null, hpQ = -1, aimOn = false, aimT = 0;
+    // таблица счёта (лист); на телефоне плашка «⏱» — только показывает (в бою ≤ 5 кнопок, §2.1), таблица — ☰ → «⚔️ Счёт боя» (T-123 fix 7)
+    const openScore = () => { if (!W.inZone || !V2 || !S.H?.sheet) return; scSheet = scSheet || S.H.sheet({ title: '⚔️ Счёт боя' }); scSheet.open(); drawScore(); };
+    rt.war.score = openScore;
     function drawHud(){
       const hp = Math.max(0, Math.ceil(W.hp));
       if (V2) {   // в страницу — только когда сменилось (реген зовёт каждый шаг)
@@ -551,7 +554,7 @@
       if (V2 && S.H?.tray) {
         tray = S.H.tray({ title: 'Оружие', slots: () => SLOTS.map(w => ({ icon: WEAPONS[w].icon, label: WEAPONS[w].name })), sel: W.slot, onSel: i => { if (i !== W.slot) setSlot(i); } });
         hpChip = S.H.chip('war-hp', { icon: '❤', at: 'tl' }).show(true); hpQ = -1;
-        scChip = S.H.chip('war-sc', { icon: '⏱', at: 'tc', tap: () => { scSheet = scSheet || S.H.sheet({ title: '⚔️ Счёт боя' }); scSheet.open(); drawScore(); }, title: 'Счёт боя' }).show(true);
+        scChip = S.H.chip('war-sc', { icon: '⏱', at: 'tc', tap: S.I?.touch ? null : openScore, title: 'Счёт боя' }).show(true);
         S.el.querySelector('.wld')?.classList.add('mz-inwar');   // 📱 и 💬 — в ☰, пока бой
       }
       drawHud(); drawScore();

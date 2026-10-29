@@ -7,6 +7,7 @@
 // <игра>-<профиль>-<сцена>.jpg. Выход 1 — нарушен предел (§2.2).
 // Запуск из корня сайта: node scripts/hud2-e2e.cjs [игры через запятую: world,studio,terra,shell] [профили: P,L,PC]
 // Дело игры: module.exports = { url, ready: 'выражение', root, extra?, skip?, caps?: { P, L, PC }, sceneCaps?: { сцена: { P, L, PC } }, prep?: async T => {}, scenes: { имя: async T => {} } }
+//   ctrlScenes?: ['сцена', …] — §2.1 на телефоне (P, L): кнопок, видимых всегда, ≤ 5 и по обстановке ≤ 2 — иначе провал (T-123 fix 7)
 // T — { ev(expr), send(method, params), sleep(ms), touch(x, y, ms), prof }.
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
@@ -141,6 +142,8 @@ async function thrash(send, ms = 5000){
           const th = name.startsWith('idle') || G.thrash?.includes(name) ? await thrash(B.send) : null;
           const cap = G.sceneCaps?.[name]?.[pk] ?? (G.caps && G.caps[pk]) ?? CAPS[pk], over = m.pct > cap;
           if (over) bad++;
+          const ctrlOver = P.mobile && G.ctrlScenes?.includes(name) && (m.controls > 5 || m.ctx > 2);
+          if (ctrlOver) { bad++; console.log(`  ✗ ${name}: кнопок ${m.controls} (≤ 5) + ${m.ctx} по обстановке (≤ 2) — §2.1`); }
           rows.push({ game: gid, prof: pk, scene: name, ...m, thrash: th, cap });
           console.log(`  ${name.padEnd(12)} HUD ${m.pct}% (предел ${cap}${over ? ' ✗' : ''}) · окно ${m.gameShare}% · кнопок ${m.controls}${m.ctx ? ' + ' + m.ctx + ' по обстановке' : ''} [${m.list.join(' ')}] · середина: ${m.center.join(',') || '—'} · палец ${m.hitOk} ок${m.hitBad.length ? ', мимо: ' + m.hitBad.join('; ') : ''}${th ? ` · покой: раскладок ${th.layouts}/с, стилей ${th.styles}/с` : ''}`);
         }

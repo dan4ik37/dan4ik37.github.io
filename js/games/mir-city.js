@@ -1097,7 +1097,7 @@
       if (!A) { wEl.innerHTML = R0 ? `<span>${R0.icon} ${esc(R0.name)}</span>` : ''; return; }
       const st = A.st, sk = R0?.prof ? E.ui.skill(A.D, st, R0.prof) : null, bf = num(E.Rules.buffP(A.D, st, A.clock())), rr = num(E.ui.rate(A.D, city, A.pub[city]));
       C.rateShown = rr;
-      wEl.innerHTML = `<button type="button" class="mz-wbank" data-mz="c:${city}:bank" title="🏦 Банк: денки, зарплаты, навыки">💵 ${fmt(st.cash)}${A.mode === 'server' ? '' : ' <em title="пробные — только в этом браузере">🧪</em>'}</button>${R0 ? `<span>${R0.icon} ${esc(R0.name)}${sk ? ` <em class="mz-stars">${'★'.repeat(sk.L + 1)}</em>` : ''}</span>` : ''}${bf ? `<span>🍽 +${bf} %</span>` : ''}${rr < 100 ? `<span title="Казна города бедная — зарплаты у всех ниже">📉 ставка ${rr} %</span>` : ''}`;
+      wEl.innerHTML = `<button type="button" class="mz-wbank e2-ctx" data-mz="c:${city}:bank" title="🏦 Банк: денки, зарплаты, навыки">💵 ${fmt(st.cash)}${A.mode === 'server' ? '' : ' <em title="пробные — только в этом браузере">🧪</em>'}</button>${R0 ? `<span>${R0.icon} ${esc(R0.name)}${sk ? ` <em class="mz-stars">${'★'.repeat(sk.L + 1)}</em>` : ''}</span>` : ''}${bf ? `<span>🍽 +${bf} %</span>` : ''}${rr < 100 ? `<span title="Казна города бедная — зарплаты у всех ниже">📉 ставка ${rr} %</span>` : ''}`;
     }
     const inCity = () => MZ.inRect(Z, S.P.ch.x, S.P.ch.z, 2);
     // ── метка цели задания: светящееся кольцо + значок (один объект на город) ──

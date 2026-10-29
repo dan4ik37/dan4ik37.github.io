@@ -1020,6 +1020,7 @@
         // HUD 2.0 (T-123): карта, участок, телефон и чат — здесь (на экране вверху только ☰ 📱 💬; в бою — только ☰)
         ...(S.hud2 ? [{ id: 'map', icon: '🗺️', text: 'Карта и телепорты' }, ...(S.q('[data-mb="menu"]') ? [{ id: 'plot', icon: '🏘️', text: 'Мой участок' }] : []),
           { id: 'phone', icon: '📱', text: 'Телефон' }, { id: 'chat', icon: '💬', text: 'Чат и эмоции' }] : []),
+        ...(S.hud2 && S.zones?.war?.W?.inZone && S.zones.war.score ? [{ id: 'war-score', icon: '⚔️', text: 'Счёт боя' }] : []),   // T-123 fix 7: на телефоне плашка ⏱ не кнопка
         { id: 'settings', icon: '⚙️', text: 'Настройки' },
         { id: 'look', icon: '🎭', text: 'Персонаж' },
         ...(S.hud2 ? (window.D37Shell?.items('world') || []).filter(it => it.id === 'sh-mute' || it.id === 'sh-chal' || it.id === 'sh-rules') : []),
@@ -1034,6 +1035,7 @@
   function closeMenu(){ S?.menu?.close(); }
   function menuAct(id){
     if (!S) return;
+    if (id === 'war-score') { closeMenu(); S.zones?.war?.score?.(); return; }
     if (id === 'resume') {
       closeMenu();
       if (S.rig?.mode === 'first' && !S.I.touch) { try { const r = S.wrap.requestPointerLock?.(); r?.catch?.(() => {}); } catch (e) {} }   // нажатие — можно снова захватить мышь

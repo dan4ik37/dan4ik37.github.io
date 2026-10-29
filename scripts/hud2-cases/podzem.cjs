@@ -14,6 +14,9 @@ module.exports = {
   ready: `(() => { const g = window.GAME_IMPL?.podzem?._test?.state?.(); if (g?.state === 'play') return true; document.querySelector('.pz-menu [data-a="quick"], .pz-menu [data-a="play"]:not([disabled])')?.click(); return false; })()`,
   root: '.pz-wrap', skip: '.pz-ko,.pz-load,.pz-menu,.pz-inv,.pz-goals',
   caps: { P: 12, L: 10, PC: 6 },   // §9.6
+  // раскрытый нажатием лоток (сам свернётся через 3 с) — открыл игрок, не покой: предел + 4 п. п., как у подсказки первых секунд (§2.2)
+  sceneCaps: { tray: { P: 16, L: 16, PC: 6 } },
+  ctrlScenes: ['idle-hud'],   // §2.1: ≤ 5 кнопок (🎯 цель на телефоне — плашка, все цели — ☰)
   ls: { d37_settings: JSON.stringify({ gfxPreset: 'mid', gfx: 'mid', autoLand: true }) },
   async prep(T){ await T.ev(`(() => { ${T0}.god(true); document.querySelectorAll('.age-sheet,#appCard,.apu,.apt,.notif-toast,.chat-toast').forEach(e => e.remove()); return 1; })()`); },
   scenes: {
