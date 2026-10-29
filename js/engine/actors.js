@@ -16,15 +16,29 @@
 // уберёт сам; звуки (шорох кармана, касание экрана, щелчок камеры) — здесь, у человечка. От 1-го лица (a.hidden и a.fp = rig
 // камеры) — кисть с телефоном у камеры, внизу экрана (покачивание — по настройке «Покачивание камеры»).
 // Руки и предметы (бой, D37E.combat): a.hold = { r, l, m, mh, v, g, d, p } (CB.pose / CB.unpack) — слой поз world3d.js; null — без него.
+// Простые фигурки (V2, T-127 AI LOD P1): A.impostors({ cap, far, near }) — у актёров, добавленных с { npc: true } (жители, зомби),
+// подробный человечек (V0/V1) — только у cap ближайших к камере и ближе far; остальные — простые фигурки (туловище, ноги, голова
+// цветов человечка) тремя общими InstancedMesh на всех: 3 вызова отрисовки вместо 7–18 на каждого, сборка — без K.build. Новый
+// житель сначала фигурка, подробным становится в update (не больше одной сборки за кадр). Сколько подробных — дело устройства
+// (телефон 8, ПК 16 в «Мире»); сколько жителей есть и что они делают — у всех одинаково. A.impCount() — сколько сейчас фигурок.
 (() => {
   const E = window.D37E = window.D37E || {};
   const LOD_FAR = 30, LOD_NEAR = 24, LOOK_R = 5, CAM_R = 14, ME_R = 8;
+  const IMP_MAX = 128;   // фигурок на один набор актёров (больше — не рисуются)
+  // цвета фигурки: верх, низ, кожа — у kit (World3D.impColors), иначе — от ключа
+  const PAL = ['#4f8df7', '#e8384f', '#22c55e', '#f59e0b', '#a855f7', '#14b8a6', '#f472b6', '#64748b'];
+  const impColors = (look, key) => {
+    try { const c = window.World3D?.impColors?.(look, key); if (c) return c; } catch (e) {}
+    let h = 2166136261; const k = String(key); for (let i = 0; i < k.length; i++) { h ^= k.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return [PAL[(h >>> 0) % PAL.length], '#3b4252', look?.tone === 'zombie' ? '#86b36b' : '#f7cba5'];
+  };
   E.actors = function (R){
     const K = R.K, list = new Map(), trail = K.trails(R.scene);
     let arr = [];   // те же, что в list, — обход без итераторов
     const sync = () => { arr = [...list.values()]; };
     function setLook(a, look, force){
       const sig = JSON.stringify(look || {});
+      if (a.v2) { if (a.sig !== sig || !a.impC) { a.sig = sig; a.look = look; a.impC = impColors(look, a.key); a.impK = null; } return; }   // простая фигурка (V2)
       if (a.ch && a.sig === sig && !force) return;
       const ch = K.build(look, a.key, { lod: a.lod });
       ch.root.userData.actor = true; if (ch.pet) ch.pet.userData.actor = true;   // погода (precip.js): человечек — не крыша
@@ -39,21 +53,22 @@
         K.dispose(a.ch);
       } else ch.yaw = a.yaw;
       if (ch.pet && !a.ch) ch.pet.position.set(a.x, a.y + .5, a.z);
-      a.ch = ch; a.sig = sig; a.look = look;
+      a.ch = ch; a.sig = sig; a.look = look; a.impC = null;
       R.shadowsOn?.(ch.root);   // человечек отбрасывает тень
       R.shadowDirty?.();
     }
-    function add(key, look, o = {}){
+    function add(key, look, o = {}, opt = null){
       remove(key);
       const a = { key, x: o.x || 0, y: o.y || 0, z: o.z || 0, yaw: o.yaw || 0, moving: false, speed: 0, air: false, crouch: 0, sit: false, seatY: null, sitY: 0,
         roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, lie: false, sleep: false, hidden: false, fade: 1, lastTrail: 0, ch: null, sig: '',
         lod: 0, lookAt: null, lk: null, lkT: Math.random() * .3, lt: { x: 0, y: 0, z: 0 }, phone: '', hold: null, fp: null, vm: null, bob: { ph: 0, w: 0, k: 1 },
-        ao: { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, lie: false, sleep: false, look: null, phone: '', hold: null } };
+        ao: { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, lie: false, sleep: false, look: null, phone: '', hold: null },
+        imp: !!opt?.npc, v2: !!(opt?.npc && L2), impC: null, impK: null, camD: 0, bobP: Math.random() * 6 };
       setLook(a, look);
       list.set(key, a); sync();
       return a;
     }
-    function remove(key){ const a = list.get(key); if (a) { if (a.vm) a.vm.dispose(); K.dispose(a.ch); list.delete(key); sync(); for (let i = 0; i < arr.length; i++) if (arr[i].lk === a) arr[i].lk = null; R.shadowDirty?.(); } }
+    function remove(key){ const a = list.get(key); if (a) { if (a.vm) a.vm.dispose(); if (a.ch) K.dispose(a.ch); list.delete(key); sync(); for (let i = 0; i < arr.length; i++) if (arr[i].lk === a) arr[i].lk = null; R.shadowDirty?.(); } }
     // Звуки телефона у человечка (события кадра из world3d.js: 1 — шорох кармана, 2 — касание экрана, 4 — щелчок камеры)
     const PHE = K.PHE || { POCKET: 1, TAP: 2, SHUTTER: 4 };
     function phoneSounds(a, ev, cam){
@@ -90,11 +105,57 @@
       else { a.lt.x = k.x; a.lt.y = k.y + (k.ch?.headY || 1.6); a.lt.z = k.z; }
       return a.lt;
     }
+    // ── простые фигурки (V2): кто подробный — cap ближайших к камере ближе far (возврат в фигурку — дальше far + 6 или не в cap) ──
+    let L2 = null, IMP = null, impN = 0, tierT = 0;
+    const rank = [];   // кандидаты (без мусора: тот же массив)
+    function impMesh(){
+      if (IMP !== null) return IMP;
+      const T = window.THREE;
+      if (!T || !R.scene) return (IMP = false);
+      const mk = (geo, y) => { geo.translate(0, y, 0); const m = new T.InstancedMesh(geo, new T.MeshLambertMaterial({ color: '#ffffff' }), IMP_MAX); m.count = 0; m.frustumCulled = false; m.userData.actor = true; R.scene.add(m); R.shadowsOn?.(m); return m; };
+      IMP = { legs: mk(new T.BoxGeometry(.42, .86, .26), .43), torso: mk(new T.BoxGeometry(.54, .66, .32), 1.19), head: mk(new T.SphereGeometry(.23, 10, 8), 1.76),
+        m4: new T.Matrix4(), col: new T.Color() };
+      return IMP;
+    }
+    function tiers(cam){
+      rank.length = 0;
+      for (let i = 0; i < arr.length; i++) { const a = arr[i]; if (!a.imp) continue; a.camD = cam ? Math.hypot(a.x - cam.x, a.z - cam.z) : 0; rank.push(a); }
+      for (let i = 1; i < rank.length; i++) { const a = rank[i]; let j = i - 1; while (j >= 0 && rank[j].camD > a.camD) { rank[j + 1] = rank[j]; j--; } rank[j + 1] = a; }   // вставками: n — десятки
+      let rigs = 0, built = false;
+      for (let i = 0; i < rank.length; i++) {
+        const a = rank[i], want = rigs < L2.cap && a.camD < (a.v2 ? L2.near : L2.far + 6);
+        if (want) rigs++;
+        if (!want && !a.v2) { if (a.vm) { a.vm.dispose(); a.vm = null; } K.dispose(a.ch); a.ch = null; a.v2 = true; a.impC = impColors(a.look, a.key); R.shadowDirty?.(); }
+        else if (want && a.v2 && !built) { built = true; a.v2 = false; setLook(a, a.look, true); }   // одна сборка за проход
+      }
+    }
+    const impSet = (m, n) => { m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; };
+    function figures(t){
+      const M = impMesh(); if (!M) return false;
+      let n = 0, moved = false;
+      for (let i = 0; i < arr.length && n < IMP_MAX; i++) {
+        const a = arr[i]; if (!a.v2 || a.hidden || a.fade < .02) continue;
+        const bob = a.moving ? Math.abs(Math.sin(t * 9 + a.bobP)) * .07 : 0, y = (a.sit ? (a.seatY != null ? a.seatY - .5 : a.sitY) : a.y) + bob;
+        M.m4.makeRotationY(a.yaw); M.m4.setPosition(a.x, y, a.z);
+        M.legs.setMatrixAt(n, M.m4); M.torso.setMatrixAt(n, M.m4); M.head.setMatrixAt(n, M.m4);
+        if (a.impK !== a.impC) { a.impK = a.impC; const c = a.impC; M.torso.setColorAt(n, M.col.set(c[0])); M.legs.setColorAt(n, M.col.set(c[1])); M.head.setColorAt(n, M.col.set(c[2])); a.impI = n; }
+        else if (a.impI !== n) { const c = a.impC; M.torso.setColorAt(n, M.col.set(c[0])); M.legs.setColorAt(n, M.col.set(c[1])); M.head.setColorAt(n, M.col.set(c[2])); a.impI = n; }
+        if (a.moving) moved = true;
+        n++;
+      }
+      if (n !== impN) moved = true;
+      impSet(M.legs, n); impSet(M.torso, n); impSet(M.head, n);
+      impN = n;
+      return moved;
+    }
     function update(dt, t, cam){
       let moved = false, rebuild = true, me = null;
+      if (L2 && (t >= tierT || !cam)) { tierT = t + .25; tiers(cam); rebuild = false; }   // 4 раза в секунду — кто подробный
+      if (L2 || impN) { if (figures(t)) moved = true; }
       if (cam) { let bd = ME_R * ME_R; for (let i = 0; i < arr.length; i++) { const a = arr[i]; if (String(a.key).startsWith('npc:')) continue; const d = (a.x - cam.x) * (a.x - cam.x) + (a.z - cam.z) * (a.z - cam.z); if (d < bd) { bd = d; me = a; } } }
       for (let i = 0; i < arr.length; i++) {
         const a = arr[i];
+        if (!a.ch) continue;   // простая фигурка (V2) — нарисована выше
         // дальний — упрощённый человечек (пересборка — не больше одной за кадр)
         if (cam && rebuild) {
           const d = Math.hypot(a.x - cam.x, a.z - cam.z), want = d > LOD_FAR ? 1 : d < LOD_NEAR ? 0 : a.lod;
@@ -149,9 +210,18 @@
       list, add, remove, setLook, update,
       get: k => list.get(k),
       pose(key, p){ const a = list.get(key); if (a && p) Object.assign(a, p); return a; },
-      emote(key, e, t){ const a = list.get(key); if (a) { a.ch.emote = e; a.ch.emoteT = t; } },
-      top: key => list.get(key)?.ch.top || 2.3,
-      dispose(){ for (const a of list.values()) { if (a.vm) a.vm.dispose(); K.dispose(a.ch); } list.clear(); arr = []; trail.clear(); R.shadowDirty?.(); },
+      emote(key, e, t){ const a = list.get(key); if (a?.ch) { a.ch.emote = e; a.ch.emoteT = t; } },
+      top: key => list.get(key)?.ch?.top || 2.3,
+      // простые фигурки: { cap — сколько подробных, far — дальше простая (м), near — ближе снова подробная }; null — выкл.
+      impostors(o){ L2 = o ? { cap: Math.max(0, o.cap | 0), far: o.far || 56, near: o.near || (o.far || 56) - 6 } : null; tierT = 0;
+        if (!L2) for (const a of arr) if (a.v2) { a.v2 = false; setLook(a, a.look, true); } },
+      impCount: () => impN,
+      tierOf: key => { const a = list.get(key); return !a ? null : a.v2 ? 'V2' : a.lod ? 'V1' : 'V0'; },
+      dispose(){
+        for (const a of list.values()) { if (a.vm) a.vm.dispose(); if (a.ch) K.dispose(a.ch); } list.clear(); arr = []; rank.length = 0; trail.clear();
+        if (IMP) { for (const m of [IMP.legs, IMP.torso, IMP.head]) { m.parent?.remove(m); m.geometry.dispose(); m.material.dispose(); m.dispose?.(); } }
+        IMP = null; impN = 0; R.shadowDirty?.();
+      },
     };
   };
 })();
