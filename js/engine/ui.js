@@ -136,11 +136,13 @@
       tl?.detach(); tl = null; tlFree(false);
       const TL = window.D37TouchLayout;
       if (!TL || !list.length || o.layout === false) return;
+      // v2: кнопка позы встала на место «присесть» — раскладка та же (имя по старым id, alias { pose: 'crouch' }), свои места игрока не теряются
+      const alias = o.alias || (v2 ? { pose: 'crouch' } : null);
       const ids = list.map(b => b.id || b.action);
-      let h = 0; for (const c of ids.join(',')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+      let h = 0; for (const c of (alias ? ids.map(i => alias[i] || i) : ids).join(',')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
       const items = list.map(b => ({ id: b.id || b.action, icon: b.icon, label: b.label || '', opt: b.action === 'interact' ? 'когда рядом есть что сделать' : undefined }));
       tl = TL.attach({ id: o.layout || 'e3d-' + h.toString(36), title: o.title || 'Кнопки 3D-мира', el, items: () => items, btn: k => byId.get(k) || null,
-        defaults: (W, H, k, cx) => gridPos(cx), apply: (k, b, p) => tlPlace(b, p), alias: o.alias, avoid: o.avoid || (K2 ? K2.avoid : undefined) });
+        defaults: (W, H, k, cx) => gridPos(cx), apply: (k, b, p) => tlPlace(b, p), alias: alias || undefined, avoid: o.avoid || (K2 ? K2.avoid : undefined) });
       if (!ro && window.ResizeObserver) { ro = new ResizeObserver(() => tl?.layout()); ro.observe(el); }
     }
     // по умолчанию — где кнопки стоят в сетке (меряем со всеми кнопками, и спрятанной «действие»): для правой руки
