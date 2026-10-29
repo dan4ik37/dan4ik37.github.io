@@ -66,6 +66,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       'kubomir-qol-e2e.cjs': 'Chrome, помощники «Кубомира»: снимки, замеры на профиле телефона (ЦП ×4), 20 открытий, 10 минут игры',
       'podzem-fire-e2e.cjs': 'Chrome, огонь «Подземья»: замеры на профиле телефона (ЦП ×4), снимки, 20 открытий, 10 минут игры',
       'studio-fire-e2e.cjs': 'Chrome, огонь «Студии 3D»: ▶ Играть, пожар ~1 мин, снимок',
+      'hud2-e2e.cjs': 'Chrome, интерфейс игр 2.0 (T-123): доля экрана, кнопки, середина, палец, покой — телефон стоя/лёжа (ЦП ×4) и ПК, снимки',
     };
     const files = fs.readdirSync(path.join(SITE, 'scripts')).filter(f => /-(test|e2e)\.(cjs|mjs)$/.test(f));
     const forgotten = files.filter(f => !inManifest.has(f) && !NOT_IN_CI[f]);

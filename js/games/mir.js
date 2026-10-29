@@ -681,7 +681,9 @@
       el, q, wrap: q('.wld-wrap'), players: new Map(), me: null, ch: null, shard: 1, key: '', keys: null, pass: null, myRole: null,
       log: [], muted: new Set(), friends: new Set(), checkCache: new Map(), stopped: false, idleAt: Date.now(), hiddenAt: 0, pending: [],
       lastTs: 0, hostSnapAt: 0, joinedAt: Date.now(), live: null, occ: new Map(), mySeat: null, lastSend: { key: '', t: 0 }, sendT: 0, jumpVy: 0,
+      hud2: typeof HUD2 !== 'undefined' && !!HUD2.kit && !!HUD2.mir,   // интерфейс 2.0 (T-123, docs/HUD_V2.md §9.2): откат — HUD2.mir = 0
     };
+    if (S.hud2) { q('.wld')?.classList.add('e2'); window.D37Shell?.own(); }   // ☰ «Мира» берёт пункты шапки игры (🔊 Звук и др.)
     S.key = isGuest ? 'g:' + (window.GameRoom?.guestId?.() || Math.random().toString(36).slice(2)) : 'u:' + currentUser.id;
     S.me = { key: S.key, uid: isGuest ? null : currentUser.id, nick: isGuest ? (window.GameRoom?.nick?.() || 'Гость') : (currentProfile?.nick || 'Игрок'), look: window.D37Char ? window.D37Char.look() : {}, isMe: true, v: null };
     if (isGuest) { q('.wld-say input').placeholder = 'Войди, чтобы писать в чат'; q('.wld-say input').readOnly = true; }
@@ -738,8 +740,10 @@
     rig.onMode = (m, why) => { if (why !== 'zoom' || !S?.H) return; S.H.crosshair(m === 'first'); if (m !== 'first') S.I?.unlock(); };
     rig.snap(P.ch.x, P.ch.y, P.ch.z);
     S.unfollow = rig.follow(P);
-    const H = S.H = E.ui(wrap, C);
-    if (I.touch) H.buttons([{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }]);
+    const H = S.H = E.ui(wrap, C, S.hud2 ? { v2: true, game: 'mir', touch: I.touch } : undefined);
+    S.baseBtns = () => S.hud2 ? BTNS_V2 : BTNS_OLD;   // кнопки по умолчанию (и после машины / боевой зоны: mir-veh.js, mir-war.js)
+    if (S.hud2) hud2Pose(H, P);
+    if (I.touch) H.buttons(S.baseBtns());
     // звуки
     const AU = S.AU = E.audio();
     P.on('step', e => AU.step(e.floor, e.run, e.x, e.y, e.z));
@@ -979,7 +983,8 @@
     R.render();
     drawTags(); drawFolk();
     // на телефоне вместо «[E]» — значок кнопки ✋
-    H.prompt(I.touch ? (P.mode === 'sit' ? '✋ Встать' : S.X.raw && S.X.cur ? '✋ ' + S.X.raw : null) : S.X.text, S.X.progress);
+    if (S.hud2) hud2Frame(H, P, I);
+    else H.prompt(I.touch ? (P.mode === 'sit' ? '✋ Встать' : S.X.raw && S.X.cur ? '✋ ' + S.X.raw : null) : S.X.text, S.X.progress);
     H.stamina(P.stamina / P.maxStamina, P.exhausted);
     if (t - (S.posSaved || 0) > 3) { S.posSaved = t; savePos(); }
   }
@@ -1009,16 +1014,20 @@
     S.I?.unlock();
     const SS = window.D37Settings, fsEl = () => S?.stage || S?.el;
     S.menu = SS.menu(S.wrap, {
-      title: '🌍 Мир Денчика', sub: `Мир онлайн — он идёт и в меню. ${window.D37Full?.isTouch?.() ? '☰' : 'Esc'} — вернуться`,
+      title: '🌍 Мир Денчика', sub: S.hud2 ? `${esc(S.q('.wldOnline')?.textContent || '')} · ${window.D37Full?.isTouch?.() ? '☰' : 'Esc'} — вернуться` : `Мир онлайн — он идёт и в меню. ${window.D37Full?.isTouch?.() ? '☰' : 'Esc'} — вернуться`,
       items: () => [
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
+        // HUD 2.0 (T-123): карта, участок, телефон и чат — здесь (на экране вверху только ☰ 📱 💬; в бою — только ☰)
+        ...(S.hud2 ? [{ id: 'map', icon: '🗺️', text: 'Карта и телепорты' }, ...(S.q('[data-mb="menu"]') ? [{ id: 'plot', icon: '🏘️', text: 'Мой участок' }] : []),
+          { id: 'phone', icon: '📱', text: 'Телефон' }, { id: 'chat', icon: '💬', text: 'Чат и эмоции' }] : []),
         { id: 'settings', icon: '⚙️', text: 'Настройки' },
         { id: 'look', icon: '🎭', text: 'Персонаж' },
+        ...(S.hud2 ? (window.D37Shell?.items('world') || []).filter(it => it.id === 'sh-mute' || it.id === 'sh-chal' || it.id === 'sh-rules') : []),
         ...(SS.fsItems?.(fsEl()) || []),
         { id: 'help', icon: '❓', text: 'Как играть' },
         { id: 'exit', icon: '🚪', text: 'Выйти из мира', warn: true },
       ],
-      onPick: id => { if (!SS.fsPick?.(id, fsEl(), S?.menu)) menuAct(id); },
+      onPick: id => { if (window.D37Shell?.pick(id, S?.menu)) return; if (!SS.fsPick?.(id, fsEl(), S?.menu)) menuAct(id); },
       onClose: () => { if (S) { S.menu = null; S.C?.reset_state(); } },   // Enter/Esc, закрывшие меню, — не в игру (чат, меню снова)
     });
   }
@@ -1032,6 +1041,10 @@
     else if (id === 'look') { closeMenu(); openEditor(); }
     else if (id === 'full') { window.D37Full?.toggle(S.stage || S.el, { esc: false }); setTimeout(() => S?.menu?.redraw(), 80); }
     else if (id === 'help') { closeMenu(); onAct('help'); }
+    else if (id === 'map') { closeMenu(); S.zones?.openMap?.(); }
+    else if (id === 'plot') { closeMenu(); S.q('[data-mb="menu"]')?.click(); }
+    else if (id === 'phone') { closeMenu(); window.D37Phone?.open?.(); }
+    else if (id === 'chat') { closeMenu(); onAct('chat', S.q('.gs-chatbtn')); }
     else if (id === 'exit') { closeMenu(); go('#/games'); }
   }
 
@@ -1517,6 +1530,63 @@
     p.bubble = { text: t, t: now() }; addLog(p, t);
   }
   function emote(e){ if (Date.now() - (S.lastEmo || 0) < 900) return; S.lastEmo = Date.now(); S.me.emo = { e, t: now() }; send({ t: 'emo', e }); }
+
+  // ═══ Интерфейс 2.0 (T-123, docs/HUD_V2.md §3, §9.2): кнопка позы (нажал — присесть/встать, удержал — круг: присесть, сесть,
+  //     лечь, 3 последние эмоции, «➕ Ещё»), одна кнопка действия (значок — глагол; в машине — 🚪 Выйти), лист «➕ Ещё» ═══
+  const BTNS_OLD = [{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }];
+  const BTNS_V2 = [{ kind: 'pose', id: 'pose', icon: '⬇', label: 'поза' }, { action: 'interact', icon: '✋', label: 'действие' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }];
+  const EMO_L = { '👋': 'Помахать', '😂': 'Смеяться', '❤️': 'Любовь', '🔥': 'Огонь', '🎉': 'Ура', '😎': 'Круто', '😭': 'Плакать', '👍': 'Класс', '💃': 'Танцевать', '👏': 'Хлопать', '🤔': 'Думать', '😮': 'Ого', '😡': 'Злиться', '🙇': 'Поклон', '🤸': 'Сальто' };
+  const EMO_DEF = ['💃', '👋', '😂'];
+  // 3 последние эмоции — на этом устройстве (localStorage d37_emo_recent; общее для всех 3D-игр)
+  function emoRecent(){
+    let a = []; try { a = JSON.parse(localStorage.getItem('d37_emo_recent') || '[]'); } catch (e) {}
+    const out = Array.isArray(a) ? a.filter(e => EMOS.includes(e)).slice(0, 3) : [];
+    for (const d of EMO_DEF) if (out.length < 3 && !out.includes(d)) out.push(d);
+    return out;
+  }
+  function emoUse(e){ try { localStorage.setItem('d37_emo_recent', JSON.stringify([e, ...emoRecent().filter(x => x !== e)].slice(0, 3))); } catch (er) {} emote(e); }
+  const poseNow = P => P.mode === 'sit' ? (P.seat?.lie ? 'lie' : 'sit') : P.crouch ? 'crouch' : 'stand';
+  function hud2Pose(H, P){
+    H.pose({
+      current: () => poseNow(P),
+      items: () => [{ id: 'crouch', icon: '⬇', label: 'Присесть' }, { id: 'sit', icon: '🪑', label: 'Сесть' }, { id: 'lie', icon: '🛌', label: 'Лечь' },
+        ...emoRecent().map(e => ({ id: 'emo:' + e, icon: e, label: EMO_L[e] || 'Эмоция' })), { id: 'more', icon: '➕', label: 'Ещё: эмоции, действия' }],
+      onPick: it => {
+        if (!S || S.stopped) return;
+        if (it.id === 'sit') { if (S.zones?.sitHere) S.zones.sitHere(); else P.sitHere([]); }
+        else if (it.id === 'lie') { if (S.zones?.sleepHere) S.zones.sleepHere(); else P.lieHere([]); }
+        else if (it.id.startsWith('emo:')) emoUse(it.id.slice(4));
+        else if (it.id === 'more') hud2More();
+      },
+    });
+    // картинка уезжает из-под листа (персонаж виден): js/engine/ui.js D37E.viewOffset
+    S.vo = window.D37E.viewOffset(S.R.camera);
+    S.wrap.addEventListener('e2:inset', e => { if (S?.vo) S.vo.want(e.detail, S.wrap.clientWidth, S.wrap.clientHeight); });
+    if (S.I.touch) setTimeout(() => { if (S?.H === H) H.hint('pose', 'Удержи ⬇ — сесть, лечь, эмоции'); }, 13000);   // после подсказки управления (12 с)
+    // подсказка управления (.wld-hint) — один раз на устройство (T-123, §5)
+    const wh = S.q('.wld-hint'); if (wh && window.D37TouchLayout?.hintOnce && !window.D37TouchLayout.hintOnce('mir', 'h-start')) wh.remove();
+  }
+  function hud2More(){
+    const H = S?.H; if (!H?.sheet) return;
+    const grid = (b, list, f) => { const g = document.createElement('div'); g.className = 'e2-grid'; for (const it of list) { const x = document.createElement('button'); x.type = 'button'; x.textContent = it.icon || ''; const sp = document.createElement('span'); sp.textContent = it.name || ''; x.appendChild(sp); x.title = it.hint || it.name || ''; x.onclick = () => { S?.moreSheet?.close(); f(it); }; g.appendChild(x); } b.appendChild(g); };
+    if (!S.moreSheet) S.moreSheet = H.sheet({ title: '➕ Ещё', tabs: [
+      { id: 'emo', icon: '😀', label: 'Эмоции', render: b => grid(b, EMOS.map(e => ({ icon: e, name: EMO_L[e] || '', e })), it => emoUse(it.e)) },
+      { id: 'act', icon: '🎬', label: 'Действия', render: b => {
+        const L = S.zones?.actsList?.() || { list: [] };
+        if (!L.list.length) { const p = document.createElement('p'); p.style.cssText = 'margin:6px 2px;font-size:12px;opacity:.8'; p.textContent = 'Здесь действий нет — они есть в городах (есть, пить, позвонить, работа).'; b.appendChild(p); return; }
+        grid(b, L.list.map(a => ({ icon: a.icon, name: a.name, hint: a.hint, id: a.id })), it => S.zones?.doAct?.(it.id));
+      } },
+    ] });
+    S.moreSheet.open(S.zones?.actsList?.().list.length ? 'act' : 'emo');
+  }
+  function hud2Frame(H, P, I){
+    const X = S.X, veh = S.zones?.veh?.me;
+    H.prompt(I.touch ? null : X.text, X.progress);   // ПК: «[E] …» внизу (10 %); телефон: подпись — у кнопки действия
+    const vk = veh ? '#veh' : P.mode === 'sit' ? '#sit' : X.cur && X.raw ? X.raw : '';
+    if (vk !== S.vk) { S.vk = vk; H.act(!vk ? null : vk === '#veh' ? { icon: '🚪', label: 'Выйти' } : vk === '#sit' ? { icon: '⬆', label: 'Встать' } : { icon: window.D37E.verbIcon(vk), label: vk }); }
+    H.poseIcon(poseNow(P));
+    if (S.vo?.busy()) S.vo.tick(1 / 60);
+  }
   function addLog(p, text){
     S.log.push({ who: p ? p.nick : '', me: p === S.me, sys: !p, text });
     if (S.log.length > 40) S.log.shift();
@@ -1626,11 +1696,13 @@
       const e = S.NPC.list.get(k.f.id), h = e && S.NPC.head(e);
       const [sx, sy, vis] = h ? S.R.project(h[0], h[1] + .15, h[2]) : [0, 0, false];
       const far = !h || Math.hypot(h[0] - S.P.ch.x, h[2] - S.P.ch.z) > 26;
-      if (!vis || far) { el.style.display = 'none'; continue; }
-      el.style.display = '';
-      el.style.transform = `translate(${Math.round(sx)}px,${Math.round(sy)}px) translate(-50%,-100%)`;
+      // в страницу — только изменившееся (T-123: раньше hidden/display писались каждый кадр — пересчёт стилей 60+ раз в секунду)
+      if (!vis || far) { if (el.style.display !== 'none') el.style.display = 'none'; continue; }
+      if (el.style.display) el.style.display = '';
+      const tf = `translate(${Math.round(sx)}px,${Math.round(sy)}px) translate(-50%,-100%)`;
+      if (el._tf !== tf) { el._tf = tf; el.style.transform = tf; }
       const bub = el.firstChild, show = k.bubble && now() - k.bubble.t < 6000;
-      if (show) { if (bub.textContent !== k.bubble.text) bub.textContent = k.bubble.text; bub.hidden = false; } else bub.hidden = true;
+      if (show) { if (bub.textContent !== k.bubble.text) bub.textContent = k.bubble.text; if (bub.hidden) bub.hidden = false; } else if (!bub.hidden) bub.hidden = true;
     }
   }
   function showInfo(title, text){ panel(`<b>${esc(title)}</b>`, `<p>${esc(text)}</p>`); }
@@ -1865,12 +1937,13 @@
       }
       seen.add(el);
       const a = S.A.get(p.key);
-      if (!a || a.hidden || (p === S.me && S.rig.mode === 'first')) { el.style.display = 'none'; continue; }
-      const top = a.sit ? (a.seatY ?? 0) - (a.ch.hipY || .52) + a.ch.top : a.y + a.ch.top * (1 - .3 * (a.crouch || 0));
+      if (!a || a.hidden || (p === S.me && S.rig.mode === 'first')) { if (el.style.display !== 'none') el.style.display = 'none'; continue; }
+      const top = a.lie ? (a.seatY ?? a.y) + .6 : a.sit ? (a.seatY ?? 0) - (a.ch.hipY || .52) + a.ch.top : a.y + a.ch.top * (1 - .3 * (a.crouch || 0));
       const [sx, sy, vis] = S.R.project(a.x, top + .45, a.z);
-      if (!vis || (p.leaving && now() - p.leaving > 500)) { el.style.display = 'none'; continue; }
-      el.style.display = '';
-      el.style.transform = `translate(${Math.round(sx)}px,${Math.round(sy)}px) translate(-50%,-100%)`;
+      if (!vis || (p.leaving && now() - p.leaving > 500)) { if (el.style.display !== 'none') el.style.display = 'none'; continue; }
+      if (el.style.display) el.style.display = '';
+      const tf = `translate(${Math.round(sx)}px,${Math.round(sy)}px) translate(-50%,-100%)`;
+      if (el._tf !== tf) { el._tf = tf; el.style.transform = tf; }
       let col = '#ffffff', pre = '';
       if (p === S.me) col = '#93c5fd'; else if (!p.uid) col = '#cbd5e1';
       if (p.v?.vip) col = VIPC[p.v.vip] || col;
@@ -1881,10 +1954,10 @@
       if (nm.textContent !== name) nm.textContent = name;
       if (nm.style.color !== col) nm.style.color = col;
       const bub = el.firstChild, showB = p.bubble && now() - p.bubble.t < 7000 && !S.muted.has(p.key);
-      if (showB) { if (bub.textContent !== p.bubble.text) bub.textContent = p.bubble.text; bub.hidden = false; } else { bub.hidden = true; if (p.bubble && now() - p.bubble.t >= 7000) p.bubble = null; }
+      if (showB) { if (bub.textContent !== p.bubble.text) bub.textContent = p.bubble.text; if (bub.hidden) bub.hidden = false; } else { if (!bub.hidden) bub.hidden = true; if (p.bubble && now() - p.bubble.t >= 7000) p.bubble = null; }
       const em = el.children[1], k = p.emo ? (now() - p.emo.t) / 2200 : 1;
-      if (k < 1) { if (em.textContent !== p.emo.e) em.textContent = p.emo.e; em.hidden = false; em.style.opacity = Math.min(1, (1 - k) * 2); em.style.transform = `translateY(${-k * 30}px)`; }
-      else { em.hidden = true; if (p.emo) p.emo = null; }
+      if (k < 1) { if (em.textContent !== p.emo.e) em.textContent = p.emo.e; if (em.hidden) em.hidden = false; em.style.opacity = Math.min(1, (1 - k) * 2); em.style.transform = `translateY(${-k * 30}px)`; }
+      else { if (!em.hidden) em.hidden = true; if (p.emo) p.emo = null; }
     }
     for (const el of [...tags.children]) if (!seen.has(el)) el.remove();
   }

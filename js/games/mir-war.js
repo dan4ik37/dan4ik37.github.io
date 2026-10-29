@@ -480,8 +480,19 @@
     const hud = document.createElement('div'); hud.className = 'mz-war'; hud.hidden = true; rt.hud.appendChild(hud);
     hud.innerHTML = `<div class="mz-hitfx"></div><div class="mz-cross"></div><div class="mz-hp"><i></i><b></b></div><div class="mz-wpn">${SLOTS.map((w, i) => `<button type="button" data-mz="w:slot:${i}" title="${esc(WEAPONS[w].name)} (${i + 1})">${WEAPONS[w].icon}<small>${i + 1}</small></button>`).join('')}</div><div class="mz-score"></div><div class="mz-feed"></div><div class="mz-down" hidden></div>`;
     const hq = s => hud.querySelector(s);
+    // HUD 2.0 (T-123, docs/HUD_V2.md §9.2 «War zone»): оружие — лоток внизу (свёрнут: в руке и соседи; удержал — круг оружия),
+    // жизни — плашка «❤ 100» слева вверху, счёт — плашка «⏱ 4:57 · 0/0» вверху (нажал — таблица), прицел — только пока стреляешь
+    const V2 = !!S.hud2;
+    if (V2) hud.classList.add('e2');
+    let tray = null, hpChip = null, scChip = null, scSheet = null, hpQ = -1, aimOn = false, aimT = 0;
     function drawHud(){
-      hq('.mz-hp i').style.width = Math.max(0, W.hp) + '%'; hq('.mz-hp b').textContent = `❤️ ${Math.max(0, Math.ceil(W.hp))}`;
+      const hp = Math.max(0, Math.ceil(W.hp));
+      if (V2) {   // в страницу — только когда сменилось (реген зовёт каждый шаг)
+        if (hp !== hpQ) { hpQ = hp; hpChip?.set(String(hp)); hpChip?.el.classList.toggle('low', hp < 35); }
+        tray?.update(W.slot);
+        return;
+      }
+      hq('.mz-hp i').style.width = Math.max(0, W.hp) + '%'; hq('.mz-hp b').textContent = `❤️ ${hp}`;
       hud.querySelectorAll('.mz-wpn button').forEach((b, i) => b.classList.toggle('on', i === W.slot));
     }
     function drawScore(){
@@ -493,7 +504,13 @@
         body = `<ol>${L.map(([k, n]) => `<li>${esc(nickOf(k))} — ${n}</li>`).join('') || '<li>пока никого</li>'}</ol>`;
       } else if (W.mode === 'team') body = `<span class="r">🟥 ${W.teams[1]}</span> : <span class="bl">${W.teams[2]} 🟦</span>`;
       else body = `<span class="r">🟥 ${W.teams[1]}</span> : <span class="bl">${W.teams[2]} 🟦</span> / ${CAP_WIN}<br>${W.pts.map(p => `🚩${p.id}${p.own === 1 ? '🟥' : p.own === 2 ? '🟦' : '⬜'}`).join(' ')}`;
-      hq('.mz-score').innerHTML = `<b>${M0[0]} ${esc(M0[1])} · ${tm}</b>${body}<div>Ты: ${W.kills} выбил · ${W.deaths} выбыл${W.robotKills ? ` · 🤖 ${W.robotKills}` : ''}</div>`;
+      const html = `<b>${M0[0]} ${esc(M0[1])} · ${tm}</b>${body}<div>Ты: ${W.kills} выбил · ${W.deaths} выбыл${W.robotKills ? ` · 🤖 ${W.robotKills}` : ''}</div>`;
+      if (V2) {
+        scChip?.set(`${tm} · ${W.mode === 'ffa' ? `${W.kills}/${W.deaths}` : `${W.teams[1]}:${W.teams[2]}`}`);
+        if (scSheet?.isOpen()) { const d = scSheet.body.firstChild || scSheet.body.appendChild(document.createElement('div')); d.className = 'mz-score-t'; d.innerHTML = html; }
+        return;
+      }
+      hq('.mz-score').innerHTML = html;
     }
     const nickOf = k => (k === S.key ? S.me.nick : S.players.get(k)?.nick || 'игрок');
     function feed(text){ const d = document.createElement('div'); d.textContent = text; const f = hq('.mz-feed'); f.prepend(d); while (f.children.length > 5) f.lastChild.remove(); setTimeout(() => d.remove(), 5200); }
@@ -501,12 +518,13 @@
     const BASE_BTNS = [{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }];
     function touchButtons(on){
       if (!S.I?.touch || !S.H) return;
+      if (V2) { S.H.buttons(on ? [{ kind: 'pose', id: 'pose', icon: '⬇', label: 'поза' }, { action: 'interact', icon: '✋', label: 'действие' }, { action: 'attack', icon: '👊', label: 'огонь', big: true }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }] : (S.baseBtns?.() || BASE_BTNS)); return; }
       S.H.buttons(on ? [{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { id: 'wnext', icon: '🔄', label: 'оружие', toggle: () => { setSlot((W.slot + 1) % SLOTS.length); return false; } }, { action: 'attack', icon: '👊', label: 'огонь', big: true }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }] : BASE_BTNS);
     }
     // Панель оружия — не под кнопками телефона: кнопки по ширине заходят под неё (телефон стоя, планшет) — панель и жизни над
     // кнопками (высота кнопок — меряем: размер кнопок в ⚙️, левша, их число). Раньше на телефоне её ячейки закрывали кнопки и очки
     function layoutHud(){
-      if (hud.hidden) return;
+      if (hud.hidden || V2) return;
       const eb = S.wrap.querySelector('.e-btns'), wp = hq('.mz-wpn');
       let up = false, mzb = 0;
       if (eb && wp) {
@@ -529,7 +547,14 @@
       setTimeout(() => { if (W.inZone && !W.stopped) applyTeam(); }, 700);
       W.hp = HP; W.prot = nowMs() + PROTECT * 1000;
       rt.setZX({ h: 10, w: SLOTS[W.slot] });
-      hud.hidden = false; drawHud(); drawScore();
+      hud.hidden = false;
+      if (V2 && S.H?.tray) {
+        tray = S.H.tray({ title: 'Оружие', slots: () => SLOTS.map(w => ({ icon: WEAPONS[w].icon, label: WEAPONS[w].name })), sel: W.slot, onSel: i => { if (i !== W.slot) setSlot(i); } });
+        hpChip = S.H.chip('war-hp', { icon: '❤', at: 'tl' }).show(true); hpQ = -1;
+        scChip = S.H.chip('war-sc', { icon: '⏱', at: 'tc', tap: () => { scSheet = scSheet || S.H.sheet({ title: '⚔️ Счёт боя' }); scSheet.open(); drawScore(); }, title: 'Счёт боя' }).show(true);
+        S.el.querySelector('.wld')?.classList.add('mz-inwar');   // 📱 и 💬 — в ☰, пока бой
+      }
+      drawHud(); drawScore();
       touchButtons(true);
       requestAnimationFrame(layoutHud); root.addEventListener('resize', onResize);
       S.H?.crosshair?.(false);
@@ -538,6 +563,7 @@
     function leave(){
       W.inZone = false;
       hud.hidden = true;
+      if (V2) { tray?.dispose(); tray = null; hpChip?.show(false); scChip?.show(false); scSheet?.close(); S.el.querySelector('.wld')?.classList.remove('mz-inwar'); if (aimOn) { aimOn = false; hud.classList.toggle('aim', false); } }
       touchButtons(false);
       root.removeEventListener('resize', onResize);
       for (const m of [...W.mercs]) dropMerc(m);
@@ -995,7 +1021,13 @@
         if (W.inZone) {
           const C = S.C;
           for (let i = 0; i < SLOTS.length; i++) if (C?.down('slot' + (i + 1))) setSlot(i);
-          if (C && (C.held('attack') || (S.I?.locked && C.heldRaw?.('attack'))) && !S.menu && !S.phoneOn && !rt.veh?.driving?.()) fire();   // за рулём не стреляют (пассажир — может)
+          const atk = C && (C.held('attack') || (S.I?.locked && C.heldRaw?.('attack'))) && !S.menu && !S.phoneOn && !rt.veh?.driving?.();
+          if (atk) fire();   // за рулём не стреляют (пассажир — может)
+          if (V2) {   // прицел — пока стреляешь и 1,5 с после (и от 1-го лица), не на лице своего персонажа
+            if (atk) aimT = nowMs() + 1500;
+            const aim = !!atk || nowMs() < aimT || S.rig?.mode === 'first';
+            if (aim !== aimOn) { aimOn = aim; hud.classList.toggle('aim', aim); }
+          }
           if (W.down && nowMs() >= W.down) respawn();
           if (!W.down && W.hp < HP && nowMs() - W.lastHit > 6000) { W.hp = Math.min(HP, W.hp + dt * 4); const hb = Math.ceil(W.hp / 10); if (hb !== rt.zx.h) rt.setZX({ h: hb }); drawHud(); }
           robotTick(dt); mercTick(dt);

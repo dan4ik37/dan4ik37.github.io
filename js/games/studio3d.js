@@ -258,6 +258,7 @@ Players.PlayerAdded.Connect(player => {
         <button type="button" data-a="publish" class="s3-pubbtn" title="Выложить мир — по ссылке или в каталог">📤<span> Выложить</span></button>
         <span class="gs-s3"><button type="button" data-gs-set title="Настройки: графика, звук, управление, камера" aria-label="Настройки">⚙️</button>${window.D37Full ? window.D37Full.btn('.s3', { esc: false }) : ''}</span>
         <button type="button" class="s3-play" data-a="play">▶ Играть</button>
+        <button type="button" class="s3-e2menu" data-a="e2menu" title="Меню: телефон, настройки, экран, вывод скриптов" aria-label="Меню" aria-haspopup="dialog">☰</button>
       </div>
       <div class="s3-main">
         <div class="s3-left"><div class="s3-ph">🌲 Проводник<input type="search" class="s3-find" placeholder="🔍 Найти" aria-label="Найти объект"></div><div class="s3-tree"></div></div>
@@ -995,6 +996,7 @@ Players.PlayerAdded.Connect(player => {
     if (extAny('act', a, b)) return;   // кнопки расширений (data-a)
     if (a.startsWith('menu:')) { const m = ed.q('.s3-menu'); if (!m.hidden && ed.menuFor === a) { closeMenu(); return; } ed.menuFor = a; openMenu(a.slice(5), b); return; }
     if (a === 'exit') { exitStudio(); return; }
+    if (a === 'e2menu') { s3Menu(); return; }
     if (a === 'undo') undo(false); else if (a === 'redo') undo(true);
     else if (a === 'add:Script') insert('Script');
     else if (a === 'play') {
@@ -1313,8 +1315,13 @@ Players.PlayerAdded.Connect(player => {
     const rig = E.cameraRig(R.camera, { yaw: Math.PI, pitch: .42, dist: 10, minD: 2.6, maxD: 24, autoFirst: true });
     rig.snap(sp[0], sp[1], sp[2]);
     const unf = rig.follow(P);
-    const H = E.ui(R.r.domElement.parentElement, C);
-    if (I.touch) H.buttons([{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }]);
+    // интерфейс 2.0 (T-123, docs/HUD_V2.md §9.3; откат — HUD2.studio = 0): поза с кругом (сесть на скамейку или на землю, лечь,
+    // эмоции), одна кнопка действия; панель редактора в игре — только ■ Стоп и ☰ поверх мира, «Вывод» свёрнут
+    const v2 = typeof HUD2 !== 'undefined' && !!HUD2.kit && !!HUD2.studio;
+    ed.box.classList.toggle('s3-e2', v2);
+    const H = E.ui(R.r.domElement.parentElement, C, v2 ? { v2: true, game: 's3', touch: I.touch } : undefined);
+    if (v2) s3Pose(H, P, A);
+    if (I.touch) H.buttons(v2 ? S3_BTNS : [{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }]);
     if (window.D37Settings?.get('view') === 'first') { rig.mode = 'first'; H.crosshair(true); }   // настройка «Вид»
     const AU = E.audio();
     P.on('step', e => AU.step(e.floor, e.run, e.x, e.y, e.z)); P.on('jump', e => AU.play('jump', e)); P.on('land', e => AU.play('land', { ...e, vol: .35 + e.k * .65 }));
@@ -1334,7 +1341,7 @@ Players.PlayerAdded.Connect(player => {
     pl.SH = E.scripts({
       apply: d => applyCmd(d),
       print: (t, k) => print(t, k),
-      error: (s, line, m) => { print(`❌ ${s || 'скрипт'}${line > 0 ? ', строка ' + line : ''}: ${m}`, 'err'); setBottom('out'); },
+      error: (s, line, m) => { print(`❌ ${s || 'скрипт'}${line > 0 ? ', строка ' + line : ''}: ${m}`, 'err'); setBottom('out'); ed.box.classList.toggle('s3-e2out', true); },
       hang: () => { print('⛔ Скрипт завис (бесконечный цикл?) — остановлен. Используй await task.wait() в циклах.', 'err'); setBottom('out'); },
     });
     pplug('start', PLAY_API);   // режим игры и ракурс камеры (studio3d-play.js) — и в чужом мире, и у гостя
@@ -1422,7 +1429,8 @@ Players.PlayerAdded.Connect(player => {
     ed.B?.edit();
     if (pl.light0.time !== ed.R.lighting.time) ed.R.setLighting(pl.light0);
     select(sel ? ed.SC.get(sel) : null); renderTree();
-    ed.box.classList.remove('s3-playing');
+    ed.box.classList.remove('s3-playing', 's3-e2out');
+    ed.e2m?.close();
     ed.q('.s3-play').textContent = '▶ Играть';
     ed.loop.pause(false);
     print('■ Остановлено — мир вернулся как был', 'sys');
@@ -1620,7 +1628,7 @@ Players.PlayerAdded.Connect(player => {
     pl.bubs = pl.bubs.filter(b => { if (now > b.until) { b.d.remove(); return false; } return true; });
     for (const b of pl.bubs) { const h = ED.NPC.head(b.e); if (!h) continue; const [x, y, ok] = R.project(h[0], h[1], h[2]); b.d.hidden = !ok; b.d.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`; }
   }
-  function drawHealth(){ const pl = ED.playing; if (!pl) return; const i = pl.hud.querySelector('.s3-health i'); i.style.width = (pl.health / pl.maxHealth * 100) + '%'; i.parentElement.classList.toggle('low', pl.health < pl.maxHealth * .35); }
+  function drawHealth(){ const pl = ED.playing; if (!pl) return; if (pl.health < pl.maxHealth && !pl.hud.classList.contains('s3-hurt')) pl.hud.classList.toggle('s3-hurt', true); const i = pl.hud.querySelector('.s3-health i'); i.style.width = (pl.health / pl.maxHealth * 100) + '%'; i.parentElement.classList.toggle('low', pl.health < pl.maxHealth * .35); }
   function drawStats(){
     const pl = ED?.playing; if (!pl) return;
     const box = pl.hud.querySelector('.s3-stats'), mp = ED.mp;
@@ -1656,6 +1664,7 @@ Players.PlayerAdded.Connect(player => {
     C.blocked = !!window.D37Settings?.isOpen?.() || !!pl.phoneOn;   // открыто окно ⚙️ или телефон 📱 — персонаж стоит
     C.walk = !!pl.phoneOn && !window.D37Settings?.isOpen?.();   // с телефоном в руке — можно идти (как в ГТА)
     C.step(dt);
+    if (C.down('emote') && !C.blocked && pl.H.poseRadial && !ed.e2m) pl.H.poseRadial();   // T (интерфейс 2.0, как в «Мире»): круг позы и эмоций
     if (C.down('pause') && !C.blocked && !(mp && ed.player)) { stopPlay(); return; }   // в комнате по ссылке Esc не выкидывает из игры
     if (C.down('view')) playView(pl);   // V — вид от 1-го / 3-го лица (как в «Мире»)
     // едем на движущейся детали
@@ -1750,8 +1759,61 @@ Players.PlayerAdded.Connect(player => {
     playVis();
     pplug('frame', dt);   // табло режима, таймер, подписи команд
     R.render();
-    H.prompt(I.touch ? (pl.X.raw && pl.X.cur ? '✋ ' + pl.X.raw : null) : pl.X.text, pl.X.progress);
+    if (H.act) {   // интерфейс 2.0: подпись — у кнопки действия, значок — глагол
+      H.prompt(I.touch ? null : pl.X.text, pl.X.progress);
+      const vk = P.mode === 'sit' ? '#sit' : pl.X.raw && pl.X.cur ? pl.X.raw : '';
+      if (vk !== pl.vk) { pl.vk = vk; H.act(!vk ? null : vk === '#sit' ? { icon: '⬆', label: 'Встать' } : { icon: window.D37E.verbIcon(vk), label: vk }); }
+      H.poseIcon(P.mode === 'sit' ? (P.seat?.lie ? 'lie' : 'sit') : P.crouch ? 'crouch' : 'stand');
+    } else H.prompt(I.touch ? (pl.X.raw && pl.X.cur ? '✋ ' + pl.X.raw : null) : pl.X.text, pl.X.progress);
     H.stamina(P.stamina / P.maxStamina, P.exhausted);
+  }
+  // ═══ Интерфейс 2.0 в игре (T-123): круг позы и ☰ ═══
+  const S3_BTNS = [{ kind: 'pose', id: 'pose', icon: '⬇', label: 'поза' }, { action: 'interact', icon: '✋', label: 'действие' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }];
+  const S3_EMO = ['💃', '👋', '😂'];
+  const s3Recent = () => { let a = []; try { a = JSON.parse(localStorage.getItem('d37_emo_recent') || '[]'); } catch (e) {} const E3 = window.World3D?.EMOTES || []; const out = Array.isArray(a) ? a.filter(e => E3.includes(e)).slice(0, 3) : []; for (const d of S3_EMO) if (out.length < 3 && !out.includes(d)) out.push(d); return out; };
+  function s3Emote(A, e){ try { localStorage.setItem('d37_emo_recent', JSON.stringify([e, ...s3Recent().filter(x => x !== e)].slice(0, 3))); } catch (er) {} A.emote(ED?.playing?.meKey || 'me', e, performance.now() / 1000); }
+  // места: скамейки мира (Prefab bench); иначе — на землю (player.js sitHere / lieHere)
+  const s3Seats = () => { const out = []; for (const o of ED?.SC?.all?.() || []) if (o.cls === 'Prefab' && o.kind === 'bench' && Array.isArray(o.pos)) out.push({ x: o.pos[0], y: o.pos[1] + .5, z: o.pos[2], yaw: ((o.rot?.[1] || 0) * Math.PI) / 180 }); return out; };
+  function s3Pose(H, P, A){
+    H.pose({
+      current: () => P.mode === 'sit' ? (P.seat?.lie ? 'lie' : 'sit') : P.crouch ? 'crouch' : 'stand',
+      items: () => [{ id: 'crouch', icon: '⬇', label: 'Присесть' }, { id: 'sit', icon: '🪑', label: 'Сесть' }, { id: 'lie', icon: '🛌', label: 'Лечь' },
+        ...s3Recent().map(e => ({ id: 'emo:' + e, icon: e, label: 'Эмоция' })), { id: 'more', icon: '➕', label: 'Все эмоции' }],
+      onPick: it => {
+        if (it.id === 'sit') P.sitHere(s3Seats());
+        else if (it.id === 'lie') P.lieHere([]);
+        else if (it.id.startsWith('emo:')) s3Emote(A, it.id.slice(4));
+        else if (it.id === 'more') {
+          const pl = ED?.playing; if (!pl) return;
+          if (!pl.more) {
+            const g = document.createElement('div'); g.className = 'e2-grid';
+            for (const e of window.World3D?.EMOTES || []) { const b = document.createElement('button'); b.type = 'button'; b.textContent = e; b.onclick = () => { pl.more.close(); s3Emote(A, e); }; g.appendChild(b); }
+            pl.more = H.sheet({ title: '😀 Эмоции', body: g });
+          }
+          pl.more.open();
+        }
+      },
+    });
+  }
+  function s3Menu(){
+    const ed = ED, SS = window.D37Settings; if (!ed?.playing || !SS?.menu || ed.e2m) return;
+    const fsEl = () => ed.box;
+    ed.e2m = SS.menu(ed.R.r.domElement.parentElement, {
+      title: '🧱 ' + esc(ed.q('.s3-name')?.value || 'Студия 3D'), sub: 'Мир идёт и в меню',
+      items: () => [{ id: 'resume', icon: '▶', text: 'Продолжить', primary: true }, ...(window.D37Phone ? [{ id: 'phone', icon: '📱', text: 'Телефон' }] : []), { id: 'set', icon: '⚙️', text: 'Настройки' },
+        ...(SS.fsItems?.(fsEl()) || []), { id: 'out', icon: '🖨', text: ed.box.classList.contains('s3-e2out') ? 'Спрятать вывод скриптов' : 'Вывод скриптов' },
+        { id: 'stop', icon: '■', text: ed.player ? 'Заново' : 'Стоп — в редактор' }, { id: 'exit', icon: '←', text: 'Выйти из студии', warn: true }],
+      onPick: id => {
+        if (SS.fsPick?.(id, fsEl(), ed.e2m)) return;
+        ed.e2m?.close();
+        if (id === 'phone') window.D37Phone?.open?.();
+        else if (id === 'set') SS.open?.({ ctx: 'engine' });
+        else if (id === 'out') ed.box.classList.toggle('s3-e2out');
+        else if (id === 'stop') act('play');
+        else if (id === 'exit') exitStudio();
+      },
+      onClose: () => { ed.e2m = null; ed.playing?.C?.reset_state?.(); },
+    });
   }
 
   // ═══ Игра по сети (js/engine/net.js + net-transport.js) ═══
