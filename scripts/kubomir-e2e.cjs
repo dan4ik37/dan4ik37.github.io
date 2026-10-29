@@ -305,14 +305,16 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       if (!process.env.KB_NO_DEBRIS) ok(res.tp.deb && res.tp.deb.ceilMax <= 6144, 'общий потолок за такт (постройки + обломки) ≤ 6144 операций', res.tp.deb);
       // 20 кругов «построил — подрубил — упало — убрал»: память JS не растёт
       const h0 = await heap();
-      const rounds = [];
-      for (let k = 0; k < +(process.env.KB_N || 20); k++) { await ev(scene, 120000); if (process.env.KB_SCENE_ONLY) { rounds.push([1, 0, 0, 0, 0, 0, {}]); continue; } if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 }); const r = await ev(run, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 }); rounds.push([r.went && r.far >= 15 ? 1 : 0, r.cpuFall, r.p95, r.max, r.fps, r.worstTickMs, r.ms, r.deb ? r.deb.worstTickMs : 0, r.deb ? r.deb.broke : 0, r.deb ? r.deb.down : 0]); }
+      const rounds = [], hsR = [];   // куча после каждого круга (после сборки мусора)
+      for (let k = 0; k < +(process.env.KB_N || 20); k++) { await ev(scene, 120000); if (process.env.KB_SCENE_ONLY) { rounds.push([1, 0, 0, 0, 0, 0, {}]); hsR.push(await heap()); continue; } if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 }); const r = await ev(run, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 }); rounds.push([r.went && r.far >= 15 ? 1 : 0, r.cpuFall, r.p95, r.max, r.fps, r.worstTickMs, r.ms, r.deb ? r.deb.worstTickMs : 0, r.deb ? r.deb.broke : 0, r.deb ? r.deb.down : 0]); hsR.push(await heap()); }
       const h1 = await heap(); res.tpHeap = { h0, h1 }; console.log('T-138 память, МБ', JSON.stringify(res.tpHeap));
       if (rounds.length) { const col = i => rounds.map(r => r[i]).sort((a, b) => a - b), med = a => a[a.length >> 1]; res.tpRounds = { n: rounds.length, ok: rounds.filter(r => r[0]).length, cpuMed: med(col(1)), p95Med: med(col(2)), maxMed: med(col(3)), maxMax: col(3)[rounds.length - 1], fpsMed: med(col(4)), tickMed: med(col(5)), tickMax: col(5)[rounds.length - 1], debTickMed: med(col(7)), debTickMax: col(7)[rounds.length - 1], brokeMed: med(col(8)), downMed: med(col(9)), evMed: Object.fromEntries(Object.keys(rounds[0][6] || {}).map(k => [k, med(rounds.map(r => r[6][k]).sort((a, b) => a - b))])) }; console.log('T-138 круги' + (PHONE ? ' (ЦП ×4)' : ''), JSON.stringify(res.tpRounds)); ok(res.tpRounds.ok === rounds.length, 'каждый круг: башня и великан упали', res.tpRounds); }
       // сама сцена (каждый круг заново 41×29×31 клеток: снести, построить) растёт ~1,7 МБ / круг и без T-138 (KB_SCENE_ONLY=1 — та же сцена с
       // выключенными флагами); утечку T-138 ловят 20× reopen с падением (KB_TOPPLE=1) и node-проба (40 падений в одном мире — +0,24 МБ)
-      const per = (h1 - h0) / Math.max(1, +(process.env.KB_N || 20));
-      ok(per < 3, (process.env.KB_N || 20) + ' кругов «башня и великан упали — убрали»: ' + per.toFixed(2) + ' МБ / круг (сцена без T-138 — ~1,7)', res.tpHeap);
+      // наклон по ПОЛУ: меньший из первых 5 и из последних 5 замеров (куча после ~10 открытий и без T-138 скачет через раз на ~45 МБ — reopen)
+      const NR = hsR.length, lo5 = a => Math.min(...a), per = NR >= 10 ? (lo5(hsR.slice(-5)) - lo5(hsR.slice(0, 5))) / (NR - 5) : (h1 - h0) / Math.max(1, NR);
+      res.tpHeap.rounds = hsR; res.tpHeap.perRound = +per.toFixed(2); console.log('T-138 куча по кругам, МБ', hsR.join(' '));
+      ok(per < 3, NR + ' кругов «башня и великан упали — убрали»: ' + per.toFixed(2) + ' МБ / круг по полу кучи (сцена без T-138 — KB_SCENE_ONLY)', res.tpHeap);
       const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`), errs = logs.filter(l => !/X3595|DevTools|favicon/i.test(l));
       ok(!pr.bad.length, 'все программы шейдеров собрались', pr.bad);
       ok(!errs.length, 'в консоли — без ошибок и исключений', errs.slice(0, 6));

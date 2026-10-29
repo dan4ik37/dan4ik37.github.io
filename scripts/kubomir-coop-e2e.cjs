@@ -196,6 +196,7 @@ async function basic(A, B){
   // T-138 шаг 2 (F5): решает хозяин. Гость надрубает камень — срез у гостя от хозяина; гость рубит живое дерево (подруб + запил) —
   // валит хозяин, у гостя видно падение (события 'kt'), брёвна лежат в обоих мирах одинаково
   { const sx = P0.x + 2, sy = P0.y + 1, sz = P0.z - 2;
+    await Promise.all([A, B].map(P => P.ev(`(${ST}.creative = false, 1)`)));   // мир basic — «творчество» (там ломают сразу, без надрубов): на время проверки — выживание у обоих
     await A.ev(`(() => { const S = ${ST}, V = D37E.vox; S.W.set(${sx}, ${sy}, ${sz}, V.cell(V.ID.stone), { urgent: 3 }); return 1; })()`);
     await waitFor(B, `${ST}.W.get(${sx}, ${sy}, ${sz}) === D37E.vox.ID.stone`, 5000);
     await B.ev(`(() => { const S = ${ST}, V = D37E.vox, M = S.mine; M.need = 1; M.t = .5 + 1e-6; const v = S.W.raw(${sx}, ${sy}, ${sz}); return S.topple.mine({ x: ${sx}, y: ${sy}, z: ${sz}, v, nx: -1, ny: 0, nz: 0 }, V.blocks[v & 0xfff], M); })()`);
@@ -209,7 +210,8 @@ async function basic(A, B){
       return 1; })()`;
     await A.ev(plant);
     await waitFor(B, `${ST}.W.get(${tx}, ${gy} + 6, ${tz}) === D37E.vox.ID.log_oak`, 8000);
-    await B.ev(`(() => { const S = ${ST}, W = S.W; for (let y = ${gy}; y < ${gy} + 9; y++) for (let x = ${tx} - 2; x <= ${tx} + 2; x++) for (let z = ${tz} - 2; z <= ${tz} + 2; z++) W.chunkAt(x, z)?.edits?.delete(((x & 15) << 11) | ((z & 15) << 7) | y); S.P.x = ${tx} + 2.5; S.P.z = ${tz} + 2.5; return 1; })()`);   // у гостя то же «живое» дерево (в игре — из генератора у обоих)
+    await B.ev(`(() => { const S = ${ST}, W = S.W; for (let y = ${gy}; y < ${gy} + 9; y++) for (let x = ${tx} - 2; x <= ${tx} + 2; x++) for (let z = ${tz} - 2; z <= ${tz} + 2; z++) W.chunkAt(x, z)?.edits?.delete(((x & 15) << 11) | ((z & 15) << 7) | y); Object.assign(S.P, { x: ${tx} + 2.5, y: ${gy}, z: ${tz} + .5, vx: 0, vy: 0, vz: 0, fly: false }); return 1; })()`);   // у гостя то же «живое» дерево (в игре — из генератора у обоих)
+    await waitFor(A, `(() => { const G = [...${ST}.net.guests.values()][0]; return Math.abs(G.tx - (${tx} + 2.5)) < 1 && Math.abs(G.tz - (${tz} + .5)) < 1 && Math.abs(G.ty - ${gy}) < 1.5; })()`, 5000);   // хозяин видит гостя у дерева (дальность удара)
     const hit = nx => `(() => { const S = ${ST}, V = D37E.vox, M = S.mine, v = S.W.raw(${tx}, ${gy} + 1, ${tz}); if (!(v > 0)) return -1; M.need = 1; M.t = .125 + 1e-6; return S.topple.mine({ x: ${tx}, y: ${gy} + 1, z: ${tz}, v, nx: ${nx}, ny: 0, nz: 0 }, V.blocks[v & 0xfff], M); })()`;
     const f0 = await A.ev(`${ST}.topple.stats.fells`), nb0 = await B.ev(`${ST}.topple.stats.netBodies | 0`);
     for (const [nx, n] of [[1, 3], [-1, 5]]) for (let k = 0; k < n; k++) { await B.ev(hit(nx)); await sleep(450); }
@@ -218,7 +220,11 @@ async function basic(A, B){
     await waitFor(A, `!${ST}.topple.bodies().length`, 15000); await sleep(1500);
     const logs = P => P.ev(`(() => { const S = ${ST}, V = D37E.vox, o = []; for (let x = ${tx} - 9; x <= ${tx} + 9; x++) for (let z = ${tz} - 9; z <= ${tz} + 9; z++) for (let y = ${gy}; y < ${gy} + 3; y++) if (S.W.get(x, y, z) === V.ID.log_oak) o.push(x + ',' + y + ',' + z); return o.join(' '); })()`);
     const [lA, lB] = await Promise.all([logs(A), logs(B)]);
-    ok(fell && seen && lA.split(' ').length >= 5 && lA === lB, 'T-138: гость рубил живое дерево — повалил хозяин, у гостя видно падение, брёвна лежат одинаково (' + lA.split(' ').length + ')', { fell: !!fell, seen: !!seen, host: lA, guest: lB, kc: await A.ev(`${T}.coop().journal.filter(j => j[1] === 'kc')`) });
+    ok(fell && seen && lA.split(' ').length >= 5 && lA === lB, 'T-138: гость рубил живое дерево — повалил хозяин, у гостя видно падение, брёвна лежат одинаково (' + lA.split(' ').length + ')', { fell: !!fell, seen: !!seen, host: lA, guest: lB, kc: await A.ev(`${T}.coop().journal.slice(-12)`), denied: await A.ev(`${T}.coop().stats.denied`), gPos: await A.ev(`(() => { const G = [...${ST}.net.guests.values()][0]; return [G.tx, G.ty, G.tz]; })()`),
+      dbg: { gHits: await B.ev(`${ST}.topple.stats.netHits | 0`), hChips: await A.ev(`${ST}.topple.stats.chips | 0`), hFells: await A.ev(`${ST}.topple.stats.fells | 0`),
+        gMode: await B.ev(`(() => { const S = ${ST}, v = S.W.raw(${tx}, ${gy} + 1, ${tz}); return v > 0 ? S.topple.mines({ x: ${tx}, y: ${gy} + 1, z: ${tz}, v, nx: 1, ny: 0, nz: 0 }, D37E.vox.blocks[v & 0xfff], 1) : -1; })()`),
+        hMode: await A.ev(`(() => { const S = ${ST}, v = S.W.raw(${tx}, ${gy} + 1, ${tz}); return v > 0 ? S.topple.mines({ x: ${tx}, y: ${gy} + 1, z: ${tz}, v, nx: 1, ny: 0, nz: 0 }, D37E.vox.blocks[v & 0xfff], 1) : -1; })()`) } });
+    await Promise.all([A, B].map(P => P.ev(`(${ST}.creative = true, 1)`)));
   }
   // чат
   await B.ev(`${T}.command('привет всем'), 1`);
