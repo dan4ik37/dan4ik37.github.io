@@ -321,8 +321,10 @@ The owner's own 3D editor AI3D (from his package ai3d-mcp: ai3d.html, author —
   9–20 MB. 20 open/close: 0 renderers, 0 WebGL contexts, canvases and window/document listeners as before, heap 7.2 → 9.0 MB (flat from
   cycle 10). Soak 10 min of random ops (920: self-test rows, demos, undo/redo, 66 broken batches, 65 exports, 6 «В Студию 3D», 11 selftests,
   views, play, orbit): 0 errors, every rollback kept the scene, heap 16–58 MB per minute, 17 MB after an empty scene + GC (was 71–112 MB).
-- **Next (A2–A5 need).** A2: shared skeleton (spec/BODY.md) — AI3D parts are rigid (no skin); rigAuto + gait clips → bones + skinned glTF;
-  D37E model.js has no skin/animation playback yet. A3: colliders/mass/joints → glTF extension D37_physics (AI3D manifestOf has colliders).
+- **Next (A2–A5 need).** A2: shared skeleton (spec/BODY.md) — AI3D parts are rigid (no skin). What the GLB has today: every part is a
+  flat child of one root node «AI3D» (state.parent links are not written), no armature or skin, clips as per-part TRS tracks (Blender: one
+  action per clip, correct ranges, shape-key animation too — but moving the pelvis does not move the legs). A2: export the part hierarchy
+  (local TRS) or bones + skin; rigAuto + gait clips → bones + skinned glTF; D37E model.js has no skin/animation playback yet. A3: colliders/mass/joints → glTF extension D37_physics (AI3D manifestOf has colliders).
   A4: terrain from core T1 instead of AI3D's own value noise; scatter → batch.js instancing, not one merged mesh. A5: command layer like the
   photo editor (D37Tools «d37 v1»: schema per op, per-step undo; AI3D now has whole-state rollback and no ANIM/CON rollback), short guide topics,
   MCP server. Also: inverted-hull outlines do not show
