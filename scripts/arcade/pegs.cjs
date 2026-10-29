@@ -30,14 +30,30 @@ module.exports = {
     stepN(s, C.IDLE - 1);
     ok(!s.fly && s.ball === 0 && !s.over, 'pegs: до IDLE шагов шарик ждёт');
     stepN(s, 1);
-    ok(s.fly === 1 && s.ball === 1, 'pegs: IDLE шагов без броска — шарик падает сам');
+    ok(s.fly === 1 && s.ball === 1 && s.free === 1, 'pegs: IDLE шагов без броска — шарик падает сам (без очков)');
+    // проверка T-140 (R1): шарик, упавший сам, очков не даёт — партия без нажатий: 0 очков и не победа (на 60 зёрнах)
+    { let maxSc = 0, wins = 0, frees = 0;
+      for (let seed = 1; seed <= 60; seed++) { const z = spec.create(K.rng(seed)); let n = 0; while (!z.over && n < 40000) { spec.step(z, K.STEP, inp); n++; } maxSc = Math.max(maxSc, z.score); wins += spec.win(z) ? 1 : 0; frees += z.frees; }
+      ok(maxSc === 0 && wins === 0 && frees === 600, 'pegs: партия без единого нажатия — 0 очков и не победа (60 зёрен)', { maxSc, wins, frees }); }
+    // один прицельный бросок, остальные сами: очки только за него
+    { const z = spec.create(K.rng(61)); let g = 0; for (let b = 0; b < C.NB; b++) if (z.tg[b] === 2) g = b;
+      send(z, T.DOWN, g * C.BW + C.BW / 2); send(z, T.UP, g * C.BW + C.BW / 2); stepN(z, 1); const f1 = z.free; while (z.fly) stepN(z, 1);
+      const first = z.score; let n = 0; while (!z.over && n < 40000) { spec.step(z, K.STEP, inp); n++; }
+      ok(f1 === 0 && first > 0 && z.score === first && z.frees === C.BALLS - 1, 'pegs: очки только за прицельный бросок, остальные 9 упали сами — 0', { first, score: z.score, frees: z.frees }); }
+    // нажал и отпустил во время полёта — следующий шарик не бросается вслепую (цели меняются, когда шарик упал)
+    { const z = spec.create(K.rng(62)); send(z, T.DOWN, 100); send(z, T.UP, 100); stepN(z, 1); stepN(z, 20);
+      send(z, T.DOWN, 200); send(z, T.UP, 200); let n = 0; while (z.fly && n < 2000) { stepN(z, 1); n++; } stepN(z, 3);
+      ok(z.ball === 1 && z.fly === 0 && z.want === 0 && z.aim === 200, 'pegs: нажатие в полёте — только прицел, следующий шарик ждёт', { ball: z.ball, fly: z.fly, want: z.want }); }
+    // клавиши ← → — тоже прицел: шарик, упавший после них сам, считается (игрок целился)
+    { const z = spec.create(K.rng(63)); ev.type = T.KEY; ev.k = 0; spec.input(z, ev, inp); stepN(z, C.IDLE);
+      ok(z.fly === 1 && z.free === 0, 'pegs: целился клавишами и не бросил — шарик падает сам, но очки считаются', { free: z.free }); }
     // тап — бросок туда, где палец; держит палец вечно — бросок через 2·IDLE (партия не стоит)
     s = spec.create(K.rng(52)); send(s, T.DOWN, 90); send(s, T.UP, 90); stepN(s, 1);
     ok(s.fly === 1 && Math.abs(s.x - 90) < 1e-9 && !s.over, 'pegs: тап — шарик падает из-под пальца, игра идёт');
     s = spec.create(K.rng(53)); send(s, T.DOWN, 90); stepN(s, 2 * C.IDLE - 1);
     ok(!s.fly, 'pegs: палец держит — шарик ждёт');
     stepN(s, 1);
-    ok(s.fly === 1, 'pegs: держит 2·IDLE шагов — шарик всё равно падает');
+    ok(s.fly === 1 && s.free === 0, 'pegs: держит 2·IDLE шагов — шарик всё равно падает (прицел был — очки считаются)');
     // тяжесть в секунду²: 0,25 с свободного падения
     s = spec.create(K.rng(54)); send(s, T.DOWN, 16); send(s, T.UP, 16); stepN(s, 1); stepN(s, 15);
     ok(Math.abs(s.vy - C.G0 * .25) < 1, 'pegs: за 0,25 с скорость падения ≈ G0 / 4', s.vy);
@@ -82,7 +98,7 @@ module.exports = {
         x = g * C.BW + C.BW / 2 + ((++k * 7) % 9 - 4) * 2; __ptr('pointerdown', x, 60); held = 1;
       }, ${gap}); return 1; })()`,
     gap: 300, stopB: 2,
-    endByStop: false,    // 10 шариков; бот B бросил 2 — остальные падают сами через 6 с
+    endByStop: false,    // 10 шариков; бот B бросил 2 — остальные падают сами через 6 с и очков не дают
     endMs: 130000,
     field: 'tg',
   },

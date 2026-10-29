@@ -11,6 +11,9 @@
 // гвоздика (иначе он мог бы застыть на нём); (4) B.filter и объекты-шарики каждый кадр (мусор) — теперь поля состояния;
 // (5) застрявший шарик через 25 с считался «упавшим» в случайную корзинку — теперь через 10 с — в корзинку под ним;
 // (6) крайние гвоздики стояли так, что шарик мог застрять у стены; (7) у партии не было конца — теперь 10 шариков.
+// Проверка T-140: шарик, упавший сам (не целился и не бросал), очков не даёт — иначе партия без единого нажатия набирала
+// в среднем 152 очка и в половине случаев считалась победой (XP); нажатие во время полёта не бросает следующий шарик
+// вслепую (цели меняются, когда шарик упал) — оно только двигает прицел.
 (() => {
   const T = ArcadeKit.T;
   const W = 320, H = 440, BR = 6.5, PR = 4, PY0 = 104, PDY = 30, PROWS = 9, NB = 8, BW = 40, DIV = 392, LAND = 424, HOLD = 34;
@@ -38,17 +41,19 @@
 
   function create(rng){
     const s = { rng, rs: Int32Array.of((rng() * 4294967296) | 0 || 1), t: 0, score: 0, over: false, why: '', snd: 0,
-      ball: 0, fly: 0, aim: W / 2, qx: .5, qy: .5, held: 0, want: 0, idle: 0, age: 0, x: 0, y: 0, x0: 0, y0: 0, vx: 0, vy: 0, bar: W / 2,
+      ball: 0, fly: 0, aim: W / 2, qx: .5, qy: .5, held: 0, want: 0, aimed: 0, free: 0, frees: 0, idle: 0, age: 0, x: 0, y: 0, x0: 0, y0: 0, vx: 0, vy: 0, bar: W / 2,
       streak: 0, best: 0, gold: 0, green: 0, last: -1, lastB: -1, flash: 0, tg: new Uint8Array(NB) };
     targets(s);
     return s;
   }
 
+  // s.aimed — игрок что-то сделал для этого шарика (палец, клавиши); шарик без этого падает сам и очков не даёт
   function input(s, e){
     if (s.over) return;
-    if (e.type === T.DOWN || e.type === T.MOVE) { s.aim = e.x < 14 ? 14 : e.x > W - 14 ? W - 14 : e.x; s.held = 1; }
-    else if (e.type === T.UP) { s.held = 0; s.want = 1; }
-    else if (e.type === T.KEY && e.k === 2) s.want = 1;
+    if (e.type === T.DOWN || e.type === T.MOVE) { s.aim = e.x < 14 ? 14 : e.x > W - 14 ? W - 14 : e.x; s.held = 1; if (!s.fly) s.aimed = 1; }
+    else if (e.type === T.UP) { s.held = 0; if (!s.fly) s.want = 1; }   // в полёте — только прицел, следующий шарик ждёт
+    else if (e.type === T.KEY) { if (s.fly) return; s.aimed = 1; if (e.k === 2) s.want = 1; }
+    else if (e.type === T.CANCEL) s.held = 0;   // пауза / потеря фокуса — палец отпущен без броска
   }
 
   // отскок от круга (гвоздик, конец планки или перегородки) радиуса pr в точке (s.qx, s.qy) — дробные через поля состояния:
@@ -67,7 +72,8 @@
   function land(s, b){
     const t = s.tg[b];
     let p = PTS[t];
-    if (t) { s.streak++; p += 10 * (s.streak - 1); if (t === 2) s.gold++; else s.green++; s.snd = t === 2 ? 'win' : 'ok'; s.flash = 30; }
+    if (s.free) { p = 0; s.streak = 0; s.frees++; s.snd = 'tick'; }   // упал сам — 0, серия прервана
+    else if (t) { s.streak++; p += 10 * (s.streak - 1); if (t === 2) s.gold++; else s.green++; s.snd = t === 2 ? 'win' : 'ok'; s.flash = 30; }
     else { s.streak = 0; s.snd = 'tick'; }
     s.best = s.streak > s.best ? s.streak : s.best;
     s.score += p; s.last = p; s.lastB = b;
@@ -90,7 +96,8 @@
       s.idle++;
       // отпустил палец (или пробел); не бросил IDLE шагов — сам; держит палец вечно — сам через 2·IDLE (партия кончается)
       if (s.want || (!s.held && s.idle >= IDLE) || s.idle >= 2 * IDLE) {
-        s.fly = 1; s.ball++; s.want = 0; s.age = 0;
+        s.free = s.want || s.held || s.aimed ? 0 : 1;   // ни прицела, ни нажатия — шарик «сам», без очков
+        s.fly = 1; s.ball++; s.want = 0; s.aimed = 0; s.age = 0;
         s.x = s.aim; s.y = HOLD; s.x0 = s.x; s.y0 = s.y; s.vx = 0; s.vy = 0; s.snd = 'move';
       }
       return;
@@ -176,7 +183,7 @@
     kind: 'canvas', W, H, drag: true,
     title: '⚪ Шарик в цель',
     intro: 'Веди пальцем над гвоздиками и отпусти — шарик полетит вниз. ⭐ золотая корзинка — 50, зелёные — 20, остальные — 2. Цели меняются перед каждым шариком. Попадания подряд — серия. 10 шариков.',
-    controls: 'Веди пальцем (или мышью с зажатой кнопкой) и отпусти. Клавиатура: ← → и пробел. Не бросишь 6 с — шарик упадёт сам.',
+    controls: 'Веди пальцем (или мышью с зажатой кнопкой) и отпусти. Клавиатура: ← → и пробел. Не бросишь за 6 с — шарик упадёт сам, без очков.',
     duelTitle: 'Одинаковые цели у обоих',
     keys: { ArrowLeft: 0, KeyA: 0, ArrowRight: 1, KeyD: 1, Space: 2, ArrowDown: 2, KeyS: 2 },
     create, input, step, draw,
@@ -185,7 +192,7 @@
     win: s => s.gold >= 2 || s.score >= 200,
     result: s => ({
       title: s.gold >= 4 ? '🏆 Снайпер!' : s.gold + s.green >= 5 ? '🎯 Меткий бросок!' : '🎯 Шарики кончились',
-      text: '⭐ ' + s.gold + ' · зелёных: ' + s.green + ' · лучшая серия: ' + s.best,
+      text: '⭐ ' + s.gold + ' · зелёных: ' + s.green + ' · лучшая серия: ' + s.best + (s.frees ? ' · упали сами: ' + s.frees : ''),
     }),
     consts: { W, H, BR, PR, PY0, PDY, PROWS, NB, BW, DIV, LAND, HOLD, G0, SUB, BALLS, IDLE, STUCK, BAR, BARL, BARY, NPEG },
   });
