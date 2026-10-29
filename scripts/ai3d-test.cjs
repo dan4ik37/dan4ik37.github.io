@@ -109,6 +109,8 @@ function threeDir(){
     S.reset();
     const ts = performance.now(), r = S.run(D.cmds), tRun = performance.now() - ts;
     ok(r.ok, D.id + ': commands run', r.error);
+    if (D.id === 'land') { const m = /рассеяно (\d+)\/(\d+)/.exec(r.summary || ''), n = +(D.t.match(/\d+/) || [0])[0];
+      ok(m && +m[1] === +m[2] && +m[1] === n && !/ограничено бюджетом/.test(r.summary), 'land: the picker title = pines placed (not cut by the scatter budget)', { title: D.t, scattered: m && m[0] }); }
     if (!r.ok) continue;
     const group = vm.runInThisContext('group'), clips = S.clips();
     const live = group.children.filter(m => !m.userData.aux);

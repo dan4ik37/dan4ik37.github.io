@@ -30,10 +30,10 @@
     { id: 'fox', t: '🦊 Лис-антропоморф', cmds: [
       { op: 'make', type: 'anthro', species: 'fox', name: 'fox', fur: true }, { op: 'gait', prefix: 'fox_', clip: 'run', anim: 'run' }] },
     { id: 'dragon', t: '🐉 Дракон', cmds: [{ op: 'make', type: 'dragon', name: 'd' }, { op: 'gait', prefix: 'd_', clip: 'walk', anim: 'walk' }] },
-    { id: 'land', t: '🏝 Остров и 120 сосен', cmds: [
+    { id: 'land', t: '🏝 Остров и 10 сосен', cmds: [   // a pine is ~6000 triangles (branches; leafDensity barely matters): 10 fit the scatter budget (60000) and Studio 3D's 100k limit
       { op: 'terrain', name: 'land', size: [60, 60], res: 96, amp: 6, seed: 3, island: true, erode: 6, sea: .4 },
       { op: 'tree', name: 'pine1', species: 'pine', height: 4, pos: [100, 0, 100], leafDensity: .4 },
-      { op: 'scatter', src: 'pine1', on: 'land', count: 120, minH: 1, maxSlope: .5, minDist: 2.5, hideSrc: true }] },
+      { op: 'scatter', src: 'pine1', on: 'land', count: 10, minH: 1, maxSlope: .5, minDist: 2.5, hideSrc: true }] },
   ];
   const BUTTONS = [['run', 'Выполнить', 'p'], ['undo', 'Отменить'], ['redo', 'Вернуть'], ['snap', 'Виды 2×2'], ['sum', 'Сводка'], ['json', 'JSON сцены'],
     ['obj', 'Экспорт OBJ'], ['glb', 'Скачать GLB'], ['studio', '📦 В Студию 3D'], ['play', 'Играть'], ['test', 'Самотест'], ['ins', 'Инструкция для ИИ']];
