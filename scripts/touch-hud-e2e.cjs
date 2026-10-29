@@ -248,28 +248,33 @@ async function fullChecks(B, VW, VH, row){
   ok(log.includes('C:jump:true') && log.includes('C:jump:false'), 'кнопка «прыжок» → прыжок (нажал и отпустил)', log);
   const at = async sel => ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e || e.hidden) return null; const r = e.getBoundingClientRect(); return r.width ? [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] : null; })()`);
   if (v2) {
+    // короткое нажатие — с метками времени касания (90 мс): CDP шлёт «отпустил» только после того, как медленная страница (swiftshader)
+    // обработала «нажал», — без меток игра (нажал / удержал — по времени событий) видит «удержал»
+    // смахнуть — тоже с метками: касание 30 мс на шаг
+    const qswipe = async (x, y, moves) => { const t = Date.now() / 1000; await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1, radiusX: 4, radiusY: 4 }], timestamp: t }); let k = 0; for (const [mx, my] of moves) await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: mx, y: my, id: 1, radiusX: 4, radiusY: 4 }], timestamp: t + .03 * ++k }); await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: t + .03 * (k + 2) }); await sleep(150); };
+    const qtapXY = async (x, y) => { const t = Date.now() / 1000; await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1, radiusX: 4, radiusY: 4 }], timestamp: t }); await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: t + .09 }); await sleep(150); };
     // лоток: нажал — весь ряд и 🎒; 🎒 — окно вещей (лист); смахнул вбок — соседняя вещь; удержал — круг вещей
-    let p = await at('.kb-hrow .kb-slot.on'); if (p) await touch(send, p[0], p[1], 60);
+    let p = await at('.kb-hrow .kb-slot.on'); if (p) await qtapXY(p[0], p[1]);
     ok(await ev(`!!document.querySelector('.kb-hrow.kb-open')`), 'лоток: нажал — раскрылся (весь ряд и 🎒)');
-    p = await at('.kb-hrow .kb-bag'); if (p) await touch(send, p[0], p[1], 60);
+    p = await at('.kb-hrow .kb-bag'); if (p) await qtapXY(p[0], p[1]);
     ok(await ev(`GAME_IMPL.kubomir._test.state().ui.isOpen() && !!document.querySelector('.kb-inv.kb-sheet')`), 'лоток → 🎒 → окно вещей листом');
     await ev(`GAME_IMPL.kubomir._test.state().ui.close()`); await sleep(3300);
     ok(!(await ev(`!!document.querySelector('.kb-hrow.kb-open')`)), 'лоток свернулся сам (3 с)');
     const kst = () => ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), e = document.elementFromPoint(...${'${JSON.stringify(p || [0, 0])}'}); return { sel: S.P.sel, open: !!document.querySelector('.kb-hrow.kb-open'), inv: S.ui.isOpen(), rad: !!S.rad?.isOpen(), sneak: !!S.touchSneak, pose: GAME_IMPL.kubomir._test.poseCur(), under: e ? String(e.className || e.tagName).slice(0, 30) : null }; })()`.replace('${JSON.stringify(p || [0, 0])}', JSON.stringify(p || [0, 0])));
     const sel0 = await ev(`GAME_IMPL.kubomir._test.state().P.sel`);
     if (process.env.TH_DBG) await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); window.__mv = []; for (const n of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) window.addEventListener(n, e => __mv.push(n.slice(7, 11) + ':' + Math.round(e.clientX) + ',' + Math.round(e.clientY) + ':' + S.P.sel + ':' + e.pointerId + ':' + JSON.stringify(GAME_IMPL.kubomir._test.trayS?.()) + ':' + String(e.target.className || e.target.tagName).slice(0, 10)), true); return 1; })()`);
-    p = await at('.kb-hrow .kb-slot.on'); if (p) await touch(send, p[0], p[1], 60, [[p[0] + 15, p[1]], [p[0] + 34, p[1]], [p[0] + 44, p[1]]]);
+    p = await at('.kb-hrow .kb-slot.on'); if (p) await qswipe(p[0], p[1], [[p[0] + 15, p[1]], [p[0] + 34, p[1]], [p[0] + 44, p[1]]]);
     if (process.env.TH_DBG) console.log('   события:', await ev(`JSON.stringify(window.__mv.splice(0))`));
     ok(await ev(`GAME_IMPL.kubomir._test.state().P.sel`) === (sel0 + 1) % 9, 'лоток: смахнул вправо — следующая вещь (не раскрываясь)', { sel0, p, st: await kst() });
     p = await at('.kb-hrow .kb-slot.on'); if (p) await touch(send, p[0], p[1], 600);
     ok(await ev(`!!document.querySelector('.kb-wrap .e2-radial:not([hidden])')`), 'лоток: удержал — круг вещей');
     await sleep(3300);   // круг ждал нажатия 3 с (палец отпустили, не ведя) — закрылся
-    p = await at('.kb-hrow .kb-slot.on'); if (p) await touch(send, p[0], p[1], 60, [[p[0], p[1] - 20], [p[0], p[1] - 44]]);
+    p = await at('.kb-hrow .kb-slot.on'); if (p) await qswipe(p[0], p[1], [[p[0], p[1] - 20], [p[0], p[1] - 44]]);
     ok(await ev(`GAME_IMPL.kubomir._test.state().ui.isOpen()`), 'лоток: смахнул вверх — окно вещей', { p, st: await kst() });
     await ev(`GAME_IMPL.kubomir._test.state().ui.close()`); await sleep(200);
     // поза: нажал — красться (ещё раз — встал); удержал и повёл к 🪑 — сел. Короткое нажатие — с метками времени касания (90 мс):
     // CDP шлёт «отпустил» только после того, как медленная страница (swiftshader) обработала «нажал», — без меток это «удержал»
-    const qtap = async id => { const b = (await geo()).btns.find(x => x.id === id); if (!b) return; const t = Date.now() / 1000; await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x, y: b.y, id: 1, radiusX: 4, radiusY: 4 }], timestamp: t }); await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: t + .09 }); await sleep(150); };
+    const qtap = async id => { const b = (await geo()).btns.find(x => x.id === id); if (b) await qtapXY(b.x, b.y); };
     await qtap('pose');
     ok(await ev(`!!GAME_IMPL.kubomir._test.state().touchSneak`), 'кнопка позы: нажал — красться', await kst());
     await qtap('pose');
@@ -289,7 +294,7 @@ async function fullChecks(B, VW, VH, row){
     }
     // руки: факел в правой → нажал ячейку левой руки → в левой
     await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); S.P.inv[S.P.sel] = { id: 'torch', n: 3 }; S.P.off = null; return 1; })()`);
-    await sleep(200); p = await at('.kb-oslot'); if (p) await touch(send, p[0], p[1], 60);
+    await sleep(200); p = await at('.kb-oslot'); if (p) await qtapXY(p[0], p[1]);
     ok(await ev(`GAME_IMPL.kubomir._test.state().P.off?.id === 'torch'`), 'ячейка левой руки → факел в левой руке');
   } else {
   // вещи
