@@ -342,46 +342,6 @@
    ]
   },
   {
-   "f": "api/game.js",
-   "fn": "card",
-   "k": "markup:text",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.icon"
-   ]
-  },
-  {
-   "f": "api/game.js",
-   "fn": "card",
-   "k": "markup:url",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.id"
-   ]
-  },
-  {
-   "f": "api/game.js",
-   "fn": "gamePage",
-   "k": "markup:text",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.icon"
-   ]
-  },
-  {
-   "f": "api/game.js",
-   "fn": "gamePage",
-   "k": "markup:url",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "play"
-   ]
-  },
-  {
    "f": "api/sitemap.js",
    "fn": "handler",
    "k": "markup:text",
@@ -1688,16 +1648,6 @@
   {
    "f": "js/features/community2.js",
    "fn": "evForm",
-   "k": "markup:text",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.icon"
-   ]
-  },
-  {
-   "f": "js/features/community2.js",
-   "fn": "evForm",
    "k": "markup:url",
    "c": "id-db",
    "n": "ссылки #/chat/… из номеров",
@@ -2082,16 +2032,6 @@
    "f": "js/features/games.js",
    "fn": "openGame",
    "k": "markup:text",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.icon"
-   ]
-  },
-  {
-   "f": "js/features/games.js",
-   "fn": "openGame",
-   "k": "markup:text",
    "c": "html-helper",
    "n": "D37Age.badge: число + esc(title)",
    "xs": [
@@ -2107,46 +2047,6 @@
    "xs": [
     "r.played",
     "r.wins"
-   ]
-  },
-  {
-   "f": "js/features/games.js",
-   "fn": "renderGamesHub",
-   "k": "markup:attr",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.top"
-   ]
-  },
-  {
-   "f": "js/features/games.js",
-   "fn": "renderGamesHub",
-   "k": "markup:on",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.top"
-   ]
-  },
-  {
-   "f": "js/features/games.js",
-   "fn": "renderGamesHub",
-   "k": "markup:style",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.color"
-   ]
-  },
-  {
-   "f": "js/features/games.js",
-   "fn": "renderGamesHub",
-   "k": "markup:text",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.icon"
    ]
   },
   {
@@ -2172,42 +2072,12 @@
   {
    "f": "js/features/games.js",
    "fn": "renderProfileGameStats",
-   "k": "markup:style",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "r.g.color"
-   ]
-  },
-  {
-   "f": "js/features/games.js",
-   "fn": "renderProfileGameStats",
-   "k": "markup:text",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "r.g.icon"
-   ]
-  },
-  {
-   "f": "js/features/games.js",
-   "fn": "renderProfileGameStats",
    "k": "markup:text",
    "c": "num-db",
    "n": "сезон, задания недели, статистика, онлайн — числа",
    "xs": [
     "r.p",
     "r.w"
-   ]
-  },
-  {
-   "f": "js/features/games.js",
-   "fn": "renderProfileGameStats",
-   "k": "markup:url",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "r.g.id"
    ]
   },
   {
@@ -2468,26 +2338,6 @@
     "L?.w.lv || 3",
     "gift(x)",
     "x.lv"
-   ]
-  },
-  {
-   "f": "js/features/invite.js",
-   "fn": "placeOptions",
-   "k": "markup:attr",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.id"
-   ]
-  },
-  {
-   "f": "js/features/invite.js",
-   "fn": "placeOptions",
-   "k": "markup:text",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.icon"
    ]
   },
   {
@@ -4755,16 +4605,6 @@
    "c": "num-local",
    "xs": [
     "G.opened"
-   ]
-  },
-  {
-   "f": "js/games/mir-base.js",
-   "fn": "arcadePanel",
-   "k": "markup:text",
-   "c": "const",
-   "n": "таблицы GAMES / GAME_PAGES в коде; с флагом отката T145_OPEN (перенос строк таблицы) разбор их больше не доказывает сам",
-   "xs": [
-    "g.icon"
    ]
   },
   {

@@ -284,10 +284,20 @@ const YEAR = 2026, NOW = Date.UTC(2026, 9, 15, 9, 0, 0);
   ok(v('Сгта') === 12 && v('ГТА 5 трюки') === 16, '«гта» — только отдельным словом');
   // игры: GAMES[].age (games.js) = GAME_AGE (api/_lib/age.js)
   const gsrc = read('js/features/games.js');
-  const block = gsrc.slice(gsrc.indexOf('const GAMES = ['), gsrc.indexOf('];', gsrc.indexOf('const GAMES = [')) + 1).replace('const GAMES = ', '');
-  const GAMES = eval(block);
-  const hb = gsrc.slice(gsrc.indexOf('const GAMES_HIDDEN = ['), gsrc.indexOf('];', gsrc.indexOf('const GAMES_HIDDEN = [')) + 1).replace('const GAMES_HIDDEN = ', '');
-  const HIDDEN = eval(hb);
+  // таблицы GAMES и GAMES_HIDDEN с флагом отката T-145 (строки «Планеты» и «Новой земли» входят через ...(T145_OPEN ? T145_ROWS : []))
+  const tables = open => {
+    const a = gsrc.indexOf('const T145_OPEN'), b = gsrc.indexOf('];', gsrc.indexOf('const GAMES = [')) + 2;
+    const h0 = gsrc.indexOf('const GAMES_HIDDEN = ['), h1 = gsrc.indexOf('];', h0) + 2;
+    const code = gsrc.slice(a, b).replace(/const T145_OPEN = (true|false);/, 'const T145_OPEN = ' + open + ';') + ';' + gsrc.slice(h0, h1);
+    return new Function(code + ';return [GAMES, GAMES_HIDDEN];')();
+  };
+  const [GAMES, HIDDEN] = tables(true);
+  { const [G0, H0] = tables(false), ids = ['planet', 'terra'];
+    ok(ids.every(id => !G0.some(g => g.id === id) && H0.some(g => g.id === id)) && G0.length === GAMES.length - 2, 'откат T145_OPEN = false: «Планета» и «Новая земля» — снова скрытые страницы (не в каталоге, открываются по адресу)');
+    // значок из одного знака «текстового» вида (Emoji_Presentation = No: ⛰ ⛏ ⚔ ⌨ …) без U+FE0F — белый одноцветный среди цветных
+    const mono = g => { const cs = [...g.icon]; return cs.length === 1 && /\p{Emoji}/u.test(cs[0]) && !/\p{Emoji_Presentation}/u.test(cs[0]) && !/[0-9#*]/.test(cs[0]); };
+    ok(![...GAMES, ...HIDDEN].some(mono), 'значки игр «текстового» вида — с U+FE0F (цветной эмодзи)', [...GAMES, ...HIDDEN].filter(mono).map(g => g.id));
+    ok(/^const T145_OPEN = true;/m.test(gsrc) && !/GAMES\.splice|GAMES_HIDDEN\.push/.test(gsrc),'флаг T-145 открыт; таблицы не меняются во время работы (разбор XSS видит их сам)'); }
   const { GAME_AGE, videoAge, ageBadge } = await import(pathToFileURL(path.join(SITE, 'api/_lib/age.js')).href);
   ok(GAMES.length >= 40 && GAMES.every(g => /^(0|6|12|16|18)\+$/.test(g.age)), 'у каждой игры в GAMES — метка 0+/6+/12+/16+/18+', GAMES.filter(g => !g.age).map(g => g.id));
   ok(HIDDEN.every(g => /^(0|6|12|16|18)\+$/.test(g.age)), 'у скрытых страниц (GAMES_HIDDEN) — тоже');
