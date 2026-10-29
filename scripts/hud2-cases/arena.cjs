@@ -8,7 +8,7 @@ module.exports = {
   scenes: {
     async 'idle-play'(T){
       await T.sleep(6000);
-      console.log('  поле:', JSON.stringify(await T.ev(`(() => { const r = document.querySelector('.ar-wrap').getBoundingClientRect(), n = document.querySelector('.ar .ct-note'); return { w: Math.round(r.width), h: Math.round(r.height), share: +(100 * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)) * r.width / (innerWidth * innerHeight)).toFixed(1), note: !!(n && !n.hidden && n.getClientRects().length) }; })()`)));
+      console.log('  поле:', JSON.stringify(await T.ev(`(() => { const w = document.querySelector('.ar-wrap'); if (!w) return { нет: location.hash, menu: !!document.querySelector('[data-act="bot"]'), ov: document.querySelector('.ar-ov')?.textContent?.slice(0, 60) }; const r = w.getBoundingClientRect(), n = document.querySelector('.ar .ct-note'); return { w: Math.round(r.width), h: Math.round(r.height), share: +(100 * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)) * r.width / (innerWidth * innerHeight)).toFixed(1), note: !!(n && !n.hidden && n.getClientRects().length) }; })()`)));
     },
   },
 };

@@ -755,7 +755,7 @@
   // ═══ ЭКРАН, УПРАВЛЕНИЕ, МЕНЮ ═══
   let root, api, wrap, cv, ctx, ov, hud, G = null, raf = 0, last = 0, acc = 0, mode = 'menu', hooks = null, stopDuel = null;
   let dpr = 1, k = 1, scale = 1, cssW = 0, cssH = 0, full = false, ox = 0, oy = 0, ovLock = 0, choosing = null, runId = '', lastProg = 0, sfxAt = 0, duelSeed = 0;
-  let look = null, petX = 0, petY = 0, trail = [], trailAt = 0;
+  let look = null, petX = 0, petY = 0, trail = [], trailAt = 0, noteEl = null;
   const input = { keys: {}, jx: 0, jy: 0, on: false, id: null, ox: 0, oy: 0, px: 0, py: 0 };
   const listeners = [];
   const sprites = new Map();
@@ -802,6 +802,14 @@
         <div class="ct-note hd-note">Ходи стрелками / WASD или пальцем: зажми в любом месте поля и веди. Оружие бьёт само, ты выбираешь улучшения.</div>
       </div>`;
     wrap = el.querySelector('.hd-wrap'); cv = el.querySelector('.hd-cv'); ctx = cv.getContext('2d'); ov = el.querySelector('.hd-ov'); hud = el.querySelector('.hd-hud');
+    // интерфейс 2.0 (T-123, HUD2.horde): ⏸ и ⛶ — «попадание» 46 px (картинка та же); подпись управления — до первого шага, раз на устройство
+    if (typeof HUD2 !== 'undefined' && HUD2.kit && HUD2.horde) {
+      el.firstElementChild.classList.add('hd-v2');
+      if (!document.getElementById('hd2-css')) { const st = document.createElement('style'); st.id = 'hd2-css'; st.textContent = '.hd-v2 .hd-btn{position:relative}.hd-v2 .hd-btn::after{content:"";position:absolute;inset:-4px;border-radius:14px}.hd-v2 .hd-hud{gap:10px}'; document.head.appendChild(st); }
+      noteEl = el.querySelector('.hd-note');
+      let seen = false; try { seen = !!localStorage.getItem('d37_hd_note'); } catch (er) {}
+      if (seen) { noteEl.hidden = true; noteEl = null; }
+    }
     hud.addEventListener('click', e => { const a = e.target.closest('[data-act]')?.dataset.act; if (a === 'pause') pause(); else if (a === 'full') toggleFull(); });
     ov.addEventListener('click', onOv);
     cv.addEventListener('pointerdown', onDown);
@@ -1163,8 +1171,9 @@
   function trailTick(){
     if (!G || !look) return;
     const p = G.players[G.me];
-    for (const t of trail) t.t -= .03;
-    trail = trail.filter(t => t.t > 0);
+    // T-123: на месте, без нового массива в каждом шаге
+    let n = 0; for (let i = 0; i < trail.length; i++) { const t = trail[i]; t.t -= .03; if (t.t > 0) trail[n++] = t; } trail.length = n;
+    if (noteEl && p.moving && !p.dead) { noteEl.hidden = true; noteEl = null; try { localStorage.setItem('d37_hd_note', '1'); } catch (er) {} }   // подпись управления — до первого шага (раз на устройство)
     const e = CH()?.trail(look);
     if (!e || !p.moving || p.dead) return;
     const now = performance.now();
@@ -1668,8 +1677,7 @@
     const P0 = G.players[0], b0 = B.p[0], a0 = A?.p[0];
     if (b0) { P0.x = lerp(a0?.x, b0.x); P0.y = lerp(a0?.y, b0.y); P0.dead = b0.dead; P0.inv = b0.inv ? .2 : 0; P0.moving = b0.moving; P0.hx = b0.hx; }
     for (const p of G.players) { const ob = p.weapons.find(w => w.id === 'orbit'); if (ob && ob.on) ob.ang += ob.s.spd * dt; }
-    for (const f of G.fx) f.t -= dt;
-    G.fx = G.fx.filter(f => f.t > 0);
+    { let n = 0; const fx = G.fx; for (let i = 0; i < fx.length; i++) { const f = fx[i]; f.t -= dt; if (f.t > 0) fx[n++] = f; } fx.length = n; }   // T-123: на месте
     if (G.banner && (G.banner.t -= dt) <= 0) G.banner = null;
     if (G.shake > 0) G.shake -= dt;
   }

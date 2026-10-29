@@ -489,6 +489,18 @@
 .rd-league span{flex:1;min-width:84px;text-align:center;padding:.4rem;border-radius:10px;background:rgba(255,255,255,.04);font-size:.74rem;border:1px solid rgba(255,255,255,.07)}
 .rd-league span.on{border-color:#facc15;background:rgba(250,204,21,.12)}
 .rd-help p,.rd-help li{font-size:.84rem;line-height:1.5}
+.rd-mb{width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(255,255,255,.38);background:rgba(14,12,28,.55);color:#fff;font-size:18px;display:grid;place-items:center;padding:0;position:relative;flex:none;cursor:pointer}
+.rd-mb::after{content:'';position:absolute;inset:-4px;border-radius:50%}
+/* интерфейс 2.0 (T-123, HUD2.raid): отряды — компактная полупрозрачная панель по ширине отрядов (не полоса во всю ширину), 🏠 Домой —
+   в ☰ (там же пункты шапки игры), название боя прячется через 3 с, подсказка обучения — слева сверху, не на базе */
+.rd-v2 .rd-barB{left:8px;right:auto;bottom:8px;width:max-content;max-width:calc(100% - 16px);padding:5px;gap:5px;border-radius:16px;background:rgba(14,12,28,.42);border:1.5px solid rgba(255,255,255,.3)}
+.rd-v2 .rd-barB:empty{display:none}
+.rd-v2 .rd-u{width:50px;height:54px;font-size:1.35rem;border-width:1.5px}
+.rd-v2 .rdHome{display:none}
+.rd-v2 .rd-tip{left:8px;top:56px;transform:none;max-width:min(60%,360px);text-align:left;font-size:.78rem}
+@media (orientation:landscape){.rd-v2 .rd-tip{max-width:min(29%,360px);font-size:.74rem}}   /* лёжа — левее середины поля (база видна) */
+.rd-v2 .rd-pill.tf .rdTitle{display:none}
+.rd-v2 .rd-pill.tf:has(.rdLoot:empty){display:none}
 @media (max-width:760px){.rd-grid{grid-template-columns:1fr}.rd-base{height:250px}}
 @media (max-width:640px){.rd-field{height:calc(62vw + 230px);min-height:380px;max-height:calc(100vh - 70px)}.rd-barB{padding-right:.45rem}.rd-act{bottom:82px}.rd-act .rd-b{min-height:40px;padding:.3rem .55rem;font-size:.74rem}.rd-field.rp .rd-act{bottom:.45rem}}
 @media (max-width:420px){.rd-btns{grid-template-columns:repeat(2,minmax(0,1fr))}.rd-u{width:52px;height:56px;font-size:1.35rem}.rd-head h2{font-size:1.08rem}}
@@ -557,11 +569,12 @@
     document.removeEventListener('visibilitychange', st.onHide);
     root.removeEventListener('pagehide', flushBeacon);
     st.ro?.disconnect?.();
+    if (v2()) root.D37Shell?.own?.(false);
     S = null;
     try { root.dispatchEvent(new CustomEvent('d37:base')); } catch (e) {}   // мир перечитает свою базу (армия, добыча)
   }
   const $ = s => S?.root?.querySelector(s);
-  function setHTML(html){ cancelAnimationFrame(S.raf); S.ro?.disconnect?.(); S.ro = null; S.views = []; S.prevBt?.off?.(); S.prevBt = S.bt; S.root.innerHTML = html; }
+  function setHTML(html){ if (v2()) root.D37Shell?.own?.(false); cancelAnimationFrame(S.raf); S.ro?.disconnect?.(); S.ro = null; S.views = []; S.prevBt?.off?.(); S.prevBt = S.bt; S.root.innerHTML = html; }
 
   // ═══ Штаб ═══
   function showHub(){
@@ -814,7 +827,7 @@
     const title = kind === 'replay' ? `🎬 ${esc(data.att?.nick || '')}${bn(data.att?.base) ? ' (' + esc(bn(data.att.base)) + ')' : ''} → ${esc(bn(def.base) || def.nick || '')}` : kind === 'tut' ? '🎓 Учебный набег' : kind === 'friendly' ? `🤝 Дружеский бой: ${esc(def.nick || '')}` : data.mode === 'camp' ? `🏴‍☠️ Лагерь ${data.lvl}` : data.mode === 'bot' ? '🏴‍☠️ Разбойники' : `🆚 🏯 ${esc(bn(def) || def.nick || 'База')}${L ? ` ${L[1]} ${num(def.tr)}` : ''} · штаб ${def.th || ''}`;
     const types = Object.keys(bt.B.left).filter(u => U[u]);
     setHTML(`<div class="rd"><div class="rd-field${kind === 'replay' ? ' rp' : ''}"><canvas class="rdCv"></canvas>
-      <div class="rd-top"><div class="rd-pill">${title}<div class="rdLoot" style="font-weight:700;opacity:.9"></div></div><div class="rd-sp"></div><div class="rd-pill big"><div class="rdTimer">—</div><div class="rd-stars rdStars">☆☆☆</div><div class="rdPct" style="font-size:.7rem">0 %</div></div></div>
+      <div class="rd-top"><div class="rd-pill"><span class="rdTitle">${title}</span><div class="rdLoot" style="font-weight:700;opacity:.9"></div></div><div class="rd-sp"></div><div class="rd-pill big"><div class="rdTimer">—</div><div class="rd-stars rdStars">☆☆☆</div><div class="rdPct" style="font-size:.7rem">0 %</div></div></div>
       <div class="rd-tip rdTip" hidden></div>
       <div class="rd-barB">${kind === 'replay' ? '' : types.map(u => `<button type="button" class="rd-u" data-u="${u}" title="${esc(U[u].n)}">${U[u].e}<i>${bt.B.left[u]}</i></button>`).join('') + (bt.B.hero ? '<button type="button" class="rd-u" data-u="hero" title="Герой — твой персонаж">🦸<i>1</i></button><button type="button" class="rd-u ab" data-ab="1" title="«Удар» героя" disabled>💥</button>' : '')}</div>
       <div class="rd-act">${kind === 'replay' ? `<button type="button" class="rd-b" data-a="pause">⏸</button><button type="button" class="rd-b" data-a="speed">×1</button><button type="button" class="rd-b" data-a="restart">⏮</button>${data.id ? '<button type="button" class="rd-b" data-a="share" title="Поделиться повтором">🔗</button>' : ''}<button type="button" class="rd-b" data-a="hub">🏠</button>`
@@ -825,6 +838,8 @@
     S.ro = new ResizeObserver(() => V.resize()); S.ro.observe(cv);
     bindField(bt, cv);
     S.root.firstChild.addEventListener('click', e => onBattleClick(e, bt));
+    bt.el = null;   // элементы экрана боя — найдёт hud() один раз
+    if (v2() && kind !== 'replay') battle2(bt);
     if (types.length) select(bt, types[0]);
     if (kind === 'tut') tip(bt, '🎓 Это лагерь разбойников. Выбери отряд внизу и нажми на <b>зелёную полосу</b> у края — там высадка.');
     else if (kind === 'raid' && bt.phase === 'scout') tip(bt, '👀 Разведка: посмотри базу (колесо или два пальца — ближе). Нажми на зелёную полосу — высадка начнёт бой (3 минуты).');
@@ -845,9 +860,9 @@
   }
   function tip(bt, html, ms = 0){ const t = $('.rdTip'); if (!t) return; t.innerHTML = html; t.hidden = !html; clearTimeout(bt.tipT); if (ms) bt.tipT = setTimeout(() => { if (t) t.hidden = true; }, ms); }
   function select(bt, u){ bt.sel = u; S.root.querySelectorAll('.rd-u[data-u]').forEach(b => b.classList.toggle('on', b.dataset.u === u)); }
-  function updBar(bt){
-    S.root.querySelectorAll('.rd-u[data-u]').forEach(b => { const u = b.dataset.u, n = u === 'hero' ? (bt.B.heroUsed ? 0 : 1) : bt.B.left[u] || 0; b.querySelector('i').textContent = n; b.disabled = !n || bt.B.over; });
-    const ab = $('.rd-u.ab'); if (ab) { const h = bt.B.us[bt.B.heroIdx]; ab.disabled = !h || !h.alive || bt.B.abUsed || bt.B.over; }
+  function updBar(bt){   // 3 раза в секунду; пишем только изменившееся (T-123)
+    S.root.querySelectorAll('.rd-u[data-u]').forEach(b => { const u = b.dataset.u, n = u === 'hero' ? (bt.B.heroUsed ? 0 : 1) : bt.B.left[u] || 0, i = b.querySelector('i'), ns = String(n), d = !n || bt.B.over; if (i.textContent !== ns) i.textContent = ns; if (b.disabled !== d) b.disabled = d; });
+    const ab = $('.rd-u.ab'); if (ab) { const h = bt.B.us[bt.B.heroIdx], d = !h || !h.alive || bt.B.abUsed || bt.B.over; if (ab.disabled !== d) ab.disabled = d; }
     if (bt.sel && (bt.sel === 'hero' ? bt.B.heroUsed : !(bt.B.left[bt.sel] > 0))) { const n = Object.keys(bt.B.left).find(u => bt.B.left[u] > 0) || (!bt.B.heroUsed && bt.B.hero ? 'hero' : null); select(bt, n); }
   }
   function applyIn(bt, e){ const B = bt.B; return e.u != null ? B.deploy(e.u, e.x, e.z) : e.a ? B.ability() : B.surrender(); }
@@ -1067,18 +1082,41 @@
     if (o.hp < o.mhp) hpBar(V, u.cx, u.cz, h + 1.05, o.hp / o.mhp, V.tw * .5, o.k === 'hero' ? '#c084fc' : null);
     if (o.k === 'hero') { g.fillStyle = '#e9d5ff'; g.font = `800 ${Math.max(9, Math.round(V.tw * .3))}px Montserrat,sans-serif`; g.textAlign = 'center'; g.fillText('🦸', sx, sy - HH * 1.1); }
   }
+  // экран боя (каждый кадр): элементы — один раз на бой, итог (звёзды, %) — 4 раза в секунду, пишем только изменившееся
+  // (T-123: было 130 раскладок в секунду в покое)
   function hud(bt){
-    const B = bt.B, r = B.result(), now = sNow();
-    const t = $('.rdTimer'), s = $('.rdStars'), p = $('.rdPct'), l = $('.rdLoot');
-    if (t) t.textContent = bt.phase === 'scout' && bt.kind === 'raid' ? '👀 ' + clock(bt.scoutEnd - now) : bt.phase === 'scout' ? '3:00' : clock((B.MAXT - B.tick) / 20);
+    const B = bt.B, now = sNow(), pn = performance.now();
+    const E = bt.el || (bt.el = { t: $('.rdTimer'), s: $('.rdStars'), p: $('.rdPct'), l: $('.rdLoot') });
+    if (!bt.hr || pn - bt.hrT > 250 || B.over) { bt.hr = B.result(); bt.hrT = pn; }
+    const r = bt.hr, t = E.t, s = E.s, p = E.p, l = E.l;
+    const tt = bt.phase === 'scout' && bt.kind === 'raid' ? '👀 ' + clock(bt.scoutEnd - now) : bt.phase === 'scout' ? '3:00' : clock((B.MAXT - B.tick) / 20);
+    if (t && t.textContent !== tt) t.textContent = tt;
     if (s && s.textContent !== stars(r.stars)) s.textContent = stars(r.stars);
-    if (p) p.textContent = r.pct + ' %';
+    const pt = r.pct + ' %'; if (p && p.textContent !== pt) p.textContent = pt;
     if (l) {
       const off = bt.data.offer, tr = bt.data.tr, pv = bt.data.pve;
       const txt = off ? `🧱 ${num(lootNow(bt))} из ${num(off.total)}${tr ? ` · 🏆 +${tr.win} / −${tr.lose}` : ''}` : pv ? `🧱 до ${num(pv.loot)}` : bt.kind === 'friendly' || bt.kind === 'tut' && !pv ? 'без добычи и кубков' : '';
       if (l.textContent !== txt) l.textContent = txt;
     }
-    if (!bt.barT || performance.now() - bt.barT > 300) { bt.barT = performance.now(); updBar(bt); }
+    if (!bt.barT || pn - bt.barT > 300) { bt.barT = pn; updBar(bt); }
+  }
+  // ── Интерфейс 2.0 (T-123, docs/HUD_V2.md §9.10; откат — HUD2.raid = 0 в js/core/config.js): ☰ вместо «🏠 Домой» — одно меню
+  //    (▶ Продолжить, 🏠 Домой, пункты шапки игры 📣 📖 🔊 ⚙️ 📱 ⛶ ←), у шапки своего ☰ на время боя нет; название боя — 3 с ──
+  function v2(){ return typeof HUD2 !== 'undefined' && !!HUD2.kit && !!HUD2.raid; }
+  function battle2(bt){
+    const rd = S.root.firstChild; rd.classList.add('rd-v2');
+    const top = $('.rd-top'), mb = document.createElement('button');
+    mb.type = 'button'; mb.className = 'rd-mb'; mb.textContent = '☰'; mb.setAttribute('aria-label', 'Меню'); top.prepend(mb);
+    mb.addEventListener('click', e => {
+      e.stopPropagation();
+      const D = root.D37Settings; if (!D?.menu) { $('.rdHome')?.click(); return; }
+      const m = D.menu($('.rd-field'), { title: '☰ Набег', items: () => [{ id: 'rd-go', icon: '▶', text: 'Продолжить бой', primary: true },
+        { id: 'rd-home', icon: '🏠', text: bt.phase === 'fight' ? 'Домой (бой закончится)' : 'Домой', group: 'Набег' },
+        ...((root.D37Shell?.items?.() || []).map(it => it.id === 'sh-back' ? it : Object.assign({ group: 'Игра' }, it)))],
+      onPick: id => { if (id === 'rd-go') { m.close(); return; } if (id === 'rd-home') { m.close(); $('.rdHome')?.click(); return; } root.D37Shell?.pick?.(id, m); } });
+    });
+    const pill = top.querySelector('.rd-pill'); bt.tfT = setTimeout(() => pill?.classList.toggle('tf', true), 3000); S.timers?.push?.(bt.tfT);
+    root.D37Shell?.own?.(true);
   }
 
   // ── Конец боя: итог считает сервер ──
