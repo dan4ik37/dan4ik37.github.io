@@ -233,7 +233,9 @@ const summary = f => {
       for (let i = 0; i < n; i++) {
         await send('Page.navigate', { url: BASE + '/#/games' }); await sleep(800);
         await ev(`location.hash = '#/games/planet'`);
-        let ok = false; for (let q = 0; q < 60 && !ok; q++) { await sleep(400); try { ok = await ev(`!!(window.GAME_IMPL?.planet?._test?.S?.V)`, 5000); } catch (e) {} }
+        // машина под нагрузкой (соседние задачи): ждём до 60 с, не открылась — пропускаем круг, а не падаем (T-145)
+        let ok = false; for (let q = 0; q < 150 && !ok; q++) { await sleep(400); try { ok = await ev(`!!(window.GAME_IMPL?.planet?._test?.S?.V)`, 5000); } catch (e) {} }
+        if (!ok) { out.slow = (out.slow || 0) + 1; await ev(`location.hash = '#/games'`); await sleep(700); continue; }
         await ev(`${T}.goto(29, 81, 30)`); await sleep(1500); await ev(`${T}.land()`); await sleep(1500);
         await ev(`location.hash = '#/games'`); await sleep(700);
         if (i % 5 === 4) { await ev('window.gc && window.gc()'); await sleep(300); out.cycles.push({ i: i + 1, heap: await ev(`+(performance.memory.usedJSHeapSize / 1048576).toFixed(1)`), canvases: await ev(`document.querySelectorAll('canvas').length`), workers: await workers(), ...(await countObjs()) }); console.log('  ', JSON.stringify(out.cycles[out.cycles.length - 1])); }

@@ -151,10 +151,15 @@ Bodies arrive one per step (§7); the catalog lives in `D37E.system.HOME` (data)
 ## 2. Orbits with physics
 
 ### 2.1 Frames and time
-- **World clock** `D37E.clock`: `now()` = Date.now() + offset; offset from the Supabase RPC `world_now()` (ms, median of 3 with RTT/2, every 10 min),
-  refined by T-045 server time and `net.js` host clocks. Seconds since the epoch `2026-01-01T00:00Z` in doubles. Before the first offset: Date.now().
+- **World clock** `D37E.clock`: `now()` = Date.now() + offset; offset from our live game server (T-145: `GET <RT_URL>/time` → `{ t }`, when
+  `D37RT.enabled()`; an old server without /time answers 404 → not asked again for 30 min) or, as the fallback, the Supabase RPC
+  `world_now()` (ms, median of 3 with RTT/2, every 10 min); `C.src` = 'rt' | 'sb' | 'cache' | feed source. Refined by `net.js` host clocks (`C.feed`). Seconds since the epoch `2026-01-01T00:00Z` in doubles. Before the first offset: Date.now().
   50 ms error ≈ 75 u at orbital speed — fine for visuals; docking is relative (§2.7), coverage has margins (§3.2). `planet.sql` not applied yet
   (PGRST202) → offset 0, everything still works locally.
+- **Solar eclipse shadow on the ground** (T-088, T-145, planet-view flag `eclipse`): space-view picks the body whose penumbra cone touches
+  the planet (`E.spaceView.eclOf` → `V.ecl` = centre BF, radius, sun angular radius); the terrain shader dims sun, sky light and haze per pixel
+  (`d37Ecl` = `E.spaceView.eclFrac`: smooth disc overlap, within 0.15 of the exact `S.shadow` — orbit-test). The umbra runs across the ground
+  (~2 min of totality at a point on the home planet). No eclipse → `uEcl.w = 0`, the shader branch is skipped (0 cost).
 - **System frame**: star at the origin; body positions = sum of rails up the parent chain. **PCI** (body-centred inertial, non-rotating): ship physics
   inside a body's sphere of influence (SOI). **BF** (planet.md: rotating with the body): terrain, regions, edits, air. **Patch L** (planet.md): walking,
   driving, landing near the ground.

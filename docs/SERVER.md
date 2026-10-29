@@ -172,7 +172,7 @@ cd ~/d37/server && git pull && docker compose up -d --build
 
 ```
 browser tab ──wss://HOST/rt──► Caddy :443 (TLS, Let's Encrypt IP cert «shortlived», default_sni) ──► rt 127.0.0.1:8787 (Node 22 + ws)
-            ──https://HOST/health, /turn──────────────────────────────────────────────────────────┘        │  watcher: 1–8 sockets
+            ──https://HOST/health, /turn, /time───────────────────────────────────────────────────┘        │  watcher: 1–8 sockets
             ──turn:HOST:3478 (udp/tcp) ─► coturn (host network, relay 49160–49200/udp)                     ▼  (Phoenix vsn 1.0.0)
             ──(fallback) wss://<project>.supabase.co/realtime ◄───────────────── Supabase Realtime ◄──────┘
 ```
@@ -234,7 +234,8 @@ send (frame × recipients) 8 MB burst + 2 MB/s — a «Кубомир» host rel
 subscribers and 200 presences per room; meta 4 KB; track 10 burst + 1/s per member; 20 000 rooms; memory: > 380 MB RSS — no new
 sockets/rooms and slow readers get nothing above 32 KB buffered, > 450 MB — /health ok:false and readers above 64 KB are
 disconnected (container 512 MB, `--max-old-space-size=320`); slow reader normally: > 1 MB buffered — drop, > 4 MB — disconnect;
-buffers of disconnected sessions ≤ 512 frames / 1 MB each and 64 MB together; /turn 10 burst + 1/min per address, TTL 1 h; coturn: 12 allocations per user, 300 total, 96 KB/s per
+buffers of disconnected sessions ≤ 512 frames / 1 MB each and 64 MB together; /turn 10 burst + 1/min per address, TTL 1 h; /time (T-145: `{ t }` —
+server clock in ms for the world clock js/engine/clock.js: 3 samples on open, then every 10 min; CORS for the site) 12 burst + 1 per 2 s per address; coturn: 12 allocations per user, 300 total, 96 KB/s per
 session, 6 MB/s total, private/loopback/link-local (169.254.169.254)/CGNAT/doc/multicast peers denied (IPv4 + IPv6).
 
 ### Tests and numbers (22.10.2026, i5-12400F Windows, the machine at ~90–100 % CPU from other work)

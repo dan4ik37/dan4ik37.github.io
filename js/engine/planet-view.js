@@ -18,8 +18,8 @@
 // Движок (T-075, PL-4): солнце — через E.setSunProvider (gfx.js); глубина — два диапазона (R.depthSplit: ближний — человечки, AO,
 // отражения; дальний — земля и небо; post.js рисует оба); тени движка ложатся на землю у игрока (V.setShadows); дымка до вещей
 // движка — та же атмосфера (туман gfx.js: E.GFXU.apA…apD); погода — V.climateAt / V.weatherPos (по широте, js/engine/climate.js).
-// T-075 НА ПАУЗЕ (22.10): всё это ВЫКЛ по умолчанию (FLAGS ниже; без флагов — вид как до T-075). Включить — localStorage
-// d37_planet_v2 = '1' (всё сразу) или o.flags; что сделано и как продолжить — docs/plans/planet.md «T-075 — paused».
+// T-145 (29.10): всё это ВКЛ по умолчанию (FLAGS ниже). Откат одной строкой: FLAGS = { ...FLAGS_OFF } (вид как до T-075); на одном
+// устройстве — localStorage d37_planet_v2 = '0' (или '1' — всё, и тени на телефоне); замеры и что сделано — docs/plans/planet.md §12b.
 (() => {
   const E = window.D37E = window.D37E || {};
   const sqrt = Math.sqrt, max = Math.max, min = Math.min, abs = Math.abs;
@@ -38,13 +38,16 @@
     if (typeof E.setSunProvider === 'function') return E.setSunProvider(f);
     wrapSun(); SUNP.f = f; return () => { if (SUNP.f === f) SUNP.f = null; };
   };
-  // что включено. T-075 на паузе: всё новое ВЫКЛ, пока нет замеров на профиле телефона. Без флагов — как до T-075: прежний выбор
+  // что включено. T-145: ВКЛ (замеры на профиле телефона — docs/plans/planet.md §12b). FLAGS_OFF — как до T-075: прежний выбор
   // кусков и потоков, сборка без формы родителя, шейдер без перетекания и теней, небо и глубина — одним проходом, туман движка
-  // обычный, без погоды. Включить: localStorage d37_planet_v2 = '1' (всё сразу; читается при открытии вида, дымке нужна и
-  // перезагрузка — gfx.js E.aerialFog) или o.flags в D37E.planetView(R, P, { flags }); навсегда — true здесь
-  const FLAGS = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false, eclipse: false };
+  // обычный, без погоды и тени затмения. Читается при открытии вида (дымке нужна и перезагрузка — gfx.js E.aerialFog); на устройстве —
+  // localStorage d37_planet_v2 = '0' | '1', отдельные — d37_planet_flags; в коде — o.flags в D37E.planetView(R, P, { flags }).
+  // shadows 'auto' — тени движка на земле, кроме телефона на «средней» и «низкой» (там у человечка своё пятно тени: +0,1 мс ЦП ×4
+  // за проход теней не стоят); split — два прохода глубины, только пока включены AO или отражения в экране
+  // ОТКАТ ОДНОЙ СТРОКОЙ: const FLAGS = { ...FLAGS_OFF };
   const FLAGS_ON = { lod2: true, morph: true, prefetch: true, split: true, shadows: true, aerial: true, weather: true, eclipse: true };
   const FLAGS_OFF = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false, eclipse: false };
+  const FLAGS = { lod2: true, morph: true, prefetch: true, split: true, shadows: 'auto', aerial: true, weather: true, eclipse: true };
   const v2ls = () => { try { return typeof localStorage !== 'undefined' ? localStorage.getItem('d37_planet_v2') : null; } catch (e) { return null; } };
   // замеры по частям и отладка: localStorage d37_planet_flags = '{"weather":false}' — отдельные флаги поверх (только известные)
   const v2flags = () => {
@@ -410,6 +413,7 @@ void main(){
     const T = R.T, PL = E.planet, D = P.def, q = R.q || 'mid', mob = !!E.isMobile?.(), low = q === 'low';
     const v2 = v2ls(), F = { ...FLAGS, ...(v2 === '1' ? FLAGS_ON : v2 === '0' ? FLAGS_OFF : {}), ...v2flags(), ...(o.flags || {}) };
     if (!F.lod2) F.morph = F.prefetch = false;
+    if (F.shadows === 'auto') F.shadows = !(mob || low) || q === 'high' || q === 'ultra';
     // перетекание — атрибут-«экземпляр» куска: WebGL1 без ANGLE_instanced_arrays (редкость) — без перетекания (куски видны)
     try { const rr = R.r || R.renderer; if (F.morph && rr && rr.capabilities && !rr.capabilities.isWebGL2 && !(rr.extensions && rr.extensions.has('ANGLE_instanced_arrays'))) F.morph = false; } catch (e) {}
     const BO = { lite: !F.lod2 };   // без LOD v2 — кусок собирается как раньше (без формы родителя и его точности — дешевле)
@@ -1099,7 +1103,7 @@ void main(){
 
   // куски шейдеров атмосферы — для неба системы (space-view.js): тела светят сквозь тот же воздух
   E.planetView.GLSL = { ATMO, PHASE };
-  E.planetView.FLAGS = FLAGS;   // что включено по умолчанию (T-075 на паузе — всё false; см. начало файла)
+  E.planetView.FLAGS = FLAGS;   // что включено по умолчанию (T-145: всё; см. начало файла)
 
   // купол неба: кольца гуще у горизонта (там небо меняется сильнее всего)
   function domeGeo(T){
