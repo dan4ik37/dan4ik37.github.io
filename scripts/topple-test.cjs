@@ -133,6 +133,18 @@ sec('ход: сначала крен, потом падение целым к п
   ok(clash === 0 && under === 0, 'места клеток после поворота не совпадают и не под землёй', { clash, under });
 }
 
+sec('четыре стороны одинаковы: подруб с −x / +z / −z — те же такты, легла на свою сторону, клетки не накладываются');
+{
+  const res = [];
+  for (const [skip, d] of [[(x, y) => y === 0 && x >= 0, 0], [(x, y) => y === 0 && x <= 0, 1], [(x, y, z) => y === 0 && z >= 0, 2], [(x, y, z) => y === 0 && z <= 0, 3]]) {
+    const B = bodyOf(box(-1, 1, 0, 7, -1, 1, skip), S0), R = TP.storeys(B, { sway: 50 });
+    const A = simulate(S0, B, R, 60, { rate: 900 }), out = [0, 0, 0], seen = new Set(); let side = true, clash = 0;
+    for (let i = 0; i < B.n; i++) { A.Wd.land(A.s, B.x[i], B.y[i], B.z[i], out); const k = out.join(); if (seen.has(k)) clash++; seen.add(k); const a = d < 2 ? out[0] : out[2]; if ((d & 1 ? -a : a) < 0) side = false; }
+    res.push({ dir: R.dir, want: d, ticks: A.ticks, side, clash });
+  }
+  ok(res.every(r => r.dir === r.want && r.side && !r.clash && r.ticks === res[0].ticks), 'все 4 стороны: направление, такты, места', res);
+}
+
 sec('тяжёлое на ножке по центру: крен (медленно, со скрипом), потом падение к тяжёлой стороне');
 {
   const mush = box(0, 0, 0, 2, 0, 0).concat(box(-1, 1, 3, 8, -1, 1), [[0, 9, -1], [1, 9, -1]]);

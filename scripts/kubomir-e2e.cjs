@@ -251,6 +251,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         const tx = cx + 2, tz = cz + 10;
         for (let y = gy; y < gy + 14; y++) for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) nat(tx + i, y, tz + j, 'log_oak');
         for (let y = gy + 11; y < gy + 16; y++) for (let x = tx - 3; x <= tx + 4; x++) for (let z = tz - 3; z <= tz + 4; z++) if (!W.raw(x, y, z) && Math.abs(x - tx - .5) + Math.abs(z - tz - .5) < 6) nat(x, y, z, 'leaves_oak');
+        for (const it of S.ents.items.splice(0)) { it.mesh?.parent?.remove(it.mesh); it.mesh?.geometry?.dispose(); }   // вещи прошлого круга (как в KB_MODE=support)
         S._tp = { cx, cz, gy, tx, tz };
         Object.assign(P, { x: cx - 6.5, y: gy, z: cz + 6.5, vx: 0, vy: 0, vz: 0, fly: false }); S.rig.yaw = -Math.PI / 2; S.rig.fp = .15;
         window.dispatchEvent(new Event('pointerdown'));   // звук: как у игрока — контекст WebAudio создан первым касанием (в headless жеста нет; создание ~0,2 с — не физика)
@@ -295,9 +296,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       // 20 кругов «построил — подрубил — упало — убрал»: память JS не растёт
       const h0 = await heap();
       const rounds = [];
-      for (let k = 0; k < +(process.env.KB_N || 20); k++) { await ev(scene, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 }); const r = await ev(run, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 }); rounds.push([r.went && r.far >= 15 ? 1 : 0, r.cpuFall, r.p95, r.max, r.fps, r.worstTickMs]); }
+      for (let k = 0; k < +(process.env.KB_N || 20); k++) { await ev(scene, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 }); const r = await ev(run, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 }); rounds.push([r.went && r.far >= 15 ? 1 : 0, r.cpuFall, r.p95, r.max, r.fps, r.worstTickMs, r.ms]); }
       const h1 = await heap(); res.tpHeap = { h0, h1 }; console.log('T-138 память, МБ', JSON.stringify(res.tpHeap));
-      if (rounds.length) { const col = i => rounds.map(r => r[i]).sort((a, b) => a - b), med = a => a[a.length >> 1]; res.tpRounds = { n: rounds.length, ok: rounds.filter(r => r[0]).length, cpuMed: med(col(1)), p95Med: med(col(2)), maxMed: med(col(3)), maxMax: col(3)[rounds.length - 1], fpsMed: med(col(4)), tickMed: med(col(5)), tickMax: col(5)[rounds.length - 1] }; console.log('T-138 круги' + (PHONE ? ' (ЦП ×4)' : ''), JSON.stringify(res.tpRounds)); ok(res.tpRounds.ok === rounds.length, 'каждый круг: башня и великан упали', res.tpRounds); }
+      if (rounds.length) { const col = i => rounds.map(r => r[i]).sort((a, b) => a - b), med = a => a[a.length >> 1]; res.tpRounds = { n: rounds.length, ok: rounds.filter(r => r[0]).length, cpuMed: med(col(1)), p95Med: med(col(2)), maxMed: med(col(3)), maxMax: col(3)[rounds.length - 1], fpsMed: med(col(4)), tickMed: med(col(5)), tickMax: col(5)[rounds.length - 1], evMed: Object.fromEntries(Object.keys(rounds[0][6] || {}).map(k => [k, med(rounds.map(r => r[6][k]).sort((a, b) => a - b))])) }; console.log('T-138 круги' + (PHONE ? ' (ЦП ×4)' : ''), JSON.stringify(res.tpRounds)); ok(res.tpRounds.ok === rounds.length, 'каждый круг: башня и великан упали', res.tpRounds); }
       ok(h1 - h0 < 8, (process.env.KB_N || 20) + ' кругов «башня и великан упали — убрали»: память JS не растёт (< 8 МБ)', res.tpHeap);
       const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`), errs = logs.filter(l => !/X3595|DevTools|favicon/i.test(l));
       ok(!pr.bad.length, 'все программы шейдеров собрались', pr.bad);
@@ -792,6 +793,11 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         if (FIRE) await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, P = S.P, x0 = Math.floor(P.x) + 3, z0 = Math.floor(P.z), y0 = Math.floor(P.y);
           for (let x = x0; x < x0 + 5; x++) for (let z = z0 - 2; z < z0 + 3; z++) for (let y = y0; y < y0 + 3; y++) W.set(x, y, z, V.cell(V.ID.planks_oak), { urgent: 1 });
           S.fire?.igniteAt(x0, y0 + 2, z0, 0, 1, 0); S.fire?.igniteAt(x0 + 4, y0 + 2, z0 + 2, 0, 1, 0); await new Promise(r => setTimeout(r, 6000)); return S.fire?.F?.n || 0; })()`, 30000);   // мир с пожаром: пламя, дым, звук — каждый раз
+        if (process.env.KB_TOPPLE) res.tpReopen = await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, ID = V.ID, wait = ms => new Promise(r => setTimeout(r, ms));   // T-138: башня кренится и падает, дерево подрублено — закрыть посреди падения (flush)
+          if (!S.topple || !S.sup) return { none: true }; const bx = Math.floor(S.P.x) + 4, bz = Math.floor(S.P.z), by = Math.floor(S.P.y);
+          for (let y = by; y < by + 8; y++) for (let x = bx; x < bx + 2; x++) for (let z = bz; z < bz + 2; z++) W.set(x, y, z, V.cell(ID.stone_bricks), { urgent: 1 });
+          await wait(300); for (let z = bz; z < bz + 2; z++) { const c = S.sup.code(bx + 1, by, z); W.set(bx + 1, by, z, 0, { urgent: 1 }); S.sup.removed(bx + 1, by, z, c); }
+          await wait(1500); return { bodies: S.topple.bodies().length, leans: S.topple.stats.leans + S.topple.stats.tips }; })()`, 30000);
         hs.push(await heap());
         await ev(`(async () => { await GAME_IMPL.kubomir._test.stop(); GAME_IMPL.kubomir._test.menu(); return true; })()`, 60000);
         for (let k = 0; k < 60; k++) { await sleep(500); if (await ev(`!!document.querySelector('.kb-world [data-w="play"]')`, 3000).catch(() => false)) break; }

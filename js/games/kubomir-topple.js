@@ -197,7 +197,10 @@
       CHK.push(x, y, z, was);
     }
     if (Array.isArray(W.listeners)) W.listeners.push((x, y, z, was, v) => {
-      if (own || !KT.LEAN || !st.sup) return;
+      if (own) return;
+      // клетку заменили чем-то другим (огонь, вода, чужая правка) — её надруб и рубка больше не её (иначе новый блок «надрублен»)
+      if ((KT.CUT || KT.FELL) && ((was ^ v) & 0xfff) && W.tile) { const t = W.tile(x, y, z); if (t && (t.cut || t.fs)) { delete t.cut; delete t.fs; if (!Object.keys(t).length) W.dropTile(x, y, z); } }
+      if (!KT.LEAN || !st.sup) return;
       const a = was > 0 ? st.sup.matOf(was & 0xfff) : 255, b = v > 0 ? st.sup.matOf(v & 0xfff) : 255;
       if (a === 255 && b === 255) return;
       queueCheck(x, y, z, was > 0 ? was : 0);
@@ -408,7 +411,8 @@
     // запись — по KT.LAND_CELLS клеток за такт (телефон ×4: 126 клеток разом — 37 мс в одном такте); пока пишется — сетка лежит на
     // месте клеток; budget = Infinity — сразу (сохранение)
     function land0(s, b, budget = KT.LAND_CELLS){
-      if (!b.L) { X.stats.lands++; const c = b.cells, n = c.length / 4; b.L = { i: 0, ev: batch(true), xyz: [], lk: Math.min(1, 150 / Math.max(1, n)), rng: V.rng ? V.rng(V.hash ? V.hash(W.seed | 0, c[0], c[1], c[2]) : 7) : Math.random }; }
+      if (!b.L) { X.stats.lands++; const c = b.cells, n = c.length / 4; b.L = { i: 0, ev: batch(b.kind !== 'tree'),   // дерево — вещи как у прежнего падения (исчезают со временем); постройка — «keep» (как обрушение)
+ xyz: [], lk: Math.min(1, 150 / Math.max(1, n)), rng: V.rng ? V.rng(V.hash ? V.hash(W.seed | 0, c[0], c[1], c[2]) : 7) : Math.random }; }
       const c = b.cells, n = c.length / 4, L = b.L, ev = L.ev, xyz = L.xyz, lk = L.lk, rng = L.rng, i1 = Math.min(n, L.i + budget);
       own++;
       try {

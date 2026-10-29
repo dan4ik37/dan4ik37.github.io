@@ -1470,6 +1470,9 @@ function fakeWorld(sky, blk, walls = new Set()){
       h2.nx = -1; S14.mine.t = .26; const r1 = T.mine(h2, b, S14.mine); S14.mine.t = .26; const r2 = T.mine(h2, b, S14.mine);
       ok(r1 === 0 && r2 === 1 && FL.side(T.cutAt(42, 12, 40), 0) === 4, 'с двух сторон: 4/8 с +x и 4/8 с −x — насквозь на 4-м ударе', { r1, r2 });
       S14.mine = { t: 0, need: .15 }; ok(T.mines({ x: 44, y: 12, z: 40, v: V.cell(ID.dirt), nx: 1 }, V.blocks[ID.dirt]) === 0, 'быстрый блок (земля, < 0,3 с) — копается как раньше');
+      W.set(46, 12, 40, STN); S14.mine = { t: .26, need: 1 }; T.mine({ x: 46, y: 12, z: 40, v: STN, nx: 1, ny: 0, nz: 0 }, b, S14.mine); const was = T.cutAt(46, 12, 40);
+      W.set(46, 12, 40, V.cell(ID.planks_oak));
+      ok(was && !T.cutAt(46, 12, 40) && !W.tile(46, 12, 40), 'надрубленную клетку заменили другим блоком (огонь, чужая правка) — срез ушёл с ней', { was, now: T.cutAt(46, 12, 40) });
       KT.CUT = false; S14.mine = { t: 0, need: 1 }; const off = T.mines(hit, b); KT.CUT = true;
       ok(off === 0, 'KT.CUT = false — копать как раньше (откат одной строкой)');
       X.dispose(); }
