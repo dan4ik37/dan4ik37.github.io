@@ -92,6 +92,7 @@
   }
 
   // ── рисование: дорога, ворота, туча, фонарь, фонарик со светлячками ──
+  const F22 = 'bold 22px system-ui, sans-serif', F26 = 'bold 26px system-ui, sans-serif';
   function draw(G, s, a){
     const ctx = G.ctx, d = s.over ? s.d : s.d0 + (s.d - s.d0) * a, hx = s.over ? s.hx : s.hx0 + (s.hx - s.hx0) * a;
     ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
@@ -107,6 +108,8 @@
       ctx.fillStyle = C.lamp; ctx.beginPath(); ctx.arc(W / 2, ly, 34, 0, 6.2832); ctx.fill();
       ctx.fillStyle = C.bg; ctx.font = 'bold 15px system-ui, sans-serif'; ctx.fillText('ФИНИШ', W / 2, ly + 1);
     }
+    // шрифт меняется только при смене размера (каждое присваивание ctx.font — разбор строки, дорого на телефоне)
+    let font = '';
     for (let r = Math.max(0, s.row - 1); r < ROWS; r++) {
       const y = HY - (P0 + r * GAP - d);
       if (y < -40) break;
@@ -118,7 +121,9 @@
         ctx.fillStyle = C.cloudD; ctx.fillRect(0, y - 26, W, 52);
         ctx.fillStyle = C.cloud;
         for (let x = 20; x < W; x += 56) { ctx.beginPath(); ctx.arc(x, y - 18, 24, 0, 6.2832); ctx.fill(); }
-        ctx.fillStyle = C.ink; ctx.font = 'bold 22px system-ui, sans-serif'; ctx.fillText(s.lbl[b], W / 2, y + 4);
+        ctx.fillStyle = C.ink;
+        if (font !== F22) { font = F22; ctx.font = F22; }
+        ctx.fillText(s.lbl[b], W / 2, y + 4);
       } else {
         const gw = W / k;
         for (let i = 0; i < k; i++) {
@@ -126,7 +131,9 @@
           ctx.fillStyle = good ? C.good : C.bad; ctx.fillRect(i * gw + 3, y - 24, gw - 6, 48);
           ctx.fillStyle = good ? C.goodB : C.badB; ctx.fillRect(i * gw + 3, y - 24, gw - 6, 4);
           if (past && s.took[r] === i) { ctx.globalAlpha = .6; }
-          ctx.fillStyle = C.ink; ctx.font = k === 3 ? 'bold 22px system-ui, sans-serif' : 'bold 26px system-ui, sans-serif';
+          ctx.fillStyle = C.ink;
+          const f = k === 3 ? F22 : F26;
+          if (font !== f) { font = f; ctx.font = f; }
           ctx.fillText(s.lbl[b + i], i * gw + gw / 2, y + 2);
           if (past) ctx.globalAlpha = C.done;
         }
