@@ -89,7 +89,8 @@
     const api = { active: true, core: null, unmount };
     let core = null, busy = false, dead = false, a3 = null;
     const onResize = () => place();
-    const onTheme = () => { if (core && core.theme) core.theme(); };   // settings.js switched the site theme: the 3D background follows (an idle editor draws nothing)
+    const onTheme = () => { if (core && core.theme) core.theme(); };
+    const retry = () => start();   // made here, not inside start(): a closure from start() would keep the failed markup (canvas → renderer) alive under the fallback   // settings.js switched the site theme: the 3D background follows (an idle editor draws nothing)
     function place(){
       if (!a3) return;
       const nav = document.getElementById('nav');
@@ -113,7 +114,7 @@
         core = root.D37AI3DCore.create(a3, env);
       } catch (e) {
         core = null; a3 = null;
-        failView(host, String(e && e.message || e), () => start());
+        failView(host, String(e && e.message || e), retry);
         return;
       }
       api.core = core;
