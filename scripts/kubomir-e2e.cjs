@@ -13,6 +13,9 @@
 //   погода и время суток меняются, телепорты, бой (меч, щит, лук) — ошибок и исключений в консоли нет, игрок ходит (ввод не заперт),
 //   память JS после сборки мусора — не растёт
 // KB_MODE=reopen — мир закрыть и открыть 8 раз (KB_N — другое число): память JS после сборки мусора — не растёт
+// KB_MODE=topple — T-138, мир «реализм» (выживание): подрубленная башня 3×3×14 и дуб-великан 2×2 (подруб + запил) падают вместе — ЦП кадра,
+//   кадров в секунду, худший такт крена, время событий; KB_N кругов (20) — память не растёт; KB_PHONE=1 — профиль телефона, ЦП ×4.
+//   KB_TOPPLE=1 KB_MODE=soak — 10 мин игры, каждый 4-й шаг рядом падают башня и дерево
 // KB_MODE=fire — огонь (T-022d), мир «Огонь распространяется»: лес 6 × 6 и дом из досок — ЦП на кадр без огня и в пожаре (среднее, 95 %,
 //   худший, вызовы), снимки днём, ночью и после пожара; KB_PHONE=1 — профиль телефона (ЦП ×4); KB_FIRE=1 KB_MODE=soak / reopen — с пожаром
 // KB_MODE=firecycle — дом из досок сгорает на одном месте KB_N раз (по умолчанию 12): память JS после сборки мусора не растёт (без
@@ -30,7 +33,7 @@ const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [label = 'now', preset = 'ultra', angle = 'd3d11'] = process.argv.slice(2);
 const MODE = process.env.KB_MODE || '';
 const PHONE = MODE === 'perf' || !!process.env.KB_PHONE;
-const SUPPORT = MODE === 'support' || !!process.env.KB_SUPPORT || !!process.env.KB_LOAD;   // мир «Обрушение: реализм» (T-022a; KB_SUPPORT=1 — и для soak)
+const SUPPORT = MODE === 'support' || MODE === 'topple' || !!process.env.KB_SUPPORT || !!process.env.KB_LOAD || !!process.env.KB_TOPPLE;   // мир «Обрушение: реализм» (T-022a; KB_SUPPORT=1 — и для soak)
 const LOAD = !!process.env.KB_LOAD;   // T-124: + нагрузка (meta.load = 1)
 const FIRE = MODE === 'fire' || MODE === 'firecycle' || !!process.env.KB_FIRE;   // мир «Огонь распространяется» (T-022d; KB_FIRE=1 — и для soak / reopen)
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
@@ -234,6 +237,73 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       ok(!errs.length, 'в консоли — без ошибок и исключений', errs.slice(0, 6));
       return;
     }
+    if (MODE === 'topple') {
+      // T-138: крен и падение целым, рубка дерева — «Кубомир», мир «реализм»: подрубленная башня 3×3×14 и дуб-великан 2×2 (живые брёвна)
+      // падают одновременно — кадр (ЦП, среднее, 95 %, худший), кадров в секунду, худший такт T-138 и обрушения; KB_PHONE=1 — ЦП ×4
+      await idle();
+      const SET = `const wait = ms => new Promise(r => setTimeout(r, ms)), S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, ID = V.ID;
+        const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(ID[n]) : 0, { urgent: 1 });
+        const nat = (x, y, z, n) => { set(x, y, z, n); const c = W.chunkAt(x, z); c?.edits?.delete(((x & 15) << 11) | ((z & 15) << 7) | y); };`;
+      const scene = `(async () => { ${SET}
+        const P = S.P, cx = Math.floor(P.x) + 4, cz = Math.floor(P.z) - 4, gy = Math.floor(P.y);
+        for (let x = cx - 6; x <= cx + 34; x++) for (let z = cz - 14; z <= cz + 14; z++) { for (let y = gy; y <= gy + 30; y++) if (W.raw(x, y, z) > 0) set(x, y, z, null); nat(x, gy - 1, z, 'stone'); }   // пол — природный камень (не постройка)
+        for (let y = gy; y < gy + 14; y++) for (let x = cx; x < cx + 3; x++) for (let z = cz; z < cz + 3; z++) set(x, y, z, 'stone_bricks');
+        const tx = cx + 2, tz = cz + 10;
+        for (let y = gy; y < gy + 14; y++) for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) nat(tx + i, y, tz + j, 'log_oak');
+        for (let y = gy + 11; y < gy + 16; y++) for (let x = tx - 3; x <= tx + 4; x++) for (let z = tz - 3; z <= tz + 4; z++) if (!W.raw(x, y, z) && Math.abs(x - tx - .5) + Math.abs(z - tz - .5) < 6) nat(x, y, z, 'leaves_oak');
+        S._tp = { cx, cz, gy, tx, tz };
+        Object.assign(P, { x: cx - 6.5, y: gy, z: cz + 6.5, vx: 0, vy: 0, vz: 0, fly: false }); S.rig.yaw = -Math.PI / 2; S.rig.fp = .15;
+        window.dispatchEvent(new Event('pointerdown'));   // звук: как у игрока — контекст WebAudio создан первым касанием (в headless жеста нет; создание ~0,2 с — не физика)
+        await wait(4000);
+        return { sup: !!S.sup, topple: !!S.topple, mode: S.sup?.mode, audio: S.AU?.ctx?.state || null };
+      })()`;
+      const run = `(async () => { ${SET}
+        const { cx, cz, gy, tx, tz } = S._tp, T = S.topple, st = T.stats;
+        const cpu = [], ft = []; let on = true, last = performance.now(); const loop = () => { if (!on) return; const n = performance.now(); ft.push(n - last); last = n; cpu.push(S.R.stats.cpuFrame); requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+        await wait(2000); const before = cpu.length; st.maxTickMs = 0; for (const k in st.ms) st.ms[k] = 0; if (S.sup?.stats) S.sup.stats.maxTickMs = 0; const l0 = st.lands, f0 = st.fells, t0 = st.tips + st.leans;
+        // башня: снят столбик +x внизу, у следующего — подруб наполовину (удары API копания)
+        for (let z = cz; z < cz + 3; z++) { const c = S.sup.code(cx + 2, gy, z); W.set(cx + 2, gy, z, 0, { urgent: 1 }); S.sup.removed(cx + 2, gy, z, c); }
+        const M = S.mine, hitAt = (x, y, z, nx) => ({ x, y, z, v: W.raw(x, y, z), nx, ny: 0, nz: 0 });
+        for (let z = cz; z < cz + 3; z++) for (let k = 0; k < 2; k++) { M.need = 1; M.t = .26; const h = hitAt(cx + 1, gy, z, 1); if (h.v > 0) T.mine(h, V.blocks[h.v & 0xfff], M); }
+        // великан 2×2: подруб с +x (6/8 ствола), запил с −x до недопила
+        let r = 0, sw = 0;
+        const chop = (nx, n) => { for (let k = 0; k < n && r !== 2; k++) { let h = null; for (let i = 0; i < 2 && !h; i++) for (let j = 0; j < 2 && !h; j++) { const v = W.raw(tx + i, gy + 1, tz + j); if (v > 0 && (v & 0xfff) === ID.log_oak) h = hitAt(tx + i, gy + 1, tz + j, nx); } if (!h) return; M.need = 1; M.t = .25 + 1e-6; r = T.mine(h, V.blocks[ID.log_oak], M); sw++; } };
+        chop(1, 6); await wait(300); chop(-1, 16);
+        M.key = ''; M.t = 0;
+        const tFell = performance.now();
+        for (let i = 0; i < 400 && (T.bodies().length || T.busy()); i++) await wait(100);
+        const fallMs = performance.now() - tFell;
+        await wait(800); on = false;
+        const a = cpu.slice(0, before), b = cpu.slice(before), fb = ft.slice(before), avg = q => q.reduce((s, v) => s + v, 0) / Math.max(1, q.length);
+        b.sort((x, y) => x - y);
+        let lying = 0; for (let x = tx + 2; x < tx + 20; x++) for (let z = tz - 1; z <= tz + 2; z++) for (let y = gy; y < gy + 3; y++) if ((W.raw(x, y, z) & 0xfff) === ID.log_oak) lying++;
+        let far = 0; for (let x = cx + 3; x < cx + 20; x++) for (let z = cz - 1; z <= cz + 3; z++) for (let y = gy; y < gy + 4; y++) if ((W.raw(x, y, z) & 0xfff) === ID.stone_bricks) far++;
+        return { went: r === 2, swings: sw, leaned: st.tips + st.leans - t0, fells: st.fells - f0, lands: st.lands - l0, lying, far, fallS: +(fallMs / 1000).toFixed(1),
+          cpuBefore: +avg(a).toFixed(2), cpuFall: +avg(b).toFixed(2), p95: +(b[Math.floor(b.length * .95)] || 0).toFixed(2), max: +(b[b.length - 1] || 0).toFixed(2), fps: +(1000 / avg(fb)).toFixed(1),
+          worstTickMs: +st.maxTickMs.toFixed(2), avgTickMs: +(st.tickMs / Math.max(1, st.ticks)).toFixed(3), supWorstTickMs: +(S.sup?.stats?.maxTickMs || 0).toFixed(2), maxReads: T.Wd.stats.maxReads, checkNodes: st.checkNodes, checks: st.checks, skipped: st.skipped, over: st.over | 0, hp: S.P.hp, ms: Object.fromEntries(Object.entries(st.ms).map(([k, v]) => [k, +v.toFixed(1)])) };
+      })()`;
+      res.tpScene = await ev(scene, 120000);
+      ok(res.tpScene.sup && res.tpScene.topple && res.tpScene.mode === 'real', 'мир «реализм» с T-138 (крен и рубка подключены)', res.tpScene);
+      if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      res.tp = await ev(run, 120000);
+      if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      console.log('T-138 башня и великан падают' + (PHONE ? ' (телефон, ЦП ×4)' : ''), JSON.stringify(res.tp));
+      await shot('topple-after');
+      ok(res.tp.leaned >= 1 && res.tp.far >= 15, 'подрубленная башня кренится и падает целой к подрубу (легла: ' + res.tp.far + ' блоков)', res.tp);
+      ok(res.tp.went && res.tp.fells >= 1 && res.tp.lying >= 8, 'великан: подруб и запил — упал целым, брёвна лежат (' + res.tp.lying + ')', res.tp);
+      ok(res.tp.maxReads <= 2048, 'чтений мира за такт ≤ 2048 (потолок)', res.tp.maxReads);
+      // 20 кругов «построил — подрубил — упало — убрал»: память JS не растёт
+      const h0 = await heap();
+      const rounds = [];
+      for (let k = 0; k < +(process.env.KB_N || 20); k++) { await ev(scene, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 }); const r = await ev(run, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 }); rounds.push([r.went && r.far >= 15 ? 1 : 0, r.cpuFall, r.p95, r.max, r.fps, r.worstTickMs]); }
+      const h1 = await heap(); res.tpHeap = { h0, h1 }; console.log('T-138 память, МБ', JSON.stringify(res.tpHeap));
+      if (rounds.length) { const col = i => rounds.map(r => r[i]).sort((a, b) => a - b), med = a => a[a.length >> 1]; res.tpRounds = { n: rounds.length, ok: rounds.filter(r => r[0]).length, cpuMed: med(col(1)), p95Med: med(col(2)), maxMed: med(col(3)), maxMax: col(3)[rounds.length - 1], fpsMed: med(col(4)), tickMed: med(col(5)), tickMax: col(5)[rounds.length - 1] }; console.log('T-138 круги' + (PHONE ? ' (ЦП ×4)' : ''), JSON.stringify(res.tpRounds)); ok(res.tpRounds.ok === rounds.length, 'каждый круг: башня и великан упали', res.tpRounds); }
+      ok(h1 - h0 < 8, (process.env.KB_N || 20) + ' кругов «башня и великан упали — убрали»: память JS не растёт (< 8 МБ)', res.tpHeap);
+      const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`), errs = logs.filter(l => !/X3595|DevTools|favicon/i.test(l));
+      ok(!pr.bad.length, 'все программы шейдеров собрались', pr.bad);
+      ok(!errs.length, 'в консоли — без ошибок и исключений', errs.slice(0, 6));
+      return;
+    }
     if (MODE === 'soak') {
       const MIN = +process.env.KB_MIN || 10, t0 = Date.now(), h0 = await heap(), ex0 = logs.length;
       await idle();
@@ -260,6 +330,17 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           C.press('jump', false); C.press('run', false); C.press('forward', false);
           // огонь (KB_FIRE=1): поджигает доски рядом и иногда льёт воду — горит, гаснет, рушится
           if (${FIRE ? 1 : 0} && n % 5 === 2 && S.fire?.F) { const V = D37E.vox, W = S.W, x0 = Math.floor(S.P.x) + 3, z0 = Math.floor(S.P.z), y0 = Math.floor(S.P.y); for (let x = x0; x < x0 + 3; x++) for (let z = z0; z < z0 + 3; z++) W.set(x, y0 + 2, z, V.cell(V.ID.planks_oak), { urgent: 1 }); S.fire.igniteAt(x0 + 1, y0 + 2, z0 + 1, 0, 1, 0); if (n % 10 === 7) W.set(x0 + 1, y0 + 3, z0 + 1, V.cell(V.ID.water), { urgent: 1 }); }
+          // T-138 (KB_TOPPLE=1): рядом подрубленная башня кренится и падает, живое дерево — подруб и запил
+          if (${process.env.KB_TOPPLE ? 1 : 0} && n % 4 === 3 && S.topple && S.sup) {
+            const V = D37E.vox, W = S.W, ID = V.ID, bx = Math.floor(S.P.x) + 5, bz = Math.floor(S.P.z), by = Math.floor(S.P.y);
+            const nat = (x, y, z, id) => { W.set(x, y, z, V.cell(id), { urgent: 1 }); W.chunkAt(x, z)?.edits?.delete(((x & 15) << 11) | ((z & 15) << 7) | y); };
+            for (let y = by; y < by + 7; y++) for (let x = bx; x < bx + 2; x++) for (let z = bz; z < bz + 2; z++) if (!W.raw(x, y, z)) W.set(x, y, z, V.cell(ID.stone_bricks), { urgent: 1 });
+            await wait(300); for (let z = bz; z < bz + 2; z++) { const c = S.sup.code(bx + 1, by, z); W.set(bx + 1, by, z, 0, { urgent: 1 }); S.sup.removed(bx + 1, by, z, c); }
+            const tx = Math.floor(S.P.x) - 5, tz = Math.floor(S.P.z) + 2; for (let y = by; y < by + 6; y++) if (!W.raw(tx, y, tz)) nat(tx, y, tz, ID.log_oak); for (let y = by + 4; y < by + 7; y++) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (!W.raw(tx + dx, y, tz + dz)) nat(tx + dx, y, tz + dz, ID.leaves_oak);
+            const M = S.mine, h = nx => ({ x: tx, y: by + 1, z: tz, v: W.raw(tx, by + 1, tz), nx, ny: 0, nz: 0 });
+            for (const [nx, k] of [[1, 3], [-1, 5]]) for (let i = 0; i < k; i++) { const q = h(nx); if (!(q.v > 0)) break; M.need = 1; M.t = .126; S.topple.mine(q, V.blocks[q.v & 0xfff], M); }
+            M.t = 0; M.key = '';
+          }
           // ставит и ломает
           if (n % 3 === 0) { T.give?.({ id: ['planks_oak', 'stone', 'torch', 'glass'][n % 4], n: 16 }); S.P.sel = 0; for (let i = 0; i < 3; i++) { T.use?.(); await wait(150); T.dig?.(); await wait(150); } }
           // бой (T-012): меч и щит против зомби, поменять руки, лук со стрелой
@@ -283,8 +364,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const h1 = await heap(), errs = logs.slice(ex0).filter(l => !/X3595|DevTools|favicon/i.test(l));
       // мир «Обрушение» (KB_SUPPORT=1): сколько было пересчётов и обрушений — что прогон их правда задел
       const fireSt = FIRE ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.fire; return X?.F ? { burnt: X.stats.burnt, ignited: X.F.stats.ignited, out: X.F.stats.out, peak: X.F.stats.peak, blocks: X.blocks.n } : null; })()`, 10000).catch(() => null) : undefined;
+      const tpl = process.env.KB_TOPPLE ? await ev(`(() => { const s = GAME_IMPL.kubomir._test.state()?.topple?.stats; return s ? { leans: s.leans, tips: s.tips, fells: s.fells, lands: s.lands, hangs: s.hangs, back: s.back, checks: s.checks, maxTickMs: +s.maxTickMs.toFixed(2) } : null; })()`, 10000).catch(() => null) : null;
       const sup = SUPPORT ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.sup, s = X?.stats; return s ? { mode: X.mode, load: !!X.load, solves: s.solves, avgMs: +(s.ms / Math.max(1, s.solves)).toFixed(2), maxMs: +s.maxMs.toFixed(1), groups: s.groups, cells: s.cells | 0, refused: s.refused, jobs: s.jobs, restarts: s.restarts, crushed: s.crushed, tickAvgMs: s.ticks ? +(s.tickMs / s.ticks).toFixed(3) : 0, maxTickMs: +(s.maxTickMs || 0).toFixed(2) } : null; })()`, 10000).catch(() => null) : undefined;
-      res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6), sup, fire: fireSt };
+      res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6), sup, fire: fireSt, topple: tpl };
       console.log('ЗАМЕР soak', JSON.stringify(res.soak));
       ok(!errs.length, MIN + ' мин игры — без ошибок и исключений в консоли', errs.slice(0, 6));
       ok((res.moved | 0) >= (res.walk | 0) * .5, 'игрок ходил (ввод не заперт окном или меню) — в половине шагов и больше', { moved: res.moved | 0, of: res.walk | 0 });
@@ -741,7 +823,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     for (let i = 0; i < 120; i++) { await sleep(500); const okm = await ev(`!!document.querySelector('.kb-menu')`, 3000).catch(() => false); if (okm) break; }
     await ev(`(() => { const b = [...document.querySelectorAll('button')].find(x => /Новый мир/.test(x.textContent)); b && b.click(); return !!b; })()`);
     await sleep(500);
-    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' || MODE === 'combat' || MODE === 'swim' ? 'survival' : 'creative'}"]'); c && c.click(); ${MODE === 'swim' ? `document.querySelector('[data-f="diff"] [data-v="peaceful"]')?.click();` : ''} ${SUPPORT ? `document.querySelector('[data-f="support"] [data-v="real"]')?.click();` : ''} ${FIRE ? `document.querySelector('[data-f="fire"] [data-v="spread"]')?.click();` : ''} const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
+    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' || MODE === 'combat' || MODE === 'swim' || MODE === 'topple' ? 'survival' : 'creative'}"]'); c && c.click(); ${MODE === 'swim' ? `document.querySelector('[data-f="diff"] [data-v="peaceful"]')?.click();` : ''} ${SUPPORT ? `document.querySelector('[data-f="support"] [data-v="real"]')?.click();` : ''} ${FIRE ? `document.querySelector('[data-f="fire"] [data-v="spread"]')?.click();` : ''} const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
     let kb = false;
     for (let i = 0; i < 240 && !kb; i++) { await sleep(500); kb = await ev(`!!(GAME_IMPL.kubomir?._test?.state()?.ready && GAME_IMPL.kubomir._test.state().WX)`, 3000).catch(() => false); }
     if (!kb) { await shot('debug-open'); console.log('  состояние:', JSON.stringify(await ev(`(() => { const S = GAME_IMPL.kubomir?._test?.state(); return S ? { ready: S.ready, wx: !!S.WX, view: document.querySelector('.kb-screen')?.textContent?.slice(0, 200) } : { none: true, html: document.querySelector('.kb-screen')?.innerText?.slice(0, 300) }; })()`).catch(e => e.message))); }
