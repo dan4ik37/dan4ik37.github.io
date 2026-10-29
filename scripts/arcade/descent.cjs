@@ -100,7 +100,8 @@ module.exports = {
   },
   e2e: {
     bot: (gap, stopAfter = 1e9) => e2eBot('descent', decide,
-      "if (a === 1) P.tap(160, 300); else P.tap(a - 100000, 300, 'pointermove');", 'm.kill = ' + (stopAfter < 1e9 ? stopAfter : 0) + ';')(gap),
+      // after a pause the kit lets the finger go (T.CANCEL) — press again before dragging, as a player would
+      "if (a === 1) P.tap(160, 300); else { if (!T.inst()?.run?.inp.down) P.tap(a - 100000, 300); P.tap(a - 100000, 300, 'pointermove'); }", 'm.kill = ' + (stopAfter < 1e9 ? stopAfter : 0) + ';')(gap),
     gap: 10, stopB: 5,
     endByStop: false, endMs: 40000,
     field: 'seq',
