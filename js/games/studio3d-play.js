@@ -276,7 +276,8 @@
       applyCam(true);
       // 👊 на телефоне — в режимах с боем
       const g = gameCfg();
-      if (P.I.touch && g && E.modes.PVP.has(g.mode)) P.H.buttons([{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { id: 'attack', action: 'attack', icon: '👊', label: 'удар' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }]);
+      if (P.I.touch && g && E.modes.PVP.has(g.mode) && P.H.act) { P.H.buttons([{ kind: 'pose', id: 'pose', icon: '⬇', label: 'поза' }, { action: 'interact', icon: '✋', label: 'действие' }, { id: 'attack', action: 'attack', icon: '👊', label: 'удар', big: true }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }]); P.hud?.classList.toggle('s3-hurt', true); }   // интерфейс 2.0 (T-123): бой — и полоска жизни сразу
+      else if (P.I.touch && g && E.modes.PVP.has(g.mode)) P.H.buttons([{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { id: 'attack', action: 'attack', icon: '👊', label: 'удар' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }]);
       if (g) setTimeout(() => { if (A === papi && pl()) toast(`${E.modes.MODES[g.mode].icon} ${E.modes.MODES[g.mode].name}: ${E.modes.MODES[g.mode].desc}`); }, 900);
       // как играть — под то, чем управляют (студия пишет про клавиатуру)
       setTimeout(() => {

@@ -543,6 +543,25 @@
       emit('sit', seat);
       return true;
     };
+    // Сесть / лечь где угодно (T-123, docs/HUD_V2.md §3.2): ближайшее свободное место (не кровать) в 4 м — сесть на него, иначе — на
+    // землю, где стоишь; лечь — кровать в 5 м (спать), иначе — на землю. list — [{ x, y, z, yaw, bed, name }], free(seat) — свободно ли.
+    // → место, на которое сел/лёг, или null
+    const nearSeat = (list, beds, R, free) => {
+      let best = null, bd = R;
+      for (const sp of list || []) { if (!!sp.bed !== beds || (free && !free(sp))) continue; const d = Math.hypot(sp.x - ch.x, sp.z - ch.z) + Math.abs(sp.y - ch.y) * 2; if (d < bd) { bd = d; best = sp; } }
+      return best;
+    };
+    P.sitHere = (list, free) => {
+      if (P.mode !== 'move' || !ch.grounded) return null;
+      const sp = nearSeat(list, false, 4, free) || { x: ch.x, y: ch.y + .32, z: ch.z, yaw: P.yaw, ground: true, name: 'Сесть' };
+      return P.sitOn(sp) ? sp : null;
+    };
+    P.lieHere = (list, free) => {
+      if (P.mode !== 'move' || !ch.grounded) return null;
+      const bed = nearSeat(list, true, 5, free);
+      const sp = bed ? Object.assign({}, bed, { lie: true, bed: true }) : { x: ch.x, y: ch.y + .02, z: ch.z, yaw: P.yaw, ground: true, lie: true, name: 'Лечь' };
+      return P.sitOn(sp) ? sp : null;
+    };
     function tickSit(dt, C, w){ if (Math.hypot(w.x, w.z) > .3 || C?.down('jump') || C?.down('crouch') || C?.down('interact')) P.standUp(); }
     P.standUp = () => {
       const s = P.seat; if (!s) return;
@@ -577,7 +596,8 @@
       speed: P.mode === 'move' ? P.speed : 0,
       air: P.mode === 'move' && !P.swim && !ch.grounded && ch.airT > .12, swim: P.swim, dive: P.dive,
       crouch: P.mode === 'move' || P.mode === 'roll' ? P.crouchW : 0,
-      sit: P.mode === 'sit' && !P.seat?.stand, seatY: P.seat && !P.seat.stand ? P.seat.y : null,
+      sit: P.mode === 'sit' && !P.seat?.stand && !P.seat?.lie, seatY: P.seat && !P.seat.stand ? P.seat.y : null,
+      lie: P.mode === 'sit' && !!P.seat?.lie, sleep: P.mode === 'sit' && !!P.seat?.bed,   // лежит (на кровати — спит, глаза закрыты; T-123)
       roll: P.mode === 'roll' ? P.roll.t / ROLL_T : -1, rollBack: P.mode === 'roll' && P.roll.back,
       hang: P.mode === 'hang', ladder: P.mode === 'ladder', climbPh: P._climbPh,
       pk: P.mode === 'pk' ? P.pk.move : '', pkK: P.mode === 'pk' ? P.pk.k : 0,

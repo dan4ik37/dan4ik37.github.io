@@ -123,5 +123,24 @@ console.log('— подписи «до первого нажатия», стро
   T.detach();
 }
 
+console.log('— T-123: старое место «присесть» — у кнопки позы (alias), подсказка один раз');
+{
+  // игрок переставил «crouch» (старая кнопка) — у новой «pose» то же место; без alias — место по умолчанию
+  const saved = { v: 1, g: { 'e3d-x': { l: { crouch: { x: 100, y: 120, ax: 1, ay: 1, d: 50 } } } } };
+  const E = env({ d37_touch_layout: JSON.stringify(saved) }), wrap = E.el(844, 390), B = { pose: E.el(), jump: E.el() };
+  const items = () => [{ id: 'pose', icon: '⬇' }, { id: 'jump', icon: '⤒' }];
+  const def = (W, H) => ({ pose: { x: W - 150, y: H - 40, d: 46 }, jump: { x: W - 40, y: H - 40, d: 56 } });
+  const at = b => ({ x: parseFloat(b.style.left) + parseFloat(b.style.width) / 2, y: parseFloat(b.style.top) + parseFloat(b.style.height) / 2 });
+  const T = E.TL.attach({ id: 'e3d-x', el: wrap, items, btn: id => B[id], defaults: def, alias: { pose: 'crouch' } });
+  ok(Math.abs(at(B.pose).x - 744) < .6 && Math.abs(at(B.pose).y - 270) < .6, 'alias: «поза» — там, где игрок поставил «присесть»', at(B.pose));
+  T.detach();
+  const E2 = env({ d37_touch_layout: JSON.stringify(saved) }), B2 = { pose: E2.el(), jump: E2.el() };
+  const T2 = E2.TL.attach({ id: 'e3d-x', el: E2.el(844, 390), items, btn: id => B2[id], defaults: def });
+  ok(Math.abs(at(B2.pose).x - 694) < .6, 'без alias — место по умолчанию', at(B2.pose));
+  T2.detach();
+  ok(E2.TL.hintOnce('mir', 'h-pose') === true && E2.TL.hintOnce('mir', 'h-pose') === false, 'hintOnce: первый раз — показать, второй — нет');
+  E2.TL.resetSeen(); ok(E2.TL.hintOnce('mir', 'h-pose') === true, 'resetSeen: подсказки снова');
+}
+
 console.log(`\ntouch-layout-test: ${pass} ok, ${fail} fail`);
 process.exit(fail ? 1 : 0);

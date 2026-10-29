@@ -144,8 +144,9 @@
       [.8, pose({ ALX: -.45, ALZ: -.35, ARX: -.45, ARZ: .35, EL: -.3, ER: -.3, LLX: -1.35, LRX: .2, KL: 1.9, KR: .4, TX: .45 })], [1, pose({ ALX: -.45, ALZ: -.35, ARX: -.45, ARZ: .35, EL: -.3, ER: -.3, LLX: -1.0, LRX: .1, KL: 1.4, KR: .3, TX: .3 })]],
   };
   // Переход между состояниями (с): 0 земля, 1 кувырок, 2 вис, 3 лестница, 4 перелезть, 5 плывёт, 6 воздух, 7 сидит,
-  // 8 вис паркура, 9 подтянуться, 10 нырок, 11 держится на воде, 12 ползком (лёг — o.crawl, «Кубомир»: лаз высотой в блок)
-  const XD = [.2, .07, .12, .15, .1, .3, .14, .25, .1, .1, .25, .3, .22];
+  // 8 вис паркура, 9 подтянуться, 10 нырок, 11 держится на воде, 12 ползком (лёг — o.crawl, «Кубомир»: лаз высотой в блок),
+  // 13 лежит на спине (o.lie: на кровати или на земле; o.sleep — глаза закрыты; T-123)
+  const XD = [.2, .07, .12, .15, .1, .3, .14, .25, .1, .1, .25, .3, .22, .3];
   // Эмоции: длительность и выражение лица
   const EMOTES = ['👋', '😂', '❤️', '🔥', '🎉', '😎', '😭', '👍', '💃', '👏', '🤔', '😮', '😡', '🙇', '🤸'];
   const EMO_T = { '💃': 3.2, '🤔': 2.4, '🙇': 1.9, '🤸': 1.15, '👏': 1.8 };
@@ -1732,7 +1733,7 @@
       const mv = moving ? 1 : 0, s = Math.sin(ch.phase);
       // состояние (у паркура и воды — свои подсостояния, между ними тоже плавно)
       const cat = !o ? 0 : o.roll >= 0 ? 1 : o.hang ? 2 : o.ladder ? 3 : o.pk ? (o.pk === 'vault' ? 4 : o.pk === 'hang' ? 8 : 9)
-        : o.swim ? (o.dive ? 10 : moving ? 5 : 11) : o.crawl ? 12 : o.air ? 6 : o.sit ? 7 : 0;
+        : o.swim ? (o.dive ? 10 : moving ? 5 : 11) : o.crawl ? 12 : o.lie ? 13 : o.air ? 6 : o.sit ? 7 : 0;
       if (cat !== ch.cat) {
         ch.Ps.set(P); ch.Ps[J.BX] = wrapA(ch.Ps[J.BX]); ch.Ps[J.BRY] = wrapA(ch.Ps[J.BRY]); ch.Ps[J.BRZ] = wrapA(ch.Ps[J.BRZ]);
         if (ch.cat === 6 && cat === 0 && !snap) { ch.land = 1; ch.xd = .08; } else ch.xd = XD[cat];
@@ -1789,6 +1790,13 @@
         Pt[J.LLX] = .08 + q * .32 * w; Pt[J.LRX] = .08 - q * .32 * w; Pt[J.LLZ] = -.16; Pt[J.LRZ] = .16;
         Pt[J.KL] = .3 + Math.max(0, -q) * .85 * w; Pt[J.KR] = .3 + Math.max(0, q) * .85 * w;
         Pt[J.BRY] = q * .06 * w; Pt[J.TS] = 1 + br * .012 * (1 - w);
+      } else if (cat === 13) {   // лежит на спине: тело назад (голова — к −z места), середина тела — над местом, руки вдоль тела, дышит
+        const k = (ch.top || 2.3) / 2.3, br = Math.sin(t * 1.6 + ch.seed);
+        Pt[J.BX] = -1.5; Pt[J.BY] = .2 * k; Pt[J.BZ] = .9 * k;
+        Pt[J.HX] = -.06; Pt[J.HZ] = Math.sin(t * 1.6 + ch.seed + 1.2) * .04;   // частота = дыхание (цикл спрайта «lie» = TAU/1.6 замкнут)
+        Pt[J.ALX] = -.08; Pt[J.ARX] = -.08; Pt[J.ALZ] = -.2; Pt[J.ARZ] = .2; Pt[J.EL] = Pt[J.ER] = -.18;
+        Pt[J.LLX] = Pt[J.LRX] = .02; Pt[J.LLZ] = -.05; Pt[J.LRZ] = .05; Pt[J.KL] = Pt[J.KR] = .06;
+        Pt[J.TS] = 1 + br * .02;
       } else if (cat === 6) {   // в воздухе: ноги врозь, колено к груди, руки вверх-в стороны
         Pt[J.LLX] = -.6; Pt[J.KL] = .75; Pt[J.LRX] = .4; Pt[J.KR] = .35;
         Pt[J.ALX] = -.5; Pt[J.ALZ] = -.75; Pt[J.ARX] = -.5; Pt[J.ARZ] = .75; Pt[J.EL] = Pt[J.ER] = -.35; Pt[J.TX] = .05; Pt[J.HX] = -.08;
@@ -1880,7 +1888,8 @@
       const want = ch.emote ? EMO_EXPR[ch.emote] || 'base' : 'base';
       if (want !== ch.expr) setExpr(ch, want);
       const fs = ch.faceSet;
-      if (fs && fs.userData.blink && fs.userData.eyes) fs.userData.eyes.scale.y = (snap ? !!o.blink : (t + ch.blinkAt) % 4 > 3.86) ? .12 : 1;
+      if (fs && fs.userData.eyes && cat === 13 && o.sleep) fs.userData.eyes.scale.y = .12;   // спит — глаза закрыты
+      else if (fs && fs.userData.blink && fs.userData.eyes) fs.userData.eyes.scale.y = (snap ? !!o.blink : (t + ch.blinkAt) % 4 > 3.86) ? .12 : 1;
       for (let i = 0; i < ch.anims.length; i++) ch.anims[i](t, dt, mv, s);
       if (ch.phS) phoneProp(ch, t, o);   // корпус телефона в кисти, экран, пальцы
     }
@@ -2313,7 +2322,7 @@
 
   // Версия внешности человечка: менять при любой правке геометрии, цветов или поз (кэш спрайтов и картинок по ней сбрасывается).
   // 1 — до частей тела; 2 — части тела, колени и локти, новые лица (15.10.2026); 3 — телефон 📱, плечи поднимаются (15.10.2026)
-  const CHAR_VERSION = 4;   // 4 — поза «ползком» (T-096a)
+  const CHAR_VERSION = 5;   // 4 — поза «ползком» (T-096a); 5 — поза «лежит» (T-123)
   // Телефон человечка (без набора kit): phonePose(ch, 'use' | 'call' | 'play' | 'photo' | '' или код 0…4) — что держать
   // (достанет / уберёт сам, плавно); если animate получает o.phone — главнее оно. phoneSnap(ch, t) — «щёлк» камеры сейчас (t — то же
   // время, что в animate; дальше — только по кнопке). phoneCode('call') → 2, phoneName(2) → 'call'

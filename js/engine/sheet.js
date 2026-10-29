@@ -195,5 +195,8 @@
     return L;
   }
 
-  E.sheet = { open, escape, vlist, current: () => cur, closeAll: () => { if (cur) cur.close(); }, esc, css };   // css() — стили заранее (при входе в игру: вставка <style> пересчитывает всю страницу — не на первом открытии)
+  // T-123: js/engine/ui.js (интерфейс 2.0) кладёт сюда же свой лист — функцию D37E.sheet(host, o). «Кубомир» грузит оба файла: не
+  // затирать её (иначе «➕ Ещё» в «Мире» после «Кубомира» падал бы — E.sheet is not a function), а повесить наши методы на неё
+  const api = { open, escape, vlist, current: () => cur, closeAll: () => { if (cur) cur.close(); }, esc, css };
+  E.sheet = typeof E.sheet === 'function' ? Object.assign(E.sheet, api) : api;   // css() — стили заранее (при входе в игру: вставка <style> пересчитывает всю страницу — не на первом открытии)
 })();

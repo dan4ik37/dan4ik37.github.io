@@ -131,6 +131,9 @@
 
   // ═══ ЭКРАН ═══
   let root, api, cv, ctx, Wd = null, mode = 'menu', lv = 'normal', raf = 0, last = 0, acc = 0, dpr = 1, k = 1, ox = 0, oy = 0, rot = false;
+  // интерфейс 2.0 (T-123, HUD2.arena): счёт — плашкой поверх поля (поле выше), подпись управления — раз на устройство; элементы экрана — один раз
+  const v2 = () => typeof HUD2 !== 'undefined' && !!HUD2.kit && !!HUD2.arena;
+  let elT = null, elSup = null, elS0 = null, elS1 = null, supQ = -1, supOn = null, noteEl = null;
   let me = 0, vs = 'bot', B = {}, room = null, np = null, host = true, gin = null, sentAt = 0, snapA = null, snapB = null, look = null, oppLook = null, names = ['Ты', 'Бот'], shake = 0;
   const keys = {}, sticks = { move: null, aim: null };
   const listeners = [];
@@ -158,6 +161,15 @@
         <div class="ct-note" style="text-align:center">Левый палец — бег, правый — прицел и выстрел. ПК: WASD + мышь, пробел — супер.</div>
       </div>`;
     cv = root.querySelector('.ar-cv'); ctx = cv.getContext('2d');
+    elT = root.querySelector('#arT'); elSup = root.querySelector('.ar-sup'); elS0 = root.querySelector('#arS0'); elS1 = root.querySelector('#arS1'); supQ = -1; supOn = null; noteEl = null;
+    if (v2()) {
+      root.firstElementChild.classList.add('ar-v2');
+      root.querySelector('.ar-wrap').prepend(root.querySelector('.ar-top'));   // счёт — поверх поля сверху
+      if (!document.getElementById('ar2-css')) { const st = document.createElement('style'); st.id = 'ar2-css'; st.textContent = '.ar-v2 .ar-wrap>.ar-top{position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:2;gap:12px;padding:4px 12px;border-radius:12px;background:rgba(14,12,28,.42);border:1.5px solid rgba(255,255,255,.3);font-size:.7rem;white-space:nowrap;pointer-events:none;max-width:calc(100% - 20px);overflow:hidden}.ar-v2 .ar-sup::after{content:"";position:absolute;inset:-5px;border-radius:50%}'; document.head.appendChild(st); }
+      noteEl = root.querySelector('.ar .ct-note');
+      let seen = false; try { seen = !!localStorage.getItem('d37_ar_note'); } catch (er) {}
+      if (seen) { noteEl.hidden = true; noteEl = null; }
+    }
     cv.addEventListener('pointerdown', onDown);
     cv.addEventListener('contextmenu', e => e.preventDefault());
     root.querySelector('.ar-sup').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); doShoot(Wd?.p[me].aim ?? 0, true); });
@@ -183,7 +195,8 @@
   function resize(){
     if (!cv) return;
     dpr = Math.min(2, window.devicePixelRatio || 1);
-    const w = cv.parentElement.clientWidth || 360, maxH = Math.max(320, window.innerHeight - 200);
+    // 2.0: счёт поверх поля, подпись — раз на устройство: поле выше (во весь экран — почти вся высота); пропорции поля те же
+    const w = cv.parentElement.clientWidth || 360, fs = v2() && !!window.D37Full?.contains?.(cv), maxH = fs ? Math.max(240, window.innerHeight - 8) : Math.max(320, window.innerHeight - (v2() ? 170 : 200));
     rot = w < 560 && maxH > w * 1.15;
     const tw = rot ? H : W, th = rot ? W : H, s = Math.min(w / tw, maxH / th);
     const cw = Math.round(tw * s), chh = Math.round(th * s);
@@ -205,6 +218,7 @@
       doShoot(aimFromMouse(sx, sy), false); return;
     }
     const left = rot ? sy > cv.height / 2 : sx < cv.width / 2;
+    if (noteEl) { noteEl.hidden = true; noteEl = null; try { localStorage.setItem('d37_ar_note', '1'); } catch (er) {} }   // 2.0: подпись управления — до первого касания
     const st = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: performance.now() };
     if (left && !sticks.move) sticks.move = st;
     else if (!sticks.aim) sticks.aim = st;
@@ -445,14 +459,17 @@
       ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.arc(bx, by, m, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = s === sticks.aim ? 'rgba(255,209,102,.6)' : 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.arc(bx + dx, by + dy, 22 * dpr, 0, Math.PI * 2); ctx.fill();
     }
-    const tEl = root.querySelector('#arT');
-    if (tEl) { const left = Math.max(0, Math.ceil(LIMIT - Wd.t)), txt = `⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; if (tEl.textContent !== txt) tEl.textContent = txt; }
-    const sup = root.querySelector('.ar-sup');
-    if (sup) { const ready = Wd.p[me].sup >= 1 && Wd.p[me].dead <= 0; sup.classList.toggle('ready', ready); sup.style.setProperty('--sp', Math.round(Wd.p[me].sup * 100) + '%'); }
+    // экран: элементы найдены один раз (build), пишем только изменившееся; заряд «супер» — шагом 2 % (T-123)
+    if (elT) { const left = Math.max(0, Math.ceil(LIMIT - Wd.t)), txt = `⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; if (elT.textContent !== txt) elT.textContent = txt; }
+    if (elSup) {
+      const ready = Wd.p[me].sup >= 1 && Wd.p[me].dead <= 0, q = Math.round(Math.min(1, Wd.p[me].sup) * 50) * 2;
+      if (ready !== supOn) { supOn = ready; elSup.classList.toggle('ready', ready); }
+      if (q !== supQ) { supQ = q; elSup.style.setProperty('--sp', q + '%'); }
+    }
   }
   function hud(){
     if (!Wd || !root) return;
-    const s0 = root.querySelector('#arS0'), s1 = root.querySelector('#arS1');
+    const s0 = elS0, s1 = elS1;
     if (s0) s0.innerHTML = `<b class="ar-g">${esc(names[0])}</b> ${'●'.repeat(Wd.score[0])}${'○'.repeat(WIN - Wd.score[0])}`;
     if (s1) s1.innerHTML = `${'●'.repeat(Wd.score[1])}${'○'.repeat(WIN - Wd.score[1])} <b class="ar-r">${esc(names[1])}</b>`;
   }

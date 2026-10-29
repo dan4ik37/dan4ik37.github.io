@@ -17,7 +17,9 @@
 // })
 // T.layout(force) — расставить (пишет стили ТОЛЬКО если поменялись окно, размер кнопок, левша или раскладка — не каждый кадр);
 // игра зовёт из своего resize; T.detach(). D37TouchLayout.edit() — редактор для последней открытой игры; settingsRow() — строка
-// для ⚙️ → «Управление» («🎮 Настроить кнопки»); seen(game, id) / markSeen(game, id) — подписи кнопок «до первого нажатия».
+// для ⚙️ → «Управление» («🎮 Настроить кнопки»); seen(game, id) / markSeen(game, id) — подписи кнопок «до первого нажатия»;
+// hintOnce(game, id) — подсказка один раз на устройство (T-123), resetSeen() — показать всё снова. attach({ alias: { pose: 'crouch' } })
+// — сохранённое место старой кнопки достаётся новой (T-123: «⬇ присесть» стала кнопкой позы).
 // Хранится на этом устройстве: localStorage d37_touch_layout = { v: 1, g: { <игра>: { l: {…}, p: {…} } } } — лёжа (l) и стоя (p)
 // отдельно; кнопка = { x, y, ax, ay, d }: середина от ближнего края (ax: 1 — от правого, ay: 1 — от нижнего) и диаметр при 100 %.
 (() => {
@@ -75,6 +77,9 @@
     if (!ID_RE.test(g) || !ID_RE.test(id) || seen(g, id)) return;
     const m = seenLoad(); (m[g] = m[g] || {})[id] = 1; lsSet(SEEN, m);
   }
+  // подсказка один раз на устройство (T-123): true — показать сейчас (и сразу запомнить); ⚙️ «Подсказки → Показать снова» — resetSeen
+  const hintOnce = (g, id) => { if (!ID_RE.test(g) || !ID_RE.test(id) || seen(g, id)) return false; markSeen(g, id); return true; };
+  function resetSeen(){ seenM = {}; lsSet(SEEN, null); }
 
   // ── вырез экрана (safe-area): меряется пробником внутри окна игры (только при раскладке, не каждый кадр) ──
   function safe(el){
@@ -107,7 +112,8 @@
   function compute(T, W, H, k){
     const o = T.o, sv = saved(o.id, orient(W, H)), def = (o.defaults && o.defaults(W, H, k, { lefty: lefty() })) || {}, out = new Map();
     for (const it of (o.items ? o.items() : [])) {
-      const s = sv && sv[it.same || it.id], d0 = def[it.id];
+      // o.alias { новый id: старый } (T-123): раскладка, сохранённая под старым id (crouch → pose), переезжает на новую кнопку
+      const s = sv && (sv[it.same || it.id] || (o.alias && o.alias[it.id] && sv[o.alias[it.id]])), d0 = def[it.id];
       let p = null;
       if (s) p = { x: s.ax ? W - s.x : s.x, y: s.ay ? H - s.y : s.y, d: s.d * k, custom: true };
       else if (d0 && Number.isFinite(d0.x) && Number.isFinite(d0.y)) p = { x: d0.x, y: d0.y, d: d0.d, custom: false };
@@ -313,7 +319,7 @@
   }
 
   root.D37TouchLayout = {
-    attach, edit, settingsRow, seen, markSeen, safe,
+    attach, edit, settingsRow, seen, markSeen, hintOnce, resetSeen, safe,
     current: () => liveT(),
     isEditing: () => !!ed,
     saved: (g, o) => saved(g, o),

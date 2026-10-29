@@ -16,6 +16,7 @@
 // Палец: K.finger — палец, который сейчас держит мир ({ x, y, t, moved }), K.taps — короткие нажатия ({ x, y });
 // K.touchBar(wrap, list, { game }) — кнопки телефона (прыжок, красться, полёт вверх/вниз, вещи, руки, щит, ⛏/🧱 в режиме «прицел»):
 // только значки, подпись — до первого нажатия и пока держишь; расставляет их kubomir.js через D37TouchLayout (js/core/touch-layout.js).
+// Интерфейс 2.0 (T-123): у кнопки может быть b.ptr = { down(e, d), move(e, d), up(e, d) } — нажатия ведёт игра (кнопка позы), G — круг позы.
 (() => {
   const LS = 'd37_kb_keys';
   // id, название, клавиши по умолчанию [клавиатура, геймпад]
@@ -23,6 +24,8 @@
     ['sneak', 'Красться (с края не упадёшь)', ['ShiftLeft', 'Pad1']],
     // ползком (T-096a): держать; два раза «красться» (Shift / Ⓑ) — лечь и ползти, пока не нажмёшь «красться» или «прыжок»
     ['crawl', 'Ползти — лечь (держать; или два раза «красться»)', ['KeyZ', '']],
+    // круг позы (T-123, docs/HUD_V2.md §3.1): красться, ползком, сесть, лечь — G (T — чат); у геймпада по умолчанию нет
+    ['pose', 'Круг позы: сесть, лечь, ползком', ['KeyG', '']],
     ['sprint', 'Бег (или два раза «вперёд»)', ['ControlLeft', 'Pad10']],
     ['inventory', 'Вещи (открыть / закрыть)', ['KeyE', 'Pad3']],
     ['drop', 'Выбросить вещь (с Ctrl — всю стопку)', ['KeyQ', 'Pad13']],
@@ -223,9 +226,11 @@
           e.preventDefault(); e.stopPropagation(); try { d.setPointerCapture(e.pointerId); } catch (er) {}
           d.classList.add('held');
           if (d.classList.contains('new')) { d.classList.remove('new'); TL?.markSeen?.(game, b.id); }
+          if (b.ptr) { b.ptr.down(e, d); return; }   // T-123: кнопка ведёт нажатия сама (поза: нажал — присесть, удержал — круг)
           if (b.toggle) { d.classList.toggle('on', b.toggle()); return; } if (b.onTap) { b.onTap(); return; } set(true);
         });
-        for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) d.addEventListener(ev, () => { d.classList.remove('held'); if (!b.toggle && !b.onTap) set(false); });
+        if (b.ptr) d.addEventListener('pointermove', e => b.ptr.move(e, d));
+        for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) d.addEventListener(ev, e => { d.classList.remove('held'); if (b.ptr) { if (ev !== 'lostpointercapture') b.ptr.up(e, d); return; } if (!b.toggle && !b.onTap) set(false); });
         bar.appendChild(d); byId.set(b.id, d);
       }
       return { el: bar, btn: id => byId.get(id), show: (id, v) => { const d = byId.get(id); if (d && d.hidden !== !v) d.hidden = !v; }, on: (id, v) => { const d = byId.get(id); if (d && d.classList.contains('on') !== !!v) d.classList.toggle('on', !!v); } };

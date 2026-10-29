@@ -1454,7 +1454,7 @@
     const d0 = PERF ? performance.now() : 0;
     draw(t, V, guest);
     if (PERF && PERF.n < 4000) PERF.dr[PERF.n] = performance.now() - d0;
-    if (t - hudAt > 250) { hudAt = t; hud(V, guest); PV?.hud(V, guest, t); }
+    if (t - hudAt > (ui.v2 ? 500 : 250)) { hudAt = t; hud(V, guest); PV?.hud(V, guest, t); }
     sounds(t);
   }
   function prepHost(W, a){
@@ -1632,7 +1632,8 @@
     }
     if (PV) PV.overlay(c, ox, oy, z, W2, H2, t, n);
     // мини-карта
-    const ms = Math.min(96, cssW * .2) * dpr, mx = 10 * dpr, my = H2 - ms - 10 * dpr;
+    // 2.0 (T-123, ui.v2): ≤ 72 px справа вверху под таблицей лидеров — не под пальцем, что рулит; иначе — слева внизу, до 96 px
+    const v2 = ui.v2, ms = (v2 ? Math.min(72, cssW * .16) : Math.min(96, cssW * .2)) * dpr, mx = v2 ? W2 - ms - 10 * dpr : 10 * dpr, my = v2 ? Math.min(H2 - ms - 10 * dpr, 100 * dpr) : H2 - ms - 10 * dpr;
     c.fillStyle = 'rgba(8,10,20,.55)'; c.fillRect(mx, my, ms, ms);
     c.strokeStyle = 'rgba(255,255,255,.25)'; c.lineWidth = 1; c.strokeRect(mx + .5, my + .5, ms - 1, ms - 1);
     if (myMass > 0) { c.fillStyle = '#fde68a'; c.beginPath(); c.arc(mx + (myCx + H) / (2 * H) * ms, my + (myCy + H) / (2 * H) * ms, 3 * dpr, 0, TAU); c.fill(); }
@@ -1658,7 +1659,7 @@
     for (let i = 0; i < 40; i++) { ctx.fillStyle = PCOL[i & 7]; ctx.beginPath(); ctx.arc(((i * 977) % 1000) / 1000 * cv.width, ((i * 571) % 1000) / 1000 * cv.height, 5 * dpr, 0, TAU); ctx.fill(); }
   }
   const fmtT = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-  let lbStr = '';
+  let lbStr = '', lbAt = 0;
   function hud(V, guest){
     if (!V || !ui) return;
     const mass = guest ? V.mass : (V.owners[S.me]?.alive ? V.owners[S.me].mass : 0);
@@ -1666,17 +1667,19 @@
     if (ui.sc.textContent !== sc) ui.sc.textContent = sc;
     if (mass > 0) { if (!lifeBest) lifeAt = performance.now(); if (mass > lifeBest) lifeBest = mass; } else if (koAt) lifeBest = 0;
     const left = Math.max(0, Math.ceil(V.left / SPS));
-    const tt = V.phase ? `🏁 ${left}` : `⏱ ${fmtT(left)}`;
-    if (ui.time.textContent !== tt) ui.time.textContent = tt;
-    const lt = ui.ov.querySelector('.io-left'); if (lt) lt.textContent = String(left);
+    const tt = V.phase ? `🏁 ${left}` : `⏱ ${fmtT(left)}`, tick = ui.time.textContent !== tt;
+    if (tick) ui.time.textContent = tt;
+    if (!ui.ov.hidden) { const lt = ui.ov.querySelector('.io-left'), ls = String(left); if (lt && lt.textContent !== ls) lt.textContent = ls; }   // отсчёт нового раунда — только когда окно видно и число другое
     const net = K.netLabel(S);
     if (ui.net.textContent !== net) ui.net.textContent = net;
     // лидеры
     const n = V.lbN, list = [];
     let key = String(S.me);
     for (let k = 0; k < n; k++) key += ',' + V.lbO[k] + ':' + Math.round(V.lbS[k]);
-    if (key !== lbStr) {
-      lbStr = key;
+    // 2.0 (T-123): таблица перерисовывается раз в секунду — в тот же кадр, что и часы ⏱ (одна раскладка в секунду, а не две;
+    // часы стоят — не чаще раза в 2 с)
+    if (key !== lbStr && (!ui.v2 || (tick && performance.now() - lbAt > 900) || performance.now() - lbAt > 2000)) {
+      lbStr = key; lbAt = performance.now();
       for (let k = 0; k < n; k++) list.push({ i: V.lbO[k], name: names[V.lbO[k]] || '…', score: V.lbS[k], bot: bots[V.lbO[k]], me: V.lbO[k] === S.me });
       ui.lb.innerHTML = K.lbHtml(list);
     }

@@ -49,6 +49,12 @@
 .pz-goal b{color:var(--pz-gold);font-weight:800;white-space:nowrap}
 .pz-goal:empty{display:none}
 .pz-goal.done{animation:pzIn .45s ease-out}
+.pz-gh{position:absolute;left:0;top:calc(100% + 5px);width:max-content;display:flex;align-items:center;gap:6px;max-width:min(320px,calc(100vw - 32px));min-height:28px;box-sizing:border-box;padding:4px 10px 4px 7px;border-radius:999px;background:rgba(10,14,26,.62);border:1px solid rgba(255,255,255,.14);color:#fff;font:700 12px/1.25 Montserrat,system-ui,sans-serif;text-align:left;cursor:pointer}
+.pz-gh[hidden]{display:none}
+.pz-gh i{font-style:normal;flex:none;font-size:14px;line-height:1}
+.pz-gh span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pz-gh.open{border-radius:12px;align-items:flex-start;background:rgba(10,14,26,.8)}.pz-gh.open span{white-space:normal}
+@media (orientation:landscape){.pz-gh{max-width:min(320px,calc(30vw - 12px))}}   /* лёжа — левее середины экрана (§2.3) */
 .pz-clock{display:none;align-self:flex-start;padding:3px 8px;border-radius:9px;background:rgba(8,8,16,.5);font:700 11px/1.2 Montserrat,system-ui,sans-serif;text-shadow:0 1px 2px #000}
 .pz-t .pz-clock{display:block}
 .pz-hot{position:absolute;z-index:3;top:8px;left:50%;display:grid;grid-template-columns:repeat(10,var(--pz-cell));gap:3px;padding:4px;border-radius:13px;background:rgba(8,8,16,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
@@ -243,8 +249,65 @@
 .pz-hb-grid .pz-vit{flex:1 1 130px}
 .pz-hb-grid .pz-goal{flex:1 1 120px;min-height:44px}
 .pz-hb-grid .pz-clock{display:none!important}
-.pz-hb-grid .pz-buffs{flex-basis:100%}`;
-  function addCss(){ const old = document.getElementById('pz-css'); if (old && old.dataset.v === '3') return; old?.remove(); const s = document.createElement('style'); s.id = 'pz-css'; s.dataset.v = '3'; s.textContent = CSS; document.head.appendChild(s); }
+.pz-hb-grid .pz-buffs{flex-basis:100%}
+/* ── интерфейс 2.0 (T-123, docs/HUD_V2.md §9.6; откат — HUD2.podzem = 0 в js/core/config.js): здоровье и мана — тонкая плашка
+   (числа — при изменении и по нажатию), цель — плашка «🎯 1/10» (текст — 6 с после новой цели), часы — в заголовке ☰;
+   телефон: вместо панели 2×5 — свёрнутый лоток вверху (D37E.tray), кнопки прыжок · ⛏ · поза (+ ✋ рядом с дверью, сундуком,
+   кроватью, Проводником), «Вещи» — лист на полэкрана, а картинка сдвигается, чтобы герой был виден ── */
+.pz-v2 .pz-box{width:auto;max-width:calc(50% - 20px);left:max(8px,env(safe-area-inset-left));top:max(8px,env(safe-area-inset-top));gap:5px}
+.pz-v2 .pz-vit{position:relative;align-self:flex-start;gap:4px;padding:7px 9px;border-radius:12px;background:var(--e2-bg,rgba(14,12,28,.42));border:1.5px solid var(--e2-line,rgba(255,255,255,.38));
+  box-shadow:var(--e2-shadow,none);backdrop-filter:none;-webkit-backdrop-filter:none;cursor:pointer;opacity:var(--e2-fade,1);transition:opacity .3s}
+.pz-v2 .pz-vit::after{content:'';position:absolute;inset:-7px -4px}
+.pz-v2 .pz-bar{width:90px;height:6px;border-radius:3px;box-shadow:none;background:rgba(255,255,255,.16)}
+.pz-v2 .pz-bar i{border-radius:3px}
+.pz-v2 .pz-bar span{display:none}
+.pz-vnum{display:none}
+.pz-v2 .pz-vit.num .pz-vnum{display:block;font:800 11px/1.15 Montserrat,system-ui,sans-serif;white-space:nowrap;text-shadow:0 1px 2px #000}
+.pz-v2 .pz-goal{position:relative;align-self:flex-start;min-height:30px;padding:4px 10px;border-radius:12px;background:var(--e2-bg,rgba(14,12,28,.42));border:1.5px solid rgba(255,216,74,.5);
+  box-shadow:var(--e2-shadow,none);opacity:var(--e2-fade,1);transition:opacity .3s}
+.pz-v2 .pz-goal::after{content:'';position:absolute;inset:-7px -2px}
+.pz-v2.pz-t .pz-goal{pointer-events:none}.pz-v2.pz-t .pz-goal::after{content:none}   /* телефон: цель — плашка, не кнопка (≤ 5 кнопок, §2.1); все цели — ☰ → «🎯 Цели» */
+.pz-v2 .pz-goal:not(.wide) span{display:none}
+.pz-v2 .pz-goal.wide{max-width:min(320px,100%)}
+.pz-v2 .pz-clock{display:none!important}
+.pz-v2 .pz-status{background:none}
+.pz-v2 .pz-hbtn{position:relative;width:44px;padding:0;justify-content:center}
+.pz-v2 .pz-hbtn b,.pz-v2 .pz-hbtn kbd,.pz-v2 .pz-hbtn[data-a="smart"]{display:none}   /* 🎯 умный курсор — Ctrl и пункт в ☰ */
+.pz-v2.pz-t .pz-btns{top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right))}
+.pz-v2.pz-t .pz-hbtn{width:40px;height:40px;min-width:0;border-radius:50%;background:var(--e2-bg,rgba(14,12,28,.42));border:1.5px solid var(--e2-line,rgba(255,255,255,.38));backdrop-filter:none;-webkit-backdrop-filter:none}
+.pz-v2.pz-t .pz-hbtn::after{content:'';position:absolute;inset:-4px;border-radius:50%}
+.pz-v2.pz-t .pz-hot{display:none}
+/* кнопки — как во всех играх 2.0: тёмный круг, тонкая обводка, подпись — только до первого нажатия, бледнеют без касаний */
+.pz-v2 .pz-touch .tb{background:var(--e2-bg,rgba(14,12,28,.42));border:1.5px solid var(--e2-line,rgba(255,255,255,.38));box-shadow:var(--e2-shadow,none);opacity:calc(var(--gs-touch-a,1) * var(--e2-fade,1));transition:opacity .3s}
+.pz-v2 .pz-touch .tb::after{content:'';position:absolute;inset:-6px;border-radius:50%}
+.pz-v2 .pz-touch .tb.on{background:var(--e2-bg-on,rgba(124,58,237,.72));border-color:#fff}
+.pz-v2 .pz-touch .tb.near{box-shadow:0 0 0 2px rgba(255,216,74,.85)}
+.pz-v2 .pz-touch .tb .i{font-size:calc(var(--d) * var(--pz-sc) * .44)}
+.pz-v2 .pz-touch .tb b{display:none}
+.pz-v2 .pz-touch .tb.new b{display:block;position:absolute;bottom:-11px}
+.pz-v2 .pz-joyhint{width:60px;height:60px;font-size:13px;border-width:1.5px;opacity:calc(.8 * var(--gs-touch-a,1))}
+/* лоток: значки вещей — из атласа (в ячейке <s> — картинка, эмодзи — только в круге вещей) */
+/* width:max-content — иначе «left:50% + сдвиг» даёт лотку только половину ширины окна и 10 ячеек ложатся в 3 ряда */
+.pz .e2-tray{z-index:6;width:max-content;max-width:calc(100% - 24px)}
+.pz .e2-tray-c s{--s:28px;display:block;width:var(--s);height:var(--s);font-size:0;text-decoration:none;background-image:var(--pz-atlas);background-size:calc(var(--s) * 64) calc(var(--s) * 64);
+  background-position:calc(var(--c,0) * var(--s) * -1) calc(var(--r,0) * var(--s) * -1);image-rendering:pixelated}
+.pz .e2-tray-c{width:44px;height:44px}
+.pz .e2-tray-c.sel{width:48px;height:48px}
+.pz-v2.pz-p .e2-tray.open{top:max(84px,calc(env(safe-area-inset-top) + 76px))}   /* стоя: раскрытый лоток — под плашками, не на них */
+.pz .e2-tray-c.sel s{--s:34px}
+.pz .e2-tray-c s.no{background:none}
+.pz .e2-tray-c.pz-em s{font-size:20px;width:auto;height:auto;background:none;line-height:1}
+.pz .e2-radial .e2-rad-it .pz-ic{--s:30px}
+/* «Вещи» — лист: лёжа справа (≤ 50 %), стоя снизу (≤ 55 %); ячейки 44 px */
+.pz-v2 .pz-inv{left:auto;right:0;top:0;bottom:0;transform:none;width:min(50%,560px);border-radius:16px 0 0 16px;border-right:0;padding-right:env(safe-area-inset-right)}
+.gs-lefty .pz-v2 .pz-inv{right:auto;left:0;border-radius:0 16px 16px 0;border-left:0;border-right:1px solid var(--pz-line)}
+.pz-v2.pz-bsheet .pz-inv{left:0;right:0;top:auto;width:auto;height:55%;border-radius:16px 16px 0 0;border:0;border-top:1px solid var(--pz-line);padding:0 0 env(safe-area-inset-bottom)}
+.pz-v2 .pz-inv .pz-det{min-height:56px;padding:6px 10px}
+.pz-v2 .pz-inv .pz-det .pz-ic{--s:36px}
+.pz-v2.pz-modal .pz-toasts{top:auto;bottom:16px;left:25%;width:min(46%,420px)}
+.pz-v2.pz-bsheet.pz-modal .pz-toasts{left:50%;bottom:auto;top:12px;width:min(480px,92%)}`;
+  function addCss(){ const old = document.getElementById('pz-css'); if (old && old.dataset.v === '4') return; old?.remove(); const s = document.createElement('style'); s.id = 'pz-css'; s.dataset.v = '4'; s.textContent = CSS; document.head.appendChild(s); }
+  const hud2On = () => typeof HUD2 !== 'undefined' && !!HUD2.kit && !!HUD2.podzem && !!window.D37E?.tray;
   const isTouch = () => { try { return matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window; } catch (e) { return false; } };
   const fmtTime = s => { s = Math.floor(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h} ч ${m} мин` : `${m} мин`; };
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -260,6 +323,21 @@
     let pauseMenu = null, touchUI = false, LW = 0, LH = 0, selNameT = 0, lastSel = '';
     const offs = [];
     const on = (t, ev, f, o) => { t.addEventListener(ev, f, o); offs.push(() => t.removeEventListener(ev, f, o)); };
+    // HUD 2.0 (T-123): лоток вещей, круг позы и круг ⛏, лист эмоций (D37E — js/engine/ui.js); v2 решается один раз (HUD2.podzem)
+    const v2 = hud2On();
+    let tray = null, rad = null, emoSheet = null, fade = null, vitT = 0, goalT = 0, hintT = 0, ghT = 0, insetK = '';
+    // подсказка один раз (T-123 fix 6, §5): строка с 💡 в левом верхнем углу под целью (не тост посреди экрана над героем), 6 с;
+    // нажал — целиком на 10 с; открыл круг позы (сделал то, о чём она) — убрать. text null — нажатие по ней
+    function ghint(text, tap){
+      const el = boxEl?.querySelector('.pz-gh'); if (!el) return;
+      clearTimeout(ghT); ghT = 0;
+      if (text === '') { if (!el.hidden) el.hidden = true; el.classList.toggle('open', false); return; }
+      if (text) { el.lastChild.textContent = text; el.classList.toggle('open', false); el.hidden = false; }
+      else if (tap) el.classList.toggle('open', !el.classList.contains('open'));
+      if (!el.hidden) ghT = setTimeout(() => ghint(''), el.classList.contains('open') ? 10000 : 6000);
+    }
+    let kVit = '', kBuf = '', kHot = '', kBtn = '';   // экран игры пишем по частям — только то, что поменялось
+    const hudReset = () => { lastHud = kVit = kBuf = kHot = kBtn = ''; };
     // открылось окно (вещи, меню, нокаут) — отпустить всё, что держали пальцем: кнопки под окном не видны
     let wasModal = false;
     const modalObs = new MutationObserver(() => { const m = !!root?.classList.contains('pz-modal'); if (m && !wasModal) U.releaseTouch?.(); wasModal = m; });
@@ -320,9 +398,10 @@
       wrap.insertAdjacentHTML('beforeend', `
         <div class="pz-hurt"></div>
         <div class="pz-box">
-          <div class="pz-vit"><div class="pz-bar pz-hp"><i></i><span></span></div><div class="pz-bar pz-mp"><i></i><span></span></div></div>
+          <div class="pz-vit" data-a="vit"><div class="pz-bar pz-hp"><i></i><span></span></div><div class="pz-bar pz-mp"><i></i><span></span></div><b class="pz-vnum"></b></div>
           <div class="pz-buffs"></div>
           <button type="button" class="pz-goal" data-a="goals" title="Что сделать дальше — нажми, чтобы увидеть все цели"></button>
+          <button type="button" class="pz-gh" data-a="ghint" hidden aria-live="polite"><i aria-hidden="true">💡</i><span></span></button>
           <span class="pz-clock"></span>
         </div>
         <div class="pz-hot" role="toolbar" aria-label="Панель вещей"></div>
@@ -358,6 +437,8 @@
         else if (a === 'smart') API.setSmart(!G.opt.smart);
         else if (a === 'pause') { if (G.state === 'play') API.pause(); }
         else if (a === 'goals') goalsToggle();
+        else if (a === 'ghint') ghint(null, true);
+        else if (a === 'vit') vitNums();
       };
       btnsEl.addEventListener('click', onHud); boxEl.addEventListener('click', onHud);
       goalsEl.addEventListener('click', () => goalsToggle(false));
@@ -382,13 +463,15 @@
         e.stopPropagation();
         throwHand();
       }, true);
+      root.classList.toggle('pz-v2', v2);
+      if (v2) window.D37Shell?.own?.(true);   // одно меню: пункты шапки игры (📣 📖 🔊 📱 ←) — в нашем ☰
       buildTouch(wrap);
       setTouch(isTouch());
       settingsTab(true);
-      // телефон стоя: «поверни — так удобнее» (раз за визит)
+      // телефон стоя: «поверни — так удобнее» (раз за визит; 2.0 — раз на устройство и не при «Телефон стоя — игра на весь экран»)
       rotEl = document.createElement('div'); rotEl.className = 'pz-rot'; rotEl.hidden = true;
       rotEl.innerHTML = '🔄 Лёжа удобнее: больше мира и кнопки под пальцами <button type="button" class="pz-b sm ghost" aria-label="Скрыть">✕</button>';
-      rotEl.querySelector('button').addEventListener('click', () => { rotEl.hidden = true; try { sessionStorage.setItem('d37_pz_rot', '1'); } catch (er) {} });
+      rotEl.querySelector('button').addEventListener('click', () => { rotEl.hidden = true; try { sessionStorage.setItem('d37_pz_rot', '1'); } catch (er) {} lsSet('d37_pz_rot', '1'); });
       wrap.appendChild(rotEl);
       modalObs.observe(root, { attributes: true, attributeFilter: ['class'] });
     };
@@ -396,7 +479,10 @@
       touchUI = !!v;
       root?.classList.toggle('pz-t', touchUI);
       if (touchEl) touchEl.hidden = !touchUI;
-      lastHud = ''; U.layout(LW, LH);
+      if (v2 && touchUI && !fade && wrap) {
+        fade = window.D37E.fade?.(wrap, wrap) || null;   // 4 с без касаний — кнопки бледнеют
+      }
+      hudReset(); U.layout(LW, LH);
     }
     // ═══ Раскладка по размеру окна игры (зовёт resize игры): ячейки панели, где она, высота «шапки» ═══
     U.layout = (w, h) => {
@@ -406,11 +492,14 @@
       root.classList.toggle('pz-p', portrait); root.classList.toggle('pz-s', short); root.classList.toggle('pz-n', w < 700);
       // панель 1–0: обычно — одним рядом между здоровьем (слева) и кнопками (справа); не влезает с ячейками ≥ 44 px (40 мышью) —
       // вторым рядом; телефон стоя — 2 ряда по 5 под строкой «⏸ здоровье цель»
-      let mode = portrait ? 'grid' : 'center';
+      // 2.0 на телефоне — панели нет (свёрнутый лоток вверху, D37E.tray); 2.0 на компьютере — ячейки 44 (меньше закрывают мир)
+      let mode = v2 && touchUI ? 'tray' : portrait ? 'grid' : 'center';
       root.classList.toggle('pz-hb-grid', mode === 'grid'); root.classList.remove('pz-hb-row2');
-      const minCell = touchUI ? 44 : 40, top = short ? 6 : 8, r1 = short ? 46 : 54, maxCell = touchUI && short ? 44 : 52;   // телефон лёжа — ячейки 44 (T-074: компактнее)
+      root.classList.toggle('pz-bsheet', h > w);   // «Вещи» 2.0: стоя — лист снизу, лёжа — справа
+      const minCell = touchUI ? 44 : 40, top = short ? 6 : 8, r1 = short ? 46 : 54, maxCell = touchUI && short ? 44 : v2 ? 42 : 52;   // телефон лёжа — ячейки 44 (T-074: компактнее)
       let cell, left, hotTop = top;
-      if (mode === 'center') {
+      if (mode === 'tray') { cell = 44; left = 0; }
+      else if (mode === 'center') {
         const gl = 10 + (boxEl.offsetWidth || (short ? 160 : 230)) + 10, gr = w - 10 - (btnsEl.offsetWidth || 60) - 10, avail = gr - gl;
         cell = Math.min(maxCell, Math.floor((avail - 35) / 10));
         if (cell >= minCell) left = gl + (avail - (cell * 10 + 35)) / 2;
@@ -418,13 +507,21 @@
       } else { cell = Math.max(40, Math.min(touchUI ? 44 : 50, Math.floor((w - 48) / 5))); left = (w - (cell * 5 + 20)) / 2; hotTop = r1 + 6; }
       root.classList.toggle('pz-hb-row2', mode === 'row2');
       root.style.setProperty('--pz-cell', cell + 'px');
-      hotEl.style.left = Math.round(left) + 'px'; hotEl.style.top = hotTop + 'px';
-      const hotH = (mode === 'grid' ? 2 : 1) * (cell + 3) + 5;
-      root.style.setProperty('--pz-top', Math.round(hotTop + hotH + 10) + 'px');
-      // телефон стоя — подсказать повернуть (если ещё не скрыли)
+      if (mode === 'tray') root.style.setProperty('--pz-top', (top + 64) + 'px');   // под лотком (48 + поля)
+      else {
+        hotEl.style.left = Math.round(left) + 'px'; hotEl.style.top = hotTop + 'px';
+        const hotH = (mode === 'grid' ? 2 : 1) * (cell + 3) + 5;
+        root.style.setProperty('--pz-top', Math.round(hotTop + hotH + 10) + 'px');
+      }
+      // телефон стоя — подсказать повернуть (если ещё не скрыли); 2.0 — один раз на устройство и не при «стоя — на весь экран»
       let rotSeen = false; try { rotSeen = !!sessionStorage.getItem('d37_pz_rot'); } catch (e) {}
-      if (rotEl) rotEl.hidden = !(touchUI && portrait && !rotSeen && G.state === 'play');
-      if (invOpen) U.inv();
+      if (v2) rotSeen = rotSeen || !!lsGet('d37_pz_rot') || document.documentElement.classList.contains('gs-tall') || window.D37Settings?.get?.('autoPortrait') !== false;
+      const rotOn = !!(touchUI && portrait && !rotSeen && G.state === 'play');
+      if (rotEl && rotEl.hidden === rotOn) {
+        rotEl.hidden = !rotOn;
+        if (rotOn && v2) { lsSet('d37_pz_rot', '1'); setTimeout(() => { if (rotEl) rotEl.hidden = true; }, 6000); }
+      }
+      if (invOpen) { U.inv(); camInset(); }
       tlT?.layout();   // кнопки телефона — по окну (пишет стили, только если окно или настройки поменялись)
     };
     U.atlas = A => {
@@ -434,7 +531,7 @@
         atlasUrl = URL.createObjectURL(b);
         root.style.setProperty('--pz-atlas', `url(${atlasUrl})`);
       });
-      lastHud = ''; U.hud(); if (invOpen) U.inv();
+      hudReset(); if (tray) for (const c of tray.el.children) c._pz = null; U.hud(); if (invOpen) U.inv();
     };
     // ранили — края экрана на миг (k 0…1)
     U.hurt = k => {
@@ -471,35 +568,68 @@
         ge.dataset.k = String(gk);
         ge.innerHTML = gl ? `${gl.icon} <span>${esc(gl.text)}</span> <b>${gl.i + 1}/${gl.n}</b>` : '';
         ge.classList.remove('done'); void ge.offsetWidth; ge.classList.add('done');
+        if (gl) ge.title = `Цель ${gl.i + 1} из ${gl.n}: ${gl.text} — нажми, чтобы увидеть все цели`;
+        // 2.0: новая цель — 6 с текстом, потом плашка «🎯 1/10» (нажал — весь список)
+        if (v2) { ge.classList.toggle('wide', !!gl); clearTimeout(goalT); goalT = setTimeout(() => ge.classList.toggle('wide', false), 6000); }
         if (!goalsEl.hidden) goalsToggle(true);
       }
-      const ul = touchUI ? useLabel() : null, near = touchUI && API.nearAct?.();
-      const key = [CH.hp | 0, CH.maxHp, CH.mana | 0, CH.maxMana, CH.sel, G.A ? 1 : 0, hook ? 1 : 0, ul && ul.join(), near ? 1 : 0, ...Object.keys(bf).map(k => k + Math.ceil(bf[k])), ...CH.inv.slice(0, 10).map(s => s ? s.id + ':' + s.n : '')].join('|');
-      if (key === lastHud) return;
-      lastHud = key;
-      U.smart(G.opt.smart);
+      // по частям (4 раза в секунду): здоровье, усиления, панель 1–0 / лоток, кнопки пальцем — пишем только изменившееся
+      // (раньше любой удар перерисовывал всю панель вещей)
+      const hp = Math.max(0, CH.hp | 0), vk = hp + '|' + CH.maxHp + '|' + (CH.mana | 0) + '|' + CH.maxMana;
+      if (vk !== kVit) {
+        const first = !kVit; kVit = vk;
+        const hpEl = boxEl.querySelector('.pz-hp'), mpEl = boxEl.querySelector('.pz-mp');
+        hpEl.querySelector('i').style.width = Math.max(0, Math.min(100, hp / CH.maxHp * 100)) + '%';
+        hpEl.querySelector('span').textContent = `❤ ${hp} / ${CH.maxHp}`;
+        hpEl.classList.toggle('low', hp > 0 && hp <= CH.maxHp * .25);
+        mpEl.querySelector('i').style.width = Math.max(0, Math.min(100, CH.mana / CH.maxMana * 100)) + '%';
+        mpEl.querySelector('span').textContent = `★ ${CH.mana | 0} / ${CH.maxMana}`;
+        const vit = boxEl.querySelector('.pz-vit'); vit.title = `Здоровье ${hp} из ${CH.maxHp}, мана ${CH.mana | 0} из ${CH.maxMana}`;
+        if (v2) { vit.querySelector('.pz-vnum').textContent = `❤ ${hp}/${CH.maxHp} · ★ ${CH.mana | 0}/${CH.maxMana}`; if (!first) vitNums(); }
+      }
       const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-      boxEl.querySelector('.pz-buffs').innerHTML = Object.keys(bf).map(k => `<span class="pz-buff" title="${k === 'mine' ? 'Зелье шахтёра: копаешь быстрее' : 'Зелье сияния: светишься сам'}">${icon(k === 'mine' ? 'potion_miner' : 'potion_shine')}<b>${mmss(Math.ceil(bf[k]))}</b></span>`).join('');
-      // здоровье и мана — полосы с числами (видно с телефона)
-      const hp = Math.max(0, CH.hp | 0), hpEl = boxEl.querySelector('.pz-hp'), mpEl = boxEl.querySelector('.pz-mp');
-      hpEl.querySelector('i').style.width = Math.max(0, Math.min(100, hp / CH.maxHp * 100)) + '%';
-      hpEl.querySelector('span').textContent = `❤ ${hp} / ${CH.maxHp}`;
-      hpEl.classList.toggle('low', hp > 0 && hp <= CH.maxHp * .25);
-      mpEl.querySelector('i').style.width = Math.max(0, Math.min(100, CH.mana / CH.maxMana * 100)) + '%';
-      mpEl.querySelector('span').textContent = `★ ${CH.mana | 0} / ${CH.maxMana}`;
-      // панель 1–0
-      hotEl.innerHTML = CH.inv.slice(0, 10).map((s, i) => `<button type="button" class="pz-slot hb${i === CH.sel ? ' sel' : ''}${pick && pick.box === 'inv' && pick.i === i ? ' pick' : ''}" data-slot="${i}" data-box="inv" aria-label="${s ? esc(nameOf(s.id)) + (s.n > 1 ? ' ×' + s.n : '') : 'Пусто'}"><i class="k">${(i + 1) % 10}</i>${s ? icon(s.id) + (s.n > 1 ? `<b>${s.n}</b>` : '') : ''}</button>`).join('');
-      const s = CH.inv[CH.sel], nm = s ? nameOf(s.id) : '';
-      if (nm !== lastSel) { lastSel = nm; selName.textContent = nm; selName.classList.toggle('off', !nm); clearTimeout(selNameT); if (nm) selNameT = setTimeout(() => selName.classList.add('off'), 1600); }
-      // пальцем: подпись большой кнопки и крюк
-      const hb = touchEl?.querySelector('[data-t="hook"]'); if (hb) hb.hidden = !hook;
-      if (ul) { const ub = touchEl.querySelector('[data-t="use"]'); if (ub && ub.dataset.l !== ul.join()) { ub.dataset.l = ul.join(); ub.innerHTML = `<span class="i">${ul[0]}</span><b>${ul[1]}</b>`; } }
-      touchEl?.querySelector('[data-t="act"]')?.classList.toggle('near', !!near);
+      const bk = Object.keys(bf).map(k => k + Math.ceil(bf[k])).join();
+      if (bk !== kBuf) { kBuf = bk; boxEl.querySelector('.pz-buffs').innerHTML = Object.keys(bf).map(k => `<span class="pz-buff" title="${k === 'mine' ? 'Зелье шахтёра: копаешь быстрее' : 'Зелье сияния: светишься сам'}">${icon(k === 'mine' ? 'potion_miner' : 'potion_shine')}<b>${mmss(Math.ceil(bf[k]))}</b></span>`).join(''); }
+      const hk = CH.sel + '|' + (G.A ? 1 : 0) + '|' + (pick && pick.box === 'inv' ? pick.i : '') + '|' + CH.inv.slice(0, 10).map(s => s ? s.id + ':' + s.n : '').join();
+      if (hk !== kHot) {
+        kHot = hk;
+        U.smart(G.opt.smart);
+        // панель 1–0 (компьютер; телефон 2.0 — лоток)
+        if (!tray || !touchUI) hotEl.innerHTML = CH.inv.slice(0, 10).map((s, i) => `<button type="button" class="pz-slot hb${i === CH.sel ? ' sel' : ''}${pick && pick.box === 'inv' && pick.i === i ? ' pick' : ''}" data-slot="${i}" data-box="inv" aria-label="${s ? esc(nameOf(s.id)) + (s.n > 1 ? ' ×' + s.n : '') : 'Пусто'}"><i class="k">${(i + 1) % 10}</i>${s ? icon(s.id) + (s.n > 1 ? `<b>${s.n}</b>` : '') : ''}</button>`).join('');
+        trayPaint();
+        const s = CH.inv[CH.sel], nm = s ? nameOf(s.id) : '';
+        if (nm !== lastSel) { lastSel = nm; selName.textContent = nm; selName.classList.toggle('off', !nm); clearTimeout(selNameT); if (nm) selNameT = setTimeout(() => selName.classList.add('off'), 1600); }
+      }
+      // пальцем: подпись большой кнопки, крюк, ✋ рядом с дверью / сундуком / кроватью / Проводником
+      if (touchUI) {
+        // 2.0: подсказка про жесты — один раз на устройство, в первые секунды игры (потом — в «❓ Как играть»)
+        if (v2 && !hintT && G.state === 'play') hintT = window.D37TouchLayout?.hintOnce?.('podzem', 'h-gest') ? setTimeout(() => { if (root) ghint('⬇ Удержи — сесть, лечь, эмоции · ⛏ смахни вверх — кирка, блок, ✛ точно · лоток вещей: смахни, удержи'); }, 1500) : -1;
+        const ul = useLabel(), near = (v2 ? API.nearKind?.() : API.nearAct?.()) || '', pz = v2 ? API.poseNow?.() || '' : '', tk = ul.join() + '|' + near + '|' + (hook ? 1 : 0) + '|' + pz;
+        if (tk !== kBtn) {
+          kBtn = tk;
+          const pb = v2 && touchEl.querySelector('[data-t="pose"]');
+          if (pb) { const ic = pz === 'sit' ? '🪑' : pz === 'lie' ? '🛌' : '⬇'; const sp = pb.querySelector('.i'); if (sp && sp.textContent !== ic) sp.textContent = ic; pb.classList.toggle('on', !!pz); }
+          const hb = touchEl.querySelector('[data-t="hook"]'); if (hb) hb.hidden = !hook;
+          const ub = touchEl.querySelector('[data-t="use"]'); if (ub && ub.dataset.l !== ul.join()) { ub.dataset.l = ul.join(); ub.innerHTML = `<span class="i">${ul[0]}</span><b>${ul[1]}</b>`; }
+          const ab = touchEl.querySelector('[data-t="act"]');
+          if (ab) {
+            ab.classList.toggle('near', !!near);
+            if (v2) { const vb = NEAR_VERB[near] || NEAR_VERB.door; ab.hidden = !near; if (near) { ab.innerHTML = `<span class="i">${vb[0]}</span><b>${vb[1]}</b>`; ab.setAttribute('aria-label', vb[1]); } }
+          }
+        }
+      }
       if (bossEl && !bossEl.hidden && G.boss) bossEl.querySelector('i').style.width = Math.max(0, G.boss.hp / G.boss.maxHp * 100) + '%';
     };
+    // ✋ рядом с чем (podzem.js nearAct) → значок и подпись (одна таблица глаголов, как в 3D-играх)
+    const NEAR_VERB = { npc: ['💬', 'Поговорить'], door: ['🚪', 'Дверь'], chest: ['📦', 'Сундук'], bed: ['🛏', 'Кровать'] };
+    // числа здоровья и маны — 3 с после изменения или нажатия на плашку
+    function vitNums(){
+      const vit = boxEl?.querySelector('.pz-vit'); if (!vit || !v2) return;
+      vit.classList.toggle('num', true); clearTimeout(vitT); vitT = setTimeout(() => vit.classList.toggle('num', false), 3000);
+    }
     U.status = t => {   // 4 раза в секунду: текст меняем, только если он другой (иначе лишняя раскладка)
-      if (statusEl && statusEl.textContent !== t) statusEl.textContent = t;
-      const ck = boxEl?.querySelector('.pz-clock'), ct = ck && API.clockText ? API.clockText() : null; if (ct !== null && ck.textContent !== ct) ck.textContent = ct;
+      if (statusEl && !touchUI && statusEl.textContent !== t) statusEl.textContent = t;   // строка внизу — только на компьютере
+      if (!v2) { const ck = boxEl?.querySelector('.pz-clock'), ct = ck && API.clockText ? API.clockText() : null; if (ct !== null && ck.textContent !== ct) ck.textContent = ct; }   // 2.0: часы — в заголовке ☰
       if (G.boss && bossEl && !bossEl.hidden) bossEl.querySelector('i').style.width = Math.max(0, G.boss.hp / G.boss.maxHp * 100) + '%';
     };
     function goalsToggle(v){
@@ -525,9 +655,23 @@
       invEl.hidden = !invOpen;
       modalClass();
       if (invOpen) U.inv(); else U.hud();
+      camInset();
       API.snd('click', { vol: .4 });
     };
-    U.chest = k => { G.chestOpen = k; if (k) { invOpen = true; invTab = 'chest'; invEl.hidden = false; modalClass(); U.inv(); } else if (invOpen) { if (invTab === 'chest') invTab = 'items'; U.inv(); } };
+    U.chest = k => { G.chestOpen = k; if (k) { invOpen = true; invTab = 'chest'; invEl.hidden = false; modalClass(); U.inv(); } else if (invOpen) { if (invTab === 'chest') invTab = 'items'; U.inv(); } camInset(); };
+    // 2.0: «Вещи» — лист на полэкрана; картинка сдвигается в свободную часть окна (герой виден), закрыли — обратно
+    function camInset(){
+      if (!v2 || !wrap) return;
+      let x = 0, y = 0;
+      if (invOpen && invEl && !invEl.hidden) {
+        const b = invEl.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+        if (root.classList.contains('pz-bsheet')) y = (w.bottom - b.top) / 2;
+        else if (b.left - w.left > w.width / 3) x = (w.right - b.left) / 2;
+        else x = -(b.right - w.left) / 2;
+      }
+      const k = Math.round(x) + ',' + Math.round(y); if (k === insetK) return; insetK = k;
+      API.camOffset?.(Math.round(x), Math.round(y));
+    }
     function modalClass(){ root?.classList.toggle('pz-modal', !!(invOpen || menuKind || (koEl && !koEl.hidden))); }
     const chestItems = () => G.chestOpen && G.chests?.get(G.chestOpen);
     function grid(box, items, n, cols, from = 0){
@@ -544,11 +688,13 @@
       if (!invOpen || !G.CH) return;
       const chest = chestItems();
       if (invTab === 'chest' && !chest) invTab = 'items';
-      const W = invEl.clientWidth || LW - 16, wide = W >= 720;
+      const W = invEl.clientWidth || LW - 16, wide = !v2 && W >= 720;
       invEl.classList.toggle('wide', wide);
-      // ячейки: широкое окно — 10 в ряд слева, крафт справа; узкое — 5 в ряд (крупные, под палец)
-      const cols = wide || W >= 600 ? 10 : 5, avail = wide ? Math.max(400, W - 380) : W - 26;
-      const cell = Math.max(40, Math.min(wide ? 54 : 64, Math.floor((avail - (cols - 1) * 4) / cols)));
+      // ячейки: широкое окно — 10 в ряд слева, крафт справа; узкое — 5 в ряд (крупные, под палец); 2.0 (лист на полэкрана) —
+      // 44 px, сколько влезет (5–10 в ряд), вкладки «Вещи / Сделать / Сундук»
+      let cols = wide || W >= 600 ? 10 : 5, cell;
+      if (v2) { cell = touchUI ? 44 : 46; cols = Math.max(5, Math.min(10, Math.floor((W - 22) / (cell + 4)))); }
+      else { const avail = wide ? Math.max(400, W - 380) : W - 26; cell = Math.max(40, Math.min(wide ? 54 : 64, Math.floor((avail - (cols - 1) * 4) / cols))); }
       invEl.style.setProperty('--pz-cell', cell + 'px');
       const list = API.craftList(), ok = list.filter(x => x.ok);
       const tabs = `<button type="button" data-tab="items" class="${invTab === 'items' ? 'on' : ''}">🎒 Вещи</button><button type="button" data-tab="craft" class="${invTab === 'craft' ? 'on' : ''}">🛠 Сделать${ok.length ? `<i>${ok.length}</i>` : ''}</button>${chest ? `<button type="button" data-tab="chest" class="${invTab === 'chest' ? 'on' : ''}">📦 Сундук</button>` : ''}`;
@@ -814,14 +960,19 @@
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
         { id: 'goals', icon: '🎯', text: `Цели${gl ? ` (${gl.i} из ${gl.n})` : ' — все выполнены'}`, group: 'Игра' },
         { id: 'ach', icon: '🏆', text: `Достижения (${Object.keys(ach).length} из ${Object.keys(API.ACH).length})`, group: 'Игра' },
-        { id: 'share', icon: '📣', text: 'Позвать друга', group: 'Игра' },
+        { id: 'share', icon: v2 ? '🔗' : '📣', text: 'Позвать друга', group: 'Игра' },
         { id: 'save', icon: '💾', text: 'Сохранить', group: 'Мир' },
         { id: 'wmods', icon: '🧩', text: 'Моды мира', group: 'Мир' },
         { id: 'opts', icon: '⚙️', text: 'Настройки', group: SYS },
         ...(window.D37Settings?.fsItems?.(fsEl()) || []).map(it => ({ group: SYS, ...it })),
         { id: 'help', icon: '❓', text: 'Как играть', group: SYS },
         { id: 'stuck', icon: '🆘', text: wait > 0 ? `Я застрял (можно через ${wait} с)` : 'Я застрял — вытащить', group: SYS },
+        // 2.0: одно меню — ✛ точный крестик (палец) и пункты шапки игры (📣 Вызов, 📖 Правила, 🔊 Звук, 📱 Телефон, ← Все игры)
+        ...(v2 && touchUI ? [{ id: 'build', icon: '✛', text: U.touch.build ? 'Точный крестик — убрать' : 'Точный крестик (копать и ставить по клетке)', group: 'Игра' }] : []),
+        ...(v2 && !touchUI ? [{ id: 'smart', icon: '🎯', text: G.opt.smart ? 'Умный курсор — выключить (Ctrl)' : 'Умный курсор — включить (Ctrl)', group: 'Игра' }] : []),
+        ...(v2 ? (window.D37Shell?.items?.('podzem') || []).filter(it => ['sh-chal', 'sh-rules', 'sh-mute', 'sh-phone'].includes(it.id)).map(it => ({ ...it, group: it.id === 'sh-chal' ? 'Игра' : SYS })) : []),
         { id: 'exit', icon: '🚪', text: 'Сохранить и выйти', warn: true },
+        ...(v2 && window.D37Shell ? [{ id: 'sh-back', icon: '←', text: 'Все игры' }] : []),
       ];
     }
     function pauseOpen(){
@@ -841,7 +992,11 @@
     }
     async function pausePick(id){
       if (window.D37Settings?.fsPick?.(id, fsEl(), pauseMenu)) return;   // ⛶ — меню остаётся, 🔄 — закрывается (играть лёжа)
+      if (id === 'sh-back') { await API.saveAll().catch(() => {}); }   // «← Все игры» — сначала сохранить мир
+      if (window.D37Shell?.pick?.(id, pauseMenu)) return;               // пункты шапки игры (games.js D37Shell)
       switch (id) {
+        case 'build': API.resume(); toggleBuild(); return;
+        case 'smart': API.setSmart(!G.opt.smart); pauseMenu?.redraw(); return;
         case 'resume': API.resume(); return;
         case 'opts': openSettings(); return;
         case 'help': U.menu('help'); return;
@@ -954,6 +1109,7 @@
           <li><b>✋ Открыть</b> — дверь, сундук, Проводник рядом (кнопка светится, когда есть что открыть). <b>🎒 Вещи</b> — вещи и крафт</li>
           <li><b>Палец по миру</b>: держи — копать или ставить там, коротко — открыть дверь, сундук, поговорить</li>
           <li><b>✛ Точно</b> — крестик: двигай его пальцем, <b>✓ Сюда</b> — копать или ставить ровно в нём</li>
+          ${v2 ? '<li><b>⬇ Поза</b>: нажми — присесть или встать, удержи — сесть, лечь, эмоции. <b>⛏ смахни вверх</b> — кирку или блок в руку, ✛ точно, лечиться. <b>Вещи вверху</b>: смахни — соседняя, нажми — все и 🎒, удержи — круг вещей. ✋ появляется у двери, сундука, кровати, Проводника</li>' : ''}
           <li>Лёжа удобнее: <b>☰ Меню</b> → «Во весь экран» или «🔄 Повернуть экран». Размер кнопок, «для левши» и «🎮 Настроить кнопки» (переставить пальцем) — ☰ Меню → ⚙️ Настройки → «⛏ Подземье»</li></ul>`],
         pad: ['🎮 Геймпад', `<ul><li>Левый стик — идти (к стене — схватиться за край), <b>A</b> — прыжок, правый стик — прицел, <b>RT</b> — копать/бить/ставить, <b>X</b> — открыть, <b>B</b> — крюк, <b>Y</b> — вещи, <b>LB/RB</b> — ячейки, <b>LT</b> — лечение, крестовина ↑ — зелья, <b>Start</b> — меню</li></ul>`],
       };
@@ -1076,29 +1232,42 @@
     // своя раскладка игрока («⚙️ → ⛏ Подземье → 🎮 Настроить кнопки») — те же --d/--x/--y; левша — зеркалом .pz-tc, как было
     const PZ_BTNS = [['jump', '⤒', 'Прыжок', 58, 14, 16], ['use', '⛏', 'Копать', 54, 86, 12], ['act', '✋', 'Открыть', 46, 22, 92], ['inv', '🎒', 'Вещи', 46, 84, 80],
       ['hook', '🪝', 'Крюк', 44, 150, 30], ['build', '✛', 'Точно', 42, 28, 158], ['put', '✓', 'Сюда', 52, 146, 84]];
+    // 2.0 (T-123): прыжок · ⛏ (смахни вверх — круг: кирка, блок, ✛ точно, лечиться) · поза (нажал — присесть / встать; удержал —
+    // круг: присесть, сесть, лечь, 3 последние эмоции, ➕ ещё) + по обстановке ✋ (дверь, сундук, кровать, Проводник), 🪝, ✓;
+    // 🎒 — последняя ячейка лотка (или смахни лоток вверх), ✛ — в ☰ и в круге ⛏
+    const PZ_BTNS2 = [['jump', '⤒', 'Прыжок', 56, 14, 16], ['use', '⛏', 'Копать', 54, 84, 12], ['pose', '⬇', 'Поза', 46, 22, 90], ['act', '✋', 'Открыть', 46, 84, 82],
+      ['hook', '🪝', 'Крюк', 44, 150, 30], ['put', '✓', 'Сюда', 52, 146, 84]];
+    const BTNS = v2 ? PZ_BTNS2 : PZ_BTNS;
+    const BTN_ARIA = { jump: 'Прыжок', use: 'Действие вещью в руке', act: 'Открыть, поговорить', inv: 'Вещи и крафт', hook: 'Крюк-кошка', build: 'Точный крестик',
+      put: 'Копать или ставить там, где крестик', pose: 'Поза: нажми — присесть или встать, удержи — сесть, лечь, эмоции' };
     let tlT = null;
     function buildTouch(wrap){
-      const st = id => { const b = PZ_BTNS.find(x => x[0] === id); return `--d:${b[3]}px;--x:${b[4]}px;--y:${b[5]}px`; };
-      touchEl.innerHTML = `<div class="pz-tc">
-          <button type="button" class="tb" data-t="jump" style="${st('jump')}" aria-label="Прыжок"><span class="i">⤒</span><b>Прыжок</b></button>
-          <button type="button" class="tb" data-t="use" style="${st('use')}" aria-label="Действие вещью в руке"><span class="i">⛏</span><b>Копать</b></button>
-          <button type="button" class="tb" data-t="act" style="${st('act')}" aria-label="Открыть, поговорить"><span class="i">✋</span><b>Открыть</b></button>
-          <button type="button" class="tb" data-t="inv" style="${st('inv')}" aria-label="Вещи и крафт"><span class="i">🎒</span><b>Вещи</b></button>
-          <button type="button" class="tb" data-t="hook" style="${st('hook')}" aria-label="Крюк-кошка" hidden><span class="i">🪝</span><b>Крюк</b></button>
-          <button type="button" class="tb" data-t="build" style="${st('build')}" aria-label="Точный крестик"><span class="i">✛</span><b>Точно</b></button>
-          <button type="button" class="tb ok" data-t="put" style="${st('put')}" aria-label="Копать или ставить там, где крестик" hidden><span class="i">✓</span><b>Сюда</b></button>
-        </div>
-        <div class="pz-joyhint"${lsGet('d37_pz_joy') ? ' hidden' : ''}>◀ ▶<br>двигай<br>пальцем</div>
+      const st = id => { const b = BTNS.find(x => x[0] === id); return `--d:${b[3]}px;--x:${b[4]}px;--y:${b[5]}px`; };
+      const hid = { hook: 1, put: 1, act: v2 ? 1 : 0 }, ctx = v2 ? { act: 1, hook: 1, put: 1 } : {};
+      touchEl.innerHTML = `<div class="pz-tc">${BTNS.map(([id, ic, lb]) => `<button type="button" class="tb${id === 'put' ? ' ok' : ''}${ctx[id] ? ' e2-ctx' : ''}" data-t="${id}" style="${st(id)}" aria-label="${BTN_ARIA[id]}"${hid[id] ? ' hidden' : ''}><span class="i">${ic}</span><b>${lb}</b></button>`).join('')}</div>
+        <div class="pz-joyhint"${lsGet('d37_pz_joy') ? ' hidden' : ''}>${v2 ? '◀ ▶' : '◀ ▶<br>двигай<br>пальцем'}</div>
         <div class="pz-joy" hidden><i></i></div>`;
       const joyEl = touchEl.querySelector('.pz-joy'), knob = joyEl.querySelector('i'), hintEl = touchEl.querySelector('.pz-joyhint');
       const ptr = new Map();
       const btn = (t, v) => { const b = touchEl.querySelector(`[data-t="${t}"]`); b?.classList.toggle('on', v); };
+      if (v2) {
+        // подписи — только до первого нажатия, не больше двух сразу
+        const TLs = window.D37TouchLayout; let n = 0;
+        for (const id of ['jump', 'use', 'pose']) { if (n >= 2 || TLs?.seen?.('podzem', 'b-' + id)) continue; touchEl.querySelector(`[data-t="${id}"]`)?.classList.add('new'); n++; }
+        // лоток вещей вверху: свёрнут — вещь в руке и соседи; нажал — 10 ячеек и 🎒; смахнул — соседняя; удержал — круг вещей
+        tray?.dispose();
+        tray = window.D37E.tray(touchEl, { anchor: 'top', title: 'Вещи', slots: traySlots, sel: G.CH?.sel | 0, onSel: i => API.selSlot(i), more: { icon: '🎒', on: () => U.toggleInv(true) }, wheelHost: touchEl });
+        tray.el.addEventListener('pointerdown', () => setTimeout(wheelIcons, 430));   // круг вещей открылся — значки из атласа
+      }
       touchEl.addEventListener('pointerdown', e => {
         const b = e.target.closest('[data-t]'); if (!b) return;
         e.preventDefault(); e.stopPropagation();
         const t = b.dataset.t;
         try { b.setPointerCapture(e.pointerId); } catch (er) {}
-        ptr.set(e.pointerId, { kind: 'btn', t });
+        const q = { kind: 'btn', t, x0: e.clientX, y0: e.clientY, rad: false, holdT: 0, t0: e.timeStamp, mv: false };
+        ptr.set(e.pointerId, q);
+        if (b.classList.contains('new')) { b.classList.toggle('new', false); window.D37TouchLayout?.markSeen?.('podzem', 'b-' + t); }
+        if (t === 'pose') { q.holdT = setTimeout(() => { if (ptr.get(e.pointerId) === q && !q.rad) openRad(q, 'pose', b); }, 250); return; }
         if (t !== 'build') btn(t, true);
         if (t === 'jump') { U.touch.jump = true; U.touch.jumpDown = true; }
         else if (t === 'use') { API.attackStart(); U.touch.front = true; U.touch.use = true; }
@@ -1106,15 +1275,25 @@
         else if (t === 'act') API.interactNear();
         else if (t === 'inv') U.toggleInv();
         else if (t === 'hook') API.toggleHook();
-        else if (t === 'build') {
-          const v = !U.touch.build; API.buildMode(v); btn('build', v);
-          touchEl.querySelector('[data-t="put"]').hidden = !v;
-          API.toast(v ? '✛ Двигай крестик пальцем, «✓ Сюда» — копать или ставить ровно там' : 'Крестик убран', 'info');
-        }
+        else if (t === 'build') toggleBuild();
+      });
+      // поза: сдвинул палец — круг сразу; ⛏ 2.0: смахнул вверх — круг «что в руке» (копать перестаёт)
+      touchEl.addEventListener('pointermove', e => {
+        const q = ptr.get(e.pointerId); if (!q || q.kind !== 'btn') return;
+        const dx = e.clientX - q.x0, dy = e.clientY - q.y0;
+        if (!q.mv && Math.hypot(dx, dy) > 18) q.mv = true;
+        if (q.rad) { rad?.move(e.clientX, e.clientY); return; }
+        if (q.t === 'pose' && Math.hypot(dx, dy) > 18) { clearTimeout(q.holdT); openRad(q, 'pose', touchEl.querySelector('[data-t="pose"]')); }
+        else if (v2 && q.t === 'use' && dy < -48 && Math.abs(dx) < 60) { U.touch.use = false; U.touch.front = false; API.attackEnd(); btn('use', false); openRad(q, 'use', touchEl.querySelector('[data-t="use"]')); }
       });
       const endBtn = e => {
         const q = ptr.get(e.pointerId); if (!q || q.kind !== 'btn') return;
-        ptr.delete(e.pointerId); if (q.t !== 'build') btn(q.t, false);
+        ptr.delete(e.pointerId); clearTimeout(q.holdT);
+        // круг открыл запоздавший таймер (тяжёлый кадр), а по времени события это короткое нажатие без сдвига — нажатие (как «Кубомир»)
+        if (q.rad && q.t === 'pose' && e.type === 'pointerup' && !q.mv && e.timeStamp - q.t0 < 250) { rad?.close(true); poseTap(); return; }
+        if (q.rad) { if (e.type === 'pointerup') rad?.up(); else rad?.close(true); return; }
+        if (q.t === 'pose') { if (e.type === 'pointerup') poseTap(); return; }
+        if (q.t !== 'build') btn(q.t, false);
         if (q.t === 'jump') U.touch.jump = false;
         if (q.t === 'use') { U.touch.use = false; U.touch.front = false; API.attackEnd(); }
         if (q.t === 'put') U.touch.use = false;
@@ -1171,24 +1350,130 @@
       };
       cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
       // окно открылось — отпустить всё, что держали пальцем (кнопки скрыты)
-      U.releaseTouch = () => { ptr.clear(); U.touch.mx = U.touch.my = 0; U.touch.jump = U.touch.use = U.touch.front = false; joyEl.hidden = true; for (const b of touchEl.querySelectorAll('.tb.on')) b.classList.remove('on'); API.attackEnd(); };
+      U.releaseTouch = () => { for (const q of ptr.values()) clearTimeout(q.holdT || q.timer); ptr.clear(); U.touch.mx = U.touch.my = 0; U.touch.jump = U.touch.use = U.touch.front = false; joyEl.hidden = true; for (const b of touchEl.querySelectorAll('.tb.on')) b.classList.remove('on'); rad?.close(); API.attackEnd(); };
       // раскладка (js/core/touch-layout.js): окно игры — wrap (у .pz-touch тот же прямоугольник), кнопки — CSS-переменными
       const TL = window.D37TouchLayout;
       tlT?.detach();
       tlT = TL ? TL.attach({ id: 'podzem', title: 'Подземье', el: wrap,
-        items: () => PZ_BTNS.map(([id, icon, label]) => ({ id, icon, label, opt: id === 'hook' ? 'с крюком-кошкой' : id === 'put' ? 'в режиме «✛ Точно»' : undefined })),
+        items: () => BTNS.map(([id, icon, label]) => ({ id, icon, label, opt: id === 'hook' ? 'с крюком-кошкой' : id === 'put' ? 'в режиме «✛ Точно»' : id === 'act' && v2 ? 'у двери, сундука, кровати' : undefined })),
         btn: id => touchEl.querySelector(`[data-t="${id}"]`),
-        defaults: (W, H, k) => { const o = {}; for (const [id, , , d, x, y] of PZ_BTNS) o[id] = { x: W - (x + d / 2) * k, y: H - (y + d / 2) * k, d: d * k }; return o; },
+        defaults: (W, H, k) => { const o = {}; for (const [id, , , d, x, y] of BTNS) o[id] = { x: W - (x + d / 2) * k, y: H - (y + d / 2) * k, d: d * k }; return o; },
         apply: (id, b, p) => { const k = p.k || 1, s = b.style; s.setProperty('--d', (p.d / k).toFixed(1) + 'px'); s.setProperty('--x', ((p.W - p.x - p.d / 2) / k).toFixed(1) + 'px'); s.setProperty('--y', ((p.H - p.y - p.d / 2) / k).toFixed(1) + 'px'); },   // CSS сам умножит на --pz-sc
-        avoid: () => { const B = wrap.getBoundingClientRect(), out = []; for (const [e, label] of [[hotEl, 'панель вещей'], [boxEl, 'здоровье'], [btnsEl, 'меню']]) { const r = e && !e.hidden && e.getBoundingClientRect(); if (r && r.width) out.push({ l: r.left - B.left, t: r.top - B.top, r: r.right - B.left, b: r.bottom - B.top, label }); } return out; },
+        // нельзя закрывать: панель вещей / лоток (свёрнут и раскрыт — 10 ячеек и 🎒 по 44 px), здоровье, меню
+        avoid: () => {
+          const B = wrap.getBoundingClientRect(), out = [];
+          for (const [e, label] of [[hotEl, 'панель вещей'], [boxEl, 'здоровье'], [btnsEl, 'меню']]) { const r = e && !e.hidden && e.getBoundingClientRect(); if (r && r.width) out.push({ l: r.left - B.left, t: r.top - B.top, r: r.right - B.left, b: r.bottom - B.top, label }); }
+          if (tray) { out.push(tray.rect()); const w = Math.min(B.width - 24, 11 * 44), rows = Math.ceil(11 * 44 / Math.max(44, w)); out.push({ l: (B.width - w) / 2, t: 8, r: (B.width + w) / 2, b: 8 + rows * 48 + 6, label: 'вещи (раскрыты)' }); }
+          return out;
+        },
         // редактор открыт — мир на паузе (без меню), пальцы отпущены; закрыли — играем дальше
         onEdit: on => { U.releaseTouch(); if (on) { if (G.state === 'play') { G.state = 'paused'; U.tlPaused = true; } } else if (U.tlPaused) { U.tlPaused = false; if (G.state === 'paused' && !menuKind) G.state = 'play'; } } }) : null;
     }
     U.touchLayout = () => tlT;
 
+    // ═══ HUD 2.0: лоток, круг позы и круг ⛏, лист эмоций (D37E.tray / radial / sheet — js/engine/ui.js) ═══
+    // значок вещи для круга вещей, пока атлас не подставлен (в лотке — картинка из атласа)
+    const itemEmo = d => !d ? '•' : d.kind === 'tool' ? (d.tool === 'pick' ? '⛏' : d.tool === 'axe' ? '🪓' : '🔨') : d.kind === 'melee' ? '⚔' : d.kind === 'bow' || d.kind === 'ammo' ? '🏹'
+      : d.kind === 'wand' ? '✨' : d.kind === 'hook' ? '🪝' : d.kind === 'igniter' || d.key === 'torch' ? '🔥' : d.kind === 'tile' || d.kind === 'wall' ? '🧱'
+      : d.kind === 'use' ? (d.use === 'life' ? '❤' : d.use === 'mana' ? '⭐' : d.use === 'boss' ? '👑' : d.use === 'recall' ? '🏠' : '🧪') : '◆';
+    function traySlots(){
+      const inv = G.CH?.inv || [], out = [];
+      for (let i = 0; i < 10; i++) { const s = inv[i], d = s && API.itemDef(s.id); out.push(s ? { icon: itemEmo(d), n: s.n, label: nameOf(s.id) + (s.n > 1 ? ' ×' + s.n : '') } : { icon: '', empty: true, label: 'Пусто' }); }
+      return out;
+    }
+    // ячейки лотка: в <s> — картинка вещи из атласа (CSS-переменные --c/--r; пишем, только если вещь в ячейке сменилась)
+    function trayPaint(){
+      if (!tray || !G.CH) return;
+      tray.update(G.CH.sel);
+      const cs = tray.el.children;
+      for (let i = 0; i < cs.length; i++) {
+        const c = cs[i], s = i < 10 ? G.CH.inv[i] : null, id = i >= 10 ? '+' : (G.A ? 'a' : '') + (s ? s.id : '');
+        if (c._pz === id) continue;
+        c._pz = id;
+        const sp = c.firstChild, cc = s ? G.A?.item?.[s.id] : undefined;
+        c.classList.toggle('pz-em', i >= 10);
+        if (cc !== undefined && cc !== null) { sp.style.setProperty('--c', String(cc % 64)); sp.style.setProperty('--r', String(cc >> 6)); sp.classList.toggle('no', false); }
+        else sp.classList.toggle('no', i < 10);
+      }
+    }
+    function wheelIcons(){
+      const w = touchEl?.querySelector('.e2-radial:not([hidden])'); if (!w || !G.CH) return;
+      for (const b of w.querySelectorAll('.e2-rad-it')) { const s = G.CH.inv[+b.dataset.i]; if (s && G.A?.item?.[s.id] !== undefined) b.innerHTML = icon(s.id, 30); }
+    }
+    const radial = () => rad || (rad = window.D37E.radial(wrap));
+    function openRad(q, kind, b){
+      const list = kind === 'pose' ? poseItems() : useItems(); if (!list.length || !b) return;
+      q.rad = true; ghint('');
+      const r = b.getBoundingClientRect(), h = wrap.getBoundingClientRect(), lefty = !!window.D37Opt?.lefty || document.documentElement.classList.contains('gs-lefty');
+      radial().open(list, { x: r.left + r.width / 2 - h.left + (lefty ? 40 : -40), y: r.top - h.top - 124 }, { onPick: kind === 'pose' ? posePick : usePick, from: { x: q.x0, y: q.y0 }, title: kind === 'pose' ? 'Поза' : 'В руку' });
+    }
+    // поза (только картинка: рост, удары и столкновения те же — podzem.js setPose); эмоции — анимации 2D-персонажа (char2d)
+    const EMO = () => window.D37Sprite?.EMO_ANIM || {};
+    function emoRecent(){
+      let a = []; try { a = JSON.parse(lsGet('d37_emo_recent') || '[]'); } catch (e) {}
+      const M = EMO(), out = Array.isArray(a) ? a.filter(e => typeof e === 'string' && M[e]).slice(0, 3) : [];
+      for (const d of ['💃', '👋', '😂']) if (out.length < 3 && !out.includes(d) && M[d]) out.push(d);
+      return out;
+    }
+    function emoUse(e){ const a = EMO()[e]; if (!a) return; lsSet('d37_emo_recent', JSON.stringify([e, ...emoRecent().filter(x => x !== e)].slice(0, 3))); API.pose?.(a); kBtn = ''; U.hud(); }
+    function poseItems(){
+      const cur = API.poseNow?.() || '', A = window.D37Sprite?.ANIMS || {}, M = EMO();
+      const list = [{ id: 'crouch', icon: '⬇', label: 'Присесть' }, { id: 'sit', icon: '🪑', label: 'Сесть' }, { id: 'lie', icon: '🛌', label: 'Лечь' },
+        ...emoRecent().map(e => ({ id: 'emo:' + e, icon: e, label: A[M[e]]?.name || 'Эмоция', anim: M[e] }))];
+      if (Object.keys(M).length) list.push({ id: 'more', icon: '➕', label: 'Ещё эмоции' });
+      for (const it of list) it.cur = it.id === cur || (!!it.anim && it.anim === cur);
+      return list;
+    }
+    function posePick(it){
+      if (it.id === 'more') { emoMore(); return; }
+      if (it.id.startsWith('emo:')) { emoUse(it.id.slice(4)); return; }
+      const cur = API.poseNow?.() || '';
+      API.pose?.(it.id === cur ? null : it.id);   // та же поза — встать
+      kBtn = ''; U.hud();
+    }
+    function poseTap(){ const cur = API.poseNow?.() || ''; API.pose?.(cur ? null : 'crouch'); kBtn = ''; U.hud(); }   // сидит / лежит / эмоция — встать, стоит — присесть
+    U.poseRadial = () => {   // компьютер: G — круг позы посередине (щёлкни пункт; Esc — закрыть)
+      if (!v2 || !G.pl || G.state !== 'play' || U.modal() || invOpen) return;
+      if (rad?.isOpen()) { rad.close(true); return; }
+      radial().open(poseItems(), null, { onPick: posePick, sticky: true, title: 'Поза — щёлкни (Esc — закрыть)' });
+    };
+    function emoMore(){
+      const M = EMO(), A = window.D37Sprite?.ANIMS || {};
+      if (!emoSheet) {
+        const body = document.createElement('div'); body.className = 'e2-grid';
+        body.addEventListener('click', e => { const b = e.target.closest('[data-e]'); if (!b) return; emoSheet.close(); emoUse(b.dataset.e); });
+        emoSheet = window.D37E.sheet(wrap, { title: '💃 Эмоции', body });
+      }
+      const body = emoSheet.body.firstChild; body.textContent = '';
+      for (const e of Object.keys(M)) { const b = document.createElement('button'); b.type = 'button'; b.dataset.e = e; b.textContent = e; const s = document.createElement('span'); s.textContent = A[M[e]]?.name || ''; b.appendChild(s); body.appendChild(b); }
+      emoSheet.open();
+    }
+    // ⛏ смахнул вверх: что взять в руку (с панели 1–0), ✛ точный крестик, лечиться
+    function useItems(){
+      return [{ id: 'pick', icon: '⛏', label: 'Кирку в руку' }, { id: 'tile', icon: '🧱', label: 'Блок в руку' }, { id: 'build', icon: '✛', label: U.touch.build ? 'Убрать крестик' : 'Точный крестик' }, { id: 'heal', icon: '🧪', label: 'Лечиться' }];
+    }
+    function usePick(it){
+      if (it.id === 'build') { toggleBuild(); return; }
+      if (it.id === 'heal') { API.quickHeal(); return; }
+      const inv = G.CH?.inv || []; let best = -1, bp = -1;
+      for (let i = 0; i < 10; i++) {
+        const s = inv[i], d = s && API.itemDef(s.id); if (!d) continue;
+        if (it.id === 'pick' ? d.kind === 'tool' && d.tool === 'pick' && (d.power || 0) > bp : best < 0 && d.kind === 'tile' && d.key !== 'torch') { best = i; bp = d.power || 0; }
+      }
+      if (best >= 0) API.selSlot(best); else API.toast(it.id === 'pick' ? '⛏ Кирки нет на панели 1–0' : '🧱 Блоков нет на панели 1–0', 'info');
+    }
+    function toggleBuild(){
+      const v = !U.touch.build; API.buildMode(v);
+      touchEl.querySelector('[data-t="build"]')?.classList.toggle('on', v);
+      const pb = touchEl.querySelector('[data-t="put"]'); if (pb) pb.hidden = !v;
+      API.toast(v ? '✛ Двигай крестик пальцем, «✓ Сюда» — копать или ставить ровно там' : 'Крестик убран', 'info');
+    }
+
     U.dispose = () => {
       offs.forEach(f => f()); offs.length = 0;
-      clearInterval(koT); clearTimeout(selNameT);
+      clearInterval(koT); clearTimeout(selNameT); clearTimeout(vitT); clearTimeout(goalT); clearTimeout(hintT); clearTimeout(ghT);
+      tray?.dispose(); tray = null; rad?.dispose(); rad = null; emoSheet?.dispose(); emoSheet = null; fade?.dispose(); fade = null;
+      if (v2) window.D37Shell?.own?.(false);
       closePause();
       settingsTab(false);
       tlT?.detach(); tlT = null;
