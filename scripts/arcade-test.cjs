@@ -47,131 +47,9 @@ function stubG(spec){
 }
 
 // ═══ Боты и сценарии по играм ═══
-const BOTS = {
-  tiles: {
-    // gap — не чаще одного нажатия за gap шагов (10 → 6 нажатий в секунду: на скорости выше 6 рядов/с бот не успевает и проигрывает)
-    bot(K, spec, gap = 10){
-      const C = spec.consts, T = K.T;
-      let last = -1e9;
-      return (s, k, push) => {
-        if (s.over || k - last < gap) return;
-        const n = s.next, u = n + .5 - s.pos;
-        if (u < 0 || u > 3.6) return;
-        push(T.DOWN, (s.col[n & (C.RING - 1)] + .5) * C.CW, C.H - u * C.RH, 0);
-        last = k;
-      };
-    },
-    maxMs: 240000,
-    garbage: { gap: 9, ms: 30 * 60 * 1000 },   // 9 → 6,7 нажатия в секунду: бот не проигрывает, полчаса игры
-    scenarios(K, spec){
-      const C = spec.consts, T = K.T, ev = { type: 0, x: 0, y: 0, k: 0, t: 0 };
-      const tapAt = (s, c, u) => { ev.type = T.DOWN; ev.x = (c + .5) * C.CW; ev.y = C.H - (u - s.pos) * C.RH; spec.input(s, ev); };   // u — высота в рядах (абсолютная)
-      const key = (s, c) => { ev.type = T.KEY; ev.k = c; spec.input(s, ev); };
-      const stepN = (s, n) => { for (let i = 0; i < n && !s.over; i++) spec.step(s, K.STEP, null); };
-      const colOf = (s, r) => s.col[r & (C.RING - 1)];
-      const white = (s, r) => (colOf(s, r) + 1) % C.COLS;
-
-      // баг владельца: «нажал — сразу конец». Нажатие на «СТАРТ» засчитано, игра идёт, пропуск — не раньше чем через ~1,2 с
-      let s = spec.create(K.rng(11));
-      ok(!s.started && s.pos === -1 && s.next === 0, 'tiles: старт — первая плитка во втором ряду, поле стоит');
-      stepN(s, 120);
-      ok(!s.over && s.pos === -1, 'tiles: до «СТАРТ» поле не едет и игра не кончается (2 с)');
-      tapAt(s, white(s, 0), .5);
-      ok(!s.over && !s.started, 'tiles: промах по белому до «СТАРТ» прощается');
-      tapAt(s, colOf(s, 0), .5);
-      ok(s.started && s.score === 1 && !s.over, 'tiles: нажатие на «СТАРТ» засчитано (+1), игра идёт', { score: s.score, over: s.over });
-      stepN(s, 1);
-      ok(!s.over, 'tiles: первый шаг после старта — не конец (баг прототипа: нижняя плитка у края считалась пропущенной)');
-      let n = 1; while (!s.over) { spec.step(s, K.STEP, null); n++; }
-      ok(s.why === 'miss' && n >= 70 && n <= 90, 'tiles: без нажатий — пропуск через ~1,3 с, а не сразу', { why: s.why, steps: n });
-
-      // нажатие проверяет ряд, а не только дорожку
-      s = spec.create(K.rng(12)); tapAt(s, colOf(s, 0), .5);
-      tapAt(s, colOf(s, 1), .85);   // ниже плитки на 0,15 ряда (в запасе TOL) — попадание
-      ok(s.score === 2 && !s.over, 'tiles: палец чуть ниже плитки (в запасе) — засчитано');
-      const r3 = 3, c3 = colOf(s, r3);
-      if (c3 !== colOf(s, 2)) { tapAt(s, c3, r3 + .5); ok(!s.over && s.score === 2, 'tiles: чёрная плитка не по порядку — без наказания и без очков'); }
-      tapAt(s, colOf(s, 0), .5);
-      ok(!s.over && s.score === 2, 'tiles: нажатие по пройденному ряду — не считается');
-      // та же дорожка, что у следующей, но двумя рядами выше и там белое — конец (прототип засчитывал как попадание)
-      let r = s.next + 2; while (colOf(s, r) === colOf(s, s.next)) r++;
-      tapAt(s, colOf(s, s.next), r + .5);
-      ok(s.over && s.why === 'white' && s.badR === r, 'tiles: дорожка верная, ряд — нет (белое выше) — конец', { why: s.why, badR: s.badR, r });
-
-      // клавиатура: своя дорожка — попадание, чужая — белое
-      s = spec.create(K.rng(13)); key(s, colOf(s, 0)); key(s, colOf(s, 1));
-      ok(s.score === 2 && !s.over, 'tiles: клавиши D F J K — по дорожке следующего ряда');
-      key(s, white(s, 2)); ok(s.over && s.why === 'white', 'tiles: не та клавиша — белая, конец');
-
-      // счёт: 20 верных нажатий подряд = 20 + 2 × ⭐ (золотые — 3 очка)
-      s = spec.create(K.rng(14)); let gold = 0;
-      for (let i = 0; i < 40; i++) { if (s.gold[s.next & (C.RING - 1)]) gold++; tapAt(s, colOf(s, s.next), s.next + .5); stepN(s, 5); }
-      ok(!s.over && s.hits === 40 && s.score === 40 + 2 * gold && s.golds === gold, 'tiles: счёт = плитки + 2 за каждую ⭐', { score: s.score, gold });
-      // скорость — рядов в секунду: 1 с без нажатий после старта = V0 + DV·hits рядов
-      s = spec.create(K.rng(15)); tapAt(s, colOf(s, 0), .5);
-      const p0 = s.pos; stepN(s, 30);
-      ok(Math.abs((s.pos - p0) - (C.V0 + C.DV) * .5) < 1e-9, 'tiles: за 0,5 с поле проехало (V0 + DV) × 0,5 ряда', s.pos - p0);
-    },
-  },
-
-  lights: {
-    // нажимает окна решения по одному раз в 20 шагов; каждое 7-е нажатие — лишнее окно (меньше ⭐, разнообразнее партии)
-    bot(K, spec){
-      const T = K.T;
-      let last = -1e9, i = 0, house = -1, cnt = 0;
-      return (s, k, push) => {
-        if (s.over || s.wait || k - last < 20) return;
-        if (s.house !== house) { house = s.house; i = 0; }
-        last = k; cnt++;
-        if (cnt % 7 === 0) { push(T.PICK, 0, 0, (s.sol[0] + 1) % (s.n * s.n)); push(T.PICK, 0, 0, (s.sol[0] + 1) % (s.n * s.n)); return; }   // туда-обратно
-        if (i < s.par) push(T.PICK, 0, 0, s.sol[i++]);
-      };
-    },
-    maxMs: 180000,
-    garbage: { ms: 10 * 60 * 1000, repeat: true },
-    scenarios(K, spec){
-      const T = K.T, C = spec.consts, ev = { type: T.PICK, x: 0, y: 0, k: 0, t: 0 };
-      const pick = (s, k) => { ev.type = T.PICK; ev.k = k; spec.input(s, ev); };
-      const stepN = (s, n) => { for (let i = 0; i < n && !s.over; i++) spec.step(s, K.STEP, null); };
-      const lit = s => { let c = 0; for (let i = 0; i < s.n * s.n; i++) c += s.g[i]; return c; };
-      // идеальная ночь: решение из генератора (= норма) → 5 × 100, 5 ⭐, бонус за оставшиеся секунды
-      let s = spec.create(K.rng(21));
-      for (let h = 0; h < C.HOUSES.length; h++) {
-        ok(s.house === h && s.n === C.HOUSES[h][0] && lit(s) > 0, 'lights: дом ' + (h + 1) + ' — сторона ' + C.HOUSES[h][0] + ', свет горит');
-        stepN(s, 30);   // полсекунды «думает»
-        for (let i = 0; i < s.par; i++) pick(s, s.sol[i]);
-        ok(lit(s) === 0 && s.wait === C.WAIT, 'lights: решение генератора гасит дом ' + (h + 1));
-        pick(s, 0); ok(lit(s) === 0, 'lights: пока дом засыпает, нажатия не считаются');
-        stepN(s, C.WAIT);   // пауза «дом уснул» — часы стоят
-      }
-      const used = C.HOUSES.length * 30;   // шагов прошло вне пауз
-      ok(s.over && s.solved === 5 && s.stars === 5 && s.score === 500 + 3 * Math.ceil((C.TIME - used) / 60), 'lights: 5 домов в норму — 500 + 3 × секунды', { score: s.score, stars: s.stars });
-      ok(spec.win(s), 'lights: все дома — победа (XP)');
-      // лишние нажатия: −10 за каждое сверх нормы, без ⭐
-      s = spec.create(K.rng(22));
-      pick(s, 0); pick(s, 0);
-      for (let i = 0; i < s.par; i++) pick(s, s.sol[i]);
-      ok(s.solved === 1 && s.stars === 0 && s.score === 80, 'lights: 2 лишних нажатия — 80 очков, без ⭐', { score: s.score });
-      // время вышло — конец, счёт за решённое
-      s = spec.create(K.rng(23)); stepN(s, C.TIME + 5);
-      ok(s.over && s.score === 0 && s.left === 0, 'lights: 2 минуты без решения — утро, 0 очков');
-      ok(!spec.win(s), 'lights: не успел — не победа');
-      // генератор: 3000 ночей — каждый дом с горящим светом, решение = норма нажатий по разным окнам
-      let bad = 0;
-      for (let seed = 1; seed <= 3000; seed++) {
-        const q = spec.create(K.rng(seed * 7919));
-        for (let h = 0; h < C.HOUSES.length; h++) {
-          const set = new Set(); for (let i = 0; i < q.par; i++) set.add(q.sol[i]);
-          if (lit(q) === 0 || set.size !== q.par) bad++;
-          for (let i = 0; i < q.par; i++) pick(q, q.sol[i]);
-          if (lit(q) !== 0) bad++;
-          stepN(q, C.WAIT);
-        }
-      }
-      ok(bad === 0, 'lights: 3000 ночей — все дома решаются за норму', bad);
-    },
-  },
-};
+// Боты и сценарии — у каждой игры свой файл scripts/arcade/<id>.cjs (docs/ARCADE.md): { bot(K, spec, gap) → (s, step, push),
+// maxMs, garbage: { gap, ms, repeat }, scenarios(K, spec, ok), e2e: {…} } — общий скрипт при новой игре не правится.
+const BOTS = new Proxy({}, { get: (_, id) => { const f = path.join(__dirname, 'arcade', String(id) + '.cjs'); return fs.existsSync(f) ? require(f) : undefined; } });
 
 // «Случайный палец» для игр без своего бота: нажатия по сетке поля / [data-k] через равные промежутки (детерминированно)
 function genericBot(K, spec){
@@ -221,8 +99,8 @@ function genericBot(K, spec){
     ok(a === b && a !== c && K.hash(d1.s) === K.hash(d2.s), id + ': один seed — одна игра у обоих соперников, другой seed — другая');
 
     // 4) сценарии
-    if (B.scenarios) { try { B.scenarios(K, spec); } catch (e) { ok(false, id + ': сценарии без ошибок', e.stack.split('\n').slice(0, 3).join(' | ')); } }
-    else console.log('  (' + id + ': своих сценариев нет — добавь раздел в BOTS scripts/arcade-test.cjs)');
+    if (B.scenarios) { try { B.scenarios(K, spec, ok); } catch (e) { ok(false, id + ': сценарии без ошибок', e.stack.split('\n').slice(0, 3).join(' | ')); } }
+    else console.log('  (' + id + ': своих сценариев нет — добавь scripts/arcade/' + id + '.cjs)');
 
     // 5) мусор: прогрев (JIT), потом долгие партии под профилем выделений памяти (V8 sampling heap profiler, включая уже
     // собранное). Считаем байты, выделенные кодом игры и ядра на шаг; подготовка партии (create, Runner, Queue) и сама

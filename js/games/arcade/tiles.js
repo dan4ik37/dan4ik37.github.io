@@ -92,13 +92,6 @@
       ctx.fillStyle = C.bad;
       ctx.fillRect(s.badC * CW + 2, H - (s.badR + 1 - p) * RH + 2, CW - 4, RH - 4);
     }
-    // счёт крупно сверху (строка пересобирается только когда меняется — без мусора на кадр)
-    if (G.sc !== s.score) { G.sc = s.score; G.scT = String(s.score); }
-    if (s.started || s.over) {
-      ctx.font = 'bold 34px Montserrat, system-ui, sans-serif';
-      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.strokeText(G.scT, W / 2, 34);
-      ctx.fillStyle = C.bad; ctx.fillText(G.scT, W / 2, 34);
-    }
   }
 
   ArcadeKit.define('tiles', {
