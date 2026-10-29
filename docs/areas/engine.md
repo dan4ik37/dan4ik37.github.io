@@ -341,10 +341,10 @@
   vector is one object per player; `ladderHere` / trigger events skip Set iteration when empty.
   Gap: an awake player.js body still allocates ~38 B per step (V8 keeps the doubles of P / ch fields as heap numbers, field
   representation "Any") — needs player.js on typed arrays (P2/P3); sleeping NPCs allocate ~0.
-- `js/engine/actors.js` V2 figures: `A.impostors({ cap, far })` — actors added with `{ npc: true }` (npc.js does it) get a full
-  rig only for the `cap` nearest to the camera within `far` (4 m bonus for an existing rig — no flip-flop); the rest are simple
+- `js/engine/actors.js` V2 figures: `A.impostors({ cap, far, focus })` — actors added with `{ npc: true }` (npc.js does it) get a
+  full rig only for the `cap` nearest to the camera (or to `focus()` — Studio passes its own player for top-down views) within `far` (4 m bonus for an existing rig — no flip-flop); the rest are simple
   figures (legs / torso / head in the human's colours, `World3D.impColors`) drawn by three shared InstancedMesh (3 draw calls for
-  all, frustumCulled off, disposed in `A.dispose`). A new NPC starts as a figure (no K.build), ≤ 1 rig build per 0.25 s pass.
+  all, instanceColor created before the first render, frustumCulled off, disposed in `A.dispose`). A new NPC starts as a figure (no K.build), ≤ 1 rig build per 0.25 s pass.
   `A.tierOf(key)` → V0 / V1 / V2, `A.impCount()`.
 - Mir (`mir-zones.js npcCaps`, rollback `MIR_LOD = false`): NPC_CAP 16 / RES_CAP 7 / NPC_ADD 2 on every device; RIG_CAP 8 phone or
   «low», 16 PC, RIG_FAR 56; `npcTick` reuses its rows (no arrays per tick), `npcPick` is the pure choice.
