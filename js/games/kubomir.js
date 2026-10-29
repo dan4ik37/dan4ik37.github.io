@@ -588,6 +588,7 @@
     st.ST = V.streamer({ world: W, rd: opts.rd, url, features: modState.features, genVer: meta.genVer || 1,
       bare: () => window.KubomirEnts?.bareOf?.(st) || 0,   // зима: лиственные — с голыми ветвями (сетка чанка, T-022b)
       load: c => guest ? guest.loadChunk(c) : st.savedKeys.has(c.cx + '|' + c.cz) ? V.store.chunk(meta.id, c.cx, c.cz) : null,
+      cuts: (cx, cz) => st.topple ? st.topple.cutsFor(cx, cz) : null,   // T-138 F1: надрубленные клетки — в сетку чанка
       applySaved: (c, rec) => applySaved(c, rec),
       onGen: c => { st.ents?.onChunkTiles?.(c); st.fire?.onChunk(c); },   // огонь: блоки «огонь» из правок (сохранённый пожар)
       onMesh: (c, m) => { VR.setChunk(c, m); st.KL?.onChunk(c, m); st.fire?.onMesh(c, m); },
@@ -637,6 +638,9 @@
     st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;
     st.sup = window.KubomirSupport?.attach?.(st) || null; st.shakeOK = () => shakeOK(st);   // обрушение и прочность (T-022a; мир без него — null)
     st.fellOn = () => opts.fell !== false;
+    st.ktWear = n => { if (!st.creative) wear(st, st.P.sel, n); };
+    try { st.topple = window.KubomirTopple?.attach?.(st) || null; if (!guest && meta.topple) st.topple?.restore?.(meta.topple); } catch (e) { console.error(e); window.d37Err?.('kb:topple', e); st.topple = null; }   // T-138: надрубы, крен и падение целым, рубка дерева (kubomir-topple.js); тела, что были в полёте при сохранении, — ложатся
+    try { st.debris = window.KubomirDebris?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:debris', e); st.debris = null; }   // T-138 F4: обломки летят по весу, катятся со склона и скалы; вещи катятся (kubomir-debris.js)
     try { st.fire = window.KubomirFire?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:fire', e); st.fire = null; }   // огонь (T-022d): горит, перекидывается (если в мире включено), гаснет
     st.swimDeep = swimDeep; st.swimDrawY = (a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt);   // 👥 у других игроков — так же (kubomir-coop.js)   // руки как в Майнкрафте, свет человечков
     st.weatherOff = opts.weather === false;
@@ -714,6 +718,8 @@
     S = null;
     if (st.net) { try { if (st.coopGuest) { if (coopG === st.net) coopG = null; st.net.leave(); } else st.net.close('exit'); } catch (e) { console.error(e); } }
     st.coopEl?.remove();
+    try { st.topple?.flush?.(); } catch (e) { console.error(e); }   // T-138: что кренится и падает — ложится сразу (в сохранение); новых тел больше нет — обрушение ниже кладёт как раньше
+    try { st.debris?.flush?.(); st.debris?.dispose?.(); } catch (e) { console.error(e); }   // T-138 F4: обломки в полёте — блоком / вещью сразу
     try { st.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение, что считается и падает, — до конца (в сохранение)
     let saved = null;
     try { if (!o.quick) await (saved = saveAll(st, true)); else saved = saveAll(st, true); } catch (e) { console.error(e); }
@@ -788,6 +794,8 @@
     m.time = st.R?.lighting?.time ?? m.time;
     m.ents = st.ents?.save?.() || [];
     if (st.fire?.F) m.fireState = st.fire.save();   // огонь: что горит (чтобы продолжить с того же места)
+    // T-138 (ревью D2, S4): тела в полёте, повисшие и обломки — куда лягут (мир не меняется: крен идёт дальше); загрузка — X.restore
+    { let p = null; try { p = st.topple?.pending?.() || null; } catch (e) { console.error(e); } if (p) m.topple = p; else delete m.topple; }
     if (st.modRun) m.modData = st.modRun.data();
     return m;
   }
@@ -807,10 +815,12 @@
   // вкладку закрывают: синхронно в localStorage (журнал), база — как успеет
   function journalNow(){
     const st = S; if (!st || !st.ready || st.coopGuest) return;
+    // T-138 (ревью D2, S6): крен, падение, повисшее и обломки НЕ кладутся (вкладку скрыли — вернулись: всё идёт дальше); куда лягут —
+    // в журнал (metaSnap → meta.topple)
     try { st.sup?.flush?.(); } catch (e) { console.error(e); }   // T-124: обрушение — до конца, чтобы в журнал легло, как будет
     const V = VX(), recs = [];
     for (const k of st.unsaved) { const c = st.W.chunks.get(k); if (c && c.gen) { const r = chunkRec(c, st); recs.push({ cx: r.cx, cz: r.cz, e: V.store.b64(new Uint8Array(r.e.buffer)), t: r.t }); } }
-    const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData, ice: m.ice, snow: m.snow, fireState: m.fireState };
+    const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData, ice: m.ice, snow: m.snow, fireState: m.fireState, topple: m.topple || null };
     V.store.journal(st.meta.id, { recs, meta });
     saveAll(st).catch(() => {});
   }
@@ -892,6 +902,8 @@
     if (st.steps % 3 === 0) {
       st.ents?.tick(1 / 20);
       st.sup?.step();   // обрушение: очередь падающих кусков (по бюджету шага; kubomir-support.js)
+      st.topple?.tick();   // T-138: проверка этажей, крен, падение целым, рубка (такт мира — одинаково при любой частоте кадров)
+      st.debris?.tick(st.topple ? st.topple.left() : -1);   // T-138 F4: обломки — остаток общего потолка за такт (§5.x; 0 — пол обломков, −1 — нет построек: вся доля)
       st.fire?.tick();   // огонь: такт ядра (D37E.fire), ветер и дождь погоды, лава и молния поджигают (kubomir-fire.js)
       if (!st.creative) survivalTick(st, 1 / 20);
       st.modRun?.tick(1 / 20);
@@ -1491,14 +1503,19 @@
     if (mining) {
       const key = hit.x + ',' + hit.y + ',' + hit.z, b = hit.ice ? V.blocks[V.ID.ice] : V.blocks[hit.v & 0xfff];   // лёд на озере — как блок льда
       if (st.mine.key !== key) { st.mine.key = key; st.mine.t = 0; st.mine.need = breakTime(st, b); st.mine.snd = 0; }
-      if (st.creative) { if (st.mine.cool <= 0) { breakBlock(st, hit); st.mine.cool = .18; st.mine.key = ''; } }
+      // T-138 (ревью D1): тело в крене / полёте / повисшее (его клетка в мире — воздух): ломать нечего; повисшее — удар (время блока,
+      // не дольше 1,5 с) — ложится блоками там, где висит (дорубить)
+      if (hit.body) { if (st.mine.cool <= 0 && (st.creative || (st.mine.t += dt) >= Math.min(st.mine.need, 1.5))) { st.topple?.knock?.(hit); st.mine.key = ''; st.mine.t = 0; st.mine.cool = .25; } }
+      else if (st.creative) { if (st.mine.cool <= 0) { breakBlock(st, hit); st.mine.cool = .18; st.mine.key = ''; } }
       else if (st.mine.need < Infinity) {
         st.mine.t += dt;
         st.mine.snd -= dt; if (st.mine.snd <= 0) { st.mine.snd = .24; st.AU?.play(digSound(b), { x: hit.x - st.ox + .5, y: hit.y + .5, z: hit.z - st.oz + .5, vol: .45, rate: .9 + Math.random() * .2 }); st.ents?.hitFx?.(hit.x, hit.y, hit.z, b.id, hit.nx | 0, hit.ny | 0, hit.nz | 0); }
-        if (st.mine.t >= st.mine.need) { breakBlock(st, hit); st.mine.key = ''; st.mine.t = 0; st.mine.cool = .05; }
+        st.mine.km = st.topple && !hit.ice ? st.topple.mines(hit, b) : 0;   // T-138: надруб со стороны удара (1) / рубка живого дерева (2)
+        if (st.mine.km) { const r = st.topple.mine(hit, b, st.mine); if (r === 1) { breakBlock(st, hit); st.mine.key = ''; st.mine.t = 0; st.mine.cool = .05; } else if (r === 2) { st.mine.key = ''; st.mine.t = 0; st.mine.cool = .25; } }
+        else if (st.mine.t >= st.mine.need) { breakBlock(st, hit); st.mine.key = ''; st.mine.t = 0; st.mine.cool = .05; }
       }
-    } else { st.mine.key = ''; st.mine.t = 0; }
-    st.mine.st = mining && st.mine.need < Infinity && !st.creative ? Math.floor(st.mine.t / st.mine.need * 8) : -1;
+    } else { st.mine.key = ''; st.mine.t = 0; st.mine.km = 0; }
+    st.mine.st = mining && st.mine.need < Infinity && !st.creative && !st.mine.km ? Math.floor(st.mine.t / st.mine.need * 8) : -1;
     st.mine.k = mining && st.mine.need < Infinity && !st.creative ? Math.min(1, st.mine.t / st.mine.need) : mining ? 1 : 0;
     // поставить / открыть / съесть (ПКМ, LT; держишь — повтор). ЛКМ никогда не ставит, ПКМ никогда не ломает
     const wantPlace = live && (C.down('place') || (C.held('place') && st.placeCool <= 0));
@@ -1769,6 +1786,7 @@
   // поставить, съесть); tap — нажатие пальцем (еда тогда доедается сама). true — что-то сделали
   function use(st, hit, tap){
     const V = VX(), P = st.P, s = P.inv[P.sel];
+    if (hit && hit.body) hit = null;   // T-138: тело в полёте — к нему не ставят и его не открывают
     if (st.eat) return true;
     if (hit && !P.sneak) {
       const b = V.blocks[hit.v & 0xfff];
@@ -1950,9 +1968,22 @@
   // ═══ Кадр: подгрузка, камера, персонаж, вещь в руке, экран ═══
   const CAMP = { ch: { x: 0, y: 0, z: 0, vx: 0, vz: 0, h: PH, grounded: true }, mode: 'move', running: false, crouchW: 0, stepOff: 0 };
   const PHYS = { raycast(ox, oy, oz, dx, dy, dz, maxT){ const st = S; if (!st) return null; const V = VX(); const h = V.raycast(st.W, ox + st.ox, oy, oz + st.oz, dx, dy, dz, maxT, t => V.T.opaque[t] === 1); return h ? { t: h.t } : null; } };
+  // T-138 (ревью PERF-5): первая вещь на земле и первая крошка блока за страницу собирали в игре 3 программы шейдеров (вещь «кубик»,
+  // вещь-картинка — материалы VR.itemMesh с D37_ACT, точки крошки) — кадр 0,34–0,54 с на телефоне ×4 (то самое «первое падение»).
+  // Мир открылся — один раз нарисовать их под землёй (2 кадра, крошечные): программы собраны, пока игрок ещё осматривается
+  function warmFx(st){
+    st.warmFx = { n: 3, ms: [] };
+    try {
+      const V = VX(), VR = st.VR, R = st.R, P = st.P;
+      if (VR?.itemMesh && R?.scene) for (const n of ['cobble', 'stick', 'leaves_oak']) { if (!V.item(n)) continue; const m = VR.itemMesh(n, 15 << 12); m.scale.setScalar(.01); m.castShadow = false; m.frustumCulled = false; m.position.set(P.x - st.ox, P.y - 3, P.z - st.oz); R.scene.add(m); st.warmFx.ms.push(m); }
+      st.ents?.debris?.(Math.floor(P.x), Math.floor(P.y) - 3, Math.floor(P.z), V.ID.stone, 1);
+    } catch (e) { console.error(e); }
+  }
+  function warmEnd(st){ const w = st.warmFx; if (!w || w.n < 0 || --w.n > 0) return; for (const m of w.ms) { m.parent?.remove(m); m.geometry?.dispose(); } w.ms.length = 0; w.n = -1; }
   function frame(dt, alpha){
     const st = S; if (!st) return;
     const { R, P, rig, I, C, VR, A } = st, V = VX(), t = now() / 1000;
+    if (st.ready) { if (!st.warmFx) warmFx(st); else warmEnd(st); }   // ревью PERF-5: программы вещей и крошки — заранее
     // мобы, вещи и песок считаются 20 раз в секунду (каждый 3-й шаг логики) — рисуем их плавно: доля пути до следующего такта
     if (st.ents) st.ents.frac = P.dead || !st.ready ? 1 : Math.min(1, ((st.steps % 3) + (alpha || 0)) / 3);   // такты стоят — рисуем как есть
     const f = rig.fwd();
@@ -2023,6 +2054,7 @@
     dofFor(st);   // глубина резкости набора «Ультра»: автофокус движка, резко ближе ¾ дальности, мягко только даль у тумана
     st.hand?.frame(dt, t);   // руки и вещь в руке (поверх позы человечка), свет человечков — как у кубиков
     st.ents?.frame(dt, t);
+    st.debris?.frame(dt);   // T-138 F4: обломки — плавно между тактами
     st.WX?.frame(dt, t);   // дождь / снег вокруг камеры, шум, гром
     st.fire?.frame(dt, t);   // пламя движка на блоках «огонь» (fx.js), дым, угли, треск
     VR.select(st.hit && !C.blocked ? st.hit : null);

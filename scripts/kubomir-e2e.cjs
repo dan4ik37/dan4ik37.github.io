@@ -13,6 +13,12 @@
 //   погода и время суток меняются, телепорты, бой (меч, щит, лук) — ошибок и исключений в консоли нет, игрок ходит (ввод не заперт),
 //   память JS после сборки мусора — не растёт
 // KB_MODE=reopen — мир закрыть и открыть 8 раз (KB_N — другое число): память JS после сборки мусора — не растёт
+// KB_MODE=topple — T-138, мир «реализм» (выживание): подрубленная башня 3×3×14 и дуб-великан 2×2 (подруб + запил) падают вместе — ЦП кадра,
+//   кадров в секунду, худший такт крена, время событий; KB_N кругов (20) — память не растёт; KB_PHONE=1 — профиль телефона, ЦП ×4.
+//   KB_TOPPLE=1 KB_MODE=soak — 10 мин игры, каждый 4-й шаг рядом падают башня и дерево. Шаг 2 (обломки): KB_AB=1 — круги через один
+//   с обломками и без (честное A/B на той же странице), KB_NO_DEBRIS=1 — вся сцена без обломков, KB_SCENE_ONLY=1 — без T-138 (память сцены)
+//   Ревью: KB_PROF=1 — профиль первого падения за страницу (собственное время) и какие программы шейдеров собрались за него;
+//   KB_WARM=item|fall|both — до первого падения уже была вещь / маленькое падение (сравнить с холодным)
 // KB_MODE=fire — огонь (T-022d), мир «Огонь распространяется»: лес 6 × 6 и дом из досок — ЦП на кадр без огня и в пожаре (среднее, 95 %,
 //   худший, вызовы), снимки днём, ночью и после пожара; KB_PHONE=1 — профиль телефона (ЦП ×4); KB_FIRE=1 KB_MODE=soak / reopen — с пожаром
 // KB_MODE=firecycle — дом из досок сгорает на одном месте KB_N раз (по умолчанию 12): память JS после сборки мусора не растёт (без
@@ -30,7 +36,7 @@ const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [label = 'now', preset = 'ultra', angle = 'd3d11'] = process.argv.slice(2);
 const MODE = process.env.KB_MODE || '';
 const PHONE = MODE === 'perf' || !!process.env.KB_PHONE;
-const SUPPORT = MODE === 'support' || !!process.env.KB_SUPPORT || !!process.env.KB_LOAD;   // мир «Обрушение: реализм» (T-022a; KB_SUPPORT=1 — и для soak)
+const SUPPORT = MODE === 'support' || MODE === 'topple' || !!process.env.KB_SUPPORT || !!process.env.KB_LOAD || !!process.env.KB_TOPPLE;   // мир «Обрушение: реализм» (T-022a; KB_SUPPORT=1 — и для soak)
 const LOAD = !!process.env.KB_LOAD;   // T-124: + нагрузка (meta.load = 1)
 const FIRE = MODE === 'fire' || MODE === 'firecycle' || !!process.env.KB_FIRE;   // мир «Огонь распространяется» (T-022d; KB_FIRE=1 — и для soak / reopen)
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
@@ -234,6 +240,108 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       ok(!errs.length, 'в консоли — без ошибок и исключений', errs.slice(0, 6));
       return;
     }
+    if (MODE === 'topple') {
+      if (process.env.KB_SCENE_ONLY) await ev(`(() => { const K = window.KubomirTopple; K.CUT = K.LEAN = K.FELL = false; return 1; })()`);   // база: та же сцена без T-138 (память самой сцены)
+      if (process.env.KB_NO_DEBRIS) await ev(`(() => { const K = window.KubomirDebris; K.ON = K.ITEMS = false; return 1; })()`);   // A/B шага 2: та же сцена без обломков (F4) — кадр и память
+      // T-138: крен и падение целым, рубка дерева — «Кубомир», мир «реализм»: подрубленная башня 3×3×14 и дуб-великан 2×2 (живые брёвна)
+      // падают одновременно — кадр (ЦП, среднее, 95 %, худший), кадров в секунду, худший такт T-138 и обрушения; KB_PHONE=1 — ЦП ×4
+      await idle();
+      const SET = `const wait = ms => new Promise(r => setTimeout(r, ms)), S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, ID = V.ID;
+        const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(ID[n]) : 0, { urgent: 1 });
+        const nat = (x, y, z, n) => { set(x, y, z, n); const c = W.chunkAt(x, z); c?.edits?.delete(((x & 15) << 11) | ((z & 15) << 7) | y); };`;
+      const scene = `(async () => { ${SET}
+        const P = S.P, cx = Math.floor(P.x) + 4, cz = Math.floor(P.z) - 4, gy = Math.floor(P.y);
+        for (let x = cx - 6; x <= cx + 34; x++) for (let z = cz - 14; z <= cz + 14; z++) { for (let y = gy; y <= gy + 30; y++) if (W.raw(x, y, z) > 0) set(x, y, z, null); nat(x, gy - 1, z, 'stone'); }   // пол — природный камень (не постройка)
+        // шаг 2 (F4): за местом, куда ляжет башня, — обрыв на 8 вниз: обломки, долетевшие до края, скатываются с него
+        for (let x = cx + 18; x <= cx + 34; x++) for (let z = cz - 6; z <= cz + 8; z++) { const fy = gy - 9; for (let y = gy - 10; y < gy; y++) if (y > fy && W.raw(x, y, z) !== 0) set(x, y, z, null); nat(x, fy, z, 'stone'); }
+        for (let y = gy; y < gy + 14; y++) for (let x = cx; x < cx + 3; x++) for (let z = cz; z < cz + 3; z++) set(x, y, z, 'stone_bricks');
+        const tx = cx + 2, tz = cz + 10;
+        for (let y = gy; y < gy + 14; y++) for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) nat(tx + i, y, tz + j, 'log_oak');
+        for (let y = gy + 11; y < gy + 16; y++) for (let x = tx - 3; x <= tx + 4; x++) for (let z = tz - 3; z <= tz + 4; z++) if (!W.raw(x, y, z) && Math.abs(x - tx - .5) + Math.abs(z - tz - .5) < 6) nat(x, y, z, 'leaves_oak');
+        for (const it of S.ents.items.splice(0)) { it.mesh?.parent?.remove(it.mesh); it.mesh?.geometry?.dispose(); }   // вещи прошлого круга (как в KB_MODE=support)
+        S._tp = { cx, cz, gy, tx, tz };
+        Object.assign(P, { x: cx - 6.5, y: gy, z: cz + 6.5, vx: 0, vy: 0, vz: 0, fly: false }); S.rig.yaw = -Math.PI / 2; S.rig.fp = .15;
+        window.dispatchEvent(new Event('pointerdown'));   // звук: как у игрока — контекст WebAudio создан первым касанием (в headless жеста нет; создание ~0,2 с — не физика)
+        await wait(4000);
+        return { sup: !!S.sup, topple: !!S.topple, mode: S.sup?.mode, audio: S.AU?.ctx?.state || null };
+      })()`;
+      const run = `(async () => { ${SET}
+        const { cx, cz, gy, tx, tz } = S._tp, T = S.topple, st = T.stats;
+        const cpu = [], ft = []; let on = true, last = performance.now(); const loop = () => { if (!on) return; const n = performance.now(); ft.push(n - last); last = n; cpu.push(S.R.stats.cpuFrame); requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+        await wait(2000); const before = cpu.length; st.maxTickMs = 0; for (const k in st.ms) st.ms[k] = 0; if (S.sup?.stats) S.sup.stats.maxTickMs = 0; const l0 = st.lands, f0 = st.fells, t0 = st.tips + st.leans;
+        // башня: снят столбик +x внизу, у следующего — подруб наполовину (удары API копания)
+        for (let z = cz; z < cz + 3; z++) { const c = S.sup.code(cx + 2, gy, z); W.set(cx + 2, gy, z, 0, { urgent: 1 }); S.sup.removed(cx + 2, gy, z, c); }
+        const M = S.mine, hitAt = (x, y, z, nx) => ({ x, y, z, v: W.raw(x, y, z), nx, ny: 0, nz: 0 });
+        const frame = () => new Promise(r => requestAnimationFrame(r));   // удары — по кадру (как у игрока: удар — четверть блока, не пачкой в одном кадре)
+        for (let z = cz; z < cz + 3; z++) for (let k = 0; k < 2; k++) { M.need = 1; M.t = .26; const h = hitAt(cx + 1, gy, z, 1); if (h.v > 0) T.mine(h, V.blocks[h.v & 0xfff], M); await frame(); }
+        // великан 2×2: подруб с +x (6/8 ствола), запил с −x до недопила
+        let r = 0, sw = 0;
+        const chop = async (nx, n) => { for (let k = 0; k < n && r !== 2; k++) { await frame(); let h = null; for (let i = 0; i < 2 && !h; i++) for (let j = 0; j < 2 && !h; j++) { const v = W.raw(tx + i, gy + 1, tz + j); if (v > 0 && (v & 0xfff) === ID.log_oak) h = hitAt(tx + i, gy + 1, tz + j, nx); } if (!h) return; M.need = 1; M.t = .25 + 1e-6; r = T.mine(h, V.blocks[ID.log_oak], M); sw++; } };
+        await chop(1, 6); await wait(300); await chop(-1, 16);
+        M.key = ''; M.t = 0;
+        const tFell = performance.now();
+        let live = 0; const b0 = st.broke | 0, sl0 = st.slid | 0, D = S.debris; if (D) { D.stats.maxTickMs = 0; D.stats.blocks = 0; D.stats.items = 0; }
+        for (let i = 0; i < 600 && (T.bodies().length || T.busy() || (D && D.live())); i++) { await wait(100); if (D && D.live() > live) live = D.live(); }
+        const fallMs = performance.now() - tFell;
+        await wait(800); on = false;
+        const a = cpu.slice(0, before), b = cpu.slice(before), fb = ft.slice(before), avg = q => q.reduce((s, v) => s + v, 0) / Math.max(1, q.length);
+        b.sort((x, y) => x - y);
+        let lying = 0; for (let x = tx + 2; x < tx + 20; x++) for (let z = tz - 1; z <= tz + 2; z++) for (let y = gy; y < gy + 3; y++) if ((W.raw(x, y, z) & 0xfff) === ID.log_oak) lying++;
+        let far = 0; for (let x = cx + 3; x < cx + 20; x++) for (let z = cz - 1; z <= cz + 3; z++) for (let y = gy; y < gy + 4; y++) if ((W.raw(x, y, z) & 0xfff) === ID.stone_bricks) far++;
+        let down = 0; for (let x = cx + 18; x <= cx + 34; x++) for (let z = cz - 6; z <= cz + 8; z++) for (let y = gy - 9; y < gy - 1; y++) if ((W.raw(x, y, z) & 0xfff) === ID.stone_bricks) down++;
+        const deb = D ? { broke: (st.broke | 0) - b0, slid: (st.slid | 0) - sl0, maxLive: live, left: D.live(), blocks: D.stats.blocks, items: D.stats.items, down, worstTickMs: +D.stats.maxTickMs.toFixed(2), maxReads: D.D.stats.maxReads, ceil: st.ceil, ceilMax: st.ceilMax | 0 } : null;
+        return { deb, went: r === 2, swings: sw, leaned: st.tips + st.leans - t0, fells: st.fells - f0, lands: st.lands - l0, lying, far, fallS: +(fallMs / 1000).toFixed(1),
+          cpuBefore: +avg(a).toFixed(2), cpuFall: +avg(b).toFixed(2), p95: +(b[Math.floor(b.length * .95)] || 0).toFixed(2), max: +(b[b.length - 1] || 0).toFixed(2), fps: +(1000 / avg(fb)).toFixed(1),
+          worstTickMs: +st.maxTickMs.toFixed(2), avgTickMs: +(st.tickMs / Math.max(1, st.ticks)).toFixed(3), supWorstTickMs: +(S.sup?.stats?.maxTickMs || 0).toFixed(2), maxReads: T.Wd.stats.maxReads, checkNodes: st.checkNodes, checks: st.checks, skipped: st.skipped, over: st.over | 0, hp: S.P.hp, ms: Object.fromEntries(Object.entries(st.ms).map(([k, v]) => [k, +v.toFixed(1)])) };
+      })()`;
+      res.tpScene = await ev(scene, 120000);
+      ok(res.tpScene.sup && res.tpScene.topple && res.tpScene.mode === 'real', 'мир «реализм» с T-138 (крен и рубка подключены)', res.tpScene);
+      if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      // ревью PERF-5 (диагностика): KB_WARM=item — до первого падения уже лежит вещь (её сетка и материал готовы), KB_WARM=fall — уже было
+      // одно маленькое падение (сетка T-138 и её тень готовы), KB_WARM=both — оба: первый круг сравнить с холодным
+      if (process.env.KB_WARM) res.tpWarm = await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), wait = ms => new Promise(r => setTimeout(r, ms)), W = S.W, V = D37E.vox, ID = V.ID, P = S.P, t0 = performance.now(), m = '${process.env.KB_WARM}';
+        if (m === 'item' || m === 'both') { S.ents.addItem(P.x + 1.5, P.y + 1, P.z, { id: 'cobble', n: 1 }); S.ents.addItem(P.x + 1.5, P.y + 1, P.z + 1, { id: 'stick', n: 1 }); await wait(1500); }
+        if (m === 'fall' || m === 'both') { const g = S.ents.fallGroup([Math.floor(P.x) + 2, Math.floor(P.y), Math.floor(P.z) + 2, V.cell(ID.log_oak), Math.floor(P.x) + 2, Math.floor(P.y) + 1, Math.floor(P.z) + 2, V.cell(ID.leaves_oak)], { x: P.x + 2, y: P.y, z: P.z + 2 }, { x: 1, z: 0 }, { topple: true, fast: true, cap: 16 }); await wait(1500); if (g) S.ents.groupEnd(g, null, false); await wait(500); }
+        for (const it of S.ents.items.splice(0)) { it.mesh?.parent?.remove(it.mesh); it.mesh?.geometry?.dispose(); }
+        return { m, ms: Math.round(performance.now() - t0) }; })()`, 60000);
+      if (process.env.KB_PROF) { await send('Profiler.enable'); await send('Profiler.setSamplingInterval', { interval: 200 }); await send('Profiler.start'); }   // первое падение за страницу — где время (KB_PROF=1)
+      const progs = () => ev(`(() => { const r = GAME_IMPL.kubomir._test.state().R.r; return (r.info.programs || []).map(p => p.name + ' #' + p.id + ' ' + String(p.cacheKey).length + ' ' + String(p.cacheKey)); })()`);
+      const pg0 = process.env.KB_PROF ? await progs() : null;
+      res.tp = await ev(run, 120000);
+      if (process.env.KB_PROF) { const pg1 = await progs(); console.log('программы шейдеров, собранные за первое падение:', JSON.stringify(pg1.filter(p => !pg0.includes(p)))); console.log('программы до:', JSON.stringify(pg0)); }
+      if (process.env.KB_PROF) {
+        const { profile: pf } = await send('Profiler.stop'), self = new Map(), byId = new Map(pf.nodes.map(n => [n.id, n]));
+        const dt = pf.timeDeltas, sm = pf.samples; for (let i = 0; i < sm.length; i++) { const n = byId.get(sm[i]); const k = (n.callFrame.functionName || '(anon)') + ' ' + n.callFrame.url.split('/').pop() + ':' + (n.callFrame.lineNumber + 1); self.set(k, (self.get(k) || 0) + (dt[i] || 0)); }
+        const tot = [...self.values()].reduce((a, b) => a + b, 0);
+        console.log('ПРОФИЛЬ первого падения (собственное время, мс и %; всего ' + (tot / 1000).toFixed(0) + ' мс):\n' + [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, v]) => '  ' + (v / 1000).toFixed(1).padStart(7) + ' ' + (v / tot * 100).toFixed(1).padStart(5) + '  ' + k).join('\n'));
+      }
+      if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      console.log('T-138 башня и великан падают' + (PHONE ? ' (телефон, ЦП ×4)' : ''), JSON.stringify(res.tp));
+      await shot('topple-after');
+      ok(res.tp.leaned >= 1 && res.tp.far >= 15, 'подрубленная башня кренится и падает целой к подрубу (легла: ' + res.tp.far + ' блоков)', res.tp);
+      ok(res.tp.went && res.tp.fells >= 1 && res.tp.lying >= 8, 'великан: подруб и запил — упал целым, брёвна лежат (' + res.tp.lying + ')', res.tp);
+      ok(res.tp.maxReads <= 2048, 'чтений мира за такт ≤ 2048 (потолок)', res.tp.maxReads);
+      if (!process.env.KB_NO_DEBRIS) ok(res.tp.deb && res.tp.deb.broke >= 1 && res.tp.deb.left === 0 && res.tp.deb.blocks + res.tp.deb.items >= res.tp.deb.broke, 'шаг 2 (F4): верх башни отломился обломками (' + (res.tp.deb && res.tp.deb.broke) + '), все легли блоками / вещами; скатились по спуску — ' + (res.tp.deb && res.tp.deb.down), res.tp.deb);
+      if (!process.env.KB_NO_DEBRIS) ok(res.tp.deb && res.tp.deb.ceilMax <= 6144, 'общий потолок за такт (постройки + обломки) ≤ 6144 операций', res.tp.deb);
+      // 20 кругов «построил — подрубил — упало — убрал»: память JS не растёт
+      const h0 = await heap();
+      const rounds = [], hsR = [];   // куча после каждого круга (после сборки мусора)
+      for (let k = 0; k < +(process.env.KB_N || 20); k++) { if (process.env.KB_AB) await ev(`(() => { const K = window.KubomirDebris; K.ON = K.ITEMS = ${k % 2 === 0}; return 1; })()`); await ev(scene, 120000); if (process.env.KB_SCENE_ONLY) { rounds.push([1, 0, 0, 0, 0, 0, {}]); hsR.push(await heap()); continue; } if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 }); const r = await ev(run, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 }); rounds.push([r.went && r.far >= 15 ? 1 : 0, r.cpuFall, r.p95, r.max, r.fps, r.worstTickMs, r.ms, r.deb ? r.deb.worstTickMs : 0, r.deb ? r.deb.broke : 0, r.deb ? r.deb.down : 0]); hsR.push(await heap()); }
+      const h1 = await heap(); res.tpHeap = { h0, h1 }; console.log('T-138 память, МБ', JSON.stringify(res.tpHeap));
+      if (process.env.KB_AB && rounds.length >= 4) { const sum = R => { const col = i => R.map(r => r[i]).sort((a, b) => a - b), med = a => a[a.length >> 1]; return { n: R.length, cpuMed: med(col(1)), p95Med: med(col(2)), maxMed: med(col(3)), maxMax: col(3)[R.length - 1], fpsMed: med(col(4)), tickMed: med(col(5)), tickMax: col(5)[R.length - 1], debTickMed: med(col(7)), brokeMed: med(col(8)) }; };
+        res.tpAB = { on: sum(rounds.filter((r, i) => i % 2 === 0)), off: sum(rounds.filter((r, i) => i % 2 === 1)) }; console.log('T-138 A/B обломки вкл / выкл (круги через один)', JSON.stringify(res.tpAB)); }
+      if (rounds.length) { const col = i => rounds.map(r => r[i]).sort((a, b) => a - b), med = a => a[a.length >> 1]; res.tpRounds = { n: rounds.length, ok: rounds.filter(r => r[0]).length, cpuMed: med(col(1)), p95Med: med(col(2)), maxMed: med(col(3)), maxMax: col(3)[rounds.length - 1], fpsMed: med(col(4)), tickMed: med(col(5)), tickMax: col(5)[rounds.length - 1], debTickMed: med(col(7)), debTickMax: col(7)[rounds.length - 1], brokeMed: med(col(8)), downMed: med(col(9)), evMed: Object.fromEntries(Object.keys(rounds[0][6] || {}).map(k => [k, med(rounds.map(r => r[6][k]).sort((a, b) => a - b))])) }; console.log('T-138 круги' + (PHONE ? ' (ЦП ×4)' : ''), JSON.stringify(res.tpRounds)); ok(res.tpRounds.ok === rounds.length, 'каждый круг: башня и великан упали', res.tpRounds); }
+      // сама сцена (каждый круг заново 41×29×31 клеток: снести, построить) растёт ~1,7 МБ / круг и без T-138 (KB_SCENE_ONLY=1 — та же сцена с
+      // выключенными флагами); утечку T-138 ловят 20× reopen с падением (KB_TOPPLE=1) и node-проба (40 падений в одном мире — +0,24 МБ)
+      // наклон по ПОЛУ: меньший из первых 5 и из последних 5 замеров (куча после ~10 открытий и без T-138 скачет через раз на ~45 МБ — reopen)
+      const NR = hsR.length, lo5 = a => Math.min(...a), per = NR >= 10 ? (lo5(hsR.slice(-5)) - lo5(hsR.slice(0, 5))) / (NR - 5) : (h1 - h0) / Math.max(1, NR);
+      res.tpHeap.rounds = hsR; res.tpHeap.perRound = +per.toFixed(2); console.log('T-138 куча по кругам, МБ', hsR.join(' '));
+      ok(per < 3, NR + ' кругов «башня и великан упали — убрали»: ' + per.toFixed(2) + ' МБ / круг по полу кучи (сцена без T-138 — KB_SCENE_ONLY)', res.tpHeap);
+      const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`), errs = logs.filter(l => !/X3595|DevTools|favicon/i.test(l));
+      ok(!pr.bad.length, 'все программы шейдеров собрались', pr.bad);
+      ok(!errs.length, 'в консоли — без ошибок и исключений', errs.slice(0, 6));
+      return;
+    }
     if (MODE === 'soak') {
       const MIN = +process.env.KB_MIN || 10, t0 = Date.now(), h0 = await heap(), ex0 = logs.length;
       await idle();
@@ -260,6 +368,17 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           C.press('jump', false); C.press('run', false); C.press('forward', false);
           // огонь (KB_FIRE=1): поджигает доски рядом и иногда льёт воду — горит, гаснет, рушится
           if (${FIRE ? 1 : 0} && n % 5 === 2 && S.fire?.F) { const V = D37E.vox, W = S.W, x0 = Math.floor(S.P.x) + 3, z0 = Math.floor(S.P.z), y0 = Math.floor(S.P.y); for (let x = x0; x < x0 + 3; x++) for (let z = z0; z < z0 + 3; z++) W.set(x, y0 + 2, z, V.cell(V.ID.planks_oak), { urgent: 1 }); S.fire.igniteAt(x0 + 1, y0 + 2, z0 + 1, 0, 1, 0); if (n % 10 === 7) W.set(x0 + 1, y0 + 3, z0 + 1, V.cell(V.ID.water), { urgent: 1 }); }
+          // T-138 (KB_TOPPLE=1): рядом подрубленная башня кренится и падает, живое дерево — подруб и запил
+          if (${process.env.KB_TOPPLE ? 1 : 0} && n % 4 === 3 && S.topple && S.sup) {
+            const V = D37E.vox, W = S.W, ID = V.ID, bx = Math.floor(S.P.x) + 5, bz = Math.floor(S.P.z), by = Math.floor(S.P.y);
+            const nat = (x, y, z, id) => { W.set(x, y, z, V.cell(id), { urgent: 1 }); W.chunkAt(x, z)?.edits?.delete(((x & 15) << 11) | ((z & 15) << 7) | y); };
+            for (let y = by; y < by + 7; y++) for (let x = bx; x < bx + 2; x++) for (let z = bz; z < bz + 2; z++) if (!W.raw(x, y, z)) W.set(x, y, z, V.cell(ID.stone_bricks), { urgent: 1 });
+            await wait(300); for (let z = bz; z < bz + 2; z++) { const c = S.sup.code(bx + 1, by, z); W.set(bx + 1, by, z, 0, { urgent: 1 }); S.sup.removed(bx + 1, by, z, c); }
+            const tx = Math.floor(S.P.x) - 5, tz = Math.floor(S.P.z) + 2; for (let y = by; y < by + 6; y++) if (!W.raw(tx, y, tz)) nat(tx, y, tz, ID.log_oak); for (let y = by + 4; y < by + 7; y++) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (!W.raw(tx + dx, y, tz + dz)) nat(tx + dx, y, tz + dz, ID.leaves_oak);
+            const M = S.mine, h = nx => ({ x: tx, y: by + 1, z: tz, v: W.raw(tx, by + 1, tz), nx, ny: 0, nz: 0 });
+            for (const [nx, k] of [[1, 3], [-1, 5]]) for (let i = 0; i < k; i++) { const q = h(nx); if (!(q.v > 0)) break; M.need = 1; M.t = .126; S.topple.mine(q, V.blocks[q.v & 0xfff], M); }
+            M.t = 0; M.key = '';
+          }
           // ставит и ломает
           if (n % 3 === 0) { T.give?.({ id: ['planks_oak', 'stone', 'torch', 'glass'][n % 4], n: 16 }); S.P.sel = 0; for (let i = 0; i < 3; i++) { T.use?.(); await wait(150); T.dig?.(); await wait(150); } }
           // бой (T-012): меч и щит против зомби, поменять руки, лук со стрелой
@@ -283,8 +402,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const h1 = await heap(), errs = logs.slice(ex0).filter(l => !/X3595|DevTools|favicon/i.test(l));
       // мир «Обрушение» (KB_SUPPORT=1): сколько было пересчётов и обрушений — что прогон их правда задел
       const fireSt = FIRE ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.fire; return X?.F ? { burnt: X.stats.burnt, ignited: X.F.stats.ignited, out: X.F.stats.out, peak: X.F.stats.peak, blocks: X.blocks.n } : null; })()`, 10000).catch(() => null) : undefined;
+      const tpl = process.env.KB_TOPPLE ? await ev(`(() => { const s = GAME_IMPL.kubomir._test.state()?.topple?.stats; const d = GAME_IMPL.kubomir._test.state()?.debris?.stats; return s ? { leans: s.leans, tips: s.tips, fells: s.fells, lands: s.lands, hangs: s.hangs, back: s.back, checks: s.checks, maxTickMs: +s.maxTickMs.toFixed(2), broke: s.broke | 0, slid: s.slid | 0, ceilMax: s.ceilMax | 0, debris: d ? { spawned: d.spawned, blocks: d.blocks, items: d.items, rolledItems: d.rolledItems, maxTickMs: +d.maxTickMs.toFixed(2) } : null } : null; })()`, 10000).catch(() => null) : null;
       const sup = SUPPORT ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.sup, s = X?.stats; return s ? { mode: X.mode, load: !!X.load, solves: s.solves, avgMs: +(s.ms / Math.max(1, s.solves)).toFixed(2), maxMs: +s.maxMs.toFixed(1), groups: s.groups, cells: s.cells | 0, refused: s.refused, jobs: s.jobs, restarts: s.restarts, crushed: s.crushed, tickAvgMs: s.ticks ? +(s.tickMs / s.ticks).toFixed(3) : 0, maxTickMs: +(s.maxTickMs || 0).toFixed(2) } : null; })()`, 10000).catch(() => null) : undefined;
-      res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6), sup, fire: fireSt };
+      res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6), sup, fire: fireSt, topple: tpl };
       console.log('ЗАМЕР soak', JSON.stringify(res.soak));
       ok(!errs.length, MIN + ' мин игры — без ошибок и исключений в консоли', errs.slice(0, 6));
       ok((res.moved | 0) >= (res.walk | 0) * .5, 'игрок ходил (ввод не заперт окном или меню) — в половине шагов и больше', { moved: res.moved | 0, of: res.walk | 0 });
@@ -710,7 +830,14 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         if (FIRE) await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, P = S.P, x0 = Math.floor(P.x) + 3, z0 = Math.floor(P.z), y0 = Math.floor(P.y);
           for (let x = x0; x < x0 + 5; x++) for (let z = z0 - 2; z < z0 + 3; z++) for (let y = y0; y < y0 + 3; y++) W.set(x, y, z, V.cell(V.ID.planks_oak), { urgent: 1 });
           S.fire?.igniteAt(x0, y0 + 2, z0, 0, 1, 0); S.fire?.igniteAt(x0 + 4, y0 + 2, z0 + 2, 0, 1, 0); await new Promise(r => setTimeout(r, 6000)); return S.fire?.F?.n || 0; })()`, 30000);   // мир с пожаром: пламя, дым, звук — каждый раз
+        if (process.env.KB_TOPPLE) res.tpReopen = await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, ID = V.ID, wait = ms => new Promise(r => setTimeout(r, ms));   // T-138: башня кренится и падает, дерево подрублено — закрыть посреди падения (flush)
+          if (!S.topple || !S.sup) return { none: true }; const bx = Math.floor(S.P.x) + 4, bz = Math.floor(S.P.z), by = Math.floor(S.P.y);
+          for (let y = by; y < by + 8; y++) for (let x = bx; x < bx + 2; x++) for (let z = bz; z < bz + 2; z++) W.set(x, y, z, V.cell(ID.stone_bricks), { urgent: 1 });
+          await wait(300); for (let z = bz; z < bz + 2; z++) { const c = S.sup.code(bx + 1, by, z); W.set(bx + 1, by, z, 0, { urgent: 1 }); S.sup.removed(bx + 1, by, z, c); }
+          await wait(1500); return { bodies: S.topple.bodies().length, leans: S.topple.stats.leans + S.topple.stats.tips }; })()`, 30000);
         hs.push(await heap());
+        // сколько миров (D37E.vox.World) живо в куче — 1 (этот): старый мир никто не держит (иначе скачок памяти — удержанный мир)
+        try { const p = await send('Runtime.evaluate', { expression: 'D37E.vox.World.prototype' }), q = await send('Runtime.queryObjects', { prototypeObjectId: p.result.objectId }), c = await send('Runtime.callFunctionOn', { objectId: q.objects.objectId, functionDeclaration: 'function(){ return this.length; }', returnByValue: true }); (res.worlds = res.worlds || []).push(c.result.value); await send('Runtime.releaseObject', { objectId: q.objects.objectId }); } catch (e) { (res.worlds = res.worlds || []).push(-1); }
         await ev(`(async () => { await GAME_IMPL.kubomir._test.stop(); GAME_IMPL.kubomir._test.menu(); return true; })()`, 60000);
         for (let k = 0; k < 60; k++) { await sleep(500); if (await ev(`!!document.querySelector('.kb-world [data-w="play"]')`, 3000).catch(() => false)) break; }
         await ev(`(() => { const b = document.querySelector('.kb-world [data-w="play"]'); b && b.click(); return !!b; })()`);
@@ -720,7 +847,11 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       }
       await idle(); await new Promise(r => setTimeout(r, 2000)); hs.push(await heap());
       res.reopen = hs; console.log('ЗАМЕР reopen, память JS после сборки мусора (МБ):', hs.join(' → '));
-      ok(hs.length >= 8 && hs[hs.length - 1] - hs[1] < 25, 'закрыть/открыть мир ' + (hs.length - 1) + ' раз — память не растёт', hs);
+      // пол последних замеров (меньший из 6): после ~10-го открытия куча и БЕЗ T-138 скачет через раз на ~+45 МБ (112 ↔ 155, мир в куче
+      // один — не удержан; замер 29.10, KB_TOPPLE и без) — утечка поднимает пол, скачок через раз — нет
+      const floor = Math.min(...hs.slice(-6)); res.reopenFloor = floor;
+      ok(hs.length >= 8 && floor - hs[1] < 25, 'закрыть/открыть мир ' + (hs.length - 1) + ' раз — память не растёт (пол последних 6 — ' + floor + ' МБ)', hs);
+      if (res.worlds) ok(res.worlds.every(n => n === 1), 'старые миры не держатся: в куче всегда один D37E.vox.World', res.worlds);
       if (LOAD) ok(!res.loadLost, 'мир с нагрузкой после каждого открытия — с нагрузкой (meta.load сохраняется)', res.loadLost | 0);
       return;
     }
@@ -741,7 +872,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     for (let i = 0; i < 120; i++) { await sleep(500); const okm = await ev(`!!document.querySelector('.kb-menu')`, 3000).catch(() => false); if (okm) break; }
     await ev(`(() => { const b = [...document.querySelectorAll('button')].find(x => /Новый мир/.test(x.textContent)); b && b.click(); return !!b; })()`);
     await sleep(500);
-    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' || MODE === 'combat' || MODE === 'swim' ? 'survival' : 'creative'}"]'); c && c.click(); ${MODE === 'swim' ? `document.querySelector('[data-f="diff"] [data-v="peaceful"]')?.click();` : ''} ${SUPPORT ? `document.querySelector('[data-f="support"] [data-v="real"]')?.click();` : ''} ${FIRE ? `document.querySelector('[data-f="fire"] [data-v="spread"]')?.click();` : ''} const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
+    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' || MODE === 'combat' || MODE === 'swim' || MODE === 'topple' ? 'survival' : 'creative'}"]'); c && c.click(); ${MODE === 'swim' ? `document.querySelector('[data-f="diff"] [data-v="peaceful"]')?.click();` : ''} ${SUPPORT ? `document.querySelector('[data-f="support"] [data-v="real"]')?.click();` : ''} ${FIRE ? `document.querySelector('[data-f="fire"] [data-v="spread"]')?.click();` : ''} const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
     let kb = false;
     for (let i = 0; i < 240 && !kb; i++) { await sleep(500); kb = await ev(`!!(GAME_IMPL.kubomir?._test?.state()?.ready && GAME_IMPL.kubomir._test.state().WX)`, 3000).catch(() => false); }
     if (!kb) { await shot('debug-open'); console.log('  состояние:', JSON.stringify(await ev(`(() => { const S = GAME_IMPL.kubomir?._test?.state(); return S ? { ready: S.ready, wx: !!S.WX, view: document.querySelector('.kb-screen')?.textContent?.slice(0, 200) } : { none: true, html: document.querySelector('.kb-screen')?.innerText?.slice(0, 300) }; })()`).catch(e => e.message))); }

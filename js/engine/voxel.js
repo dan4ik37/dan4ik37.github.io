@@ -587,6 +587,16 @@
   // ═══ Луч по блокам (DDA): первый блок, у которого есть рамка (и pick(тип) не против) ═══
   // → { x, y, z, nx, ny, nz, t, v } или null. Вода и воздух пропускаются (pick может разрешить воду). Без pick лёд времён
   // года — цель (прицел: разбить, поставить блок на лёд): тогда ещё ice: true и box — его рамка.
+  // T-138 (ревью D1, D7): W.bodyAt(x, y, z) — тело в полёте / в крене / повисшее (kubomir-topple.js): клетка воздуха мира, которую
+  // занимает тело (по его позе), → значение блока тела (0 — нет); луч прицела видит тело (hit.body), moveBox упирается в него.
+  // V.cutsOn — надрубы (плитка .cut — восьмые клетки с 6 сторон): луч и столкновения — по коробке без снятого (как рисует сетка).
+  // Нет тел / надрубов — как было (W.bodyAt не задан, V.cutsOn = false)
+  V.cutsOn = false;
+  const CUTB = [0, 0, 0, 1, 1, 1];
+  // коробка надрубленного кубика: c — срез (6 × 4 бита: +x, −x, +y, −y, +z, −z) → out (доли блока)
+  const cutBox = (c, out) => { out[0] = ((c >>> 4) & 15) / 8; out[3] = 1 - (c & 15) / 8; out[1] = ((c >>> 12) & 15) / 8; out[4] = 1 - ((c >>> 8) & 15) / 8; out[2] = ((c >>> 20) & 15) / 8; out[5] = 1 - ((c >>> 16) & 15) / 8; return out; };
+  V.cutBox = cutBox;
+  const cutOf = (W, x, y, z) => { if (!W.tile) return 0; const t = W.tile(x, y, z); return t && t.cut ? t.cut | 0 : 0; };
   V.raycast = (W, ox, oy, oz, dx, dy, dz, maxT, pick) => {
     const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
     let x = Math.floor(ox), y = Math.floor(oy), z = Math.floor(oz);
@@ -594,6 +604,7 @@
     const tdx = dx ? Math.abs(1 / dx) : Infinity, tdy = dy ? Math.abs(1 / dy) : Infinity, tdz = dz ? Math.abs(1 / dz) : Infinity;
     let tx = dx ? ((dx > 0 ? x + 1 - ox : ox - x) * tdx) : Infinity, ty = dy ? ((dy > 0 ? y + 1 - oy : oy - y) * tdy) : Infinity, tz = dz ? ((dz > 0 ? z + 1 - oz : oz - z) * tdz) : Infinity;
     let nx = 0, ny = 0, nz = 0, t = 0;
+    const BA = W.bodyAt || null;
     for (let n = 0; n < 512 && t <= maxT; n++) {
       const v = W.raw(x, y, z);
       if (v > 0) {
@@ -601,13 +612,15 @@
         if (!pick || pick(tp, v)) {
           let bx = V.boxOf(v, false) || (pick && V.T.liquid[tp] ? [0, 0, 0, 1, .875, 1] : null), ice = false;
           if (!bx && !pick && V.iceTest && iceAt(W, x, y, z, v)) { bx = V.iceBox(v); ice = true; }
+          if (bx === FULL && V.cutsOn) { const c = cutOf(W, x, y, z); if (c) bx = cutBox(c, CUTB); }   // надрубленный — по коробке без снятого
           if (bx) {
             if (bx === FULL) return { x, y, z, nx, ny, nz, t, v };
             const h = rayBox(ox - x, oy - y, oz - z, dx, dy, dz, bx);
-            if (h && h.t <= maxT) { const r = { x, y, z, nx: h.nx, ny: h.ny, nz: h.nz, t: h.t, v }; if (ice) { r.ice = true; r.box = bx; if (!(h.nx || h.ny || h.nz)) r.ny = oy >= y + bx[4] ? 1 : -1; } return r; }
+            if (h && h.t <= maxT) { const r = { x, y, z, nx: h.nx, ny: h.ny, nz: h.nz, t: h.t, v }; if (bx === CUTB) r.box = CUTB.slice(); if (ice) { r.ice = true; r.box = bx; if (!(h.nx || h.ny || h.nz)) r.ny = oy >= y + bx[4] ? 1 : -1; } return r; }
           }
         }
       } else if (v < 0) return null;   // не загружено
+      else if (BA !== null) { const bv = BA(x, y, z); if (bv > 0 && (!pick || pick(bv & TYPE, bv))) return { x, y, z, nx, ny, nz, t, v: bv, body: true }; }   // тело в крене / полёте / повисшее
       if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; nx = -sx; ny = 0; nz = 0; }
       else if (ty < tz) { y += sy; t = ty; ty += tdy; nx = 0; ny = -sy; nz = 0; }
       else { z += sz; t = tz; tz += tdz; nx = 0; ny = 0; nz = -sz; }
@@ -656,19 +669,31 @@
   // столбец (x, z) для moveBox: у настоящего мира (V.World со своим raw) чанк ищется один раз на столбец, клетка — как W.raw
   // (ниже 0 — коренная порода, выше — воздух, нет чанка — −1, «стена»); любой другой мир (свой raw: проверки, моды) — его raw
   const RAW = World.prototype.raw;
-  let colC = null, colI = 0, colW = null, colX = 0, colZ = 0;
+  let colC = null, colI = 0, colW = null, colX = 0, colZ = 0, colOX = 0, colOZ = 0, OVF = null, CUTW = null;
   const colAt = (W, x, z) => {
+    colOX = x; colOZ = z;
     if (W.raw === RAW) { const c = W.chunk(x >> 4, z >> 4); colC = c && c.gen ? c : null; colI = ((x & 15) << 11) | ((z & 15) << 7); colW = null; }
     else { colW = W; colX = x; colZ = z; }
   };
-  const cellV = y => colW !== null ? colW.raw(colX, y, colZ) : y < 0 ? 7 : y >= H ? 0 : colC !== null ? colC.ids[colI | y] : -1;
+  // воздух мира — может быть занят телом (W.bodyAt, T-138): столкновение с ним — как с блоком
+  const cellV = y => { const v = colW !== null ? colW.raw(colX, y, colZ) : y < 0 ? 7 : y >= H ? 0 : colC !== null ? colC.ids[colI | y] : -1; return v === 0 && OVF !== null ? OVF(colOX, y, colOZ) : v; };
+  // надрубленный кубик (V.cutsOn): коробка столкновений — без снятого (плитка клетки столбца)
+  const cutAdj = (y, out) => {
+    let t;
+    if (colC !== null) { const m = colC.tiles; if (!m || m.size === 0) return; t = m.get(colI | y); }
+    else if (CUTW !== null && CUTW.tile) t = CUTW.tile(colOX, y, colOZ);
+    else return;
+    if (!t || !t.cut || out[0] !== 0 || out[1] !== 0 || out[2] !== 0 || out[3] !== 1 || out[4] !== 1 || out[5] !== 1) return;
+    cutBox(t.cut | 0, out);
+  };
   // Сдвиг — через типизированный массив: V.moveBox маленькая (встраивается у вызывающего), большая часть — moveCore(W, b) без
   // дробных аргументов (дробное в аргументе невстроенной функции V8 заворачивает в новый HeapNumber — по 16 байт на сдвиг)
   const MD = new Float64Array(3);
   V.moveBox = (W, b, dx, dy, dz) => { MD[0] = dx; MD[1] = dy; MD[2] = dz; return moveCore(W, b); };
   function moveCore(W, b){
     const dx = MD[0], dy = MD[1], dz = MD[2];
-    const hw = b.w / 2, EPS = 1e-4, ice = !!V.iceTest;
+    const hw = b.w / 2, EPS = 1e-4, ice = !!V.iceTest, cuts = V.cutsOn;
+    OVF = W.bodyAt || null; CUTW = W;
     b.hitX = b.hitY = b.hitZ = false;
     // по y
     if (dy) {
@@ -679,6 +704,7 @@
         colAt(W, x, z);
         for (let y = ya; y <= yb; y++) {
           if (!solidV(W, cellV(y), x, y, z, BX, icy)) continue;
+          if (cuts) cutAdj(y, BX);
           if (b.x + hw <= x + BX[0] + EPS || b.x - hw >= x + BX[3] - EPS || b.z + hw <= z + BX[2] + EPS || b.z - hw >= z + BX[5] - EPS) continue;
           const top = y + BX[4], bot = y + BX[1];
           if (dy < 0 && b.y >= top - EPS && ny < top) { ny = top; b.hitY = true; }
@@ -697,6 +723,7 @@
         colAt(W, x, z);
         for (let y = y0; y <= y1; y++) {
           if (!solidV(W, cellV(y), x, y, z, BX, ice)) continue;
+          if (cuts) cutAdj(y, BX);
           if (b.y + b.h <= y + BX[1] + EPS || b.y >= y + BX[4] - EPS) continue;
           if (q + hw <= z + BX[2] + EPS || q - hw >= z + BX[5] - EPS) continue;
           const lo = x + BX[0], hi = x + BX[3];
@@ -714,6 +741,7 @@
         colAt(W, x, z);
         for (let y = y0; y <= y1; y++) {
           if (!solidV(W, cellV(y), x, y, z, BX, ice)) continue;
+          if (cuts) cutAdj(y, BX);
           if (b.y + b.h <= y + BX[1] + EPS || b.y >= y + BX[4] - EPS) continue;
           if (q + hw <= x + BX[0] + EPS || q - hw >= x + BX[3] - EPS) continue;
           const lo = z + BX[2], hi = z + BX[5];
@@ -723,7 +751,7 @@
       }
       b.z = np;
     }
-    colC = null; colW = null;   // чанк и мир не держим (их могли выгрузить)
+    colC = null; colW = null; OVF = null; CUTW = null;   // чанк и мир не держим (их могли выгрузить)
     return b;
   }
   // Пересекается ли коробка с твёрдым (нельзя поставить блок туда, где стоит игрок; встать после приседа); ice — и лёд времён

@@ -17,7 +17,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const MODE = process.argv[2] || 'basic';
-const TMP = 'E:/claude-tmp/coop', SHOTS = path.join(TMP, 'shots');
+const TMP = process.env.D37_TMP ? path.join(process.env.D37_TMP, 'coop') : 'E:/claude-tmp/coop', SHOTS = path.join(TMP, 'shots');   // D37_TMP — своя временная папка задачи
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -193,6 +193,39 @@ async function basic(A, B){
   await A.ev(`(() => { const S = ${ST}, G = [...S.net.guests.values()][0]; S.ents.addItem(G.tx, G.ty + 1, G.tz, { id: 'diamond', n: 3 }); return 1; })()`);
   ok(await waitFor(B, `${ST}.P.inv.some(s => s && s.id === 'diamond' && s.n === 3)`, 8000), 'вещь подобрал гость (хозяин отдал)');
   ok(await waitFor(A, `!${ST}.ents.items.some(e => e.s.id === 'diamond')`, 3000), 'у хозяина вещи в мире больше нет');
+  // T-138 шаг 2 (F5): решает хозяин. Гость надрубает камень — срез у гостя от хозяина; гость рубит живое дерево (подруб + запил) —
+  // валит хозяин, у гостя видно падение (события 'kt'), брёвна лежат в обоих мирах одинаково
+  { const sx = P0.x + 2, sy = P0.y + 1, sz = P0.z - 2;
+    await Promise.all([A, B].map(P => P.ev(`(${ST}.creative = false, 1)`)));   // мир basic — «творчество» (там ломают сразу, без надрубов): на время проверки — выживание у обоих
+    await A.ev(`(() => { const S = ${ST}, V = D37E.vox; S.W.set(${sx}, ${sy}, ${sz}, V.cell(V.ID.stone), { urgent: 3 }); return 1; })()`);
+    await waitFor(B, `${ST}.W.get(${sx}, ${sy}, ${sz}) === D37E.vox.ID.stone`, 5000);
+    await B.ev(`(() => { const S = ${ST}, V = D37E.vox, M = S.mine; M.need = 1; M.t = .5 + 1e-6; const v = S.W.raw(${sx}, ${sy}, ${sz}); return S.topple.mine({ x: ${sx}, y: ${sy}, z: ${sz}, v, nx: -1, ny: 0, nz: 0 }, V.blocks[v & 0xfff], M); })()`);
+    const cutH = await waitFor(A, `${ST}.topple.cutAt(${sx}, ${sy}, ${sz})`, 5000), cutG = await waitFor(B, `${ST}.topple.cutAt(${sx}, ${sy}, ${sz})`, 5000);
+    ok(cutH && cutH === cutG && (await B.ev(`${ST}.W.get(${sx}, ${sy}, ${sz})`)) === (await A.ev('D37E.vox.ID.stone')), 'T-138: гость надрубил камень (2 удара) — срез сделал хозяин, у гостя тот же срез', { cutH, cutG });
+    const tx = P0.x + 4, tz = P0.z + 4, gy = P0.y;
+    const plant = `(() => { const S = ${ST}, V = D37E.vox, W = S.W, nat = (x, y, z, n) => { W.set(x, y, z, V.cell(V.ID[n]), { urgent: 3 }); W.chunkAt(x, z)?.edits?.delete(((x & 15) << 11) | ((z & 15) << 7) | y); };
+      for (let x = ${tx} - 2; x <= ${tx} + 12; x++) for (let z = ${tz} - 3; z <= ${tz} + 3; z++) { for (let y = ${gy}; y < ${gy} + 12; y++) if (W.raw(x, y, z) > 0) W.set(x, y, z, 0, { urgent: 3 }); W.set(x, ${gy} - 1, z, V.cell(V.ID.stone), { urgent: 3 }); }
+      for (let y = ${gy}; y < ${gy} + 7; y++) nat(${tx}, y, ${tz}, 'log_oak');
+      for (let y = ${gy} + 5; y < ${gy} + 8; y++) for (let x = ${tx} - 2; x <= ${tx} + 2; x++) for (let z = ${tz} - 2; z <= ${tz} + 2; z++) if (!W.raw(x, y, z)) nat(x, y, z, 'leaves_oak');
+      return 1; })()`;
+    await A.ev(plant);
+    await waitFor(B, `${ST}.W.get(${tx}, ${gy} + 6, ${tz}) === D37E.vox.ID.log_oak`, 8000);
+    await B.ev(`(() => { const S = ${ST}, W = S.W; for (let y = ${gy}; y < ${gy} + 9; y++) for (let x = ${tx} - 2; x <= ${tx} + 2; x++) for (let z = ${tz} - 2; z <= ${tz} + 2; z++) W.chunkAt(x, z)?.edits?.delete(((x & 15) << 11) | ((z & 15) << 7) | y); Object.assign(S.P, { x: ${tx} + 2.5, y: ${gy}, z: ${tz} + .5, vx: 0, vy: 0, vz: 0, fly: false }); return 1; })()`);   // у гостя то же «живое» дерево (в игре — из генератора у обоих)
+    await waitFor(A, `(() => { const G = [...${ST}.net.guests.values()][0]; return Math.abs(G.tx - (${tx} + 2.5)) < 1 && Math.abs(G.tz - (${tz} + .5)) < 1 && Math.abs(G.ty - ${gy}) < 1.5; })()`, 5000);   // хозяин видит гостя у дерева (дальность удара)
+    const hit = nx => `(() => { const S = ${ST}, V = D37E.vox, M = S.mine, v = S.W.raw(${tx}, ${gy} + 1, ${tz}); if (!(v > 0)) return -1; M.need = 1; M.t = .125 + 1e-6; return S.topple.mine({ x: ${tx}, y: ${gy} + 1, z: ${tz}, v, nx: ${nx}, ny: 0, nz: 0 }, V.blocks[v & 0xfff], M); })()`;
+    const f0 = await A.ev(`${ST}.topple.stats.fells`), nb0 = await B.ev(`${ST}.topple.stats.netBodies | 0`);
+    for (const [nx, n] of [[1, 3], [-1, 5]]) for (let k = 0; k < n; k++) { await B.ev(hit(nx)); await sleep(450); }
+    const fell = await waitFor(A, `${ST}.topple.stats.fells > ${f0}`, 8000);
+    const seen = await waitFor(B, `(${ST}.topple.stats.netBodies | 0) > ${nb0}`, 8000);
+    await waitFor(A, `!${ST}.topple.bodies().length`, 15000); await sleep(1500);
+    const logs = P => P.ev(`(() => { const S = ${ST}, V = D37E.vox, o = []; for (let x = ${tx} - 9; x <= ${tx} + 9; x++) for (let z = ${tz} - 9; z <= ${tz} + 9; z++) for (let y = ${gy}; y < ${gy} + 3; y++) if (S.W.get(x, y, z) === V.ID.log_oak) o.push(x + ',' + y + ',' + z); return o.join(' '); })()`);
+    const [lA, lB] = await Promise.all([logs(A), logs(B)]);
+    ok(fell && seen && lA.split(' ').length >= 5 && lA === lB, 'T-138: гость рубил живое дерево — повалил хозяин, у гостя видно падение, брёвна лежат одинаково (' + lA.split(' ').length + ')', { fell: !!fell, seen: !!seen, host: lA, guest: lB, kc: await A.ev(`${T}.coop().journal.slice(-12)`), denied: await A.ev(`${T}.coop().stats.denied`), gPos: await A.ev(`(() => { const G = [...${ST}.net.guests.values()][0]; return [G.tx, G.ty, G.tz]; })()`),
+      dbg: { gHits: await B.ev(`${ST}.topple.stats.netHits | 0`), hChips: await A.ev(`${ST}.topple.stats.chips | 0`), hFells: await A.ev(`${ST}.topple.stats.fells | 0`),
+        gMode: await B.ev(`(() => { const S = ${ST}, v = S.W.raw(${tx}, ${gy} + 1, ${tz}); return v > 0 ? S.topple.mines({ x: ${tx}, y: ${gy} + 1, z: ${tz}, v, nx: 1, ny: 0, nz: 0 }, D37E.vox.blocks[v & 0xfff], 1) : -1; })()`),
+        hMode: await A.ev(`(() => { const S = ${ST}, v = S.W.raw(${tx}, ${gy} + 1, ${tz}); return v > 0 ? S.topple.mines({ x: ${tx}, y: ${gy} + 1, z: ${tz}, v, nx: 1, ny: 0, nz: 0 }, D37E.vox.blocks[v & 0xfff], 1) : -1; })()`) } });
+    await Promise.all([A, B].map(P => P.ev(`(${ST}.creative = true, 1)`)));
+  }
   // чат
   await B.ev(`${T}.command('привет всем'), 1`);
   ok(await waitFor(A, `[...document.querySelectorAll('.kb-log div')].some(d => /привет всем/.test(d.textContent))`, 5000), 'чат гостя дошёл до хозяина');
