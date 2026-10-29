@@ -257,7 +257,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     if (st.wx) {   // погода: частицы и небо движка — каждый кадр, свет планеты — 4 раза в секунду
       try {
         st.wx.frame(dt);
-        if ((st.wxT = (st.wxT || 0) - dt) <= 0) { st.wxT = .25; const v = st.wx.vis || st.wx.state; V.setWeather(v ? { cloud: v.cloud, rain: v.rain, fog: v.fog, storm: v.thunder, snowCover: v.snowCover, wet: v.wet } : null); }
+        if ((st.wxT = (st.wxT || 0) - dt) <= 0) { st.wxT = .25; V.setWeather(planetWx(st.wx.vis || st.wx.state)); }
       } catch (e) { console.warn('планета: погода', e); try { st.wx.dispose(); } catch (e2) {} st.wx = null; V.setWeather(null); }
     }
     V.update(dt, st.t, ms);
@@ -293,6 +293,11 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
 
   // ═══ Режимы ═══
   function toggleLand(st){ if (st.mode === 'fly') land(st); else fly(st); }
+  // погода → земля планеты (planet-view.js V.setWeather): крючок для погоды по биомам (T-145, BIOME_WEATHER.md v2 §WX2) — новые поля
+  // (dust, tint, vis, flat) просто идут дальше, когда ядро погоды начнёт их давать
+  function planetWx(v){
+    return v ? { cloud: v.cloud, rain: v.rain, fog: v.fog, storm: v.thunder, snowCover: v.snowCover, wet: v.wet, dust: v.dust, tint: v.tint, vis: v.vis, flat: v.flat } : null;
+  }
   function land(st){
     if (st.mode !== 'fly') return;
     const { P, V, R } = st, F = st.fly;

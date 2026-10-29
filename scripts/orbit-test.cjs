@@ -407,6 +407,28 @@ sec('небо родной: солнце = солнце планеты, ΔL не
     const surf = fl < HOME.R ? [foot[0] - ax[0] * back, foot[1] - ax[1] * back, foot[2] - ax[2] * back] : [h[0] + toF[0] / fl * HOME.R, h[1] + toF[1] / fl * HOME.R, h[2] + toF[2] / fl * HOME.R];
     const under = S.shadow(surf, t, HOME, null), far = S.shadow([h[0] + ax[0] * HOME.R * .2, h[1] + HOME.R * .97, h[2]], t, HOME, null);
     ok(under < .5 && far > .99, 'солнечное затмение: под тенью Луны солнце закрыто, в стороне — нет', { under, far, kind: eo.solar.kind });
+    // T-088: тень затмения бежит по земле — небо из точки под тенью (BF) → тело для шейдера земли (space-view.js eclOf) и доля
+    // солнца по точкам (eclFrac — то же приближение, что в шейдере) против точной (S.shadow)
+    require(path.join(SITE, 'js/engine/space-view.js'));
+    const SVf = E.spaceView, ms = O.EPOCH_MS + t * 1000, Fh = S.frame('home', t, ms), M = Fh.M;
+    const toBF = p => { const d = sub(p, h); return [M[0] * d[0] + M[1] * d[1] + M[2] * d[2], M[3] * d[0] + M[4] * d[1] + M[5] * d[2], M[6] * d[0] + M[7] * d[1] + M[8] * d[2]]; };
+    const pb = toBF(surf), skyU = S.sky('home', t, ms, new Float64Array(pb), []), sunE = skyU[skyU.length - 1], ecl = new Float64Array(5);
+    SVf.eclOf(skyU, HOME.R + 1000, ecl);
+    const fU = SVf.eclFrac(pb, ecl, sunE.d), farB = toBF([h[0] + ax[0] * HOME.R * .2, h[1] + HOME.R * .97, h[2]]), fF = SVf.eclFrac(farB, ecl, sunE.d);
+    ok(Math.abs(ecl[3] - LUNA.R) < 1e-6 && Math.abs(ecl[4] - sunE.rad) < 1e-12, 'тень на земле: тело перед солнцем — Луна (её радиус), угловой радиус солнца', [ecl[3], ecl[4]]);
+    ok(Math.abs(fU - under) < .15 && Math.abs(fU - sunE.light) < .15 && fF > .99, 'доля солнца под тенью ≈ точной (S.shadow), в стороне — 1', { fU, under, light: sunE.light, fF });
+    // тень бежит: через 3 мин тень с этой точки уходит (полная фаза — ~2 мин), доля растёт — и ≈ точной в частной фазе
+    const t2 = t + 180, sky2 = S.sky('home', t2, ms + 1.8e5, new Float64Array(pb), []), e2 = new Float64Array(5); SVf.eclOf(sky2, HOME.R + 1000, e2);
+    { const f2 = SVf.eclFrac(pb, e2, sky2[sky2.length - 1].d), x2 = sky2[sky2.length - 1].light;
+      ok(e2[3] > 0 && f2 > fU + .2 && Math.abs(f2 - x2) < .15, 'через 3 мин тень уходит с этой точки (бежит по земле), доля ≈ точной', { f2, x2, fU }); }
+    // не затмение (полнолуние) — тела перед солнцем нет: земля как раньше (шейдер не считает)
+    const tf = eo.lunar ? eo.lunar.t : t + S.synodic('home', 'luna') / 2, skyF = S.sky('home', tf, O.EPOCH_MS + tf * 1000, new Float64Array(pb), []), eF = new Float64Array(5);
+    SVf.eclOf(skyF, HOME.R + 1000, eF);
+    ok(eF[3] === 0, 'полнолуние: тени затмения на земле нет (uEcl.w = 0)');
+    // без выделения памяти: 10 000 вызовов
+    for (let i = 0; i < 30000; i++) { SVf.eclOf(skyU, HOME.R + 1000, ecl); SVf.eclFrac(pb, ecl, sunE.d); }   // прогрев (оптимизатор)
+    const hp0 = process.memoryUsage().heapUsed; for (let i = 0; i < 10000; i++) { SVf.eclOf(skyU, HOME.R + 1000, ecl); SVf.eclFrac(pb, ecl, sunE.d); }
+    ok(process.memoryUsage().heapUsed - hp0 < 400000, 'eclOf / eclFrac — без мусора', process.memoryUsage().heapUsed - hp0);
   }
   // небо: что видно — Луна (2,6°), Песчаная (точка), солнце (0,27°); заготовок нет
   const sky = S.sky('home', 2.5e7, O.EPOCH_MS + 2.5e10, new Float64Array([0, HOME.R + 2, 0]), []);
