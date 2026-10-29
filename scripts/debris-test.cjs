@@ -5,6 +5,8 @@
 // (blast) — лёгкое летит дальше тяжёлого (Δv = J/m), засыпает (событие SLEEP с клеткой), одинаково при 30 / 60 / 144 кадрах,
 // бюджет чтений за такт (лишние ждут такт, не теряются), мусор за шаг (0 Б), пул полон — −1 (игра делает блок сразу).
 const path = require('path');
+// мусор за шаг меряется и в ci-run (без --expose-gc): gc — через флаги v8 (как topple-test, T138-V4)
+if (typeof globalThis.gc !== 'function') { try { require('v8').setFlagsFromString('--expose-gc'); globalThis.gc = require('vm').runInNewContext('gc'); } catch (e) {} }
 const SITE = path.join(__dirname, '..');
 globalThis.window = globalThis; globalThis.self = globalThis;
 require(path.join(SITE, 'js/engine/debris.js'));
