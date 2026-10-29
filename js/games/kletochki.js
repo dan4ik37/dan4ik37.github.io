@@ -1667,8 +1667,8 @@
     if (ui.sc.textContent !== sc) ui.sc.textContent = sc;
     if (mass > 0) { if (!lifeBest) lifeAt = performance.now(); if (mass > lifeBest) lifeBest = mass; } else if (koAt) lifeBest = 0;
     const left = Math.max(0, Math.ceil(V.left / SPS));
-    const tt = V.phase ? `🏁 ${left}` : `⏱ ${fmtT(left)}`;
-    if (ui.time.textContent !== tt) ui.time.textContent = tt;
+    const tt = V.phase ? `🏁 ${left}` : `⏱ ${fmtT(left)}`, tick = ui.time.textContent !== tt;
+    if (tick) ui.time.textContent = tt;
     if (!ui.ov.hidden) { const lt = ui.ov.querySelector('.io-left'), ls = String(left); if (lt && lt.textContent !== ls) lt.textContent = ls; }   // отсчёт нового раунда — только когда окно видно и число другое
     const net = K.netLabel(S);
     if (ui.net.textContent !== net) ui.net.textContent = net;
@@ -1676,8 +1676,9 @@
     const n = V.lbN, list = [];
     let key = String(S.me);
     for (let k = 0; k < n; k++) key += ',' + V.lbO[k] + ':' + Math.round(V.lbS[k]);
-    // 2.0 (T-123): таблица перерисовывается не чаще раза в секунду (видно 3 строки — хватает; меньше раскладок в покое)
-    if (key !== lbStr && (!ui.v2 || performance.now() - lbAt > 1000)) {
+    // 2.0 (T-123): таблица перерисовывается раз в секунду — в тот же кадр, что и часы ⏱ (одна раскладка в секунду, а не две;
+    // часы стоят — не чаще раза в 2 с)
+    if (key !== lbStr && (!ui.v2 || (tick && performance.now() - lbAt > 900) || performance.now() - lbAt > 2000)) {
       lbStr = key; lbAt = performance.now();
       for (let k = 0; k < n; k++) list.push({ i: V.lbO[k], name: names[V.lbO[k]] || '…', score: V.lbS[k], bot: bots[V.lbO[k]], me: V.lbO[k] === S.me });
       ui.lb.innerHTML = K.lbHtml(list);
