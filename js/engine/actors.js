@@ -4,7 +4,8 @@
 // ═══════════════════════════════════════
 // A = D37E.actors(R). Свой персонаж: A.pose(key, P.pose()) каждый кадр (из player.js); чужие — то же из сети с плавным
 // догоном. Поля позы: x, y, z, yaw, moving, speed (м/с), air, crouch (0…1), sit + seatY (верх сиденья), roll (0…1 или −1),
-// rollBack, hang, ladder, climbPh, pk ('vault' | 'mantle' | 'climb' | 'hang' | 'pullup') + pkK (0…1), swim / dive, crawl (ползком). hidden — не рисовать
+// rollBack, hang, ladder, climbPh, pk ('vault' | 'mantle' | 'climb' | 'hang' | 'pullup') + pkK (0…1), swim / dive, crawl (ползком), lie + seatY (лежит на
+// спине; sleep — глаза закрыты, T-123). hidden — не рисовать
 // (вид от 1-го лица). A.update(dt, t, cam) — каждый кадр (без мусора: свой объект настроек анимации у каждого).
 // Взгляд: ближайший к камере (свой игрок) смотрит туда же, куда камера, а если она спереди — на неё; остальные — на соседа
 // рядом или на камеру поблизости. a.lookAt = { x, y, z } — смотреть на точку (свой выбор игры).
@@ -45,9 +46,9 @@
     function add(key, look, o = {}){
       remove(key);
       const a = { key, x: o.x || 0, y: o.y || 0, z: o.z || 0, yaw: o.yaw || 0, moving: false, speed: 0, air: false, crouch: 0, sit: false, seatY: null, sitY: 0,
-        roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, hidden: false, fade: 1, lastTrail: 0, ch: null, sig: '',
+        roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, lie: false, sleep: false, hidden: false, fade: 1, lastTrail: 0, ch: null, sig: '',
         lod: 0, lookAt: null, lk: null, lkT: Math.random() * .3, lt: { x: 0, y: 0, z: 0 }, phone: '', hold: null, fp: null, vm: null, bob: { ph: 0, w: 0, k: 1 },
-        ao: { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, look: null, phone: '', hold: null } };
+        ao: { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, lie: false, sleep: false, look: null, phone: '', hold: null } };
       setLook(a, look);
       list.set(key, a); sync();
       return a;
@@ -100,10 +101,10 @@
           if (want !== a.lod) { a.lod = want; setLook(a, a.look, true); rebuild = false; }
         }
         const ch = a.ch, root = ch.root, p = root.position;
-        const y = a.sit ? (a.seatY != null ? a.seatY - (ch.hipY || .52) + .03 : a.sitY) : a.y;
+        const y = a.lie ? (a.seatY != null ? a.seatY : a.y) : a.sit ? (a.seatY != null ? a.seatY - (ch.hipY || .52) + .03 : a.sitY) : a.y;   // лежит — на месте (кровать, земля)
         if (p.x !== a.x || p.y !== y || p.z !== a.z) { moved = true; p.set(a.x, y, a.z); }
         const yaw0 = ch.yaw;
-        ch.yaw = E.dampAngle(ch.yaw, a.yaw, a.sit || a.pk || a.hang || a.ladder || a.roll >= 0 ? 40 : 14, dt);
+        ch.yaw = E.dampAngle(ch.yaw, a.yaw, a.sit || a.lie || a.pk || a.hang || a.ladder || a.roll >= 0 ? 40 : 14, dt);
         if (Math.abs(ch.yaw - yaw0) > 1e-4) moved = true;
         root.rotation.y = ch.yaw;
         const far = cam ? Math.hypot(a.x - cam.x, a.z - cam.z) > 42 : false;
@@ -111,9 +112,9 @@
           const o = a.ao;
           o.rate = a.speed < .3 ? 10.5 : 5 + a.speed; o.air = a.air; o.sit = a.sit; o.crouch = a.crouch;
           o.roll = a.roll; o.rollBack = a.rollBack; o.hang = a.hang; o.ladder = a.ladder; o.climbPh = a.climbPh; o.pk = a.pk; o.pkK = a.pkK;
-          o.swim = a.swim; o.dive = a.dive; o.crawl = a.crawl; o.phone = a.phone; o.hold = a.hold;
+          o.swim = a.swim; o.dive = a.dive; o.crawl = a.crawl; o.phone = a.phone; o.hold = a.hold; o.lie = a.lie; o.sleep = a.sleep;
           o.look = far ? null : lookTarget(a, cam, me, t);
-          K.animate(ch, a.moving && !a.sit, far ? dt * 3 : dt, t, o);
+          K.animate(ch, a.moving && !a.sit && !a.lie, far ? dt * 3 : dt, t, o);
           const ps = ch.phS;
           if (ps) {   // телефон: звуки, свечение экрана (mid/high — постобработка), от 1-го лица — кисть у камеры
             if (ps.ev) phoneSounds(a, ps.ev, cam);

@@ -229,7 +229,7 @@
     function touch(on, v, seat){
       const UI = S.H;   // кнопки телефона — интерфейс движка (E.ui), не помощники mir.js
       if (!S.I?.touch || !UI?.buttons) return;
-      if (!on) { if (rt.war?.W?.inZone && rt.war.touch) rt.war.touch(true); else UI.buttons(BASE_BTNS); return; }
+      if (!on) { if (rt.war?.W?.inZone && rt.war.touch) rt.war.touch(true); else UI.buttons(S.baseBtns?.() || BASE_BTNS); return; }
       const air = v.kind === 'heli' || v.kind === 'plane';
       if (seat > 0) { UI.buttons([{ action: 'interact', icon: '🚪', label: 'выйти' }, { action: 'jump', icon: '🧑‍✈️', label: 'за руль' }]); return; }
       UI.buttons(air
@@ -541,8 +541,9 @@
       const alt = d.kind === 'heli' || d.kind === 'plane' ? ` · ↑ ${Math.max(0, Math.round((v.y - ph.groundAt(v.x, v.z)) / (E.UNIT || 1.17)))} м` : '';
       const fuel = d.fuel ? ` · ⛽ ${Math.round(v.fuel / d.fuel.cap * 100)}%` : '', hp = v.hp < d.hp ? ` · ❤️ ${Math.round(v.hp / d.hp * 100)}%` : '';
       const thr = d.kind === 'plane' && m.seat === 0 ? ` · газ ${Math.round(v.thr * 100)}%` : '';
-      hudEl.textContent = `${d.icon} ${kmh} км/ч${alt}${thr}${fuel}${hp}${v.lights ? ' · 💡' : ''}`;
-      hudShow(true);
+      const txt = `${d.icon} ${kmh} км/ч${alt}${thr}${fuel}${hp}${v.lights ? ' · 💡' : ''}`;
+      if (hudEl.textContent !== txt) hudEl.textContent = txt;   // в страницу — только когда сменилось (T-123)
+      if (hudEl.hidden) hudShow(true);
     }
     VS.esc = () => false;
     VS.dispose = () => {

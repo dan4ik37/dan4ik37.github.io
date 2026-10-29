@@ -55,20 +55,30 @@ const SCREENS = process.env.SCREENS ? JSON.parse(process.env.SCREENS) : [['phone
         for (let i = 0; i < 60 && !(document.querySelector('.mz-war') && !document.querySelector('.mz-war').hidden); i++) await new Promise(r => setTimeout(r, 150));
         await new Promise(r => setTimeout(r, 1500));
         document.querySelectorAll('.age-sheet,#appCard,.apu,.apt,.notif-toast,.chat-toast,.wld-panel').forEach(e => e.remove());
-        const war = document.querySelector('.mz-war');
-        return { inZone: !!(war && !war.hidden), n: document.querySelectorAll('.mz-wpn button').length };
+        const war = document.querySelector('.mz-war'), v2 = !!war?.classList.contains('e2');
+        // интерфейс 2.0 (T-123): оружие — лоток .e2-tray (на телефоне свёрнут: нажатие раскрывает весь ряд)
+        const tray = document.querySelector('.e2-tray');
+        if (v2 && tray && !tray.classList.contains('open')) { const r = tray.getBoundingClientRect(); return { inZone: !!(war && !war.hidden), v2, expand: [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] }; }
+        return { inZone: !!(war && !war.hidden), v2, n: document.querySelectorAll(v2 ? '.e2-tray-c:not([hidden])' : '.mz-wpn button').length };
       })()`);
+      if (st.expand) {   // раскрыть лоток касанием (как игрок)
+        await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: st.expand[0], y: st.expand[1], id: 1 }] }); await sleep(60);
+        await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await sleep(300);
+        st.n = await ev(`document.querySelectorAll('.e2-tray-c:not([hidden])').length`);
+      }
+      const WPN = st.v2 ? '.e2-tray-c' : '.mz-wpn button', ON = st.v2 ? 'sel' : 'on';
       ok(st.inZone && st.n === 5, 'в зоне: панель оружия на экране', st);
       const bad = await ev(`(() => { const btns = [...document.querySelectorAll('.e-btn')].filter(b => !b.hidden && b.getBoundingClientRect().width).map(b => b.getBoundingClientRect()), bad = [];
-        [...document.querySelectorAll('.mz-wpn button')].forEach((b, i) => { const r = b.getBoundingClientRect();
-          for (const [x, y] of [[r.left + r.width / 2, r.top + r.height / 2], [r.left + 4, r.top + 4], [r.right - 4, r.top + 4], [r.left + 4, r.bottom - 4], [r.right - 4, r.bottom - 4]]) { const el = document.elementFromPoint(x, y); if (!el || el.closest('.mz-wpn button') !== b) bad.push({ slot: i + 1, at: [Math.round(x), Math.round(y)], top: el ? String(el.className || el.tagName) : null }); }
+        [...document.querySelectorAll(${JSON.stringify(WPN)})].forEach((b, i) => { const r = b.getBoundingClientRect();
+          for (const [x, y] of [[r.left + r.width / 2, r.top + r.height / 2], [r.left + 4, r.top + 4], [r.right - 4, r.top + 4], [r.left + 4, r.bottom - 4], [r.right - 4, r.bottom - 4]]) { const el = document.elementFromPoint(x, y); if (!el || el.closest(${JSON.stringify(WPN)}) !== b) bad.push({ slot: i + 1, at: [Math.round(x), Math.round(y)], top: el ? String(el.className || el.tagName) : null }); }
           for (const q of btns) if (q.left < r.right && q.right > r.left && q.top < r.bottom && q.bottom > r.top) bad.push({ slot: i + 1, overlap: 'кнопка телефона' }); });
         const hp = document.querySelector('.mz-hp')?.getBoundingClientRect(); if (hp) for (const q of btns) if (q.left < hp.right && q.right > hp.left && q.top < hp.bottom && q.bottom > hp.top) bad.push({ hp: 'жизни на кнопке телефона' });
         return bad; })()`);
       ok(!bad.length, 'ячейки целиком свободны (середина и углы), не на кнопках телефона; жизни — тоже', bad.slice(0, 6));
-      const pts = await ev(`[...document.querySelectorAll('.mz-wpn button')].map(b => { const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })`);
-      const sel = () => ev(`[...document.querySelectorAll('.mz-wpn button')].findIndex(b => b.classList.contains('on'))`);
+      const pts0 = await ev(`[...document.querySelectorAll(${JSON.stringify(WPN)})].map(b => { const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })`);
+      const sel = () => ev(`[...document.querySelectorAll(${JSON.stringify(WPN)})].findIndex(b => b.classList.contains(${JSON.stringify(ON)}))`);
       for (const k of [1, 3, 4, 2, 0]) {
+        const pts = st.v2 ? await ev(`[...document.querySelectorAll(${JSON.stringify(WPN)})].map(b => { const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })`) : pts0;   // выбранная ячейка крупнее — ряд сдвигается
         const [x, y] = pts[k];
         if (mode === 'phone') {
           await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] }); await sleep(60);
