@@ -395,5 +395,45 @@ sec('10 минут случайной игры (60 шагов в секунду)
   ok(have >= 0 && have + items >= placed, 'ничего не потерялось: блоки на месте или вещами', [have, items, placed]);
 }
 
-console.log(`\nОбрушение и прочность: ${pass} прошло, ${fail} не прошло`);
-process.exit(fail ? 1 : 0);
+// ═══ 12. v1 golden pin (T-124, SH0.1): hash of sup[] and group lists over a seeded 36,000-step build + boxes (scripts/support-hash.js) ═══
+// The pinned value changes only if v1 behaviour changes — then old saved worlds would behave differently (never allowed).
+// --chrome: the same hash in headless Chrome (CHROME = path to chrome.exe), at 30 / 60 / 144 fps there too.
+const V1_HASH = '8c175736f6541c49';
+sec('v1 pin: hash of support values and groups (36,000 steps, 30 / 60 / 144 fps)');
+(async () => {
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'scripts/support-hash.js'), 'utf8'), { filename: 'scripts/support-hash.js' });
+  const runs = [];
+  for (const fps of FAST ? [60] : [30, 60, 144]) { const t0 = now(); const r = globalThis.D37SupportV1Hash(S, E, { fps }); r.ms = Math.round(now() - t0); runs.push(r); }
+  console.log('  node:', runs.map(r => `${r.fps} fps → ${r.hash} (${r.ms} мс)`).join(', '), `· действий ${runs[0].actions}, обрушений ${runs[0].collapses}, узлов до ${runs[0].nodesMax}, коробок ${runs[0].boxes}`);
+  ok(runs.every(r => r.hash === V1_HASH && r.steps === 36000), 'v1: hash совпадает с закреплённым при 30 / 60 / 144 кадрах (node)', runs.map(r => [r.fps, r.hash]));
+  ok(runs[0].collapses > 20 && runs[0].refused > 50 && runs[0].landed > 20 && runs[0].boxes > 1000, 'v1 pin задевает обрушения, отказы, падение и коробки', runs[0]);
+  if (process.argv.includes('--chrome')) {
+    const r = await chromeHash().catch(e => ({ err: String(e && e.message || e) }));
+    console.log('  Chrome:', JSON.stringify(r));
+    ok(r && !r.err && r.runs.every(x => x.hash === V1_HASH), 'v1: тот же hash в Chrome при 30 / 60 / 144 кадрах', r);
+  }
+  console.log(`\nОбрушение и прочность: ${pass} прошло, ${fail} не прошло`);
+  process.exit(fail ? 1 : 0);
+})();
+async function chromeHash(){
+  const os = require('os'), { spawn } = cp, sleep = ms => new Promise(r => setTimeout(r, ms));
+  const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+  const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+  fs.mkdirSync(path.join(TMP, 'support-hash'), { recursive: true });
+  const prof = fs.mkdtempSync(path.join(TMP, 'support-hash', 'chrome-')), port = 9700 + Math.floor(Math.random() * 200);
+  const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${prof}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' });
+  try {
+    let page = null;
+    for (let i = 0; i < 80 && !page; i++) { try { page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch (e) {} if (!page) await sleep(250); }
+    if (!page) throw new Error('Chrome не запустился');
+    const ws = new WebSocket(page.webSocketDebuggerUrl);
+    await new Promise((a, b) => { ws.onopen = a; ws.onerror = b; });
+    let id = 0; const cb = new Map();
+    ws.onmessage = m => { const d = JSON.parse(m.data); if (d.id && cb.has(d.id)) { cb.get(d.id)(d); cb.delete(d.id); } };
+    const ev = expr => new Promise(a => { const i = ++id; cb.set(i, a); ws.send(JSON.stringify({ id: i, method: 'Runtime.evaluate', params: { expression: expr, returnByValue: true, awaitPromise: true } })); });
+    for (const f of ['js/engine/core.js', 'js/engine/support.js', 'scripts/support-hash.js']) { const d = await ev(fs.readFileSync(path.join(SITE, f), 'utf8')); if (d.result?.exceptionDetails) throw new Error(f + ': ' + d.result.exceptionDetails.text); }
+    const d = await ev(`(() => { const runs = []; for (const fps of [30, 60, 144]) { const t0 = performance.now(); const r = D37SupportV1Hash(D37E.support, D37E, { fps }); runs.push({ fps, hash: r.hash, ms: Math.round(performance.now() - t0) }); } return { ua: navigator.userAgent.match(/Chrome\\/[\\d.]+/)?.[0], runs }; })()`);
+    ws.close();
+    return d.result.result.value;
+  } finally { proc.kill(); }
+}
