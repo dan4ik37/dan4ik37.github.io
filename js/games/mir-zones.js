@@ -287,7 +287,7 @@
   // ═══ Своё состояние игрока по сети (поле zx в 'st'): что можно — белым списком ═══
   // r роль · f семья · a действие · sl [x, y, z, yaw] место (сесть/лечь) · t команда 1/2 · h жизни 0…10 · w оружие · m наёмников
   // pt питомец · wn розыск 0…3 · pr в тюрьме · v транспорт (mir-war / vehicle.js) · c город (детский — строгий чат)
-  const ACTS = new Set(['sit', 'sleep', 'eat', 'carry', 'hose', 'aim', 'heal', 'cook', 'drink', 'dance', 'fix', 'hold']);
+  const ACTS = new Set(['sit', 'sleep', 'lie', 'eat', 'carry', 'hose', 'aim', 'heal', 'cook', 'drink', 'dance', 'fix', 'hold']);
   const ID_RE = /^[a-z][a-z0-9_]{0,15}$/;
   const fin = v => typeof v === 'number' && isFinite(v);
   function cleanZX(o){
@@ -1742,7 +1742,7 @@
       b.className = 'mz-banner ' + cls; b.hidden = false;
       b.innerHTML = `<b>${icon} ${esc(name)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}`;
       b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
-      clearTimeout(rt.bannerT); rt.bannerT = setTimeout(() => { b.hidden = true; }, 3600);
+      clearTimeout(rt.bannerT); rt.bannerT = setTimeout(() => { b.hidden = true; }, S.hud2 ? 2200 : 3600);   // HUD 2.0 (T-123): пилюля вверху, 2,2 с
     }
     rt.banner = banner;
     function areaTick(dt){
@@ -1937,14 +1937,15 @@
     rt.seatPrompt = sp => (S.P.mode === 'sit' ? null : sp.name);
     rt.sitDown = sp => {
       const P = S.P;
-      if (!P.sitOn({ x: sp.x, y: sp.y, z: sp.z, yaw: sp.yaw })) return;
+      const lie = S.hud2 && (sp.bed || sp.lie);   // HUD 2.0 (T-123): кровать — поза «лежит» (player.js seat.lie), лечь можно и на землю
+      if (!P.sitOn({ x: sp.x, y: sp.y, z: sp.z, yaw: sp.yaw, lie, bed: !!sp.bed })) return;
       rt.mySeat = sp;
       const r2 = v => Math.round(v * 100) / 100;
-      rt.setZX({ a: sp.bed ? 'sleep' : 'sit', sl: [r2(sp.x), r2(sp.y), r2(sp.z), r2(sp.yaw)] });
+      rt.setZX({ a: sp.bed ? 'sleep' : sp.lie && S.hud2 ? 'lie' : 'sit', sl: [r2(sp.x), r2(sp.y), r2(sp.z), r2(sp.yaw)] });
       rt.sfx('click');
       if (sp.bed) toast('😴 Спокойной ночи! Пробел или шаг — встать');
     };
-    rt.unsit = () => { if (rt.zx.a === 'sit' || rt.zx.a === 'sleep') rt.setZX({ a: null, sl: null }); rt.mySeat = null; };
+    rt.unsit = () => { if (rt.zx.a === 'sit' || rt.zx.a === 'sleep' || rt.zx.a === 'lie') rt.setZX({ a: null, sl: null }); rt.mySeat = null; };
     S.P.on('stand', () => rt.unsit());
     rt.sitHere = () => {
       const P = S.P, ch = P.ch;
@@ -1958,8 +1959,12 @@
       const ch = S.P.ch;
       let best = null, bd = 5;
       for (const sp of [...[...rt.zones.values()].flatMap(zs => zs.K?.seats || []), ...intSeats]) { const d = Math.hypot(sp.x - ch.x, sp.z - ch.z) + Math.abs(sp.y - ch.y) * 2; if (sp.bed && d < bd) { bd = d; best = sp; } }
-      if (best) rt.sitDown(best); else toast('🛏 Подойди к кровати — в домах и в больнице');
+      if (best) rt.sitDown(best);
+      else if (S.hud2 && S.P.mode === 'move' && ch.grounded) rt.sitDown({ x: ch.x, y: ch.y + .02, z: ch.z, yaw: S.P.yaw, lie: true, name: 'Лечь' });   // HUD 2.0: лечь на землю
+      else toast('🛏 Подойди к кровати — в домах и в больнице');
     };
+    // HUD 2.0 (T-123): «➕ Ещё» в круге позы — действия своей зоны (то же, что было в 🎬)
+    rt.actsList = () => { const Z = rt.area?.zone, D = Z && DEFS[Z.id]; return { title: Z?.short || '', list: typeof D?.actions === 'function' ? D.actions(rt) : D?.actions || [] }; };
     // ── zx: своё состояние для сети ──
     rt.setZX = patch => {
       for (const [k, v] of Object.entries(patch)) { if (v == null) delete rt.zx[k]; else rt.zx[k] = v; }
@@ -2125,10 +2130,12 @@
       // сидит/лежит на месте зоны — у чужих по sl (своему ставит player.js)
       for (const p of S.players.values()) {
         const z = p.zx, a = S.A.get(p.key); if (!a) continue;
-        if (z?.sl && (z.a === 'sit' || z.a === 'sleep')) { a.sit = z.a === 'sit'; a.seatY = z.sl[1]; a.x = z.sl[0]; a.z = z.sl[2]; a.yaw = z.sl[3]; a.moving = false; if (z.a === 'sleep') { a.sit = false; a.y = z.sl[1]; } }
+        const lie = !!(S.hud2 && z?.sl && (z.a === 'sleep' || z.a === 'lie'));   // HUD 2.0 (T-123): лежит — поза «лежит» (world3d 13), а не стоя на кровати
+        if (a.lie !== lie) { a.lie = lie; a.sleep = lie && z.a === 'sleep'; }
+        if (z?.sl && (z.a === 'sit' || z.a === 'sleep' || z.a === 'lie')) { a.sit = z.a === 'sit'; a.seatY = z.sl[1]; a.x = z.sl[0]; a.z = z.sl[2]; a.yaw = z.sl[3]; a.moving = false; if (z.a !== 'sit' && !lie) { a.sit = false; a.y = z.sl[1]; } }
       }
       const me = S.A.get(S.key);
-      if (me && rt.zx.a === 'sleep') { me.sit = false; me.moving = false; }
+      if (me && rt.zx.a === 'sleep' && !S.hud2) { me.sit = false; me.moving = false; }
       for (const zs of rt.mods) { try { zs.mod?.preActors?.(dt, t); } catch (e) { console.error(e); } }
       try { rt.veh?.preActors?.(); } catch (e) { console.error(e); }   // седоки — в машинах
     };
@@ -2140,7 +2147,7 @@
         const p = key === S.key ? S.me : S.players.get(key), z = p === S.me ? rt.zx : p?.zx;
         const ch = a.ch, root3 = ch.root;
         if (root3.rotation.order !== 'YXZ') root3.rotation.order = 'YXZ';
-        if (z?.a === 'sleep' && z.sl) {   // лежит на спине вдоль кровати: голова — к изголовью (−z кровати)
+        if (z?.a === 'sleep' && z.sl && !S.hud2) {   // лежит на спине вдоль кровати: голова — к изголовью (−z кровати; HUD 2.0 — поза world3d 13)
           const [x, y, zz, yaw] = z.sl, L = (ch.top || 2.3) * .5;
           root3.rotation.x = -PI / 2; root3.rotation.y = yaw;
           root3.position.set(x + Math.sin(yaw) * L * .95, y + .18, zz + Math.cos(yaw) * L * .95);
@@ -2177,17 +2184,18 @@
       const P = S.P.ch;
       for (const zs of rt.zones.values()) {
         for (const o of zs.K?.npcs || []) {
-          if (!o._on) { if (o._tagEl) o._tagEl.style.display = 'none'; continue; }
+          if (!o._on) { if (o._tagEl && o._tagEl.style.display !== 'none') o._tagEl.style.display = 'none'; continue; }
           const e = S.NPC.list.get(o.id), h = e && S.NPC.head(e);
           let el = o._tagEl;
           if (!el) { el = o._tagEl = document.createElement('div'); el.className = 'wld-tag wld-npc'; el.innerHTML = '<div class="wld-tbub" hidden></div><b class="wld-tname"></b>'; el.lastChild.textContent = o.name || ''; tagBox.appendChild(el); }
           const far = !h || Math.hypot(h[0] - P.x, h[2] - P.z) > 24 || Math.abs(h[1] - P.y) > 10;   // этажом выше/ниже — без подписи
           const [sx, sy, vis] = h && !far ? R.project(h[0], h[1] + .15, h[2]) : [0, 0, false];
-          if (!vis) { el.style.display = 'none'; continue; }
-          el.style.display = '';
-          el.style.transform = `translate(${Math.round(sx)}px,${Math.round(sy)}px) translate(-50%,-100%)`;
+          if (!vis) { if (el.style.display !== 'none') el.style.display = 'none'; continue; }   // в страницу — только изменившееся (T-123)
+          if (el.style.display) el.style.display = '';
+          const tf = `translate(${Math.round(sx)}px,${Math.round(sy)}px) translate(-50%,-100%)`;
+          if (el._tf !== tf) { el._tf = tf; el.style.transform = tf; }
           const bub = el.firstChild, show = o._tagTxt && now() - o._tagT < 6000;
-          if (show) { if (bub.textContent !== o._tagTxt) bub.textContent = o._tagTxt; bub.hidden = false; } else bub.hidden = true;
+          if (show) { if (bub.textContent !== o._tagTxt) bub.textContent = o._tagTxt; if (bub.hidden) bub.hidden = false; } else if (!bub.hidden) bub.hidden = true;
         }
       }
     }
@@ -2205,7 +2213,7 @@
       const C = S.C;
       if (C && !rt.modal && C.down('map')) openMap();
       else if (C && rt.modal === 'map' && C.downRaw?.('map')) closeMap();
-      if (C && !rt.modal && C.down('emote') && !rt.actBtn.hidden) toggleActs();
+      if (C && !rt.modal && C.down('emote')) { if (S.hud2) S.H?.poseRadial?.(); else if (!rt.actBtn.hidden) toggleActs(); }   // T: HUD 2.0 — круг позы (T-123), раньше — 🎬
       borderTick();
       areaTick(dt);
       lazyT -= dt;

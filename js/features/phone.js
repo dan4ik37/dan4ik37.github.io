@@ -433,13 +433,16 @@
   // ── Домашний экран ──
   function renderHome(){
     const d = new Date();
+    // T-123 (docs/HUD_V2.md §5): гостю — одна тихая строка «Войти» внизу экрана, а не яркая плашка сверху (откат — HUD2.kit = 0)
+    const quietLogin = typeof HUD2 !== 'undefined' && !!HUD2.kit;
     const live = window.D37Calls?.liveInfo?.();
     const day = d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });   // «среда, 15 октября» → «Среда, 15 октября»
     view.innerHTML = `<div class="ph-home">
       <div class="ph-wid"><b>${d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</b><span>${esc(day.charAt(0).toUpperCase() + day.slice(1))}</span>
-        <div class="ph-wid-info">${P.me() ? '<span class="ph-wid-on">👥 друзья онлайн: …</span>' : '<button type="button" class="ph-wid-login" data-ph-login>🔑 Войди — будут звонки, друзья и сообщества</button>'}${ctx ? `<span>📍 ${esc(ctx.hooks.title || '')}</span>` : ''}${live ? `<span>${esc(live)}</span>` : ''}</div></div>
+        <div class="ph-wid-info">${P.me() ? '<span class="ph-wid-on">👥 друзья онлайн: …</span>' : quietLogin ? '' : '<button type="button" class="ph-wid-login" data-ph-login>🔑 Войди — будут звонки, друзья и сообщества</button>'}${ctx ? `<span>📍 ${esc(ctx.hooks.title || '')}</span>` : ''}${live ? `<span>${esc(live)}</span>` : ''}</div></div>
       <div class="ph-grid">${APPS.filter(a => !DOCK.includes(a.id)).map(appIcon).join('')}${LINKS.map(l => `<a class="ph-icon" href="${l.h}"><i style="background:linear-gradient(135deg,${l.bg})">${l.ic}</i><span>${l.t}</span></a>`).join('')}</div>
       <div class="ph-dock">${DOCK.map(id => appIcon(APPS.find(a => a.id === id))).join('')}</div>
+      ${!P.me() && quietLogin ? '<button type="button" class="ph-login-row" data-ph-login>🔑 Войти — звонки, друзья, сообщества</button>' : ''}
     </div>`;
     view.querySelector('[data-ph-login]')?.addEventListener('click', () => { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); });
     view.querySelectorAll('[data-ph-app]').forEach(b => b.addEventListener('click', () => {
