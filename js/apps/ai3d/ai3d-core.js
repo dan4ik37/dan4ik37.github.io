@@ -4,7 +4,7 @@
 // This is the owner's editor script from ai3d.html (one inline script; 63 ops in run(cmds), atomic rollback of the scene state),
 // kept as he wrote it. It runs inside D37AI3DCore.create(host, env) so it can be opened and closed many times on the SPA:
 //   host — the editor root (.a3, markup from ai3d-ui.js, ids with the "a3-" prefix); env — { ws, exportGLB(group, clips), onAI(on) }.
-//   Returns __site: { api (= window.AI3D), say, run, reset, frame, dispose, redraw, exportGLB, connectAI, aiOn, stats, state, clips, frames }.
+//   Returns __site: { api (= window.AI3D), say, run, reset, frame, cam, dispose, redraw, exportGLB, connectAI, aiOn, stats, state, clips, frames }.
 // The text between the @ai3d-body markers also runs as a plain top-level script in node (scripts/ai3d-test.cjs: the owner's test.mjs
 // and test-run.mjs checks, real three r149, GLB export) — keep the markers and do not use `return` in the body.
 // Site changes are marked "site:" (made once from the owner's ai3d.html; list in docs/areas/studio3d.md; edit this file directly now):
@@ -196,7 +196,8 @@ function gkey(o){const s=o.size;return o.type+'|'+(o.ver||0)+'|'+(o.type==='mesh
 function cgeo(o){const k=gkey(o);let g=GC.get(k);if(!g){g=geo(o.type,o.size);GC.set(k,g);if(GC.size>60){const f=GC.keys().next().value,ev=GC.get(f);ev.dispose();const L=LODC.get(ev);if(L)L.forEach(x=>x.dispose());GC.delete(f)}}return g}
 
 const SET={lod:true,cull:true,adaptive:true,onDemand:true,shadows:true};
-let TG=null;function toonGrad(){if(!TG){TG=new THREE.DataTexture(new Uint8Array([95,175,255]),3,1,THREE.LuminanceFormat);TG.minFilter=TG.magFilter=THREE.NearestFilter;TG.needsUpdate=true}return TG}
+let TG=null;function toonGrad(){if(!TG){TG=new THREE.DataTexture(new Uint8Array([95,95,95,255,175,175,175,255,255,255,255,255]),3,1,THREE.RGBAFormat);   // site: was LuminanceFormat (r149 WebGL2)
+TG.minFilter=TG.magFilter=THREE.NearestFilter;TG.needsUpdate=true}return TG}
 function mkMat(o,P){P=Object.assign({},P);delete P.morphTargets;   // site: r149
  if(o.card){const Q={map:P.map,transparent:true,alphaTest:.02,side:THREE.DoubleSide,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2};return o.card==='lit'?new THREE.MeshStandardMaterial({...Q,color:'#ffffff',roughness:.7}):new THREE.MeshBasicMaterial({...Q,color:'#ffffff'})}
  if(o.toon){const Q={...P};delete Q.roughness;delete Q.metalness;return new THREE.MeshToonMaterial({...Q,gradientMap:toonGrad()})}return new THREE.MeshStandardMaterial(P)}
@@ -207,14 +208,14 @@ const LODC=new WeakMap();
 
 function lodsOf(g){let L=LODC.get(g);if(!L){L=[decimate(g,28),decimate(g,12)];LODC.set(g,L);lodN+=2}return L}
 const triOf=g=>g.index?g.index.count/3:g.attributes.position.count/3;
-const __wc=new THREE.Vector3();function lodUpdate(force){const wc=__wc;
+const __wc=new THREE.Vector3();let __lodB=1,__lodPend=false;function lodUpdate(force){const wc=__wc;__lodB=1;
  group.children.forEach(m=>{const g0=m.userData.g0;if(!g0)return;
   if(force){if(m.geometry!==g0)m.geometry=g0;m.visible=true;return}
   if(!g0.boundingSphere)g0.computeBoundingSphere();m.updateMatrixWorld();
   const bs=g0.boundingSphere,rad=bs.radius*Math.max(m.scale.x,m.scale.y,m.scale.z),dist=Math.max(cam.position.distanceTo(wc.copy(bs.center).applyMatrix4(m.matrixWorld)),1e-3),cov=rad/dist;
   m.visible=SET.cull?cov>=.0015:true;
   if(m.userData.n===undefined)m.userData.n=triOf(g0);
-  if(SET.lod&&!g0.morphAttributes.position&&m.userData.n>3000){const L=lodsOf(g0),g=cov>.12?g0:cov>.04?L[0]:L[1];if(m.geometry!==g)m.geometry=g}
+  if(SET.lod&&!g0.morphAttributes.position&&m.userData.n>3000){let g=g0;if(cov<=.12){const L=LODC.get(g0)||(__lodB-->0?lodsOf(g0):null);if(L)g=cov>.04?L[0]:L[1];else __lodPend=true}if(m.geometry!==g)m.geometry=g}   // site: lazy, ≤1 per frame
   else if(m.geometry!==g0)m.geometry=g0})}
 function stats(){let tri=0,full=0,vis=0;group.children.forEach(m=>{full+=triOf(m.userData.g0||m.geometry);tri+=triOf(m.geometry);if(m.visible)vis++});
  return{objects:state.length,drawn:vis,tris_now:Math.round(tri),tris_full:Math.round(full),geom_cache:GC.size,lod_geoms:lodN,pixelRatio:+PR.toFixed(2),ms_per_frame:+ft.toFixed(1)}}
@@ -1612,14 +1613,14 @@ cv.addEventListener('pointermove',e=>{
 cv.addEventListener('wheel',e=>{e.preventDefault();dist=Math.min(60,Math.max(2,dist*(1+e.deltaY*.001)));dirty=true},{passive:false});
 function fit(){const w=cv.clientWidth,h=cv.clientHeight;R.setPixelRatio(PR);R.setSize(w,h,false);cam.aspect=w/Math.max(h,1);cam.updateProjectionMatrix();dirty=true}
 const __ro=new ResizeObserver(fit);__ro.observe($('#stage'));
-const __FR=new Float32Array(4096);let __frN=0;   // site: CPU ms of rendered frames (ring)
+const __FR=new Float32Array(4096);let __frN=0,__rend=false,__tick=0,__cost=0;   // site: CPU ms of rendered frames (ring); frame pacing
 (function loop(){if(!__alive)return;__raf=requestAnimationFrame(loop);
+ const __now=performance.now();if(__rend){const d=__now-__tick;if(d<100&&d>0)ft=ft*.9+d*.1;__rend=false}__tick=__now;
  if(!(dirty||playing||!SET.onDemand))return;
  const t0=performance.now();R.setClearColor(bg());place();
  if(SET.lod||SET.cull){lodOn=true;lodUpdate(false)}else if(lodOn){lodUpdate(true);lodOn=false}
- R.render(scene,cam);dirty=false;__FR[__frN++&4095]=performance.now()-t0;
- const dt=t0-lastT;lastT=t0;
- if(dt<100&&dt>0){ft=ft*.9+dt*.1;if(SET.adaptive){const mx=Math.min(devicePixelRatio,2);if(ft>30&&PR>.6){PR=Math.max(.6,PR-.1);fit()}else if(ft<20&&PR<mx){PR=Math.min(mx,PR+.1);fit()}}}
+ R.render(scene,cam);dirty=false;if(__lodPend){__lodPend=false;dirty=true}const __c=performance.now()-t0;__FR[__frN++&4095]=__c;__cost=__cost*.9+__c*.1;__rend=true;lastT=t0;
+ if(SET.adaptive){const mx=Math.min(devicePixelRatio,2);if(ft>30&&PR>.6&&__cost<ft*.6){PR=Math.max(.6,PR-.1);fit()}else if(ft<20&&PR<mx){PR=Math.min(mx,PR+.1);fit()}}   // site
 })();
 
 // интерфейс
@@ -1724,7 +1725,7 @@ function __dispose(){if(!__alive)return;__alive=false;cancelAnimationFrame(__raf
  try{R.dispose();R.forceContextLoss()}catch(e){}if(__SR){try{__SR.dispose();__SR.forceContextLoss()}catch(e){}__SR=null}
  if(__cm&&'legacyMode' in __cm)__cm.legacyMode=__cmL;
  if(window.AI3D===__api)delete window.AI3D}
-const __site={api:__api,say,run,reset:__reset,frame:__frame,dispose:__dispose,redraw:()=>{dirty=true},exportGLB:__exportGLB,connectAI:u=>__wsCtl.connect(u),
+const __site={api:__api,say,run,reset:__reset,frame:__frame,cam:(t,p,d)=>{th=+t;ph=Math.min(3,Math.max(.1,+p));if(d)dist=Math.min(150,Math.max(.3,+d));dirty=true},dispose:__dispose,redraw:()=>{dirty=true},exportGLB:__exportGLB,connectAI:u=>__wsCtl.connect(u),
  aiOn:()=>!!(__ws&&__ws.readyState===1),stats,state:()=>state,clips,
  frames:()=>{const n=Math.min(__frN,4096),o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=__FR[(__frN-n+i)&4095];__frN=0;return o}};
 fit();build();$('#run').click();
