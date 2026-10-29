@@ -2,6 +2,7 @@
 // d37 realtime relay — own WebSocket server for the site's game rooms (broadcast + presence like Supabase Realtime), TURN
 // credentials for WebRTC, health and metrics. Runs behind Caddy (TLS) on the owner's Oracle VM; see docs/SERVER.md.
 //   GET  /health   → { ok, rooms, v, up, conns, load }  (no secrets; ok:false = maintenance / out of memory → the site uses Supabase)
+//   GET  /time     → { t }                              (server clock, ms since 1970: the site's world clock D37E.clock; CORS)
 //   GET  /turn     → { iceServers, ttl }                 (time-limited coturn credentials; CORS for the site)
 //   GET  /metrics  → counters (Authorization: Bearer ADMIN_TOKEN)
 //   WS   /rt       → protocol v1 (docs/SERVER.md «Protocol»)
@@ -38,8 +39,8 @@ function start(){
   const audit = C.AUDIT === 'http' && !C.AUDIT_URL ? null : makeAudit(C);
   hub = new Hub({ watcher, jwt: new Jwt(), audit });
   const wss = new WebSocketServer({ noServer: true, maxPayload: C.MAX_MSG, perMessageDeflate: false, clientTracking: false });
-  const ips = new Map(), turnB = new Map(), live = new Set();
-  Object.assign(stats.drop, { origin: 0, full: 0, ip: 0, ipRate: 0, turnRate: 0 });
+  const ips = new Map(), turnB = new Map(), timeB = new Map(), live = new Set();
+  Object.assign(stats.drop, { origin: 0, full: 0, ip: 0, ipRate: 0, turnRate: 0, timeRate: 0 });
 
   // ── load, memory, rates ──
   const loop = monitorEventLoopDelay({ resolution: 20 }); loop.enable();
@@ -71,6 +72,7 @@ function start(){
     const now = Date.now();
     for (const [k, st] of ips) if (!st.n && now - st.at > 120e3) ips.delete(k);
     for (const [k, b] of turnB) if (now - b.t > 3600e3) turnB.delete(k);
+    for (const [k, b] of timeB) if (now - b.t > 600e3) timeB.delete(k);
   }, 60e3);
   for (const t of [loadT, memT, pingT, sweepT]) t.unref?.();
 
@@ -108,6 +110,15 @@ function start(){
     if (req.method === 'OPTIONS') { res.writeHead(204, Object.assign({ 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '600' }, cors)); res.end(); return; }
     if (req.method !== 'GET' && req.method !== 'HEAD') { json(res, 405, { error: 'method' }); return; }
     if (path === '/health') { json(res, 200, health(), cors); return; }
+    if (path === '/time') {
+      // world clock (js/engine/clock.js): 3 samples on open, then every 10 min — 12 at once, then one per 2 s per address
+      const ip = ipKey(clientIp(req));
+      let b = timeB.get(ip);
+      if (!b) { b = new Bucket(12, 0.5); timeB.set(ip, b); }
+      if (!b.take()) { stats.drop.timeRate++; json(res, 429, { error: 'rate' }, cors); return; }
+      json(res, 200, { t: Date.now() }, cors);
+      return;
+    }
     if (path === '/turn') {
       const ip = ipKey(clientIp(req));
       let b = turnB.get(ip);

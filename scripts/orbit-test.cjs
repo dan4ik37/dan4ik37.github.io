@@ -9,7 +9,7 @@
 // 7. Небо: солнце системы = солнце планеты (календарь владельца), ΔL не меняет углов, фазы, затмения (солнечное и лунное)
 // 8. Одинаковость: 30 / 60 / 144 кадра в секунду (шаг логики 1/60 с), порядок вызовов, новые экземпляры — до бита; без мусора
 // 9. Точность вдали от центра: тела у 1,6·10¹⁰ и 10¹² u, 100 лет вперёд, картинка в float32 (как видеокарта)
-// 10. Часы мира (clock.js): медиана трёх, RTT/2, planet.sql не запущен (PGRST202), нет сети, feed(), start/stop
+// 10. Часы мира (clock.js): медиана трёх, RTT/2, planet.sql не запущен (PGRST202), нет сети, feed(), start/stop; свой сервер /time (T-145)
 // 11. Скорость (телефон с ЦП ×4 — примерно ×4)
 const path = require('path'), fs = require('fs'), cp = require('child_process');
 const SITE = path.join(__dirname, '..');
@@ -541,6 +541,33 @@ sec('часы мира (clock.js): медиана трёх, RTT/2, нет planet
     s1(); s1(); ok(C.users() === 1, 'stop повторно — не считается');
     s2(); ok(C.users() === 0, 'все ушли — таймера нет');
     await wait(50);
+  }
+  // T-145: свой игровой сервер (RT_URL, GET /time) — первым; Supabase — запасной
+  {
+    const C = fresh(); const seen = [];
+    C._rtUrl = 'https://rt.test';
+    C._fetch = async (url, o) => { seen.push(url); await wait(10); const srv = Date.now() + 7000; await wait(10); return url.endsWith('/time') ? resp(200, { t: srv }) : resp(200, srv - 99999); };
+    ok(await C.sync() && C.src === 'rt' && Math.abs(C.off - 7000) < 25 && seen.length === 3 && seen.every(u => u === 'https://rt.test/time'), 'свой сервер: 3 × /time, медиана, Supabase не спрашиваем', { off: C.off, src: C.src, seen });
+  }
+  {
+    const C = fresh(); const seen = [];
+    C._rtUrl = 'https://rt.test';
+    C._fetch = async url => { seen.push(url); if (url.endsWith('/time')) return resp(404, { error: 'not found' }); return resp(200, Date.now() + 4000); };
+    ok(await C.sync() && C.src === 'sb' && Math.abs(C.off - 4000) < 25 && seen[0].endsWith('/time') && seen.filter(u => /world_now$/.test(u)).length === 3 && /404/.test(C.errRt), 'старый сервер без /time (404) — Supabase world_now', { src: C.src, err: C.errRt, n: seen.length });
+  }
+  {
+    const C = fresh();
+    C._rtUrl = 'https://rt.test';
+    C._fetch = async url => { if (url.endsWith('/time')) throw new TypeError('Failed to fetch'); return resp(200, Date.now() - 2500); };
+    ok(await C.sync() && C.src === 'sb' && Math.abs(C.off + 2500) < 25, 'свой сервер не отвечает — Supabase', { src: C.src, off: C.off });
+    C._fetch = async url => url.endsWith('/time') ? resp(200, { t: 'нет' }) : resp(200, Date.now());
+    ok(await C.sync() && C.src === 'sb', 'свой сервер ответил не временем — не берём, Supabase');
+  }
+  {
+    const C = fresh();
+    C._rtUrl = 'https://rt.test';
+    C._fetch = async url => url.endsWith('/time') ? resp(200, { t: Date.now() + 1500 }) : resp(404, { code: 'PGRST202' });
+    ok(await C.sync() && C.state === 'sync' && C.src === 'rt', 'planet.sql не запущен, а свой сервер есть — время с него');
   }
   // ═══ 11. planet.sql ═══
   sec('planet.sql: часы мира (сама проверка в PGlite — scripts/planet-sql-test.mjs)');
