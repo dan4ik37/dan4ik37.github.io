@@ -2,7 +2,7 @@
 //  D37 TERRAIN — worker: builds 32³ blocks with the T1 core (js/engine/terra.wasm, JS fallback terra-core.js)
 // ═══════════════════════════════════════
 // new Worker('js/engine/terra-worker.js?v=…') — loads terra-core.js with the same ?v=.
-// Messages (in): { t: 'init', wasm: url | null, cap } → { t: 'ready', kind: 'wasm' | 'js', err }
+// Messages (in): { t: 'init', wasm: url | null, cap, gen, rules, param } → { t: 'ready', kind: 'wasm' | 'js', err }   (gen / rules: T1 ABI 2)
 //   { t: 'edit', e: [x, y, z, r, mode] } — append (order = the main thread's order)   { t: 'edits', list: Float64Array, n } — replace all
 //   { t: 'col', id, seed, cx, cz } → { t: 'col', id, cx, cz, hmin, hmax, ms }
 //   { t: 'build', id, seed, cx, cy, cz, ne } (ne — how many edits the main thread had) → { t: 'built', id, q, buf, hmin, hmax, trunc, ms, kind, ne }
@@ -16,7 +16,15 @@
   const q = (self.location && self.location.search) || '';
   importScripts('terra-core.js' + q);
   const T1 = self.D37E.terraCore;
-  let core = null, kind = 'none', ready = false, cap = 24000, fallbacks = 0;
+  let core = null, kind = 'none', ready = false, cap = 24000, fallbacks = 0, gen = 1, rules = 0, param = 0, compact = false;
+  const TT = new Float64Array(5);
+  // does edit e touch world block (cx, cy, cz)? inverted worlds test the mirrored edit against the mirrored block (as the core)
+  function touchesW(e, cx, cy, cz){
+    if (rules !== 4) return T1.touches(ed, e, cx * 32, cy * 32, cz * 32);
+    for (let k = 0; k < 5; k++) TT[k] = ed[e * 5 + k];
+    TT[1] = -1 - TT[1];
+    return T1.touches(TT, 0, cx * 32, ~cy * 32, cz * 32);
+  }
   const waiting = [];
   let ed = new Float64Array(5 * 256), ne = 0;
   const pool = new Map();
@@ -34,17 +42,26 @@
   }
   async function init(d){
     cap = d.cap || 24000;
+    gen = d.gen === 2 ? 2 : 1; rules = gen === 2 ? d.rules | 0 : 0; param = d.param | 0; compact = !!d.compact;
     let err = '';
     if (d.wasm) {
-      try {
-        const r = await fetch(d.wasm);
+      // a stalled download must not leave the worker "not ready" forever: after wasmMs (6 s) → the JS core
+      const ms = d.wasmMs || 6000, ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      let timer = 0;
+      const load = (async () => {
+        const r = await fetch(d.wasm, ac ? { signal: ac.signal } : undefined);
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const w = await T1.wasm(await r.arrayBuffer(), cap);
         if (!selfTest(w)) { w.dispose(); throw new Error('self-test'); }
-        core = w; kind = 'wasm';
-      } catch (e) { err = String(e && e.message || e); core = null; }
+        return w;
+      })();
+      const late = new Promise((_, rej) => { timer = setTimeout(() => { if (ac) ac.abort(); rej(new Error('wasm timeout ' + ms + ' ms')); }, ms); });
+      try { core = await Promise.race([load, late]); kind = 'wasm'; }
+      catch (e) { err = String(e && e.message || e); core = null; load.then(w => { try { w && w.dispose(); } catch (x) {} }, () => {}); }
+      finally { clearTimeout(timer); }
     }
     if (!core) { core = T1.js(cap); kind = 'js'; }
+    if (core.setGen(gen, rules, param) !== 0) { err = (err ? err + '; ' : '') + 'gen ' + gen + '/' + rules; core.setGen(1, 0, 0); }
     ready = true;
     self.postMessage({ t: 'ready', kind, err });
     while (waiting.length) handle(waiting.shift());
@@ -53,26 +70,29 @@
     fallbacks++;
     try { core && core.dispose(); } catch (x) {}
     core = T1.js(cap); kind = 'js';
+    core.setGen(gen, rules, param);
     self.postMessage({ t: 'fallback', kind, err: String(e && e.message || e), fallbacks });
   }
   function build(d){
     const t0 = now(), fox = d.cx * 32, foy = d.cy * 32, foz = d.cz * 32, lim = Math.min(d.ne | 0, ne);
     let n = 0;
-    for (let e = 0; e < lim; e++) if (T1.touches(ed, e, fox, foy, foz)) n++;
+    for (let e = 0; e < lim; e++) if (touchesW(e, d.cx, d.cy, d.cz)) n++;
     const buf = core.edits(n);
     let k = 0;
-    for (let e = 0; e < lim && k < n; e++) if (T1.touches(ed, e, fox, foy, foz)) { buf.set(ed.subarray(e * 5, e * 5 + 5), k * 5); k++; }
+    for (let e = 0; e < lim && k < n; e++) if (touchesW(e, d.cx, d.cy, d.cz)) { buf.set(ed.subarray(e * 5, e * 5 + 5), k * 5); k++; }
     const qn = core.build(d.seed, d.cx, d.cy, d.cz, n);
     if (qn < 0) throw new Error('build ' + qn);
     const o = core.out();
     let ab = null;
-    if (qn > 0) {
-      ab = take(qn * 80);
+    if (qn > 0 && compact) { ab = take(qn * T1.COMPACT_BYTES); T1.compactPack(o, qn, ab); }   // T-115: q·44 B (pos = physics)
+    else if (qn > 0) {
+      ab = take(qn * T1.BLOCK_BYTES);
       new Float32Array(ab, 0, qn * 12).set(o.pos.subarray(0, qn * 12));
       new Int8Array(ab, qn * 48, qn * 16).set(o.nrm.subarray(0, qn * 16));
       new Uint8Array(ab, qn * 64, qn * 16).set(o.col.subarray(0, qn * 16));
+      T1.physPack(o.pos, qn, ab);   // + the physics copy (Uint16) — the page keeps it with a memcpy
     }
-    const msg = { t: 'built', id: d.id, q: qn, buf: ab, hmin: o.info[0], hmax: o.info[1], trunc: o.info[3], ms: now() - t0, kind, ne: lim };
+    const msg = { t: 'built', id: d.id, q: qn, buf: ab, pk: compact ? 2 : 1, hmin: o.info[0], hmax: o.info[1], trunc: o.info[3], ms: now() - t0, kind, ne: lim };
     self.postMessage(msg, ab ? [ab] : []);
   }
   function handle(d){

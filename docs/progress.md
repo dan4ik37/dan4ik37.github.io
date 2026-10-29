@@ -466,6 +466,17 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
 - Backrooms (18+ по своим правилам): агрессия, урон, стаи, упорство погони, облик и звук — жёстче; настраивает его чат.
 - Сайт: опасность — через сложность («Сложно», «Кошмар» жёстче); облик по возрасту не меняется (дети — мультяшно, 18+ выключено до проверки возраста).
 
+## T-145 track L (land, T-115 / T-116) — decisions 29.10.2026
+- Took: the unmerged T-111 review fixes (d62cbfe) into the branch first — the tails (cave roofs, crater camera) build on its physics.
+- Took: logical biomes as a NEW generator version only (T1 gen 2, Kubomir v4); heights unchanged in T1 (old edits and places stay valid).
+- Took: latitude scale equator → pole 4096 m / blocks (one walk of a few minutes reaches another belt); spawn at mid-latitude.
+- Took: snow caps by the temperature at the height (no snow peaks next to deserts); «lonely patch» measured as interior regions
+  < 32 × 32 m (coastal slivers are terrain, not climate).
+- Took: strange-world presets in the T1 core (mono, patchwork, absurd islands, inverted) + data JSON; presentation laws (sky, rain
+  up, time rate, gravity zones) stay data for the host game (Backrooms).
+- Took: compact blocks (×2.4 less page memory) instead of indexed vertices (per-quad colours would have to become per-vertex).
+- Skipped: switching Kubomir new worlds to v4 (KB_GEN, coop genVer) — files of t138-teardown; one-line steps for the coordinator.
+
 ## Погода по биомам (BIOME_WEATHER.md v2) — решения координатора 29.10.2026 (владелец может поменять)
 - Град вредит по-настоящему (владелец 29.10: «Град вредит по настоящему»): портит посевы, оставляет вмятины, ранит под открытым небом (у детей мягче, без нокаута). Ледяной дождь — скользко и людям, и машинам
   (руль ×0,7, тормоз ×0,6, без заносов-«волчков»).

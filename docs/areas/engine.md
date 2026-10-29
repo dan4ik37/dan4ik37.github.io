@@ -314,14 +314,59 @@
   `build.ps1 -Site <site>` (copies wasm + golden). Output is chunk-local (positions relative to cx*32, cy*32, cz*32).
 - Files: terra-core.js (core + wasm loader), terra-worker.js (wasm in workers, self-test, JS fallback on load error or trap, messages
   before init are queued, buffer pool), terra.js (rings, column probes `t1_column`, ≤ 2 jobs per worker, edits quantized to 1/64 m and
-  applied in order, affected blocks rebuilt first, `ground()` from the density field — cave floors, `ray()`), terra-mesh.js (pooled
+  applied in order, affected blocks rebuilt first, `ground()` / `blocked()` from the shown mesh — cave floors, `ray()`), terra-mesh.js (pooled
   geometries, one shared index buffer — detach it before `dispose()`, sRGB→linear vertex colours in the vertex shader, anchor),
   js/games/terra-demo.js (hidden /play/terra; `D37E.terra.ON` — rollback; `localStorage d37_terra_wasm = '0'` forces the JS core).
   Units: core = meters; the game converts with U = E.UNIT; the floating anchor (multiple of 32 m) moves only in the logic step.
+- Physics = the SHOWN mesh (review fix 29.10): at TS.recycle (terra-mesh showed the block) the block's triangles become its physics
+  (Uint16 copy packed by the worker after the mesh: buffer = q·104 B, T1.physPack; xz index 34×34 built on first query). TS.ground =
+  highest floor under yRef+1.1 on the vertical line; facing by parity from the open sky (column hmax + fills) — per-quad normals are
+  unreliable on near-vertical faces. Block not shown yet → the old density path (TS.densityGround). |ground − mesh| ≤ 7 mm (was up
+  to 0.4 m at craters, 8.3 m at river banks). Phys hooks, opt-in (other games unchanged): ph.terrain.col (terrain hits are grippable),
+  .blocked(x, z, y0, y1, r) (stand/mantle room), .normal(x, y, z, out, dx, dy, dz) (field normal; horizontal rays → the face 0.3 m
+  lower). Parkour then works on steep faces (river banks); dig/fill spheres at 1 m Surface Nets are ≤ ~55° cones — no ledge there.
+- Edits are bucketed by 32 m cell (EB): TS.ray / TS.solid / column probes read one cell's edits (sign-exact; 5040 edits: 0.21 ms per ray
+  vs 1.4 ms over all edits). TS.density stays the core's exact point density (all edits).
 - Pitfalls: a URL handed to a worker must be absolute and resolved against `document.baseURI` (real addresses /play/… + `<base href="/">`;
   `location.href` gave /play/js/… → 404 → silent JS fallback). Chrome CPU throttling does NOT slow workers (worker ms = desktop).
-- Tests: terra-test (golden, edit re-mesh, worker protocol in worker_threads, wasm vs JS timing); Chrome:
-  `node scripts/terra-e2e.cjs perf | leak [N] | soak [min] | shots` (PC=1 — desktop).
+  A stalled terra.wasm download → JS core after 6 s (init `wasmMs`). terra-e2e leak FAILS on heap +6 MB (LEAK_MB), live workers,
+  changed three.js counts or console errors (heap = least of 3 GC'd samples — one sample right after a close was noisy ±28 MB).
+- Tests: terra-test (golden, edit re-mesh, worker protocol in worker_threads incl. stalled wasm, ground == drawn mesh at craters /
+  fills / banks, parkour hooks, edit buckets, wasm vs JS timing); Chrome: `node scripts/terra-e2e.cjs perf | leak [N] | soak [min] |
+  shots` (PC=1 — desktop). C# (Unity) binding + managed port + tests: E:\d37-terrain\csharp, contract E:\d37-terrain\spec\API.md.
+
+## 🌍 T-145 track L — new land tails (T-115) and logical biomes (T-116), 29.10.2026 (branch t145-land)
+- Also merged here: the T-111 review fixes (d62cbfe, physics = drawn mesh, Phys terrain hooks, edit buckets) — they had never
+  reached main (main had merged the earlier f3535dd).
+- T1 core ABI 2 (E:\d37-terrain 12414bc, spec/API.md §3a): generator v2 (logical climate → Whittaker; biomes 11 Steppe, 12 Jungle),
+  world rules (0 earth, 1 mono, 2 patchwork, 3 absurd islands, 4 inverted), flatten edits (mode 2). Heights unchanged — only the
+  surface colour differs between v1 and v2. wasm == JS == DLL == C# bit for bit (golden G 200, R 72, Q2 50). terra.js:
+  create({ gen, rules, param, compact }), TS.flatten / TS.climate / TS.ceiling; workers get gen/rules in init and re-apply them
+  after a JS fallback; inverted worlds route edits through the mirrored test (TE.touchesW).
+- D37E.biomes (js/engine/biomes.js, new, English): one API for T1 and Kubomir v4 — at(src, x, z) → biome, class (climate_classes.csv
+  integers), surface bits, ts / tp / m, tempC; region(src, x, z, cell) → integer record { ck, cls, smask, F, alt } (BIOME_WEATHER
+  §1.2, five fixed samples); climateKey / climateAtFn (climate.js keys for C.world({ climateAt })); PRESETS (strange worlds as data,
+  mirror of E:\d37-terrain\data\world_presets.json). This is the name agreed for the weather track (T-135).
+- /play/terra flags (js/games/terra-demo.js, one-line rollbacks): TERRA_GEN = 2 (logical biomes; HUD shows the biome and °C),
+  SEA_TILES (sea = 32 m tiles over columns whose own terrain is below 0 — a pit on land stays dry; coast / river columns keep water),
+  CAM_CLIMB (camera rig option `climb`: in a crater the rig searches, every 0.2 s with 3 rays, a steeper pitch with a clear line
+  and eases into it — not into the back of the head), COMPACT (blocks as u16 positions = the physics numbers, octahedral normals u8×2,
+  rgb: 44 B per quad on the page and GPU instead of 80 B geometry + 24 B physics; TS.recycle(b, meshPosArray) — the physics reads
+  the mesh's own array). Tool «▭ Выровнять» (flatten pad r 6 m at the hit point). Phys: opt-in `terrain.ceiling(x, z, y)` — a jump
+  stops at a cave roof / overhang / fill (the DRAWN roof), walking under a roof lower than the head is blocked, crouching passes.
+- Tests: terra-test (+ compact block, compact physics == old, pad within 0.015 m, roofs = drawn mesh, Phys ceiling), biomes-test
+  (new, in ci-run), Rust `cargo test` (v2 adjacency / distance / patches / column == point / inverted mirror / flatten / 0 allocations
+  for every rule), C# tests. Chrome: `node scripts/terra-e2e.cjs t145` (phone ×4: biome, inland crater stays dry, camera climb on/off,
+  flatten pad level; Page.setDownloadBehavior deny).
+- Numbers 29.10 (Chrome headless, phone 412×915×2, CPU ×4, «mid», before = 2412cc0 / after, machine shared with other agents):
+  wasm walk frame CPU 4.68 → 3.26 ms (p95 9.3 → 5.0), fly 4.10 → 4.37 ms (p95 8.6 → 9.5); JS core walk 4.43 → 3.76, fly 4.12 → 4.09;
+  worker block 5.3 / 6.3 → 4.9 / 7.2 ms (walk / fly); upload per block 0.50 → 0.48 ms; GPU 37.1 → 20.1 MB; page heap after the run
+  77.4 → 46.7 MB (wasm), 125.4 → 66.1 MB (JS). 20× open / close: heap 14.2 → 15.1 MB (flat after 10), workers 0, renderers 1,
+  geometries 43, materials 18 — equal; 10 min soak: 287 edits, 11 540 blocks, heap 35–51 MB without growth, 0 errors, 0 fallbacks.
+  Crater (inland, 20 m deep, below the sea): no sea tile over it; camera 7.5 m from the head with climb, 3.1 m without. Flatten pad
+  r 6 m: ground inside within 0.001 m in Chrome (0.015 m in node). SSAO angle bias (post.js AO_ANGLE 0.2, rollback 0): AO darkening
+  on open terrain at «high» −40…50 % (mean 3.7 → 2.2 %, 1.2 → 0.6 %, 2.0 → 1.2 % in three close-ups); the bands themselves did not
+  show in headless shots — check on a real phone.
 
 ## 🧠 AI LOD P1 — «ум толпы» on the site (T-127, 29.10.2026, GAMES_VER 148, review fixes 149; spec E:\d37-core\spec\AI_LOD.md §10.2, §12 P1)
 - Owner decisions (docs/progress.md 29.10): D1 Horde — one enemy cap for every device; D4 Mir — the same 16 residents on phone

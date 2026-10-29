@@ -10,7 +10,9 @@
 // Биомы: 0 океан, 1 пляж, 2 равнина, 3 лес, 4 березняк, 5 пустыня, 6 снега, 7 горы, 8 болото, 9 река.
 // Версии (meta.genVer мира): 1 — до 16.10, 2 — извилистые границы биомов, 3 (T-022b, 22.10) — деревья «как в модах» (js/engine/trees.js:
 // породы по биому и климату, ствол 2×2 / 3×3 у корня, сучья, корни, тонкие ветки, молодые деревья). Старые миры — свои версии: блоки
-// несохранённых чанков ровно как раньше (проверка — kubomir-hand-test, «генератор»).
+// несохранённых чанков ровно как раньше (проверка — kubomir-hand-test, «генератор»). 4 (T-116, 29.10) — логичные биомы: климат по
+// широте, высоте, морю по ветру и «тени» гор → таблица Уиттекера (E:\d37-core\spec\WORLD_RULES.md §1): жара никогда не рядом
+// с зимой, снег на вершинах — по температуре на высоте, без одиноких пятен. Высоты те же (кроме дюн и болот — по новому климату).
 (() => {
   const root = typeof self !== 'undefined' ? self : globalThis;
   const E = root.D37E = root.D37E || {};
@@ -85,7 +87,7 @@
       features: Array.isArray(o.features) ? o.features : [], ores: null, id: V.ID || {}, oc: new Map(),
       // версия генератора (meta.genVer мира; нет — 1): 2 — границы биомов извилистые (сдвиг шума), у снегов — переходная полоса
       // (снег пятнами, смешанные деревья). Старые миры остаются на 1 — несохранённые чанки иначе выросли бы другими
-      ver: o.ver >= 3 ? 3 : o.ver >= 2 ? 2 : 1, nW1: mk(16), nW2: mk(17), nPt: mk(18), tc: new Map() };
+      ver: o.ver >= 4 ? 4 : o.ver >= 3 ? 3 : o.ver >= 2 ? 2 : 1, nW1: mk(16), nW2: mk(17), nPt: mk(18), tc: new Map(), cn4: null };
     if (G.ver >= 3 && !root.D37E.trees) throw new Error('генератор v3: нет js/engine/trees.js');
     const ID = G.id;
     // руды: блок, замена, высота, размер жилы, попыток на чанк
@@ -99,9 +101,64 @@
     return G;
   };
 
+  // ═══ v4 (T-116): логичный климат. Узлы через 32 блока (кэш на мир, типизированные массивы — без мусора), между ними — по
+  // билинейке: tb — температура на уровне моря 0…1 (широта: «пила» вдоль изогнутой z, экватор → полюс 4096 блоков, начало мира — в
+  // умеренном поясе; шум ±0,06; море смягчает; узлы — через 32 блока), m — влажность 0…1 (воздух по ветру: 6 точек 64…2048 блоков против ветра — над морем
+  // набирает, над сушей сохнет, за горами «тень»; пояса: влажные тропики, сухие субтропики, влажный умеренный, сухой полярный;
+  // реки), hs — сглаженная высота (без холмов). ts = tb − 0,004 × (hs − SEA − 8) — для биома, tp — то же по настоящей высоте (снег
+  // на вершинах). Только + − × ÷ floor sqrt и свой синус (sinT) — у всех одинаково ═══
+  V.GEN_LATEST = 4;
+  const UPW4 = [64, 128, 256, 512, 1024, 2048], DRYK4 = [.03, .03, .06, .12, .2, .3], LAPSE4 = .004, TAU = 6.283185307179586;
+  const cl01 = t => (t < 0 ? 0 : t > 1 ? 1 : t);
+  function baseH4(G, x, z, C){   // сглаженная высота: без холмов, рек и отдельных гребней (горный массив — средней высотой)
+    const Er = fbm2(G.nE, x / 420, z / 420, 2);
+    const land = ss(-.2, -.02, C), mk = ss(-.04, -.42, Er) * ss(-.02, .22, C);
+    return lerp(SEA - 10, SEA + 3 + 9 * ss(0, .6, C) + mk * 32, land);
+  }
+  function node4(G, x, z, o, k){
+    const w = n2(G.nW1, x / 4096 + 3.1, z / 4096 - 7.7) * 600, u = (z + w) / 8192 + .2, f = u - Math.floor(u + .5), phi = (f < 0 ? -f : f) * 2;
+    const C0 = fbm2(G.nC, x / 760, z / 760, 3), hs = Math.max(SEA, baseH4(G, x, z, C0));
+    const wx = -cosT(phi * TAU), wl = Math.sqrt(wx * wx + .09), ux = -wx / wl, uz = -.3 / wl;
+    let q = .3, sea1 = 0;
+    for (let i = 5; i >= 0; i--) {
+      const d = UPW4[i], px = x + ux * d, pz = z + uz * d, C = fbm2(G.nC, px / 760, pz / 760, 3);
+      const sea = 1 - ss(-.2, -.02, C), h = baseH4(G, px, pz, C);
+      q = q + (1 - q) * sea * .5;
+      q = q * (1 - (1 - sea) * DRYK4[i]);
+      q = q * (1 - .5 * ss(20, 50, h - SEA));
+      if (i === 0) sea1 = sea;
+    }
+    const seaH = 1 - ss(-.2, -.02, C0);
+    q = q + (1 - q) * seaH * .5;
+    const mLat = .5 + .22 * cosT(phi * 9.42477796076938);
+    const rv = Math.abs(fbm2(G.nR, x / 340, z / 340, 2)), riv = (1 - ss(0, .1, rv)) * .12;
+    const m = cl01(q * .65 + mLat * .35 + riv + fbm2(G.nM, x / 1400, z / 1400, 2) * .08);
+    let tb = 1 - 1.27 * phi + .27 * phi * phi + fbm2(G.nT, x / 1400, z / 1400, 2) * .06;
+    tb = tb + (.5 - tb) * .2 * (seaH > sea1 ? seaH : sea1);
+    o[k] = tb; o[k + 1] = m; o[k + 2] = hs;
+  }
+  // узел (ix, iz) в кэше мира (4096 ячеек, прямое отображение): индекс значений в G.cn4.v
+  function nodeAt(G, ix, iz){
+    const C = G.cn4 || (G.cn4 = { k: new Int32Array(8192), v: new Float64Array(12288), ok: new Uint8Array(4096) });
+    const sl = (Math.imul(ix, 73856093) ^ Math.imul(iz, 19349663)) & 4095;
+    if (!C.ok[sl] || C.k[sl * 2] !== ix || C.k[sl * 2 + 1] !== iz) { node4(G, ix * 32, iz * 32, C.v, sl * 3); C.k[sl * 2] = ix; C.k[sl * 2 + 1] = iz; C.ok[sl] = 1; }
+    return sl * 3;
+  }
+  const CL4 = new Float64Array(3);
+  function clim4(G, x, z){   // → CL4 = tb, m, hs (билинейно между узлами)
+    const gx = x / 32, gz = z / 32, ix = Math.floor(gx), iz = Math.floor(gz), fx = gx - ix, fz = gz - iz, v = () => G.cn4.v;
+    let a = nodeAt(G, ix, iz); const t00 = v()[a], m00 = v()[a + 1], h00 = v()[a + 2];
+    a = nodeAt(G, ix + 1, iz); const t10 = v()[a], m10 = v()[a + 1], h10 = v()[a + 2];
+    a = nodeAt(G, ix, iz + 1); const t01 = v()[a], m01 = v()[a + 1], h01 = v()[a + 2];
+    a = nodeAt(G, ix + 1, iz + 1); const t11 = v()[a], m11 = v()[a + 1], h11 = v()[a + 2];
+    CL4[0] = bil(t00, t10, t01, t11, fx, fz); CL4[1] = bil(m00, m10, m01, m11, fx, fz); CL4[2] = bil(h00, h10, h01, h11, fx, fz);
+    return CL4;
+  }
+
   // ── Столбец: высота и биом (чистая функция — её же зовут соседние чанки для деревьев) ──
-  const COL = { h: 0, b: 0, land: 0, mk: 0, T: 0, M: 0, river: 0, swamp: 0, desert: 0 };
+  const COL = { h: 0, b: 0, land: 0, mk: 0, T: 0, M: 0, river: 0, swamp: 0, desert: 0, ts: 0, tp: 0, m: 0 };
   function column(G, x, z, out = COL){
+    if (G.ver >= 4) return column4(G, x, z, out);
     const C = fbm2(G.nC, x / 760, z / 760, 3), Er = fbm2(G.nE, x / 420, z / 420, 2);
     const pk = 1 - Math.abs(fbm2(G.nP, x / 230, z / 230, 3)), hills = fbm2(G.nH, x / 96, z / 96, 3), det = fbm2(G.nD, x / 26, z / 26, 2);
     const land = ss(-.2, -.02, C);
@@ -135,7 +192,47 @@
     out.h = hi; out.b = b; out.land = land; out.mk = mk; out.T = T; out.M = M; out.river = river; out.swamp = swamp; out.desert = desert;
     return out;
   }
+  // v4: тот же рельеф, климат — логичный (T, M — в шкале прежних версий: деревья, цвета, лёд и зоны погоды работают как раньше:
+  // T = −0,34 — край зимы (ts 0,22), T = 0,14 — край жары (ts 0,62); M = 0,09 — лес, −0,2 — пустыня, 0,38 — болото)
+  function column4(G, x, z, out){
+    const C = fbm2(G.nC, x / 760, z / 760, 3), Er = fbm2(G.nE, x / 420, z / 420, 2);
+    const pk = 1 - Math.abs(fbm2(G.nP, x / 230, z / 230, 3)), hills = fbm2(G.nH, x / 96, z / 96, 3), det = fbm2(G.nD, x / 26, z / 26, 2);
+    const land = ss(-.2, -.02, C);
+    const mk = ss(-.04, -.42, Er) * ss(-.02, .22, C);
+    const ocean = SEA - 7 - 22 * ss(-.2, -.62, C) + det * 2;
+    let h = SEA + 3 + 9 * ss(0, .6, C) + hills * (5 + 5 * (1 - mk)) + det * 1.6 + mk * (pk * pk * pk * 58 + pk * 12);
+    const rn = Math.abs(fbm2(G.nR, x / 340, z / 340, 2)), river = (1 - ss(.018, .055, rn)) * land * (1 - mk * .85);
+    h = lerp(h, SEA - 3 + det, river);
+    const cc = clim4(G, x, z), tb = cc[0], m = cc[1], hs = cc[2];
+    const ts = hs > SEA + 8 ? tb - (hs - SEA - 8) * LAPSE4 : tb;
+    const swamp = ss(.70, .78, m) * ss(.38, .44, ts) * land * (1 - mk);
+    h = lerp(h, SEA + det * 1.4 - .4, swamp * .88);
+    const desert = ss(.58, .66, ts) * ss(.34, .26, m) * land * (1 - mk);
+    h += desert * fbm2(G.nDune, x / 40, z / 40, 2) * 3.5;
+    h = lerp(ocean, h, land);
+    const hi = Math.max(2, Math.min(H - 6, Math.floor(h)));
+    const tp = hi > SEA + 8 ? tb - (hi - SEA - 8) * LAPSE4 : tb;
+    let b;
+    if (river > .55 && hi <= SEA) b = BI.river;
+    else if (hi < SEA - 1) b = BI.ocean;
+    else if (hi <= SEA + 1 && land < .95 && ts >= .22) b = BI.beach;
+    else if (hi > SEA + 44 || (mk > .55 && hi > SEA + 20)) b = BI.mountains;
+    else if (ts < .22) b = BI.snow;
+    else if (desert > .5) b = BI.desert;
+    else if (swamp > .5) b = BI.swamp;
+    else if (m >= .52) b = ts < .40 ? BI.birch : BI.forest;
+    else b = BI.plains;
+    out.h = hi; out.b = b; out.land = land; out.mk = mk; out.T = -.34 + (ts - .22) * 1.55; out.M = (m - .45) * 1.3; out.river = river; out.swamp = swamp; out.desert = desert;
+    out.ts = ts; out.tp = tp; out.m = m;
+    return out;
+  }
   V.genColumn = column;
+  // климат в точке (погода по биомам, T-135): { b, h, ts, tp, m, T, M } — v4; у старых версий ts / tp / m из T и M (обратно)
+  V.climateAt = (G, x, z, out = {}) => {
+    const c = column(G, Math.floor(x), Math.floor(z), out);
+    if (G.ver < 4) { c.ts = .22 + (c.T + .34) / 1.55; c.tp = c.ts; c.m = .45 + c.M / 1.3; }
+    return c;
+  };
 
   // Климатическая зона столба (21.10.2026, владелец: «где-то всегда зима, где-то зимы нет»): 0 — обычная (времена года),
   // 1 — всегда зима (холодный край, вершины гор выше снеговой линии SEA + 40 — там генератор кладёт снег), 2 — зимы не бывает
@@ -151,7 +248,15 @@
     return (p == null ? T > .26 : fw >= 1 || p < fw) ? 2 : 0;
   };
   const patch = (G, x, z) => G.ver >= 2 ? n2(G.nPt, x / 7, z / 7) * .5 + .5 : null;
-  V.climZoneAt = (G, x, z, col) => { if (G.void) return 0; const c = column(G, x, z, col || {}); return V.climZone(c.T, c.h, c.b, patch(G, x, z)); };
+  // v4: «всегда зима» — по температуре на высоте (tp < 0,22, на краю пятнами), а не по высоте над морем
+  V.climZone4 = (T, tp, b, p) => {
+    const fc = ss(.26, .18, tp);
+    if (fc >= 1 || p < fc) return 1;
+    if (b === BI.desert || b === BI.swamp) return 2;
+    const fw = ss(.2, .32, T);
+    return fw >= 1 || p < fw ? 2 : 0;
+  };
+  V.climZoneAt = (G, x, z, col) => { if (G.void) return 0; const c = column(G, x, z, col || {}); return G.ver >= 4 ? V.climZone4(c.T, c.tp, c.b, patch(G, x, z)) : V.climZone(c.T, c.h, c.b, patch(G, x, z)); };
 
   // ── Пещеры: шум на сетке 4×4×4 + трилинейно (точка считается так же, как в чанке — деревья не повиснут) ──
   const CG = 4, CGY = 4;
@@ -318,11 +423,11 @@
     const x0 = cx * 16, z0 = cz * 16;
     // высоты 18×18 (с полями — для крутизны склонов) и биомы
     const hh = new Int16Array(324), bb = new Uint8Array(324), col = {};
-    const tmp = new Float32Array(256);
+    const tmp = new Float32Array(256), tpk = G.ver >= 4 ? new Float32Array(256) : null;
     for (let j = 0; j < 18; j++) for (let i = 0; i < 18; i++) {
       const c = column(G, x0 + i - 1, z0 + j - 1, col);
       hh[j * 18 + i] = c.h; bb[j * 18 + i] = c.b;
-      if (i >= 1 && i <= 16 && j >= 1 && j <= 16) tmp[(i - 1) * 16 + (j - 1)] = c.T;
+      if (i >= 1 && i <= 16 && j >= 1 && j <= 16) { tmp[(i - 1) * 16 + (j - 1)] = c.T; if (tpk) tpk[(i - 1) * 16 + (j - 1)] = c.tp; }
     }
     // цвета биомов — среднее по сетке 4 блока вокруг (плавные переходы)
     const cg = new Uint8Array(81);
@@ -344,7 +449,8 @@
       const o = (x * 16 + z) * 9;
       for (let q = 0; q < 9; q++) tint[o + q] = Math.round(s[q] / n);
       biome[x * 16 + z] = bb[(z + 1) * 18 + x + 1];
-      zone[x * 16 + z] = V.climZone(tmp[x * 16 + z], hh[(z + 1) * 18 + x + 1], bb[(z + 1) * 18 + x + 1], patch(G, x0 + x, z0 + z));
+      zone[x * 16 + z] = tpk ? V.climZone4(tmp[x * 16 + z], tpk[x * 16 + z], bb[(z + 1) * 18 + x + 1], patch(G, x0 + x, z0 + z))
+        : V.climZone(tmp[x * 16 + z], hh[(z + 1) * 18 + x + 1], bb[(z + 1) * 18 + x + 1], patch(G, x0 + x, z0 + z));
     }
     // пещеры: сетка шума на чанк
     const GX = 16 / CG + 1, GY = H / CGY + 1, cs = new Float64Array(GX * GY * GX * 3);
@@ -366,6 +472,7 @@
       else if (b === BI.beach) { top = ID.sand; fill = ID.sand; deep = 4; under = ID.sandstone; }
       else if (b === BI.desert) { top = ID.sand; fill = ID.sand; deep = 4; under = ID.sandstone; }
       else if (b === BI.snow) { top = ID.snow_grass; }
+      else if (b === BI.mountains && tpk) { const t = tpk[x * 16 + z]; if (slope >= 3) { top = ID.stone; fill = ID.stone; } else if (t < .12) { top = ID.snow; fill = ID.snow; deep = 2; } else if (t < .22) top = ID.snow_grass; }   // v4: снег — где холодно на этой высоте
       else if (b === BI.mountains) { if (slope >= 3) { top = ID.stone; fill = ID.stone; } else if (h > SEA + 54) { top = ID.snow; fill = ID.snow; deep = 2; } else if (h > SEA + 40) top = ID.snow_grass; }
       else if (h <= SEA && b !== BI.swamp) { top = ID.sand; fill = ID.sand; }
       // v2: у снегов — переходная полоса: снег пятнами (доля по «температуре» −0,25…−0,42), без прямой линии
