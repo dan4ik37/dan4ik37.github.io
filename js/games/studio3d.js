@@ -2282,7 +2282,7 @@ Players.PlayerAdded.Connect(player => {
     let s = opt('', '✨ Само (стоит)') + opt('none', '⏸ Без движения');
     if (A.own.length) s += `<optgroup label="Из файла модели">${A.own.map(n => opt(n, n)).join('')}</optgroup>`;
     if (A.lib.length) s += `<optgroup label="Общие действия">${A.lib.map(n => opt(n, ACT_RU[n] || n)).join('')}</optgroup>`;
-    return `<label class="s3-lbl">🦴 Действие (${A.bones} костей)<select data-p="act">${s}</select></label>`;
+    return `<label class="s3-lbl">🦴 Действие (${esc(A.bones)} костей)<select data-p="act">${s}</select></label>`;
   }
 
   // ═══ Расширения студии (инструменты, набор предметов, ИИ-помощник — каждый своим файлом, без правок здесь) ═══
