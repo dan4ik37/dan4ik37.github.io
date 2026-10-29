@@ -1,0 +1,151 @@
+/* ═══════════════════════════════════════
+   ИНТЕРФЕЙС ИГР 2.0 (T-123, docs/HUD_V2.md §7–8): общие кнопки, круг выбора, лоток вещей, листы, плашки, подсказки.
+   Экран игры — «тёмный остров» (одинаков в светлой и тёмной теме). Только классы .e2-* и .e-hud.e2 (движок js/engine/ui.js,
+   флаг HUD2.kit в js/core/config.js). Свои правки игр — в CSS самих игр.
+   ═══════════════════════════════════════ */
+:root{--e2-bg:rgba(14,12,28,.42);--e2-bg-on:rgba(124,58,237,.72);--e2-line:rgba(255,255,255,.38);--e2-text:#fff;--e2-shadow:0 2px 10px rgba(0,0,0,.25);
+  --e2-panel:rgba(16,14,32,.9)}
+/* бледнеют без касаний (4 с): opacity = «Прозрачность кнопок» × затухание; ⚙️ «Бледнеют без касаний» выкл — html.e2-nofade */
+.e2-idle{--e2-fade:.45}
+html.e2-nofade .e2-idle{--e2-fade:1}
+
+/* ── Кнопки движка (E.ui v2): круги 46 / 56 px, «попадание» больше картинки (::after), подписи — только до первого нажатия ── */
+.e-hud.e2 .e-btns{gap:8px;opacity:calc(var(--gs-touch-a,1) * var(--e2-fade,1))}
+.e-hud.e2 .e-btns,.e-hud.e2 .e-btn{transition:opacity .3s!important}
+.e-hud.e2 .e-btn{width:46px;height:46px;border:1.5px solid var(--e2-line);background:var(--e2-bg);font-size:20px;box-shadow:var(--e2-shadow)}
+.e-hud.e2 .e-btn.big{width:56px;height:56px;font-size:25px}
+.e-hud.e2 .e-btn::after{content:'';position:absolute;inset:-6px;border-radius:50%}
+.e-hud.e2 .e-btn.on,.e-hud.e2 .e-btn:active{background:var(--e2-bg-on);border-color:#fff}
+.e-hud.e2 .e-btn b{display:none}
+.e-hud.e2 .e-btn.new b{display:block;bottom:-12px}
+.e-hud.e2 .e-btn.e2-ctx[hidden]{display:none}
+/* подпись цели действия — рядом с кнопкой ✋ (не в середине экрана): «🚪 Открыть дверь» */
+.e2-pill{position:absolute;right:0;bottom:calc(100% + 6px);max-width:180px;padding:5px 10px;border-radius:12px;background:var(--e2-panel);color:#fff;
+  font:800 12px/1.2 Montserrat,system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:var(--e2-shadow)}
+.e2-pill[hidden]{display:none}
+html.gs-lefty .e2-pill{right:auto;left:0}
+/* кольцо удержания вокруг кнопки действия */
+.e2-hold{position:absolute;inset:-5px;width:calc(100% + 10px);height:calc(100% + 10px);pointer-events:none;transform:rotate(-90deg)}
+.e2-hold circle{fill:none;stroke:#ffd23f;stroke-width:3.5;stroke-linecap:round}
+.e2-hold[hidden]{display:none}
+/* «[E] Открыть» на компьютере — низ экрана (10 %), не на ногах персонажа; на телефоне подпись — у кнопки */
+.e-hud.e2 .e-prompt{bottom:10%;padding:5px 12px 5px 6px;font-size:13px;background:var(--e2-panel)}
+.e-hud.e2.e2-touch .e-prompt{display:none}
+.e-hud.e2 .e-stam{bottom:calc(10% + 34px);height:5px;width:min(160px,32vw)}
+.e-hud.e2 .e-toast{max-width:70%;font-size:13px;padding:7px 14px}
+
+/* ── Круг выбора (D37E.radial): позы, эмоции, вещи; палец ведёт к пункту и отпускает ── */
+.e2-radial{position:absolute;left:0;top:0;width:0;height:0;z-index:30;pointer-events:none;contain:layout style}
+.e2-radial[hidden]{display:none}
+.e2-rad-bg{position:absolute;left:-128px;top:-128px;width:256px;height:256px;border-radius:50%;background:radial-gradient(circle,rgba(10,8,22,.0) 26px,rgba(10,8,22,.55) 27px,rgba(10,8,22,.55) 70%,rgba(10,8,22,0) 71%);pointer-events:none}
+.e2-rad-it{position:absolute;left:-24px;top:-24px;width:48px;height:48px;border-radius:50%;border:1.5px solid var(--e2-line);background:var(--e2-bg);color:#fff;font-size:22px;
+  display:grid;place-items:center;line-height:1;padding:0;box-sizing:border-box;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;box-shadow:var(--e2-shadow)}
+.e2-rad-it::after{content:'';position:absolute;inset:-2px;border-radius:50%}
+.e2-rad-it.on{background:var(--e2-bg-on);border-color:#fff;transform:scale(1.12)}
+.e2-rad-it.cur{border-color:#ffd23f}
+.e2-rad-lbl{position:absolute;left:0;top:-128px;transform:translate(-50%,-100%);padding:4px 10px;border-radius:10px;background:var(--e2-panel);color:#fff;
+  font:800 12px/1.2 Montserrat,system-ui,sans-serif;white-space:nowrap;pointer-events:none}
+.e2-rad-lbl:empty{display:none}
+.e2-rad-x{position:absolute;left:-14px;top:-14px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:rgba(255,255,255,.7);font-size:14px;pointer-events:none}
+
+/* ── Лоток вещей (D37E.tray): свёрнут — вещь в руке и соседи; нажал — весь ряд; удержал — круг; смахнул — соседняя ── */
+.e2-tray{position:absolute;left:50%;bottom:max(8px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:4px;align-items:center;z-index:6;
+  pointer-events:auto;touch-action:none;contain:layout paint;padding:3px;border-radius:14px;max-width:calc(100% - 24px);flex-wrap:wrap;justify-content:center}
+.e2-tray.top{bottom:auto;top:max(8px,env(safe-area-inset-top))}
+.e2-tray-c{position:relative;width:40px;height:40px;border-radius:10px;border:1.5px solid var(--e2-line);background:var(--e2-bg);color:#fff;font-size:20px;display:grid;
+  place-items:center;padding:0;box-sizing:border-box;line-height:1;-webkit-tap-highlight-color:transparent;opacity:calc(var(--e2-fade,1))}
+.e2-tray-c.sel{width:48px;height:48px;border-color:#ffd23f;background:rgba(124,58,237,.5);font-size:24px;opacity:1}
+.e2-tray:not(.open) .e2-tray-c:not(.sel){opacity:calc(.6 * var(--e2-fade,1))}
+.e2-tray-c[hidden]{display:none}
+.e2-tray-c i{position:absolute;right:2px;bottom:1px;font:800 10px/1 Montserrat,system-ui,sans-serif;font-style:normal;text-shadow:0 1px 2px #000}
+.e2-tray-c.empty{color:transparent}
+
+/* ── Лист (D37E.sheet): лёжа — справа (≤ 50 %), стоя — снизу (≤ 55 %); вкладки вместо длинной ленты ── */
+.e2-sheet{position:absolute;z-index:40;display:flex;flex-direction:column;background:var(--e2-panel);color:#fff;font-family:Montserrat,system-ui,sans-serif;
+  box-shadow:0 -4px 24px rgba(0,0,0,.4);contain:layout paint;pointer-events:auto;overscroll-behavior:contain}
+.e2-sheet[hidden]{display:none}
+.e2-sheet.side{top:0;right:0;bottom:0;width:min(50%,420px);border-radius:16px 0 0 16px;padding-right:env(safe-area-inset-right)}
+html.gs-lefty .e2-sheet.side{right:auto;left:0;border-radius:0 16px 16px 0;padding-right:0;padding-left:env(safe-area-inset-left)}
+.e2-sheet.bottom{left:0;right:0;bottom:0;max-height:55%;border-radius:16px 16px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+.e2-sheet-h{display:flex;align-items:center;gap:8px;padding:8px 8px 6px 14px;flex:none}
+.e2-sheet-h b{flex:1;font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.e2-sheet-x{position:relative;width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:16px;display:grid;place-items:center;padding:0}
+.e2-sheet-x::after{content:'';position:absolute;inset:-5px;border-radius:50%}
+.e2-sheet-tabs{display:flex;gap:6px;padding:0 10px 6px;flex:none;overflow-x:auto;scrollbar-width:none}
+.e2-sheet-tabs button{flex:none;min-height:36px;padding:0 12px;border-radius:12px;border:1.5px solid var(--e2-line);background:var(--e2-bg);color:#fff;font:800 12px Montserrat,system-ui,sans-serif}
+.e2-sheet-tabs button.on{background:var(--e2-bg-on);border-color:#fff}
+.e2-sheet-b{flex:1;min-height:0;overflow:auto;padding:0 12px 12px;-webkit-overflow-scrolling:touch}
+.e2-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+.e2-grid button{min-height:52px;border-radius:12px;border:1.5px solid var(--e2-line);background:var(--e2-bg);color:#fff;font-size:22px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:2px;padding:4px 2px;line-height:1}
+.e2-grid button span{font:700 10px/1.15 Montserrat,system-ui,sans-serif;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.e2-grid button:active{background:var(--e2-bg-on)}
+
+/* ── Плашки (H.chip): 💵 120 ›, ❤ 100, ⏱ 4:57 — маленькие, у края; бледнеют без касаний ── */
+.e2-chips{position:absolute;inset:0;pointer-events:none;z-index:5}
+.e2-chip{position:absolute;display:flex;align-items:center;gap:5px;min-height:30px;padding:0 10px;border-radius:12px;background:var(--e2-bg);border:1.5px solid var(--e2-line);
+  color:#fff;font:800 12px/1 Montserrat,system-ui,sans-serif;white-space:nowrap;box-shadow:var(--e2-shadow);opacity:var(--e2-fade,1);transition:opacity .3s;box-sizing:border-box}
+.e2-chip[hidden]{display:none}
+.e2-chip.tap{pointer-events:auto;cursor:pointer}
+.e2-chip.tap::after{content:'';position:absolute;inset:-7px -2px}
+.e2-chip.tl{left:max(10px,env(safe-area-inset-left));top:max(10px,env(safe-area-inset-top))}
+.e2-chip.tc{left:50%;top:max(10px,env(safe-area-inset-top));transform:translateX(-50%)}
+.e2-chip.tr{right:max(10px,env(safe-area-inset-right));top:max(52px,calc(env(safe-area-inset-top) + 44px))}
+.e2-chip.bl{left:max(10px,env(safe-area-inset-left));bottom:max(10px,env(safe-area-inset-bottom))}
+.e2-chip .e2-bar{display:block;width:70px;height:5px;border-radius:3px;background:rgba(255,255,255,.18);overflow:hidden}
+.e2-chip .e2-bar i{display:block;height:100%;width:100%;background:#4ade80;transform-origin:left}
+
+/* ── Подсказка один раз (H.hint) и плашка зоны (вверху по центру, ≤ 36 px, ≤ 60 % ширины) ── */
+.e2-hint{position:absolute;left:50%;top:max(54px,calc(env(safe-area-inset-top) + 46px));transform:translateX(-50%);max-width:min(60%,520px);padding:7px 14px;border-radius:14px;
+  background:var(--e2-panel);color:#fff;font:700 12px/1.3 Montserrat,system-ui,sans-serif;text-align:center;z-index:7;pointer-events:none;opacity:0;transition:opacity .3s;box-shadow:var(--e2-shadow)}
+.e2-hint.on{opacity:1}
+/* окно отладки (H.debug): спрятано, F3 или ⚙️ «Окно отладки» */
+.e2-debug{position:absolute;left:max(8px,env(safe-area-inset-left));bottom:max(8px,env(safe-area-inset-bottom));z-index:8;max-width:60%;padding:6px 8px;border-radius:8px;
+  background:rgba(0,0,0,.6);color:#d1fae5;font:600 10px/1.35 ui-monospace,Consolas,monospace;white-space:pre;pointer-events:none}
+.e2-debug[hidden]{display:none}
+
+/* ── Шапка игры 2.0 (#gamesStage.gs2, флаг HUD2.shell): ← · название · ☰ · ⛶; лёжа во весь экран — один плавающий ☰ ── */
+#gamesStage.gs2 .gm-stage-bar > .gm-mute:not(.gs-fullbtn):not(.gs2-menubtn){display:none!important}
+#gamesStage:not(.gs2) .gs2-menubtn,#gamesStage.gs2.gs2-own .gs2-menubtn{display:none!important}
+#gamesStage.gs2 .gs2-menubtn{display:inline-flex;align-items:center;justify-content:center}
+html.gs-compact #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar{position:absolute;left:max(8px,env(safe-area-inset-left));top:max(8px,env(safe-area-inset-top));width:auto;height:auto;
+  padding:0;gap:6px;background:none;border:0;box-shadow:none;z-index:50;pointer-events:none;overflow:visible}
+html.gs-compact #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar > *{display:none!important}
+html.gs-compact #gamesStage.gs2.gs-fs:not(.gm-own-bar):not(.gs2-own) > .gm-stage-bar > .gs2-menubtn{display:grid!important;place-items:center;width:40px;min-width:0;height:40px;padding:0;border-radius:50%;
+  background:rgba(14,12,28,.55);border:1.5px solid rgba(255,255,255,.4);color:#fff;font-size:18px;pointer-events:auto;position:relative}
+html.gs-compact #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar > .gs2-menubtn::after{content:'';position:absolute;inset:-4px;border-radius:50%}
+html.gs-lefty.gs-compact #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar{left:auto;right:max(8px,env(safe-area-inset-right))}
+/* свой ☰ у игры («Подземье») — во весь экран шапки игры нет совсем */
+html.gs-compact #gamesStage.gs2.gs-fs.gm-own-menu > .gm-stage-bar{display:none}
+
+/* ── Сайт под игрой (флаг HUD2.chrome): фон не анимируется, пока открыта игра — меньше работы телефону ── */
+body.game-on.e2-calm .particle,body.game-on.e2-calm .d37-secret,body.game-on.e2-calm .donation-alert-icon{animation-play-state:paused!important}
+body.game-on.e2-calm #particles{display:none}
+
+/* ── Телефон стоя во весь экран (html.gs-tall, js/core/fullscreen.js, ⚙️ «Телефон стоя — игра на весь экран»): как лёжа —
+   панель «Мира» значками поверх 3D, чат и эмоции — по 💬 ── */
+html.gs-tall .gs-fs .wld{position:relative}
+html.gs-tall .gs-fs .wld-wrap{position:absolute;inset:0}
+html.gs-tall .gs-fs .wld-top{position:absolute;top:0;right:0;z-index:8;flex-wrap:nowrap;gap:6px;padding:max(6px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) 0 0;background:none;border:0;pointer-events:none}
+html.gs-tall .gs-fs .wld-top>b,html.gs-tall .gs-fs .wldShard{display:none}
+html.gs-tall .gs-fs .wld-topbtns{pointer-events:auto;gap:4px;margin-left:0}
+html.gs-tall .gs-fs .wld-topbtns button{width:40px;height:40px;padding:0;display:grid;place-items:center;background:rgba(10,8,24,.55);border-color:rgba(255,255,255,.3);color:#fff;border-radius:50%}
+html.gs-tall .gs-fs .wld-topbtns button span{display:none}
+html.gs-tall .gs-fs .gs-chatbtn{display:grid!important}
+html.gs-tall .gs-fs .wld-topbtns button.gs-chatbtn.on{background:var(--accent,#7c3aed);border-color:transparent}
+html.gs-tall .gs-fs .wld-bar{display:none;position:absolute;z-index:8;top:calc(52px + env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));padding:6px;border-radius:12px;background:rgba(14,12,26,.94);box-shadow:0 8px 24px rgba(0,0,0,.4);flex-wrap:wrap}
+html.gs-tall .gs-fs .wld.gs-chat .wld-bar{display:flex}
+html.gs-tall .gs-fs .wld.gs-chat .wld-say{min-width:0;flex:1 1 100%}
+html.gs-tall .gs-fs .wld-wrap .wld-hint,html.gs-tall .gs-fs .mir .mir-tb,html.gs-tall .gs-fs .wld-inv,html.gs-tall .gs-fs .mb-top{top:calc(54px + env(safe-area-inset-top))}
+html.gs-tall .gs-fs .mir .wld-inv:not(.mir-tb){top:auto}
+html.gs-tall .gs-fs .wld-pop{top:calc(54px + env(safe-area-inset-top));max-height:calc(100% - 62px - env(safe-area-inset-top))}
+html.gs-tall .gs-fs .wld-log{left:max(8px,env(safe-area-inset-left));max-height:30%;overflow:hidden}
+
+/* ── «Мир Денчика» 2.0 (.mir.e2, флаг HUD2.mir): вверху ☰ · 📱 · 💬; 🗺️ и 🎬 — в ☰ и в круге позы, 👥 — в заголовке ☰ ── */
+.mir.e2 .mz-mapbtn,.mir.e2 .mz-actbtn,.mir.e2 .mz-acts{display:none!important}
+html:is(.gs-compact,.gs-tall) .gs-fs .mir.e2 .wldOnline{display:none}
+.mir.e2 .wld-topbtns .wld-menubtn{order:9}
+/* плашка зоны — пилюля вверху по центру (2,2 с), а не карточка на полэкрана */
+.mir.e2 .mz-banner{top:max(8px,env(safe-area-inset-top))!important;max-width:60%;min-height:0!important;padding:6px 14px!important;border-radius:14px!important;font-size:13px!important}
+.mir.e2 .mz-banner small,.mir.e2 .mz-banner p{display:none}
+.mir.e2 .mz-banner b{font-size:14px;text-shadow:none}

@@ -15,12 +15,14 @@
 // «Поверни телефон». D37Full.auto(el) — открыта игра el: телефон положили горизонтально — она сама во весь экран (настройка
 // autoLand), поставили обратно — выходит; вышел сам кнопкой — до следующего поворота не возвращаем.
 // Пока полный экран — экран не гаснет (Wake Lock). html.gs-compact — полный экран на низком экране (телефон лёжа).
+// T-123 (docs/HUD_V2.md §6.3): D37Full.auto(el, { tall: true }) — игра с персонажем: и телефон стоя — сразу во весь экран (CSS,
+// настройка autoPortrait, флаг HUD2.portrait); html.gs-tall — полный экран на телефоне стоя. Вышел сам — до поворота не возвращаем.
 // Событие window 'd37:fullscreen' { on, el, mode: 'api' | 'pseudo', auto }; D37Full.on(fn) → отписка; D37Full.state().
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const doc = root.document;
   if (!doc || root.D37Full) return;
-  const F = { el: null, mode: null, auto: false, o: {}, hist: 0, ignorePop: 0, autoEl: null, autoOff: false, locked: false, wake: null, vp: null, subs: new Set(), seq: 0 };
+  const F = { el: null, mode: null, auto: false, o: {}, hist: 0, ignorePop: 0, autoEl: null, autoOff: false, autoTall: false, autoOffP: false, locked: false, wake: null, vp: null, subs: new Set(), seq: 0 };
   const de = () => doc.documentElement;
   const apiEl = () => doc.fullscreenElement || doc.webkitFullscreenElement || null;
   const apiOk = () => !!((doc.fullscreenEnabled || doc.webkitFullscreenEnabled) && (de().requestFullscreen || de().webkitRequestFullscreen));
@@ -57,7 +59,7 @@
     if (on) { if (F.vp === null) { F.vp = m.getAttribute('content') || ''; if (!/viewport-fit/.test(F.vp)) m.setAttribute('content', F.vp + ', viewport-fit=cover'); } }
     else if (F.vp !== null) { m.setAttribute('content', F.vp); F.vp = null; }
   }
-  const compact = () => de().classList.toggle('gs-compact', !!F.el && landscape() && H() <= 500);
+  const compact = () => { de().classList.toggle('gs-compact', !!F.el && landscape() && H() <= 500); de().classList.toggle('gs-tall', !!F.el && !landscape() && touch()); };
 
   // ── Экран не гаснет, пока полный экран (как ⛶ в чате) ──
   async function wakeOn(){
@@ -138,7 +140,7 @@
     const wasAuto = F.auto;
     F.el = null; F.mode = null; F.auto = false;
     mark(el, false); el.classList.remove('gs-fs'); exitBtn(el, false);
-    de().classList.remove('gs-full', 'gs-compact'); fit(false);
+    de().classList.remove('gs-full', 'gs-compact', 'gs-tall'); fit(false);
     rotHint(false);
     if (!o.keepApi) { if (apiEl()) exitApi(); unlockOrient(); wakeOff(); }
     // своя запись истории: вышли сами (кнопка, Esc) — убрать её «назад»; игру закрывают переходом (release) — не трогать,
@@ -146,6 +148,7 @@
     if (F.hist && !o.fromPop && !o.noHist && root.history?.state?.gsFull === F.hist) { F.ignorePop++; try { root.history.back(); } catch (e) { F.ignorePop--; } }
     F.hist = 0;
     if (o.user && wasAuto && landscape()) F.autoOff = true;   // сам вышел из «повернул — на весь экран»: не возвращать до поворота
+    if (o.user && wasAuto && !landscape()) F.autoOffP = true;   // сам вышел из «стоя — на весь экран» (T-123): до поворота — сайт
     emit(el);
   }
   function toggle(el, o = {}){
@@ -187,9 +190,10 @@
   }
 
   // ── Авто: телефон лёжа + открыта игра → во весь экран (без API: поворот — не нажатие, браузер не разрешит) ──
-  const autoWanted = () => !!F.autoEl && F.autoEl.isConnected !== false && phone() && landscape() && setting('autoLand', true) !== false && !F.autoOff;
+  const tallOn = () => F.autoTall && (typeof HUD2 === 'undefined' || !!HUD2.portrait) && setting('autoPortrait', true) !== false && !F.autoOffP;
+  const autoWanted = () => !!F.autoEl && F.autoEl.isConnected !== false && phone() && (landscape() ? setting('autoLand', true) !== false && !F.autoOff : tallOn());
   function check(){
-    if (!landscape()) F.autoOff = false; else rotHint(false);
+    if (!landscape()) F.autoOff = false; else { rotHint(false); F.autoOffP = false; }
     const want = autoWanted();
     if (want && !F.el) enter(F.autoEl, { auto: true, api: false });
     else if (!want && F.el && F.auto) exit();
@@ -238,7 +242,7 @@
   root.D37Full = {
     enter, exit: () => exit({ user: true }), toggle, rotate,
     // Открыта игра el (или null — закрыта): включает «повернул телефон — во весь экран»
-    auto(el){ F.autoEl = el || null; F.autoOff = false; if (!el && F.auto) exit({ noHist: true }); check(); },
+    auto(el, o){ F.autoEl = el || null; F.autoOff = false; F.autoOffP = false; F.autoTall = !!(el && o && o.tall); if (!el && F.auto) exit({ noHist: true }); check(); },
     // Игру закрывают (обычно переходом на другой адрес): если она (или что-то в ней) во весь экран — выйти, историю не трогая
     release(el){ if (F.autoEl && el && (F.autoEl === el || el.contains?.(F.autoEl))) F.autoEl = null; if (F.el && el && (F.el === el || el.contains?.(F.el))) exit({ noHist: true }); },
     active: () => F.el,

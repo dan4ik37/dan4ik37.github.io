@@ -426,9 +426,9 @@ body.cel-ban-on .cel-adv{display:none}
     const home = doc.body.dataset.route === 'home', today = doc.getElementById('today');
     const h = holidaysOn() ? L.find(x => x.phase !== 'pre') : null, A = C()?.advent(now);
     const key = home && today ? (h ? h.id + h.year : A ? 'adv' + A.day : '') : '';
-    if (!key) { if (banEl) { banEl.remove(); banEl = null; banKey = ''; } doc.body.classList.remove('cel-ban-on'); return; }
+    if (!key) { if (banEl) { banEl.remove(); banEl = null; banKey = ''; } if (doc.body.classList.contains('cel-ban-on')) doc.body.classList.toggle('cel-ban-on', false); return; }   // T-123: класс — только при смене (было каждую секунду)
     if (!banEl || !banEl.isConnected) { banEl = doc.createElement('div'); banEl.className = 'cel-ban'; today.before(banEl); banKey = ''; }
-    doc.body.classList.add('cel-ban-on');   // на главной карточка задания не нужна — она в полосе
+    if (!doc.body.classList.contains('cel-ban-on')) doc.body.classList.toggle('cel-ban-on', true);   // на главной карточка задания не нужна — она в полосе
     if (key === banKey) { const el = banEl.querySelector('[data-left]'); if (el && A) el.textContent = fmtLeft(A.left); return; }
     banKey = key;
     if (h) { banEl.className = 'cel-ban cel-' + (h.style || 'fireworks'); banEl.innerHTML = `<b>${esc(h.greet)}</b><span>${esc(h.sub || '')}</span>`; return; }

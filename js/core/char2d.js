@@ -46,6 +46,7 @@
     ledge:  { name: 'Подтягивается', n: 6, lo: 4, dur: .32, loop: 0 },         // с края — наверх (паркур world3d «up»); «Подземье» и другие 2D
     swim:   { name: 'Плывёт', n: 6, lo: 4, dur: TAU / 3.4, loop: 1 },
     sit:    { name: 'Сидит', n: 1, dur: 1, loop: 1 },
+    lie:    { name: 'Лежит', n: 2, lo: 1, dur: TAU / 1.6, loop: 1 },              // на спине (world3d 13, T-123): дышит
     hurt:   { name: 'Больно', n: 3, dur: .3, loop: 0 },
     use:    { name: 'Удар', n: 5, dur: .32, loop: 0 },
     phone:  { name: 'Телефон', n: 4, lo: 2, dur: 2.4, loop: 1 },   // смотрит в телефон, палец стучит, изредка поднимает глаза
@@ -393,7 +394,7 @@
     // «Удар»: замах правой сверху вниз с поворотом корпуса (ключи по доле k)
     const USE = { ax: [-2.85, -2.3, -1.25, -.3, -.55], az: [.4, .32, .18, .1, .16], er: [-.7, -.45, -.2, -.12, -.3], ty: [-.32, -.18, .1, .24, .08], tx: [-.06, 0, .12, .18, .06],
       lx: [.4, .25, -.15, -.4, -.12], ll: [.12, .1, -.15, -.25, -.08], lr: [-.1, -.05, .15, .22, .06] };
-    const O = { snap: true, rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, land: 0, blink: false };
+    const O = { snap: true, rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, lie: false, sleep: false, land: 0, blink: false };
     // Поставить позу кадра: k — доля (цикл: i/n, разовая: i/(n−1)), A — анимация, St — стиль (чиби)
     function pose(ch, anim, k, A, St){
       let t = T0 + (A.loop ? .1 * Math.sin(TAU * k) : .1 * k);
@@ -408,6 +409,7 @@
       else if (anim === 'ledge') { o.pk = 'up'; o.pkK = k; }
       else if (anim === 'swim') { o.swim = true; mv = true; t = T0 + k * A.dur; }
       else if (anim === 'sit') o.sit = true;
+      else if (anim === 'lie') { o.lie = true; t = T0 + k * A.dur; }
       else if (anim === 'phone' || anim === 'call') { o.phone = anim === 'phone' ? 'use' : 'call'; o.phonePh = TAU * k; }   // телефон 📱: фаза — своя, цикл замкнут
       else if (A.emo) { ch.emote = A.emo; ch.emoteT = t - (A.loop ? EMO_IN + k * A.dur : k * (A.dur - .02)); }
       K.animate(ch, mv, 0, t, o);

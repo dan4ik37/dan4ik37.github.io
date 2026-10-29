@@ -75,6 +75,12 @@
     bubbles: { def: true, bool: 1 },
     autoFull: { def: false, bool: 1 },
     autoLand: { def: true, bool: 1 },
+    // Интерфейс игр 2.0 (T-123, docs/HUD_V2.md): кнопки бледнеют без касаний; лоток вещей (телефон — свёрнут, ПК — открыт);
+    // окно отладки (F3); телефон стоя — игра с персонажем на весь экран
+    hudFade: { def: true, bool: 1 },
+    hudTray: { def: 'auto', list: ['auto', 'open', 'closed'] },
+    hudDebug: { def: false, bool: 1 },
+    autoPortrait: { def: true, bool: 1 },
   };
   // Старые ключи: как читать и как писать (null — удалить ключ: «как по умолчанию»)
   const b01 = { read: v => v === '1' ? true : v === '0' ? false : undefined, write: v => v ? '1' : null };
@@ -180,6 +186,7 @@
     h.classList.toggle('gs-lefty', get('lefty'));
     h.classList.toggle('gs-notags', !get('tags'));
     h.classList.toggle('gs-nobub', !get('bubbles'));
+    h.classList.toggle('e2-nofade', !get('hudFade'));   // T-123: кнопки игр не бледнеют (css/hud2.css)
     applyTheme();
   }
   // Тема: «Авто» — как в системе (и меняется вместе с ней); выключена светлая (THEME_LIGHT) — только тёмная
@@ -221,7 +228,7 @@
     { id: 'sound', icon: '🔊', title: 'Звук', order: 20, ctx: ['engine', 'game', 'site'], render: tabSound, keys: ['mute', 'vol', 'volFx', 'volAmb', 'volVoice'] },
     { id: 'controls', icon: '🎮', title: 'Управление', order: 30, ctx: ['engine', 'site'], render: tabControls, keys: ['sens', 'invertY', 'touchSize', 'touchAlpha', 'lefty', 'keys'] },
     { id: 'camera', icon: '🎥', title: 'Камера', order: 40, ctx: ['engine', 'site'], render: tabCamera, keys: ['view', 'zoomFirst', 'fov', 'motion', 'shake'] },
-    { id: 'ui', icon: '🧩', title: 'Интерфейс', order: 50, ctx: ['engine', 'game', 'site'], render: tabUi, keys: ['uiScale', 'tags', 'bubbles', 'autoFull', 'autoLand'] },
+    { id: 'ui', icon: '🧩', title: 'Интерфейс', order: 50, ctx: ['engine', 'game', 'site'], render: tabUi, keys: ['uiScale', 'tags', 'bubbles', 'autoFull', 'autoLand', 'autoPortrait', 'hudFade', 'hudTray', 'hudDebug'] },
     { id: 'site', icon: '🌐', title: 'Сайт', order: 90, ctx: ['engine', 'game', 'site'], render: tabSite },
   ];
   let win = null, cur = 'main', cx = 'site', opened = {}, capture = null, keyNote = '', padT = 0, sfxAt = 0, query = '', qWords = [];
@@ -485,6 +492,12 @@
       + head('Полный экран')
       + row('Сразу во весь экран', sw('autoFull', { label: 'Сразу во весь экран' }), 'Игры открываются во весь экран. Выйти — ☰ Меню или Esc.', { words: 'полный экран fullscreen' })
       + row('Повернул телефон — во весь экран', sw('autoLand', { label: 'Повернул телефон — во весь экран' }), 'Телефон горизонтально — игра на весь экран, обратно — сайт.', { words: 'поворот горизонтально альбомная' })
+      + row('Телефон стоя — игра на весь экран', sw('autoPortrait', { label: 'Телефон стоя — игра на весь экран' }), '«Мир», «Кубомир», «Подземье», «Студия 3D»: без шапки сайта, весь экран — игра.', { words: 'вертикально портрет стоя' })
+      + head('Кнопки в игре')
+      + row('Бледнеют без касаний', sw('hudFade', { label: 'Кнопки бледнеют без касаний' }), 'Через 4 секунды кнопки становятся прозрачнее — мир виднее. Коснулся — снова яркие.', { words: 'прозрачные кнопки' })
+      + row('Вещи внизу экрана', seg('hudTray', [['auto', 'Авто'], ['open', 'Все'], ['closed', 'Свёрнуты']], { label: 'Вещи внизу экрана' }), 'Авто: на телефоне видна только вещь в руке и соседние, на компьютере — все.', { words: 'инвентарь панель вещей хотбар' })
+      + row('Окно отладки', sw('hudDebug', { label: 'Окно отладки' }), 'Цифры для проверки (кадры, память). Клавиша F3.', { words: 'fps отладка debug f3' })
+      + row('Подсказки', '<button type="button" class="gs-btn" data-site="hints">💡 Показать снова</button>', 'Каждая подсказка показывается один раз. Здесь — вернуть все.', { words: 'подсказки обучение' })
       + (cx === 'game' ? note('Графика, управление и камера 3D — в «Мире Денчика» (☰ Меню → ⚙️ Настройки) или в меню сайта «Ещё → ⚙️ Настройки».') : '');
   }
   function tabSite(){
@@ -664,6 +677,7 @@
       else if (a === 'push') { if (typeof togglePush === 'function') Promise.resolve(togglePush()).finally(() => renderBody()); }
       else if (a === 'profile') { close(); location.hash = '#/profile'; setTimeout(() => doc.getElementById('profileAccountSettings')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 900); }
       else if (a === 'login') { close(); if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
+      else if (a === 'hints') { root.D37TouchLayout?.resetSeen?.(); lsSet('d37_hint_once', null); const b = e.target.closest('[data-site]'); if (b) { b.textContent = '✅ Покажем снова'; b.disabled = true; } }
     }
   }
   function onInput(e){

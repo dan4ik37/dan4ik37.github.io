@@ -1124,6 +1124,8 @@ body.low .donation-alert-icon{animation:none}
 .confirm-ok:hover{background:#e0244a}
 </style>
 <link rel="stylesheet" href="css/premium.css">
+<!-- T-123: интерфейс игр 2.0 — общие кнопки, круг выбора, лоток, листы (js/engine/ui.js, docs/HUD_V2.md) -->
+<link rel="stylesheet" href="css/hud2.css">
 <!-- Чат «как Дискорд» + лента сообщений (community.js, msgview.js) и телефон 📱 (phone.js, calls.js) -->
 <link rel="stylesheet" href="css/ds.css">
 <link rel="stylesheet" href="css/phone.css">
@@ -2042,6 +2044,8 @@ body.low .donation-alert-icon{animation:none}
       <!-- ⚙️ / 🔄 / ⛶ — js/core/settings.js и js/core/fullscreen.js (обработчики свои, по data-атрибутам) -->
       <button class="gm-mute gs-setbtn" type="button" data-gs-set title="Настройки: звук, графика, управление, полный экран" aria-label="Настройки">⚙️</button>
       <button class="gm-mute gs-rotbtn" type="button" data-gs-rot="#gamesStage" title="Повернуть экран: игра горизонтально и во весь экран" aria-label="Повернуть экран">🔄</button>
+      <!-- ☰ — шапка игры 2.0 (T-123, D37Shell в js/features/games.js): 📣 📖 🔊 ⚙️ 📱 🔄 — в этом меню, в шапке — только ← ☰ ⛶ -->
+      <button class="gm-mute gs2-menubtn" type="button" onclick="window.D37Shell&&D37Shell.menu()" title="Меню: правила, звук, настройки, телефон, экран" aria-label="Меню" aria-haspopup="dialog">☰</button>
       <button class="gm-mute gs-fullbtn" type="button" data-gs-full="#gamesStage" title="Во весь экран" aria-label="Во весь экран">⛶</button>
     </div>
     <div id="gamesStageBox"></div>
