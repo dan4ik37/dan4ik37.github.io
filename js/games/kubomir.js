@@ -489,10 +489,17 @@
   }
   function help(){
     const t = window.D37Full?.isTouch?.() || E()?.isTouch?.();
-    const txt = t ? (opts.touchMode === 'cross'
+    // интерфейс 2.0 (T-123): кнопок меньше — поза, прыжок, лоток вещей, ☰
+    const t2 = 'Внизу — вещи: нажми — весь ряд и 🎒 (все вещи), смахни вбок — соседняя, вверх — все вещи, держи — круг вещей. Ячейка слева от вещей — левая рука (нажми — поменять руки: щит, факел, еда). '
+      + '⬇ — красться (ещё раз — встать); держи ⬇ и веди пальцем — круг: 🐛 ползком, 🪑 сесть, 🛌 лечь (у лежанки ночью — спать). ⤒ — прыжок (два раза в «Творчестве» — полёт, ⤓ — вниз), 🛡 — держать щит или тянуть лук (когда в руке). '
+      + '☰ — меню: спрятать интерфейс, камера, подсказка, настройки. Кнопки можно переставить: ⚙️ → «Управление» → «🎮 Настроить кнопки».';
+    const txt = t && hud2On() ? (opts.touchMode === 'cross'
+        ? 'Джойстик слева — идти, палец справа — смотреть. Прицел в центре: нажми по экрану — поставить/открыть, держи — ломать (или ⛏ и 🧱). ' + t2
+        : 'Как в Bedrock: джойстик слева — идти, палец справа — смотреть. Нажми по блоку — поставить/открыть/съесть, держи палец на блоке — ломать (вокруг пальца — кольцо), нажми по мобу — удар (бей вовремя — сильнее). ' + t2)
+      : t ? (opts.touchMode === 'cross'
         ? 'Джойстик слева — идти, палец справа — смотреть. Прицел в центре: нажми по экрану — поставить/открыть, держи — ломать (или ⛏ и 🧱). ⤒ — прыжок (два раза в «Творчестве» — полёт, ⤓ — вниз), ⬇ — красться, 🎒 — вещи. Панель вещей — проведи пальцем, подержи ячейку — выбросить. Кнопки можно переставить и поменять размер: ⚙️ → «Управление» → «🎮 Настроить кнопки».'
         : 'Как в Bedrock: джойстик слева — идти, палец справа — смотреть. Нажми по блоку — поставить/открыть/съесть, держи палец на блоке — ломать (вокруг пальца — кольцо), нажми по мобу — удар (бей вовремя — сильнее). ⤒ — прыжок (два раза в «Творчестве» — полёт, ⤓ — вниз), ⬇ — красться, 🎒 — вещи, 🔄 — поменять руки (левая — щит, факел, еда), 🛡 — держать щит (вовремя — отбив) или тянуть лук. Панель вещей — проведи пальцем, подержи ячейку — выбросить. В ⚙️ можно включить «прицел», а в ⚙️ → «Управление» → «🎮 Настроить кнопки» — переставить кнопки и поменять их размер.')
-      : 'Как в Майнкрафте: WASD — идти, Пробел — прыжок (два раза в «Творчестве» — полёт), Shift — красться (с края не упадёшь), Ctrl или два раза W — бег. ЛКМ (держать) — ломать, ПКМ — поставить/открыть/съесть, СКМ — взять блок в руку, колесо и 1–9 — ячейки, Q — выбросить (Ctrl+Q — стопку), E — вещи, F — поменять руки (в левой — щит, факел, еда: ПКМ ими, если правой нечего делать), F5 — вид, F1 — спрятать интерфейс, F3 — сведения, T или Enter — чат, / — команда (/help), Esc — меню. В вещах: Shift+клик — перекинуть, ПКМ с протяжкой — по одной в каждую ячейку, ЛКМ с протяжкой — поровну, двойной клик — собрать. Бой: бей вовремя — полоска под прицелом полная (часто — слабо), меч — серия из трёх ударов, топор — сверху и выбивает щит; щит — держи ПКМ, подними прямо перед ударом — отбив (моб оглушён); лук — держи ПКМ и отпусти (дольше — сильнее). Геймпад: RT — ломать/бить, LT — ставить/щит/лук, LB/RB — ячейки, Y — вещи, B — красться, ↑ — поменять руки. Клавиши — в ⚙️ → «🧊 Кубомир».';
+      : 'Как в Майнкрафте: WASD — идти, Пробел — прыжок (два раза в «Творчестве» — полёт), Shift — красться (с края не упадёшь), Ctrl или два раза W — бег. ЛКМ (держать) — ломать, ПКМ — поставить/открыть/съесть, СКМ — взять блок в руку, колесо и 1–9 — ячейки, Q — выбросить (Ctrl+Q — стопку), E — вещи, F — поменять руки (в левой — щит, факел, еда: ПКМ ими, если правой нечего делать), ' + (hud2On() ? 'G — круг позы (сесть, лечь, ползком), ' : '') + 'F5 — вид, F1 — спрятать интерфейс, F3 — сведения, T или Enter — чат, / — команда (/help), Esc — меню. В вещах: Shift+клик — перекинуть, ПКМ с протяжкой — по одной в каждую ячейку, ЛКМ с протяжкой — поровну, двойной клик — собрать. Бой: бей вовремя — полоска под прицелом полная (часто — слабо), меч — серия из трёх ударов, топор — сверху и выбивает щит; щит — держи ПКМ, подними прямо перед ударом — отбив (моб оглушён); лук — держи ПКМ и отпусти (дольше — сильнее). Геймпад: RT — ломать/бить, LT — ставить/щит/лук, LB/RB — ячейки, Y — вещи, B — красться, ↑ — поменять руки. Клавиши — в ⚙️ → «🧊 Кубомир».';
     if (window.GameKit?.ask) window.GameKit.ask(txt, { yes: 'Понятно', no: null }); else alert(txt);
   }
   function setWhere(t){ const w = el?.querySelector('.kb-where'); if (w) w.textContent = t; }
@@ -2262,7 +2269,7 @@
   function invOpen(st){ if (S !== st || st.P.dead || st.menu || st.modWin) return; if (st.tray?.open) trayOpen(st, false); if (!st.ui?.isOpen()) st.ui?.open('inv'); }
   function trayDown(st, hb, e){
     const T = st.tray; try { hb.setPointerCapture(e.pointerId); } catch (er) {}
-    T.pid = e.pointerId; T.x0 = e.clientX; T.y0 = e.clientY; T.sw = false; T.wheel = false; T.dropped = false; T.slot = -1;
+    T.pid = e.pointerId; T.x0 = e.clientX; T.y0 = e.clientY; T.sw = false; T.wheel = false; T.wmv = false; T.dropped = false; T.slot = -1; T.t0 = e.timeStamp;
     clearTimeout(T.ht);
     if (T.always || T.open) {   // раскрыт — как было: нажал — выбрал; держишь палец — выбросить по одной
       const s = e.target.closest('[data-s]');
@@ -2274,8 +2281,11 @@
   function trayDrop(st){ const T = st.tray; if (!T || T.pid == null || S !== st || st.P.dead) return; dropSel(st, false); T.dropped = true; T.ht = setTimeout(() => trayDrop(st), 220); }
   function trayMove(st, e){
     const T = st.tray; if (e.pointerId !== T.pid) return;
-    if (T.wheel) { st.rad?.move(e.clientX, e.clientY); return; }
     const dx = e.clientX - T.x0, dy = e.clientY - T.y0;
+    // круг открылся по таймеру, а палец по времени события поехал раньше 0,38 с (тяжёлый кадр задержал касание) — это смахивание
+    if (T.wheel && !T.wmv && e.timeStamp - T.t0 < 380 && Math.abs(dx) + Math.abs(dy) > 12) { T.wheel = false; st.rad?.close(true); }
+    if (T.wheel) { T.wmv = true; st.rad?.move(e.clientX, e.clientY); return; }
+    if (!T.sw && Math.abs(dx) + Math.abs(dy) > 12) clearTimeout(T.ht);   // палец поехал — это не «удержал»
     if (dy < -36 && Math.abs(dx) < 30 && !T.sw && !T.dropped) { clearTimeout(T.ht); T.pid = null; invOpen(st); return; }   // вверх — 🎒 все вещи
     if (T.always || T.open) {   // раскрыт: выбор едет за пальцем
       const c = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.kb-hotbar [data-s]'), i = c ? +c.dataset.s : -1;
@@ -2287,8 +2297,12 @@
   function trayUp(st, e){
     const T = st.tray; if (e.pointerId !== T.pid) return;
     T.pid = null; clearTimeout(T.ht);
-    if (T.wheel) { T.wheel = false; st.rad?.up(); return; }
     const open = T.always || T.open;
+    if (T.wheel) {   // отпустил так быстро, что по времени события это нажатие (круг открыл запоздавший таймер) — нажатие
+      T.wheel = false;
+      if (!T.wmv && e.timeStamp - T.t0 < 380) { st.rad?.close(true); if (!open) trayOpen(st, true); return; }
+      st.rad?.up(); return;
+    }
     if (e.type !== 'pointerup' || T.sw || T.dropped) { if (open) trayOpen(st, T.open); return; }
     if (!open) { trayOpen(st, true); return; }   // свёрнут — нажал: весь ряд и 🎒
     if (document.elementFromPoint(e.clientX, e.clientY)?.closest?.('[data-bag]')) { invOpen(st); return; }
@@ -2339,12 +2353,14 @@
   }
   // нажатия кнопки позы (kubomir-input.js touchBar: b.ptr): удержал 0,25 с или повёл пальцем — круг над кнопкой, выбор — по сдвигу пальца
   function poseBtnPtr(st){
-    let pid = null, x0 = 0, y0 = 0, ht = 0, opened = false;
+    let pid = null, x0 = 0, y0 = 0, ht = 0, opened = false, t0 = 0, mv = false;
     const openAt = d => { const b = d.getBoundingClientRect(), w = wrap()?.getBoundingClientRect(); if (!w) return; opened = poseRadial(st, { x: b.left + b.width / 2 - w.left - 40, y: b.top - w.top - 124 }, { from: { x: x0, y: y0 } }); };
     return {
-      down(e, d){ pid = e.pointerId; x0 = e.clientX; y0 = e.clientY; opened = false; clearTimeout(ht); ht = setTimeout(() => { if (pid != null && !opened && S === st) openAt(d); }, 250); },
-      move(e, d){ if (e.pointerId !== pid) return; if (!opened && Math.hypot(e.clientX - x0, e.clientY - y0) > 18) { clearTimeout(ht); openAt(d); } if (opened) st.rad?.move(e.clientX, e.clientY); },
-      up(e){ if (e.pointerId !== pid) return; pid = null; clearTimeout(ht); if (opened) { opened = false; st.rad?.up(); return; } if (e.type === 'pointerup' && S === st) poseTap(st); },
+      down(e, d){ pid = e.pointerId; x0 = e.clientX; y0 = e.clientY; opened = false; mv = false; t0 = e.timeStamp; clearTimeout(ht); ht = setTimeout(() => { if (pid != null && !opened && S === st) openAt(d); }, 250); },
+      move(e, d){ if (e.pointerId !== pid) return; const far = Math.hypot(e.clientX - x0, e.clientY - y0) > 18; if (far) mv = true; if (!opened && far) { clearTimeout(ht); openAt(d); } if (opened) st.rad?.move(e.clientX, e.clientY); },
+      // отпустил: круг открыт — выбрать (или ждать нажатия); по времени события это было короткое нажатие без сдвига (круг открыл
+      // запоздавший таймер — тяжёлый кадр) — нажатие
+      up(e){ if (e.pointerId !== pid) return; pid = null; clearTimeout(ht); if (opened) { opened = false; if (!mv && e.type === 'pointerup' && e.timeStamp - t0 < 250) { st.rad?.close(true); if (S === st) poseTap(st); return; } st.rad?.up(); return; } if (e.type === 'pointerup' && S === st) poseTap(st); },
       stop(){ clearTimeout(ht); pid = null; opened = false; },
     };
   }
@@ -2711,7 +2727,7 @@
     }
     if (P.food <= 6) return `🍗 Ты голоден и не можешь бежать: возьми еду в руку и ${touch ? 'нажми на экран' : 'держи ПКМ'} — съешь`;
     if (!A.log && !hasItem(st, /^log_/)) return `🪵 Подойди к дереву и ${touch ? 'держи палец на стволе' : 'держи ЛКМ на стволе'} — добудешь брёвна`;
-    if (!A.table && !hasItem(st, /^planks_/) && !hasItem(st, /^crafting_table$/)) return `🎒 Открой вещи (${touch ? '🎒' : K.label('inventory') || 'E'}) и в «📖 Можно сделать» нажми доски`;
+    if (!A.table && !hasItem(st, /^planks_/) && !hasItem(st, /^crafting_table$/)) return st.v2 && touch ? '🎒 Открой вещи (смахни лоток вверх или нажми его → 🎒), вкладка «🛠 Ремесло» → «📖 Можно сделать» → доски' : `🎒 Открой вещи (${touch ? '🎒' : K.label('inventory') || 'E'}) и в «📖 Можно сделать» нажми доски`;
     if (!A.table) return '🛠️ Сделай верстак из 4 досок (📖 в окне вещей), поставь его и открой — там сетка 3×3';
     if (!A.pick) return '⛏️ На верстаке сделай деревянную кирку — «📖 Можно сделать» подскажет, чего не хватает';
     if (!A.stone_pick) return '🪨 Накопай камня (серые блоки, нужна кирка) и сделай каменную кирку — копает быстрее и берёт железо';
@@ -3054,5 +3070,5 @@
     metaSnap: st => metaSnap(st), guestData: st => guestData(st), homeOf: st => homeOf(st), xMenu: st => xMenu(st), xHooks: st => xHooks(st), eatNow: (st, it, which) => eat(st, it, which),
     useHand: (st, hit, tap, s, which) => useHand(st, hit, tap, s, which), dropsOf: (st, b) => dropsOf(st, b), die: (st, why) => die(st, why), play: id => playById(id),
     // интерфейс 2.0 (T-123, scripts/hud2-cases/kubomir.cjs): поза (круг), лоток, кнопки телефона заново
-    pose: id => S && posePick(S, id), poseCur: () => S && poseCur(S), tray: on => S && trayOpen(S, on), touchUI: () => S && touchUI(S), poseCheck: (st, C, K) => poseCheck(st, C, K) } };
+    pose: id => S && posePick(S, id), poseCur: () => S && poseCur(S), tray: on => S && trayOpen(S, on), trayS: () => S?.tray ? { open: S.tray.open, always: S.tray.always, pid: S.tray.pid, sw: S.tray.sw, wheel: S.tray.wheel } : null, touchUI: () => S && touchUI(S), poseCheck: (st, C, K) => poseCheck(st, C, K) } };
 })();
