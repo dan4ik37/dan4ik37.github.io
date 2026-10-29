@@ -44,7 +44,7 @@
       for (let t = 0; t < n; t++) {
         const b = V.blocks[t], m = KS?.matOf ? KS.matOf(t) : 255;
         MS[t] = MT?.[m] ? MT[m].mass : (b && /leaves|wool|cloth|bed/.test(b.name) ? 80 : 600);
-        RL[t] = V.T.axis[t] ? 1000 : b && /stone|cobble|ore_|gravel|basalt|granite|andesite|diorite|boulder|rock/.test(b.name) ? 600 : 0;
+        RL[t] = V.T.axis[t] ? 1000 : b && /^(stone|cobble|cobblestone|mossy_cobble|gravel|basalt|granite|andesite|diorite|boulder|rock|ore_\w+)$/.test(b.name) ? 600 : 0;   // камень и руда — шершавый «круглый» обломок; кирпич, доски — кубик
       }
     }
     const batch = keep => st.ents?.itemBatch ? st.ents.itemBatch(keep) : { add: (x, y, z, s) => st.ents?.addItem?.(x, y, z, s, false, null, false, keep), flush(){} };

@@ -248,6 +248,8 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const scene = `(async () => { ${SET}
         const P = S.P, cx = Math.floor(P.x) + 4, cz = Math.floor(P.z) - 4, gy = Math.floor(P.y);
         for (let x = cx - 6; x <= cx + 34; x++) for (let z = cz - 14; z <= cz + 14; z++) { for (let y = gy; y <= gy + 30; y++) if (W.raw(x, y, z) > 0) set(x, y, z, null); nat(x, gy - 1, z, 'stone'); }   // пол — природный камень (не постройка)
+        // шаг 2 (F4): за местом, куда ляжет башня, — обрыв на 8 вниз: обломки, долетевшие до края, скатываются с него
+        for (let x = cx + 18; x <= cx + 34; x++) for (let z = cz - 6; z <= cz + 8; z++) { const fy = gy - 9; for (let y = gy - 10; y < gy; y++) if (y > fy && W.raw(x, y, z) !== 0) set(x, y, z, null); nat(x, fy, z, 'stone'); }
         for (let y = gy; y < gy + 14; y++) for (let x = cx; x < cx + 3; x++) for (let z = cz; z < cz + 3; z++) set(x, y, z, 'stone_bricks');
         const tx = cx + 2, tz = cz + 10;
         for (let y = gy; y < gy + 14; y++) for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) nat(tx + i, y, tz + j, 'log_oak');
@@ -274,14 +276,17 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         await chop(1, 6); await wait(300); await chop(-1, 16);
         M.key = ''; M.t = 0;
         const tFell = performance.now();
-        for (let i = 0; i < 400 && (T.bodies().length || T.busy()); i++) await wait(100);
+        let live = 0; const b0 = st.broke | 0, sl0 = st.slid | 0, D = S.debris; if (D) { D.stats.maxTickMs = 0; D.stats.blocks = 0; D.stats.items = 0; }
+        for (let i = 0; i < 600 && (T.bodies().length || T.busy() || (D && D.live())); i++) { await wait(100); if (D && D.live() > live) live = D.live(); }
         const fallMs = performance.now() - tFell;
         await wait(800); on = false;
         const a = cpu.slice(0, before), b = cpu.slice(before), fb = ft.slice(before), avg = q => q.reduce((s, v) => s + v, 0) / Math.max(1, q.length);
         b.sort((x, y) => x - y);
         let lying = 0; for (let x = tx + 2; x < tx + 20; x++) for (let z = tz - 1; z <= tz + 2; z++) for (let y = gy; y < gy + 3; y++) if ((W.raw(x, y, z) & 0xfff) === ID.log_oak) lying++;
         let far = 0; for (let x = cx + 3; x < cx + 20; x++) for (let z = cz - 1; z <= cz + 3; z++) for (let y = gy; y < gy + 4; y++) if ((W.raw(x, y, z) & 0xfff) === ID.stone_bricks) far++;
-        return { went: r === 2, swings: sw, leaned: st.tips + st.leans - t0, fells: st.fells - f0, lands: st.lands - l0, lying, far, fallS: +(fallMs / 1000).toFixed(1),
+        let down = 0; for (let x = cx + 18; x <= cx + 34; x++) for (let z = cz - 6; z <= cz + 8; z++) for (let y = gy - 9; y < gy - 1; y++) if ((W.raw(x, y, z) & 0xfff) === ID.stone_bricks) down++;
+        const deb = D ? { broke: (st.broke | 0) - b0, slid: (st.slid | 0) - sl0, maxLive: live, left: D.live(), blocks: D.stats.blocks, items: D.stats.items, down, worstTickMs: +D.stats.maxTickMs.toFixed(2), maxReads: D.D.stats.maxReads, ceil: st.ceil, ceilMax: st.ceilMax | 0 } : null;
+        return { deb, went: r === 2, swings: sw, leaned: st.tips + st.leans - t0, fells: st.fells - f0, lands: st.lands - l0, lying, far, fallS: +(fallMs / 1000).toFixed(1),
           cpuBefore: +avg(a).toFixed(2), cpuFall: +avg(b).toFixed(2), p95: +(b[Math.floor(b.length * .95)] || 0).toFixed(2), max: +(b[b.length - 1] || 0).toFixed(2), fps: +(1000 / avg(fb)).toFixed(1),
           worstTickMs: +st.maxTickMs.toFixed(2), avgTickMs: +(st.tickMs / Math.max(1, st.ticks)).toFixed(3), supWorstTickMs: +(S.sup?.stats?.maxTickMs || 0).toFixed(2), maxReads: T.Wd.stats.maxReads, checkNodes: st.checkNodes, checks: st.checks, skipped: st.skipped, over: st.over | 0, hp: S.P.hp, ms: Object.fromEntries(Object.entries(st.ms).map(([k, v]) => [k, +v.toFixed(1)])) };
       })()`;
@@ -295,12 +300,14 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       ok(res.tp.leaned >= 1 && res.tp.far >= 15, 'подрубленная башня кренится и падает целой к подрубу (легла: ' + res.tp.far + ' блоков)', res.tp);
       ok(res.tp.went && res.tp.fells >= 1 && res.tp.lying >= 8, 'великан: подруб и запил — упал целым, брёвна лежат (' + res.tp.lying + ')', res.tp);
       ok(res.tp.maxReads <= 2048, 'чтений мира за такт ≤ 2048 (потолок)', res.tp.maxReads);
+      ok(res.tp.deb && res.tp.deb.broke >= 1 && res.tp.deb.left === 0 && res.tp.deb.blocks + res.tp.deb.items >= res.tp.deb.broke, 'шаг 2 (F4): верх башни отломился обломками (' + (res.tp.deb && res.tp.deb.broke) + '), все легли блоками / вещами; скатились по спуску — ' + (res.tp.deb && res.tp.deb.down), res.tp.deb);
+      ok(res.tp.deb && res.tp.deb.ceilMax <= 6144, 'общий потолок за такт (постройки + обломки) ≤ 6144 операций', res.tp.deb);
       // 20 кругов «построил — подрубил — упало — убрал»: память JS не растёт
       const h0 = await heap();
       const rounds = [];
-      for (let k = 0; k < +(process.env.KB_N || 20); k++) { await ev(scene, 120000); if (process.env.KB_SCENE_ONLY) { rounds.push([1, 0, 0, 0, 0, 0, {}]); continue; } if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 }); const r = await ev(run, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 }); rounds.push([r.went && r.far >= 15 ? 1 : 0, r.cpuFall, r.p95, r.max, r.fps, r.worstTickMs, r.ms]); }
+      for (let k = 0; k < +(process.env.KB_N || 20); k++) { await ev(scene, 120000); if (process.env.KB_SCENE_ONLY) { rounds.push([1, 0, 0, 0, 0, 0, {}]); continue; } if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 }); const r = await ev(run, 120000); if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 }); rounds.push([r.went && r.far >= 15 ? 1 : 0, r.cpuFall, r.p95, r.max, r.fps, r.worstTickMs, r.ms, r.deb ? r.deb.worstTickMs : 0, r.deb ? r.deb.broke : 0, r.deb ? r.deb.down : 0]); }
       const h1 = await heap(); res.tpHeap = { h0, h1 }; console.log('T-138 память, МБ', JSON.stringify(res.tpHeap));
-      if (rounds.length) { const col = i => rounds.map(r => r[i]).sort((a, b) => a - b), med = a => a[a.length >> 1]; res.tpRounds = { n: rounds.length, ok: rounds.filter(r => r[0]).length, cpuMed: med(col(1)), p95Med: med(col(2)), maxMed: med(col(3)), maxMax: col(3)[rounds.length - 1], fpsMed: med(col(4)), tickMed: med(col(5)), tickMax: col(5)[rounds.length - 1], evMed: Object.fromEntries(Object.keys(rounds[0][6] || {}).map(k => [k, med(rounds.map(r => r[6][k]).sort((a, b) => a - b))])) }; console.log('T-138 круги' + (PHONE ? ' (ЦП ×4)' : ''), JSON.stringify(res.tpRounds)); ok(res.tpRounds.ok === rounds.length, 'каждый круг: башня и великан упали', res.tpRounds); }
+      if (rounds.length) { const col = i => rounds.map(r => r[i]).sort((a, b) => a - b), med = a => a[a.length >> 1]; res.tpRounds = { n: rounds.length, ok: rounds.filter(r => r[0]).length, cpuMed: med(col(1)), p95Med: med(col(2)), maxMed: med(col(3)), maxMax: col(3)[rounds.length - 1], fpsMed: med(col(4)), tickMed: med(col(5)), tickMax: col(5)[rounds.length - 1], debTickMed: med(col(7)), debTickMax: col(7)[rounds.length - 1], brokeMed: med(col(8)), downMed: med(col(9)), evMed: Object.fromEntries(Object.keys(rounds[0][6] || {}).map(k => [k, med(rounds.map(r => r[6][k]).sort((a, b) => a - b))])) }; console.log('T-138 круги' + (PHONE ? ' (ЦП ×4)' : ''), JSON.stringify(res.tpRounds)); ok(res.tpRounds.ok === rounds.length, 'каждый круг: башня и великан упали', res.tpRounds); }
       // сама сцена (каждый круг заново 41×29×31 клеток: снести, построить) растёт ~1,7 МБ / круг и без T-138 (KB_SCENE_ONLY=1 — та же сцена с
       // выключенными флагами); утечку T-138 ловят 20× reopen с падением (KB_TOPPLE=1) и node-проба (40 падений в одном мире — +0,24 МБ)
       const per = (h1 - h0) / Math.max(1, +(process.env.KB_N || 20));

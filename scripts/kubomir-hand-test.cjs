@@ -1616,6 +1616,7 @@ function fakeWorld(sky, blk, walls = new Set()){
     { const A = tower15(), B2 = tower15({ frames: i => 1 + (i * 7) % 5 }), S2 = tower15({ slope: true });
       ok((A.stats.broke | 0) >= 4 && A.left === 0 && A.dstats.blocks > 0, 'башня 3×3×14 легла с размаху: верх отломился обломками (' + (A.stats.broke | 0) + '), они долетели и легли блоками (' + A.dstats.blocks + ')', { broke: A.stats.broke, slid: A.stats.slid, d: A.dstats });
       ok(A.blocks + A.items === 123, 'ничего не потерялось: блоков ' + A.blocks + ' + вещей ' + A.items + ' = 123', { blocks: A.blocks, items: A.items });
+      ok((A.stats.ceilMax | 0) > 0 && A.stats.ceilMax <= 6144 && A.dstats.reads > 0, 'общий потолок за такт (§5.x): постройки + обломки — худшее окно ' + A.stats.ceilMax + ' операций из 6144', A.stats.ceil);
       ok(B2.snap === A.snap && B2.ticks === A.ticks, 'кадры (1–5 между тактами) не влияют на обломки: тот же мир, те же такты', [A.ticks, B2.ticks]);
       ok(S2.blocks + S2.items === 123 && S2.low < 10 && S2.far > A.far, 'за башней спуск: обломки скатились вниз (ниже уровня — y ' + S2.low + ', дальше — x ' + S2.far + ' против ' + A.far + ' на ровном)', { low: S2.low, far: S2.far, flat: A.far });
       const off = tower15({ kd: { ON: false, ITEMS: false } }), none = tower15({ noDebris: true });
