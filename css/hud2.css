@@ -110,15 +110,20 @@ html.gs-lefty .e2-sheet.side{right:auto;left:0;border-radius:0 16px 16px 0;paddi
 #gamesStage.gs2 .gm-stage-bar > .gm-mute:not(.gs-fullbtn):not(.gs2-menubtn){display:none!important}
 #gamesStage:not(.gs2) .gs2-menubtn,#gamesStage.gs2.gs2-own .gs2-menubtn{display:none!important}
 #gamesStage.gs2 .gs2-menubtn{display:inline-flex;align-items:center;justify-content:center}
-html.gs-compact #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar{position:absolute;left:max(8px,env(safe-area-inset-left));top:max(8px,env(safe-area-inset-top));width:auto;height:auto;
+/* кнопки шапки — «попадание» 44+ px (картинка та же) */
+#gamesStage.gs2 .gm-stage-bar>button{position:relative}
+#gamesStage.gs2 .gm-stage-bar>button::after{content:'';position:absolute;inset:-3px;border-radius:inherit}
+html:is(.gs-compact,.gs-tall) #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar{position:absolute;left:max(8px,env(safe-area-inset-left));top:max(8px,env(safe-area-inset-top));width:auto;height:auto;
   padding:0;gap:6px;background:none;border:0;box-shadow:none;z-index:50;pointer-events:none;overflow:visible}
-html.gs-compact #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar > *{display:none!important}
-html.gs-compact #gamesStage.gs2.gs-fs:not(.gm-own-bar):not(.gs2-own) > .gm-stage-bar > .gs2-menubtn{display:grid!important;place-items:center;width:40px;min-width:0;height:40px;padding:0;border-radius:50%;
+html:is(.gs-compact,.gs-tall) #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar > *{display:none!important}
+html:is(.gs-compact,.gs-tall) #gamesStage.gs2.gs-fs:not(.gm-own-bar):not(.gs2-own) > .gm-stage-bar > .gs2-menubtn{display:grid!important;place-items:center;width:40px;min-width:0;height:40px;padding:0;border-radius:50%;
   background:rgba(14,12,28,.55);border:1.5px solid rgba(255,255,255,.4);color:#fff;font-size:18px;pointer-events:auto;position:relative}
-html.gs-compact #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar > .gs2-menubtn::after{content:'';position:absolute;inset:-4px;border-radius:50%}
-html.gs-lefty.gs-compact #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar{left:auto;right:max(8px,env(safe-area-inset-right))}
+html:is(.gs-compact,.gs-tall) #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar > .gs2-menubtn::after{content:'';position:absolute;inset:-4px;border-radius:50%}
+html.gs-lefty:is(.gs-compact,.gs-tall) #gamesStage.gs2.gs-fs:not(.gm-own-bar) > .gm-stage-bar{left:auto;right:max(8px,env(safe-area-inset-right))}
+/* телефон стоя во весь экран: без рамки вокруг игры */
+html.gs-tall #gamesStage.gs2.gs-fs{padding:0}
 /* свой ☰ у игры («Подземье») — во весь экран шапки игры нет совсем */
-html.gs-compact #gamesStage.gs2.gs-fs.gm-own-menu > .gm-stage-bar{display:none}
+html:is(.gs-compact,.gs-tall) #gamesStage.gs2.gs-fs.gm-own-menu > .gm-stage-bar{display:none}
 
 /* ── Сайт под игрой (флаг HUD2.chrome): фон не анимируется, пока открыта игра — меньше работы телефону ── */
 body.game-on.e2-calm .particle,body.game-on.e2-calm .d37-secret,body.game-on.e2-calm .donation-alert-icon{animation-play-state:paused!important}
@@ -176,6 +181,7 @@ html:is(.gs-compact,.gs-tall) .gs-fs .mir.e2 .wldOnline{display:none}
 .s3.s3-e2.s3-playing:not(.s3-e2out) .s3-bottom{display:none}
 .s3.s3-e2.s3-playing .s3-top>.s3-e2menu{width:40px;height:40px;border-radius:50%;padding:0;font-size:18px;background:rgba(14,12,28,.55);border:1.5px solid rgba(255,255,255,.4);color:#fff;position:relative}
 .s3.s3-e2.s3-playing .s3-top>.s3-e2menu::after{content:'';position:absolute;inset:-4px;border-radius:50%}
-.s3.s3-e2.s3-playing .s3-top>.s3-play{height:36px;border-radius:18px;padding:0 14px}
+.s3.s3-e2.s3-playing .s3-top>.s3-play{height:40px;border-radius:20px;padding:0 14px;position:relative}
+.s3.s3-e2.s3-playing .s3-top>.s3-play::after{content:'';position:absolute;inset:-4px;border-radius:24px}
 .s3.s3-e2 .s3-hud:not(.s3-hurt) .s3-health{display:none}
 .s3.s3-e2.s3-playing .s3-health{top:max(56px,calc(env(safe-area-inset-top) + 48px))}
