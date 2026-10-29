@@ -192,6 +192,7 @@
         if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; if (y < y0) y0 = y;
       }
       if (!cells.length) return;
+      if (st.topple?.group?.(cells, nat)) { X.stats.toppled = (X.stats.toppled | 0) + 1; return; }   // T-138: стоит краем на чём-то и перевешивает — опрокидывается (kubomir-topple.js)
       if (LD && !canMove(cells)) { X.stats.inPlace++; return; }   // v2: лечь некуда ниже (стоит на чём-то) — остаётся как есть
       X.stats.cells += cells.length / 4;
       const evA = batch(true), ev = batch(true);   // отпавшее сразу; что не легло — при посадке
@@ -239,6 +240,7 @@
     }
     // легли — держатся ли? (падение только добавляет блоки — чужое держание не уменьшается; не держатся только сами упавшие)
     X.recheck = xyz => { recheck(xyz, 1); X.step(); };
+    X.popAttached = (x, y, z, ev) => { own++; try { popAttached(x, y, z, ev); } finally { own--; } };   // T-138: крен постройки — прицепленное вещами
     function recheck(xyz, d){
       if (!xyz.length || d > 2 || xyz.length > 3 * 1600) return;
       if (LD) { fresh(); for (let i = 0; i < xyz.length; i += 3) { const c = read(xyz[i], xyz[i + 1], xyz[i + 2]); if ((c & 3) >= 2) queueJob('add', xyz[i], xyz[i + 1], xyz[i + 2], c, d); } return; }   // v2: «лёг» — с нагрузкой (до = до посадки)

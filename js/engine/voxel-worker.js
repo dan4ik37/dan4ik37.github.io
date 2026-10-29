@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════
 // new Worker('js/engine/voxel-worker.js?v=…') — сам подгружает voxel.js, trees.js (деревья генератора v3), voxel-gen.js, voxel-mesh.js с тем же ?v=.
 // Сообщения: { t: 'init', T, seed, features } · { t: 'gen', id, cx, cz } → { id, ids, biome, tint, zone, ms }
-// · { t: 'mesh', id, reg, tint, zone, bare, cx, cz } → { id, reg (вернули — переиспользовать), light, lights, сетки V.LAYERS (solid, cutout,
+// · { t: 'mesh', id, reg, tint, zone, bare, cx, cz, cuts? (T-138: надрубленные клетки) } → { id, reg (вернули — переиспользовать), light, lights, сетки V.LAYERS (solid, cutout,
 // water, foliage, glass), yMax, ms }.
 // Ошибка → { id, err }. Подключён обычным <script> в окне (список файлов игры — для кэша приложения) — ничего не делает.
 (() => {
@@ -29,8 +29,9 @@
       }
       if (d.t === 'mesh') {
         const t0 = now();
+        V.applyCuts?.(d.reg, d.cuts);   // T-138 F1: надрубленные клетки — пустые для света и граней соседей, рисуются коробкой
         V.shedLeaves?.(d.reg, V.T, d.zone, d.bare, d.cx, d.cz);   // зима: лиственные голые (свет и сетка)
-        const L = V.lightRegion(d.reg, V.T), m = V.meshChunk(d.reg, L, V.T, d.tint, d.zone);
+        const L = V.lightRegion(d.reg, V.T), m = V.meshChunk(d.reg, L, V.T, d.tint, d.zone, d.cuts);
         const tr = [d.reg.buffer, m.light.buffer], out = { id: d.id, reg: d.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: 0 };
         for (const k of V.LAYERS) { out[k] = m[k]; if (m[k]) tr.push(m[k].pos.buffer, m[k].vd.buffer, m[k].col.buffer, m[k].lt.buffer); }
         if (m.lights) tr.push(m.lights.buffer);

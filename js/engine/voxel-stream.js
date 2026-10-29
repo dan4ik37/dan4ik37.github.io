@@ -58,10 +58,10 @@
       if (!G) G = V.genInit(W.seed, { features: o.features || [], ver: o.genVer || 1 });
       const t0 = now();
       if (j.t === 'gen') { const r = V.genChunk(G, j.c.cx, j.c.cz); onResult({ id: j.id, ids: r.ids, biome: r.biome, tint: r.tint, zone: r.zone, ms: now() - t0 }); }
-      else { V.shedLeaves?.(j.reg, V.T, j.zone, j.bare, j.c.cx, j.c.cz); const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint, j.zone), r = { id: j.id, reg: j.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: now() - t0 }; for (const k of V.LAYERS) r[k] = m[k]; onResult(r); }
+      else { V.applyCuts?.(j.reg, j.cuts); V.shedLeaves?.(j.reg, V.T, j.zone, j.bare, j.c.cx, j.c.cz); const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint, j.zone, j.cuts), r = { id: j.id, reg: j.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: now() - t0 }; for (const k of V.LAYERS) r[k] = m[k]; onResult(r); }
     }
     function send(j, msg, tr){
-      if (S.inline) { j.reg = msg.reg; j.tint = msg.tint; j.zone = msg.zone; j.bare = msg.bare; inlineRun(j); return; }
+      if (S.inline) { j.reg = msg.reg; j.tint = msg.tint; j.zone = msg.zone; j.bare = msg.bare; j.cuts = msg.cuts || null; inlineRun(j); return; }
       let w = S.workers[0];
       for (const x of S.workers) if (x.n < w.n) w = x;
       w.n++; j.w = w;
@@ -96,7 +96,8 @@
       c.meshJob = id; c.urgent = 0; jobs.set(id, j);
       const reg = V.buildRegion((x, z) => { const n = W.chunk(x, z); return n && n.ready ? n.ids : null; }, c.cx, c.cz, regions.pop());
       c.bare = S.bare;
-      send(j, { t: 'mesh', id, reg, tint: c.tint, zone: c.zone, bare: S.bare, cx: c.cx, cz: c.cz }, S.inline ? null : [reg.buffer]);
+      const cuts = o.cuts ? o.cuts(c.cx, c.cz) : null;   // T-138 F1: надрубленные клетки области (нет — null, как было)
+      send(j, cuts ? { t: 'mesh', id, reg, tint: c.tint, zone: c.zone, bare: S.bare, cx: c.cx, cz: c.cz, cuts } : { t: 'mesh', id, reg, tint: c.tint, zone: c.zone, bare: S.bare, cx: c.cx, cz: c.cz }, S.inline ? null : [reg.buffer]);
     }
 
     // ── применить готовое (по бюджету) ──

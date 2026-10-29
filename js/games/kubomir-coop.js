@@ -18,6 +18,10 @@
 (() => {
   const VX = () => window.D37E.vox, CO = () => window.D37Coop, CBk = () => window.D37E?.combat;
   const PROTO = 1, MAX = 8, GAME = 'kubomir';
+  // T138-V2: что хозяин умеет сверх PROTO (в 'wel'): 1 — удары гостя 'kc' и события физики 'kt' (T-138). Гость рубит через хозяина,
+  // только если хозяин это умеет; у старого хозяина (поля нет) — копает как раньше ('brk'). Старый гость у нового хозяина — тоже как
+  // раньше (шлёт 'brk', новые сообщения хозяина ему неизвестны и пропускаются): PROTO не меняется, игра вместе после выкладки не рвётся
+  const KT_NET = 1;
   const T_JSON = 1, T_EDITS = 2, T_CHUNK = 3, T_SNAP = 16, T_ST = 17;
   const SNAP_MS = 100, SNAP_RELAY_MS = 333, ST_MS = 66, ST_RELAY_MS = 333, EDIT_MS = 50, INV_MS = 10000, HOST_SILENT_MS = 15000;
   const MOB_R = 64, ITEM_R = 40, REACH = 5, REACH_C = 6.5, SLACK = 2.5;
@@ -233,7 +237,7 @@
         E.hookHurtRemote = (o, n, m) => { const G = o.G; if (G?.ready) sendJ(G, { t: 'hurt', n, m: m?.id || 0, x: m ? +m.x.toFixed(2) : o.x, z: m ? +m.z.toFixed(2) : o.z }); };
         E.hookGiveRemote = (o, s, eid) => { const G = o.G; if (!G?.ready) return s.n; sendJ(G, { t: 'give', s: { id: s.id, n: s.n, d: s.d | 0 }, e: eid || 0 }); return 0; };
         H.kill0 = E.hookKill; E.hookKill = (m, by) => { H.kill0?.(m, by); mobDied(m); };
-        H.fall0 = E.fallGroup; E.fallGroup = (cells, pivot, dir, o) => { const g = H.fall0(cells, pivot, dir, o); if (g && !o?.visual) fell(cells, pivot, dir, !!o?.drop); return g; };
+        H.fall0 = E.fallGroup; E.fallGroup = (cells, pivot, dir, o) => { const g = H.fall0(cells, pivot, dir, o); if (g && !o?.visual && !(o?.topple && window.KubomirTopple?.NET)) fell(cells, pivot, dir, !!o?.drop); return g; };   // T-138 F5: крен / падение D37E.topple — своими событиями ('kt')
         H.shoot0 = E.shoot; E.shoot = (x, y, z, vx, vy, vz, dmg, o) => { const a = H.shoot0(x, y, z, vx, vy, vz, dmg, o); shotOut(x, y, z, vx, vy, vz, o, H.shooter); return a; };
         E.isLocked = k => { const L = H.locks.get(k); return !!L && L !== 'host'; };
       }
@@ -279,7 +283,7 @@
         for (const k of H.edited) { const [a, b] = k.split('|'); keys[i++] = +a; keys[i++] = +b; }
         const P = st.P, saved = meta.coopPlayers?.[pk] || null;
         G.nonce = m.nonce;
-        G.wel = { t: 'wel', v: PROTO, pid, proof, pub: meta.coop.key.pub, code: H.code,
+        G.wel = { t: 'wel', v: PROTO, kt: window.KubomirTopple?.NET ? KT_NET : 0, pid, proof, pub: meta.coop.key.pub, code: H.code,
           host: { pid: 0, nick: myNick(), look: myLook() }, players: ready().filter(o => o !== G).map(o => ({ pid: o.pid, nick: o.nick, look: o.look })),
           world: { name: meta.name, seed: meta.seed, genVer: meta.genVer || 1, mode: meta.mode, diff: meta.diff, gen: meta.gen || null, mc: meta.mc || null, palette: meta.palette, spawn: meta.spawn, time: st.R.lighting.time, day: meta.day || 1, seasons: st.seasons, ice: meta.ice || null, snow: meta.snow || null, wf: st.WX?.force ?? null, cheats: !!meta.cheats, support: meta.support || null },
           items: H.items, you: saved, at: { x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2) }, edited: b64(new Uint8Array(keys.buffer)) };
@@ -365,6 +369,21 @@
           if (H.locks.has(x + '|' + y + '|' + z)) { deny(G, [[x, y, z]], null, 'busy'); return; }
           G.dig -= need;
           if (!hooks.breakAs(G, x, y, z, tool)) deny(G, [[x, y, z], [x, y + 1, z], [x, y - 1, z]], null, 'no');
+          return;
+        }
+        case 'kc': {   // T-138 F5: удар гостя по надрубаемому блоку / живому стволу — один удар; срез, рубку и «сломан» решает хозяин
+          const { x, y, z } = m; if (!ints(x, y, z) || !Array.isArray(m.n) || !ints(m.n[0], m.n[1], m.n[2])) return;
+          const T = st.topple; if (!T?.hostHit) return;
+          const v = W.raw(x, y, z);
+          if (v <= 0 || !reachOk(G, x, y, z)) { deny(G, [[x, y, z]], null, 'reach'); return; }
+          if (H.locks.has(x + '|' + y + '|' + z)) return;
+          const b = V.blocks[v & 0xfff], tool = typeof m.tool === 'string' && V.item(m.tool) ? m.tool : '';
+          const need = hooks.breakTime(b, tool), hit = { x, y, z, v, nx: clamp(m.n[0], -1, 1), ny: clamp(m.n[1], -1, 1), nz: clamp(m.n[2], -1, 1) };
+          const per = T.hitCost(hit, b, need), cost = (per > 0 ? per : need) * .7;
+          if (!(cost < Infinity) || fill(G, 'dig', 'digT', 1, 1.6) < cost) { H.stats.denied++; H.note(G, 'kc', [x, y, z], 'fast'); return; }
+          G.dig -= cost;
+          const r = per > 0 ? T.hostHit(hit, b, need, { x: G.tx, z: G.tz }) : 1;   // у хозяина блок не надрубается — «сломать» как обычно
+          if (r === 1 && !hooks.breakAs(G, x, y, z, tool)) deny(G, [[x, y, z]], null, 'no');
           return;
         }
         case 'put': {
@@ -598,6 +617,11 @@
       const o = { t: 'fell', c: b64(new Uint8Array(a.buffer)), p: [pivot.x, pivot.y, pivot.z], d: [dir.x, dir.z], k: drop ? 'd' : undefined };   // k: 'd' — обрушение (падает целым вниз)
       for (const G of H.guests.values()) if (G.ready && Math.abs(pivot.x - G.x) < MOB_R && Math.abs(pivot.z - G.z) < MOB_R) sendJ(G, o);
     }
+    // T-138 F5: события физики хозяина (срезы, крен и падение, обломки — kubomir-topple.js netTake) — после правок того же окна
+    function ktFlush(){
+      const e = st.topple?.netTake?.(pv, b64); if (!e) return;
+      if (ready().length) toAll({ t: 'kt', e });
+    }
     function shotOut(x, y, z, vx, vy, vz, o, by){
       const m = { t: 'shot', p: [+x.toFixed(2), +y.toFixed(2), +z.toFixed(2)], v: [+vx.toFixed(2), +vy.toFixed(2), +vz.toFixed(2)], crit: !!o?.crit };
       for (const G of H.guests.values()) if (G.ready && G !== by && Math.abs(x - G.x) < MOB_R && Math.abs(z - G.z) < MOB_R) sendJ(G, m);
@@ -607,7 +631,7 @@
     H.step = dt => {
       if (H.closed || !H.R) return;
       const t = now();
-      if (t - H.editT >= EDIT_MS) { H.editT = t; flushEdits(); }
+      if (t - H.editT >= EDIT_MS) { H.editT = t; flushEdits(); ktFlush(); }
       for (const G of H.guests.values()) {
         if (!G.ready) continue;
         while (G.ckQ.length && G.ckBusy < 4 && H.R.backlog(G.id) < 384e3) chunkReply(G, G.ckQ.shift());
@@ -683,7 +707,7 @@
       if (!ok) { G.R?.markFake(G.hostId); hooks.status?.('wait'); return; }   // не хозяин этого мира — ждём настоящего
       const w = m.world || {};
       if (typeof w.seed !== 'string' && typeof w.seed !== 'number') return;
-      G.pid = m.pid | 0; G.items = Array.isArray(m.items) ? m.items.map(String) : [];
+      G.pid = m.pid | 0; G.items = Array.isArray(m.items) ? m.items.map(String) : []; G.kt = Number.isInteger(m.kt) ? m.kt : 0;
       try { const u = unb64(m.edited || ''), a = new Int16Array(u.buffer, u.byteOffset, u.byteLength >> 1); for (let i = 0; i + 1 < a.length; i += 2) G.edited.add(a[i] + '|' + a[i + 1]); } catch (e) {}
       G.meta = { id: 'coop-' + code, coop: { guest: true, code }, name: String(w.name || 'Мир друга').slice(0, 40), seed: w.seed, mode: w.mode === 'creative' ? 'creative' : 'survival', diff: ['peaceful', 'easy', 'normal', 'hard'].includes(w.diff) ? w.diff : 'easy',
         genVer: w.genVer === 3 ? 3 : w.genVer === 2 ? 2 : 1, gen: w.gen === 'void' ? 'void' : undefined, mc: w.mc && Array.isArray(w.mc.blocks) ? { blocks: w.mc.blocks.slice(0, 2000).map(String) } : undefined,
@@ -820,6 +844,7 @@
         case 'shut': { if (G.lock && G.lock[0] === m.x && G.lock[1] === m.y && G.lock[2] === m.z && st.ui?.isOpen()) { st.ui.close({ esc: true }); hooks.toast?.('📦 Сундук сдвинуло обвалом — окно закрыто'); } return; }   // T-124: закрыл — уходит 'close' с плиткой
         case 'mk': st.ents?.clientKill?.(m.id, +m.kx || 0, +m.kz || 0); return;
         case 'ice': if (Number.isInteger(m.x) && Number.isInteger(m.y) && Number.isInteger(m.z)) st.WX?.hole?.(m.x, m.y, m.z, fin(m.at) ? m.at : Date.now()); return;
+        case 'kt': st.topple?.netIn?.(m.e, toLocal, unb64); return;   // T-138 F5: события физики хозяина — в такт мира гостя
         case 'fell': {
           try {
             const u = unb64(m.c), a = new Int32Array(u.buffer, u.byteOffset, u.byteLength >> 2); if (a.length > 4 * 2400) return;   // деревья v3 (T-022b): великан — до ~2000 блоков
@@ -840,6 +865,7 @@
     }
     // ── действия гостя (kubomir.js показывает сразу, хозяин проверяет) ──
     G.reqBreak = (x, y, z, tool) => toHost({ t: 'brk', x, y, z, tool: tool || '' });
+    G.reqCut = (x, y, z, nx, ny, nz, tool) => toHost({ t: 'kc', x, y, z, n: [nx, ny, nz], tool: tool || '' });   // T-138 F5: один удар по надрубаемому
     G.sleep = on => toHost({ t: 'zz', on: !!on });   // T-049: лёг на лежанку / встал (ночь проходит, когда спит половина — решает хозяин)
     G.reqPlace = (x, y, z, v, v2, it) => toHost({ t: 'put', x, y, z, v: pv(v), v2: v2 == null ? null : pv(v2), it: it || '' });
     G.reqFire = (x, y, z, nx, ny, nz) => toHost({ t: 'fire', x, y, z, nx, ny, nz });   // огниво (T-022d)
