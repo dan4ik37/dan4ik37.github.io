@@ -261,7 +261,8 @@
   for (const l of CSV_EVENTS) ROWS.push(parseRow(l));
   index();
   WX.ROWS = ROWS; WX.BY = BY; WX.CLASSES = CLS; WX.CK2CLS = CK2CLS;
-  WX.row = key => ROWS.find(r => r.key === key) || null;
+  const BYKEY = new Map();
+  WX.row = key => (BYKEY.size !== ROWS.length && (BYKEY.clear(), ROWS.forEach(r => BYKEY.set(r.key, r))), BYKEY.get(key) || null);   // no garbage per call
   // mods (§7.6): rows ≥ 1000 come after every base row, rarity ≤ 300 ‰; a row that pushes any acc over 1000 is the data test's job
   WX.addRows = lines => { for (const l of lines) { const r = parseRow(l); if (r.id < 1000 || r.pm > 300 || ROWS.some(o => o.id === r.id)) throw new Error('wx: mod row ' + r.id); ROWS.push(r); } index(); WX._gen++; };
   WX._gen = 0;
