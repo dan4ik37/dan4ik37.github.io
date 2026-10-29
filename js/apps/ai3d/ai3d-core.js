@@ -4,14 +4,14 @@
 // This is the owner's editor script from ai3d.html (one inline script; 63 ops in run(cmds), atomic rollback of the scene state),
 // kept as he wrote it. It runs inside D37AI3DCore.create(host, env) so it can be opened and closed many times on the SPA:
 //   host — the editor root (.a3, markup from ai3d-ui.js, ids with the "a3-" prefix); env — { ws, exportGLB(group, clips), onAI(on) }.
-//   Returns __site: { api (= window.AI3D), say, run, reset, frame, cam, dispose, redraw, exportGLB, connectAI, aiOn, stats, state, clips, frames }.
+//   Returns __site: { api (= window.AI3D), say, run, reset, frame, cam, dispose, redraw, theme, exportGLB, connectAI, aiOn, stats, state, clips, frames }.
 // The text between the @ai3d-body markers also runs as a plain top-level script in node (scripts/ai3d-test.cjs: the owner's test.mjs
 // and test-run.mjs checks, real three r149, GLB export) — keep the markers and do not use `return` in the body.
 // Site changes are marked "site:" (made once from the owner's ai3d.html; list in docs/areas/studio3d.md; edit this file directly now):
 //   ids scoped to the host; colours from .a3 tokens; ColorManagement.legacyMode = true while open (r128 colour maths on r149, restored on
 //   close); no "morphTargets" material parameter (r149); one offscreen renderer for snapshots (was a new WebGL context per call); outline
 //   program per thickness; LOD copies freed with their geometry; undo snapshots capped (~12M chars); stoppable render loop and resize
-//   observer; frame CPU ring for e2e; GLB through ai3d-gltf.js (binary on r149, no userData extras, linear colours); the MCP bridge
+//   observer; frame CPU ring for e2e; theme() re-reads the 3D background (live site theme switch); GLB through ai3d-gltf.js (binary on r149, no userData extras, linear colours); the MCP bridge
 //   (server.mjs, ws://localhost) only on demand; full GPU cleanup in __dispose().
 (function(){
 function create(host,env){
@@ -1755,7 +1755,7 @@ function __dispose(){if(!__alive)return;__alive=false;cancelAnimationFrame(__raf
  try{R.dispose();R.forceContextLoss()}catch(e){}if(__SR){try{__SR.dispose();__SR.forceContextLoss()}catch(e){}__SR=null}
  if(__cm&&'legacyMode' in __cm)__cm.legacyMode=__cmL;
  if(window.AI3D===__api)delete window.AI3D}
-const __site={api:__api,say,run,reset:__reset,frame:__frame,cam:(t,p,d)=>{th=+t;ph=Math.min(3,Math.max(.1,+p));if(d)dist=Math.min(150,Math.max(.3,+d));dirty=true},dispose:__dispose,redraw:()=>{dirty=true},exportGLB:__exportGLB,connectAI:u=>__wsCtl.connect(u),
+const __site={api:__api,say,run,reset:__reset,frame:__frame,cam:(t,p,d)=>{th=+t;ph=Math.min(3,Math.max(.1,+p));if(d)dist=Math.min(150,Math.max(.3,+d));dirty=true},dispose:__dispose,redraw:()=>{dirty=true},theme:()=>{__bgC='';dirty=true},exportGLB:__exportGLB,connectAI:u=>__wsCtl.connect(u),
  aiOn:()=>!!(__ws&&__ws.readyState===1),stats,state:()=>state,clips,
  frames:()=>{const n=Math.min(__frN,4096),o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=__FR[(__frN-n+i)&4095];__frN=0;return o}};
 fit();build();$('#run').click();

@@ -7,7 +7,7 @@
 // The editor is the owner's (ai3d-core.js): command JSON → «Выполнить», his buttons, his self-test. Added here: examples (the six demo
 // scenes of the tests), «📦 В Студию 3D» (GLB → D37E.models, the list «🧩 Модели» in Studio 3D), «🔌 ИИ» (his MCP bridge server.mjs on
 // this computer: ws://localhost:3737, or /tools/3d?ws=ws://localhost:PORT), a fallback when WebGL does not start, and a notice on
-// WebGL context loss. All text from commands, AI and files reaches the page only through textContent.
+// WebGL context loss, the 3D background following a live theme switch ('d37:theme'). All text from commands, AI and files reaches the page only through textContent.
 // window.D37AI3D = { active } — js/ui/hotkeys.js leaves the keyboard to the editor while it is open.
 (function(){
   'use strict';
@@ -89,6 +89,7 @@
     const api = { active: true, core: null, unmount };
     let core = null, busy = false, dead = false, a3 = null;
     const onResize = () => place();
+    const onTheme = () => { if (core && core.theme) core.theme(); };   // settings.js switched the site theme: the 3D background follows (an idle editor draws nothing)
     function place(){
       if (!a3) return;
       const nav = document.getElementById('nav');
@@ -149,12 +150,14 @@
       root.D37AI3D = api;
     }
     root.addEventListener('resize', onResize);
+    root.addEventListener('d37:theme', onTheme);
     document.body.classList.add('a3-on');
     start();
     function unmount(){
       if (dead) return;
       dead = true; api.active = false;
       root.removeEventListener('resize', onResize);
+      root.removeEventListener('d37:theme', onTheme);
       document.body.classList.remove('a3-on');
       if (core) { try { core.dispose(); } catch (e) { console.warn(e); } }
       core = null; api.core = null; a3 = null;
