@@ -327,12 +327,12 @@
       J = G.loadJob();
       GE = S.grid({ dims: 3, down: -1, max: 4096 }); JE = GE.loadJob(); BOE = { r: 96, rn: 13, P, max: 4096, opb: 16 };
       // чужая правка (игрок поставил, огонь, вода) внутри куска идущего задания — пересчитать заново
-      if (Array.isArray(W.listeners)) W.listeners.push((x, y, z) => { if (!own && J.busy && G.inPiece(x, y, z)) touched = true; });
+      if (Array.isArray(W.listeners)) W.listeners.push((x, y, z) => { if (!own && cur && G.inPiece(x, y, z)) touched = true; });
     }
     const NEAR = 256;
     function queueJob(kind, x, y, z, code, depth){
       // идущее задание того же вида и его кусок — заново с объединением семян
-      if (cur && J.busy && cur.kind === kind && G.inPiece(x, y, z) && restarts < 2) { cur.seeds.push(x, y, z, code); touched = true; return; }
+      if (cur && cur.kind === kind && G.inPiece(x, y, z) && restarts < 2) { cur.seeds.push(x, y, z, code); touched = true; return; }
       const q = JQ[JQ.length - 1];
       if (q && q.kind === kind && q.depth === depth && q.seeds.length < 4 * 4096 && Math.abs(q.seeds[0] - x) < NEAR && Math.abs(q.seeds[2] - z) < NEAR && Math.abs(q.seeds[1] - y) < NEAR) { q.seeds.push(x, y, z, code); return; }
       JQ.push({ kind, depth, seeds: [x, y, z, code], t0: X.stats.ticks });
@@ -350,16 +350,16 @@
       }
       a.length = k; return k > 0;
     }
-    const startJob = () => { fresh(); J.start(cur.kind, cur.seeds, read, BO, JOBO); };
+    const startJob = () => { S.warmStop(G); fresh(); J.start(cur.kind, cur.seeds, read, BO, JOBO); };   // разогрев (если шёл) — потом заново
     const dropJob = () => { J.busy = false; J.early = 0; cur = null; X.stats.skipped++; };
     // такт мира: задание — SOLVE_BUDGET шагов; оценка «поставить» — в том же потолке (что осталось, не меньше EST_MIN)
     function loadTick(budget = S.SOLVE_BUDGET, flushing = false){
       const t0 = nowMs();
       X.stats.ticks++;
-      for (let k = 0; k < 8 && !J.busy && JQ.length; k++) { cur = JQ.shift(); restarts = 0; touched = false; if (liveSeeds(cur)) { startJob(); X.stats.jobs++; } else { cur = null; X.stats.skipped++; } }
-      if (J.busy && touched) { touched = false; if (restarts < 2) { restarts++; X.stats.restarts++; if (liveSeeds(cur)) startJob(); else dropJob(); } }
+      for (let k = 0; k < 8 && !cur && JQ.length; k++) { cur = JQ.shift(); restarts = 0; touched = false; if (liveSeeds(cur)) { startJob(); X.stats.jobs++; } else { cur = null; X.stats.skipped++; } }
+      if (cur && touched) { touched = false; if (restarts < 2) { restarts++; X.stats.restarts++; if (liveSeeds(cur)) startJob(); else dropJob(); } }
       let used = 0;
-      if (J.busy) {
+      if (cur) {
         const o0 = J.ops; fresh();
         const fin = J.step(budget);
         used = J.ops - o0; X.stats.jobOps += used;
@@ -368,6 +368,8 @@
         if (fin) apply(cur);
       }
       if (!flushing) tintTick(Math.max(EST_MIN, S.SOLVE_BUDGET - used));
+      // нет задания и оценки — разогрев ядра на своём куске (первые задания страницы иначе в 5–10 раз медленнее; не состояние игры)
+      if (!flushing && !cur && !JQ.length) { if (!G.warmed) S.warmTick(G, WARM_MS); else if (!GE.warmed && !EST.busy) S.warmTick(GE, WARM_MS); }
       const ms = nowMs() - t0; X.stats.tickMs += ms; if (ms > X.stats.maxTickMs) X.stats.maxTickMs = ms;
     }
     // v1-куски задания (держались до, не держатся после — проход 1): падают сразу, задание идёт дальше (нагрузка)
@@ -401,7 +403,7 @@
     X.flush = () => {
       for (let pass = 0; pass < 8; pass++) {
         let any = false;
-        if (LD) for (let k = 0; k < 256 && (J.busy || JQ.length); k++) { any = true; loadTick(1 << 30, true); }
+        if (LD) for (let k = 0; k < 256 && (cur || JQ.length); k++) { any = true; loadTick(1 << 30, true); }
         while (Q.length) { any = true; const q = Q.shift(); dropGroup(q.xyz, q.depth, true); }
         if (st.ents?.landAll?.()) any = true;
         if (!any) return;
@@ -419,6 +421,7 @@
     const EST = { x: 0, y: -999, z: 0, id: -1, ok: true, ld: 0, done: false, busy: false, want: false, wantT: 0, wx: 0, wy: 0, wz: 0, wid: -1, bx: 0, by: 0, bz: 0, bid: -1,
       tn: 0, tover: 0, wrev: -1, tc: new Array(32).fill(null), tr: new Float64Array(32) };
     const EST_MIN = 512;   // оценке в такте — что осталось от потолка SOLVE_BUDGET после задания, но не меньше этого
+    const WARM_MS = 1;   // разогрев ядра в такте без заданий — не дольше (мс; не состояние игры)
     const trackBegin = () => { TRK.n = 0; TRK.over = 0; TRK.wrev = W.rev; };
     function estStore(x, y, z, id, o){
       EST.x = x; EST.y = y; EST.z = z; EST.id = id; EST.ok = o.ok; EST.ld = o.load; EST.done = true; EST.busy = false;
@@ -436,7 +439,7 @@
       const s = X.estimate(x, y, z, b);
       if (s >= 0 && s < P.min[m]) { X.stats.refused++; return false; }
       if (!(EST.done && EST.x === x && EST.y === y && EST.z === z && EST.id === b.id && estValid())) {
-        trackBegin(); TRK.on = true; fresh();
+        S.warmStop(GE); trackBegin(); TRK.on = true; fresh();
         try { const o = S.placeCheck(GE, x, y, z, (m << 2) | 2, read, BOE); estStore(x, y, z, b.id, o); } finally { TRK.on = false; }
       }
       if (!EST.ok) X.stats.refused++;
@@ -450,7 +453,7 @@
       if (!EST.busy) {
         if (EST.done && EST.x === wx && EST.y === wy && EST.z === wz && EST.id === wid && estValid()) return;
         const m = MT[wid]; if (m === undefined || m === 255) return;
-        trackBegin(); fresh(); S.placeStart(GE, wx, wy, wz, (m << 2) | 2, read, BOE);
+        S.warmStop(GE); trackBegin(); fresh(); S.placeStart(GE, wx, wy, wz, (m << 2) | 2, read, BOE);
         EST.busy = true; EST.bx = wx; EST.by = wy; EST.bz = wz; EST.bid = wid;
       }
       TRK.on = true; fresh(); const o0 = JE.ops;
@@ -458,13 +461,13 @@
     }
     // ── замер без последствий (v2): задание целиком по кусочкам бюджета — сколько тактов и худший такт (мс) ──
     function dry2(x, y, z, code){
-      for (let k = 0; k < 4096 && (J.busy || JQ.length); k++) loadTick();   // замер — на пустой очереди (идущее задание доводим до конца)
-      const t0 = nowMs(); fresh(); J.start('rm', [x, y, z, code], read, BO);
+      for (let k = 0; k < 4096 && (cur || JQ.length); k++) loadTick();   // замер — на пустой очереди (идущее задание доводим до конца)
+      S.warmStop(G); const t0 = nowMs(); fresh(); J.start('rm', [x, y, z, code], read, BO);
       let maxT = 0, nt = 0, wph = -1; const ph = [0, 0, 0, 0, 0, 0, 0, 0], po = [0, 0, 0, 0, 0, 0, 0, 0];
       for (;;) { const p = J.phase, o0 = J.ops, a = nowMs(); fresh(); const fin = J.step(S.SOLVE_BUDGET); const d = nowMs() - a; nt++; ph[p] += d; po[p] += J.ops - o0; if (d > maxT) { maxT = d; wph = p; } if (fin) break; }
       return { ms: nowMs() - t0, maxTick: maxT, worstPhase: wph, phaseMs: ph.map(v => +v.toFixed(2)), phaseOps: po, ticks: nt, nodes: G.g.n, groups: J.res.ng, fall: J.res.nf, ops: J.res.ops };
     }
-    X.jobs = () => ({ busy: !!J?.busy, queued: JQ.length, cur: cur ? { kind: cur.kind, seeds: cur.seeds.length / 4 } : null, est: { done: EST.done, busy: EST.busy, skipped: !!JE?.skipped, full: !!GE?.full } });
+    X.jobs = () => ({ busy: !!cur, queued: JQ.length, warm: !!G.warmed, cur: cur ? { kind: cur.kind, seeds: cur.seeds.length / 4 } : null, est: { done: EST.done, busy: EST.busy, skipped: !!JE?.skipped, full: !!GE?.full } });
     return X;
   };
 })();

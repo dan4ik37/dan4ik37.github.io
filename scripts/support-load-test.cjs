@@ -317,6 +317,25 @@ sec('ранний сброс: v1-куски падают сразу после �
   ok(te > 0 && ne > 0 && te <= bound && te * 3 <= t, 'дом ' + G.g.n + ' узлов, проём пробит: v1-куски падают на ' + te + '-м такте (' + (te / 20).toFixed(2) + ' с), задание целиком — ' + t + ' тактов (' + (t / 20).toFixed(2) + ' с)', { te, t, ne, bound, n: G.g.n });
 }
 
+// T-124 review: JIT warm-up — the first jobs of a grid run cold code (5–10× slower per op); a load world warms its own grids in
+// idle slices (S.warmTick) — the results must not change, and a real job may interrupt the warm-up at any point
+sec('разогрев ядра в тактах без заданий: итог заданий тот же, задание прерывает разогрев; первое задание — быстрее холодного');
+{
+  const cell = new Uint8Array(200 * 200), I = (x, y) => y * 200 + x;
+  for (let x = 40; x < 80; x++) for (let y = 95; y <= 120; y++) cell[I(x, y)] = 1;
+  const rd = (x, y) => { if (y > 120) return (M.rock << 2) | 3; if (x < 0 || y < 0 || x >= 200 || y >= 200) return 0; return cell[I(x, y)] ? (M.wood << 2) | 2 : 0; };
+  const b = { r: 64, rn: 20, P: S.prof('real') };
+  const job = (Gx, x) => { cell[I(x, 120)] = 0; const J = Gx.loadJob(); J.start('rm', [x, 120, 0, (M.wood << 2) | 2], rd, b, { early: true }); let ops = 0, t = 0, e = 0;
+    for (;;) { const o = J.ops, t0 = now(); const fin = J.step(S.SOLVE_BUDGET); t += now() - t0; ops += J.ops - o; if (J.early) { e += J.early; J.early = 0; } if (fin) break; }
+    cell[I(x, 120)] = 1; return { sig: [J.res.ng, J.res.nf, J.res.crushed, J.res.worst, J.res.over, e].join(','), nsop: t * 1e6 / ops }; };
+  const Ga = S.grid({ dims: 2, down: 1, max: 8192 }), cold = [0, 1, 2].map(k => job(Ga, 44 + k * 9));
+  const Gb = S.grid({ dims: 2, down: 1, max: 8192 }); let ticks = 0, mid = null;
+  while (!S.warmTick(Gb, .25) && ticks < 1e5) { ticks++; if (ticks === 7) { S.warmStop(Gb); mid = job(Gb, 44); } }
+  const warm = [0, 1, 2].map(k => job(Gb, 44 + k * 9));
+  ok(Gb.warmed && !Gb.warmS && mid && mid.sig === cold[0].sig && warm.every((w, k) => w.sig === cold[k].sig), 'разогрев (' + ticks + ' тактов по 0,25 мс): итоги заданий те же, что без него; задание посреди разогрева — тот же итог', { ticks, cold: cold.map(c => c.sig), warm: warm.map(w => w.sig), mid: mid && mid.sig });
+  console.log('  первые задания сетки: холодные ' + cold.map(c => c.nsop.toFixed(0)).join(' / ') + ' нс на шаг, после разогрева ' + warm.map(c => c.nsop.toFixed(0)).join(' / '));
+}
+
 // ═══ 10. Per-tick time: v1 synchronous vs v2 slices of SOLVE_BUDGET (PC; "phone" ×4) ═══
 sec('время: v1 сразу против v2 по кусочкам (ПК; «телефон» ×4)');
 const perf = {};
@@ -347,7 +366,9 @@ if (process.argv.includes('--alloc')) {
   const run = n => { let s = 0; for (let i = 0; i < n; i++) { const J = G.loadJob(); J.start('rm', seeds, W.read, b); while (!J.step(S.SOLVE_BUDGET)); s += J.res.ng; S.placeCheck(GE, 3, 33, 3, (M.wood << 2) | 2, W.read, b); } return s; };
   run(20);
   let best = Infinity;
-  for (let k = 0; k < 4; k++) { global.gc(); global.gc(); const h0 = process.memoryUsage().heapUsed; run(40); best = Math.min(best, (process.memoryUsage().heapUsed - h0) / 40); }
+  // garbage = new + old + large-object space (JIT code and deopt data — code / trusted space — are not per-call garbage: T-124 review)
+  const heap = () => require('v8').getHeapSpaceStatistics().reduce((a, x) => /^(new_space|old_space|large_object_space|new_large_object_space)$/.test(x.space_name) ? a + x.space_used_size : a, 0);
+  for (let k = 0; k < 4; k++) { global.gc(); global.gc(); const h0 = heap(); run(40); best = Math.min(best, (heap() - h0) / 40); }
   console.log(JSON.stringify({ perCall: best }));
   process.exit(0);
 }

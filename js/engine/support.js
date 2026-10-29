@@ -206,7 +206,7 @@
     const keys = new Int32Array(HS), vals = new Int32Array(HS), stamp = new Uint16Array(HS);
     const px = new Int32Array(max), py = new Int32Array(max), pz = new Int32Array(max), dist = new Uint16Array(max);
     let gen = 0, used = 0, ox = 0, oy = 0, oz = 0, slot = 0;
-    const G = { dims, down: DOWN, g, px, py, pz, dist, full: false };
+    const G = { dims, down: DOWN, g, px, py, pz, dist, full: false, J: null, warmed: false, warmS: null };   // v2 fields here too: one map (the job reads geo.* per node)
     // направления: +x, −x, вверх, вниз, +z, −z (2D — без z); rel по «вниз»
     const DX = [1, -1, 0, 0, 0, 0], DY = [0, 0, -DOWN, DOWN, 0, 0], DZ = [0, 0, 0, 0, 1, -1], REL = [1, 1, 2, 0, 1, 1];
     const keyOf = (x, y, z) => { const a = x - ox + 512, b = y - oy + 512, c = dims === 2 ? 0 : z - oz + 512; return (a | b | c) & ~1023 ? -1 : a | (b << 10) | (c << 20); };
@@ -325,7 +325,7 @@
     const max = Math.max(16, o.max | 0 || 4096), deg = o.deg || 24;
     const g = graph(max, deg);
     const bx = new Float64Array(max * 6), ord = new Int32Array(max), act = new Int32Array(max), ea = [], eb = [], er = [];
-    const B = { g, n: 0, bx, over: false };
+    const B = { g, n: 0, bx, over: false, J: null };
     B.reset = () => { B.n = 0; g.reset(); B.over = false; };
     B.add = (x0, y0, z0, x1, y1, z1, mat, gnd) => {
       if (B.n >= max) { B.over = true; return -1; }
@@ -937,6 +937,53 @@
     return OUT;
   };
   S.placeCheck = (G, x, y, z, code, read, b, o) => { S.placeStart(G, x, y, z, code, read, b, o).run(); return S.placeResult(G, code); };
+  // JIT warm-up (T-124 review): the first load jobs of a page run cold code — 5–10× slower per op (node: 99–168 ns/op for the first
+  // six jobs on a 1,000-tile wall, 12–28 after; worst slice 2.2 → 0.2 ms), which broke the per-tick bound right after a world opens.
+  // Feedback and optimized code live with each job's own closures (warming another grid does not carry over), so a load world warms
+  // ITS grids: a synthetic piece of about the real size (2D: a wall 32 × 20; 3D: a 12 × 12 house) through every phase (early groups,
+  // load, storey, select, groups, the placement rule, a landing job). In idle slices at the world tick — S.warmTick(G, ms) while no
+  // real job uses G (not game state: own cells, nothing of the world is read; the next real job starts from scratch, so a time limit
+  // is fine here); a real job takes the grid with S.warmStop(G) and the interrupted round starts again later. S.warm(G) — all at once.
+  const tnow = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  function warmInit(G, reps){
+    const dims = G.dims, D = G.down, P = S.prof('real');
+    const NX = 44, NH = 24, NZ = dims === 2 ? 1 : 14, cell = new Uint8Array(NX * NH * NZ), I = (x, h, z) => (h * NX + x) * NZ + z;
+    const at = (x, h, z) => x >= 0 && x < NX && h >= 0 && h < NH && z >= 0 && z < NZ;
+    const put = (x, h, z, m) => { if (at(x, h, z)) cell[I(x, h, z)] = m + 1; };
+    if (dims === 2) { for (let x = 2; x < 34; x++) for (let h = 0; h < 20; h++) put(x, h, 0, x % 5 ? MAT.wood : MAT.stone); for (let x = 34; x < 41; x++) put(x, 19, 0, MAT.wood); }
+    else {
+      for (let x = 1; x <= 12; x++) for (let z = 1; z <= 12; z++) { for (let h = 0; h < 6; h++) if (x === 1 || z === 1 || x === 12 || z === 12) put(x, h, z, (x + h) % 4 ? MAT.wood : MAT.stone); put(x, 6, z, MAT.wood); }
+      for (let x = 13; x < 18; x++) for (let z = 5; z < 9; z++) put(x, 5, z, MAT.wood);
+    }
+    const read = (x, y, z) => { const h = -y * D; if (h < 0) return 1; if (!at(x, h, z)) return 0; const c = cell[I(x, h, z)]; return c ? ((c - 1) << 2) | 2 : 0; };
+    const yOf = h => -h * D, z0 = dims === 2 ? 0 : 1, zp = dims === 2 ? 0 : 5, top = dims === 2 ? 19 : 6;
+    return { G, J: G.loadJob(), read, cell, I, D, b: { r: 64, rn: 10, P }, EO: { early: true }, reps, r: 0, st: 0, ci: -1, c0: 0,
+      seeds: [[6, yOf(0), z0], [12, yOf(2), dims === 2 ? 0 : 6], [20, yOf(0), z0], [10, yOf(5), z0]], px: 8, py: yOf(top + 1), pz: zp, ay: yOf(top) };
+  }
+  function warmStep(W){   // one slice (509 or 4096 ops: both shapes of a slice) or one stage change → true when every round is done
+    const J = W.J, G = W.G;
+    switch (W.st) {
+      case 0: {
+        if (W.r >= W.reps) return true;
+        const s = W.seeds[W.r % W.seeds.length], code = W.read(s[0], s[1], s[2]);
+        W.ci = W.I(s[0], -s[1] * W.D, s[2]); W.c0 = W.cell[W.ci]; W.cell[W.ci] = 0;
+        J.start('rm', [s[0], s[1], s[2], code], W.read, W.b, W.EO); W.st = 1; return false;
+      }
+      case 1: if (J.step(W.r & 1 ? 509 : 4096)) { W.cell[W.ci] = W.c0; W.ci = -1; W.st = 2; } else J.early = 0; return false;
+      case 2: S.placeStart(G, W.px + (W.r % 5), W.py, W.pz, (MAT.metal << 2) | 2, W.read, W.b); W.st = 3; return false;
+      case 3: if (J.step(4096)) { S.placeResult(G, (MAT.metal << 2) | 2); W.st = 4; } return false;
+      case 4: J.start('add', [W.px, W.ay, W.pz, W.read(W.px, W.ay, W.pz)], W.read, W.b); W.st = 5; return false;
+      default: if (J.step(4096)) { W.r++; W.st = 0; } return false;
+    }
+  }
+  S.warmTick = (G, ms = 1, reps = 4) => {
+    if (!G || !G.isGrid || G.warmed) return true;
+    const W = G.warmS || (G.warmS = warmInit(G, reps)), t0 = tnow();
+    do { if (warmStep(W)) { G.warmed = true; G.warmS = null; return true; } } while (tnow() - t0 < ms);
+    return false;
+  };
+  S.warmStop = G => { const W = G && G.warmS; if (!W) return; if (W.ci >= 0) { W.cell[W.ci] = W.c0; W.ci = -1; } W.st = 0; };
+  S.warm = (G, reps = 4) => { const t0 = tnow(); S.warmTick(G, 1e9, reps); return tnow() - t0; };
 
   function sortRange(a, lo, hi){ for (let i = lo + 1; i < hi; i++) { const v = a[i]; let j = i - 1; while (j >= lo && (a[j] >> 2) > (v >> 2)) { a[j + 1] = a[j]; j--; } a[j + 1] = v; } }
 
