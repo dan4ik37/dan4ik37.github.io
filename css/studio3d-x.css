@@ -50,7 +50,7 @@
 
 /* ── Узкий экран: верхняя панель — только главное, остальное в «⋯ Ещё» ── */
 .s3-compact .s3-top{gap:6px;padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) 6px max(6px,env(safe-area-inset-left))}
-.s3-compact .s3-top>*:not([data-a="exit"]):not(.s3-name):not([data-a="undo"]):not([data-a="redo"]):not(.s3x-more):not(.s3-play):not(.s3-grow):not(.s3-pinfo):not(.gs-s3){display:none!important}
+.s3-compact .s3-top>*:not([data-a="exit"]):not(.s3-name):not([data-a="undo"]):not([data-a="redo"]):not(.s3x-more):not(.s3-play):not(.s3-grow):not(.s3-pinfo):not(.gs-s3):not(.s3-e2menu){display:none!important}
 .s3-compact .s3-top button{min-height:40px;min-width:40px;font-size:16px}
 .s3-compact .s3-name{flex:1 1 auto!important;width:auto;min-width:60px;max-width:180px;font-size:14px;padding:8px}
 .s3-compact .s3-grow{display:none}
