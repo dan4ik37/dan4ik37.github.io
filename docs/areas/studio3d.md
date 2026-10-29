@@ -402,7 +402,8 @@ spec/data/skeleton.json (Unity HumanBodyBones names, left/right = the character'
   `node scripts/anim-e2e.cjs perf|leak [20]` (Chrome; needs hm.glb written by anim-test). ai3d-test: 65 ops (+ skel, actions).
   FBX: re-import check 109/109 (28 bones, 35 takes, lengths, slide ≤ 0.0002 m/s).
 - **Numbers (phone 412×915×2, CPU ×4, headless Chrome, 20 copies of the AI3D human, 12k tris each, 28 bones).** Frame CPU p50/p95: static
-  (SKIN=false, batched) 2.2/3.7 ms, 131 fps; animated 5.4–6.9/10.4–10.8 ms, 111–117 fps, 0 frames > 50 ms; D37E.models.animate 0.81–0.92 ms
+  (SKIN=false, batched) 2.2/3.7 ms, 131 fps; animated 5.4–6.9/10.4–10.8 ms, 111–117 fps, 0 frames > 50 ms (after the merge with T-127,
+  machine busier — static rose to 3.3/5.4 too: animated 10.0–10.9/14.6–20 ms, 71–84 fps, still 0 frames > 50 ms); D37E.models.animate 0.81–0.92 ms
   per frame for 20; draw calls 25 → 53 (skinned copies are not instanced). LOD over 2 s: near 262 mixer updates, far 65. Node: animate
   20 × 600 frames — heap +0.09 MB, 0.026 ms per frame (PC). Leak 20× close/open (the world reloads 20 animated models): 0 live instances
   after every close, 0 bones/skeletons/mixers alive at the end, heap 22.3 → 26.9 (cycle 10) → 27.1 MB (cycle 20) — the same ~5 MB warm-up
