@@ -773,8 +773,8 @@
   function libSetup(model, A){
     if (A.lib) return A.lib;
     const SK = E.skel, q = SK.q, sk = model.skin, hm = A.hum, NB = SK.NB, BONES = SK.BONES;
-    const P = new Array(sk.n), Q = new Array(sk.n);
-    for (let i = 0; i < sk.n; i++) { const e = A.wm[i].elements, d = m4.dec(Array.from(e)); P[i] = d.t; Q[i] = d.q; }
+    const P = new Array(sk.n), Q = new Array(sk.n), Sc = new Array(sk.n);
+    for (let i = 0; i < sk.n; i++) { const e = A.wm[i].elements, d = m4.dec(Array.from(e)); P[i] = d.t; Q[i] = d.q; Sc[i] = d.s[0]; }
     const ref = SK.reference(), rp = b => [ref.rest[b * 3], ref.rest[b * 3 + 1], ref.rest[b * 3 + 2]];
     const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], len = v => Math.hypot(v[0], v[1], v[2]), nrm = v => { const l = len(v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
     const chain = new Int16Array(NB).fill(-1);
@@ -802,12 +802,32 @@
       if (!D) D = id === 'Hips' || chain[b] < 0 ? [0, 0, 0, 1] : (dl[chain[b]] || [0, 0, 0, 1]);
       dl[b] = D; Tw[b] = q.mul(q.inv(D), Q[hm[b]]);
     }
-    // кости модели между отображёнными (скрутки, «Bip01 …»): их поворот покоя
-    const mid = new Array(NB);
-    for (let b = 0; b < NB; b++) { if (hm[b] < 0 || chain[b] < 0) continue; const ap = sk.par[hm[b]], pa = hm[chain[b]]; mid[b] = ap >= 0 && ap !== pa ? q.mul(q.inv(Q[pa]), Q[ap]) : [0, 0, 0, 1]; }
+    // настоящий родитель в иерархии МОДЕЛИ: ближайший отображённый предок (у 3ds Max Biped / Rocketbox бёдра — дети «Bip01 Spine»,
+    // ключицы — дети «Bip01 Neck»: они двигаются с ними) + поворот покоя неотображённых костей между ними (скрутки, «Bip01 …»)
+    const rev = new Int16Array(sk.n).fill(-1); for (let b = 0; b < NB; b++) if (hm[b] >= 0) rev[hm[b]] = b;
+    const par = new Int16Array(NB).fill(-1), mid = new Array(NB);
+    for (let b = 0; b < NB; b++) {
+      if (hm[b] < 0) continue;
+      let a = sk.par[hm[b]]; while (a >= 0 && rev[a] < 0) a = sk.par[a];
+      const ap = sk.par[hm[b]];
+      if (a < 0) { mid[b] = ap >= 0 ? Q[ap] : [0, 0, 0, 1]; continue; }   // над отображёнными (корень модели) — его поворот покоя
+      par[b] = rev[a];
+      mid[b] = ap !== a ? q.mul(q.inv(Q[a]), Q[ap]) : [0, 0, 0, 1];
+    }
+    // переподвешенные кости (бёдра Biped под Spine, ключицы под Neck): сустав едет с общим родителем (Hips / UpperChest), а не с
+    // настоящим — дорожка позиции; путь в модели от общего родителя до настоящего (смещения покоя в кадре родителя, без масштаба)
+    const rel = (i, j) => q.rot(q.inv(Q[j]), sub(P[i], P[j])), pos = [];
+    for (let b = 0; b < NB; b++) {
+      const ca = chain[b]; if (hm[b] < 0 || ca < 0 || par[b] < 0 || par[b] === ca) continue;
+      const path = []; let x = sk.par[hm[b]];
+      while (x >= 0 && x !== hm[ca]) { path.push(x); x = sk.par[x]; }
+      if (x !== hm[ca]) continue;   // общий родитель — не предок в модели: оставить как есть
+      path.reverse();
+      pos.push({ b, ca, ob: rel(hm[b], hm[ca]), sc: Sc[sk.par[hm[b]]] || 1, path: path.map(i => ({ m: rev[i], t: rel(i, sk.par[i]), r: rev[i] < 0 ? q.mul(q.inv(Q[sk.par[i]]), Q[i]) : null })) });
+    }
     const hp = sk.par[hm[0]], pwM = hp >= 0 ? A.wm[hp].clone().invert() : null, pw = hp >= 0 ? Q[hp] : [0, 0, 0, 1];
     const hipsLocal = pwM ? v => { const e = pwM.elements, x = v[0], y = v[1], z = v[2]; return [e[0] * x + e[4] * y + e[8] * z + e[12], e[1] * x + e[5] * y + e[9] * z + e[13], e[2] * x + e[6] * y + e[10] * z + e[14]]; } : null;
-    A.lib = { gen, names: Array.from(hm, i => i >= 0 ? A.names[i] : null), tg: { Tw, chain, mid, pw, hipsP: J.Hips, srcHips: [gen.rest[0], gen.rest[1], gen.rest[2]], hipsK: 1, hipsLocal } };
+    A.lib = { gen, names: Array.from(hm, i => i >= 0 ? A.names[i] : null), tg: { Tw, chain, par, mid, pos, pw, hipsP: J.Hips, srcHips: [gen.rest[0], gen.rest[1], gen.rest[2]], hipsK: 1, hipsLocal } };
     return A.lib;
   }
   // клип по имени: свой (из файла) или общее действие; три-клипы общие на модель

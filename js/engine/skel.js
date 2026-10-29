@@ -568,14 +568,16 @@
   // o.names[b] — node name for shared bone b (null = the model has no such bone); o.root: 'inplace' (default for loops) or 'bake'
   // (Hips carries the root motion: one-shots show their turn/steps); o.target — retarget onto another rest pose (model.js libSetup):
   // { Tw[b]: the target bone's world rest rotation "as in a T-pose" (A-pose arms swung up to the reference directions), chain[b]: the
-  //   nearest mapped ancestor, mid[b]: rest rotation of unmapped target bones between it and the real parent, pw: world rotation of the
-  //   Hips' parent, hipsP/srcHips/hipsK: hips position mapping, hipsLocal(v): model space → the Hips' parent space }.
-  // Target pose: world G'_b = G_b · Tw_b (G = canonical world rotation), local = (G'_chain · mid)⁻¹ · G'_b.
+  //   nearest mapped ancestor in the shared hierarchy, par[b]: the nearest mapped ancestor in the TARGET hierarchy (the parent the local
+//   rotation is relative to), mid[b]: rest rotation of unmapped target bones between par[b] and the real parent, pw: world rotation of the
+  //   Hips' parent, pos[]: re-parented joints { b, ca, ob, sc, path } kept on the shared parent by position tracks, hipsP/srcHips/hipsK:
+//   hips position mapping, hipsLocal(v): model space → the Hips' parent space }.
+  // Target pose: world G'_b = G_b · Tw_b (G = canonical world rotation), local = (G'_par · mid)⁻¹ · G'_b.
   function toThree(T, clip, o){
     o = o || {};
     const names = o.names || BONES.map(b => b.id), bake = o.root ? o.root === 'bake' : !clip.loop, n = clip.n, tr = [];
     const times = Float32Array.from(clip.t), tg = o.target, has = names.map(Boolean);
-    const quat = new Array(NB).fill(0).map(() => new Float32Array(n * 4)), hipsP = new Float32Array(n * 3);
+    const quat = new Array(NB).fill(0).map(() => new Float32Array(n * 4)), hipsP = new Float32Array(n * 3), posT = [];
     for (let i = 0; i < n; i++) {
       const ry = qY(clip.root[i * 3 + 2] / D2R), Q = new Array(NB);
       for (let b = 0; b < NB; b++) { const k = (i * NB + b) * 4; Q[b] = [clip.q[k], clip.q[k + 1], clip.q[k + 2], clip.q[k + 3]]; }
@@ -587,11 +589,19 @@
         // canonical world rotations → target: G'_j = G_j · Tw_j; local = G'_parent⁻¹ · G'_j (parent = nearest mapped ancestor)
         const G = new Array(NB), Gt = new Array(NB);
         for (let b = 0; b < NB; b++) { const pi = BONES[b].parent; G[b] = pi < 0 ? Q[b] : qMul(G[pi], Q[b]); }
+        for (let b = 0; b < NB; b++) if (has[b]) Gt[b] = qMul(G[b], tg.Tw[b]);
         for (let b = 0; b < NB; b++) {
           if (!has[b]) continue;
-          Gt[b] = qMul(G[b], tg.Tw[b]);
-          const pa = tg.chain[b];
-          Q[b] = pa < 0 ? qMul(qInv(tg.pw || qId()), Gt[b]) : qMul(qInv(tg.mid && tg.mid[b] ? qMul(Gt[pa], tg.mid[b]) : Gt[pa]), Gt[b]);
+          const pa = tg.par ? tg.par[b] : tg.chain[b];   // the parent in the TARGET hierarchy (Biped: thighs under Spine, clavicles under Neck)
+          Q[b] = pa < 0 ? qMul(qInv(tg.par && tg.mid[b] ? tg.mid[b] : tg.pw || qId()), Gt[b]) : qMul(qInv(tg.mid && tg.mid[b] ? qMul(Gt[pa], tg.mid[b]) : Gt[pa]), Gt[b]);
+        }
+        // re-parented joints (Biped thighs under Spine, clavicles under Neck) ride with the shared parent: local position in the real parent
+        if (tg.pos) for (let j = 0; j < tg.pos.length; j++) {
+          const e = tg.pos[j]; if (!has[e.b]) continue;
+          let D = [0, 0, 0], Rw = Gt[e.ca];
+          for (const nd of e.path) { D = vAdd(D, qRot(Rw, nd.t)); Rw = nd.m >= 0 ? Gt[nd.m] : qMul(Rw, nd.r); }
+          const tb = vSc(qRot(qInv(Rw), vSub(qRot(Gt[e.ca], e.ob), D)), 1 / e.sc);
+          (posT[j] || (posT[j] = new Float32Array(n * 3))).set(tb, i * 3);
         }
         hp = vAdd(tg.hipsP, vSc(vSub(hp, tg.srcHips), tg.hipsK));
         if (tg.hipsLocal) hp = tg.hipsLocal(hp);
@@ -603,6 +613,7 @@
     if (scale !== 1) for (let i = 0; i < hipsP.length; i++) hipsP[i] *= scale;
     if (has[0]) tr.push(new T.VectorKeyframeTrack(names[0] + '.position', times, hipsP));
     for (let b = 0; b < NB; b++) if (has[b]) tr.push(new T.QuaternionKeyframeTrack(names[b] + '.quaternion', times, quat[b]));
+    if (tg && tg.pos) tg.pos.forEach((e, j) => { if (posT[j]) tr.push(new T.VectorKeyframeTrack(names[e.b] + '.position', times, posT[j])); });
     const c = new T.AnimationClip(clip.name, clip.dur, tr);
     c.userData = { d37: meta(clip) };
     return c;

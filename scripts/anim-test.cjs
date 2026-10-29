@@ -238,6 +238,51 @@ const threeDir = () => { for (const p of [process.argv[2], process.env.THREE_PAT
   ok(hH.acts.length === 2 && hH.acts[1].blendMode === T.AdditiveAnimationBlendMode, 'additive fidget plays over the idle');
   M.play(hH, 'none'); ok(hH.name === 'none', "'none' → rest pose");
   scene.remove(gH); M.release(hH);
+
+  // 3ds Max Biped / Rocketbox (review 29.10): thighs are children of "Bip01 Spine", clavicles of "Bip01 Neck" (RB_Business_Male_01.fbx);
+  // an unmapped, turned "Bip01" root; every bone with its own rest orientation; A-pose arms. Joint world positions and limb
+  // directions must equal the canonical clip (they rode on the spine / neck before: 8–16° limb error in crouch / sprint / flinch).
+  {
+    const BIP = { Hips: 'Bip01 Pelvis', Spine: 'Bip01 Spine', Chest: 'Bip01 Spine1', UpperChest: 'Bip01 Spine2', Neck: 'Bip01 Neck', Head: 'Bip01 Head' };
+    for (const [s, l] of [['Left', 'L'], ['Right', 'R']]) Object.assign(BIP, { [s + 'Shoulder']: `Bip01 ${l} Clavicle`, [s + 'UpperArm']: `Bip01 ${l} UpperArm`, [s + 'LowerArm']: `Bip01 ${l} Forearm`, [s + 'Hand']: `Bip01 ${l} Hand`,
+      [s + 'UpperLeg']: `Bip01 ${l} Thigh`, [s + 'LowerLeg']: `Bip01 ${l} Calf`, [s + 'Foot']: `Bip01 ${l} Foot`, [s + 'Toes']: `Bip01 ${l} Toe0` });
+    const ids = ['Root', ...Object.keys(BIP)], nb = ids.length, q = S.q;
+    const parOf = id => id === 'Root' ? null : id === 'Hips' ? 'Root' : /UpperLeg$/.test(id) ? 'Spine' : /Shoulder$/.test(id) ? 'Neck' : S.BONES[S.BONES[S.index(id)].parent].id;
+    // world rest: reference joints (A-pose: arm chains turned 35° down about the upper-arm joint), arbitrary bone orientations
+    const Pw = {}, Qw = {};
+    for (const id of ids) {
+      let p = id === 'Root' ? [0, 0, 0] : [0, 1, 2].map(c => ref.rest[S.index(id) * 3 + c]);
+      const arm = /(Left|Right)(UpperArm|LowerArm|Hand)$/.exec(id);
+      if (arm) { const sg = arm[1] === 'Left' ? 1 : -1, ua = S.index(arm[1] + 'UpperArm'), o = [0, 1, 2].map(c => ref.rest[ua * 3 + c]); p = q.rot(q.axis(0, 0, 1, -35 * sg), p.map((v, c) => v - o[c])).map((v, c) => v + o[c]); }
+      Pw[id] = p.map(v => v * U);
+      const k = ids.indexOf(id); Qw[id] = id === 'Root' ? q.axis(1, 0, 0, -90) : q.norm(q.mul(q.axis(0, 1, 0, 37 * k), q.axis(1, 0, 0, 23 * k + 11)));
+    }
+    const skB = { n: nb, names: ids.map(id => id === 'Root' ? 'Bip01' : BIP[id]), par: new Int16Array(nb), t: new Float32Array(nb * 3), q: new Float32Array(nb * 4), s: new Float32Array(nb * 3).fill(1) };
+    ids.forEach((id, i) => { const pid = parOf(id); skB.par[i] = pid ? ids.indexOf(pid) : -1;
+      const iq = pid ? q.inv(Qw[pid]) : [0, 0, 0, 1]; skB.q.set(q.mul(iq, Qw[id]), i * 4); skB.t.set(pid ? q.rot(iq, Pw[id].map((v, c) => v - Pw[pid][c])) : Pw[id], i * 3); });
+    const mB = { ...mH, id: 'mtestB', skin: skB };
+    ok(M.actions(mB).humanoid, 'Biped / Rocketbox names → humanoid');
+    // canonical: the same joints in a T-pose (the generator's own skeleton for this model)
+    const genB = S.fromJoints(Object.fromEntries(Object.keys(BIP).map(id => [id, [0, 1, 2].map(c => ref.rest[S.index(id) * 3 + c] * U)])));
+    const res = {};
+    for (const act of ['loco.walk.fwd', 'stance.crouch.idle', 'loco.sprint.fwd', 'loco.turn.l90']) {
+      const g = M.instance(R, mB, { act }), h = g.userData.anim; scene.add(g);
+      const clipC = S.generate(genB, act), node = id => g.getObjectByName(T.PropertyBinding.sanitizeNodeName(BIP[id]));
+      let mm = 0, deg = 0;
+      for (const t of [0, .15, .3, .45, .6, .8]) {
+        if (t > clipC.dur) continue;
+        h.mixer.setTime(t); scene.updateMatrixWorld(true);
+        const w = S.sample(genB, clipC, t, { inplace: clipC.loop }), wp = id => new T.Vector3().setFromMatrixPosition(node(id).matrixWorld);
+        for (const id of ['LeftUpperLeg', 'RightUpperLeg', 'LeftFoot', 'RightToes', 'LeftShoulder', 'RightUpperArm', 'LeftHand', 'Head']) { const p = wp(id), c = w.P[S.index(id)]; mm = Math.max(mm, Math.hypot(p.x - c[0], p.y - c[1], p.z - c[2]) / U * 1000); }
+        for (const [a, b] of [['LeftUpperArm', 'LeftLowerArm'], ['RightLowerArm', 'RightHand'], ['LeftUpperLeg', 'LeftLowerLeg'], ['RightUpperLeg', 'RightLowerLeg']]) {
+          const d1 = wp(b).sub(wp(a)).normalize(), pa = w.P[S.index(a)], pb = w.P[S.index(b)], d2 = new T.Vector3(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]).normalize(); deg = Math.max(deg, d1.angleTo(d2) * 180 / Math.PI); }
+      }
+      res[act] = [+mm.toFixed(2), +deg.toFixed(2)];
+      scene.remove(g); M.release(h);
+    }
+    ok(Object.values(res).every(([mm, deg]) => mm <= 1 && deg <= .5), 'Biped / Rocketbox hierarchy: joints and limb directions = canonical (≤ 1 mm, ≤ 0.5°) [mm, deg]', res);
+    console.log('Biped / Rocketbox retarget [joint mm, limb deg]:', JSON.stringify(res));
+  }
   // 20 instances: LOD steps (near every frame, far rarely), heap stays flat, release all → 0
   const many = [];
   for (let i = 0; i < 20; i++) { const g = M.instance(R, mH, { act: 'loco.jog.fwd' }); g.position.set((i % 5) * 2, 0, -Math.floor(i / 5) * 40); scene.add(g); many.push(g); }
