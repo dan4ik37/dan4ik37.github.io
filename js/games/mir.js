@@ -1562,7 +1562,8 @@
     // картинка уезжает из-под листа (персонаж виден): js/engine/ui.js D37E.viewOffset
     S.vo = window.D37E.viewOffset(S.R.camera);
     S.wrap.addEventListener('e2:inset', e => { if (S?.vo) S.vo.want(e.detail, S.wrap.clientWidth, S.wrap.clientHeight); });
-    if (S.I.touch) setTimeout(() => { if (S?.H === H) H.hint('pose', 'Удержи ⬇ — сесть, лечь, эмоции'); }, 13000);   // после подсказки управления (12 с)
+    // после подсказки управления (12 с); таймер снимает unmount — иначе 13 с держит закрытый мир с рендером в памяти (T-123 fix 4)
+    if (S.I.touch) { const s0 = S; s0.poseHintT = setTimeout(() => { s0.poseHintT = 0; if (S === s0 && !s0.stopped && s0.H === H) H.hint('pose', 'Удержи ⬇ — сесть, лечь, эмоции'); }, 13000); }
     // подсказка управления (.wld-hint) — один раз на устройство (T-123, §5)
     const wh = S.q('.wld-hint'); if (wh && window.D37TouchLayout?.hintOnce && !window.D37TouchLayout.hintOnce('mir', 'h-start')) wh.remove();
   }
@@ -1994,7 +1995,7 @@
     const seatedPlay = !!(s.playing && s.mySeat);
     if (s.playing) { try { window.MirPlay?.close('unmount'); } catch (e) { console.error(e); } s.playing = null; }
     s.stopped = true;
-    clearInterval(s.tick); clearTimeout(s.invT); clearTimeout(s.rejoinT);
+    clearInterval(s.tick); clearTimeout(s.invT); clearTimeout(s.rejoinT); clearTimeout(s.poseHintT); s.poseHintT = 0;
     if (s.mySeat) { s.mySeat = null; }
     try { s.menu?.close(); s.offCtx?.(); s.offFb?.(); s.stage?.classList.remove('gm-own-bar'); } catch (e) {}   // настройки/полный экран, страж графики
     leaveChannel();

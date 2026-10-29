@@ -79,6 +79,19 @@ ok(!found.length, `${FILES.length} файлов мира: ни своих гет
 const mir = read('js/games/mir.js'), mz = read('js/games/mir-zones.js'), rnd = read('js/engine/render.js'), war = read('js/games/mir-war.js');
 ok(/el\.addEventListener\('click', onClick\)/.test(mir) && /el\.removeEventListener\('click', onClick\)/.test(mir), 'mir.js: слушатель «click» на рамке игры снимается при закрытии');
 ok(!/\bt\.tag\s*=/.test(mir), 'mir.js: TABLES (данные модуля) не получают вещей мира (t.tag)');
+// T-123 fix 4: долгий таймер (≥ 2 с) держит закрытый мир с рендером, пока не сработает (13 с подсказки позы → 3 WebGL за 8 входов) —
+// каждый такой setTimeout в mir.js записан в поле S (S.x = setTimeout / s0.x = setTimeout) и снимается в unmount (clearTimeout(s.x))
+{
+  const unm = mir.slice(mir.indexOf('function unmount(){'), mir.indexOf('function unmount(){') + 2500), long = [];
+  const re = /setTimeout\(/g; let m;
+  while ((m = re.exec(mir))) {
+    let i = m.index + 11, d = 1; while (d && i < mir.length) { const c = mir[i]; if ('([{'.includes(c)) d++; else if (')]}'.includes(c)) d--; i++; }
+    const ms = /,\s*(\d+)\s*\)$/.exec(mir.slice(m.index, i)); if (!ms || +ms[1] < 2000) continue;
+    const f = /\b(?:S|s0|st)\.(\w+)\s*=\s*$/.exec(mir.slice(Math.max(0, m.index - 40), m.index));
+    if (!f || !unm.includes('clearTimeout(s.' + f[1] + ')')) long.push(mir.slice(0, m.index).split('\n').length + ': ' + (f ? 'S.' + f[1] + ' не снят в unmount' : 'не записан в S'));
+  }
+  ok(!long.length, 'mir.js: долгие таймеры (≥ 2 с) записаны в S и снимаются в unmount', long);
+}
 ok(/BUILT = null/.test(mz.slice(mz.indexOf('rt.dispose = () =>'), mz.indexOf('rt.dispose = () =>') + 600)), 'mir-zones.js: rt.dispose отпускает BUILT');
 ok(/rt\.offAge\?\.\(\)/.test(mz), 'mir-zones.js: отписка от D37Age при закрытии');
 const rDisp = rnd.slice(rnd.indexOf('R.dispose = () =>'), rnd.indexOf('R.dispose = () =>') + 3000);
