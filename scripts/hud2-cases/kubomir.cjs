@@ -92,6 +92,11 @@ module.exports = {
       console.log(`  утечки, мир закрыть / открыть ${n} из 20:`, JSON.stringify(b0), '→', JSON.stringify(b1));
       if (T.P.mobile) await T.send('Emulation.setCPUThrottlingRate', { rate: T.P.cpu });
     },
+    // ПК: в игре (мышь захвачена — «🖱 Нажми на мир» нет; в headless захвата нет — прячем её) и без всплывашек
+    async steady(T){
+      if (T.P.mobile) return;
+      await T.ev(`(async () => { const S = ${T0}.state(); S.ui.close(); await new Promise(r => setTimeout(r, 3000)); if (S.lockEl) S.lockEl.style.display = 'none'; return 1; })()`, 10000);
+    },
     async cross(T){
       if (!T.P.mobile) return;   // «прицел» — режим телефона
       await T.ev(`(() => { const t = ${T0}, S = t.state(); S.ui.close(); t.opts({ touchMode: 'cross' }); t.touchUI?.(); return 1; })()`);
