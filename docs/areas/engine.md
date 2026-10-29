@@ -126,6 +126,9 @@
   W.front (a place 8,000 u east sees the same special exactly 8,000 / front w-h later); «Стихии» `elements` 'rare' (default: strong rows
   half as often) | 'real' | 'off'. Region record per place: `wxRegionAt(x, z)` → { cls, smask, F, alt, kc }; else `WX.biomeAt(W, x, z)`
   (the ONE biome adapter — T-116 switches it; `W.biomeAt` callback until then) → `WX.regionOfBiome`; else the climate key.
+  T-145: a world on the logical biomes passes `wxRegionAt: D37E.wx.regionOf(src)` (src = `D37E.biomes.t1(seed, { gen })` |
+  `.kb(G)`) — `B.region` per 128 m weather cell (majority class of five samples, surfaces OR-ed, coast/high), cached; class, surface
+  and feature bit orders are the same in wx.js and biomes.js (climate_classes.csv). Used by «Новая земля» and by «Кубомир» v4 worlds.
   Kids' city (kc) and W.storm === false: no strong rows. Realm 'kids' (default): hail at most HA1 (1.3 cm), wind W9 halved.
 - AI: `WX.visQ`, `WX.sight(d, vq, kind‰)`, `WX.limitAt(x, z)` (cell 64 u × 2 s cache) — creatures never see farther than the player's fog
   (≤ 4× for natives); npc.js caps follow/flee radius by it (`E.wx.AI = false` — off).
@@ -137,9 +140,12 @@
   own sky). Flags: `D37E.climate.SPECIAL = false` (all off), `D37E.wxfx.ON = false` (no visuals), graphics guard key 'wxfx'.
 - Mir: `mirWxRegion` (mir.js) — 64-u cells: steppe (dust storms, tumbleweed wind, буран, позёмка), mountains (high: fog, hail), sea /
   war coast (coast: sea fog, squalls, waterspouts), capital and cities (town: hoarfrost, freezing rain, valley mist); kids' city kc.
-- Planet (integrator): add 'js/engine/wx.js' after climate.js and 'js/engine/wx-fx.js' after precip.js to the planet scripts; planet
-  desert latitudes then get sandstorms by themselves; pass `st.wx.wfx.K` (dust, tint, tintK, vis, flat — or `E.wxfx.planetSky(state)`)
-  into planet-view `V.setWeather` (sky toward the tint, sun dimmer, fog at vis).
+- Planet (wired in T-145): the planet scripts load wx.js and wx-fx.js; desert latitudes get sandstorms by themselves (class by the
+  latitude's climate key). planet-demo `planetWx(v, st.wx.wfx)` passes the smoothed wx-fx numbers (dust, flat, vis; tint linear →
+  sRGB) into planet-view `V.setWeather` 4×/s: sky dome toward the storm colour, sun dimmer, the ground fades into the tint at vis.
+- «Новая земля» (terra-demo.js, T-145, flag TERRA_WX): calendar weather in metres of the world (anchor + u / U), climate of rain and
+  snow by `biomes.climateAtFn`, specials by `wx.regionOf(biomes.t1(SEED, { gen: 2 }))`, the sky ends over the core height (no rain
+  in caves). «Кубомир» v4 worlds: kubomir-weather.js kbRegion takes zone-0 cells from `D37E.biomes.region` (biomes.js in its scripts).
 - Tests: wx-test (55: data, grid, twin, season, T_q ±1.1°, golden, §2.11 frequencies, kids, fronts, order, AI, WxRec, speed),
   wxfx-test (11: pools, caps, low, roof, pushSky, 0.22 B/frame), wx-e2e (Chrome: Mir + Kubomir storms, phone ×4, soak),
   world-reopen-e2e with REOPEN_WX=sandstorm (20× phone, no leaks).

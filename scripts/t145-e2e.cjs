@@ -90,7 +90,7 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
     // ── the catalog: both open to everyone (no «проверка»), SEO card exists ──
     if (WHAT === 'all' || WHAT === 'planet' || WHAT === 'terra') {
       await ev(`location.hash = '#/games'`); await sleep(2500);
-      const cat = await ev(`(() => { const t = document.body.innerText; return { planet: /Планета/.test(t), terra: /Новая земля/.test(t), test: /\\(проверка\\)/.test(t), n: typeof GAMES !== 'undefined' ? GAMES.length : -1, hid: typeof GAMES_HIDDEN !== 'undefined' ? GAMES_HIDDEN.map(g => g.id) : null }; })()`);
+      const cat = await ev(`(() => { const t = document.body.textContent; return { planet: /Планета/.test(t), terra: /Новая земля/.test(t), test: /\\(проверка\\)/.test(t), n: typeof GAMES !== 'undefined' ? GAMES.length : -1, hid: typeof GAMES_HIDDEN !== 'undefined' ? GAMES_HIDDEN.map(g => g.id) : null }; })()`);
       ok(cat.planet && cat.terra && !cat.test && cat.hid && !cat.hid.includes('planet') && !cat.hid.includes('terra'), 'каталог: «Планета» и «Новая земля» видны всем, без «(проверка)»', cat);
     }
     // ═══ «Планета» ═══

@@ -619,3 +619,18 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
 - Skip (later steps): wall band, funnels, tumbleweeds (WX3); aurora/halo/haze/mirage/drift shaders (WX4); body effects — push, hail
   damage, glaze friction (WX5); AI core call d37_mind_set_wx (WX6); links (WX7); Studio settings/props/API, Podzem layer, Backrooms
   port, Mir mir_regions.csv features (WX8); the phone «Погода» showing stateX (phone.js — not this track).
+
+## 29.10 — T-145 integration (branch t145-planet-all: t145-planet + t145-land + t145-wx, GAMES_VER 154)
+- Take: «Планета» and «Новая земля» (id terra) moved from GAMES_HIDDEN into the catalog (0+, tag 'new'), SEO pages /games/planet and
+  /games/terra (api/_lib/games-seo.js → page, sitemap, in-game «📖 Правила» via make-rules), preview cards img/games/planet|terra.png.
+  Rollback: `T145_OPEN = false` in js/features/games.js (back to hidden pages) and in api/_lib/games-seo.js (no pages / sitemap rows).
+  The flag mutates the GAMES / GAME_PAGES tables, so xss-scan no longer proves their fields constant by itself — 18 findings
+  allowlisted as 'const' (the values are still the literal tables).
+- Take: weather by biome reaches the planet's own sky and ground: planet scripts load wx.js + wx-fx.js; planetWx(v, st.wx.wfx) passes
+  dust / flat / vis / tint (linear → sRGB) to V.setWeather 4×/s. Desert latitudes get sandstorms by the latitude's climate class.
+- Take: the biome adapter is `D37E.wx.regionOf(src)` (wx.js) over `D37E.biomes.region` — one region record per 128 m cell, cached;
+  «Новая земля» gets calendar weather on it (flag TERRA_WX in terra-demo.js), «Кубомир» v4 worlds take zone-0 cells from it
+  (biomes.js added to Kubomir's scripts). WX.biomeAt (id-based) stays for games with their own biome callback.
+- Take: the planet's debug line (chunks, cache, CPU) is hidden by default, F3 shows it (HUD rule: debug panels hidden).
+- Skip (not this step): Kubomir v4 for NEW worlds (KB_GEN = 4 and the co-op genVer line are in T-138 files); hail harm and other body
+  effects (WX5); saving edits in «Новая земля» (honest FAQ line: «пока нет»).
