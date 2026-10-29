@@ -85,6 +85,15 @@ module.exports = {
     ok(s.over && s.why === 'full', 'planets: тела выше красной линии — переполнение, конец', { why: s.why, n });
     s = spec.create(K.rng(100)); s.idle = -1e9; n = 0; while (!s.over) { spec.step(s, K.STEP, inp); n++; }
     ok(s.why === 'time' && n === C.TIME, 'planets: 2 минуты — конец по времени');
+    // проверка T-140 (D4): броски наугад так часто, как можно, — не победа и меньше очков, чем у бота со стратегией
+    // (было: 30 из 30 побед, 2604 против 2267 у бота); бросок наугад раз в секунду проигрывает боту с тем же темпом
+    { const NS = 30, run = mk => { let w = 0, sc = 0; for (let seed = 1; seed <= NS; seed++) { const r = K.sim(spec, { seed, fps: 60, maxMs: 130000, bot: mk() }); w += spec.win(r.s) ? 1 : 0; sc += r.score; } return { w, mean: Math.round(sc / NS) }; };
+      const blind = gap => () => { let x = 1; return (q, k, push) => { if (k % gap) return; x = (x * 1103515245 + 12345) >>> 0; const px = (x % 997) / 997 * C.W; push(T.DOWN, px, 200, 0); push(T.UP, px, 200, 0); }; };
+      const fast = run(blind(7)), slow = run(blind(60)), bot = run(() => module.exports.bot(K, spec)), calm = run(() => module.exports.bot(K, spec, 60));
+      console.log('  planets: ' + NS + ' партий, победы и средний счёт — наугад как можно чаще ' + fast.w + ' / ' + fast.mean + ', бот тем же темпом ' + bot.w + ' / ' + bot.mean
+        + '; наугад раз в секунду ' + slow.w + ' / ' + slow.mean + ', бот раз в секунду ' + calm.w + ' / ' + calm.mean);
+      ok(fast.w <= 3 && slow.w < calm.w && bot.mean > fast.mean * 1.1 && calm.mean > slow.mean * 1.1,
+        'planets: наугад — почти не победа и меньше очков, чем со стратегией (тот же темп)', { fast, slow, bot, calm }); }
   },
 
   e2e: {

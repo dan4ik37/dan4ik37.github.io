@@ -11,10 +11,16 @@
 // в типизированных массивах; (3) Math.random — rng (у соперников одинаковые тела); (4) переполнение по «возрасту в кадрах»
 // — теперь в шагах; (5) тап после конца сразу начинал заново; (6) конца, кроме переполнения, не было — для соревнования
 // общий предел 2 минуты; (7) бросок по нажатию сразу — теперь целишься пальцем и отпускаешь.
+// Проверка T-140 (D4): броски наугад так часто, как можно, всегда «побеждали» и набирали больше бота со стратегией
+// (30 из 30, в среднем 2604 против 2267): тела были мелкие для поля 320 — банка не переполнялась, и счёт решало число
+// бросков, а не куда бросаешь. Теперь тела в 1,6 раза крупнее (банка тесная — переполнение настоящая угроза, место броска
+// решает), победа — ⭐ звезда или 💥 сверхновая, или 🪐 планета с кольцами, если продержался все 2 минуты.
 (() => {
   const T = ArcadeKit.T;
   const W = 320, H = 440, FLOOR = 432, LINE = 82, HANG = 44, NP = 56, SUB = 4;
-  const RAD = [11, 15, 20, 25, 31, 37, 44, 51, 58], TOP = 8, COMET = 9, CR = 10;
+  const RAD = [18, 24, 32, 40, 50, 59, 70, 82, 93], TOP = 8, COMET = 9, CR = 10, RING = 7;
+  // кольца (у планеты RING) и сияние звезды — от радиуса тела; точка начала эллипса кольца (наклон −0,25)
+  const RX = Math.round(RAD[RING] * 1.25), RY = Math.round(RAD[RING] * .18), RMX = RX * Math.cos(-.25), RMY = RX * Math.sin(-.25), GLOW = Math.round(RAD[TOP] * 1.1);
   const PTS = [0, 2, 4, 8, 16, 32, 64, 128, 256], NOVA = 500;
   const G0 = 900, REST = .12, CD = 30, IDLE = 150, DANGER = 120, TIME = 120 * 60, KEYV = 260;
   const COL = ['#a8a29e', '#8a7560', '#cfd2dc', '#b9a27a', '#e0603f', '#4fb3ff', '#e8a94f', '#c38bff', '#ffd23f', '#e6f6ff'];
@@ -181,17 +187,17 @@
     }
     // детали: тень-полоса у планет, блик у мелких, кольца, сияние звёзд
     ctx.fillStyle = C.dark;
-    for (let i = 0; i < NP; i++) if (s.on[i] && s.lv[i] >= 3 && s.lv[i] <= 7) { const r = radius(s.lv[i]); ctx.fillRect(X[i] - r * .8, Y[i] + r * .15, r * 1.6, r * .22); }
+    for (let i = 0; i < NP; i++) if (s.on[i] && s.lv[i] >= 3 && s.lv[i] <= RING) { const r = radius(s.lv[i]); ctx.fillRect(X[i] - r * .8, Y[i] + r * .15, r * 1.6, r * .22); }
     ctx.fillStyle = C.light;
     for (let i = 0; i < NP; i++) if (s.on[i] && s.lv[i] <= 2) { const r = radius(s.lv[i]) * .3; ctx.fillRect(X[i] - r * 1.5, Y[i] - r * 1.5, r, r); }
     ctx.strokeStyle = C.ring; ctx.lineWidth = 3; ctx.beginPath();
     for (let i = 0; i < NP; i++) {
-      if (!s.on[i] || s.lv[i] !== 7) continue;
-      ctx.moveTo(X[i] + 62, Y[i] - 15.8); ctx.ellipse(X[i], Y[i], 64, 9, -.25, 0, 6.2832);
+      if (!s.on[i] || s.lv[i] !== RING) continue;
+      ctx.moveTo(X[i] + RMX, Y[i] + RMY); ctx.ellipse(X[i], Y[i], RX, RY, -.25, 0, 6.2832);
     }
     ctx.stroke();
     ctx.fillStyle = C.glow; ctx.beginPath();
-    for (let i = 0; i < NP; i++) { if (!s.on[i] || s.lv[i] !== TOP) continue; ctx.moveTo(X[i] + 64, Y[i]); ctx.arc(X[i], Y[i], 64, 0, 6.2832); }
+    for (let i = 0; i < NP; i++) { if (!s.on[i] || s.lv[i] !== TOP) continue; ctx.moveTo(X[i] + GLOW, Y[i]); ctx.arc(X[i], Y[i], GLOW, 0, 6.2832); }
     ctx.fill();
     if (s.flash) { ctx.fillStyle = C.nova; ctx.beginPath(); ctx.arc(s.nx, s.ny, 20 + (30 - s.flash) * 3, 0, 6.2832); ctx.fill(); }
   }
@@ -199,18 +205,19 @@
   ArcadeKit.define('planets', {
     kind: 'canvas', W, H, drag: true,
     title: '🪐 Слияние планет',
-    intro: 'Целься пальцем и отпусти — тело упадёт. Два одинаковых сливаются в большее: метеорит → астероид → луна → … → звезда. Две звезды — 💥 сверхновая! Не дай телам застрять выше красной линии. 2 минуты.',
+    intro: 'Целься пальцем и отпусти — тело упадёт. Два одинаковых сливаются в большее: метеорит → астероид → луна → … → звезда. Банка тесная: не дай телам застрять выше красной линии. Победа — ⭐ звезда или 🪐 планета с кольцами, если продержишься 2 минуты.',
     controls: 'Веди пальцем (или мышью с зажатой кнопкой) и отпусти. Клавиатура: ← → и пробел. Не бросишь 2,5 с — тело упадёт само.',
     duelTitle: 'Одинаковые тела у обоих',
     keys: { ArrowLeft: 0, KeyA: 0, ArrowRight: 1, KeyD: 1, Space: 2, ArrowDown: 2, KeyS: 2 },
     create, input, step, draw,
     hudKey: s => s.nxt * 1e4 + Math.ceil(s.left / 60),
     hud: s => 'дальше: ' + ICON[s.nxt] + ' · ⏱ ' + Math.floor(Math.ceil(s.left / 60) / 60) + ':' + String(Math.ceil(s.left / 60) % 60).padStart(2, '0'),
-    win: s => s.top >= 6 || s.novas > 0,
+    // победа (XP): звезда или сверхновая; планета с кольцами — если банка не переполнилась за 2 минуты
+    win: s => s.novas > 0 || s.top >= TOP || (s.top >= RING && s.why === 'time'),
     result: s => ({
-      title: s.novas ? '💥 Сверхновая!' : s.top >= 7 ? '🪐 Планета с кольцами!' : s.top >= 6 ? '🟠 Газовый гигант!' : s.why === 'full' ? '🌌 Космос переполнен' : '⏰ Время вышло',
+      title: s.novas ? '💥 Сверхновая!' : s.top >= TOP ? '⭐ Звезда!' : s.top >= RING && s.why === 'time' ? '🪐 Планета с кольцами!' : s.why === 'full' ? '🌌 Космос переполнен' : '⏰ Время вышло',
       text: 'слияний: ' + s.merges + ' · самое большое: ' + ICON[s.top],
     }),
-    consts: { W, H, FLOOR, LINE, HANG, NP, RAD, TOP, COMET, CR, PTS, NOVA, CD, IDLE, DANGER, TIME, G0 },
+    consts: { W, H, FLOOR, LINE, HANG, NP, RAD, TOP, RING, COMET, CR, PTS, NOVA, CD, IDLE, DANGER, TIME, G0 },
   });
 })();
