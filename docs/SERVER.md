@@ -43,25 +43,20 @@ Oracle Cloud → ☰ → **Networking → Virtual Cloud Networks** → твоя 
 | TCP | `3478` | TURN (если UDP закрыт у провайдера игрока) |
 | UDP | `49160-49200` | TURN — пересылка |
 
-### Шаг 2. Открыть те же порты на самом сервере (ufw)
+### Шаг 2. Открыть те же порты на самом сервере (iptables)
 
-**Сервер:**
+На образах Oracle Ubuntu фаервол — iptables (файл /etc/iptables/rules.v4), ufw нет (29.10.2026: `sudo: ufw: command not found`).
+Правила разрешений должны стоять ДО строки `-A INPUT -j REJECT`. Так сделано на сервере владельца 29.10.2026:
+
+**Сервер** — открыть сейчас:
 ```bash
-sudo ufw allow 80/tcp
+sudo iptables -I INPUT 6 -p tcp --dport 80 -j ACCEPT && sudo iptables -I INPUT 6 -p tcp --dport 443 -j ACCEPT && sudo iptables -I INPUT 6 -p tcp --dport 3478 -j ACCEPT && sudo iptables -I INPUT 6 -p udp --dport 3478 -j ACCEPT && sudo iptables -I INPUT 6 -p udp --dport 49160:49200 -j ACCEPT
 ```
-```bash
-sudo ufw allow 443/tcp
-```
-```bash
-sudo ufw allow 3478
-```
-```bash
-sudo ufw allow 49160:49200/udp
-```
-Проверка — в списке должны быть 22, 25565 и новые:
-```bash
-sudo ufw status
-```
+Сохранить на после перезагрузки: те же 5 строк — в /etc/iptables/rules.v4 сразу после строки с `--dport 22` (копия файла —
+rules.v4.bak), проверка `sudo iptables-restore --test /etc/iptables/rules.v4`. Номер строки смотреть заранее:
+`sudo grep -n "INPUT" /etc/iptables/rules.v4` (одна вставка `sed -i -e '<N>a …'` на каждую строку; у владельца N = 43).
+
+Памяти мало (Майнкрафт 8 ГБ из 12): добавлен файл подкачки 2 ГБ (/swapfile, в /etc/fstab) — чтобы сборка и пики не выбили Майнкрафт.
 
 ### Шаг 3. Скачать на сервер только папку `server/` с сайта
 
