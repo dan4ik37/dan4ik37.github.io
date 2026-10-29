@@ -38,6 +38,8 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
   // пустыня → песчаные бури, степь → пыльные бури и бураны, горы → град и туман; запись места — из логичных биомов (D37E.biomes →
   // D37E.wx.regionOf). Откат одной строкой: TERRA_WX = false (небо и свет — как раньше, без частиц)
   const TERRA_WX = true;
+  // T-145: гладь у берега — полосами 4 м только над рельефом ниже моря (яма в 4+ м от берега сухая и на вид). Откат: SEA_FINE = false
+  const SEA_FINE = true;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   let S = null;
 
@@ -300,7 +302,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
   // ═══ Море (T-115): плитки 32 × 32 м над столбцами, где рельеф сам ниже моря (hmin < 0 у столбца без правок) — яма на суше
   //     остаётся сухой; у берега и рек вода в яме есть (рядом море). Одна сетка на SEA_CAP плиток, пересборка — когда меняется
   //     набор столбцов (не чаще 4 раз в секунду) ═══
-  const SEA_CAP = 512;
+  const SEA_CAP = 2048;
   function seaInit(st){
     const R = st.R, T = R.T, g = new T.BufferGeometry();
     const pos = new Float32Array(SEA_CAP * 12), nrm = new Float32Array(SEA_CAP * 12), uv = new Float32Array(SEA_CAP * 8), idx = new Uint16Array(SEA_CAP * 6);
@@ -319,23 +321,47 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
   function seaUpdate(st, dt){
     if (!st.seaG || (st.seaT -= dt) > 0) return;
     st.seaT = .25;
-    let sig = st.ax * 0.000713 + st.az * 0.000917, n = 0;
-    for (const c of st.TS.cols.values()) if (c.st === 2 && c.hmin < 0) { sig += ((c.cx * 73856093) ^ (c.cz * 19349663)) * 1e-9; n++; }
+    // берег (T-145, SEA_FINE): у столбца, где рельеф и выше, и ниже моря, гладь — полосами по клеткам 4 м, где рельеф ядра (без
+    // правок) сам ниже моря: яма в 4+ м от берега сухая и на вид — как и для физики (TS.water). Клетки считаются раз на столбец, не
+    // больше 8 столбцов за проход (64 высоты ядра на столбец); пока не посчитан — целая плитка, как раньше
+    let sig = st.ax * 0.000713 + st.az * 0.000917, n = 0, bud = 8;
+    for (const c of st.TS.cols.values()) if (c.st === 2 && c.hmin < 0) {
+      if (SEA_FINE && c.hmax > -0.3 && !c.seaRuns && bud > 0) { seaRuns(st, c); bud--; }
+      sig += ((c.cx * 73856093) ^ (c.cz * 19349663)) * 1e-9 + (c.seaRuns ? 1e-3 : 0); n++;
+    }
     sig += n;
     if (sig === st.seaSig) return;
     st.seaSig = sig;
     const pos = st.seaG.attributes.position.array;
     let k = 0;
-    for (const c of st.TS.cols.values()) {
-      if (k >= SEA_CAP) break;
-      if (!(c.st === 2 && c.hmin < 0)) continue;
-      const x0 = (c.cx * 32 - st.ax) * U, z0 = (c.cz * 32 - st.az) * U, x1 = x0 + 32 * U, z1 = z0 + 32 * U, o = k * 12;
+    const quad = (ax, az, bx, bz) => {
+      const x0 = (ax - st.ax) * U, z0 = (az - st.az) * U, x1 = (bx - st.ax) * U, z1 = (bz - st.az) * U, o = k * 12;
       pos[o] = x0; pos[o + 1] = 0; pos[o + 2] = z0; pos[o + 3] = x1; pos[o + 4] = 0; pos[o + 5] = z0;
       pos[o + 6] = x0; pos[o + 7] = 0; pos[o + 8] = z1; pos[o + 9] = x1; pos[o + 10] = 0; pos[o + 11] = z1;
       k++;
+    };
+    for (const c of st.TS.cols.values()) {
+      if (k >= SEA_CAP) break;
+      if (!(c.st === 2 && c.hmin < 0)) continue;
+      const bx = c.cx * 32, bz = c.cz * 32, R = c.seaRuns;
+      if (!R) { quad(bx, bz, bx + 32, bz + 32); continue; }
+      for (let i = 0; i < R.length && k < SEA_CAP; i += 3) quad(bx + R[i] * 4, bz + R[i + 2] * 4, bx + R[i + 1] * 4, bz + (R[i + 2] + 1) * 4);
     }
     const pa = st.seaG.attributes.position; pa.updateRange.offset = 0; pa.updateRange.count = k * 12; pa.needsUpdate = true;
     st.seaG.setDrawRange(0, k * 6); st.seaN = k;
+  }
+  // полосы воды столбца: [i0, i1, j, …] — клетки 4 м по x от i0 до i1 в ряду j, где рельеф ядра ниже −0,3 м (как TS.water)
+  function seaRuns(st, c){
+    const out = [], bx = c.cx * 32, bz = c.cz * 32;
+    for (let j = 0; j < 8; j++) {
+      let i0 = -1;
+      for (let i = 0; i <= 8; i++) {
+        const wet = i < 8 && st.TS.height(bx + i * 4 + 2, bz + j * 4 + 2) < -0.3;
+        if (wet && i0 < 0) i0 = i;
+        else if (!wet && i0 >= 0) { out.push(i0, i, j); i0 = -1; }
+      }
+    }
+    c.seaRuns = Int8Array.from(out);
   }
 
   // ═══ Кадр: камера, человечек, сетки рельефа (бюджет), HUD ═══

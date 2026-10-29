@@ -25,7 +25,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
 .pl-help[hidden]{display:none}
 .pl-tele{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:6;border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:.34rem .8rem;background:rgba(10,8,24,.72);color:#fff;font:800 .76rem Montserrat,sans-serif;cursor:pointer;min-height:36px}
 .pl-tele[hidden]{display:none}
-@media (max-width:640px){.pl-bar{left:10px;right:10px;max-width:none;justify-content:flex-start}.pl-bar button{padding:.3rem .55rem;font-size:.72rem}.pl-tele{bottom:150px}.pl-lbl{display:none}
+@media (max-width:640px){.pl-bar{left:10px;right:10px;max-width:none;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.pl-bar::-webkit-scrollbar{display:none}.pl-bar button{flex:none;padding:.3rem .55rem;font-size:.72rem}.pl-tele{bottom:150px}.pl-lbl{display:none}
 .pl-hud{top:58px;max-width:calc(100% - 20px);font-size:11px;padding:5px 8px}.pl-st{font-size:10px}}`;
   const css = () => { if (document.getElementById('pl-css')) return; const s = document.createElement('style'); s.id = 'pl-css'; s.textContent = CSS; document.head.appendChild(s); };
   const DEG = Math.PI / 180, U = 2.1 / 1.8, HOME_LL = [29, 81];
