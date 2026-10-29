@@ -1678,7 +1678,8 @@ $('#cmd').value=JSON.stringify([
  let url=__wsUrl(env&&env.ws);   // site: was ?ws= or always ws://localhost:3737
  const VN={front:'Спереди',side:'Сбоку',top:'Сверху',iso:'Три четверти'};
  let last=[];
- const img=(v,S,hl,lab,opt)=>{const ms=group.children.filter(m=>hl&&hl.includes(m.name));ms.forEach(m=>m.material.emissive.set(0x663300));const u=snap(S||384,v&&v.map(k=>VN[k]),lab,opt).toDataURL('image/jpeg',.7).split(',')[1];ms.forEach(m=>m.material.emissive.set(0));return u};
+ const img=(v,S,hl,lab,opt)=>{const ms=group.children.filter(m=>hl&&hl.includes(m.name)&&m.material&&m.material.emissive),e0=ms.map(m=>m.material.emissive.getHex());ms.forEach(m=>m.material.emissive.set(0x663300));   // site: unlit cards / puppet faces have no emissive (threw after the commands were applied); restore, not zero
+  try{return snap(S||384,v&&v.map(k=>VN[k]),lab,opt).toDataURL('image/jpeg',.7).split(',')[1]}finally{ms.forEach((m,i)=>m.material.emissive.setHex(e0[i]))}};
  const key=a=>Object.fromEntries(a.map(o=>[o.name,JSON.stringify(o)]));
  function diff(a,b){const A=key(a),B=key(b);return{added:b.filter(o=>!A[o.name]).map(o=>o.name),changed:b.filter(o=>A[o.name]&&A[o.name]!==B[o.name]).map(o=>o.name),removed:a.filter(o=>!B[o.name]).map(o=>o.name)}}
  async function handle(q){
