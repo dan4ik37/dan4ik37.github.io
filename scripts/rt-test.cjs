@@ -121,6 +121,11 @@ async function protocol(){
   r = await fetch(S.url + '/metrics'); ok(r.status === 401, '/metrics без ключа — 401');
   r = await fetch(S.url + '/metrics', { headers: { Authorization: 'Bearer wrong' } }); ok(r.status === 401, '/metrics с чужим ключом — 401');
   j = await S.metrics(ADMIN); ok(j.counts && j.stats && j.mem && typeof j.cpuPct === 'number' && j.loopMs, '/metrics с ключом — счётчики, память, процессор, задержка цикла', Object.keys(j));
+  // T-145: часы мира (clock.js) — время сервера; CORS для сайта; 12 подряд, дальше — 429
+  { const t0 = Date.now(); r = await fetch(S.url + '/time', { headers: { origin: 'https://dan4ik37.vercel.app' } }); j = await r.json();
+    ok(r.status === 200 && Number.isFinite(j.t) && Math.abs(j.t - t0) < 5000 && r.headers.get('access-control-allow-origin') === 'https://dan4ik37.vercel.app' && r.headers.get('cache-control') === 'no-store', '/time: время сервера, CORS, no-store', j);
+    let n429 = 0; for (let i = 0; i < 14; i++) { const q = await fetch(S.url + '/time'); if (q.status === 429) n429++; await q.text(); }
+    ok(n429 >= 2, '/time: больше 12 подряд — 429', n429); }
   r = await fetch(S.url + '/nope'); ok(r.status === 404, 'неизвестный адрес — 404');
   r = await fetch(S.url + '/health', { method: 'POST' }); ok(r.status === 405, 'POST /health — 405');
   // TURN
