@@ -1,10 +1,13 @@
 // AI3D /tools/3d (T-112, A1) in REAL headless Chrome (DevTools Protocol, no npm) — the first real browser run of the owner's editor.
 // Modes:  node scripts/ai3d-e2e.cjs smoke   — page opens, selftest() (all rows), every demo scene, every owner button, GLB from the page
 //                                             (magic, no extras, linear colour), «📦 В Студию 3D» (D37E.models), rollback, WebGL context
-//                                             loss → restore, no-WebGL fallback (page lives), hotkeys stay out, 0 console errors
+//                                             loss → restore, no-WebGL fallback (page lives), hotkeys stay out, 0 console errors; the command box
+//                                             keeps its height on the phone; the AI bridge over a real WebSocket (apply with a view, look with
+//                                             highlight on cards / puppet faces); the 3D background follows a live theme switch; create() failing
+//                                             part-way (no WebGL, before / after the render loop) leaves no renderer, loop or colour-mode change
 //         node scripts/ai3d-e2e.cjs shots   — the six demo scenes, PC 1280×720 and phone 412×915 (+ the AI's 2×2 view) → D37_TMP/t112/shots
 //         node scripts/ai3d-e2e.cjs perf    — phone (CPU ×RATE): open time (cold, in-page), demo build ms, frame CPU p50/p95 and FPS while
-//                                             orbiting with touch drags, JS heap, draw calls / triangles
+//                                             orbiting with touch drags, JS heap, draw calls / triangles; «Играть»: FPS, render CPU, shader links
 //         node scripts/ai3d-e2e.cjs leak [20] — open/close N times by in-page navigation (demo + export each time): heap after GC, canvases,
 //                                             WebGL contexts, three.js objects, window/document listeners
 //         node scripts/ai3d-e2e.cjs soak [10] — N minutes of random ops (self-test rows, demos, undo/redo, rollback, export, studio, views,
@@ -47,6 +50,38 @@ function selfRows(){
   return new Function(...stubs, 'return ' + src.slice(a + 8, b + 1))().filter(r => Array.isArray(r[1])).map(r => ({ n: r[0], c: r[1] }));
 }
 const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * q))] : 0;
+// minimal WebSocket server for the AI bridge (the owner's server.mjs side): one client, text frames, request → reply by id
+function wsBridge(){
+  const srv = http.createServer(); let sock = null, buf = Buffer.alloc(0), qid = 0, onConn = null; const wait = new Map();
+  srv.on('upgrade', (req, s) => {
+    const acc = require('crypto').createHash('sha1').update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+    s.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + acc + '\r\n\r\n');
+    sock = s; s.on('error', () => {}); if (onConn) onConn();
+    let frag = [];
+    s.on('data', d => {
+      buf = Buffer.concat([buf, d]);
+      for (;;) {
+        if (buf.length < 2) return;
+        const fin = buf[0] & 0x80, op = buf[0] & 15, masked = buf[1] & 0x80; let len = buf[1] & 127, off = 2;
+        if (len === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4; } else if (len === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10; }
+        const mk = masked ? buf.slice(off, off + 4) : null; if (masked) off += 4;
+        if (buf.length < off + len) return;
+        let pl = Buffer.from(buf.slice(off, off + len)); buf = buf.slice(off + len);
+        if (mk) for (let i = 0; i < pl.length; i++) pl[i] ^= mk[i & 3];
+        if (op === 8) { s.end(); sock = null; return; }
+        if (op === 1 || op === 0) { frag.push(pl); if (fin) { const msg = Buffer.concat(frag).toString('utf8'); frag = []; try { const j = JSON.parse(msg), w = wait.get(j.id); if (w) { wait.delete(j.id); w(j); } } catch (e) {} } }
+      }
+    });
+  });
+  srv.ask = q => new Promise(res => {
+    const id = ++qid, p = Buffer.from(JSON.stringify({ id, ...q }), 'utf8'); wait.set(id, res);
+    let h; if (p.length < 126) h = Buffer.from([0x81, p.length]); else if (p.length < 65536) { h = Buffer.alloc(4); h[0] = 0x81; h[1] = 126; h.writeUInt16BE(p.length, 2); } else { h = Buffer.alloc(10); h[0] = 0x81; h[1] = 127; h.writeBigUInt64BE(BigInt(p.length), 2); }
+    sock.write(Buffer.concat([h, p])); setTimeout(() => { if (wait.has(id)) { wait.delete(id); res({ __timeout: true }); } }, 60000);
+  });
+  srv.connected = ms => new Promise(r => { if (sock) r(true); else { onConn = () => r(true); setTimeout(() => r(!!sock), ms); } });
+  srv.kill = () => { try { if (sock) sock.destroy(); } catch (e) {} srv.close(); };
+  return srv;
+}
 
 (async () => {
   fs.mkdirSync(path.join(OUT, 'shots'), { recursive: true }); fs.mkdirSync(path.join(OUT, 'glb'), { recursive: true });   // smoke writes glb/textured-chrome.glb
@@ -98,7 +133,7 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
     renderers: await countProto('THREE.WebGLRenderer.prototype'), geometries: await countProto('THREE.BufferGeometry.prototype'), materials: await countProto('THREE.Material.prototype'),
     textures: await countProto('THREE.Texture.prototype'), winListeners: await listeners('window'), docListeners: await listeners('document') });
   const out = { mode: MODE, rate: RATE, pc: PC, when: new Date().toISOString() };
-  let failed = false;
+  let failed = false, wsb = null;
   const READY = `!!(window.D37AI3D && window.D37AI3D.active && window.D37AI3D.core && window.AI3D)`;
   const ready = async (ms = 90000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { if (await ev(READY, 5000) === true) return Date.now() - t0; } catch (e) {} await sleep(100); } throw new Error('AI3D did not open'); };
   const go = hash => ev(`(D37Route.go(${JSON.stringify(hash)}), 1)`);
@@ -151,6 +186,10 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
       const meta = await ev(`({ path: location.pathname, robots: (document.querySelector('meta[name="robots"]') || {}).content || '', title: document.title, body: document.body.classList.contains('a3-on') })`);
       ok(meta.path === '/tools/3d' && /noindex/.test(meta.robots) && meta.body, 'route /tools/3d, noindex, editor on', meta);
       ok(await ev(`THREE.REVISION === '149' && document.querySelectorAll('script[src*="three.min.js"]').length === 1`), 'three r149, one copy');
+      // layout: the command box keeps its height (the panel scrolls instead of squeezing it) and can be made taller; no sideways scroll
+      const lay = await ev(`(() => { const t = document.querySelector('#a3-cmd'), h0 = t.getBoundingClientRect().height; t.style.height = '220px'; const h1 = t.getBoundingClientRect().height; t.style.height = '';
+        return { h0: Math.round(h0), h1: Math.round(h1), sw: document.documentElement.scrollWidth, iw: innerWidth }; })()`);
+      ok(lay.h0 >= 100 && lay.h1 >= 200 && lay.sw <= lay.iw, 'command box 110 px tall, resizable to 220 px, no sideways scroll', lay);
       // owner's self-test (all 50 rows, incl. snapshots and reference compare in a real WebGL context)
       const t0 = Date.now(), st = String(await ev(`AI3D.selftest()`)); out.selftest = { ms: Date.now() - t0, head: st.split('\n')[0], bad: st.split('\n').filter(l => l.startsWith('✗')) };
       ok(/^Все \d+ проверок прошли/.test(out.selftest.head) && !out.selftest.bad.length, 'AI3D.selftest() in Chrome', out.selftest);
@@ -194,6 +233,20 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
       const before = await ev(`JSON.stringify(AI3D.state())`);
       await ev(`(document.querySelector('#a3-cmd').value = JSON.stringify([{op:'set',name:'столешница',color:'#ff0000'},{op:'del',name:'нет такого'}]), document.querySelector('#a3-run').click(), 1)`);
       ok(await ev(`JSON.stringify(AI3D.state())`) === before && /Сцена не изменилась/.test(await outText()), 'atomic rollback (error → scene unchanged)');
+      // the AI bridge over a real WebSocket (the server.mjs side): apply with a view and look with highlight on unlit materials (drawn card,
+      // puppet face) and on a lit box — the highlight used to throw on materials without emissive after the commands were applied
+      wsb = wsBridge(); await new Promise(r => wsb.listen(0, '127.0.0.1', r));
+      await ev(`(D37AI3D.core.reset(), D37AI3D.core.connectAI('ws://localhost:${wsb.address().port}'), 1)`);
+      const br = { connected: await wsb.connected(15000) };
+      if (br.connected) {
+        const A = async (k, q) => { const r = await wsb.ask(q); br[k] = { error: r.error, image: r.image ? r.image.length : 0, to: r.__timeout }; };
+        await A('cardView', { tool: 'apply', commands: [{ op: 'art', name: 'card1', pos: [0, 1, 0], w: .5, h: .5, shapes: [{ t: 'ell', c: [.5, .5], r: [.4, .4], fill: '#ff8a3a' }] }], view: 'iso' });
+        await A('cardLook', { tool: 'look', views: ['iso'], highlight: true });
+        await A('puppetView', { tool: 'apply', commands: [{ op: 'puppet', name: 'pp', pos: [1, 1.6, 0], width: .6 }], view: 'front' });
+        await A('boxView', { tool: 'apply', commands: [{ op: 'add', name: 'bx', type: 'box', size: [.3, .3, .3], pos: [-1, .15, 0], color: '#a8754a' }], view: 'iso' });
+        br.state = await ev(`AI3D.state().filter(o => /^(card1|pp|bx)$/.test(o.name)).map(o => o.name).join()`);
+      }
+      ok(br.connected && ['cardView', 'cardLook', 'puppetView', 'boxView'].every(k => br[k] && !br[k].error && !br[k].to && br[k].image > 1000), 'AI bridge: apply with a view / look with highlight (card, puppet, box) answer with a picture', br);
       // keyboard: the site's arrows must not leave the editor
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 }); await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
       await sleep(400);
@@ -201,18 +254,53 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
       logs.push('mark: context loss');   // WebGL context loss → notice → restore → renders again
       await ev(`(window.__a3lose = document.querySelector('#a3-c').getContext('webgl2').getExtension('WEBGL_lose_context'), __a3lose.loseContext(), 1)`); await sleep(500);
       const lostShown = await ev(`!document.querySelector('.a3-lost').hidden`);
-      await ev(`(__a3lose.restoreContext(), 1)`); await sleep(1200); await demo('fox'); await sleep(300); await drag(300);   // a rebuild after the restore too
+      await ev(`(__a3lose.restoreContext(), delete window.__a3lose, 1)`); await sleep(1200);   // the extension holds the context → canvas → the whole editor await demo('fox'); await sleep(300); await drag(300);   // a rebuild after the restore too
       await sleep(300);
       ok(lostShown && await ev(`document.querySelector('.a3-lost').hidden`) && (await ev(`D37AI3D.core.frames().length`)) > 0, 'context loss: notice, then restored and drawing');
-      // theme: light tokens follow the site theme
-      const bgD = await ev(`getComputedStyle(document.querySelector('.a3')).getPropertyValue('--bg').trim()`);
-      await ev(`(document.documentElement.setAttribute('data-theme','light'), 1)`);
-      const bgL = await ev(`getComputedStyle(document.querySelector('.a3')).getPropertyValue('--bg').trim()`);
-      await ev(`(document.documentElement.removeAttribute('data-theme'), 1)`);
-      ok(bgD !== bgL && bgL === '#e9edf0', 'dark and light themes', { bgD, bgL });
+      // theme: the tokens AND the 3D background follow a live switch of the site theme (settings.js sets data-theme + 'd37:theme'), idle editor
+      const clearOf = async () => {
+        const p = await send('Runtime.evaluate', { expression: 'THREE.WebGLRenderer.prototype', objectGroup: 'cc' });
+        try {
+          const q = await send('Runtime.queryObjects', { prototypeObjectId: p.result.objectId, objectGroup: 'cc' });
+          const n = await send('Runtime.callFunctionOn', { objectId: q.objects.objectId, returnByValue: true, functionDeclaration: 'function(){ const r = this.find(x => x.domElement && x.domElement.id === "a3-c"); return r ? "#" + r.getClearColor(new THREE.Color()).getHexString() : null; }' });
+          return n.result.value;
+        } finally { await send('Runtime.releaseObjectGroup', { objectGroup: 'cc' }); }
+      };
+      const tok = () => ev(`getComputedStyle(document.querySelector('.a3')).getPropertyValue('--bg').trim()`);
+      const theme = t => ev(`(${t === 'light' ? `document.documentElement.setAttribute('data-theme','light')` : `document.documentElement.removeAttribute('data-theme')`}, dispatchEvent(new CustomEvent('d37:theme', { detail: '${t}' })), 1)`);
+      await sleep(500);
+      const th = { dark: { tok: await tok(), clear: await clearOf() } };
+      await theme('light'); await sleep(500); th.light = { tok: await tok(), clear: await clearOf() };
+      await theme('dark'); await sleep(500); th.back = { tok: await tok(), clear: await clearOf() };
+      ok(th.light.tok === '#e9edf0' && th.dark.tok !== th.light.tok && th.dark.clear === th.dark.tok && th.light.clear === th.light.tok && th.back.clear === th.dark.tok,
+        'themes: tokens and the 3D background follow a live theme switch', th);
       logs.push('mark: close');   // close and reopen in the page
       await closeInPage(); out.reopenMs = await openInPage();
       ok(out.reopenMs > 0, 'in-page reopen', out.reopenMs);
+      if (wsb) { wsb.kill(); wsb = null; }
+      // create() fails part-way — no WebGL (renderer throws), before the render loop (ResizeObserver), after it started (the last call):
+      // the fallback shows, the global ColorManagement.legacyMode is back, no renderer / loop is left; «Повторить» opens the editor
+      logs.push('mark: create failure');
+      out.failPath = {};
+      for (const kind of ['webgl', 'observer', 'click']) {
+        await closeInPage(); await gc(); const l0 = logs.length;
+        await ev(`(() => { THREE.ColorManagement.legacyMode = false; window.__a3boom = '${kind}';
+          if (!window.__a3RO) { const RO = window.__a3RO = window.ResizeObserver; window.ResizeObserver = function(cb){ if (window.__a3boom === 'observer') { window.__a3boom = ''; throw new Error('test: ResizeObserver'); } return new RO(cb); }; }
+          if (!window.__a3click) { const c0 = window.__a3click = HTMLElement.prototype.click; HTMLElement.prototype.click = function(){ if (this.id === 'a3-run' && window.__a3boom === 'click') { window.__a3boom = ''; throw new Error('test: click'); } return c0.call(this); }; }
+          if (!window.__a3gc) { const g0 = window.__a3gc = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function(t, o){ return window.__a3boom === 'webgl' && /webgl/i.test(t) ? null : g0.call(this, t, o); }; }
+          D37Route.go('#/ai3d'); return 1; })()`);
+        let fb = false; for (let i = 0; i < 150 && !fb; i++) { await sleep(100); fb = await ev(`!!document.querySelector('#ai3dRoot .a3-fail')`); }
+        await ev(`(window.__a3boom = '', 1)`); await sleep(300); await gc();
+        if (kind === 'webgl') for (let i = logs.length - 1; i >= l0; i--) if (/Error creating WebGL context/.test(logs[i])) logs.splice(i, 1);   // three's own message, expected here
+        const r = { fallback: fb, legacyMode: await ev(`THREE.ColorManagement.legacyMode`), renderers: await countProto('THREE.WebGLRenderer.prototype'), gl2: await countProto('WebGL2RenderingContext.prototype') };
+        out.failPath[kind] = r;
+        ok(fb && r.legacyMode === false && r.renderers === 0, 'create() fails (' + kind + '): fallback, colour mode restored, no renderer or loop left', r);
+        if (fb) { await ev(`(document.querySelector('#ai3dRoot .a3-fail button').click(), 1)`); await ready(30000); }
+      }
+      await ev(`(window.ResizeObserver = window.__a3RO, HTMLElement.prototype.click = window.__a3click, HTMLCanvasElement.prototype.getContext = window.__a3gc, 1)`);
+      ok(await ev(`!!(D37AI3D.core && AI3D.state().length >= 0 && THREE.ColorManagement.legacyMode === true)`), '«Повторить» after a failed start opens the editor');
+      await closeInPage();
+      ok(await ev(`THREE.ColorManagement.legacyMode === false`), 'closing restores the colour mode the site had (false)');
       out.errors = realErrors(logs.filter(l => !l.startsWith('warning')));
       out.warnings = [...new Set(logs.filter(l => l.startsWith('warning')).map(l => l.slice(0, 160)))];
       ok(out.errors.length === 0, '0 console errors / exceptions', out.errors.slice(0, 8));
@@ -261,6 +349,8 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
       out.errors = realErrors(logs.filter(l => !l.startsWith('warning')));
       ok(out.errors.length === 0, '0 console errors', out.errors.slice(0, 6));
     } else if (MODE === 'perf') {
+      // shader program links (a relink every frame = a stall: checkShaderErrors waits for the link)
+      await send('Page.addScriptToEvaluateOnNewDocument', { source: `(function(){ window.__a3lp = 0; for (const C of [window.WebGL2RenderingContext, window.WebGLRenderingContext]) { if (!C) continue; const P = C.prototype, l = P.linkProgram; P.linkProgram = function(p){ window.__a3lp++; return l.call(this, p); }; } })()` });
       // cold open (first visit, three from the network), CPU ×RATE from the start
       await throttle(RATE);
       out.cold = await coldOpen();
@@ -279,6 +369,22 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
           fps: dt.length ? +(1000 / (dt.reduce((s, x) => s + x, 0) / dt.length)).toFixed(1) : 0, dtP95: +pct(dt, .95).toFixed(1), long50: f.dt.filter(x => x > 50).length,
           tris: f.st.tris_full, trisNow: f.st.tris_now, drawn: f.st.drawn, pixelRatio: f.st.pixelRatio, canvas: f.info, heapMB: await heap() };
         console.log(d, 'build', r.ms, 'ms', JSON.stringify(out.orbit[d]));
+      }
+      // «Играть» (animation playback): every frame used to rebuild every mesh and material and relink the shaders (dog ~10 fps)
+      out.play = {};
+      for (const d of ['dog', 'human', 'fox']) {
+        await demo(d); await sleep(1200);
+        await click('play'); await sleep(800);   // the first frames of the playing scene
+        const lp0 = await ev(`window.__a3lp`), h0 = await heap();
+        await ev(`(D37AI3D.core.frames(), window.__a3dt = [], window.__a3on = true, (function f(t){ if (!window.__a3on) return; __a3dt.push(t); requestAnimationFrame(f); })(performance.now()), 1)`);
+        await sleep(4000);
+        const f = await ev(`(() => { window.__a3on = false; const d = []; for (let i = 1; i < __a3dt.length; i++) d.push(__a3dt[i] - __a3dt[i - 1]); return { dt: d, cpu: Array.from(D37AI3D.core.frames()), lp: window.__a3lp, playing: document.querySelector('#a3-play').textContent }; })()`);
+        const h1 = await heap(); await click('play'); await sleep(300);
+        const cpu = f.cpu.slice().sort((a, b) => a - b), dt = f.dt.slice().sort((a, b) => a - b);
+        out.play[d] = { playing: f.playing, frames: dt.length, fps: dt.length ? +(1000 / (f.dt.reduce((s, x) => s + x, 0) / dt.length)).toFixed(1) : 0, dtP50: +pct(dt, .5).toFixed(1), dtP95: +pct(dt, .95).toFixed(1),
+          long50: f.dt.filter(x => x > 50).length, renderCpuP50: +pct(cpu, .5).toFixed(2), renderCpuP95: +pct(cpu, .95).toFixed(2), links: f.lp - lp0, heapStart: h0, heapEnd: h1 };
+        console.log('play', d, JSON.stringify(out.play[d]));
+        ok(f.playing === 'Стоп' && out.play[d].links === 0 && out.play[d].dtP95 < 50, 'play ' + d + ': no shader relinks while playing, frame interval p95 < 50 ms', out.play[d]);
       }
       await gc(); out.heapAfterGC = await heap();
       out.idle = await ev(`new Promise(res => { D37AI3D.core.frames(); setTimeout(() => res(D37AI3D.core.frames().length), 3000); })`);
@@ -352,6 +458,7 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
       ok(h.length < 2 || Math.max(...h) < 400, 'heap stays bounded', h);
     }
   } catch (e) { failed = true; console.log('ERROR', e.stack || e.message); out.error = e.message; }
+  if (wsb) wsb.kill();
   out.logs = logs.slice(0, 60);
   out.pass = pass; out.fail = fail;
   const file = path.join(OUT, `ai3d-${MODE}-${PC ? 'pc' : 'phone'}.json`);
