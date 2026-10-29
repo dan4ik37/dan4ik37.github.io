@@ -308,11 +308,27 @@ The owner's own 3D editor AI3D (from his package ai3d-mcp: ai3d.html, author —
   restore drops the old three objects and rebuilds (no stale "delete: object does not belong to this context" on close); clear colour set only when the theme changes; undo snapshots capped at ~12M chars (≤ 24 MB) (island JSON is 4 MB; 30 copies = phone crash); no
   `morphTargets` material parameter; ids scoped (`a3-`); bridge images only `data:image/…`; MCP bridge (server.mjs, ws://localhost:3737 or
   `/tools/3d?ws=ws://localhost:PORT`) only on demand and only to this computer; full cleanup on close.
-- **Tests.** `node scripts/ai3d-test.cjs <three r149>` (CI, 114 checks): the owner's test.mjs (332) and test-run.mjs (58 rows ok, 15 skipped on
+- **Fixed after the review (29.10).** «Играть»: build() made a new mesh + material per object every frame and disposed the old materials
+  before the next render, so three destroyed and relinked the shader programs each frame (phone dog 10.9 fps, render CPU 87 ms, 90 links in
+  4 s; also every run/undo/redo and AI 'sheet' frame; inherited from ai3d.html) → build() reuses a mesh when its cached geometry and material
+  inputs are unchanged (only pos/rot/scale/shape weights/shadow flags are written), replaced materials are disposed after the next main
+  render (`__oldM`). Equal materials written once in the GLB (see Export). Phone: the command box was squeezed to 53–62 px by the flex panel
+  → panel children `flex:none`, the panel scrolls. AI bridge: apply with a view / look with highlight threw on unlit cards and puppet faces
+  (no emissive) after the commands were applied → only materials with emissive are tinted, the old value restored. Live theme switch: the
+  3D background stayed dark (bg() cached, idle editor draws nothing) → `'d37:theme'` → `core.theme()`. create() failing part-way left
+  ColorManagement.legacyMode = true (set before the renderer, which throws without WebGL) and, after the loop started, a running loop → set
+  after the renderer; `create()` wraps `body()`, the body registers `__box.abort`. Memory: «Скачать GLB» kept the closed editor alive for
+  60 s (its URL-revoke arrow shared the editor scope) → `setTimeout(URL.revokeObjectURL, 60000, u)`; the fallback's «Повторить» kept the
+  failed markup + renderer alive (closure made inside start()) → made at mount scope. Island demo renamed to its real count («10 сосен»:
+  a pine is ~6000 triangles, 120 would be ~720k — over the phone budget and Studio 3D's 100k limit).
+- **Tests.** `node scripts/ai3d-test.cjs <three r149>` (CI, 129 checks): the owner's test.mjs (332) and test-run.mjs (58 rows ok, 15 skipped on
   stubs) from scripts/ai3d/, the body in strict mode on real three r149 (36/36 self-test command rows, selftest() 50/50), the six demos →
   GLB (magic, no extras, colours, COLOR_0, full detail, animations) → r149 GLTFLoader → D37E.models.compile; all 63 ops run (self-test rows
-  + demos + scripts/ai3d/ops-extra.json); cache, texture and undo limits. `node scripts/ai3d-e2e.cjs
-  smoke|shots|perf|leak [20]|soak [10]|look|retain` (Chrome; smoke is the CI e2e entry). Blender 5.2 headless (E:\claude-tmp\t112\blender\check.py):
+  + demos + scripts/ai3d/ops-extra.json); cache, texture and undo limits; materials written once and Studio part counts; island title =
+  pines placed; 30 play frames keep the same meshes and materials; create() failing part-way (no ResizeObserver) restores the colour mode. `node scripts/ai3d-e2e.cjs
+  smoke|shots|perf|leak [20]|soak [10]|look|retain` (Chrome; smoke is the CI e2e entry; smoke 30 checks incl. the command box height, the AI
+  bridge over a real WebSocket, the 3D background after a live theme switch, create() failing three ways; perf incl. «Играть» with shader link
+  counts; leak clicks «Скачать GLB»). Blender 5.2 headless (E:\claude-tmp\t112\blender\check.py):
   all six GLBs import with the same object/mesh/triangle counts, table top Base Color 0.3916 (linear), fur colour attributes, 1 action per
   animated scene; the browser-exported textured GLB: 15 images in sRGB, 30 shape keys.
 - **Numbers (phone 412×915×2, CPU ×4, headless Chrome on a loaded PC; GPU not throttled).** Open: cold 5.5 s (whole site + three from
@@ -321,6 +337,10 @@ The owner's own 3D editor AI3D (from his package ai3d-mcp: ai3d.html, author —
   9–20 MB. 20 open/close: 0 renderers, 0 WebGL contexts, canvases and window/document listeners as before, heap 7.2 → 9.0 MB (flat from
   cycle 10). Soak 10 min of random ops (920: self-test rows, demos, undo/redo, 66 broken batches, 65 exports, 6 «В Студию 3D», 11 selftests,
   views, play, orbit): 0 errors, every rollback kept the scene, heap 16–58 MB per minute, 17 MB after an empty scene + GC (was 71–112 MB).
+  After the review: «Играть» (4 s, after warm-up) dog 129–130 fps, render CPU p50/p95 2.2/4.1 ms, 0 shader links, 0 frames > 50 ms (was
+  10.9 fps, 87/99 ms, 90 links, 42 of 43 frames > 50 ms); human 132 fps 1.5/2.6 ms; fox 120–132 fps 2.9/5.8 ms; PC dog 131 fps (was ~12).
+  (Headless rAF is not capped at 60, so these are not real phone FPS.) Leak 20 with «Скачать GLB»: 0 renderers, heap 7.2 → 9.1 MB. Soak 10 min:
+  724 ops, 0 errors, 69 rollbacks, 45 exports, 15 selftests, 24 plays; heap 13–55 MB per minute, 20 MB after an empty scene + GC.
 - **Next (A2–A5 need).** A2: shared skeleton (spec/BODY.md) — AI3D parts are rigid (no skin). What the GLB has today: every part is a
   flat child of one root node «AI3D» (state.parent links are not written), no armature or skin, clips as per-part TRS tracks (Blender: one
   action per clip, correct ranges, shape-key animation too — but moving the pelvis does not move the legs). A2: export the part hierarchy
