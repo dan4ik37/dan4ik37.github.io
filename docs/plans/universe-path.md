@@ -27,7 +27,8 @@ Sizes as in planet.md: **S** < 1 agent run, **M** ≈ 1, **L** ≈ 2–3, **XL**
 14. Нужны 5 твоих решений (раздел 8): сколько длится обязательный путь новичка, «Первопоселенцы», день «Начала времён», что остаётся вне эпох, телефон до «нашего времени».
 
 ---
-
+
+
 
 ## Owner decisions (22.10.2026) — they override the recommendations of §8
 
@@ -583,7 +584,8 @@ Items 1–4 are owner decisions 4–5 in §8.
 
 ## 8. Owner decisions (5)
 1. **Mandatory path for newcomers:** short (≈ 3–4 h to awakening: cell ≈ 1 h + the first creature arc ≈ 2–3 h; the full creature and tribe stages
-   optional) or long (≈ 15–20 h)? Recommendation: short.
+   optional) or long (≈ 15–20 h)? Recommendation: short. **DECIDED by the owner 29.10: LONG — «чем дольше, тем лучше»** (the full
+   creature and tribe stages are part of the path; keep every hour varied — no grind walls; magic branches from the cell stage on).
 2. **Existing players are «Первопоселенцы»:** they keep everything and live in settlements at once; their own lineage from the microbe is optional,
    with a reward. Recommendation: yes.
 3. **«Начало времён»:** the day the three cities go back to the campfire (after T-058, T-060a and T-061; ideally on stream), and the pace: stone age →
