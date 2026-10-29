@@ -396,7 +396,12 @@
         // новое в «Микромире»
         const fresh = d.seen & ~known;
         if (fresh) { known |= fresh; for (let i = 0; i < E.MICRO_IDS.length; i++) if ((fresh >> i) & 1) { const M = E.MICRO[E.MICRO_IDS[i]]; toast(`📖 Микромир: ${M.e} ${M.n}!`); break; } }
-        if (!hl) { const tl = H.ui?.hud.querySelector('.io-tl'); if (!tl) return; hl = document.createElement('div'); hl.className = 'kp-hl'; tl.appendChild(hl); }
+        // 2.0 (T-123, ui.v2): строка пути — в строке счёта (не отдельной строкой); одиночная игра — в таблице только ты
+        if (!hl) {
+          const v2 = !!H.ui?.v2, tl = H.ui?.hud.querySelector(v2 ? '.io-score' : '.io-tl'); if (!tl) return;
+          hl = document.createElement(v2 ? 'span' : 'div'); hl.className = 'kp-hl'; tl.appendChild(hl);
+          if (v2) H.ui.lb.classList.toggle('solo', !H.S || H.S.role === 'off');
+        }
         const sec = life ? (performance.now() - life.t0) / 1000 : 0, g = life?.goal;
         const gv = !g ? '' : g.k === 'pel' ? d.pel : g.k === 'life' ? Math.floor(sec) : g.k === 'mass' ? Math.round(life.best) : g.k === 'kills' ? d.kills : g.k === 'col' ? d.col : d.m;
         const gd = g && life && goalDone(g, d, sec, life.best);
@@ -742,6 +747,7 @@
 .kp-gain{font-size:.82rem;text-align:center;line-height:1.45}
 .kp-gain b{color:#86efac;font-size:1rem}
 .kp-hl{font-size:.72rem;font-weight:800;text-shadow:0 1px 4px rgba(0,0,0,.8);background:rgba(8,10,20,.45);border-radius:8px;padding:2px 7px;white-space:nowrap;pointer-events:none}
+.io-score .kp-hl{margin-left:4px;font-size:.66rem;background:none;padding:0}
 .io-ov.kp-trans{background:linear-gradient(180deg,#020617 0%,#0c4a6e 55%,#a16207 100%);align-items:center}
 .kp-tr{display:flex;flex-direction:column;align-items:center;gap:1rem;width:min(460px,100%);margin:auto}
 .kp-tr-t{font-family:var(--font-display,inherit);font-size:1.6rem;font-weight:900;color:#e0f2fe;text-align:center;text-shadow:0 2px 12px rgba(0,0,0,.6)}

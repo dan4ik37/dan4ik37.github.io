@@ -1085,7 +1085,7 @@
     const d0 = PERF ? performance.now() : 0;
     draw(t, V, guest, dtf);
     if (PERF && PERF.n < 4000) PERF.dr[PERF.n] = performance.now() - d0;
-    if (t - hudAt > 250) { hudAt = t; hud(V, guest); }
+    if (t - hudAt > (ui.v2 ? 500 : 250)) { hudAt = t; hud(V, guest); }
     if (api?.sfx && me.L > soundL + 6 && t - soundAt > 200 && soundL > 0) { api.sfx('tick'); soundAt = t; }
     soundL = me.L;
   }
@@ -1294,7 +1294,8 @@
       if (e) { const fs = Math.min(96, Math.max(20 * dpr, sr * 2.4)) | 0; c.font = EFONTS[fs]; c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillText(K.EMOTES[e - 1], ox + hx * z, oy + hy * z - sr * 1.6 - (nm ? 14 * dpr : 0)); }
     }
     // мини-карта
-    const ms = Math.min(96, cssW * .2) * dpr, mx = 10 * dpr + ms / 2, my = H2 - ms / 2 - 10 * dpr;
+    // 2.0 (T-123, ui.v2): ≤ 72 px справа вверху под таблицей лидеров — не под пальцем, что рулит; иначе — слева внизу, до 96 px
+    const v2 = ui.v2, ms = (v2 ? Math.min(72, cssW * .16) : Math.min(96, cssW * .2)) * dpr, mx = v2 ? W2 - ms / 2 - 10 * dpr : 10 * dpr + ms / 2, my = v2 ? Math.min(H2 - ms / 2 - 10 * dpr, 100 * dpr + ms / 2) : H2 - ms / 2 - 10 * dpr;
     c.fillStyle = 'rgba(8,10,20,.55)'; c.beginPath(); c.arc(mx, my, ms / 2, 0, TAU); c.fill();
     c.strokeStyle = 'rgba(255,255,255,.25)'; c.lineWidth = 1; c.stroke();
     if (me.alive) { c.fillStyle = '#fde68a'; c.beginPath(); c.arc(mx + me.x / R * ms / 2, my + me.y / R * ms / 2, 3 * dpr, 0, TAU); c.fill(); }
@@ -1312,7 +1313,7 @@
     if (spr) for (let i = 0; i < 50; i++) { const s = 14 * dpr; ctx.drawImage(spr[i & 15], ((i * 977) % 1000) / 1000 * cv.width - s / 2, ((i * 571) % 1000) / 1000 * cv.height - s / 2, s, s); }
   }
   const fmtT = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-  let lbStr = '';
+  let lbStr = '', lbAt = 0;
   function hud(V, guest){
     if (!V || !ui) return;
     if ((V.ver | 0) !== namesVer) { namesVer = V.ver | 0; syncNames(); }
@@ -1322,13 +1323,14 @@
     if (L > 0) { if (!lifeBest) lifeAt = performance.now(); if (L > lifeBest) lifeBest = L; } else if (koAt) lifeBest = 0;
     const left = Math.max(0, Math.ceil(V.left / SPS)), tt = V.phase ? `🏁 ${left}` : `⏱ ${fmtT(left)}`;
     if (ui.time.textContent !== tt) ui.time.textContent = tt;
-    const lt = ui.ov.querySelector('.io-left'); if (lt) lt.textContent = String(left);
+    if (!ui.ov.hidden) { const lt = ui.ov.querySelector('.io-left'), ls = String(left); if (lt && lt.textContent !== ls) lt.textContent = ls; }   // отсчёт нового раунда — только когда окно видно и число другое
     const net = K.netLabel(S);
     if (ui.net.textContent !== net) ui.net.textContent = net;
     let key = String(S.me);
     for (let k = 0; k < V.lbN; k++) key += ',' + V.lbO[k] + ':' + Math.round(V.lbS[k]);
-    if (key !== lbStr) {
-      lbStr = key;
+    // 2.0 (T-123): таблица перерисовывается не чаще раза в секунду (видно 3 строки — хватает; меньше раскладок в покое)
+    if (key !== lbStr && (!ui.v2 || performance.now() - lbAt > 1000)) {
+      lbStr = key; lbAt = performance.now();
       const list = [];
       for (let k = 0; k < V.lbN; k++) list.push({ i: V.lbO[k], name: names[V.lbO[k]] || '…', score: V.lbS[k], bot: bots[V.lbO[k]], me: V.lbO[k] === S.me });
       ui.lb.innerHTML = K.lbHtml(list);
