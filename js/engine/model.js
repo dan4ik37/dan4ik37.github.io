@@ -746,7 +746,7 @@
       if (R.r.shadowMap.enabled) { mesh.castShadow = !(model.mats[p.m].blend); mesh.receiveShadow = true; }
       g.add(mesh);
     });
-    const h = { g, T, model, mixer: new T.AnimationMixer(g), skeleton, acts: [], acc: 0, i: live.length, orphan: 0, r: Math.hypot(...model.size) / 2, name: null };
+    const h = { g, T, model, mixer: new T.AnimationMixer(g), skeleton, acts: [], acc: 0, tail: 0, i: live.length, orphan: 0, r: Math.hypot(...model.size) / 2, name: null };
     g.userData.anim = h;
     live.push(h);
     M.play(h, o.act || '');
@@ -852,23 +852,34 @@
     const own = (model.anims || []).map(a => a.name), hum = model.skin && E.skel ? !!humanoidMap(model.skin) : false;
     return { own, lib: hum ? E.skel.LIST.slice() : [], humanoid: hum, bones: model.skin ? model.skin.n : 0 };
   };
-  // сменить действие: '' — само (стоит: idle), 'none' — поза покоя; добавочные (присадки) — поверх стойки
+  // сменить действие: '' — само (стоит: idle), 'none' — поза покоя; добавочные (присадки) — поверх стойки.
+  // Разовые (meta.loop === false: повороты, старт/стоп, вздрогнуть, присадки-жесты) — один раз и замереть в последнем кадре.
+  // Нет такого клипа (сменили модель, чужое имя) — играет «само» и вернёт false (раньше: старое гасло, модель замирала на полпути).
   M.play = (h, name, fade = .25) => {
     if (!h || h.dead) return false;
-    const list = M.actions(h.model);
-    let nm = name || '';
-    if (!nm) nm = list.own.find(x => /idle|stand|стоит/i.test(x)) || (list.humanoid ? 'loco.idle' : list.own[0] || 'none');
+    const list = M.actions(h.model), def = list.own.find(x => /idle|stand|стоит/i.test(x)) || (list.humanoid ? 'loco.idle' : list.own[0] || 'none');
+    let nm = name || def, found = true;
     if (nm === h.name) return true;
+    let c = nm === 'none' ? null : clipFor(h, nm);
+    if (nm !== 'none' && !c) {
+      found = false; nm = def;
+      if (nm === h.name) return false;
+      c = nm === 'none' ? null : clipFor(h, nm);
+      if (!c) nm = 'none';
+    }
     const old = h.acts; h.acts = []; h.name = nm;
     for (const a of old) a.fadeOut(fade);
     if (!old.length) fade = 0;   // первое действие — сразу, без проявления из позы покоя
-    if (nm === 'none') { if (!old.length) h.mixer.stopAllAction(); return true; }
-    const c = clipFor(h, nm); if (!c) { h.name = null; return false; }
-    const play = (clip, add) => { const a = h.mixer.clipAction(clip, h.g, add ? h.T.AdditiveAnimationBlendMode : h.T.NormalAnimationBlendMode); a.reset(); a.setLoop(h.T.LoopRepeat, Infinity); a.clampWhenFinished = false; a.fadeIn(fade).play(); h.acts.push(a); };
+    h.tail = old.length ? fade + .05 : 0;   // гаснущие ещё обновлять (M.animate), потом — поза покоя
+    if (nm === 'none') { if (!old.length) h.mixer.stopAllAction(); return found; }
+    const T = h.T, play = (clip, add) => {
+      const a = h.mixer.clipAction(clip, h.g, add ? T.AdditiveAnimationBlendMode : T.NormalAnimationBlendMode), once = !!(clip.userData && clip.userData.d37 && clip.userData.d37.loop === false);
+      a.reset(); a.setLoop(once ? T.LoopOnce : T.LoopRepeat, Infinity); a.clampWhenFinished = once; a.fadeIn(fade).play(); h.acts.push(a);
+    };
     if (c.userData?.d37?.additive) { const base = clipFor(h, list.own.find(x => /idle/i.test(x)) || 'loco.idle'); if (base) play(base, false); play(c, true); }
     else play(c, false);
     if (!fade) h.mixer.update(0);   // поза сразу (дальние обновляются редко)
-    return true;
+    return found;
   };
   M.release = h => {
     if (!h || h.dead) return;
@@ -892,7 +903,13 @@
       const h = live[i];
       if (!h.g.parent) { if (++h.orphan > 120) M.release(h); continue; }   // убрали из сцены и не отдали — через ~2 с отпускаем сами
       h.orphan = 0; h.acc += dt;
-      if (!h.g.visible || !h.acts.length) continue;
+      if (!h.g.visible) continue;
+      if (!h.acts.length) {   // всё погашено ('none'): догасить и встать в позу покоя
+        if (!(h.tail > 0)) continue;
+        h.mixer.update(h.acc); h.tail -= h.acc; h.acc = 0;
+        if (h.tail <= 0) h.mixer.stopAllAction();
+        continue;
+      }
       const e = h.g.matrixWorld.elements, dx = e[12] - cx, dy = e[13] - cy, dz = e[14] - cz, d2 = dx * dx + dy * dy + dz * dz;
       let step = 8;
       for (let k = 0; k < L.length; k++) if (d2 < L[k][0] * L[k][0]) { step = L[k][1]; break; }

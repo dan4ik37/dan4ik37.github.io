@@ -283,6 +283,26 @@ const threeDir = () => { for (const p of [process.argv[2], process.env.THREE_PAT
     ok(Object.values(res).every(([mm, deg]) => mm <= 1 && deg <= .5), 'Biped / Rocketbox hierarchy: joints and limb directions = canonical (≤ 1 mm, ≤ 0.5°) [mm, deg]', res);
     console.log('Biped / Rocketbox retarget [joint mm, limb deg]:', JSON.stringify(res));
   }
+  // M.play (review 29.10): one-shots play once and hold the end (a turn looped: 90° and back every 0.9 s); an unknown name falls back
+  // to the idle (it faded the old actions out and froze mid-pose); 'none' really reaches the rest pose (it froze too)
+  {
+    const g = M.instance(R, mH, { act: 'loco.walk.fwd' }), h = g.userData.anim; scene.add(g);
+    const step = s => { for (let i = 0; i < Math.round(s * 60); i++) M.animate(1 / 60, cam); scene.updateMatrixWorld(true); };
+    const arm = L('LeftUpperArm'), hipsN = g.getObjectByName(T.PropertyBinding.sanitizeNodeName(names.Hips)), armOf = () => g.getObjectByName(T.PropertyBinding.sanitizeNodeName(names.LeftUpperArm));
+    const yaw = () => { const f = new T.Vector3(0, 0, 1).applyQuaternion(hipsN.getWorldQuaternion(new T.Quaternion())); return Math.atan2(f.x, f.z) * 180 / Math.PI; };
+    step(.5);
+    const r = M.play(h, 'idle'); step(.3); const qa = armOf().quaternion.clone(); step(.7);
+    const a0 = h.acts[0], moved = qa.angleTo(armOf().quaternion);
+    ok(r === false && h.name === 'loco.idle' && a0 && a0.getClip().name === 'loco.idle' && a0.getEffectiveWeight() === 1 && moved > .004, 'unknown action name → false, the idle plays (no freeze)', { r, name: h.name, moved });
+    M.play(h, 'loco.turn.l90'); step(2); const y2 = yaw(); step(1); const y3 = yaw();
+    ok(Math.abs(y2 - 90) < 3 && Math.abs(y3 - 90) < 3, 'one-shot turn: plays once and holds the end (no snap back)', [+y2.toFixed(1), +y3.toFixed(1)]);
+    M.play(h, 'hit.flinch.front'); step(1.5);
+    ok(h.acts.length === 2 && h.acts[1].loop === T.LoopOnce && h.acts[1].paused && h.acts[0].loop === T.LoopRepeat, 'additive one-shot (flinch) plays once over the looping idle');
+    M.play(h, 'none'); step(1);
+    let rest = 0; g.traverse(o => { if (o.isBone) { const i = mH.skin.names.findIndex(nm => T.PropertyBinding.sanitizeNodeName(nm) === o.name); if (i >= 0) rest = Math.max(rest, o.quaternion.angleTo(new T.Quaternion().fromArray(mH.skin.q, i * 4))); } });
+    ok(rest < 1e-3, "'none' fades to the rest pose (every bone)", rest);
+    scene.remove(g); M.release(h);
+  }
   // 20 instances: LOD steps (near every frame, far rarely), heap stays flat, release all → 0
   const many = [];
   for (let i = 0; i < 20; i++) { const g = M.instance(R, mH, { act: 'loco.jog.fwd' }); g.position.set((i % 5) * 2, 0, -Math.floor(i / 5) * 40); scene.add(g); many.push(g); }
