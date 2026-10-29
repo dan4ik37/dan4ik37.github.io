@@ -29,7 +29,11 @@ module.exports = {
   },
   thrash: ['third'],
   scenes: {
-    async idle(T){ await T.sleep(9000); },   // подсказка (6 с) ушла, кнопки побледнели (4 с) — покой
+    async idle(T){
+      // ПК: в headless мышь не захватить — «🖱 Нажми на мир» висела бы посередине всех сцен (в игре её убирает щелчок) — прячем (T-123 fix 10)
+      if (!T.P.mobile) await T.ev(`(() => { const S = ${T0}.state(); if (S.lockEl) S.lockEl.style.display = 'none'; return 1; })()`);
+      await T.sleep(9000);
+    },   // подсказка (6 с) ушла, кнопки побледнели (4 с) — покой
     // KB_PERF=1: кадр в покое (телефон — ЦП ×4): медиана и 95 % промежутка кадров, скрипт / стили / раскладка на кадр
     async perf(T){
       if (!process.env.KB_PERF) return;
@@ -73,13 +77,18 @@ module.exports = {
       console.log('  лечь →', r);
     },
     async inv(T){
-      await T.ev(`(() => { const t = ${T0}; t.pose?.('lie'); t.cam(0); t.state().ui.open('inv'); return 1; })()`);
+      // сначала поза и вид, тост «Вид от 1-го лица» (≤ 2,2 с) ушёл — потом окно вещей: меряем окно, а не тост
+      await T.ev(`(async () => { const t = ${T0}; t.pose?.('lie'); t.cam(0); for (let i = 0; i < 40 && document.querySelector('.kb-wrap .e-toast.on'); i++) await new Promise(r => setTimeout(r, 100)); await new Promise(r => setTimeout(r, 300)); t.state().ui.open('inv'); return 1; })()`, 10000);
       await T.sleep(700);
       console.log('  окно вещей:', await T.ev(`(() => { const w = document.querySelector('.kb-wrap').getBoundingClientRect(), p = document.querySelector('.kb-inv .kb-panel')?.getBoundingClientRect(); if (!p) return 'нет'; const a = Math.max(0, Math.min(p.right, w.right) - Math.max(p.left, w.left)) * Math.max(0, Math.min(p.bottom, w.bottom) - Math.max(p.top, w.top)); const sc = document.querySelector('.kb-inv .kb-panel'); return 'лист ' + (100 * a / (w.width * w.height)).toFixed(1) + '% окна · ' + Math.round(p.width) + '×' + Math.round(p.height) + ' · прокрутка ' + (sc.scrollHeight > sc.clientHeight + 2 ? 'есть' : 'нет') + ' · вкладки: ' + [...document.querySelectorAll('.kb-stabs button')].map(b => b.textContent).join(' / '); })()`));
     },
     // KB_LEAK=1: 20 кругов интерфейса 2.0 (лоток, круг, лист с вкладками, сесть / встать) и 20 раз мир закрыть / открыть — узлы,
     // слушатели, память (ЦП без замедления)
     async leak(T){
+      // окно вещей и поза «лёжа» из сцены inv — закрыть, встать (без KB_LEAK сцена мерила открытое окно: 8,5 % > 8 — T-123 fix 10)
+      await T.ev(`(async () => { const t = ${T0}, S = t.state(); S.ui.close(); const c = t.poseCur?.(); if (c) t.pose(c);
+        for (let i = 0; i < 40 && document.querySelector('.kb-wrap .e-toast.on, .kb-wrap .kb-toast:not([hidden])'); i++) await new Promise(r => setTimeout(r, 100)); return 1; })()`, 10000);   // и тост «Вид от 1-го лица» ушёл
+      await T.sleep(300);
       if (!process.env.KB_LEAK) return;
       await T.send('Emulation.setCPUThrottlingRate', { rate: 1 });
       const heap = () => T.ev(`(async () => { for (let i = 0; i < 3; i++) { window.gc?.(); await new Promise(r => setTimeout(r, 250)); } return performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null; })()`, 30000);
@@ -94,7 +103,7 @@ module.exports = {
     },
     // ПК: в игре (мышь захвачена — «🖱 Нажми на мир» нет; в headless захвата нет — прячем её) и без всплывашек
     async steady(T){
-      if (T.P.mobile) return;
+      if (T.P.mobile) { await T.ev(`(() => { ${T0}.state().ui.close(); return 1; })()`); await T.sleep(300); return; }
       await T.ev(`(async () => { const S = ${T0}.state(); S.ui.close(); await new Promise(r => setTimeout(r, 3000)); if (S.lockEl) S.lockEl.style.display = 'none'; return 1; })()`, 10000);
     },
     async cross(T){
