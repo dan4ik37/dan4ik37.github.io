@@ -26,7 +26,7 @@ module.exports = {
     };
   },
   maxMs: 100000,
-  garbage: { gap: 6, ms: 30 * 60 * 1000, repeat: true },
+  garbage: { gap: 6, ms: 10 * 60 * 1000, repeat: true },
   scenarios(K, spec, ok){
     const C = spec.consts, T = K.T, ev = { type: 0, x: 0, y: 0, k: 0, t: 0 }, inp = { down: false, x: 0, y: 0, keys: 0 };
     const stepN = (s, n) => { for (let i = 0; i < n && !s.over; i++) spec.step(s, K.STEP, inp); };

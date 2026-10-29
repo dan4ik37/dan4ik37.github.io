@@ -122,53 +122,74 @@
     s.snd = s.over ? 'win' : s.snd;
   }
 
-  // ── рисование ──
-  function obj(ctx, s, i, x, y, now){
-    const t = s.ot[i], r = TR[t];
-    if (t === 0) { ctx.fillStyle = C.dust; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); return; }
-    if (t === 1) {
-      ctx.fillStyle = C.ast; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
-      ctx.fillStyle = C.astD; ctx.fillRect(x - 3, y - 2, 3, 3); ctx.fillRect(x + 2, y + 2, 2, 2); return;
+  // ── рисование: предметы одного вида — одним путём (мало вызовов canvas: телефону легче) ──
+  // G.ix / G.iy / G.ir — положения и радиусы этого кадра (массивы на G, создаются один раз)
+  function body(ctx, G, t, col){
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      if (G.ir[i] <= 0 || G.it[i] !== t || (col >= 0 && G.ic[i] !== col)) continue;
+      ctx.moveTo(G.ix[i] + G.ir[i], G.iy[i]); ctx.arc(G.ix[i], G.iy[i], G.ir[i], 0, 6.2832);
     }
-    if (t === 2) {
-      ctx.fillStyle = C.panel; ctx.fillRect(x - r, y - 3, r * .7, 6); ctx.fillRect(x + r * .3, y - 3, r * .7, 6);
-      ctx.fillStyle = C.sat; ctx.fillRect(x - 4, y - 5, 8, 10); return;
-    }
-    if (t === 3) {
-      const vx = s.vx[i], vy = s.vy[i], l = Math.sqrt(vx * vx + vy * vy) || 1;
-      ctx.strokeStyle = C.tail; ctx.lineWidth = 7; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - vx / l * 36, y - vy / l * 36); ctx.stroke();
-      ctx.fillStyle = C.comet; ctx.beginPath(); ctx.arc(x, y, 7, 0, 6.2832); ctx.fill(); return;
-    }
-    if (t === 4) {
-      ctx.fillStyle = C.moon; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
-      ctx.fillStyle = C.moonD; ctx.beginPath(); ctx.arc(x - 5, y - 4, 4, 0, 6.2832); ctx.moveTo(x + 9, y + 5); ctx.arc(x + 6, y + 5, 3, 0, 6.2832); ctx.fill(); return;
-    }
-    if (t === 7) {
-      ctx.fillStyle = C.sunR; ctx.beginPath(); ctx.arc(x, y, r + 6 + 2 * Math.sin(now / 300), 0, 6.2832); ctx.fill();
-      ctx.fillStyle = C.sun; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); return;
-    }
-    ctx.fillStyle = PLANET[s.col[i]]; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = C.astD; ctx.globalAlpha = .25; ctx.fillRect(x - r * .9, y - 3, r * 1.8, 6); ctx.globalAlpha = 1;
-    if (t === 6) { ctx.strokeStyle = C.ring; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x, y, r + 12, 6, -.35, 0, 6.2832); ctx.stroke(); }
+    ctx.fill();
   }
 
   function draw(G, s, a){
-    const ctx = G.ctx, k = s.over ? 1 : a;
+    const ctx = G.ctx, k = s.over ? 1 : a, now = G.now;
+    if (!G.ix) { G.ix = new Float32Array(N); G.iy = new Float32Array(N); G.ir = new Float32Array(N); G.it = new Uint8Array(N); G.ic = new Uint8Array(N); }
     ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = C.star;
-    for (let i = 0; i < 120; i += 2) ctx.fillRect(STARS[i] * W, STARS[i + 1] * H, 1.5, 1.5);
+    for (let i = 0; i < 48; i += 2) ctx.fillRect(STARS[i] * W, STARS[i + 1] * H, 1.5, 1.5);
+    // новые предметы «вырастают» за FADE шагов
     for (let i = 0; i < N; i++) {
-      if (s.wait[i]) continue;
-      const f = s.fade[i];
-      if (f) ctx.globalAlpha = 1 - f / FADE;
-      const x = s.px[i] + (s.ox[i] - s.px[i]) * k, y = s.py[i] + (s.oy[i] - s.py[i]) * k;
-      obj(ctx, s, i, x, y, G.now);
-      if (TR[s.ot[i]] < s.r * .85 && !f) { ctx.strokeStyle = C.edible; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, TR[s.ot[i]] + 3, 0, 6.2832); ctx.stroke(); }
-      ctx.globalAlpha = 1;
+      G.ix[i] = s.px[i] + (s.ox[i] - s.px[i]) * k; G.iy[i] = s.py[i] + (s.oy[i] - s.py[i]) * k;
+      G.ir[i] = s.wait[i] ? 0 : TR[s.ot[i]] * (1 - s.fade[i] / FADE);
+      G.it[i] = s.ot[i]; G.ic[i] = s.col[i];
     }
+    // что можно проглотить — светлый круг (один путь)
+    ctx.strokeStyle = C.edible; ctx.lineWidth = 1; ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      if (G.ir[i] <= 0 || s.fade[i] || TR[s.ot[i]] >= s.r * .85) continue;
+      ctx.moveTo(G.ix[i] + G.ir[i] + 3, G.iy[i]); ctx.arc(G.ix[i], G.iy[i], G.ir[i] + 3, 0, 6.2832);
+    }
+    ctx.stroke();
+    // хвосты комет и сияние звёзд
+    ctx.strokeStyle = C.tail; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      if (G.ir[i] <= 0 || G.it[i] !== 3) continue;
+      const vx = s.vx[i], vy = s.vy[i], l = Math.sqrt(vx * vx + vy * vy) + 1e-9;
+      ctx.moveTo(G.ix[i], G.iy[i]); ctx.lineTo(G.ix[i] - vx / l * 36, G.iy[i] - vy / l * 36);
+    }
+    ctx.stroke();
+    ctx.fillStyle = C.sunR; ctx.beginPath();
+    const glow = 6 + 2 * Math.sin(now / 300);
+    for (let i = 0; i < N; i++) {
+      if (G.ir[i] <= 0 || G.it[i] !== 7) continue;
+      ctx.moveTo(G.ix[i] + G.ir[i] + glow, G.iy[i]); ctx.arc(G.ix[i], G.iy[i], G.ir[i] + glow, 0, 6.2832);
+    }
+    ctx.fill();
+    // тела: по видам (планеты — по цвету)
+    ctx.fillStyle = C.dust; body(ctx, G, 0, -1);
+    ctx.fillStyle = C.ast; body(ctx, G, 1, -1);
+    ctx.fillStyle = C.comet; body(ctx, G, 3, -1);
+    ctx.fillStyle = C.moon; body(ctx, G, 4, -1);
+    ctx.fillStyle = C.sun; body(ctx, G, 7, -1);
+    for (let c = 0; c < PLANET.length; c++) { ctx.fillStyle = PLANET[c]; body(ctx, G, 5, c); body(ctx, G, 6, c); }
+    // мелкие детали: спутники (панели), кратеры, кольца
+    ctx.fillStyle = C.panel;
+    for (let i = 0; i < N; i++) if (G.ir[i] > 0 && G.it[i] === 2) { const r = G.ir[i]; ctx.fillRect(G.ix[i] - r, G.iy[i] - 3, r * 1.9, 6); }
+    ctx.fillStyle = C.sat;
+    for (let i = 0; i < N; i++) if (G.ir[i] > 0 && G.it[i] === 2) ctx.fillRect(G.ix[i] - 4, G.iy[i] - 5, 8, 10);
+    ctx.fillStyle = C.moonD;
+    for (let i = 0; i < N; i++) if (G.ir[i] > 4 && (G.it[i] === 4 || G.it[i] === 1)) { const r = G.ir[i] * .25; ctx.fillRect(G.ix[i] - r * 2, G.iy[i] - r, r * 1.4, r * 1.4); ctx.fillRect(G.ix[i] + r, G.iy[i] + r * .6, r, r); }
+    ctx.strokeStyle = C.ring; ctx.lineWidth = 3; ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      if (G.ir[i] <= 0 || G.it[i] !== 6) continue;
+      const rx = G.ir[i] + 12;
+      ctx.moveTo(G.ix[i] + rx * .94, G.iy[i] - rx * .34 * .2); ctx.ellipse(G.ix[i], G.iy[i], rx, 6, -.35, 0, 6.2832);
+    }
+    ctx.stroke();
     // дыра: чёрный круг и вращающийся диск
-    const hx = s.hx0 + (s.hx - s.hx0) * k, hy = s.hy0 + (s.hy - s.hy0) * k, r = s.r, ang = G.now / 400;
+    const hx = s.hx0 + (s.hx - s.hx0) * k, hy = s.hy0 + (s.hy - s.hy0) * k, r = s.r, ang = now / 400;
     ctx.lineWidth = 4;
     ctx.strokeStyle = C.disk; ctx.beginPath(); ctx.arc(hx, hy, r + 3, ang, ang + 4); ctx.stroke();
     ctx.strokeStyle = C.disk2; ctx.beginPath(); ctx.arc(hx, hy, r + 3, ang + 4.2, ang + 6.1); ctx.stroke();

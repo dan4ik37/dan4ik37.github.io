@@ -34,17 +34,17 @@ module.exports = {
     // старт: первые ворота далеко — 2 с без нажатий ничего не случается
     let s = spec.create(K.rng(51));
     stepN(s, 120);
-    ok(!s.over && s.row === 0 && s.n === C.START, 'gates: 2 с после старта — ворот ещё не было, 5 светлячков', { row: s.row, d: s.d });
+    ok(!s.over && s.row === 0 && s.n === 0 && s.score === 0 && s.op[0] === 0 && s.op[1] === 0, 'gates: 2 с после старта — ворот ещё не было, 0 светлячков; первый ряд — оба «+»', { row: s.row, d: s.d });
     // скорость дороги — за секунду: 1 с = V0..V1 единиц
     const d0 = s.d; stepN(s, 60);
     ok(s.d - d0 > C.V0 * .999 && s.d - d0 < C.V0 * 1.1, 'gates: дорога едет ~V0 единиц в секунду', s.d - d0);
     // ворота под фонариком: левые / правые
     s = spec.create(K.rng(52));
-    const b = 0, lv = apply(s.op[b], s.val[b], 5);
+    const b = 0, lv = apply(s.op[b], s.val[b], 0);
     move(s, 30); toRow(s);
     ok(s.took[0] === 0 && s.n === Math.max(0, lv), 'gates: фонарик слева — левые ворота', { n: s.n, lv });
     s = spec.create(K.rng(52)); move(s, 290); toRow(s);
-    ok(s.took[0] === 1 && s.n === Math.max(0, apply(s.op[1], s.val[1], 5)), 'gates: фонарик справа — правые ворота');
+    ok(s.took[0] === 1 && s.n === Math.max(0, apply(s.op[1], s.val[1], 0)), 'gates: фонарик справа — правые ворота');
     // путь «всегда лучшее» = s.best (оптимум, генератор его же считает), «всегда худшее» — светлячки гаснут
     let bad = 0, maxBest = 0;
     for (let seed = 1; seed <= 400; seed++) {
