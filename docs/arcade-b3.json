@@ -1,0 +1,675 @@
+{
+  "task": "T-140 batch b3",
+  "note": "Integration sheet. Card files js/games/arcade/<id>.json already hold every field; node scripts/make-arcade.mjs builds GAMES/GAME_TAGS, GAME_AGE, SEO pages, rules and game_score_cap/game_win_xp from them. Score: bigger is better for every game (low: false). Age 0+. No coin rewards.",
+  "games": [
+    {
+      "id": "bricks",
+      "icon": "🧱",
+      "title": "Кирпичики",
+      "color": "#ff8a3d",
+      "desc": "Веди дощечку, отбивай мяч и разбивай стенки — каждая следующая быстрее. 2 минуты и 3 мяча. С другом — одинаковые стенки у обоих.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "best": {
+        "top": "bricks",
+        "topLabel": "очков"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/bricks.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "bricks": 10000,
+          "bricks_duel": 10000
+        },
+        "game_win_xp": {
+          "bricks": 4,
+          "bricks_duel": 5
+        }
+      },
+      "win": "s.level >= 2 (at least one wall cleared)",
+      "end": "2 min or 3 balls lost; +50 per ball left at time-up",
+      "botScores": "380 / 580 / 870 (min / median / max of 20 bot runs)",
+      "rules": [
+        "Веди дощечку пальцем по полю и отбивай мяч вверх. Мяч, упавший мимо дощечки, потерян — всего их 3.",
+        "Мяч лежит на дощечке, пока ты не нажмёшь на поле (или пробел); через 2,5 секунды он полетит сам.",
+        "Кирпич — 10 очков, крепкий кирпич — 2 удара по 10, ⭐ звёздный — 30 очков и широкая дощечка.",
+        "Разбил всю стенку — +100 очков, встаёт новая, мяч летит быстрее.",
+        "Партия длится 2 минуты. Если время вышло, а мячи остались, — +50 за каждый мяч."
+      ],
+      "tips": [
+        "Куда попал мяч на дощечке, туда он и полетит: краем — вбок, серединой — почти вверх.",
+        "Пробей дыру сбоку стенки — мяч залетит наверх и сам разобьёт много кирпичей.",
+        "Береги мячи до конца: каждый оставшийся — ещё 50 очков."
+      ],
+      "prototype": "brick",
+      "fixed": [
+        "per-frame motion (2.4x faster at 144 Hz) -> fixed 60 Hz step + 4 substeps, ball cannot tunnel through bricks or paddle",
+        "side hit flipped vy (ball cut through rows) -> reflect on the axis of least penetration",
+        "one brick per frame and br.some() every frame -> counter of bricks left",
+        "serve always to the right -> towards the field centre",
+        "late tap after game over restarted at once -> kit button",
+        "speed grew without limit -> VMAX",
+        "no time limit (needed for duel) -> 2 min"
+      ]
+    },
+    {
+      "id": "gates",
+      "icon": "🔢",
+      "title": "Ворота с числами",
+      "color": "#35e0a3",
+      "desc": "Веди фонарик через ворота: + и × прибавляют светлячков, − и ÷ отнимают, а туча гасит часть. Донеси больше всех до фонаря! С другом — одинаковые ворота.",
+      "tags": "new mini friends action brain",
+      "age": "0+",
+      "unit": [
+        "светлячок",
+        "светлячка",
+        "светлячков"
+      ],
+      "low": false,
+      "best": {
+        "top": "gates",
+        "topLabel": "светлячков"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/gates.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "gates": 20000,
+          "gates_duel": 20000
+        },
+        "game_win_xp": {
+          "gates": 4,
+          "gates_duel": 5
+        }
+      },
+      "win": "s.why === 'lamp' && fireflies * 2 >= best possible path (reached the lamp with at least half of the optimum)",
+      "end": "the path ends at the lamp (about 22 s) or fireflies drop to 0",
+      "botScores": "1617 / 3376 / 4357",
+      "rules": [
+        "Веди фонарик пальцем влево и вправо. Когда ряд ворот доходит до фонарика, срабатывают ворота прямо под ним.",
+        "«+» и «×» прибавляют светлячков, «−» и «÷» отнимают (при делении остаток гаснет).",
+        "☁️ Туча стоит на всю ширину дороги и гасит столько светлячков, сколько на ней написано.",
+        "Если светлячков стало 0 — путь окончен.",
+        "Счёт — сколько светлячков ты донёс до большого фонаря в конце пути (24 ряда)."
+      ],
+      "tips": [
+        "«×2» выгоднее «+10», только если светлячков больше десяти. Считай до того, как ряд подъедет.",
+        "Смотри вперёд: если скоро туча — лучше набрать светлячков заранее.",
+        "Держи палец пониже на экране, чтобы видеть следующие ворота."
+      ],
+      "prototype": "tall",
+      "fixed": [
+        "per-frame motion -> fixed step, speeds per second",
+        "Math.random gates -> rng",
+        "÷2 produced fractions and growth < 1 vanished -> integer fireflies, 0 ends the run",
+        "gate picked by field centre at a frame-dependent line -> exactly when the row reaches the hero, gate under the hero",
+        "late tap restart -> kit button",
+        "unbounded growth (×3 chains) -> multiplications become additions after 2000",
+        "draw: ctx.font set for every gate -> only when the size changes (phone perf)"
+      ]
+    },
+    {
+      "id": "hole",
+      "icon": "🕳️",
+      "title": "Чёрная дыра",
+      "color": "#9b5cff",
+      "desc": "Веди чёрную дыру по космосу и глотай всё, что меньше неё: от пылинок до звёзд. Минута на всё, ☄️ комета даёт время. С другом — один и тот же космос.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "best": {
+        "top": "hole",
+        "topLabel": "очков"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/hole.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "hole": 40000,
+          "hole_duel": 40000
+        },
+        "game_win_xp": {
+          "hole": 4,
+          "hole_duel": 5
+        }
+      },
+      "win": "s.score >= 300",
+      "end": "60 s (☄️ comet adds +3 s, at most 90 s total)",
+      "botScores": "5227 / 11871 / 14780",
+      "rules": [
+        "Веди дыру пальцем: она плывёт к точке чуть выше пальца, чтобы палец её не закрывал.",
+        "Проглотить можно только то, что меньше дыры (такие предметы обведены светлым кругом).",
+        "Чем крупнее предмет, тем больше очков: пылинка — 1, планета — 18, звезда — 50.",
+        "На месте проглоченного через 2 секунды появляется новый предмет — вдали от дыры.",
+        "Партия длится минуту. ☄️ Проглоченная комета добавляет 3 секунды."
+      ],
+      "tips": [
+        "Сначала собирай мелочь рядом — дыра быстро подрастёт.",
+        "Кометы летят быстро: перехвати их на пути, а не догоняй.",
+        "Большие предметы не таранят — обходи их, пока не подрастёшь."
+      ],
+      "prototype": "hole",
+      "fixed": [
+        "new items spawned right under the hole -> far from it, fade-in 0.5 s",
+        "Math.random -> rng",
+        "font string per item per frame + emoji -> shapes",
+        "late tap restart -> kit button",
+        "hole grew without limit and covered the field -> RMAX",
+        "big items did nothing -> they push the hole away"
+      ]
+    },
+    {
+      "id": "shield",
+      "icon": "📺",
+      "title": "Защити стрим",
+      "color": "#ff5fa2",
+      "desc": "Спам-боты летят на твой стрим — рисуй пальцем стенки, и они отпишутся. Чернила кончаются, стенки тают. Продержи эфир 90 секунд! С другом — одинаковые боты.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "best": {
+        "top": "shield",
+        "topLabel": "очков"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/shield.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "shield": 1500,
+          "shield_duel": 1500
+        },
+        "game_win_xp": {
+          "shield": 4,
+          "shield_duel": 5
+        }
+      },
+      "win": "s.why === 'time' (the stream survived 90 s)",
+      "end": "90 s or 3 hearts lost",
+      "botScores": "320 / 353 / 379",
+      "rules": [
+        "Рисуй пальцем (или мышью с зажатой кнопкой) стенки на пути спам-ботов. На самом экране стрима рисовать нельзя.",
+        "Бот, который упёрся в стенку почти на секунду, отписывается и улетает — +5 очков.",
+        "Голубая полоска внизу — чернила: каждая стенка их тратит, а со временем они пополняются.",
+        "Бот, долетевший до экрана, снимает одно ❤. У стрима 3 ❤ — когда они кончатся, эфир окончен.",
+        "За каждую секунду эфира — 2 очка. Продержался 90 секунд — ещё +50 за каждое оставшееся ❤."
+      ],
+      "tips": [
+        "Рисуй короткие стенки поперёк пути бота — так чернил хватит надолго.",
+        "Боты с одной стороны часто летят рядом: одна дуга может остановить сразу нескольких.",
+        "Не рисуй вплотную к экрану — дай стенке время задержать бота."
+      ],
+      "prototype": "doge",
+      "fixed": [
+        "a closed circle around the target made it safe forever -> limited ink, lines melt under bots, no drawing on the stream screen",
+        "L.filter and point objects every frame -> typed-array ring",
+        "Math.random -> rng",
+        "bots never came from below",
+        "no end except losing -> 90 s",
+        "late tap restart -> kit button"
+      ]
+    },
+    {
+      "id": "slice",
+      "icon": "🥕",
+      "title": "Нарезка",
+      "color": "#ff8a1f",
+      "desc": "Варим суп: режь взмахом пальца подлетающие овощи, собирай заказ и не задень камни. С другом — одинаковые броски у обоих.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "best": {
+        "top": "slice",
+        "topLabel": "очков"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/slice.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "slice": 3000,
+          "slice_duel": 3000
+        },
+        "game_win_xp": {
+          "slice": 4,
+          "slice_duel": 5
+        }
+      },
+      "win": "s.soups >= 5 (five soup orders completed)",
+      "end": "2 min or 3 hearts lost",
+      "botScores": "133 / 255 / 476",
+      "rules": [
+        "Режь овощи быстрым взмахом пальца (или мышью с зажатой кнопкой). Просто нажатие не режет.",
+        "Овощ — 1 очко, овощ из заказа супа — 2 очка. Собрал весь заказ — +10 и новый заказ.",
+        "Три и больше овощей одним взмахом — дополнительные очки за каждый сверх двух.",
+        "Упал неразрезанный овощ или разрезан 🪨 камень — минус ❤. Их всего 3.",
+        "Партия длится до 2 минут."
+      ],
+      "tips": [
+        "Режь овощи на взлёте — у них уже есть время подлететь и собраться в кучку.",
+        "Смотри на заказ: те овощи, что в заказе, стоят вдвое больше.",
+        "Если рядом с овощем камень — подожди, пока они разлетятся."
+      ],
+      "prototype": "slice",
+      "fixed": [
+        "per-frame motion with factor k -> fixed step",
+        "cutting inside pointermove by between-frame positions -> swipe is a queued event resolved at step boundaries",
+        "bomb + dropped fruit in one frame ended the run twice; hearts lost after the end",
+        "F.filter and trail objects per move -> pools",
+        "Math.random -> rng",
+        "late tap restart -> kit button",
+        "no time limit -> 2 min"
+      ]
+    },
+    {
+      "id": "planets",
+      "icon": "🪐",
+      "title": "Слияние планет",
+      "color": "#c38bff",
+      "desc": "Роняй небесные тела: два одинаковых сливаются в большее — от метеорита до звезды, две звезды дают 💥 сверхновую. 2 минуты. С другом — одинаковые тела у обоих.",
+      "tags": "new mini friends brain",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "best": {
+        "top": "planets",
+        "topLabel": "очков"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/planets.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "planets": 6000,
+          "planets_duel": 6000
+        },
+        "game_win_xp": {
+          "planets": 4,
+          "planets_duel": 5
+        }
+      },
+      "win": "s.top >= 6 (gas giant made) || a supernova",
+      "end": "2 min or a body above the red line for 2 s",
+      "botScores": "184 / 2529 / 2987",
+      "rules": [
+        "Веди пальцем по полю — тело над космосом двигается за ним. Отпусти — тело упадёт.",
+        "Два одинаковых тела сливаются в следующее по цепочке. Чем больше новое тело, тем больше очков: 2, 4, 8 … 256.",
+        "Две звезды — 💥 сверхновая: +500 очков, обе исчезают.",
+        "☄️ Комета разбивает первое тело, которое задела (+очки этого тела).",
+        "Не бросишь 2,5 секунды — тело упадёт само.",
+        "Тело выше красной линии дольше 2 секунд — космос переполнен, конец. Партия длится до 2 минут."
+      ],
+      "tips": [
+        "Крупные тела держи по краям и внизу, мелкие — сверху: так им проще встретиться с парой.",
+        "Смотри в строку над полем: там следующее тело — планируй бросок заранее.",
+        "Комету бросай на тело, которое мешает слиянию."
+      ],
+      "prototype": "suika",
+      "fixed": [
+        "per-frame physics x4 repeats (2.4x faster at 144 Hz) -> 60 Hz step, 4 substeps, per-second speeds",
+        "F.filter/F.push/new objects per merge -> typed-array pool",
+        "Math.random -> rng",
+        "overflow by frame age -> by steps",
+        "late tap restart -> kit button",
+        "no time limit -> 2 min",
+        "drop on press -> aim with the finger, drop on release (and auto-drop after 2.5 s idle)",
+        "own: contact resolution passed doubles as call arguments (1.8 KB/step garbage) -> integer indices only"
+      ]
+    },
+    {
+      "id": "pour",
+      "icon": "🥛",
+      "title": "Налей воды",
+      "color": "#4db8ff",
+      "desc": "Головоломка с водой: нарисуй пальцем горку от крана к стакану и отпусти — польётся вода. Чернила ограничены, на пути полки. 2 минуты. С другом — одинаковые уровни.",
+      "tags": "new mini friends brain",
+      "age": "0+",
+      "unit": [
+        "капля",
+        "капли",
+        "капель"
+      ],
+      "low": false,
+      "best": {
+        "top": "pour",
+        "topLabel": "капель"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/pour.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "pour": 4000,
+          "pour_duel": 4000
+        },
+        "game_win_xp": {
+          "pour": 4,
+          "pour_duel": 5
+        }
+      },
+      "win": "s.stars > 0 (at least one glass with 80+ drops)",
+      "end": "2 min; levels follow each other",
+      "botScores": "1828 / 2092 / 2302",
+      "rules": [
+        "Рисуй пальцем (или мышью с зажатой кнопкой) линии. Отпустил палец — из крана польётся вода.",
+        "Не начнёшь за 4 секунды — вода польётся сама. Пробел — лить сразу.",
+        "Каждая капля в стакане — 1 очко. 80 капель из 100 — ⭐ и +20 очков.",
+        "Налил больше половины — бонус за оставшиеся чернила: 1 очко за каждые 20 единиц.",
+        "Пока вода льётся, можно дорисовывать линии, если остались чернила.",
+        "Партия длится 2 минуты, уровни идут один за другим."
+      ],
+      "tips": [
+        "Заканчивай горку у середины стакана, чуть ниже края, — быстрые капли не перелетят.",
+        "Не делай резких изломов: на крутом повороте капли слетают с линии.",
+        "Если полка мешает — проведи горку под ней, а струя пусть пролетит мимо края полки."
+      ],
+      "prototype": "glass",
+      "fixed": [
+        "per-frame drops (2.4x faster at 144 Hz) -> 60 Hz, 3 substeps, speed limit (no tunnelling through lines)",
+        "Ls.flatMap/slice/map + W.filter + drop objects every frame -> typed-array pools",
+        "Math.random stream jitter -> rng",
+        "pointerleave cut the line at the canvas edge -> kit pointer capture",
+        "unlimited ink -> ink per level with a bonus for saving it",
+        "late tap restart -> kit button",
+        "one level and no time limit -> level chain + 2 min"
+      ]
+    },
+    {
+      "id": "bubbles",
+      "icon": "🫧",
+      "title": "Пузыри",
+      "color": "#35e0c3",
+      "desc": "Целься и стреляй пузырями: три одного цвета лопаются, оторванные падают. Каждые 8 выстрелов — новый ряд, 💥 бомба — каждый 12-й. 2 минуты. С другом — одинаковые пузыри.",
+      "tags": "new mini friends action brain",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "best": {
+        "top": "bubbles",
+        "topLabel": "очков"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/bubbles.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "bubbles": 15000,
+          "bubbles_duel": 15000
+        },
+        "game_win_xp": {
+          "bubbles": 4,
+          "bubbles_duel": 5
+        }
+      },
+      "win": "popped + dropped >= 60 || field cleared",
+      "end": "2 min or a bubble lands beyond the red line",
+      "botScores": "450 / 2380 / 7040",
+      "rules": [
+        "Веди пальцем по полю — пушка целится. Отпусти — пузырь полетит.",
+        "Три и больше пузыря одного цвета рядом лопаются: 10 очков за каждый.",
+        "Пузыри, которые больше ни на чём не держатся, падают: 20 очков за каждый.",
+        "Каждые 8 выстрелов сверху добавляется новый ряд. С 40-го выстрела появляется пятый цвет.",
+        "Каждый 12-й пузырь — 💥 бомба. Очистил всё поле — +300 и новые ряды.",
+        "Пузырь встал за красной линией — конец. Партия длится до 2 минут."
+      ],
+      "tips": [
+        "Целься в опоры: лопнешь пару пузырей сверху — упадёт целая гроздь снизу.",
+        "Отскок от стенки помогает попасть за пузыри, которые закрывают цель.",
+        "Если текущий пузырь некуда поставить — тапни по пушке и возьми следующий."
+      ],
+      "prototype": "bubble",
+      "fixed": [
+        "per-frame flight -> 60 Hz, 4 substeps",
+        "landing took the first empty cell BELOW an occupied one (bubble passed through others) -> nearest empty attached cell",
+        "square grid with cross neighbours -> hex grid (6 neighbours)",
+        "Set + string keys + map/filter/split in every flood fill, G.some() every substep -> typed arrays and a stack",
+        "wall bounce without clamping (jitter at the wall)",
+        "Math.random -> rng (two streams: shots/rows identical for both opponents)",
+        "late tap restart -> kit button",
+        "no time limit -> 2 min"
+      ]
+    },
+    {
+      "id": "pegs",
+      "icon": "🎯",
+      "title": "Шарик в цель",
+      "color": "#7affb2",
+      "desc": "Целься и роняй шарик сквозь гвоздики: ⭐ золотая корзинка — 50, зелёные — 20. Цели меняются перед каждым шариком, 10 шариков. Без ставок и монет. С другом — одинаковые цели.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "best": {
+        "top": "pegs",
+        "topLabel": "очков"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/pegs.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "pegs": 1000,
+          "pegs_duel": 1000
+        },
+        "game_win_xp": {
+          "pegs": 2,
+          "pegs_duel": 4
+        }
+      },
+      "win": "s.gold >= 2 || score >= 200",
+      "end": "10 balls (a held finger still drops after 12 s, idle after 6 s)",
+      "botScores": "56 / 190 / 386",
+      "rules": [
+        "Веди пальцем над гвоздиками — шарик двигается за ним. Отпусти — шарик упадёт.",
+        "⭐ Золотая корзинка — 50 очков, зелёная — 20, остальные — 2.",
+        "Попадания в золотую или зелёную подряд — серия: +10 за каждое попадание сверх первого.",
+        "Не бросишь 6 секунд — шарик упадёт сам.",
+        "С 4-го шарика посередине ездит планка — шарик от неё отскакивает.",
+        "У тебя 10 шариков."
+      ],
+      "tips": [
+        "Один и тот же бросок всегда приводит в одну и ту же корзинку — запоминай удачные места.",
+        "Целься не прямо над корзинкой: шарик почти всегда уходит вбок от первого гвоздика.",
+        "Планку лучше переждать: брось, когда она уехала в сторону."
+      ],
+      "prototype": "plinko (reworked)",
+      "fixed": [
+        "coins, a 10-coin bet and ×0.2…×5 multipliers (casino imitation) -> removed: 10 balls, targets 50/20/2 change every ball, streak +10",
+        "per-frame ball (2.4x faster at 144 Hz) -> 60 Hz, 4 substeps",
+        "Math.random jitter on every peg -> exact bounce; seeded rng only when the ball lands exactly on a peg top",
+        "B.filter and ball objects per frame -> state fields",
+        "a stuck ball after 25 s landed in a random bucket -> after 10 s in the bucket under it",
+        "outer pegs could trap the ball at the wall",
+        "no end -> 10 balls"
+      ]
+    },
+    {
+      "id": "sling",
+      "icon": "🪃",
+      "title": "Рогатка",
+      "color": "#ff8a3d",
+      "desc": "Тир во дворе: оттяни камешек рогаткой и сбей жестяные банки с ящиков. Падающие банки сбивают соседние, ⭐ золотая — 30. 2 минуты. С другом — одинаковые банки у обоих.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "best": {
+        "top": "sling",
+        "topLabel": "очков"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/sling.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "sling": 6000,
+          "sling_duel": 6000
+        },
+        "game_win_xp": {
+          "sling": 4,
+          "sling_duel": 5
+        }
+      },
+      "win": "s.clears >= 2 (two ranges cleared)",
+      "end": "stones run out or 2 min",
+      "botScores": "405 / 1585 / 2895",
+      "rules": [
+        "Коснись поля в любом месте, потяни палец назад и отпусти — камешек полетит в обратную сторону. Чем дальше тянешь, тем сильнее.",
+        "Банка — 10 очков, ⭐ золотая — 30. Третья и следующие банки за один выстрел — ещё +5 за каждую.",
+        "Сбил все банки — +50, ещё 2 камешка (не больше 6) и новый тир.",
+        "Камешки кончились — конец. Партия длится до 2 минут.",
+        "Клавиатура: ← → угол, ↑ ↓ сила, пробел — выстрел."
+      ],
+      "tips": [
+        "Цель в нижнюю банку столбика: верхние упадут сами.",
+        "Пологий сильный выстрел сбивает банки в ряд, навесной — достаёт банки за высокими ящиками.",
+        "Точки прицела показывают только начало пути — дальше камешек опускается сильнее."
+      ],
+      "prototype": "sling",
+      "fixed": [
+        "per-frame flight -> 60 Hz, 3 substeps",
+        "pull only within 60 px of the sling (finger covers it) -> pull from anywhere, relative to the touch point",
+        "pointerleave released the shot at the canvas edge -> kit pointer capture",
+        "targets floated in the air -> cans on crates that fall (domino)",
+        "pg.filter and objects per frame -> arrays",
+        "Math.random -> rng",
+        "late tap restart -> kit button",
+        "no time limit -> 2 min",
+        "full trajectory hint -> only the first 0.4 s",
+        "own: firing during the range change skipped the next range -> shots blocked while the range changes"
+      ]
+    },
+    {
+      "id": "cannon",
+      "icon": "💥",
+      "title": "Пушка",
+      "color": "#ffc233",
+      "desc": "Води пушку пальцем — она стреляет сама. Желейные шарики делятся на два поменьше, у пушки 3 ❤, ⚡ даёт двойной огонь. 2 минуты. С другом — одинаковые шарики у обоих.",
+      "tags": "new mini friends action",
+      "age": "0+",
+      "unit": [
+        "очко",
+        "очка",
+        "очков"
+      ],
+      "low": false,
+      "best": {
+        "top": "cannon",
+        "topLabel": "очков"
+      },
+      "scripts": [
+        "js/games/room.js",
+        "js/games/versus.js",
+        "js/games/arcade/core.js",
+        "js/games/arcade/cannon.js"
+      ],
+      "server": {
+        "game_score_cap": {
+          "cannon": 4000,
+          "cannon_duel": 4000
+        },
+        "game_win_xp": {
+          "cannon": 4,
+          "cannon_duel": 5
+        }
+      },
+      "win": "s.why === 'time' (survived 2 min) || pops >= 30",
+      "end": "2 min or 3 hearts lost",
+      "botScores": "247 / 431 / 684",
+      "rules": [
+        "Веди пальцем (или мышью с зажатой кнопкой) — пушка едет за ним и стреляет сама. Клавиатура: ← → или A D.",
+        "Попадание — 1 очко и минус 1 к числу на шарике. Число дошло до нуля — шарик лопается (+5) и делится на два поменьше.",
+        "Шарик приземлился на пушку — минус ❤, пушка мигает и полторы секунды неуязвима. ❤ кончились — конец.",
+        "Большой шарик роняет ⚡: поймай его пушкой — 6 секунд двойного огня.",
+        "Новые шарики приходят всё чаще и всё крепче. Партия длится 2 минуты."
+      ],
+      "tips": [
+        "Стреляй по шарику, пока он высоко, а когда он падает — отъезжай в сторону.",
+        "Маленькие шарики прыгают низко — сначала добивай их, пока не набралось много.",
+        "⚡ лучше ловить, когда на поле большой шарик: двойной огонь быстро его лопнет."
+      ],
+      "prototype": "blast2",
+      "fixed": [
+        "per-frame motion -> 60 Hz, per-second speeds",
+        "undefined k.mh (const h = Math.ceil(k.mh / 2) || 4, unused)",
+        "one bullet could damage two rocks -> a bullet is consumed on the first hit",
+        "R.filter/B.filter/add.push/forEach objects per frame -> typed-array pools",
+        "Math.random -> rng",
+        "hp grew with the player score (stronger player got harder rocks than the opponent) -> grows with time",
+        "late tap restart -> kit button",
+        "no time limit -> 2 min",
+        "box hit test touched with empty corners -> circle vs cannon body; tiny balls bounced too low to escape -> higher bounce"
+      ]
+    }
+  ]
+}
