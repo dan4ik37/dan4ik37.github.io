@@ -111,7 +111,8 @@ const MEASURE = `async (R, n = 240) => { const st = R.stats, T = window.__wxT, a
         ok(a.vis > 0 && a.fogFar <= a.vis + 1, `Мир, ${st}: туман кончается на видимости бури`, { vis: a.vis, fogFar: a.fogFar });
         if (st !== 'whiteout') ok((a.wx.grains + a.wx.streaks) > 0 && (a.wx.grains + a.wx.streaks) <= (phone ? 350 : 770), `Мир, ${st}: частицы в пределах (телефон — 45 %)`, a.wx);
         ok(a.wxObj <= 2, `Мир, ${st}: картинка бури — не больше 2 вызовов отрисовки (бюджет — 3)`, { wxObj: a.wxObj, storm: a.calls, clear: Math.round(avg('clear', 'calls')) });
-        ok(avg(st, 'fx') <= .25, `Мир, ${st}: картинка бури ≤ 0,25 мс на кадр (${PROF}, ×${RATE})`, +avg(st, 'fx').toFixed(4));
+        // the added work over the same scene in clear weather (spec §10): timers are coarse (100 µs, jittered) — compare with clear
+        ok(avg(st, 'fx') - avg('clear', 'fx') <= .25, `Мир, ${st}: картинка бури — не больше +0,25 мс на кадр к ясной погоде (${PROF}, ×${RATE})`, { storm: +avg(st, 'fx').toFixed(4), clear: +avg('clear', 'fx').toFixed(4) });
       }
       ok(M.clear[1].wx.grains === 0 && M.clear[1].wx.streaks === 0, 'Мир, ясно: частиц бури нет (0 вызовов)', M.clear[1].wx);
       res.mirSummary = Object.fromEntries(SET.map(st => [st, { cpu: +avg(st, 'cpu').toFixed(2), p95: +avg(st, 'p95').toFixed(2), calls: Math.round(avg(st, 'calls')), fx: +avg(st, 'fx').toFixed(4), at: +avg(st, 'at').toFixed(4) }]));
@@ -146,7 +147,7 @@ const MEASURE = `async (R, n = 240) => { const st = R.stats, T = window.__wxT, a
       ok(s.special === 'sandstorm' && s.wx.grains > 0 && s.vis > 0 && s.fogFar <= s.vis + 1, 'Кубомир, песчаная буря: частицы, видимость и туман', s);
       ok(b.special === 'buran' && b.snow > .3, 'Кубомир, буран: идёт снег (свои частицы «Кубомира»)', { special: b.special, snow: b.snow });
       ok(K.clear[1].wx.grains === 0 && K.clear[1].vis === 0, 'Кубомир, ясно: бури нет, небо — как его рисует «Кубомир»', K.clear[1]);
-      ok(Math.max(...K.sandstorm.map(x => x.fx)) <= .3, `Кубомир: картинка бури ≤ 0,3 мс на кадр (${PROF}, ×${RATE})`, K.sandstorm.map(x => x.fx));
+      ok(Math.max(...K.sandstorm.map(x => x.fx)) - Math.min(...K.clear.map(x => x.fx)) <= .3, `Кубомир: картинка бури — не больше +0,3 мс на кадр к ясной погоде (${PROF}, ×${RATE})`, { storm: K.sandstorm.map(x => x.fx), clear: K.clear.map(x => x.fx) });
       res.kbSummary = Object.fromEntries(Object.entries(K).map(([k, v]) => [k, { cpu: +(v.reduce((a, x) => a + x.cpu, 0) / v.length).toFixed(2), calls: Math.round(v.reduce((a, x) => a + x.calls, 0) / v.length), fx: +(v.reduce((a, x) => a + x.fx, 0) / v.length).toFixed(4) }]));
       console.log('  Кубомир, итог:', JSON.stringify(res.kbSummary));
       await ev(`GAME_IMPL.kubomir._test.state().WX.clim.force(null)`);
@@ -160,8 +161,9 @@ const MEASURE = `async (R, n = 240) => { const st = R.stats, T = window.__wxT, a
       const cyc = ['duststorm', 'buran', 'sandstorm', null, 'whiteout', 'hail', 'downpour', 'seafog', 'freezing_rain', null];
       let k = 0;
       while (Date.now() - t0 < dur) {
-        await ev(`GAME_IMPL.world._test.state().wx.force(${cyc[k % cyc.length] ? `'${cyc[k % cyc.length]}'` : 'null'})`); k++;
-        await sleep(30000);
+        // a playing user: the world's AFK rule (8 min standing still → out of the world) must not end the soak
+        await ev(`(() => { const S = GAME_IMPL.world._test.state(); S.idleAt = Date.now(); S.wx.force(${cyc[k % cyc.length] ? `'${cyc[k % cyc.length]}'` : 'null'}); return 1; })()`); k++;
+        for (let w = 0; w < 6; w++) { await sleep(5000); await ev(`(() => { const S = GAME_IMPL.world._test.state(); if (S) S.idleAt = Date.now(); return 1; })()`); }
         if (k % 4 === 0) { hs.push(await heap()); console.log(`  soak ${Math.round((Date.now() - t0) / 1000)} с: куча ${hs[hs.length - 1]} МБ, ошибок ${ourErr().length - e0}`); }
       }
       const h1 = await heap();

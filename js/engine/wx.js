@@ -505,10 +505,13 @@
     const reg = regionAt(W, st, x, z, cKey), rk = regKey(W, reg, cid);
     const wq = W.mode === 'cycle' ? Math.floor(w * 3600) : Math.floor(ms / 125);
     const shift = W.front > 0 ? Math.floor(Math.floor(x) * 3600 / W.front) : 0, wqx = wq - shift, j = Math.floor(wqx / SLOTQ);
+    // the roll reads season, hour and T_q at the slot midpoint shifted by the front: quantised to 360 wq (3 real minutes, 400 u at the
+    // default front) — the same for every peer, and a walking player keeps hitting the cached roll (windows still use the exact wqx)
+    const shQ = Math.floor(shift / 360) * 360;
     out.wq = wqx;
     let best = null, bk = -1, bR = null;
     for (let s = j - 1; s <= j + 1; s++) {
-      const R = rollAt(W, st, q, cid, s, shift, reg, rk);
+      const R = rollAt(W, st, q, cid, s, shQ, reg, rk);
       if (s === j) { out.fire = R.fire; out.fun = R.f; out.fl0 = R.fl0; out.fl1 = R.fl1; if (R.vis < out.vis) out.vis = R.vis; }
       if (!R.m || wqx < R.ma - R.ml || wqx >= R.me) continue;
       const env = Math.max(0, Math.min(1000, Math.floor(Math.min((wqx - R.ma) * 1000 / RAMPQ, (R.me - wqx) * 1000 / RAMPQ)))), k = Math.floor(env * R.mI / 1000);

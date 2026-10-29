@@ -86,7 +86,14 @@
   // смерчи над водой; столица и города — иней, ледяной дождь, туман в низинах. В Солнечном городке сильных явлений нет (kc).
   // Пустыни и снегов в «Мире» пока нет — появятся с логичными биомами (T-116). Биом из T-116 подключается в D37E.wx.biomeAt
   const WX_SURF = { temperate: 0x60e | 0x20, steppe: 0x206 | 0x20, mountain: 0x34 | 0x6, sea: 0x81 | 0x200 };   // поверхности (биты wx.js SURF)
+  const wxRegs = new Map();   // клетка → запись (карта и зоны не меняются; 256 клеток — 16 км²)
   function mirWxRegion(x, z){
+    const key = Math.floor(x / 64) * 65536 + Math.floor(z / 64), hit = wxRegs.get(key);
+    if (hit) return hit;
+    if (wxRegs.size > 256) wxRegs.clear();
+    const r = mirWxRegion0(x, z); wxRegs.set(key, r); return r;
+  }
+  function mirWxRegion0(x, z){
     const cx = (Math.floor(x / 64) + .5) * 64, cz = (Math.floor(z / 64) + .5) * 64, ck = mirClimate(cx, cz);
     const cls = ck === 'steppe' ? 1 : ck === 'mountain' ? 2 : ck === 'sea' ? 4 : 0;
     const h = ck === 'mountain' ? window.MirZones?.worldMap?.()?.height(cx, cz) : null;
