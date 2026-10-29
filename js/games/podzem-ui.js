@@ -49,6 +49,12 @@
 .pz-goal b{color:var(--pz-gold);font-weight:800;white-space:nowrap}
 .pz-goal:empty{display:none}
 .pz-goal.done{animation:pzIn .45s ease-out}
+.pz-gh{position:absolute;left:0;top:calc(100% + 5px);width:max-content;display:flex;align-items:center;gap:6px;max-width:min(320px,calc(100vw - 32px));min-height:28px;box-sizing:border-box;padding:4px 10px 4px 7px;border-radius:999px;background:rgba(10,14,26,.62);border:1px solid rgba(255,255,255,.14);color:#fff;font:700 12px/1.25 Montserrat,system-ui,sans-serif;text-align:left;cursor:pointer}
+.pz-gh[hidden]{display:none}
+.pz-gh i{font-style:normal;flex:none;font-size:14px;line-height:1}
+.pz-gh span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pz-gh.open{border-radius:12px;align-items:flex-start;background:rgba(10,14,26,.8)}.pz-gh.open span{white-space:normal}
+@media (orientation:landscape){.pz-gh{max-width:min(320px,calc(30vw - 12px))}}   /* лёжа — левее середины экрана (§2.3) */
 .pz-clock{display:none;align-self:flex-start;padding:3px 8px;border-radius:9px;background:rgba(8,8,16,.5);font:700 11px/1.2 Montserrat,system-ui,sans-serif;text-shadow:0 1px 2px #000}
 .pz-t .pz-clock{display:block}
 .pz-hot{position:absolute;z-index:3;top:8px;left:50%;display:grid;grid-template-columns:repeat(10,var(--pz-cell));gap:3px;padding:4px;border-radius:13px;background:rgba(8,8,16,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
@@ -318,7 +324,17 @@
     const on = (t, ev, f, o) => { t.addEventListener(ev, f, o); offs.push(() => t.removeEventListener(ev, f, o)); };
     // HUD 2.0 (T-123): лоток вещей, круг позы и круг ⛏, лист эмоций (D37E — js/engine/ui.js); v2 решается один раз (HUD2.podzem)
     const v2 = hud2On();
-    let tray = null, rad = null, emoSheet = null, fade = null, vitT = 0, goalT = 0, hintT = 0, insetK = '';
+    let tray = null, rad = null, emoSheet = null, fade = null, vitT = 0, goalT = 0, hintT = 0, ghT = 0, insetK = '';
+    // подсказка один раз (T-123 fix 6, §5): строка с 💡 в левом верхнем углу под целью (не тост посреди экрана над героем), 6 с;
+    // нажал — целиком на 10 с; открыл круг позы (сделал то, о чём она) — убрать. text null — нажатие по ней
+    function ghint(text, tap){
+      const el = boxEl?.querySelector('.pz-gh'); if (!el) return;
+      clearTimeout(ghT); ghT = 0;
+      if (text === '') { if (!el.hidden) el.hidden = true; el.classList.toggle('open', false); return; }
+      if (text) { el.lastChild.textContent = text; el.classList.toggle('open', false); el.hidden = false; }
+      else if (tap) el.classList.toggle('open', !el.classList.contains('open'));
+      if (!el.hidden) ghT = setTimeout(() => ghint(''), el.classList.contains('open') ? 10000 : 6000);
+    }
     let kVit = '', kBuf = '', kHot = '', kBtn = '';   // экран игры пишем по частям — только то, что поменялось
     const hudReset = () => { lastHud = kVit = kBuf = kHot = kBtn = ''; };
     // открылось окно (вещи, меню, нокаут) — отпустить всё, что держали пальцем: кнопки под окном не видны
@@ -384,6 +400,7 @@
           <div class="pz-vit" data-a="vit"><div class="pz-bar pz-hp"><i></i><span></span></div><div class="pz-bar pz-mp"><i></i><span></span></div><b class="pz-vnum"></b></div>
           <div class="pz-buffs"></div>
           <button type="button" class="pz-goal" data-a="goals" title="Что сделать дальше — нажми, чтобы увидеть все цели"></button>
+          <button type="button" class="pz-gh" data-a="ghint" hidden aria-live="polite"><i aria-hidden="true">💡</i><span></span></button>
           <span class="pz-clock"></span>
         </div>
         <div class="pz-hot" role="toolbar" aria-label="Панель вещей"></div>
@@ -419,6 +436,7 @@
         else if (a === 'smart') API.setSmart(!G.opt.smart);
         else if (a === 'pause') { if (G.state === 'play') API.pause(); }
         else if (a === 'goals') goalsToggle();
+        else if (a === 'ghint') ghint(null, true);
         else if (a === 'vit') vitNums();
       };
       btnsEl.addEventListener('click', onHud); boxEl.addEventListener('click', onHud);
@@ -584,7 +602,7 @@
       // пальцем: подпись большой кнопки, крюк, ✋ рядом с дверью / сундуком / кроватью / Проводником
       if (touchUI) {
         // 2.0: подсказка про жесты — один раз на устройство, в первые секунды игры (потом — в «❓ Как играть»)
-        if (v2 && !hintT && G.state === 'play') hintT = window.D37TouchLayout?.hintOnce?.('podzem', 'h-gest') ? setTimeout(() => { if (root) API.toast('⬇ Удержи — сесть, лечь, эмоции · ⛏ смахни вверх — кирка, блок, ✛ точно · лоток вещей: смахни, удержи', 'info'); }, 1500) : -1;
+        if (v2 && !hintT && G.state === 'play') hintT = window.D37TouchLayout?.hintOnce?.('podzem', 'h-gest') ? setTimeout(() => { if (root) ghint('⬇ Удержи — сесть, лечь, эмоции · ⛏ смахни вверх — кирка, блок, ✛ точно · лоток вещей: смахни, удержи'); }, 1500) : -1;
         const ul = useLabel(), near = (v2 ? API.nearKind?.() : API.nearAct?.()) || '', pz = v2 ? API.poseNow?.() || '' : '', tk = ul.join() + '|' + near + '|' + (hook ? 1 : 0) + '|' + pz;
         if (tk !== kBtn) {
           kBtn = tk;
@@ -1384,7 +1402,7 @@
     const radial = () => rad || (rad = window.D37E.radial(wrap));
     function openRad(q, kind, b){
       const list = kind === 'pose' ? poseItems() : useItems(); if (!list.length || !b) return;
-      q.rad = true;
+      q.rad = true; ghint('');
       const r = b.getBoundingClientRect(), h = wrap.getBoundingClientRect(), lefty = !!window.D37Opt?.lefty || document.documentElement.classList.contains('gs-lefty');
       radial().open(list, { x: r.left + r.width / 2 - h.left + (lefty ? 40 : -40), y: r.top - h.top - 124 }, { onPick: kind === 'pose' ? posePick : usePick, from: { x: q.x0, y: q.y0 }, title: kind === 'pose' ? 'Поза' : 'В руку' });
     }
@@ -1452,7 +1470,7 @@
 
     U.dispose = () => {
       offs.forEach(f => f()); offs.length = 0;
-      clearInterval(koT); clearTimeout(selNameT); clearTimeout(vitT); clearTimeout(goalT); clearTimeout(hintT);
+      clearInterval(koT); clearTimeout(selNameT); clearTimeout(vitT); clearTimeout(goalT); clearTimeout(hintT); clearTimeout(ghT);
       tray?.dispose(); tray = null; rad?.dispose(); rad = null; emoSheet?.dispose(); emoSheet = null; fade?.dispose(); fade = null;
       if (v2) window.D37Shell?.own?.(false);
       closePause();

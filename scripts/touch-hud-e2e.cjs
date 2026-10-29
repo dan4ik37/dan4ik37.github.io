@@ -202,7 +202,15 @@ let BASE = '';
         console.log('  интерфейс занимает', cov?.pct + '%', cov && cov.W + '×' + cov.H);
         await shot(send, tag);
         results.push({ screen: VW + '×' + VH, pct: cov?.pct });
-        if (land && MODE === 'full') ok(cov.pct <= 25, `«Подземье» лёжа — интерфейс не больше 25 % (${cov.pct} %)`, cov.parts);
+        if (land && MODE === 'full') ok(cov.pct <= 16, `«Подземье» лёжа, первые секунды — интерфейс не больше 16 % (§2.2: 12 + 4; ${cov.pct} %)`, cov.parts);
+        // T-123 fix 6: подсказка жестов (первый запуск) — строка с 💡 в левом верхнем углу, а не тост посреди экрана над героем
+        if (MODE === 'full') {
+          const gh = await ev(`(() => { const w = document.querySelector('.pz-wrap').getBoundingClientRect(), e = document.querySelector('.pz-gh'), on = !!(e && !e.hidden && e.getClientRects().length), q = on ? e.getBoundingClientRect() : null;
+            const toasts = [...document.querySelectorAll('.pz-toasts > *')].filter(t => t.getClientRects().length).map(t => t.textContent.slice(0, 50));
+            return { on, text: on ? e.textContent.slice(0, 40) : '', q: q && { l: Math.round(q.left - w.left), t: Math.round(q.top - w.top), r: Math.round(q.right - w.left), b: Math.round(q.bottom - w.top), h: Math.round(q.height) }, W: Math.round(w.width), H: Math.round(w.height), toasts }; })()`);
+          ok(gh.on && /Удержи/.test(gh.text) && gh.q.h <= 34 && gh.q.l < gh.W * .05 && gh.q.b < gh.H * (land ? .32 : .2) && (!land || gh.q.r <= gh.W * .3 + 2), '«Подземье»: подсказка жестов — одна строка с 💡 в левом верхнем углу (лёжа — левее середины)', gh);
+          ok(!gh.toasts.some(t => /Удержи/.test(t)), '«Подземье»: подсказки жестов нет тостом посреди экрана', gh.toasts);
+        }
         if (MODE === 'full') await podzemChecks(B, VW, VH);
       } else if (GAME === 'world') {
         const lsW = { d37_perf: 'low', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_gfx: 'low', d37_settings: JSON.stringify({ gfxPreset: 'low', gfx: 'low', autoLand: true }) };
