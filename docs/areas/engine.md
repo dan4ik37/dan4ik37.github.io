@@ -150,6 +150,22 @@
   Phone ×4 'mid' (scripts/t145-e2e.cjs): «Новая земля» walking, clear, CPU per frame 4.24 ms with weather vs 4.32 ms without (noise);
   walking in a sandstorm 4.70 ms (77 grains + 42 streaks, fog at 62 u). Coast: sea strips of 4 m only over core ground below the sea
   (SEA_FINE) — a pit 4+ m from the shore is dry to the eye too, as for physics (TS.water).
+- **The place's own climate** (T-145 review, 30.10): `C.world({ placeAt(x, z) → { t, amp, ph } })` — the yearly mean °C, the seasonal
+  half-range and a season shift in quarters (2 — the southern hemisphere; not in mode fixed / off). climate.js takes the season
+  temperature from it instead of the class row (`seasonTemp`), the ribbon season and the accumulators too; wx.js `regionAt` copies it
+  into the region record (`t10`, `a10`, `pq`) and the integer `T_q`, the season and the roll cache key use it. No placeAt (Mir, Kubomir,
+  Studio) — bit-identical to before. Sources: `D37E.biomes.placeAtFn(src)` (32 m cells: `B.meanC(ts)` — the Whittaker borders ts .07 /
+  .22 / .40 / .62 / .80 are −15 / −3 / 7 / 17 / 24 °C; `B.ampC(tBase, m)` — 9…16 by dryness, ×0.35 where the sea-level base is hot)
+  and `P.placeAtFn()` (planet.js, 64 u cells: `tempAt` at sea level, half-range 20·|sin lat|^1.2, ×0.5 over the sea, south `ph = 2`
+  — the same declination as `P.sunDir`). Flags: TERRA_PLACE (terra-demo.js), PLANET_PLACE (planet-demo.js). Before: a hot savanna by a
+  desert used the steppe row (t 7, amp 21: −14 °C, snow, буран), the planet's 10° N used 'temperate' (snow at the equator) and both
+  hemispheres had one season. Numbers (scripts/place-climate-test.cjs, January, land within 400 m of a desert, 258 cells): class
+  climate — 164 below −5 °C and 171 with snow; the place's own — 7 and 13 (cool steppe hills only), hot biomes 0 / 0.
+- «Новая земля» since the review: day and night (TERRA_DAY: `E.dayClock(ms, 40, .2)` as Mir; the weather's `hourAt` is the same
+  function of the moment — before it was the page light fixed at 10:30, so hail, afternoon storms and night specials never came);
+  fog solid at the block ring's edge (TERRA_FOG: `(radius − 0.55) · 32 m` divided by the player's distance setting — from the air
+  the cut world edge is not seen); rain stops at `TS.skyTop(x, z)` — the height field plus the column's edits (a dug pit gets rain
+  to its floor, a fill shelters), the weather origin is one reused array.
 - Tests: wx-test (55: data, grid, twin, season, T_q ±1.1°, golden, §2.11 frequencies, kids, fronts, order, AI, WxRec, speed),
   wxfx-test (11: pools, caps, low, roof, pushSky, 0.22 B/frame), wx-e2e (Chrome: Mir + Kubomir storms, phone ×4, soak),
   world-reopen-e2e with REOPEN_WX=sandstorm (20× phone, no leaks).

@@ -592,6 +592,30 @@
       for (let t = 0.25; t <= 8; t += 0.25) if (solidAt(x, y + t, z)) { let lo = y + t - 0.25, hi = y + t; for (let i = 0; i < 6; i++) { const m = (lo + hi) / 2; if (solidAt(x, m, z)) hi = m; else lo = m; } return hi; }
       return Infinity;
     };
+    // where the sky ends above (x, z) (m) — for the weather (precip.js skyTop: rain stops on the floor of a dug pit, not at the old
+    // ground; a fill or a flattened pad shelters what is under it). The natural surface, then the column's edits in order: a dig
+    // sphere that reaches the top opens it down to the sphere's bottom, a fill sphere raises it to its top, a flatten pad cuts down
+    // to the pad (45° walls, up to FLAT_UP above it) and fills up to it (45° slopes, down to FLAT_DN). Caves and hollows under the
+    // top do not matter (rain falls on the top). Cost: the edits of one 32 m cell.
+    const FLAT_DN = T1.FLAT_DN ?? FLAT_UP;
+    TS.skyTop = (x, z) => {
+      let top = hgt(x, z);
+      const L = ne ? EB.get(TE.colKey(Math.floor(x / 32), Math.floor(z / 32))) : null;
+      if (L) for (let i = 0; i < L.length; i++) {
+        const o = L[i] * 5, dx = x - ed[o], dz = z - ed[o + 2], ey = ed[o + 1], r = ed[o + 3], mode = ed[o + 4], d2 = dx * dx + dz * dz;
+        if (mode === 2) {
+          const hd = Math.sqrt(d2) - r, cut = ey + (hd > 0 ? hd : 0), ft = ey + (hd > 0 ? -hd : 0);
+          if (top > cut && top <= ey + FLAT_UP) top = cut;          // air: max(0, hd) ≤ y − pad ≤ FLAT_UP (higher ground stays)
+          if (ft > ey - FLAT_DN && ft > top) top = ft;               // solid: −FLAT_DN < y − pad < min(0, −hd)
+          continue;
+        }
+        if (d2 >= r * r) continue;
+        const s = Math.sqrt(r * r - d2);
+        if (mode === 0) { if (top > ey - s && top <= ey + s) top = ey - s; }
+        else if (ey + s > top) top = ey + s;
+      }
+      return top;
+    };
     TS.solid = solidAt;                                              // the same sign, from the edits of one cell (fast)
     // ray march through the density field (m); first crossing into solid. Only signs are tested → signOps (one cell's edits)
     TS.ray = (ox, oy, oz, dx, dy, dz, maxT = 60) => {

@@ -14,6 +14,9 @@
 //   B.region(src, x, z, cell = 128) → { ck, cls, smask, F, alt } — BIOME_WEATHER §1.2: cls — the majority class of five samples
 //       (cell centre and ±cell/4, ties → the centre), ck — its climate.js key, surfaces OR-ed, F = FEAT bits, alt = round(mean h)
 //   B.climateKey(cls, ts) → climate.js key; B.climateAtFn(src) → (x, z) => key (cached; for C.world({ climateAt }))
+//   B.meanC(ts) → the weather's yearly mean °C on the biome table's scale; B.ampC(tBase, m) → its seasonal half-range;
+//   B.placeAtFn(src) → (x, z) => { t, amp, ph } (cached per 32 m cell; for C.world({ placeAt }), T-145: the weather's temperature
+//   is the place's own, so a savanna or a hill next to a desert never gets a steppe's −15 °C winter)
 //   B.PRESETS — strange worlds (WORLD_RULES §2) as data: { rules, param, gen, name, … presentation laws for the host game }
 (() => {
   const root = typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : globalThis;
@@ -81,17 +84,17 @@
       else if (b === 3 && c.ts >= 0.62) cls = C.tropic;
       else if (b === 4 && c.ts < 0.30) cls = C.temperate;
       out.biome = b; out.id = row.id; out.name = (V.BIOMES && V.BIOMES[b]) || row.id; out.cls = cls; out.smask = row.smask;
-      out.ts = c.ts; out.tp = c.tp; out.m = c.m; out.h = c.h;
+      out.ts = c.ts; out.tp = c.tp; out.m = c.m; out.h = c.h; out.tb = c.ts;
       out.high = c.tp < 0.22 && c.h > V.SEA + 30;
       out.coast = b === 1 || b === 0 || b === 9 || nearWater(src, x, z);
     } else {
       const T1 = E.terraCore;
       let b;
       if (src.gen === 2) b = T1.climate(src.seed, x, z, src.rules, src.param, T1V);
-      else { b = T1.biome(src.seed, x, z); T1V[4] = T1V[5] = T1.temperature01(src.seed, x, z); T1V[1] = T1.moisture01(src.seed, x, z); T1V[6] = T1.height(src.seed, x, z); }
+      else { b = T1.biome(src.seed, x, z); T1V[0] = T1V[4] = T1V[5] = T1.temperature01(src.seed, x, z); T1V[1] = T1.moisture01(src.seed, x, z); T1V[6] = T1.height(src.seed, x, z); }
       const row = B.T1[b] || B.T1[2];
       out.biome = b; out.id = row.id; out.name = row.name; out.cls = row.cls; out.smask = row.smask;
-      out.ts = T1V[4]; out.tp = T1V[5]; out.m = T1V[1]; out.h = T1V[6];
+      out.ts = T1V[4]; out.tp = T1V[5]; out.m = T1V[1]; out.h = T1V[6]; out.tb = T1V[0];   // tb — at sea level (no height lapse)
       out.high = T1V[5] < 0.22 && T1V[6] > 30;
       out.coast = b === 0 || b === 1 || nearWater(src, x, z);
     }
@@ -142,6 +145,34 @@
       const r = B.at(src, (ix + 0.5) * cell, (iz + 0.5) * cell, R);
       K[sl] = key; V[sl] = B.climateKey(r.cls, r.ts);
       return V[sl];
+    };
+  };
+  // ── the weather's temperature of a place (T-145; WORLD_RULES §1: temperature = the place's climate + season) ──
+  // yearly mean °C on the biome table's own scale: the class borders ts .07 / .22 / .40 / .62 / .80 are −15 / −3 / 7 / 17 / 24 °C
+  // (snow · tundra · cold forest and steppe · temperate · hot · tropical), piecewise linear, so neighbouring cells stay close
+  const MK = [0, -22, 0.07, -15, 0.22, -3, 0.40, 7, 0.62, 17, 0.80, 24, 1, 29];
+  B.meanC = ts => {
+    ts = +ts || 0;
+    let i = 2; while (i < MK.length - 2 && ts > MK[i]) i += 2;
+    return MK[i - 1] + (MK[i + 1] - MK[i - 1]) * (ts - MK[i - 2]) / (MK[i] - MK[i - 2]);
+  };
+  // seasonal half-range °C: continental (dry → wider: 9…16), small where the base (sea-level, latitude) temperature is hot — the
+  // base, not the place: a cool hill by a desert keeps the desert's mild winter swing (its mean is lower by the height alone)
+  const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  B.ampC = (tBase, m) => (9 + 7 * (1 - Math.max(0, Math.min(1, +m || 0)))) * (1 - 0.65 * smooth(8, 20, +tBase || 0));
+  // (x, z) → { t, amp, ph: 0 } for C.world({ placeAt }): cell centres (32 m), a small ring cache of reused records (no garbage).
+  // A flat map has no hemispheres: ph = 0
+  B.placeAtFn = (src, cell = 32) => {
+    const K = new Float64Array(256).fill(NaN), V = [], R = {};
+    for (let i = 0; i < 256; i++) V.push({ t: 0, amp: 0, ph: 0 });
+    return (x, z) => {
+      const ix = Math.floor(x / cell), iz = Math.floor(z / cell), key = ix * 1048576 + iz, sl = (Math.imul(ix, 73856093) ^ Math.imul(iz, 19349663)) & 255;
+      const o = V[sl];
+      if (K[sl] === key) return o;
+      const r = B.at(src, (ix + 0.5) * cell, (iz + 0.5) * cell, R);
+      o.t = Math.round(B.meanC(r.ts) * 10) / 10; o.amp = Math.round(B.ampC(B.meanC(r.tb), r.m) * 10) / 10; o.ph = 0;
+      K[sl] = key;
+      return o;
     };
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = B;

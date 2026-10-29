@@ -358,8 +358,8 @@
     let st = W.__wx;
     // everything a roll reads from the world: a change (W.set, ⚙️) starts clean rings
     if (st && st.gen === WX._gen && st.seed === W.seed && st.mode === W.mode && st.days === W.days && st.season === W.season && st.zone === W.zone
-      && st.front === W.front && st.el === W.elements && st.rules === W.rules && st.hourAt === W.hourAt) return st;
-    st = W.__wx = { gen: WX._gen, seed: W.seed, mode: W.mode, days: W.days, season: W.season, zone: W.zone, front: W.front, el: W.elements, rules: W.rules, hourAt: W.hourAt,
+      && st.front === W.front && st.el === W.elements && st.rules === W.rules && st.hourAt === W.hourAt && st.placeAt === W.placeAt) return st;
+    st = W.__wx = { gen: WX._gen, seed: W.seed, mode: W.mode, days: W.days, season: W.season, zone: W.zone, front: W.front, el: W.elements, rules: W.rules, hourAt: W.hourAt, placeAt: W.placeAt,
       kTag: new Float64Array(512).fill(NaN), kK: new Uint8Array(512), kA: new Float64Array(512), kE: new Float64Array(512), kI: new Int16Array(512),
       rolls: new Map(), reg: { x: NaN, z: NaN, r: null }, regTmp: {}, kind: { k: 0, pa: 0, pe: 0, pI: 0 }, lim: new Map() };
     return st;
@@ -377,27 +377,33 @@
 
   // ═══ The roll of slot s at a place (cached per (slot, region, shift)) ═══
   // ctx: lazily computed inputs of the conditions; one per roll
-  function Ctx(){ return { W: null, st: null, q: null, cid: 0, s: 0, shift: 0, reg: null, K: null, sea: 0, hr: 0, phq: 0, dry: -1, snow: -1, Tq: NaN, ap: -1, hr8: -1, tmp: { k: 0, pa: 0, pe: 0, pI: 0 } }; }
+  function Ctx(){ return { W: null, st: null, q: null, qT: null, qt: { t10: 0, amp10: 0, day10: 0 }, pq: 0, cid: 0, s: 0, shift: 0, reg: null, K: null, sea: 0, hr: 0, phq: 0, dry: -1, snow: -1, Tq: NaN, ap: -1, hr8: -1, tmp: { k: 0, pa: 0, pe: 0, pI: 0 } }; }
   const CX = Ctx();
+  // the place's own climate (C.world placeAt → region t10 / a10 / pq, T-145): T_q from the place's yearly mean and swing instead of
+  // the class row, the season shifted by pq (1/4096 of a year: 8192 — the southern hemisphere). No placeAt — the class row, as before
+  const pqOf = (W, reg) => ((W.mode === 'calendar' || W.mode === 'cycle') && reg && reg.pq ? reg.pq & 16383 : 0);
+  const phX = (x, j) => (x.pq ? (phaseQ(x.W, j, x.shift) + x.pq) & 16383 : phaseQ(x.W, j, x.shift));
+  const seaX = (x, j) => phX(x, j) >> 12;
   function setCtx(x, W, st, q, cid, s, shift, reg){
-    x.W = W; x.st = st; x.q = q; x.cid = cid; x.s = s; x.shift = shift; x.reg = reg;
-    x.sea = seasonQ(W, s, shift); x.phq = phaseQ(W, s, shift); x.hr = hourQ(W, s, shift);
+    x.W = W; x.st = st; x.q = q; x.cid = cid; x.s = s; x.shift = shift; x.reg = reg; x.pq = pqOf(W, reg);
+    if (reg && reg.t10 !== undefined) { const t = x.qt; t.t10 = reg.t10; t.amp10 = reg.a10 | 0; t.day10 = q.day10; x.qT = t; } else x.qT = q;
+    x.phq = phX(x, s); x.sea = x.phq >> 12; x.hr = hourQ(W, s, shift);
     const K = kindAt(st, W, s, q, cid, x.sea, x.tmp); x.K = { k: K.k, pa: K.pa, pe: K.pe, pI: K.pI };
     x.dry = -1; x.snow = -1; x.Tq = NaN; x.ap = -1; x.hr8 = -1;
     return x;
   }
-  const kindOf = (x, j) => kindAt(x.st, x.W, j, x.q, x.cid, seasonQ(x.W, j, x.shift), x.tmp).k;
+  const kindOf = (x, j) => kindAt(x.st, x.W, j, x.q, x.cid, seaX(x, j), x.tmp).k;
   function dryOf(x){   // consecutive slots before s with no precip or thunder, capped at 96
     if (x.dry >= 0) return x.dry;
     let n = 0;
-    const sA = seasonQ(x.W, x.s - 96, x.shift), sB = seasonQ(x.W, x.s - 1, x.shift);
-    for (; n < 96; n++) { const j = x.s - 1 - n, k = kindAt(x.st, x.W, j, x.q, x.cid, sA === sB ? sA : seasonQ(x.W, j, x.shift), x.tmp).k; if (k === 1 || k === 2) break; }
+    const sA = seaX(x, x.s - 96), sB = seaX(x, x.s - 1);
+    for (; n < 96; n++) { const j = x.s - 1 - n, k = kindAt(x.st, x.W, j, x.q, x.cid, sA === sB ? sA : seaX(x, j), x.tmp).k; if (k === 1 || k === 2) break; }
     return (x.dry = n);
   }
-  function TqAt(x, j, pk){ return T_(x.q, phaseQ(x.W, j, x.shift), hourQ(x.W, j, x.shift), pk, x.reg.alt | 0); }
-  function TqOf(x){ if (Number.isNaN(x.Tq)) x.Tq = T_(x.q, x.phq, x.hr, x.K.k, x.reg.alt | 0); return x.Tq; }
+  function TqAt(x, j, pk){ return T_(x.qT, phX(x, j), hourQ(x.W, j, x.shift), pk, x.reg.alt | 0); }
+  function TqOf(x){ if (Number.isNaN(x.Tq)) x.Tq = T_(x.qT, x.phq, x.hr, x.K.k, x.reg.alt | 0); return x.Tq; }
   function snowAt(x, s){   // 1 when snow lies (integer terms): snow class in winter, or a cold precip slot in the last 32 and no warm slot since
-    if (x.reg.cls === 5 && seasonQ(x.W, s, x.shift) === 3) return 1;
+    if (x.reg.cls === 5 && seaX(x, s) === 3) return 1;
     for (let j = s; j >= s - 32; j--) {
       const k = kindOf(x, j), T = TqAt(x, j, k);
       if (T >= 3) return 0;
@@ -455,12 +461,13 @@
   }
   const rarity = (W, r) => (r.strong && W.elements !== 'real' && W.elements !== 'off' ? r.pm >> 1 : r.pm);
   // The roll of slot s: main special (group 1), funnel kind (group 2), flavour and marker masks (groups 0, 3)
+  const placeKey = reg => (reg.t10 === undefined ? 0 : (((reg.t10 + 8192) & 16383) * 8192 + ((reg.a10 | 0) & 8191)) * 2 + (reg.pq ? 1 : 0) + 1);
   function rollAt(W, st, q, cid, s, shift, reg, rkey){
-    const key = s * 65536 + ((rkey % 65521) ^ (shift & 0xffff)), hit = st.rolls.get(key);   // a collision only recomputes
-    if (hit && hit.s === s && hit.rk === rkey && hit.sh === shift) return hit;
+    const tk = placeKey(reg), key = s * 65536 + (((rkey + tk) % 65521) ^ (shift & 0xffff)), hit = st.rolls.get(key);   // a collision only recomputes
+    if (hit && hit.s === s && hit.rk === rkey && hit.sh === shift && hit.tk === tk) return hit;
     if (st.rolls.size > 96) st.rolls.clear();
     const x = setCtx(CX, W, st, q, cid, s, shift, reg), S = W.seed ^ SALT, B = BY[reg.cls] || BY[0];
-    const R = { s, rk: rkey, sh: shift, m: null, ma: 0, me: 0, ml: 0, mI: 0, mdir: 0, f: null, fl0: 0, fl1: 0, fire: 0, mist: 0, vis: CLEAR };
+    const R = { s, rk: rkey, sh: shift, tk, m: null, ma: 0, me: 0, ml: 0, mI: 0, mdir: 0, f: null, fl0: 0, fl1: 0, fire: 0, mist: 0, vis: CLEAR };
     for (let g = 1; g <= 2; g++) {
       const u = h32(S, s, 60 + g) % 1000;
       let acc = 0;
@@ -493,7 +500,7 @@
       if (r.vis && r.g === 0) { const v = r.vis[1] - Math.floor((r.vis[1] - r.vis[0]) * (I0 - 500) / 500); if (v < R.vis) { R.vis = v; R.mist = r.id; } }
     }
     st.rolls.set(key, R);
-    x.W = x.st = x.reg = x.q = null;   // the shared scratch keeps no closed world alive
+    x.W = x.st = x.reg = x.q = x.qT = null;   // the shared scratch keeps no closed world alive
     return R;
   }
 
@@ -506,6 +513,11 @@
     if (!r) { const b = WX.biomeAt(W, x, z); if (b) r = WX.regionOfBiome(b, {}); }
     if (!r) r = WX.regionOfClimate(cKey, {});
     r.cls = (r.cls | 0) >= 0 && (r.cls | 0) < CLS.length ? r.cls | 0 : 0; r.smask = r.smask | 0; r.F = r.F | 0; r.alt = r.alt | 0; r.kc = r.kc ? 1 : 0;
+    // the place's own climate (placeAt): a copy (the game's cached record stays as it is), integers like the rest
+    if (typeof W.placeAt === 'function') {
+      let P = null; try { P = W.placeAt(x, z); } catch (e) { P = null; }
+      if (P && Number.isFinite(+P.t)) r = { cls: r.cls, smask: r.smask, F: r.F, alt: r.alt, kc: r.kc, t10: Math.round(P.t * 10), a10: Math.max(0, Math.round((+P.amp || 0) * 10)), pq: Math.round(((((+P.ph || 0) % 4) + 4) % 4) * 4096) & 16383 };
+    }
     c.x = x; c.z = z; c.ck = cKey; c.r = r;
     return r;
   }

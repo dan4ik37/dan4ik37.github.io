@@ -106,6 +106,15 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         res.planetOpenMs = ms;
         ok(await ev(`!!(window.D37E?.wx && window.D37E?.wxfx && ${T.planet}.S.wx && ${T.planet}.S.wx.wfx)`), 'планета: ядро погоды по биомам и картинка бурь загружены и подключены');
         ok(await ev(`!!document.querySelector('.pl-st')?.hidden`), 'планета: строка отладки скрыта (F3)');
+        // T-145 проверка P1: оболочка неба (ореол с орбиты) — без «погоды»: new Vector4() давал w = 1 → цвет оболочки умножался на 0
+        const halo = await ev(`(() => { let n = 0, bad = []; ${T.planet}.S.R.scene.traverse(o => { const m = o.material, u = m && m.uniforms; if (m && m.name === 'planet-sky' && u.uMode && u.uMode.value === 1) { n++; if (!u.uSkyWx || u.uSkyWx.value.w !== 0) bad.push(u.uSkyWx && u.uSkyWx.value.toArray()); } }); return { n, bad }; })()`);
+        ok(halo.n === 1 && !halo.bad.length, 'планета: ореол атмосферы с орбиты — оболочка неба без погоды (uSkyWx.w = 0)', halo);
+        await shot('planet-orbit-open-' + PROF);
+        // T-145 проверка W2: погода берёт свой климат места — у экватора в январе снега нет, на 45° ю. ш. в январе лето
+        const pw = await ev(`(() => { const S = ${T.planet}.S, W = S.W, R = S.P.R, D = Math.PI / 180; if (!W) return null; const J = Date.UTC(2027, 0, 15); let sn = 0, mn = 99;
+          for (let h = 0; h < 72; h += 1.7) { const s = W.at(120 * D * R, -10 * D * R, J + h * 3600000, 0); if (s.snow > .05) sn++; if (s.temp < mn) mn = s.temp; }
+          return { place: typeof W.placeAt === 'function', sn, mn: +mn.toFixed(1), north: W.at(30 * D * R, -45 * D * R, J, 0).season, south: W.at(30 * D * R, 45 * D * R, J, 0).season }; })()`);
+        ok(pw && pw.place && pw.sn === 0 && pw.mn > 12 && pw.north === 'winter' && pw.south === 'summer', 'планета: у экватора (10° с. ш.) в январе без снега; 45° с. ш. — зима, 45° ю. ш. — лето', pw);
         // a desert latitude: the planet's own climate by latitude
         const des = await ev(`(() => { const S = ${T.planet}.S; let any = null; for (let lat = 0; lat <= 60; lat += 2) for (let lon = -180; lon < 180; lon += 15) { const d = S.P.dirFromLatLon(lat, lon); if (S.P.climateAt(d) !== 'desert') continue; any = any || [lat, lon]; const h = S.P.localHour(d, S.t); if (h > 9 && h < 15) return [lat, lon]; } return any; })()`);
         ok(!!des, 'планета: есть пустынная широта', des);
@@ -151,6 +160,18 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         await shot('terra-open-' + PROF);
         const w0 = await ev(`${T.terra}.wx()`);
         ok(w0 && w0.region && Number.isInteger(w0.region.cls), 'новая земля: погода подключена, запись места — из логичных биомов', w0 && { state: w0.state, region: w0.region });
+        // T-145 проверка: W1 — свой климат места (саванна у пустыни без снега), W3 — сутки и часы погоды идут, TECH-4 — origin без мусора,
+        // T1 — туман сплошной к краю колец блоков
+        const tc = await ev(`(() => { const S = ${T.terra}.S, W = S.W, J = Date.UTC(2027, 0, 1), U = 2.1 / 1.8; let sn = 0, mn = 99;
+          for (let h = 0; h < 31 * 24; h += 7.3) { const s = W.at(-11600, -10400, J + h * 3600000, 38); if (s.snow > .05) sn++; if (s.temp < mn) mn = s.temp; }
+          const ms = Date.now(), lt = S.R.lighting.time, dc = D37E.dayClock(ms, 40, .2);
+          return { place: typeof W.placeAt === 'function', savSnow: sn, savMin: +mn.toFixed(1), light: +lt.toFixed(2), clock: +dc.toFixed(2), hourMoves: W.hourAt(ms) !== W.hourAt(ms + 600000),
+            origin: S.wxOrigin() === S.wxOrigin(), fogFar: +S.R.scene.fog.far.toFixed(1), edge: +((S.TS.radius - .5) * 32 * U).toFixed(1), dist: S.R.opt.dist }; })()`);
+        ok(tc.place && tc.savSnow === 0 && tc.savMin > 5, 'новая земля: саванна у пустыни в январе — без снега и мороза (свой климат места)', tc);
+        await sleep(5000); const lt2 = await ev(`${T.terra}.S.R.lighting.time`);
+        ok(Math.abs(tc.light - tc.clock) < .3 && tc.hourMoves && lt2 !== tc.light, 'новая земля: сутки идут (свет = общее время мира), часы погоды — от момента', { light: tc.light, clock: tc.clock, light5s: lt2 });
+        ok(tc.origin, 'новая земля: origin погоды — один массив (кадр без мусора)');
+        ok(tc.fogFar <= tc.edge + 1, 'новая земля: туман сплошной до края колец блоков (среза мира не видно)', tc);
         res.terraWalk = await ev(`(async () => { ${T.terra}.move(0, -1, false); const m = await (${MEASURE})(${T.terra}.S.R, ${phone ? 150 : 300}); ${T.terra}.move(0, 0, false); return m; })()`, 240000);
         console.log('  новая земля, ходьба (' + PROF + ' ×' + RATE + '):', JSON.stringify(res.terraWalk));
         // digging: 6 digs, edits applied
@@ -163,6 +184,16 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         ok(e1 > e0, 'новая земля: копаем — правки применились', { before: e0, after: e1, coreEdits: ts.edits });
         console.log('  после копания:', JSON.stringify(pS(await ev(`${T.terra}.state()`))));
         await shot('terra-dig-' + PROF);
+        // T-145 проверка TECH-6: небо кончается над рельефом с правками — в выкопанной яме дождь доходит до дна
+        const sk = await ev(`(() => { const S = ${T.terra}.S, s = ${T.terra}.state(), T1 = D37E.terraCore; let lo = 0; for (let dx = -10; dx <= 10; dx += 1) for (let dz = -10; dz <= 10; dz += 1) { const x = s.player.wx + dx, z = s.player.wz + dz, d = S.TS.skyTop(x, z) - T1.height(1337, x, z); if (d < lo) lo = d; } return +lo.toFixed(2); })()`);
+        ok(sk < -1, 'новая земля: в выкопанной яме небо ниже прежней земли (TS.skyTop с правками)', sk);
+        await ev(`(() => { ${T.terra}.S.wx.force('clear'); ${T.terra}.fly(true); ${T.terra}.vert(1); return 1; })()`); await sleep(phone ? 9000 : 5000); await ev(`(() => { ${T.terra}.vert(0); ${T.terra}.look(0.6, -0.35); return 1; })()`); await sleep(4000);
+        await shot('terra-air-' + PROF);
+        const air = await ev(`(() => { const s = ${T.terra}.state(), S = ${T.terra}.S, U = 2.1 / 1.8, g = Math.max(0, S.TS.height(s.fly.wx, s.fly.wz)) * U; return { y: Math.round(s.fly.y), above: Math.round(s.fly.y - g), fogFar: Math.round(S.R.scene.fog.far), far: Math.round(S.R.camera.far), wx: S.wx && S.wx.state.state }; })()`);
+        console.log('  полёт:', JSON.stringify(air));
+        ok(air.fogFar > air.above * 1.15, 'новая земля: в полёте в ясную погоду землю под собой видно (туман — от края на высоте камеры)', air);
+        await ev(`${T.terra}.S.wx.force(null)`);
+        await ev(`(() => { ${T.terra}.fly(false); return 1; })()`); await sleep(2500);
         await ev(`${T.terra}.S.wx.force('sandstorm')`); await sleep(9000);
         const sd = await ev(`${T.terra}.wx()`);
         ok(sd.special === 'sandstorm' && sd.wx && sd.wx.dust > .2 && sd.wx.vis < 300, 'новая земля: песчаная буря — пыль, видимость, небо', sd.wx);

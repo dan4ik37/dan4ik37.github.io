@@ -159,7 +159,7 @@
 
     // капля / град / хлопок — в случайной точке над камерой, только если столб там открыт выше точки
     function spawnDrop(i, cx, cy, cz, fill, hail){
-      const [ox, oz] = origin();
+      const OO = origin(), ox = OO[0], oz = OO[1];
       for (let k = 0; k < 3; k++) {
         const x = cx + (FR() - .5) * 2 * RAD, z = cz + (FR() - .5) * 2 * RAD, y = fill ? cy - 5 + FR() * 19 : cy + 7 + FR() * 9, tp = top(x + ox, z + oz);
         if (tp >= y - .5) continue;
@@ -171,7 +171,7 @@
       rlive[i] = 0;
     }
     function spawnFlake(i, cx, cy, cz, fill){
-      const [ox, oz] = origin();
+      const OO = origin(), ox = OO[0], oz = OO[1];
       for (let k = 0; k < 3; k++) {
         const x = cx + (FR() - .5) * 2 * RAD, z = cz + (FR() - .5) * 2 * RAD, y = fill ? cy - 5 + FR() * 17 : cy + 8 + FR() * 6, tp = top(x + ox, z + oz);
         if (tp >= y - .3) continue;
@@ -231,7 +231,7 @@ void main(){
     R.wx = {
       pre(now){
         if (!shadersOn()) { R.wxOn = false; return; }
-        const V = X.vis, p = cam.position, [ox, oz] = origin();
+        const V = X.vis, p = cam.position, OO = origin(), ox = OO[0], oz = OO[1];
         R.wxOn = V.snowCover + V.wet + V.puddle + V.ice + V.autumn + V.bare + V.fresh > .02;   // страж графики: проверить кадр с погодой
         const need = V.snowCover > .01 || V.wet > .01 || V.puddle > .01;
         if (need && o.occlusion !== false) { occInit(); occUpdate(now); }
@@ -256,7 +256,7 @@ void main(){
       if ((tOpt -= d) <= 0) { tOpt = 1; X.opts = PR.opts(); }
       if ((tq -= d) <= 0) {
         tq = .5;
-        const [px, py, pz] = where(), [ox, oz] = origin();
+        const [px, py, pz] = where(), OO = origin(), ox = OO[0], oz = OO[1];
         try { X.state = W.at(px + ox, pz + oz, Date.now(), py); } catch (e) { X.state = C.blank(); }
         // смена погоды — событие (после двух одинаковых замеров подряд: без дрожи на границе)
         const lb = X.state.state;
@@ -287,7 +287,7 @@ void main(){
     };
 
     function particles(d, now){
-      const V = X.vis, S = X.state, amt = X.q * X.opts.amount, p = cam.position, cx = p.x, cy = p.y, cz = p.z, [ox, oz] = origin();
+      const V = X.vis, S = X.state, amt = X.q * X.opts.amount, p = cam.position, cx = p.x, cy = p.y, cz = p.z, OO = origin(), ox = OO[0], oz = OO[1];
       if ((colsT -= d) <= 0) { colsT = 3; cols.clear(); }
       const day = 1 - cl(R.night || 0, 0, 1), lum = .34 + .56 * day;
       const wd = S.windDir || 0, ws = (V.wind || 0) * (.75 + .5 * (S.gust || .5)), windX = Math.cos(wd) * ws * .11, windZ = Math.sin(wd) * ws * .11;
@@ -392,7 +392,7 @@ void main(){
     // звук: шум дождя (под крышей — тише и глуше), ветер в метель и на сильном ветру
     function sound(d){
       if (!A?.loop) return;
-      const V = X.vis, [px, py, pz] = where(), [ox, oz] = origin(), covered = top(px + ox, pz + oz) > py + 2.5;
+      const V = X.vis, [px, py, pz] = where(), OO = origin(), ox = OO[0], oz = OO[1], covered = top(px + ox, pz + oz) > py + 2.5;
       const du = WFX ? Math.max(WFX.K.dust, WFX.K.flat * .5) : 0;   // буря: ветер громче и ниже (песок шипит, буран воет)
       const vr = V.rain * .5 * (covered ? .35 : 1), vw = Math.max(V.snow * .35, cl((V.wind - 6) / 10, 0, 1) * .3, du * .55) * (covered ? .4 : 1);
       if (vr > .005 && !hR) hR = A.loop('amb_rain', { vol: 0 });

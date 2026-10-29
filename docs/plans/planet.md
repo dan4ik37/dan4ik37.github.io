@@ -457,6 +457,17 @@ passes `flush` to P.lodShow (planet.js): shown nodes finer than their target lea
 Orbit after landing: 188 → 11 chunks within ~2 s, 1 flush; standing on the ground: 0 selects, 0 flushes per 5 s (unchanged); running 15 s:
 68 selects, 1 flush. Orbit frame ×4: 3.81 → 1.76 ms.
 
+**Review fixes (30.10, GAMES_VER 157).** (1) The halo seen from orbit was gone in v2 with every flag: the outer sky shell got
+`uSkyWx = new Vector4()` — three.js starts w at 1, so the shader mixed the shell colour to black (additive: nothing drawn). Now
+(0, 0, 0, 0); t145-e2e checks the uniform. (2) Weather temperature: `P.placeAtFn()` gives the weather the planet's own yearly mean
+(`tempAt` at sea level), a half-range 20·|sin lat|^1.2 (×0.5 over the sea) and the southern hemisphere's season shifted by half a
+year — the same declination as `P.sunDir` (before: the class row — 'temperate' at 10° N gave snow at −10 °C; both hemispheres one
+season). The snow on the ground near the camera fades from 0.25 · 3000 u (was 0.6: a hard disc). (3) World clock: `/time` only after
+`/health` says `time: 1`; the old live server answers `/time` with a 404 without CORS (TypeError + 2 console errors per sync).
+(4) The weather hour is taken at the moment asked (`st.CL.tOf(ms)`), not the current one. TECH-1 (v2 vs v1 on the ground, review:
+standing +0.33 ms ×4 paired median, running +0.46) — not changed here: the difference is the v2 features themselves (weather particles,
+7 vertex attributes, +5 draw calls); the select-while-waiting rule costs nothing standing (0 selects once the show has converged).
+
 ## 13. Step list → board tasks
 | Step | What | Size | After |
 |---|---|---|---|

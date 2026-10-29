@@ -658,3 +658,27 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
   column — the sea surface is not drawn (no full-screen «underwater» blue).
 - Skip (not this step): Kubomir v4 for NEW worlds (KB_GEN = 4 and the co-op genVer line are in T-138 files); hail harm and other body
   effects (WX5); saving edits in «Новая земля» (honest FAQ line: «пока нет»).
+
+## 30.10 — T-145 review fixes (branch t145-planet-all, GAMES_VER 157)
+- Take: P1 — the planet's sky shell (halo seen from orbit) had `uSkyWx = new Vector4()` (w = 1): the shell colour was multiplied by 0.
+  Now (0, 0, 0, 0); the halo is back (e2e checks the uniform, screenshot planet-orbit-open).
+- Take: W1 / W2 — the weather takes the place's own climate (`C.world({ placeAt })`, climate.js + wx.js): «Новая земля» by the biome
+  table's temperature (B.meanC / B.ampC), the planet by its latitude temperature with the south's seasons reversed (the sun's
+  declination). Rollbacks: TERRA_PLACE, PLANET_PLACE. Without placeAt — bit-identical (Mir, Kubomir, Studio). Cool steppe hills by a
+  desert can still get a frosty January night (the generator's own lapse makes them a cold-band biome) — realistic, kept.
+- Take: W3 — «Новая земля» has day and night (E.dayClock as Mir, TERRA_DAY); the weather hour is a function of the moment, so hail,
+  afternoon storms and night specials happen. The planet's weather hour is also taken at the moment asked (st.CL.tOf(ms)).
+- Take: T1 (part) — fog solid at the block ring's edge (TERRA_FOG, divided by the player's distance setting): the cut edge is not
+  seen from the air. Skip: a far low-detail horizon (needs its own LOD ring; next step). Texts no longer promise looking far.
+- Take: T2 (texts only) — no «переходы плавные», a FAQ line «деревьев пока нет». Skip: vegetation and blended biome borders (the
+  colour is made in terra.wasm — needs a new ABI in E:\d37-terrain; owner priority).
+- Take: TECH-2 — the clock asks /time only when /health says `time: 1` (the old live server answers /time with a 404 without CORS:
+  TypeError + 2 console errors per sync); TypeError → 30 min without our server; `busy` is released on every exit (after an RT
+  answer every later sync returned the old promise — the 10-min resync never ran). Server: /health `time: 1`, 404 / 405 with CORS.
+- Take: TECH-4 (one origin array), TECH-5 (T145_OPEN by literal spreads: the XSS scan proves the tables again, 16 allowlist entries
+  removed), TECH-6 (TS.skyTop with edits), S1 (⛰️ and the other text-style icons with U+FE0F).
+- Skip: W4 hail harm (WX5, not built: no game reads WX.hailHarm yet — needs health in «Новая земля» / a body effects step);
+  TECH-3 (terra physics switches from the density field to the shown mesh when the block is uploaded — frame-rate dependent for a
+  few frames after a dig; the steady state is the same bits on every device; a deterministic switch needs a physics redesign);
+  TECH-1 (v2 on the ground costs +0.33…0.46 ms ×4 over v1 — mostly weather particles, 7 vertex attributes and +5 draw calls; kept, numbers
+  in planet.md §12b).

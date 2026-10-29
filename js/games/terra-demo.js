@@ -40,6 +40,12 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
   const TERRA_WX = true;
   // T-145: гладь у берега — полосами 4 м только над рельефом ниже моря (яма в 4+ м от берега сухая и на вид). Откат: SEA_FINE = false
   const SEA_FINE = true;
+  // T-145 (проверка): TERRA_DAY — сутки идут (общее время мира, как в «Мире»: E.dayClock, 40 мин, ночь — пятая часть) и часы погоды
+  // — те же (град и грозы — днём, светлячки и холодные ночи — ночью); откат — false: всегда 10:30, как раньше.
+  // TERRA_PLACE — температура погоды — своя у места (D37E.biomes.placeAtFn: саванна у пустыни без зимы); откат — false: по классу климата.
+  // TERRA_FOG — туман сплошной там, где кончаются блоки (сверху не виден срез мира; учитывает дальность из настроек); откат — false
+  const TERRA_DAY = true, TERRA_PLACE = true, TERRA_FOG = true;
+  const terraHour = ms => (TERRA_DAY && window.D37E?.dayClock ? window.D37E.dayClock(ms, 40, .2) : 10.5);
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   let S = null;
 
@@ -80,7 +86,8 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     const sp = findSpawn(T1);
     st.ax = Math.floor(sp.x / 32) * 32; st.az = Math.floor(sp.z / 32) * 32;
     TM.setAnchor(st.ax, st.az);
-    R.setLighting({ time: 10.5, brightness: 1.05, fogEnd: Math.max(120, (TS.radius * 32 - 10) * U) });
+    R.setLighting({ time: terraHour(Date.now()), brightness: 1.05, fogEnd: TERRA_FOG ? fogEndOf(st, R, TS) : Math.max(120, (TS.radius * 32 - 10) * U) });
+    st.lightT = 2;
     // вода: море (0 м) — плитками над столбцами, где рельеф сам уходит под воду (SEA_TILES), иначе прежняя плоскость под камерой
     const T = R.T;
     if (SEA_TILES) seaInit(st);
@@ -162,16 +169,37 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
   // погода: координаты погоды — метры мира (якорь + ед. / U; переезд якоря её не сдвигает), климат дождя и снега — по классу места
   // (biomes.climateAtFn), особая погода — по записи места (wx.regionOf), небо кончается над рельефом ядра (в пещере не льёт). Время
   // года — календарь (как в «Мире»), сутки — свет страницы. Сломалась — без неё
+  // туман: сплошной к краю колец блоков (у 10 % направлений блоки кончаются раньше — радиус − 0,55 блока) на высоте камеры над
+  // землёй (край в полёте — дальше: √(край² + высота²), землю под собой видно), с учётом дальности из настроек игрока (render.js:
+  // туман = fogEnd × дальность) — сверху и вдали не видно среза мира над пустотой
+  function fogEndOf(st, R, TS){
+    const O = R.opt || {}, k = (+O.dist || 1) * (O.fog === false ? 1.6 : 1), E = (TS.radius - .55) * 32, c = R.camera.position;
+    const h = st.ax === undefined ? 0 : Math.max(0, c.y / U - Math.max(0, TS.height(st.ax + c.x / U, st.az + c.z / U)));
+    return Math.max(50, Math.sqrt(E * E + h * h) * U / k);
+  }
+  // раз в 2 с (в полёте — 0,5 с: высота меняется быстро): время суток (TERRA_DAY) и туман (TERRA_FOG) — одним вызовом, если поменялось
+  function lightFit(st){
+    st.lightT = st.mode === 'fly' ? .5 : 2;
+    const R = st.R, L = {};
+    if (TERRA_DAY) L.time = terraHour(Date.now());
+    if (TERRA_FOG) { const fe = fogEndOf(st, R, st.TS); if (Math.abs(fe - (R.lighting.fogEnd || 0)) > .5) L.fogEnd = fe; }
+    if (L.time !== undefined || L.fogEnd !== undefined) R.setLighting(L);
+  }
   function weatherInit(st){
     const E = window.D37E, Cl = E.climate, B = E.biomes, T1 = E.terraCore, R = st.R;
     if (!Cl || !Cl.world || !Cl.attach || !B || !B.t1) return;
     try {
       const src = B.t1(SEED, { gen: TERRA_GEN });
-      const W0 = Cl.world({ seed: 'terra-' + SEED, mode: 'calendar', climateAt: B.climateAtFn(src), lapse: -.0065, seaY: 0, front: 4000,
-        hourAt: () => R.lighting?.time ?? 10.5, wxRegionAt: E.wx?.regionOf ? E.wx.regionOf(src) : null, realm: 'kids' });
+      // часы погоды — функция момента (E.dayClock, как свет страницы), не «сейчас»: окна особой погоды у всех и всегда одни;
+      // температура — своя у места (placeAt), небо кончается над рельефом С ПРАВКАМИ (TS.skyTop: в выкопанной яме льёт до дна)
+      const TS = st.TS, O2 = st.wxO = [0, 0];
+      const W0 = Cl.world({ seed: 'terra-' + SEED, mode: 'calendar', climateAt: B.climateAtFn(src), placeAt: TERRA_PLACE && B.placeAtFn ? B.placeAtFn(src) : null, lapse: -.0065, seaY: 0, front: 4000,
+        hourAt: terraHour, wxRegionAt: E.wx?.regionOf ? E.wx.regionOf(src) : null, realm: 'kids' });
       const WA = Object.create(W0);
       WA.at = (x, z, ms, y) => W0.at(x / U, z / U, ms, y == null ? y : y / U);
-      st.wx = Cl.attach(R, { world: WA, origin: () => [st.ax * U, st.az * U], skyTop: (x, z) => Math.max(0, T1.height(SEED, x / U, z / U)) * U, occlusion: false });
+      st.wxOrigin = () => { O2[0] = st.ax * U; O2[1] = st.az * U; return O2; };   // один массив на игру (кадр без мусора)
+      st.wx = Cl.attach(R, { world: WA, origin: st.wxOrigin,
+        skyTop: TS.skyTop ? (x, z) => Math.max(0, TS.skyTop(x / U, z / U)) * U : (x, z) => Math.max(0, T1.height(SEED, x / U, z / U)) * U, occlusion: false });
       st.W = W0;
     } catch (e) { console.warn('терра: погода не запустилась', e); st.wx = null; }
   }
@@ -391,6 +419,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     // камера ниже моря в сухой яме у берега (плитка моря 32 м накрывает и её): гладь не рисуем — иначе из ямы «под водой» (T-145)
     if (st.seaG) { const dry = cam.position.y < 0 && st.TS.water(st.ax + cam.position.x / U, st.az + cam.position.z / U) !== 0; if (st.sea.visible === dry) st.sea.visible = !dry; }
     if (st.wx) try { st.wx.frame(dt); } catch (e) { console.warn('терра: погода', e); try { st.wx.dispose(); } catch (e2) {} st.wx = null; }
+    if ((TERRA_DAY || TERRA_FOG) && (st.lightT -= dt) <= 0) lightFit(st);
     I.frameEnd(); C.frameEnd();
     const mob = !!window.D37E.isMobile?.();
     TM.upload(mob ? 2 : 3, mob ? 2 : 4);
@@ -406,7 +435,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
   }
   function hudText(st){
     const P = st.mode === 'walk' ? st.Pl.ch : st.fly, wx = st.ax + P.x / U, wz = st.az + P.z / U, wy = P.y / U;
-    const b = st.TS.climate(wx, wz, st.clim || (st.clim = new Float64Array(8))), tC = st.TS.gen === 2 ? ` ${Math.round(-24 + 54 * st.clim[4])}°` : '';
+    const b = st.TS.climate(wx, wz, st.clim || (st.clim = new Float64Array(8))), Bm = window.D37E.biomes, tC = st.TS.gen === 2 ? ` ${Math.round(Bm?.meanC ? Bm.meanC(st.clim[4]) : -24 + 54 * st.clim[4])}°` : '';
     const s = st.TS.stats(), m = st.TM.stats(), rs = st.R.stats;
     const fps = rs.frames ? 1000 / (rs.sumDt / rs.frames) : 0, cpu = rs.frames ? rs.sumCpu / rs.frames : 0;
     st.h1.textContent = `⛰ ${st.mode === 'fly' ? '✈ полёт' : '🚶 пешком'} · ${Math.round(wx)}, ${Math.round(wy)}, ${Math.round(wz)} м · ${BIO[b] || ''}${tC}`;

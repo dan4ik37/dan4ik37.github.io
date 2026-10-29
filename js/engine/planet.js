@@ -436,6 +436,26 @@
       if (m < .42) return 'steppe';
       return 'temperate';
     };
+    // Свой климат места для погоды (T-145, C.world({ placeAt }), WORLD_RULES §1): x, z — координаты погоды планеты (x — долгота × R,
+    // z — −широта × R, как V.climateAt). t — средняя за год у моря (tempAt без высоты: высоту добавит погода), amp — полуразмах по
+    // году: у экватора ~0, к полюсам до ~20° (над морем вдвое меньше), ph — сдвиг сезона: южное полушарие — на полгода (2 четверти:
+    // там лето, когда солнце над югом — то же склонение, что у P.sunDir). Клетки 64 ед., кольцо записей — без мусора
+    P.placeAtFn = (cell = 64) => {
+      const K = new Float64Array(256).fill(NaN), V = [], DD = [0, 0, 0];
+      for (let i = 0; i < 256; i++) V.push({ t: 0, amp: 0, ph: 0 });
+      return (x, z) => {
+        const ix = Math.floor(x / cell), iz = Math.floor(z / cell), key = ix * 1073741824 + iz, sl = (Math.imul(ix, 73856093) ^ Math.imul(iz, 19349663)) & 255;
+        const o = V[sl];
+        if (K[sl] === key) return o;
+        const lat = clamp(-(iz + .5) * cell / R / DEG, -90, 90), lon = (ix + .5) * cell / R / DEG;
+        const d = P.dirFromLatLon(lat, lon, DD), sea = D.sea != null && H(d[0], d[1], d[2]) < D.sea;
+        o.t = Math.round(tempAt(d[0], d[1], d[2], D.sea ?? 0) * 10) / 10;
+        o.amp = Math.round(20 * Math.pow(abs(d[1]), 1.2) * (sea ? .5 : 1) * 10) / 10;
+        o.ph = lat < 0 ? 2 : 0;
+        K[sl] = key;
+        return o;
+      };
+    };
     // всё о точке поверхности: { h, water (глубина ≥ 0 или 0), r, g, b }
     P.surf = (d, out = {}) => {
       const h = H(d[0], d[1], d[2]);

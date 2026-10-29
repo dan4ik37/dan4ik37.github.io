@@ -166,7 +166,11 @@
   // o: seed, mode ('calendar' | 'cycle' | 'fixed' | 'off'), days (игровых суток на сезон, cycle), season (fixed), weather ('auto' |
   // состояние), climateAt(x, z) → климат, lapse (°C на единицу высоты над seaY), seaY, front (единиц за w-ч: фронт идёт с запада на
   // восток; 0 — везде одновременно), hourAt(мс) → время суток игры (calendar), gameTime() → { day, hour } (cycle), storm (false —
-  // без гроз: детский городок), zone (минут к востоку от UTC для календаря; по умолчанию МСК)
+  // без гроз: детский городок), zone (минут к востоку от UTC для календаря; по умолчанию МСК),
+  // placeAt(x, z) → { t, amp, ph } | null — свой климат места (T-145, WORLD_RULES §1: температура — от места + сезон): t — средняя за
+  // год (°C, на уровне моря / земли места), amp — полуразмах по году (°C), ph — сдвиг сезона в четвертях года (2 — южное полушарие:
+  // там зима, когда у нас лето; в mode fixed / off не сдвигается). Нет placeAt (или null) — как раньше: t и amp — у класса климата.
+  // Значения — постоянные в своей клетке (игра квантует сама): по ним же считает особая погода (wx.js, целые)
   C.MODES = ['calendar', 'cycle', 'fixed', 'off'];
   C.sanitize = (d = {}) => {   // настройки мира из файла / сети: только известное, в пределах
     d = d && typeof d === 'object' ? d : {};
@@ -186,6 +190,7 @@
       climateAt: typeof o.climateAt === 'function' ? o.climateAt : () => o.climate || 'temperate',
       lapse: num(o.lapse, -.12), seaY: num(o.seaY, 0), front: num(o.front, 4000), zone: num(o.zone, C.ZONE), storm: o.storm !== false,
       hourAt: typeof o.hourAt === 'function' ? o.hourAt : null, gameTime: typeof o.gameTime === 'function' ? o.gameTime : null,
+      placeAt: typeof o.placeAt === 'function' ? o.placeAt : null,
       // особая погода (wx.js): запись места (класс климата, поверхности, приметы, детский городок), биом, мир детей/взрослых, «Стихии»
       wxRegionAt: typeof o.wxRegionAt === 'function' ? o.wxRegionAt : null, biomeAt: typeof o.biomeAt === 'function' ? o.biomeAt : null,
       realm: o.realm === 'adult' ? 'adult' : 'kids', elements: ['rare', 'real', 'off'].includes(o.elements) ? o.elements : 'rare', rules: o.rules === 'absurd' ? 'absurd' : 'earth',
@@ -203,11 +208,16 @@
     W.set = p => { if (p && typeof p === 'object') for (const k of ['mode', 'days', 'season', 'weather', 'storm', 'elements', 'realm']) if (p[k] !== undefined) W[k] = k === 'days' ? cl(num(p[k], 3), .25, 60) : p[k]; if (p?.seed !== undefined) W.seed = C.seedOf(p.seed); cache.clear(); return W; };
     const cache = new Map();
     const tmp = { precip: 0, thunder: 0, fog: 0, heat: 0, cloud: 0, hail: 0 };
+    // место: сдвиг сезона (четверти года) — только в calendar / cycle; температура сезона места (пик — середина лета)
+    const shiftOf = PL => (W.mode === 'calendar' || W.mode === 'cycle') && PL.ph ? ((+PL.ph % 4) + 4) % 4 : 0;
+    const placeTemp = (PL, ph) => PL.t + PL.amp * Math.cos(PI2 * (ph - 1.5) / 4);
     // погода и температура в момент w (ms — тот же момент в реальном времени) в точке
     function sample(x, z, y, w, ms, cKey, o){
       const c = clim(cKey), wl = W.front ? w - x / W.front : w;
-      const ph = W.phaseAt(wl, ms), season = C.seasonOf(ph), hour = W.hourAtW(wl, ms);
-      const seasonAt = W.mode === 'calendar' ? ww => C.seasonOf(C.phaseCal(ms + (ww - wl) * C.W_MIN * 60000, W.zone)) : ww => C.seasonOf(W.phaseAt(ww, ms));
+      // свой климат места (placeAt): средняя, размах, сдвиг сезона (южное полушарие); нет — у класса климата, как раньше
+      const PL = W.placeAt ? W.placeAt(x, z) : null, sh = PL ? shiftOf(PL) : 0;
+      const ph = sh ? (W.phaseAt(wl, ms) + sh) % 4 : W.phaseAt(wl, ms), season = C.seasonOf(ph), hour = W.hourAtW(wl, ms);
+      const seasonAt = W.mode === 'calendar' ? ww => C.seasonOf(C.phaseCal(ms + (ww - wl) * C.W_MIN * 60000, W.zone) + sh) : ww => C.seasonOf(W.phaseAt(ww, ms) + sh);
       if (W.weather !== 'auto') { const f = FIXED[W.weather] || FIXED.clear; tmp.precip = f.precip || 0; tmp.thunder = f.thunder || 0; tmp.fog = f.fog || 0; tmp.heat = f.heat || 0; tmp.cloud = f.cloud || 0; tmp.hail = 0; }
       else mix(W.seed, wl, c, seasonAt, tmp);   // одна лента событий на мир: фронт везде тот же, климат решает, во что он выльется
       // особая погода по биому (wx.js): в своём окне поднимает части ленты под себя; вне окон — null, и всё ниже — как было
@@ -215,7 +225,7 @@
       if (!W.storm) { tmp.precip = Math.max(tmp.precip, tmp.thunder * .8); tmp.thunder = 0; tmp.hail = 0; }
       const sun = sm(6, 9, hour) * (1 - sm(18, 21, hour));   // день (0 — ночь)
       // температура: сезон + сутки (облака сглаживают) + высота + медленный шум
-      const T0 = C.seasonTemp(ph, c) + c.dayA * Math.cos(PI2 * (hour - 15) / 24) * (1 - .55 * tmp.cloud) + W.lapse * Math.max(0, y - W.seaY) + (noise1(W.seed, 31, w / 12) - .5) * 4 + (sp ? sp.tAdd : 0);
+      const T0 = (PL ? placeTemp(PL, ph) : C.seasonTemp(ph, c)) + c.dayA * Math.cos(PI2 * (hour - 15) / 24) * (1 - .55 * tmp.cloud) + W.lapse * Math.max(0, y - W.seaY) + (noise1(W.seed, 31, w / 12) - .5) * 4 + (sp ? sp.tAdd : 0);
       let snowF = 1 - sm(.5, 2.5, T0);
       const fx = W.weather !== 'auto' ? FIXED[W.weather] : null;
       if (fx?.snowOnly || sp?.snowOnly) snowF = 1; else if (fx?.rainOnly || sp?.rainOnly) snowF = 0;
@@ -245,12 +255,14 @@
     const prev = {};
     // Накопители по прошлому этой точки: мокро, лужи, снег на земле, лёд на воде (30 w-ч назад, шаг 0,5 w-ч)
     function accum(x, z, y, w, ms, cKey){
-      const c = clim(cKey), key = cKey + '|' + Math.round(y / 8) + '|' + (W.front ? Math.round(x / 500) : 0) + '|' + Math.floor(w * 4) + '|' + W.weather + W.mode + (C.SPECIAL && E.wx ? '|wx' + Math.round(x / 128) + ',' + Math.round(z / 128) : '');
+      const PL = W.placeAt ? W.placeAt(x, z) : null, sh = PL ? shiftOf(PL) : 0;
+      const c = clim(cKey), key = cKey + '|' + Math.round(y / 8) + '|' + (W.front ? Math.round(x / 500) : 0) + '|' + Math.floor(w * 4) + '|' + W.weather + W.mode + (C.SPECIAL && E.wx ? '|wx' + Math.round(x / 128) + ',' + Math.round(z / 128) : '')
+        + (PL ? '|p' + PL.t + ',' + PL.amp + ',' + sh : '');
       const hit = cache.get(key); if (hit) return hit;
       if (cache.size > 64) cache.clear();
       const N = 60, dt = .5, msPerW = W.mode === 'calendar' ? C.W_MIN * 60000 : 0;
       // начало окна — «как обычно в это время года» (зимой снег лежит, озёра во льду)
-      const w0 = w - N * dt, ms0 = ms - N * dt * msPerW, ph0 = W.phaseAt(W.front ? w0 - x / W.front : w0, ms0), Tm = C.seasonTemp(ph0, c) + W.lapse * Math.max(0, y - W.seaY);
+      const w0 = w - N * dt, ms0 = ms - N * dt * msPerW, ph0 = (W.phaseAt(W.front ? w0 - x / W.front : w0, ms0) + sh) % 4, Tm = (PL ? placeTemp(PL, ph0) : C.seasonTemp(ph0, c)) + W.lapse * Math.max(0, y - W.seaY);
       let glaze = 0, drift = 0, wet = 0, puddle = 0, snowC = W.weather === 'auto' ? cl((-Tm - 1) / 6, 0, 1) * Math.min(1, c.snowy) : 0, ice = W.weather === 'auto' ? cl((-Tm - 3) / 5, 0, 1) : 0;
       for (let i = N - 1; i >= 0; i--) {
         const s = sample(x, z, y, w - i * dt, ms - i * dt * msPerW, cKey, prev), T = s.temp;

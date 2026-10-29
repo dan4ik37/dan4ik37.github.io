@@ -166,6 +166,42 @@ const GOLDEN_EDITS = [10, 5, -20, 6, 0, 10, 14, -20, 4, 1, -300, -10, 400, 9, 0]
     TS.dispose();
   }
 
+  // ── T-145 TECH-6: TS.skyTop (where rain stops) follows the edits — the same as a scan of the density field from above ──
+  {
+    const scan = (TS, x, z) => {   // the highest solid point of the column (density > 0), 2 cm steps + bisection
+      const h = T1.height(1337, x, z);
+      for (let y = h + 40; y > h - 40; y -= 0.02) if (TS.density(x, y, z) > 0) { let lo = y, hi = y + 0.02; for (let i = 0; i < 20; i++) { const m = (lo + hi) / 2; if (TS.density(x, m, z) > 0) lo = m; else hi = m; } return lo; }
+      return -Infinity;
+    };
+    const cases = [
+      ['dig', TS => { const h = T1.height(1337, 40, -25); TS.dig(40, h, -25, 3); }],
+      ['fill on the ground', TS => { const h = T1.height(1337, 40, -25); TS.fill(40, h + 1, -25, 2.5); }],
+      ['floating fill', TS => { const h = T1.height(1337, 40, -25); TS.fill(40, h + 6, -25, 2); }],
+      ['buried cave dig (top unchanged)', TS => { const h = T1.height(1337, 40, -25); TS.dig(40, h - 8, -25, 2.5); }],
+      ['dig then fill', TS => { const h = T1.height(1337, 40, -25); TS.dig(40, h, -25, 3); TS.fill(40, h - 2, -25, 2); }],
+      ['flatten pad', TS => { const h = T1.height(1337, 40, -25); TS.flatten(40, h - 1.5, -25, 5); }],
+      ['flatten above (embankment)', TS => { const h = T1.height(1337, 40, -25); TS.flatten(40, h + 3, -25, 4); }],
+    ];
+    for (const [name, make] of cases) {
+      const TS = TE.create({ seed: 1337, workers: 0 });
+      make(TS);
+      let worst = 0, n = 0, natural = 0;
+      for (let dx = -12; dx <= 12; dx += 1.5) for (let dz = -12; dz <= 12; dz += 1.5) {
+        const x = 40 + dx, z = -25 + dz, hn = T1.height(1337, x, z);
+        // only where the natural top is the height field (no cave mouth at the surface)
+        if (T1.density(1337, x, hn - 0.05, z, null, 0) <= 0 || T1.density(1337, x, hn + 0.05, z, null, 0) > 0) { natural++; continue; }
+        const d = Math.abs(TS.skyTop(x, z) - scan(TS, x, z)); if (d > worst) worst = d; n++;
+      }
+      check(n > 200 && worst < 0.05, `skyTop = density scan: ${name} (${n} columns, worst ${worst.toFixed(3)} m)`);
+      TS.dispose();
+    }
+    const TS = TE.create({ seed: 1337, workers: 0 }), h = T1.height(1337, 40, -25);
+    check(Math.abs(TS.skyTop(40, -25) - h) < 1e-9, 'skyTop without edits = the height field');
+    TS.dig(40, h, -25, 3);
+    check(TS.skyTop(40, -25) < h - 2.9, 'rain reaches the floor of a dug pit');
+    TS.dispose();
+  }
+
   // ── physics == the drawn mesh (T-111 review: feet were up to 0.35 m off at craters, 8.3 m at river banks) ──
   //    TS on the page builder; "showing" = takeReady + recycle (what terra-mesh does). Reference: the JS core's own mesh of the
   //    same blocks (all quads of the 3×3 blocks around, float positions) — the highest crossing of the vertical line.

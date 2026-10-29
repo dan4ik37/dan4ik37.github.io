@@ -268,7 +268,7 @@ void main(){
   // погода у камеры (V.setWeather): снег ложится на смотрящее вверх (край — пятнами), мокрая земля темнее; дальше uWx.z — нет
   // (там свой климат); на воде — нет
   if ( uWx.x + uWx.y > 0.0 ) {
-    float wk = ( 1.0 - smoothstep( uWx.z * 0.6, uWx.z, cd ) ) * ( 1.0 - wf );
+    float wk = ( 1.0 - smoothstep( uWx.z * 0.25, uWx.z, cd ) ) * ( 1.0 - wf );   // мягкий край (T-145: не «диск» снега)
     float sn = uWx.x * wk * smoothstep( 0.62, 0.86, dot( N, vUp ) + ( d37N( vW.xz * 0.35 ) - 0.5 ) * 0.3 );
     alb = mix( alb * ( 1.0 - 0.35 * uWx.y * wk ), vec3( 0.80, 0.83, 0.87 ), sn );
   }
@@ -469,7 +469,7 @@ void main(){
     // небо: купол (у камеры) и оболочка (вокруг планеты); SKYWX — цвет и сила погоды в небе купола (V.setWeather)
     const SKYWX = { value: new T.Vector4(0, 0, 0, 0) };
     const mkSky = mode => {
-      const u = { ...U, uMode: { value: mode }, uSky: { value: new T.Vector4().copy(U.uSky.value) }, uSkyWx: mode === 0 ? SKYWX : { value: new T.Vector4() } };
+      const u = { ...U, uMode: { value: mode }, uSky: { value: new T.Vector4().copy(U.uSky.value) }, uSkyWx: mode === 0 ? SKYWX : { value: new T.Vector4(0, 0, 0, 0) } };  // w = 0: Vector4() по умолчанию w = 1 (оболочка чернела)
       const m = new T.ShaderMaterial({ name: 'planet-sky', uniforms: u, vertexShader: SKY_V, fragmentShader: SKY_F, fog: false, lights: false, depthWrite: false,
         transparent: true, blending: T.AdditiveBlending, side: T.BackSide });
       m.customProgramCacheKey = () => 'd37planetsky2';
@@ -832,6 +832,9 @@ void main(){
     //    планеты: x — на восток (долгота × R), z — на юг (−широта × R) — фронт идёт с запада, переезд якоря её не сдвигает ──
     const WD = [0, 0, 0];
     V.climateAt = (x, z) => P.climateAt(P.dirFromLatLon(clamp(-z / P.R * 180 / Math.PI, -90, 90), x / P.R * 180 / Math.PI, WD));
+    // свой климат места для погоды (C.world({ placeAt }), T-145): средняя за год по широте и рельефу, размах по году (у экватора ~0),
+    // на юге сезоны наоборот — как у солнца планеты (P.sunDir). Без него погода брала t и размах у класса: снег на экваторе
+    V.placeAt = P.placeAtFn ? P.placeAtFn() : null;
     // где камера (или точка куска x, y, z) для W.at(x, z, ms, высота над морем): [x, z, высота]
     V.weatherPos = (x, y, z, out = [0, 0, 0]) => {
       const X = P.toBF(V.fr, x, y, z, [0, 0, 0]), l = sqrt(X[0] * X[0] + X[1] * X[1] + X[2] * X[2]) || 1, ll = P.latLon([X[0] / l, X[1] / l, X[2] / l]);
