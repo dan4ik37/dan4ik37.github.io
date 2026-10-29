@@ -5,6 +5,8 @@
 const T0 = 'GAME_IMPL.kubomir._test';
 const tray = `(() => { const r = document.querySelector('.kb-hrow .kb-slot.on')?.getBoundingClientRect(); return r ? [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] : null; })()`;
 const poseBtn = `(() => { const r = document.querySelector('.kb-tbtn[data-id="pose"]:not([hidden])')?.getBoundingClientRect(); return r && r.width ? [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] : null; })()`;
+// ждать, пока на экране нет sel (лоток свернулся сам, круг закрылся сам — по 3 с; на ЦП ×4 таймеры опаздывают)
+const gone = (T, sel) => T.ev(`(async () => { for (let i = 0; i < 40 && document.querySelector(${JSON.stringify(sel)}); i++) await new Promise(r => setTimeout(r, 200)); return 1; })()`, 20000);
 const hold = async (T, xy, ms) => { await T.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: xy[0], y: xy[1], id: 1, radiusX: 4, radiusY: 4 }] }); await T.sleep(ms); await T.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await T.sleep(120); };
 module.exports = {
   url: '/#/games/kubomir',
@@ -48,13 +50,13 @@ module.exports = {
       console.log('  лоток раскрыт:', await T.ev(`!!document.querySelector('.kb-hrow.kb-open')`));
     },
     async wheel(T){
-      await T.sleep(3300);   // лоток свернулся сам (3 с)
       if (!T.P.mobile) return;
+      await gone(T, '.kb-hrow.kb-open');   // лоток свернулся сам (3 с)
       const xy = await T.ev(tray); if (xy) await hold(T, xy, 600);
       console.log('  круг вещей:', await T.ev(`(() => { const r = document.querySelector('.kb-wrap .e2-radial:not([hidden])'); return r ? r.querySelectorAll('.e2-rad-it').length + ' пунктов, картинок ' + r.querySelectorAll('.kb-radimg').length : 'нет'; })()`));
     },
     async 'pose-radial'(T){
-      await T.sleep(3300);   // круг вещей закрылся сам (3 с)
+      await gone(T, '.kb-wrap .e2-radial:not([hidden])');   // круг вещей закрылся сам (3 с)
       if (T.P.mobile) { const xy = await T.ev(poseBtn); if (xy) await hold(T, xy, 500); }
       else await T.ev(`(() => { const S = ${T0}.state(); S.K?.press?.('pose', true); return 1; })()`);
       await T.sleep(200);
@@ -62,7 +64,7 @@ module.exports = {
       if (!T.P.mobile) await T.ev(`(() => { const S = ${T0}.state(); S.K?.press?.('pose', false); return 1; })()`);
     },
     async sit(T){
-      await T.sleep(3300);
+      await gone(T, '.kb-wrap .e2-radial:not([hidden])');
       const r = await T.ev(`(async () => { const t = ${T0}; t.pose?.('sit'); await new Promise(r => setTimeout(r, 900)); const a = t.state().A.get('me'); return t.poseCur?.() + ' · человечек: поза ' + a?.ch?.cat + ' · кнопка ' + (document.querySelector('.kb-tbtn[data-id="pose"]')?.firstChild?.textContent || '—'); })()`);
       console.log('  сесть →', r);
     },
