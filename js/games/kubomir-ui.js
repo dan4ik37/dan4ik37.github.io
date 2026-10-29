@@ -7,6 +7,9 @@
 // двойной клик — собрать такие же в руку; цифра 1–9 над ячейкой — поменять с ячейкой панели; F над ячейкой — поменять с левой
 // рукой; Q над ячейкой — выбросить одну (Ctrl+Q — стопку). Вещь «в руке» мимо окна — выбросить. Закрыл — крафт вернулся в вещи.
 // Левая рука (щит, факел, еда — docs/COMBAT.md) — ячейка 'off' рядом с панелью: S.P.off.
+// Интерфейс 2.0 (T-123, docs/HUD_V2.md §4.2): hooks.sheet() → true — окно «листом» (телефон): лёжа — справа на полэкрана, стоя — снизу
+// (≤ 55 %), вкладки вместо длинной ленты (🎒 Вещи / 🛠 Ремесло / 💍 Кольца; сундук, печь, верстак — своя вкладка + 🎒), панель 1–9 и
+// левая рука — во всех вкладках; hooks.inset(панель | null) — игра сдвигает картинку, чтобы мир был виден в свободной части.
 (() => {
   const V = () => window.D37E.vox;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -14,7 +17,7 @@
   window.KubomirUI = { create };
 
   function create(S, hooks = {}){
-    const U = { kind: '', pos: null, craft: new Array(9).fill(null), el: null, cat: 'blocks', q: '', timer: 0 };
+    const U = { kind: '', pos: null, craft: new Array(9).fill(null), el: null, cat: 'blocks', q: '', timer: 0, sheet: false, tab: '', tabs: {} };
     const P = () => S.P;
     const it = id => V().item(id);
     const max = s => it(s.id)?.stack || 64;
@@ -277,9 +280,12 @@
       U.kind = kind; U.pos = pos || null;
       S.I?.unlock(); S.C?.reset_state();
       const el = U.el = document.createElement('div');
-      el.className = 'kb-ui kb-inv';
+      const host = S.R.r.domElement.parentElement;
+      U.sheet = !!hooks.sheet?.();
+      el.className = 'kb-ui kb-inv' + (U.sheet ? ' kb-sheet' + (host.clientWidth > host.clientHeight ? ' side' : ' bottom') : '');
       el.innerHTML = '<div class="kb-panel"></div><div class="kb-cursor" hidden></div>';
-      S.R.r.domElement.parentElement.appendChild(el);
+      host.appendChild(el);
+      U.tab = U.sheet ? U.tabs[kind] || tabList()[0][0] : '';
       el.addEventListener('pointerdown', onDown);
       el.addEventListener('pointerup', onUp);
       el.addEventListener('pointermove', onMove);
@@ -290,7 +296,16 @@
       render();
       if (kind === 'furnace') U.timer = setInterval(() => { if (U.el) renderFurnace(); }, 150);
       if (kind === 'chest') hooks.sound?.('door_wood_open', { vol: .4, rate: 1.4 });
+      if (U.sheet) hooks.inset?.(el.querySelector('.kb-panel'));
     };
+    // вкладки листа: [id, значок, название] — первая открывается сама (потом — та, что была открыта у этого окна)
+    function tabList(){
+      const k = U.kind, acc = !!X() && (k === 'inv' || k === 'craft') ? [['acc', '💍', 'Кольца']] : [];
+      if (k === 'chest') return [['chest', '📦', 'Сундук'], ['inv', '🎒', 'Вещи']];
+      if (k === 'furnace') return [['furn', '🔥', 'Печь'], ['inv', '🎒', 'Вещи']];
+      if (k === 'craft') return [['craft', '🛠', 'Верстак'], ['inv', '🎒', 'Вещи'], ...acc];
+      return [...(S.creative ? [['cat', '🎨', 'Каталог']] : []), ['inv', '🎒', 'Вещи'], ['craft', '🛠', 'Ремесло'], ...acc];
+    }
     // o.esc — закрыли клавишей Esc: мышь захватит игра, когда Esc отпустят (kubomir.js escClosed; T-096a)
     U.close = o => {
       if (!U.el) return;
@@ -301,6 +316,7 @@
       window.removeEventListener('keydown', hoverKey, true); U.hover = null; drag = null;
       if (U.kind === 'chest') hooks.sound?.('door_wood_close', { vol: .4, rate: 1.4 });
       U.el.remove(); U.el = null; U.kind = ''; U.pos = null;
+      if (U.sheet) { U.sheet = false; hooks.inset?.(null); }
       S.C?.reset_state();
       if (!S.I?.touch && !o?.esc) S.I?.lock?.();   // тот же элемент, что у движка (input.js), — иначе мышь захвачена, а камера не крутится
     };
@@ -315,11 +331,13 @@
       if (!U.el) return;
       const p = P(), panel = U.el.querySelector('.kb-panel'), creative = S.creative;
       const title = U.kind === 'craft' ? '🛠️ Верстак' : U.kind === 'furnace' ? '🔥 Печь' : U.kind === 'chest' ? '📦 Сундук' : '🎒 Вещи';
+      const tb = U.sheet ? U.tab : '', show = id => !tb || tb === id;   // лист: только открытая вкладка
       let top = '';
-      if (U.kind === 'inv' && creative) {
+      if (U.sheet) top = `<div class="kb-stabs" role="tablist">${tabList().map(([id, ic, t]) => `<button type="button" role="tab" data-stab="${id}" class="${id === tb ? 'on' : ''}">${ic} ${t}</button>`).join('')}</div>`;
+      if (U.kind === 'inv' && creative && show('cat')) {
         top = `<div class="kb-tabs">${CATS.map(([k, ic, t]) => `<button type="button" data-cat="${k}" class="${U.cat === k ? 'on' : ''}">${ic}<span> ${t}</span></button>`).join('')}<input class="kb-search" type="search" placeholder="Найти…" value="${esc(U.q)}"></div><div class="kb-cat"></div>`;
       }
-      if (U.kind === 'inv' || U.kind === 'craft') {
+      if ((U.kind === 'inv' || U.kind === 'craft') && show('craft')) {
         const w = craftSize(), r = result();
         let g = ''; for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) g += slot('craft', y * 3 + x, U.craft[y * 3 + x]);
         top += `<div class="kb-craft"><div class="kb-cgrid" style="grid-template-columns:repeat(${w},auto)">${g}</div><span class="kb-arrow">➜</span>${slot('result', 0, r ? { id: r.out, n: r.n } : null, 'res')}${creative ? '<div class="kb-slot trash" data-k="trash" data-i="0" title="Выбросить совсем">🗑</div>' : ''}</div>`;
@@ -327,16 +345,16 @@
           const list = U.bookList = U.book();
           top += `<div class="kb-book"><span title="${S.I?.touch ? 'Нажми — ингредиенты лягут в сетку' : 'Клик — ингредиенты лягут в сетку, Shift+клик — сделать сколько хватит'}">📖 Можно сделать</span><div class="kb-booklist">${list.length ? list.map((b, j) => slot('book', j, { id: b.r.out, n: b.r.n || 1 }, b.table ? 'need' : '')).join('') : `<small>Пока ничего. ${U.kind === 'inv' ? 'Добудь брёвна: держи ЛКМ по дереву (на телефоне — держи палец).' : 'Положи в вещи доски, палки, булыжник…'}</small>`}</div></div>`;
         }
-      } else if (U.kind === 'furnace') {
+      } else if (U.kind === 'furnace' && show('furn')) {
         const f = furnaceTile();
         top += `<div class="kb-furn"><div class="kb-fcol">${slot('furnace', 0, f?.in)}<span class="kb-flame">🔥</span>${slot('furnace', 1, f?.fuel)}</div><span class="kb-arrow kb-prog">➜</span>${slot('furnace', 2, f?.out, 'res')}</div><p class="kb-hint">Сверху — что плавить (руда, песок, сырое мясо), снизу — топливо (уголь, доски, брёвна).</p>`;
-      } else if (U.kind === 'chest') {
+      } else if (U.kind === 'chest' && show('chest')) {
         const t = chestTile(); let g = ''; for (let i = 0; i < 27; i++) g += slot('chest', i, t?.items[i]);
         top += `<div class="kb-grid">${g}</div>`;
       }
       // 💍 аксессуары (T-049): открытые ячейки + следующая закрытая (видно, что их можно открыть, и как)
       const XX = X();
-      if (XX && (U.kind === 'inv' || U.kind === 'craft')) {
+      if (XX && (U.kind === 'inv' || U.kind === 'craft') && show('acc')) {
         const A = XX.acc, n = Math.min(A.max, A.open + 1);
         let g = '';
         for (let i = 0; i < A.max; i++) {
@@ -346,13 +364,13 @@
         top += `<div class="kb-accrow"><span class="kb-acct" title="Помощники: действуют, пока надеты. Ячейки открываются развитием (☰ → 💍 Помощники)">💍<small>${A.open | 0}/${A.max | 0}</small></span><div class="kb-accs">${g}</div></div>`;
       }
       let main = '', hot = '';
-      for (let i = 9; i < 36; i++) main += slot('inv', i, p.inv[i]);
+      if (show('inv')) for (let i = 9; i < 36; i++) main += slot('inv', i, p.inv[i]);
       for (let i = 0; i < 9; i++) hot += slot('inv', i, p.inv[i], i === p.sel ? 'on' : '');
       const sortBtn = (XX?.recipesKnown?.() && U.kind !== 'chest' && U.kind !== 'furnace' ? '<button type="button" class="kb-x" data-rec="1" title="Книга рецептов (R): все рецепты, для чего нужно, где взять">📖</button>' : '')
         + (U.kind === 'chest' ? '<button type="button" class="kb-x" data-sort="chest" title="Разложить сундук по порядку">⇅</button>' : '<button type="button" class="kb-x" data-sort="inv" title="Разложить вещи по порядку (панель 1–9 не трогаем)">⇅</button>');
-      panel.innerHTML = `<div class="kb-ptitle"><b>${title}</b><span class="kb-pbtns">${sortBtn}<button type="button" class="kb-x" data-close="1" aria-label="Закрыть">✕</button></span></div>${top}<div class="kb-grid">${main}</div><div class="kb-hotwrap"><div class="kb-offwrap" title="Левая рука: щит, факел, еда (F над ячейкой — поменять)">${slot('off', 0, p.off, 'offs')}<small>🫲 левая</small></div><div class="kb-grid kb-hotrow">${hot}</div></div>
+      panel.innerHTML = `<div class="kb-ptitle"><b>${title}</b><span class="kb-pbtns">${sortBtn}<button type="button" class="kb-x" data-close="1" aria-label="Закрыть">✕</button></span></div>${top}${main ? `<div class="kb-grid">${main}</div>` : ''}<div class="kb-hotwrap"><div class="kb-offwrap" title="Левая рука: щит, факел, еда (F над ячейкой — поменять)">${slot('off', 0, p.off, 'offs')}<small>🫲 левая</small></div><div class="kb-grid kb-hotrow">${hot}</div></div>
         <p class="kb-hint">${S.I?.touch ? 'Нажми — взять/положить, подержи — половину или одну.' : 'Клик — взять/положить, ПКМ — половину или одну, Shift+клик — перекинуть, протянуть с вещью: ПКМ — по одной, ЛКМ — поровну; двойной клик — собрать; 1–9 над ячейкой — на панель, Q — выбросить. E или Esc — закрыть.'}</p>`;
-      if (U.kind === 'inv' && creative) renderCat();
+      if (U.kind === 'inv' && creative && show('cat')) renderCat();
       if (U.kind === 'furnace') renderFurnace();
       renderCursor();
     }
@@ -381,6 +399,7 @@
     function onDown(e){
       const t = e.target;
       if (t.closest('[data-close]')) { U.close(); return; }
+      const stb = t.closest('[data-stab]'); if (stb) { U.tab = U.tabs[U.kind] = stb.dataset.stab; render(); return; }   // вкладка листа
       const so = t.closest('[data-sort]'); if (so) { U.sort(so.dataset.sort); return; }
       if (t.closest('[data-rec]')) { X()?.openRecipes?.(); return; }   // 📖 книга рецептов — листом рядом с окном вещей
       const cat = t.closest('[data-cat]'); if (cat) { U.cat = cat.dataset.cat; U.q = ''; catCache = null; render(); return; }

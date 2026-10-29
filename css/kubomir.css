@@ -394,3 +394,62 @@ body.high .kb-food .g{animation:kbGhost .9s ease-in-out infinite alternate}
 .kx-qbar{height:8px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden}
 .kx-qbar i{display:block;height:100%;background:linear-gradient(90deg,#4ade80,#a3e635);border-radius:4px}
 .kx-qn{position:absolute;right:2px;bottom:0;font-size:11px;font-weight:900;text-shadow:1px 1px 0 #000,-1px -1px 0 #000}
+
+/* ═══ Интерфейс игр 2.0 (T-123, docs/HUD_V2.md §9.5; .kb-e2 у корня — флаг HUD2.kubomir в js/core/config.js) ═══
+   Кнопки — поза, прыжок, лоток вещей, ☰; тёмный остров (как css/hud2.css), бледнеют без касаний; окно вещей — лист с вкладками */
+/* ☰ — круг 40 px (попадание 48) поверх игры; название мира — в заголовке ☰ */
+html:is(.gs-compact,.gs-tall) .gs-fs .kb-e2 .kb-top>b,html:is(.gs-compact,.gs-tall) .gs-fs .kb-e2 .kb-top .kb-where{display:none}
+html:is(.gs-compact,.gs-tall) .gs-fs .kb-e2 .kb-top .wld-topbtns{gap:0}
+html:is(.gs-compact,.gs-tall) .gs-fs .kb-e2 .kb-top .wld-menubtn{position:relative;width:40px;height:40px;min-width:0;padding:0;border-radius:50%;display:grid;place-items:center;font-size:18px;
+  background:var(--e2-bg,rgba(14,12,28,.42));border:1.5px solid var(--e2-line,rgba(255,255,255,.38));color:#fff;box-shadow:var(--e2-shadow,0 2px 10px rgba(0,0,0,.25))}
+html:is(.gs-compact,.gs-tall) .gs-fs .kb-e2 .kb-top .wld-menubtn span{display:none}
+html:is(.gs-compact,.gs-tall) .gs-fs .kb-e2 .kb-top .wld-menubtn::after{content:'';position:absolute;inset:-4px;border-radius:50%}
+.kb-e2.kb-nohud2 .kb-top .wld-topbtns{visibility:hidden}
+/* кнопки: круги (поза 46, прыжок 56 — места и размер даёт D37TouchLayout), «нажата» — фиолетовая; без касаний 4 с — бледнее */
+.kb-e2 .kb-tbtn{border:1.5px solid var(--e2-line,rgba(255,255,255,.38));background:var(--e2-bg,rgba(14,12,28,.42));box-shadow:var(--e2-shadow,0 2px 10px rgba(0,0,0,.25));
+  opacity:calc(var(--gs-touch-a,1) * var(--e2-fade,1))}
+.kb-e2 .kb-tbar .kb-tbtn{transition:opacity .3s!important}
+.kb-e2 .kb-tbtn.on,.kb-e2 .kb-tbtn.held{background:var(--e2-bg-on,rgba(124,58,237,.72));border-color:#fff}
+.kb-e2 .e-hud.e2-idle~.kb-tbar,.kb-e2 .e-hud.e2-idle~.kb-hud{--e2-fade:.45}
+html.e2-nofade .kb-e2 .e-hud.e2-idle~.kb-tbar,html.e2-nofade .kb-e2 .e-hud.e2-idle~.kb-hud{--e2-fade:1}
+/* лоток вещей: свёрнут — вещь в руке (48) и соседи (40); раскрыт — весь ряд и 🎒 (лёжа в ряд, стоя 5 × 2); компьютер — раскрыт */
+.kb-bag{display:none}
+.kb-hrow.kb-tray.kb-open .kb-bag{display:grid;place-items:center;font-size:20px;cursor:pointer;pointer-events:auto}
+.kb-hrow.kb-tray:not(.kb-open) .kb-hotbar .kb-slot:not(.on):not(.nb){display:none}
+.kb-hrow.kb-tray:not(.kb-open) .kb-slot.nb{opacity:.6}
+.kb-e2 .kb-touch .kb-bottom{opacity:var(--e2-fade,1)}
+.kb-e2 .kb-touch .kb-hotbar{background:none;border:0;box-shadow:none;padding:0;gap:4px;align-items:center;touch-action:none}
+.kb-e2 .kb-touch .kb-slot{background:var(--e2-bg,rgba(14,12,28,.42));border:1.5px solid var(--e2-line,rgba(255,255,255,.38));border-radius:10px;box-shadow:var(--e2-shadow,0 2px 10px rgba(0,0,0,.25))}
+.kb-e2 .kb-touch .kb-slot.on{border-color:#ffd23f;background:rgba(124,58,237,.5);transform:none;box-shadow:var(--e2-shadow,0 2px 10px rgba(0,0,0,.25))}
+.kb-e2 .kb-touch .kb-hrow:not(.kb-open) .kb-slot.on{width:48px;height:48px}
+@media (orientation:portrait){.kb-e2 .kb-touch .kb-hrow.kb-open .kb-hotbar{flex-wrap:wrap;justify-content:center;width:216px}}
+/* левая рука — ячейка слева от лотка (нажал — поменять руки; это и есть «🔄 руки») */
+.kb-e2 .kb-touch .kb-oslot,html.gs-lefty .kb-e2 .kb-touch .kb-oslot{right:calc(100% + 8px);left:auto;bottom:0;width:40px;height:40px;border-radius:10px;border-width:1.5px;
+  background:var(--e2-bg,rgba(14,12,28,.42));border-color:var(--e2-line,rgba(255,255,255,.38));box-shadow:var(--e2-shadow,0 2px 10px rgba(0,0,0,.25))}
+.kb-e2 .kb-touch .kb-oslot::before{display:none}
+.kb-e2 .kb-touch .kb-hrow:not(.kb-open) .kb-oslot{bottom:4px}
+/* здоровье и еда — две строки над лотком (12,5 px), полные и без перемен 5 с — бледнее */
+.kb-e2 .kb-touch .kb-bars{flex-direction:column;align-items:center;width:auto;gap:1px}
+.kb-e2 .kb-touch .kb-hp,.kb-e2 .kb-touch .kb-food{font-size:12.5px;gap:0}
+.kb-e2 .kb-bars.kb-calm{opacity:.45}
+.kb-e2 .kb-wrap.kb-touchtap .kb-cool{bottom:calc(max(10px,env(safe-area-inset-bottom)) + 100px)}
+/* круг вещей (удержал лоток): картинки вещей на кнопках круга */
+.e2-radial .e2-rad-it.kb-radimg{background-size:30px;background-position:center;background-repeat:no-repeat;image-rendering:pixelated}
+/* окно вещей — лист (телефон): лёжа справа ≤ 50 %, стоя снизу ≤ 55 %; вкладки; панель 1–9 — всегда внизу листа */
+.kb-inv.kb-sheet{display:block;background:none;padding:0;overflow:hidden;--kb-s:40px}
+.kb-inv.kb-sheet .kb-panel{position:absolute;box-sizing:border-box;gap:6px;padding:8px 10px 10px 12px;overflow:auto;overscroll-behavior:contain;align-items:center;
+  background:var(--e2-panel,rgba(16,14,32,.92));border:0;box-shadow:0 0 24px rgba(0,0,0,.45)}
+.kb-inv.kb-sheet.side .kb-panel{top:0;right:0;bottom:0;width:min(50%,440px);max-width:none;border-radius:16px 0 0 16px;padding-right:max(10px,env(safe-area-inset-right))}
+html.gs-lefty .kb-inv.kb-sheet.side .kb-panel{right:auto;left:0;border-radius:0 16px 16px 0;padding-left:max(12px,env(safe-area-inset-left))}
+.kb-inv.kb-sheet.bottom .kb-panel{left:0;right:0;bottom:0;max-height:55%;border-radius:16px 16px 0 0;padding-bottom:max(10px,env(safe-area-inset-bottom))}
+.kb-sheet .kb-ptitle{align-self:stretch}
+.kb-sheet .kb-ptitle b{font-size:14px}
+.kb-sheet .kb-hint{display:none}
+.kb-sheet .kb-x{position:relative}
+.kb-sheet .kb-x::after{content:'';position:absolute;inset:-5px}
+.kb-sheet .kb-hotwrap{margin-top:auto}
+.kb-sheet .kb-book{align-self:stretch}
+.kb-stabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex:none;align-self:stretch}
+.kb-stabs button{flex:none;min-height:36px;padding:0 12px;border-radius:12px;border:1.5px solid var(--e2-line,rgba(255,255,255,.38));background:var(--e2-bg,rgba(14,12,28,.42));color:#fff;
+  font:800 12px Montserrat,system-ui,sans-serif;cursor:pointer}
+.kb-stabs button.on{background:var(--e2-bg-on,rgba(124,58,237,.72));border-color:#fff}

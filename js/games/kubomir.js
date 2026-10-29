@@ -56,6 +56,17 @@
     document.head.appendChild(l);
   }
   const ver = () => (typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1');
+  // Интерфейс игр 2.0 (T-123, docs/HUD_V2.md §9.5; откат — HUD2.kubomir = 0 в js/core/config.js: всё как было): кнопки — поза, прыжок,
+  // лоток вещей, ☰ (4); вещи — свёрнутый лоток (нажал — весь ряд и 🎒, смахнул — соседняя, удержал — круг), окно вещей — лист с
+  // вкладками, сесть / лечь / ползком — круг позы (удержать ⬇; на компьютере — G), подсказки — один раз на устройство
+  const hud2On = () => typeof HUD2 !== 'undefined' && !!HUD2.kit && !!HUD2.kubomir;
+  // пункты шапки игры (D37Shell, js/features/games.js) в ☰ «Кубомира»: 📣 Вызов другу, 🔊 Звук, 📱 Телефон (⚙️, ⛶ и «как играть» — свои)
+  function shellItems(group){
+    if (!hud2On() || !window.D37Shell?.items) return [];
+    const out = [];
+    for (const it of window.D37Shell.items(ID)) if (it.id === 'sh-chal' || it.id === 'sh-mute' || it.id === 'sh-phone') out.push(Object.assign({}, it, { group }));
+    return out;
+  }
 
   // ═══ Вход в игру ═══
   function mount(root, gapi){
@@ -68,6 +79,7 @@
       </div>`;
     el.querySelector('.kb-top').addEventListener('click', e => { const b = e.target.closest('[data-kb]'); if (!b) return; onTop(b.dataset.kb); });
     el.closest('#gamesStage')?.classList.add('gm-own-bar');
+    if (hud2On()) { el.firstElementChild?.classList.add('kb-e2'); window.D37Shell?.own(); }   // T-123: одно ☰ — 📣 🔊 📱 тоже в нём
     const p = String(gapi?.param || '');
     const m = /^play\/([\w-]+)$/.exec(p), cm = /^(?:coop\/)?([a-z2-7]{8})$/.exec(p);
     if (m) playById(m[1]); else if (cm) joinCoop(cm[1]); else showMenu();
@@ -101,9 +113,11 @@
         { id: 'settings', icon: '⚙️', text: 'Настройки' },
         ...(SS.fsItems?.(fsEl()) || []),
         { id: 'help', icon: '❓', text: 'Как играть' },
+        ...shellItems(),
         { id: 'exit', icon: '🚪', text: 'Все игры', warn: true },
       ],
       onPick: id => {
+        if (window.D37Shell?.pick?.(id, lmenu)) return;
         if (SS.fsPick?.(id, fsEl(), lmenu)) return;
         if (id === 'settings') { SS.open({ ctx: 'game' }); return; }
         lmenu?.close();
@@ -580,7 +594,8 @@
     st.rig = Ex.cameraRig(R.camera, { yaw: 0, pitch: .25, dist: 4.4, minD: 1.6, maxD: 9, lift: 1.5, mode: 'first' });
     st.rig.minP = -1.25; st.rig.maxP = 1.4; st.rig.maxLook = 89 * PI / 180; st.rig.fovFirst = 70;
     st.camMode = window.D37Settings?.get('view') === 'third' ? 1 : 0; st.camD = 0;
-    st.H = Ex.ui(wr, C);
+    st.v2 = hud2On();   // интерфейс 2.0 (T-123)
+    st.H = Ex.ui(wr, C, st.v2 ? { v2: true, game: ID, touch: !!I.touch } : undefined);
     st.AU = Ex.audio(); sounds();
     st.hudEl = hudBuild(wr); st.hurtEl = st.hudEl.querySelector('.kb-hurt');
     // вспышка молнии (гром вдалеке): мягко, k ≤ 0,22
@@ -623,6 +638,7 @@
     st.ui = window.KubomirUI ? window.KubomirUI.create(st, uiHooks()) : null;
     // ── KX:init ── помощники (T-049, kubomir-x.js): аксессуары, подсказки, книга рецептов, карта, лежанка, задания; не подключились — игра без них
     try { st.X = window.KubomirX ? window.KubomirX.attach(st, xHooks(st)) : null; } catch (e) { console.error(e); window.d37Err?.('kx:attach', e); st.X = null; }
+    if (st.v2) trayInit(st);   // лоток вещей: телефон — свёрнут, компьютер — раскрыт (⚙️ «Вещи внизу экрана»)
     if (I.touch) { hudFit(st); hudUpdate(st); touchUI(st); }   // ячейки панели — по окну, полоски заполнены (кнопки встают выше них), кнопки телефона — когда уже есть игрок
     crossUpdate(st);
     // моды: события в песочнице
@@ -712,11 +728,14 @@
     try { st.fire?.dispose(); st.FX?.dispose(); } catch (e) {}   // огонь: пламя, дым, звук
     try { st.AU?.muffle?.(0); st.uwLoop?.stop(); st.uwLoop = null; } catch (e) {}   // звук — снова чистый (движок общий для игр)
     st.ST?.close(); st.VR?.dispose(); st.A?.dispose();
+    if (st.tray) { clearTimeout(st.tray.t); clearTimeout(st.tray.ht); st.trayOff?.(); }
+    st.posePtr?.stop(); st.nohudOff?.(); st.rad?.dispose(); st.rad = null; st.vo?.clear();
     st.C?.dispose(); st.I?.dispose(); st.H?.dispose(); st.K?.dispose();
     try { st.R?.dispose(); } catch (e) {}
     st.tl?.detach(); st.tl = null;
     st.hudEl?.remove(); st.modWin?.remove(); st.tbar?.el?.remove(); st.ringEl?.remove(); st.lockEl?.remove();
     wrap()?.classList.remove('kb-nohud', 'kb-touchtap', 'kb-touch');
+    el?.firstElementChild?.classList.remove('kb-nohud2');
     settingsTab(true);
   }
   async function restartWorld(){ if (!S) return; const m = S.meta; await stopWorld(); playWorld(m); }
@@ -807,7 +826,9 @@
     const st = S; if (!st || st.dead) return;
     const { C, P, W } = st, V = VX();
     const uiOpen = !!st.ui?.isOpen(), menu = !!st.menu || !!st.modWin || !!st.X?.isOpen(), chatting = !!st.chatEl;   // modWin — окно «Моды мира»; X — лист помощника (T-049)
-    C.blocked = uiOpen || menu || chatting || !!window.D37Settings?.isOpen?.();
+    // круг позы / вещей открыт (и 0,25 с после) — пальцы и кнопки миру не достаются (T-123)
+    const radOn = !!st.rad?.isOpen(); if (radOn) st.radGrace = .25; else if (st.radGrace > 0) st.radGrace -= dt;
+    C.blocked = uiOpen || menu || chatting || !!window.D37Settings?.isOpen?.() || radOn || st.radGrace > 0;
     C.step(dt);
     const K = st.K || NOK;
     K.step(dt);
@@ -838,6 +859,9 @@
     if (K.down('camera')) cycleCam();
     if (K.down('hud')) hideHud(!st.hudHidden);
     if (K.down('debug')) { st.dbg = !st.dbg; st.hudEl.querySelector('.kb-dbg').hidden = !st.dbg; }
+    // G — круг позы (T-123): мышь захвачена — выбор движением мыши, щелчок или отпустить G — выбрать, Esc — закрыть
+    if (st.v2 && K.down('pose') && !P.dead && !st.rad?.isOpen()) { if (poseRadial(st, null, { lock: !!globalThis.document?.pointerLockElement })) st.radKey = true; }
+    else if (st.radKey && K.up('pose')) { st.radKey = false; if (st.rad?.isOpen() && !st.rad.isSticky()) st.rad.up(); }   // отпустил G: выбран — выбрать, не двигал — круг ждёт щелчка 3 с
     if (!uiOpen && (K.down('chat') || C.down('chat'))) chatOpen();
     else if (!uiOpen && K.down('command')) chatOpen('/');
     if (!C.blocked) {
@@ -908,6 +932,7 @@
     let wx = f.x * C.move.z + r.x * C.move.x, wz = f.z * C.move.z + r.z * C.move.x;
     const wl = Math.hypot(wx, wz); if (wl > 1) { wx /= wl; wz /= wl; }
     const K = st.K || NOK, jump = C.held('jump'), jumpDown = C.down('jump');
+    if (st.pose2) poseCheck(st, C, K);   // сидит / лежит (T-123): пошёл, прыжок, «красться», ломать, ставить, ударили — встал
     // красться — Shift (держать; в настройках — «нажал/отжал»), на телефоне — кнопка-переключатель
     if (opts.sneakToggle && K.down('sneak')) st.sneakOn = !st.sneakOn;
     const sneak = (opts.sneakToggle ? st.sneakOn : K.held('sneak')) || !!st.touchSneak || (!st.K && C.held('crouch'));
@@ -1931,11 +1956,11 @@
     // скорость — в единицах движка (1 м = UNIT): камера по ней узнаёт бег (шире обзор на 8°) и темп покачивания
     ch.x = P.x - st.ox; ch.y = P.y; ch.z = P.z - st.oz; ch.vx = P.vx * U; ch.vz = P.vz * U; ch.grounded = P.onGround;
     // высота глаз камеры — плавно (присел / лёг / встал за ~0,1 с, как в Майнкрафте); прицел и лучи — по телу (eye), без сглаживания
-    const camH = eyeH(P) + .2 * U; st.camH = st.camH == null || Math.abs(st.camH - camH) > 2 ? camH : st.camH + (camH - st.camH) * (1 - Math.exp(-dt * 16)); ch.h = st.camH;
+    const camH = (st.pose2 ? (st.pose2.k === 'sit' ? SIT_EYE : LIE_EYE) : eyeH(P)) + .2 * U;   // сидит / лежит — камера ниже (лучи — по телу) st.camH = st.camH == null || Math.abs(st.camH - camH) > 2 ? camH : st.camH + (camH - st.camH) * (1 - Math.exp(-dt * 16)); ch.h = st.camH;
     CAMP.running = P.sprint; CAMP.crouchW = P.crawl ? 2 : P.sneak || P.h < PH - 1e-6 ? 1 : 0; CAMP.mode = P.pk || P.hang ? 'pk' : 'move';   // залезает / висит — без покачивания
     const over = st.ui?.isOpen() || st.menu || st.modWin || st.X?.isOpen();   // открыто окно поверх мира (и лист помощника — T-049)
     rig.mode = 'first';
-    rig.update(dt, CAMP, over ? null : look, PHYS, C);
+    rig.update(dt, CAMP, over || st.rad?.isOpen() ? null : look, PHYS, C);   // круг открыт — мышь выбирает, а не крутит
     camApply(st, dt);
     // ранили — крен камеры: быстро в сторону удара, плавно обратно (0,5 с)
     if (st.roll) { const r = st.roll, q = (r.t += dt); if (q > .5) st.roll = null; else R.camera.rotateZ(r.a * (q < .06 ? Math.sin(q / .06 * PI / 2) : (1 - (q - .06) / .44) ** 2) * PI / 180); }
@@ -1972,6 +1997,10 @@
       Q.crawl = P.crawl && !P.pk && !P.hang && !deep;   // ползком (T-096a): поза world3d «лёг»
       Q.y = swimDrawY(st, me, P.x, P.y, P.z, deep && !Q.dive, dt);
       Q.ladder = P.climb && !P.onGround; Q.sit = false; Q.hang = !!P.hang; Q.pk = pkm; Q.pkK = P.pk ? P.pk.k : 0; Q.climbPh = P.climbPh || 0;
+      // сидит / лежит (T-123): поза world3d 7 / 13 (лежанка ночью — спит, глаза закрыты; kubomir-world.js st.kbSleep)
+      const lp = st.kbSleep || (st.pose2 && st.pose2.k === 'lie' ? st.pose2 : null), sp2 = !lp && st.pose2 ? st.pose2 : null;
+      Q.lie = !!lp; Q.sleep = !!st.kbSleep; Q.seatY = lp ? lp.y + .02 : sp2 ? sp2.y + SIT_Y : null;
+      if (lp || sp2) { const q = lp || sp2; Q.sit = !!sp2; Q.x = q.x - st.ox; Q.z = q.z - st.oz; Q.y = q.y; Q.yaw = q.yaw ?? want; Q.moving = false; Q.speed = 0; Q.crouch = 0; Q.crawl = false; Q.air = false; Q.ladder = false; }
       A.pose('me', Q);
       me.hidden = !st.camMode || st.camD < .95;   // вид сзади/спереди, а камера прижата к стене — не смотреть изнутри головы
       const [ex, ey, ez] = eye(st), d = lookDir(st);
@@ -1992,6 +2021,8 @@
     if (!st.previewOff) try { ghostUpdate(st); } catch (e) { st.previewOff = true; try { st.VR.preview?.(null); st.VR.ghost?.(null); } catch (e2) {} console.warn('Кубомир: подсказка постройки —', e); }
     ringUpdate(st);
     if (st.tbar && st.flyWas !== P.fly) { st.flyWas = P.fly; st.tbarSync?.(); }   // в полёте: ⤒ вверх, ⤓ вниз
+    if (st.v2 && st.tbar) { const pk = poseCur(st); if (pk !== st.poseK) { st.poseK = pk; poseSync(st); } }   // значок позы — только при смене
+    if (st.vo?.busy()) st.vo.tick(dt);   // лист открыт — картинка сдвинута в свободную часть (0,2 с)
     VR.update(dt, t);
     // небо и туман: время суток — раз в 0,25 с
     if ((st.skyT = (st.skyT || 0) - dt) <= 0) {
@@ -2063,6 +2094,14 @@
     const st = S; if (!st) return;
     st.hudHidden = !!on;
     wrap()?.classList.toggle('kb-nohud', st.hudHidden);
+    if (st.v2) {   // T-123: ☰ → «Спрятать интерфейс» прячет и ☰; вернуть — нажать в правый верхний угол окна (или F1)
+      el?.firstElementChild?.classList.toggle('kb-nohud2', st.hudHidden);
+      const w = wrap();
+      if (st.hudHidden && !st.nohudOff && w) {
+        const f = e => { const b = w.getBoundingClientRect(); if (e.clientX > b.right - 72 && e.clientY < b.top + 72) { e.preventDefault(); e.stopPropagation(); hideHud(false); } };
+        w.addEventListener('pointerdown', f, true); st.nohudOff = () => { w.removeEventListener('pointerdown', f, true); st.nohudOff = null; };
+      } else if (!st.hudHidden) st.nohudOff?.();
+    }
     crossUpdate(st);
   }
   // Подсказка постройки (21.10.2026, владелец: «нужно просто показывать, куда он поставится, не прозрачным делать его!»):
@@ -2072,7 +2111,7 @@
   const PREVIEW_MODES = ['frame', 'ghost', 'off'];
   const previewMode = () => PREVIEW_MODES.includes(opts.preview) ? opts.preview : opts.ghost === false ? 'off' : 'frame';
   const PT_OUT = { x: 0, y: 0, z: 0, state: 0, h: 1 };
-  const POSE = { x: 0, y: 0, z: 0, yaw: 0, moving: false, speed: 0, air: false, crouch: 0, crawl: false, swim: false, dive: false, ladder: false, sit: false, hang: false, pk: '', pkK: 0, climbPh: 0 };   // своя поза — общий объект
+  const POSE = { x: 0, y: 0, z: 0, yaw: 0, moving: false, speed: 0, air: false, crouch: 0, crawl: false, swim: false, dive: false, ladder: false, sit: false, hang: false, pk: '', pkK: 0, climbPh: 0, lie: false, sleep: false, seatY: null };   // своя поза — общий объект
   // Плывёт (дна под ногами нет, воды больше блока): поза world3d «держится на воде» / «кролем» / «нырок» (как в «Мире Денчика»);
   // на мелком (стоит на дне) — ходит. Игра вместе: то же у других (флаги 8 и 512 — kubomir-coop.js)
   const swimDeep = P => P.water > 1 && !P.onGround && !P.pk && !P.hang && !P.fly && P.lava <= .2;
@@ -2133,8 +2172,18 @@
     tap: { jump: [0, 0, 54], sneak: [-66, 6, 44], down: [-66, 6, 44], inv: [2, -68, 44], swap: [-64, -62, 44], off: [-130, 6, 44], crawl: [-130, -62, 44] },
     cross: { jump: [0, 0, 54], mine: [-68, 6, 50], place: [-66, -64, 50], inv: [2, -70, 44], sneak: [-134, 6, 44], down: [-134, 6, 44], swap: [-130, -62, 44], off: [-4, -134, 44], crawl: [-70, -132, 44] },
   };
+  // Интерфейс 2.0 (T-123, §9.5): поза (нажал — красться; удержал или смахнул — круг: красться, ползком, сесть, лечь) · прыжок · лоток
+  // вещей · ☰ = 4; ⤓ (полёт — вместо позы) и 🛡 / 🏹 — по обстановке; «прицел» — ещё ⛏ и 🧱. 🔄 руки — нажать ячейку левой руки, 🎒 —
+  // в лотке, 🐛 — в круге. Стоя — кнопки столбиком у правого края (лоток посередине их не задевает)
+  const KB_SLOTS2 = {
+    tap: { jump: [0, 0, 56], pose: [-66, 8, 46], down: [-66, 8, 46], off: [0, -68, 46] },
+    tapP: { jump: [0, 0, 56], pose: [0, -66, 46], down: [0, -66, 46], off: [0, -122, 46] },
+    cross: { jump: [0, 0, 56], mine: [-70, 4, 52], place: [-68, -64, 52], pose: [-138, 8, 46], down: [-138, 8, 46], off: [0, -70, 46] },
+    crossP: { jump: [0, 0, 56], pose: [0, -66, 46], down: [0, -66, 46], mine: [-70, 4, 52], place: [-70, -62, 52], off: [0, -122, 46] },
+  };
   function touchUI(st){
     const K = st.K; if (!K) return;
+    if (st.v2) { touchUI2(st); return; }
     const cross = opts.touchMode === 'cross', w = wrap();
     w?.classList.toggle('kb-touchtap', !cross); w?.classList.add('kb-touch');
     st.touchSneak = false; st.touchCrawl = false;
@@ -2162,6 +2211,181 @@
       onEdit: (on, ov) => kbEdit(st, on, ov) }) : null;
     if (!st.tl && w) { const p = kbSlots(st, slots, w.clientWidth, w.clientHeight, 1); for (const id in p) { const b = st.tbar.btn(id); if (b) { const q = p[id]; b.style.cssText = `left:${q.x - q.d / 2}px;top:${q.y - q.d / 2}px;width:${q.d}px;height:${q.d}px;--tl-d:${q.d}px`; } } }   // помощник не загрузился — по умолчанию
   }
+  function touchUI2(st){
+    const K = st.K, cross = opts.touchMode === 'cross', w = wrap();
+    w?.classList.toggle('kb-touchtap', !cross); w?.classList.add('kb-touch');
+    poseStand(st);
+    st.posePtr?.stop(); const pp = st.posePtr = poseBtnPtr(st);
+    const list = [{ id: 'pose', icon: '⬇', label: 'поза', ptr: pp }, { id: 'down', icon: '⤓', label: 'вниз', k: 'sneak', cls: 'e2-ctx' }];
+    if (cross) list.push({ id: 'place', icon: '🧱', label: 'поставить', c: 'place' }, { id: 'mine', icon: '⛏', label: 'ломать', c: 'mine' });
+    list.push({ id: 'off', icon: '🛡', label: 'щит', k: 'offuse', cls: 'e2-ctx' }, { id: 'jump', icon: '⤒', label: 'прыжок', big: true, c: 'jump' });
+    st.tbar = K.touchBar(w, list, { game: ID });
+    st.tbarSync = () => { const fly = !!S?.P?.fly; st.tbar.show('pose', !fly); st.tbar.show('down', fly); st.tbar.btn('jump').querySelector('b').textContent = fly ? 'вверх' : 'прыжок'; if (fly && S) poseStand(S); };
+    st.tbar.show('off', false); st.hud.tb = ''; st.poseK = null; st.poseIc = '';
+    st.tbarSync();
+    const TL = window.D37TouchLayout, slots = H => KB_SLOTS2[(cross ? 'cross' : 'tap') + (H.h > H.w ? 'P' : '')];
+    st.tl?.detach();
+    st.tl = TL && w ? TL.attach({ id: ID, title: 'Кубомир', el: w,
+      items: () => list.map(b => ({ id: b.id, icon: b.id === 'off' ? '🛡' : b.icon, label: b.id === 'off' ? 'щит / лук' : b.id === 'pose' ? 'поза (держать — круг)' : b.label, same: b.id === 'down' ? 'pose' : undefined, opt: b.id === 'off' ? 'когда в руке' : b.id === 'down' ? 'в полёте' : undefined })),
+      btn: id => (S === st && st.tbar?.btn(id)) || null,
+      alias: { pose: 'sneak', down: 'sneak' },   // своё место «⬇ красться» досталось кнопке позы
+      defaults: (W, H, k, cx) => kbSlots(st, slots({ w: W, h: H }), W, H, k, cx),
+      avoid: () => kbAvoid(st),
+      onEdit: (on, ov) => kbEdit(st, on, ov) }) : null;
+    if (!st.tl && w) { const p = kbSlots(st, slots({ w: w.clientWidth, h: w.clientHeight }), w.clientWidth, w.clientHeight, 1); for (const id in p) { const b = st.tbar.btn(id); if (b) { const q = p[id]; b.style.cssText = `left:${q.x - q.d / 2}px;top:${q.y - q.d / 2}px;width:${q.d}px;height:${q.d}px;--tl-d:${q.d}px`; } } }
+  }
+  // ═══ Интерфейс 2.0 (T-123, docs/HUD_V2.md §3–4): лоток вещей, кнопка и круг позы, сесть и лечь ═══
+  // общий круг выбора движка (D37E.radial, js/engine/ui.js): поза и вещи — по очереди, один на мир
+  const radial = st => st.rad || (st.rad = E().radial && wrap() ? E().radial(wrap(), {}) : null);
+  // ── Лоток: ⚙️ «Вещи внизу экрана» (hudTray): авто — телефон свёрнут, компьютер раскрыт ──
+  const TRAY_MS = 3000;
+  const trayMode = st => { const m = window.D37Settings?.get?.('hudTray') || 'auto'; return m === 'auto' ? (st.I?.touch ? 'closed' : 'open') : m === 'open' ? 'open' : 'closed'; };
+  function trayInit(st){
+    st.tray = { open: false, always: trayMode(st) === 'open', pid: null, t: 0, ht: 0, x0: 0, y0: 0, sw: false, wheel: false, slot: -1, dropped: false };
+    traySync(st);
+    const f = e => { const k = e.detail?.key; if (S === st && st.tray && (k === 'hudTray' || k === '*')) { st.tray.always = trayMode(st) === 'open'; traySync(st); st.tl?.layout(true); } };
+    window.addEventListener('d37:settings', f); st.trayOff = () => window.removeEventListener('d37:settings', f);
+  }
+  // класс ряда (свёрнут / раскрыт) — только при смене
+  function traySync(st){
+    const T = st.tray, row = st.hudEl?.querySelector('.kb-hrow'); if (!T || !row) return;
+    const open = T.always || T.open;
+    if (!row.classList.contains('kb-tray')) row.classList.toggle('kb-tray', true);
+    if (row.classList.contains('kb-open') !== open) row.classList.toggle('kb-open', open);
+  }
+  function trayOpen(st, on){
+    const T = st.tray; if (!T) return;
+    clearTimeout(T.t); T.open = !!on;
+    if (on && !T.always) T.t = setTimeout(() => { if (S === st && T.pid == null) trayOpen(st, false); else if (S === st) trayOpen(st, true); }, TRAY_MS);   // палец ещё на лотке — ждать дальше
+    traySync(st);
+  }
+  function invOpen(st){ if (S !== st || st.P.dead || st.menu || st.modWin) return; if (st.tray?.open) trayOpen(st, false); if (!st.ui?.isOpen()) st.ui?.open('inv'); }
+  function trayDown(st, hb, e){
+    const T = st.tray; try { hb.setPointerCapture(e.pointerId); } catch (er) {}
+    T.pid = e.pointerId; T.x0 = e.clientX; T.y0 = e.clientY; T.sw = false; T.wheel = false; T.dropped = false; T.slot = -1;
+    clearTimeout(T.ht);
+    if (T.always || T.open) {   // раскрыт — как было: нажал — выбрал; держишь палец — выбросить по одной
+      const s = e.target.closest('[data-s]');
+      if (s) { T.slot = st.P.sel = +s.dataset.s; if (e.pointerType === 'touch') T.ht = setTimeout(() => trayDrop(st), 550); }
+      return;
+    }
+    T.ht = setTimeout(() => { if (S === st && T.pid != null && !T.sw) trayWheel(st, T.x0, T.y0); }, 380);   // удержал — круг вещей
+  }
+  function trayDrop(st){ const T = st.tray; if (!T || T.pid == null || S !== st || st.P.dead) return; dropSel(st, false); T.dropped = true; T.ht = setTimeout(() => trayDrop(st), 220); }
+  function trayMove(st, e){
+    const T = st.tray; if (e.pointerId !== T.pid) return;
+    if (T.wheel) { st.rad?.move(e.clientX, e.clientY); return; }
+    const dx = e.clientX - T.x0, dy = e.clientY - T.y0;
+    if (dy < -36 && Math.abs(dx) < 30 && !T.sw && !T.dropped) { clearTimeout(T.ht); T.pid = null; invOpen(st); return; }   // вверх — 🎒 все вещи
+    if (T.always || T.open) {   // раскрыт: выбор едет за пальцем
+      const c = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.kb-hotbar [data-s]'), i = c ? +c.dataset.s : -1;
+      if (i >= 0 && i !== T.slot) { T.slot = st.P.sel = i; T.sw = true; clearTimeout(T.ht); if (e.pointerType === 'touch') T.ht = setTimeout(() => trayDrop(st), 550); }
+      return;
+    }
+    if (Math.abs(dx) > 26) { clearTimeout(T.ht); T.sw = true; T.x0 = e.clientX; st.P.sel = (st.P.sel + (dx > 0 ? 1 : 8)) % 9; }   // вбок — соседняя вещь
+  }
+  function trayUp(st, e){
+    const T = st.tray; if (e.pointerId !== T.pid) return;
+    T.pid = null; clearTimeout(T.ht);
+    if (T.wheel) { T.wheel = false; st.rad?.up(); return; }
+    const open = T.always || T.open;
+    if (e.type !== 'pointerup' || T.sw || T.dropped) { if (open) trayOpen(st, T.open); return; }
+    if (!open) { trayOpen(st, true); return; }   // свёрнут — нажал: весь ряд и 🎒
+    if (document.elementFromPoint(e.clientX, e.clientY)?.closest?.('[data-bag]')) { invOpen(st); return; }
+    trayOpen(st, T.open);   // ещё 3 с
+  }
+  // круг вещей у пальца (как «колесо оружия»): картинки вещей на кнопках круга
+  function trayWheel(st, x, y){
+    const R = radial(st), w = wrap(); if (!R || !w) return;
+    const b = w.getBoundingClientRect(), V = VX(), P = st.P, list = [];
+    for (let i = 0; i < 9; i++) { const s = P.inv[i], it = s && V.item(s.id); list.push({ id: i, icon: s ? ' ' : '·', label: it ? it.title + (s.n > 1 ? ' ×' + s.n : '') : 'Пусто', cur: i === P.sel }); }
+    R.open(list, { x: x - b.left, y: y - b.top - 60 }, { onPick: it => { if (S === st) st.P.sel = it.id; }, from: { x, y } });
+    for (const d of R.el.querySelectorAll('.e2-rad-it')) { const s = P.inv[+d.dataset.i]; if (s) { d.textContent = ''; d.classList.add('kb-radimg'); d.style.backgroundImage = `url(${V.iconURL(s.id, 40)})`; } }
+    st.tray.wheel = true;
+  }
+
+  // ── Поза: нажал — красться (ещё раз — встать); сидит / лежит / ползёт — встать; удержал или смахнул — круг ──
+  const POSE_IT = [{ id: 'sneak', icon: '⬇', label: 'Красться' }, { id: 'crawl', icon: '🐛', label: 'Ползком' }, { id: 'sit', icon: '🪑', label: 'Сесть' }, { id: 'lie', icon: '🛌', label: 'Лечь' }];
+  const SIT_Y = .3, SIT_EYE = .95, LIE_EYE = .45;   // сиденье над землёй (человечек 0,8), глаза сидя и лёжа
+  const poseCur = st => st.pose2 ? st.pose2.k : st.P.crawl || st.touchCrawl || st.crawlOn ? 'crawl' : st.P.sneak || st.touchSneak ? 'sneak' : '';
+  function poseStand(st){ st.pose2 = null; st.touchSneak = false; st.touchCrawl = false; st.crawlOn = false; st.sneakOn = false; }
+  function poseTap(st){
+    if (st.pose2 || st.touchCrawl || st.crawlOn) poseStand(st);
+    else st.touchSneak = !st.touchSneak;
+    poseSync(st);
+  }
+  function posePick(st, id){
+    if (S !== st || st.P.dead) return;
+    const cur = poseCur(st);
+    if (id === cur) poseStand(st);   // та же поза — встать
+    else if (id === 'sneak') { poseStand(st); st.touchSneak = true; }
+    else if (id === 'crawl') { poseStand(st); if (!st.P.fly) st.touchCrawl = true; }
+    else if (id === 'sit') sitHere(st);
+    else if (id === 'lie') lieHere(st);
+    poseSync(st);
+  }
+  // значок кнопки (⬇ 🐛 🪑 🛌) и «нажата» — только при смене
+  function poseSync(st){
+    const b = st.tbar?.btn('pose'); if (!b) return;
+    const k = poseCur(st), ic = k === 'sit' ? '🪑' : k === 'lie' ? '🛌' : k === 'crawl' ? '🐛' : '⬇';
+    if (st.poseIc !== ic) { st.poseIc = ic; const t = b.firstChild; if (t && t.nodeType === 3) t.textContent = ic; }
+    st.tbar.on('pose', k !== '');
+  }
+  function poseRadial(st, at, oo = {}){
+    const R = radial(st); if (!R || st.P.dead) return false;
+    const cur = poseCur(st);
+    R.open(POSE_IT.map(it => Object.assign({}, it, { cur: it.id === cur })), at, { onPick: it => posePick(st, it.id), from: oo.from, lock: oo.lock, sticky: oo.sticky, title: oo.title || '' });
+    return true;
+  }
+  // нажатия кнопки позы (kubomir-input.js touchBar: b.ptr): удержал 0,25 с или повёл пальцем — круг над кнопкой, выбор — по сдвигу пальца
+  function poseBtnPtr(st){
+    let pid = null, x0 = 0, y0 = 0, ht = 0, opened = false;
+    const openAt = d => { const b = d.getBoundingClientRect(), w = wrap()?.getBoundingClientRect(); if (!w) return; opened = poseRadial(st, { x: b.left + b.width / 2 - w.left - 40, y: b.top - w.top - 124 }, { from: { x: x0, y: y0 } }); };
+    return {
+      down(e, d){ pid = e.pointerId; x0 = e.clientX; y0 = e.clientY; opened = false; clearTimeout(ht); ht = setTimeout(() => { if (pid != null && !opened && S === st) openAt(d); }, 250); },
+      move(e, d){ if (e.pointerId !== pid) return; if (!opened && Math.hypot(e.clientX - x0, e.clientY - y0) > 18) { clearTimeout(ht); openAt(d); } if (opened) st.rad?.move(e.clientX, e.clientY); },
+      up(e){ if (e.pointerId !== pid) return; pid = null; clearTimeout(ht); if (opened) { opened = false; st.rad?.up(); return; } if (e.type === 'pointerup' && S === st) poseTap(st); },
+      stop(){ clearTimeout(ht); pid = null; opened = false; },
+    };
+  }
+  // ── Сесть и лечь (§3.2): на землю, где стоишь (ступенек и плит в «Кубомире» нет — место по блоку не ищем); «лечь» рядом с лежанкой —
+  // как ПКМ по ней (дом здесь, ночью — сон, kubomir-world.js) и лечь на неё. Только вид: тело игрока, удары и лучи — как стоя ──
+  const canPose = st => { const P = st.P; return P.onGround && !P.fly && !(P.water > .3) && !(P.lava > .2) && !P.pk && !P.hang && !P.climb && !P.dead; };
+  function sitHere(st){
+    if (!canPose(st)) { st.H.toast('🪑 Сесть можно, когда стоишь на земле'); return false; }
+    const P = st.P; poseStand(st);
+    st.pose2 = { k: 'sit', x: P.x, y: P.y, z: P.z, yaw: P.bodyYaw || 0, hp: P.hp };
+    return true;
+  }
+  function lieHere(st){
+    if (!canPose(st)) { st.H.toast('🛌 Лечь можно, когда стоишь на земле'); return false; }
+    const P = st.P, V = VX(); poseStand(st);
+    const bed = bedNear(st);
+    if (bed) { st.X?.useBlock(bed, V.blocks[V.ID.bed]); st.pose2 = { k: 'lie', x: bed.x + .5, y: bed.y + 1, z: bed.z + .5, yaw: P.bodyYaw || 0, hp: P.hp }; }
+    else st.pose2 = { k: 'lie', x: P.x, y: P.y, z: P.z, yaw: P.bodyYaw || 0, hp: P.hp };
+    return true;
+  }
+  // лежанка в 2 блоках вокруг (у ног или на блок ниже) — ближайшая; 5 × 5 × 2 клеток, только по нажатию
+  function bedNear(st){
+    const V = VX(), P = st.P, W = st.W, bx = Math.floor(P.x), by = Math.floor(P.y), bz = Math.floor(P.z);
+    let best = null, bd = 9;
+    for (let dy = -1; dy <= 0; dy++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+      const v = W.raw(bx + dx, by + dy, bz + dz); if (v <= 0 || (v & 0xfff) !== V.ID.bed) continue;
+      const d = dx * dx + dz * dz; if (d < bd) { bd = d; best = { x: bx + dx, y: by + dy, z: bz + dz }; }
+    }
+    return best;
+  }
+  // сидит / лежит: пошёл, прыжок (встать — не прыгать), «красться», ползком, ломать, ставить, палец по миру, ударили, упал — встал
+  function poseCheck(st, C, K){
+    const P = st.P, p = st.pose2, jump = C.down('jump');
+    if (Math.abs(C.move.x) + Math.abs(C.move.z) > .2 || jump || K.down('sneak') || K.held('crawl') || C.held('mine') || C.down('place') || K.taps.length || K.fingerHolding()
+      || P.hp < p.hp || !P.onGround || P.fly || P.water > .3 || P.dead) {
+      if (jump) P.jumpCD = Math.max(P.jumpCD || 0, .35);
+      if (K.taps.length) K.taps.length = 0;   // нажатие по миру — только встать
+      poseStand(st);
+    } else p.hp = P.hp;
+  }
+
   // раскладка по умолчанию: «прыжок» в правом нижнем углу (с вырезом экрана), остальные — сдвигами KB_SLOTS × размер кнопок;
   // задевает панель вещей, сердечки или левую руку (телефон стоя: панель во всю ширину) — вся группа выше. sf.r — вырез справа
   // (у левши кнопки слева — там свой вырез, но телефоны с вырезом сбоку бывают только лёжа, и он с обеих сторон одинаковый)
@@ -2189,7 +2413,11 @@
     const B = w.getBoundingClientRect(), out = [];
     const add = (e, label) => { if (!e || e.hidden) return; const r = e.getBoundingClientRect(); if (r.width && r.height) out.push({ l: r.left - B.left, t: r.top - B.top, r: r.right - B.left, b: r.bottom - B.top, label }); };
     // панель и полоски — по отдельности (пузырьки воздуха под водой — посередине и ненадолго: раскладку от них не двигаем)
-    add(h.querySelector('.kb-hotbar'), 'панель вещей'); add(h.querySelector('.kb-bars'), 'здоровье и еда'); add(h.querySelector('.kb-oslot'), 'левая рука');
+    if (st.tray) {   // T-123: лоток с полосками (низ посередине) и место, куда он раскроется (лёжа — в ряд, стоя — 5 × 2)
+      add(h.querySelector('.kb-bottom'), 'вещи'); add(h.querySelector('.kb-oslot'), 'левая рука');
+      const r = out[0];
+      if (r) { const land = B.width > B.height, ew = land ? 480 : 250, eh = land ? 52 : 98, cx = (r.l + r.r) / 2; out.push({ l: cx - ew / 2, r: cx + ew / 2, t: r.b - eh, b: r.b, label: 'вещи (раскрыты)' }); }
+    } else { add(h.querySelector('.kb-hotbar'), 'панель вещей'); add(h.querySelector('.kb-bars'), 'здоровье и еда'); add(h.querySelector('.kb-oslot'), 'левая рука'); }
     if (!bottom) { const top = el?.querySelector('.kb-top'); if (top && getComputedStyle(top).position === 'absolute') add(top.querySelector('.wld-topbtns'), 'значки'); }
     return out;
   }
@@ -2204,7 +2432,7 @@
   function hudFit(st){
     const w = wrap(), h = st.hudEl; if (!w || !h || !st.I?.touch) return;
     const W = w.clientWidth, H = w.clientHeight; if (!W || !H) return;
-    const s = Math.max(24, Math.min(W > H ? (H <= 460 ? 32 : 40) : 34, Math.floor((W - 24 - 16 - 8) / 9)));
+    const s = st.tray ? 40 : Math.max(24, Math.min(W > H ? (H <= 460 ? 32 : 40) : 34, Math.floor((W - 24 - 16 - 8) / 9)));   // 2.0: ячейки лотка — 40 (выбранная 48)
     if (st.kbS !== s) {
       st.kbS = s; h.style.setProperty('--kb-s', s + 'px');
       // кнопки встают выше панели — мерить её после смены размера (при «уменьшить движение» у сайта всё с переходом 0,01 мс)
@@ -2218,7 +2446,7 @@
     const h = document.createElement('div'); h.className = 'kb-hud';
     h.innerHTML = `<div class="kb-flash"></div><div class="kb-hurt"></div><div class="kb-lowhp"></div><div class="kb-parry"></div><div class="kb-cool" hidden><i></i></div><div class="kb-dbg" hidden></div><div class="kb-log"></div><div class="kb-tip" hidden><i class="kb-tipi" aria-hidden="true">💡</i><div><b>ПОДСКАЗКА</b><span></span></div><button type="button" aria-label="Скрыть подсказки" title="Скрыть подсказки в этом мире">✕</button></div>
       <div class="kb-bottom"><div class="kb-bars"><div class="kb-hp"></div><div class="kb-food"></div></div><div class="kb-air"></div><div class="kb-iname"></div>
-      <div class="kb-hrow"><div class="kb-oslot" title="Левая рука: щит, факел, еда (F — поменять руки)" aria-label="Левая рука"><i></i><b></b><u></u></div><div class="kb-hotbar">${Array.from({ length: 9 }, (_, i) => `<div class="kb-slot" data-s="${i}"><i></i><b></b><u></u></div>`).join('')}</div></div></div>
+      <div class="kb-hrow"><div class="kb-oslot" title="Левая рука: щит, факел, еда (F — поменять руки)" aria-label="Левая рука"><i></i><b></b><u></u></div><div class="kb-hotbar">${Array.from({ length: 9 }, (_, i) => `<div class="kb-slot" data-s="${i}"><i></i><b></b><u></u></div>`).join('')}<div class="kb-slot kb-bag" data-bag="1" role="button" aria-label="Все вещи">🎒</div></div></div></div>
       <div class="kb-loadbar" hidden><div class="spinner"></div><b>Строим мир вокруг…</b><small></small></div>`;
     // панель вещей: нажал — выбрать; провёл пальцем — выбор едет за пальцем; подержал (палец) — выбросить по одной
     const hb = h.querySelector('.kb-hotbar');
@@ -2231,6 +2459,7 @@
     const slotAt = (x, y) => { const s = document.elementFromPoint(x, y)?.closest?.('.kb-hotbar [data-s]'); return s ? +s.dataset.s : -1; };
     const holdDrop = () => { if (!hp || !S) return; dropSel(S, false); hp.timer = setTimeout(holdDrop, 220); };
     hb.addEventListener('pointerdown', e => {
+      if (S?.tray) { e.stopPropagation(); e.preventDefault(); trayDown(S, hb, e); return; }   // лоток (T-123)
       const s = e.target.closest('[data-s]'); if (!s || !S) return;
       e.stopPropagation(); e.preventDefault();
       S.P.sel = +s.dataset.s;
@@ -2239,11 +2468,12 @@
       if (hp.touch) hp.timer = setTimeout(holdDrop, 550);
     });
     hb.addEventListener('pointermove', e => {
+      if (S?.tray) { trayMove(S, e); return; }
       if (!hp || hp.id !== e.pointerId || !S) return;
       const i = slotAt(e.clientX, e.clientY);
       if (i >= 0 && i !== hp.slot) { hp.slot = i; S.P.sel = i; clearTimeout(hp.timer); if (hp.touch) hp.timer = setTimeout(holdDrop, 550); }
     });
-    const end = e => { if (!hp || hp.id !== e.pointerId) return; clearTimeout(hp.timer); hp = null; };
+    const end = e => { if (S?.tray) { trayUp(S, e); return; } if (!hp || hp.id !== e.pointerId) return; clearTimeout(hp.timer); hp = null; };
     hb.addEventListener('pointerup', end); hb.addEventListener('pointercancel', end);
     wr.appendChild(h);
     return h;
@@ -2252,11 +2482,11 @@
     const h = st.hudEl, P = st.P, C = st.hud, V = VX();
     // панель вещей
     for (let i = 0; i < 9; i++) {
-      const s = P.inv[i], key = s ? s.id + ':' + s.n + ':' + (s.d | 0) : '', sel = i === P.sel;
-      if (C['s' + i] !== key + sel) {
-        C['s' + i] = key + sel;
+      const s = P.inv[i], key = s ? s.id + ':' + s.n + ':' + (s.d | 0) : '', sel = i === P.sel, nb = i === P.sel - 1 || i === P.sel + 1;   // nb — сосед (виден в свёрнутом лотке)
+      if (C['s' + i] !== key + sel + nb) {
+        C['s' + i] = key + sel + nb;
         const d = h.querySelectorAll('.kb-slot')[i];
-        d.classList.toggle('on', sel);
+        d.classList.toggle('on', sel); d.classList.toggle('nb', nb);
         d.querySelector('i').style.backgroundImage = s ? `url(${V.iconURL(s.id, 40)})` : '';
         d.querySelector('b').textContent = s && s.n > 1 ? s.n : '';
         const it = s && V.item(s.id), dur = it?.tool && s.d ? 1 - s.d / it.tool.dur : -1;
@@ -2297,6 +2527,7 @@
     const surv = !st.creative, bars = surv ? P.hp + '|' + P.food + '|' + (P.air < 15 ? Math.ceil(P.air) : 'F') + '|' + (P.eyeWater ? 1 : 0) + '|' + gh : 'c';
     if (C.bars !== bars) {
       C.bars = bars;
+      st.barsT = now(); if (st.barsCalm) { st.barsCalm = false; h.querySelector('.kb-bars').classList.toggle('kb-calm', false); }   // поменялось — снова ярко (T-123)
       const icons = (n, full, half, empty) => { let s = ''; for (let i = 0; i < 10; i++) s += n >= (i + 1) * 2 ? full : n === i * 2 + 1 ? half : empty; return s; };
       // еда: к сытым — призрачные (вернёт еда в руке): полные / половинка
       const foodIcons = (n, add) => { const to = Math.min(20, n + add); let s = ''; for (let i = 0; i < 10; i++) { const a = (i + 1) * 2, b = i * 2 + 1; s += n >= a ? '<i class="f">🍗</i>' : to >= a ? (n === b ? '<i class="h g">🍗</i>' : '<i class="g">🍗</i>') : n === b ? '<i class="h">🍗</i>' : to === b ? '<i class="e gh">🍗</i>' : '<i class="e">🍗</i>'; } return s; };
@@ -2333,6 +2564,8 @@
     const st = S; if (!st) return;
     if (st.ready) st.hudEl.querySelector('.kb-loadbar').hidden = true;
     tipsUpdate(st);
+    // 2.0: здоровье и еда полные и 5 с не менялись — бледнеют (меняются — снова ярко)
+    if (st.v2) { const P = st.P, calm = !st.creative && P.hp >= 20 && P.food >= 20 && now() - (st.barsT || 0) > 5000; if (calm !== !!st.barsCalm) { st.barsCalm = calm; st.hudEl.querySelector('.kb-bars')?.classList.toggle('kb-calm', calm); } }
     // награды: очередь достижений (сервер — не чаще раза в 20 с)
     if (st.achQ.length && (!st.achAt || now() - st.achAt > 21000)) { const a = st.achQ.shift(); st.achAt = now(); rewardAch(a); }
     st.modRun?.second?.();
@@ -2490,8 +2723,29 @@
   function tipsUpdate(st){
     const box = st.hudEl?.querySelector('.kb-tip'); if (!box) return;
     const txt = !st.creative && st.meta.tips !== false && !st.P.dead && st.ready ? tipText(st) : '';
+    if (st.v2) { tips2(st, box, txt); return; }
     if (st.tipNow !== txt) { st.tipNow = txt; box.hidden = !txt; if (txt) { box.querySelector('span').textContent = txt; tipMode(st, box, 'line'); } }
     else if (txt && st.I?.touch && st.tipUntil && now() > st.tipUntil) tipMode(st, box, 'mini');
+  }
+  // 2.0 (T-123, §5): каждая подсказка — один раз на устройство (телефон — строка на 6 с, компьютер — карточка на 12 с), потом — только
+  // ☰ → «💡 Подсказка»; «📍 Твои вещи…» после нокаута — пока не дошёл (стрелка меняется раз в секунду)
+  const tipId = txt => { const c = txt.codePointAt(0) || 0; return c === 0x1F4CD ? 'death' : c.toString(36); };
+  function tips2(st, box, txt){
+    const id = txt ? tipId(txt) : '';
+    if (id === 'death') { st.tipNow = txt; tipPut(st, box, txt, 0); return; }
+    if (txt !== st.tipNow) {
+      st.tipNow = txt;
+      const TL = window.D37TouchLayout;
+      if (txt && (!TL?.hintOnce || TL.hintOnce(ID, 'tip-' + id))) tipPut(st, box, txt, st.I?.touch ? TIP_LINE : TIP_OPEN);
+      else if (!txt || st.tipId === 'death') tipPut(st, box, '', 0);
+    }
+    if (st.tipUntil && now() > st.tipUntil) tipPut(st, box, '', 0);
+  }
+  function tipPut(st, box, txt, ms){
+    st.tipId = txt ? tipId(txt) : ''; st.tipUntil = txt && ms ? now() + ms : 0;
+    if (txt) { const sp = box.querySelector('span'); if (sp.textContent !== txt) sp.textContent = txt; }
+    if (box.hidden !== !txt) box.hidden = !txt;
+    if (box.classList.contains('mini')) box.classList.toggle('mini', false);
   }
   function tipMode(st, box, m){
     const touch = !!st.I?.touch;
@@ -2535,6 +2789,7 @@
         { id: 'coop', icon: '👥', text: 'Игроки', group: 'Игра' },
         { id: 'settings', icon: '⚙️', text: 'Настройки', group: 'Экран и помощь' },
         ...(SS.fsItems?.(fsEl()) || []).map(it => ({ group: 'Экран и помощь', ...it })),   // ⛶ / 🔄 — как во всех играх (settings.js)
+        ...viewItems(st),
         { id: 'help', icon: '❓', text: 'Как играть', group: 'Экран и помощь' },
         { id: 'unstuck', icon: '🆘', text: 'Я застрял', group: 'Экран и помощь' },
         { id: 'exit', icon: '🚪', text: 'Выйти из мира друга', warn: true },
@@ -2547,15 +2802,27 @@
         { id: 'export', icon: '📤', text: 'Сохранить файл мира', group: 'Мир' },
         { id: 'settings', icon: '⚙️', text: 'Настройки', group: 'Экран и помощь' },
         ...(SS.fsItems?.(fsEl()) || []).map(it => ({ group: 'Экран и помощь', ...it })),   // ⛶ / 🔄 — как во всех играх (settings.js)
+        ...viewItems(st),
         { id: 'help', icon: '❓', text: 'Как играть', group: 'Экран и помощь' },
         { id: 'unstuck', icon: '🆘', text: 'Я застрял', group: 'Экран и помощь' },
         { id: 'exit', icon: '🏠', text: 'Сохранить и выйти в меню', warn: true },
       ],
-      onPick: id => { if (!SS.fsPick?.(id, fsEl(), S?.menu)) menuPick(id); },
+      onPick: id => { if (window.D37Shell?.pick?.(id, S?.menu)) return; if (!SS.fsPick?.(id, fsEl(), S?.menu)) menuPick(id); },
       onClose: () => { if (S) { S.menu = null; S.C?.reset_state(); } },
     });
   }
   function closeMenu(){ S?.menu?.close(); }
+  // 2.0 (T-123): F1 и F5 — и в ☰ (телефон без клавиш); 💡 — подсказка «что дальше» (на экране каждая — один раз); 📣 🔊 📱 — шапки игры
+  function viewItems(st){
+    if (!st.v2) return [];
+    const g = 'Экран и помощь';
+    return [
+      { id: 'hud', icon: '🙈', text: 'Спрятать интерфейс (вернуть — нажать в угол ↗)', group: g },
+      { id: 'cam', icon: '🎥', text: 'Камера: ' + ['от 1-го лица', 'сзади', 'спереди'][st.camMode | 0], group: g },
+      ...(st.tipNow ? [{ id: 'tip', icon: '💡', text: 'Подсказка: что делать дальше', group: g }] : []),
+      ...shellItems(g),
+    ];
+  }
   // Esc закрыл окно (вещи, сундук, лист помощника, моды): мышь — захватить снова, но только когда Esc отпустят (frame: escRelock).
   // Захват сразу, пока Esc ещё нажат, браузер (Chrome) отпускает «по Esc» на отпускании клавиши — и игра видела «отпустили мышь
   // без окон» → меню паузы. lockGrace — 0,6 с после захвата: мышь отпустилась — подсказка «нажми на мир», не меню
@@ -2565,6 +2832,9 @@
   async function menuPick(id){
     const st = S; if (!st) return;
     if (id.startsWith('x:') && st.X) { closeMenu(); if (id === 'x:acc') st.X.openAcc(); else for (const f of st.X.feats) if (!f.dead && f.pick?.(id)) break; return; }   // ── KX:menu ──
+    if (id === 'hud') { closeMenu(); hideHud(true); return; }
+    if (id === 'cam') { closeMenu(); cycleCam(); return; }
+    if (id === 'tip') { closeMenu(); const box = st.hudEl?.querySelector('.kb-tip'); if (box && st.tipNow) tipPut(st, box, st.tipNow, TIP_OPEN); return; }
     if (id === 'resume') { closeMenu(); if (!st.I.touch) st.I.lock?.(); }   // не вышло (браузер не дал сразу после Esc) — «🖱 Нажми на мир»
     else if (id === 'settings') window.D37Settings?.open({ ctx: 'engine', tab: 'kubomir' });
     else if (id === 'mods') { closeMenu(); window.KubomirMods?.worldPanel?.(st, wrap(), { restart: ids => { if (S !== st) return; st.meta.mods = ids; restartWorld(); } }); }
@@ -2722,7 +2992,16 @@
   // ── связь с окнами и сущностями ──
   function uiHooks(){ return { give: s => give(S, s), drop: s => S && spawnItem(S, S.P.x, S.P.y + 1.4, S.P.z, s, false, (() => { const d = lookDir(S); return [d.x * 4, 2, d.z * 4]; })()), unlock, toast: (t, ok) => S?.H.toast(t, ok), sound: (n, o) => S?.AU?.play(n, o || {}),
     // ── KX:ui ── окно вещей → помощники: сделал на верстаке, забрал из печи, поменял аксессуары, открыть книгу рецептов / помощников
-    craft: (id, n) => S?.X?.emit('craft', id, n), smelt: (id, n) => S?.X?.emit('smelt', id, n), x: () => S?.X || null }; }
+    craft: (id, n) => S?.X?.emit('craft', id, n), smelt: (id, n) => S?.X?.emit('smelt', id, n), x: () => S?.X || null,
+    sheet: () => !!(S?.v2 && S.I?.touch), inset: p => S && sheetInset(S, p) }; }   // T-123: окно вещей — лист, мир виден рядом
+  // лист открыт: центр картинки — в свободной части окна (камера та же, игра та же; D37E.viewOffset), закрыт — обратно
+  function sheetInset(st, panel){
+    const w = wrap(); if (!w || !E().viewOffset) return;
+    const vo = st.vo || (st.vo = E().viewOffset(st.R.camera)), h = w.getBoundingClientRect();
+    if (!panel) { vo.want(null, h.width, h.height); return; }
+    const b = panel.getBoundingClientRect(), side = b.height > h.height * .8;
+    vo.want(side ? (b.left - h.left > h.width / 3 ? { l: 0, t: 0, r: h.right - b.left, b: 0 } : { l: b.right - h.left, t: 0, r: 0, b: 0 }) : { l: 0, t: 0, r: 0, b: h.bottom - b.top }, h.width, h.height);
+  }
   // ── KX:hooks ── что игра даёт помощникам (kubomir-x.js и его файлы): только нужное, без доступа к внутренностям
   function xHooks(st){
     return {
@@ -2767,5 +3046,7 @@
     swimDeep: P => swimDeep(P), swimDrawY: (st, a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt),
     // помощники (T-049, scripts/kubomir-qol-test.cjs): что пишется в сохранение и гостю, дом, пункты меню, «съесть» и ПКМ вещью
     metaSnap: st => metaSnap(st), guestData: st => guestData(st), homeOf: st => homeOf(st), xMenu: st => xMenu(st), xHooks: st => xHooks(st), eatNow: (st, it, which) => eat(st, it, which),
-    useHand: (st, hit, tap, s, which) => useHand(st, hit, tap, s, which), dropsOf: (st, b) => dropsOf(st, b), die: (st, why) => die(st, why), play: id => playById(id) } };
+    useHand: (st, hit, tap, s, which) => useHand(st, hit, tap, s, which), dropsOf: (st, b) => dropsOf(st, b), die: (st, why) => die(st, why), play: id => playById(id),
+    // интерфейс 2.0 (T-123, scripts/hud2-cases/kubomir.cjs): поза (круг), лоток, кнопки телефона заново
+    pose: id => S && posePick(S, id), poseCur: () => S && poseCur(S), tray: on => S && trayOpen(S, on), touchUI: () => S && touchUI(S), poseCheck: (st, C, K) => poseCheck(st, C, K) } };
 })();
