@@ -49,7 +49,7 @@ const TESTS = [
   { f: 'voxel-test.cjs', serial: true, retry: 2 },
   { f: 'trees-test.cjs', args: ['--fast'], retry: 1 },   // T-022b: движок деревьев — по зерну одинаково, породы, связность, сетка, генератор «Кубомира» v1/v2 как было, v3
   // игры: бот против бота (число партий уменьшено — в CI достаточно)
-  { f: 'arcade-test.cjs' },   // T-140 мини-игры (ArcadeKit): 30/60/144 FPS, повтор нажатий, seed соперников, сценарии, мусор на шаге
+  { f: 'arcade-test.cjs', t: 480 },   // (34 игры: ~130 с одна, под нагрузкой — до 2–3 раз дольше) T-140 мини-игры (ArcadeKit): 30/60/144 FPS, повтор нажатий, seed соперников, сценарии, мусор на шаге
   { f: 'domino-test.cjs' }, { f: 'fillword-test.cjs' }, { f: 'balda-test.cjs', args: ['300'] }, { f: 'krokodil-test.cjs' },
   { f: 'kletochki-test.cjs' }, { f: 'chervyachki-test.cjs' },
   // «Путь клетки» (T-056): каталог и правила рода, мир пути, комнаты по биомам; evo.sql в PGlite (JS = SQL); время до «Готов к суше» у бота
