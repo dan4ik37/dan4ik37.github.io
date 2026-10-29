@@ -176,10 +176,22 @@ function threeDir(){
       glbKB: Math.round(buf.byteLength / 1024), jsonKB: +(g.jl / 1024).toFixed(1), exportMs: Math.round(tExp), compileMs: Math.round(tComp), studioTris: model && model.tris, studioKB: model && Math.round((model.bytes || 0) / 1024) };
     console.log(D.id.padEnd(7), JSON.stringify(sizes[D.id]));
   }
+  // the ops the self-test rows and demos do not reach (scripts/ai3d/ops-extra.json — the e2e smoke runs them in Chrome too)
+  const extra = JSON.parse(fs.readFileSync(path.join(__dirname, 'ai3d', 'ops-extra.json'), 'utf8'));
+  S.reset(); const exFail = [];
+  for (const [n, c] of extra) { let r; try { r = S.run(c); } catch (e) { r = { ok: false, error: 'THROW ' + e.message }; } if (!r.ok) exFail.push(n + ': ' + r.error); }
+  ok(!exFail.length, 'remaining ops (mesh, parent, unconstrain, fur, addon, play, anim_del, jiggle, del, clear)', exFail);
+  const runSrc = src.slice(src.indexOf('function run(cmds){', a), src.indexOf('function snap(', a));
+  const allOps = new Set([...runSrc.matchAll(/c\.op==='([a-z_0-9]+)'/g)].map(m => m[1])), reached = new Set();
+  for (const [, c] of rows) if (c) c.forEach(x => reached.add(x.op));
+  const tA = src.indexOf('const T=[', a); for (const m of src.slice(tA, src.indexOf('];', tA)).matchAll(/op:'([a-z_0-9]+)'/g)) reached.add(m[1]);   // + ops inside selftest() function rows (photo, texture)
+  for (const D of DEMOS) D.cmds.forEach(x => reached.add(x.op));
+  for (const [, c] of extra) c.forEach(x => reached.add(x.op));
+  ok(allOps.size === 63 && [...allOps].every(o => reached.has(o)), 'every op of run() is exercised (63)', { ops: allOps.size, missing: [...allOps].filter(o => !reached.has(o)) });
   // undo snapshots stay bounded (terrain JSON ~4 MB each)
   S.reset(); S.run(DEMOS[5].cmds); for (let i = 0; i < 12; i++) S.run([{ op: 'set', name: 'land', pos: [0, i * .01, 0] }]);
   const histChars = vm.runInThisContext('hist.reduce((s,x)=>s+x.length,0)'), histN = vm.runInThisContext('hist.length');
-  ok(histChars <= 24e6 + 5e6 && histN >= 1, 'undo history capped', { histChars, histN });
+  ok(histChars <= 12e6 + 5e6 && histN >= 1, 'undo history capped (~12M chars)', { histChars, histN });
   console.log(`undo history after 13 terrain edits: ${histN} snapshots, ${(histChars / 1e6).toFixed(1)}M chars`);
   // rollback still works with a capped history
   const before = JSON.stringify(globalThis.AI3D.state()).length, rb = S.run([{ op: 'set', name: 'land', pos: [0, 5, 0] }, { op: 'nope' }]);

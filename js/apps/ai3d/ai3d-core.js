@@ -10,7 +10,7 @@
 // Site changes are marked "site:" (made once from the owner's ai3d.html; list in docs/areas/studio3d.md; edit this file directly now):
 //   ids scoped to the host; colours from .a3 tokens; ColorManagement.legacyMode = true while open (r128 colour maths on r149, restored on
 //   close); no "morphTargets" material parameter (r149); one offscreen renderer for snapshots (was a new WebGL context per call); outline
-//   program per thickness; LOD copies freed with their geometry; undo snapshots capped (~24M chars); stoppable render loop and resize
+//   program per thickness; LOD copies freed with their geometry; undo snapshots capped (~12M chars); stoppable render loop and resize
 //   observer; frame CPU ring for e2e; GLB through ai3d-gltf.js (binary on r149, no userData extras, linear colours); the MCP bridge
 //   (server.mjs, ws://localhost) only on demand; full GPU cleanup in __dispose().
 (function(){
@@ -19,7 +19,7 @@ function create(host,env){
 const $=s=>host.querySelector(String(s).replace(/#([\w-]+)/g,'#a3-$1'));   // site: ids inside the host only, prefixed a3-
 let state=[],hist=[],redo=[];
 const cs=()=>getComputedStyle(host);   // site: colours from the editor root (.a3 tokens, both site themes)
-let __bgC='',__bgN=0;const bg=()=>{if(!__bgC||++__bgN>90){__bgN=0;__bgC=cs().getPropertyValue('--bg').trim()||'#10171d'}return __bgC};   // site: no style recalc every frame
+let __bgC='',__bgN=0,__bgSet='';const bg=()=>{if(!__bgC||++__bgN>90){__bgN=0;__bgC=cs().getPropertyValue('--bg').trim()||'#10171d'}return __bgC};   // site: no style recalc every frame
 const __cm=THREE.ColorManagement,__cmL=__cm?__cm.legacyMode:undefined;if(__cm&&'legacyMode' in __cm)__cm.legacyMode=true;   // site: restored in __dispose
 let __alive=true,__raf=0;
 const cv=$('#c'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true});
@@ -193,7 +193,7 @@ function polysMesh(ps,A0){const map=new Map(),v=[],f=[];
 
 let VER=Date.now();const GC=new Map();
 function gkey(o){const s=o.size;return o.type+'|'+(o.ver||0)+'|'+(o.type==='mesh'?s.v.length+'/'+s.f.length+(s.c?'c':'')+(s.sk?'s'+Object.keys(s.sk).join('|'):''):(o.type==='obj'||o.type==='csg')?s.length:JSON.stringify(s))}
-function cgeo(o){const k=gkey(o);let g=GC.get(k);if(!g){g=geo(o.type,o.size);GC.set(k,g);if(GC.size>60){const f=GC.keys().next().value,ev=GC.get(f);ev.dispose();const L=LODC.get(ev);if(L)L.forEach(x=>x.dispose());GC.delete(f)}}return g}
+function cgeo(o){const k=gkey(o);let g=GC.get(k);if(!g){g=geo(o.type,o.size);GC.set(k,g);if(GC.size>Math.max(60,state.length+20)){const f=GC.keys().next().value,ev=GC.get(f);ev.dispose();const L=LODC.get(ev);if(L)L.forEach(x=>x.dispose());GC.delete(f)}}return g}
 
 const SET={lod:true,cull:true,adaptive:true,onDemand:true,shadows:true};
 let TG=null;function toonGrad(){if(!TG){TG=new THREE.DataTexture(new Uint8Array([95,95,95,255,175,175,175,255,255,255,255,255]),3,1,THREE.RGBAFormat);   // site: was LuminanceFormat (r149 WebGL2)
@@ -1128,7 +1128,7 @@ function geo(t,s){s=s||[];
  throw new Error('Неизвестный тип: '+t+'. Доступны: box, sphere, cylinder, cone, torus, plane');
 }
 function build(){dirty=true;
- while(group.children.length){const m=group.children[0];group.remove(m);m.material.dispose();m.children.forEach(c=>c.material&&c.material.dispose())}
+ while(group.children.length){const m=group.children[0];group.remove(m);if(!__noDisp){m.material.dispose();m.children.forEach(c=>c.material&&c.material.dispose())}}__noDisp=false;   // site: not after a context loss
  state.filter(o=>!o.hidden&&layerOn(o)).forEach(o=>{
   const m=new THREE.Mesh(cgeo(o),mkMat(o,{color:((o.type==='mesh'&&o.size.c)||(o.texid&&TEXS[o.texid]))?'#ffffff':(o.color||'#b0b0b0'),vertexColors:!!(o.type==='mesh'&&o.size.c&&!(o.texid&&TEXS[o.texid])),map:(o.texid&&TEXS[o.texid])?TEXS[o.texid].tex:null,morphTargets:!!(o.type==='mesh'&&o.size.sk),roughness:o.rough??.7,metalness:o.metal||0,transparent:(o.opacity??1)<1,opacity:o.opacity??1,side:THREE.DoubleSide}));
   if(o.type==='mesh'&&o.size.sk)m.morphTargetInfluences=Object.keys(o.size.sk).map(k=>(o.w&&o.w[k])||0);m.userData.g0=m.geometry;m.position.set(...(o.pos||[0,0,0]));m.scale.setScalar(o.scale||1);
@@ -1160,7 +1160,7 @@ function withKids(g){const a=[...g];g.forEach(x=>kids(x.name).forEach(k=>{if(!a.
 function rigid(x,R,P,d){x.pos=new THREE.Vector3(...x.pos).sub(P).applyQuaternion(R).add(P).add(d).toArray();
  const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(...(x.rot||[0,0,0]).map(a=>a*Math.PI/180))).premultiply(R),e=new THREE.Euler().setFromQuaternion(q);
  x.rot=[e.x,e.y,e.z].map(r=>+(r*180/Math.PI).toFixed(3))}
-function __histCap(){let b=0;for(let i=hist.length-1;i>=0;i--){b+=hist[i].length;if(b>24e6&&i<hist.length-1){hist.splice(0,i+1);break}}}   // site
+function __histCap(){let b=0;for(let i=hist.length-1;i>=0;i--){b+=hist[i].length;if(b>12e6&&i<hist.length-1){hist.splice(0,i+1);break}}}   // site
 function run(cmds){
  hist.push(JSON.stringify(state));redo.length=0;if(hist.length>30)hist.shift();__histCap();NOTE='';
  try{
@@ -1617,7 +1617,7 @@ const __FR=new Float32Array(4096);let __frN=0,__rend=false,__tick=0,__cost=0;   
 (function loop(){if(!__alive)return;__raf=requestAnimationFrame(loop);
  const __now=performance.now();if(__rend){const d=__now-__tick;if(d<100&&d>0)ft=ft*.9+d*.1;__rend=false}__tick=__now;
  if(!(dirty||playing||!SET.onDemand))return;
- const t0=performance.now();R.setClearColor(bg());place();
+ const t0=performance.now();{const b=bg();if(b!==__bgSet){__bgSet=b;R.setClearColor(b)}}place();   // site
  if(SET.lod||SET.cull){lodOn=true;lodUpdate(false)}else if(lodOn){lodUpdate(true);lodOn=false}
  R.render(scene,cam);dirty=false;if(__lodPend){__lodPend=false;dirty=true}const __c=performance.now()-t0;__FR[__frN++&4095]=__c;__cost=__cost*.9+__c*.1;__rend=true;lastT=t0;
  if(SET.adaptive){const mx=Math.min(devicePixelRatio,2);if(ft>30&&PR>.6&&__cost<ft*.6){PR=Math.max(.6,PR-.1);fit()}else if(ft<20&&PR<mx){PR=Math.min(mx,PR+.1);fit()}}   // site
@@ -1713,15 +1713,25 @@ $('#cmd').value=JSON.stringify([
 // ═══ site: what the shell (ai3d-ui.js) and tests use ═══
 function __frame(){const b=new THREE.Box3();group.children.forEach(m=>{if(!m.userData.aux)b.expandByObject(m)});if(b.isEmpty())return;b.getCenter(tgt);dist=Math.min(150,Math.max(2,b.getSize(new THREE.Vector3()).length()*1.05));dirty=true}   // site: camera onto the scene (examples)
 function __reset(){state=[];hist.length=0;redo.length=0;Object.keys(ANIM).forEach(k=>delete ANIM[k]);CON.length=0;Object.keys(LAYERS).forEach(k=>delete LAYERS[k]);SOLO=null;PLAYSEL=[];build()}
+// WebGL context restored (three re-creates its GL state itself): three objects made before the loss keep "dispose" handlers of the lost
+// state — disposing them later printed "WebGL: INVALID_OPERATION: delete: object does not belong to this context". So: drop them (no
+// dispose), make fresh ones, rebuild; and at close skip GPU disposes after a loss (forceContextLoss frees the GPU anyway).
+let __ctxGen=0,__noDisp=false;
+cv.addEventListener('webglcontextrestored',()=>{if(!__alive)return;__ctxGen++;__bgSet='';__noDisp=true;GC.clear();TG=null;BT.clear();
+ Object.keys(TEXS).forEach(k=>{const T=TEXS[k];if(T.tex){T.tex=T.tex.clone();T.tex.needsUpdate=true}});
+ {const e=mkEnv(R);if(e)scene.environment=e}if(dl.shadow)dl.shadow.map=null;build();dirty=true});
 function __dispose(){if(!__alive)return;__alive=false;cancelAnimationFrame(__raf);try{__ro.disconnect()}catch(e){}
  if(playing){cancelAnimationFrame(playing.id);playing=null}
  clearTimeout(__wsT);if(__ws){try{__ws.onclose=null;__ws.close()}catch(e){}__ws=null}
+ if(!__ctxGen){
  while(group.children.length){const m=group.children[0];group.remove(m);m.material.dispose();m.children.forEach(c=>c.material&&c.material.dispose())}
- GC.forEach(g=>{g.dispose();const L=LODC.get(g);if(L)L.forEach(x=>x.dispose())});GC.clear();
- Object.keys(TEXS).forEach(k=>{if(TEXS[k].tex)TEXS[k].tex.dispose();delete TEXS[k]});BT.forEach(t=>t.dispose());BT.clear();if(TG){TG.dispose();TG=null}
+ GC.forEach(g=>{g.dispose();const L=LODC.get(g);if(L)L.forEach(x=>x.dispose())});
+ Object.keys(TEXS).forEach(k=>{if(TEXS[k].tex)TEXS[k].tex.dispose()});BT.forEach(t=>t.dispose());if(TG)TG.dispose();
  scene.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(mt=>{if(mt.map)mt.map.dispose();mt.dispose()})});
- if(scene.environment)scene.environment.dispose();scene.environment=null;if(__SRenv){__SRenv.dispose();__SRenv=null}
- if(dl.shadow&&dl.shadow.map){dl.shadow.map.dispose();dl.shadow.map=null}
+ if(scene.environment)scene.environment.dispose();if(dl.shadow&&dl.shadow.map)dl.shadow.map.dispose();
+ }
+ while(group.children.length)group.remove(group.children[0]);GC.clear();Object.keys(TEXS).forEach(k=>delete TEXS[k]);BT.clear();TG=null;scene.environment=null;if(dl.shadow)dl.shadow.map=null;
+ if(__SRenv){__SRenv.dispose();__SRenv=null}
  try{R.dispose();R.forceContextLoss()}catch(e){}if(__SR){try{__SR.dispose();__SR.forceContextLoss()}catch(e){}__SR=null}
  if(__cm&&'legacyMode' in __cm)__cm.legacyMode=__cmL;
  if(window.AI3D===__api)delete window.AI3D}

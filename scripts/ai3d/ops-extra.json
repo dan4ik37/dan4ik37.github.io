@@ -1,0 +1,10 @@
+[
+ ["mesh, parent, unparent", [{"op":"add","name":"p1","type":"box","size":[1,1,1],"pos":[0,0.5,0]},{"op":"add","name":"p2","type":"sphere","size":[0.3],"pos":[2,0.3,0]},{"op":"mesh","name":"p2"},{"op":"parent","name":"p2","to":"p1"},{"op":"parent","name":"p2"}]],
+ ["constrain, unconstrain", [{"op":"constrain","type":"lookat","name":"p2","target":"p1"},{"op":"unconstrain","name":"p2"}]],
+ ["fur on a mesh", [{"op":"fur","on":"p2","density":300}]],
+ ["addon ears", [{"op":"addon","on":"p1","kind":"ears","style":"cat","name":"ea"}]],
+ ["key, play, anim_del", [{"op":"key","anim":"k","time":0,"names":["p1"]},{"op":"move","name":"p1","by":[1,0,0]},{"op":"key","anim":"k","time":1},{"op":"play","anims":["k"]},{"op":"play","stop":true},{"op":"anim_del","anim":"k"}]],
+ ["jiggle", [{"op":"make","type":"dog","name":"jd","pos":[5,0,0],"fur":{"density":300}},{"op":"gait","prefix":"jd_","clip":"walk","anim":"a"},{"op":"jiggle","anim":"a","parts":["jd_ear_L"],"k":120}]],
+ ["del", [{"op":"del","name":"p2"}]],
+ ["clear", [{"op":"clear"}]]
+]

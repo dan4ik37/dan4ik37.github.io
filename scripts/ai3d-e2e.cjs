@@ -9,6 +9,9 @@
 //                                             WebGL contexts, three.js objects, window/document listeners
 //         node scripts/ai3d-e2e.cjs soak [10] — N minutes of random ops (self-test rows, demos, undo/redo, rollback, export, studio, views,
 //                                             play, orbit): errors, rollbacks, heap per minute
+//         node scripts/ai3d-e2e.cjs retain   — what stays alive after closing (three.js renderers, geometries by size)
+//         CMDS='[…]' VIEW='th,ph,dist' node scripts/ai3d-e2e.cjs look <name> — a close-up screenshot of any commands
+// The smoke mode also runs scripts/ai3d/ops-extra.json — with the self-test rows and demos every one of the 63 ops runs in Chrome.
 // Profiles: phone (default) — 412 × 915 × 2, touch, CPU ×4 (RATE); PC=1 — 1280 × 720, no throttle. Chrome profile and output:
 // D37_TMP/t112 (E:\claude-tmp\t112). Needs internet to jsDelivr (three r149, GLTFExporter); the site's own noise (Supabase, ads) is blocked.
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
@@ -36,7 +39,7 @@ const server = http.createServer((req, res) => {
 const BLOCK = ['*://*.supabase.co/*', '*://*.googlesyndication.com/*', '*://*.doubleclick.net/*', '*://*.adtrafficquality.google/*', '*://*.yandex.ru/*', '*://*.yandex.net/*',
   '*://yastatic.net/*', '*://*.twitch.tv/*', '*://decapi.me/*', '*://*.ytimg.com/*', '*://*.youtube.com/*', '*://*.google-analytics.com/*', '*://*.googletagmanager.com/*',
   '*://localhost:*/_vercel/*', '*://127.0.0.1:*/_vercel/*', '*://www.googleapis.com/*', '*://api.allorigins.win/*', '*://*/api/*'];
-const realErrors = errs => errs.filter(e => !/Failed to fetch|NetworkError|ERR_BLOCKED|net::|supabase|AbortError|googleapis|Twitch|ytimg|adsbygoogle|ym is not|insights|Не загрузилось: @supabase|status of 404|favicon/i.test(String(e)));
+const realErrors = errs => errs.filter(e => !/^mark:|Failed to fetch|NetworkError|ERR_BLOCKED|net::|supabase|AbortError|googleapis|Twitch|ytimg|adsbygoogle|ym is not|insights|Не загрузилось: @supabase|status of 404|favicon/i.test(String(e)));
 // self-test command rows straight from the editor file (the same list selftest() runs)
 function selfRows(){
   const src = fs.readFileSync(path.join(SITE, 'js/apps/ai3d/ai3d-core.js'), 'utf8'), a = src.indexOf('const T=[', src.indexOf('function selftest(')), b = src.indexOf('];', a);
@@ -160,6 +163,10 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
         out.demos[d] = { ms: r.ms, objects: r.st.objects, tris: r.st.tris_full };
       }
       console.log('demos', JSON.stringify(out.demos));
+      // the ops the self-test rows and demos do not reach (with them: all 63 ops of run())
+      const extra = JSON.parse(fs.readFileSync(path.join(__dirname, 'ai3d', 'ops-extra.json'), 'utf8'));
+      const exRes = await ev(`(() => { D37AI3D.core.reset(); const X = ${JSON.stringify(extra)}, bad = []; for (const [n, c] of X) { const r = D37AI3D.core.run(c); if (!r.ok) bad.push(n + ': ' + r.error); } return bad; })()`);
+      ok(exRes.length === 0, 'remaining ops in Chrome (mesh, parent, unconstrain, fur, addon, play, anim_del, jiggle, del, clear)', exRes);
       // GLB from the page (land is on screen now; then the table)
       await demo('table');
       const g = glbInfo(await pageGLB()), top = g.J.nodes.find(n => n.name === 'столешница'), bf = top && g.J.materials[g.J.meshes[top.mesh].primitives[0].material].pbrMetallicRoughness.baseColorFactor;
@@ -191,10 +198,10 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 }); await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
       await sleep(400);
       ok(await ev(`currentRoute() === 'ai3d'`), 'site hotkeys (arrows) do not leave the editor');
-      // WebGL context loss → notice → restore → renders again
+      logs.push('mark: context loss');   // WebGL context loss → notice → restore → renders again
       await ev(`(window.__a3lose = document.querySelector('#a3-c').getContext('webgl2').getExtension('WEBGL_lose_context'), __a3lose.loseContext(), 1)`); await sleep(500);
       const lostShown = await ev(`!document.querySelector('.a3-lost').hidden`);
-      await ev(`(__a3lose.restoreContext(), 1)`); await sleep(1200); await drag(300);
+      await ev(`(__a3lose.restoreContext(), 1)`); await sleep(1200); await demo('fox'); await sleep(300); await drag(300);   // a rebuild after the restore too
       await sleep(300);
       ok(lostShown && await ev(`document.querySelector('.a3-lost').hidden`) && (await ev(`D37AI3D.core.frames().length`)) > 0, 'context loss: notice, then restored and drawing');
       // theme: light tokens follow the site theme
@@ -203,7 +210,7 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
       const bgL = await ev(`getComputedStyle(document.querySelector('.a3')).getPropertyValue('--bg').trim()`);
       await ev(`(document.documentElement.removeAttribute('data-theme'), 1)`);
       ok(bgD !== bgL && bgL === '#e9edf0', 'dark and light themes', { bgD, bgL });
-      // close and reopen in the page
+      logs.push('mark: close');   // close and reopen in the page
       await closeInPage(); out.reopenMs = await openInPage();
       ok(out.reopenMs > 0, 'in-page reopen', out.reopenMs);
       out.errors = realErrors(logs.filter(l => !l.startsWith('warning')));
@@ -333,6 +340,9 @@ const pct = (a, q) => a.length ? a[Math.min(a.length - 1, Math.floor(a.length * 
       }
       await throttle(1);
       out.counts = N;
+      // what is left after an empty scene (undo history dropped): a leak would stay here
+      await ev(`(D37AI3D.core.reset(), 1)`); await gc(); out.heapAfterReset = await heap();
+      console.log('  heap after reset + GC', out.heapAfterReset, 'MB');
       console.log('  ops', JSON.stringify(N));
       out.errors = realErrors(logs.filter(l => !l.startsWith('warning')));
       ok(out.errors.length === 0 && N.thrown === 0, min + ' min random ops: 0 errors', out.errors.slice(0, 8));
