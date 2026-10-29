@@ -631,6 +631,14 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
 - Take: the biome adapter is `D37E.wx.regionOf(src)` (wx.js) over `D37E.biomes.region` — one region record per 128 m cell, cached;
   «Новая земля» gets calendar weather on it (flag TERRA_WX in terra-demo.js), «Кубомир» v4 worlds take zone-0 cells from it
   (biomes.js added to Kubomir's scripts). WX.biomeAt (id-based) stays for games with their own biome callback.
-- Take: the planet's debug line (chunks, cache, CPU) is hidden by default, F3 shows it (HUD rule: debug panels hidden).
+- Take: the planet's debug line (chunks, cache, CPU) is hidden by default, F3 shows it (HUD rule: debug panels hidden); on a phone the
+  planet buttons stay in one row (scroll), ❓ no longer covers the altitude line.
+- Take (bug fix): planet v2 after landing → orbit showed black holes (stuck show, 188 chunks instead of ~12). planet-view: select every
+  0.5 s while the show waits; stuck 1 s → one `flush` select (P.lodShow drops nodes finer than the target, the nearest ready target shows).
+  Standing still: still 0 selects. Details: docs/plans/planet.md §12b «Bug found and fixed in the merge».
+- Take: planet weather only near the ground (fades 2000 → 8000 u); before, a sandstorm below tinted the whole planet seen from orbit.
+- Take: «Новая земля» coast — sea strips of 4 m only over core ground below the sea (SEA_FINE): a pit 4+ m from the shore is dry to the
+  eye as well as for physics (the 32 m tiles showed water in coastal pits while the player stood dry). Camera below the sea in a dry
+  column — the sea surface is not drawn (no full-screen «underwater» blue).
 - Skip (not this step): Kubomir v4 for NEW worlds (KB_GEN = 4 and the co-op genVer line are in T-138 files); hail harm and other body
   effects (WX5); saving edits in «Новая земля» (honest FAQ line: «пока нет»).

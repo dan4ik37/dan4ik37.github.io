@@ -445,9 +445,17 @@ walking (pre-existing; v2 does not) — v1 is only the rollback now.
 **Integration (branch t145-planet-all, 29.10.2026).** The planet is in the site catalog for everyone (0+, tag «Новые»; SEO page
 /games/planet; rollback T145_OPEN in js/features/games.js and api/_lib/games-seo.js). Weather by biome is wired: the planet scripts load
 wx.js + wx-fx.js, planet-demo planetWx(v, st.wx.wfx) feeds V.setWeather with dust / flat / vis / tint (linear → sRGB) 4×/s; desert
-latitudes get sandstorms by their climate class. Phone ×4 'mid' (scripts/t145-e2e.cjs, loaded machine): ground 4.75 ms CPU per frame
-with the specials vs 4.42 with the one-line rollback (D37E.climate.SPECIAL = false + wxfx.ON = false); in a sandstorm 4.17 ms (fog at
-62 u, 46 draw calls instead of 70); orbit 3.81 ms. The debug line (chunks, CPU) is hidden, F3 shows it.
+latitudes get sandstorms by their climate class; the weather fades above ~2000 u and is off from ~8000 u (from orbit the planet is not
+tinted by the storm below). Phone ×4 'mid' (scripts/t145-e2e.cjs, order A/B/A on one page): ground 3.60 / 3.49 ms CPU per frame with the
+specials vs 3.63 ms with the one-line rollback (D37E.climate.SPECIAL = false + wxfx.ON = false) — no measurable cost; in a sandstorm
+3.62 ms (fog at 62 u, 51 draw calls instead of 71); orbit 1.76 ms. The debug line (chunks, CPU) is hidden, F3 shows it.
+**Bug found and fixed in the merge (v2, also on t145-planet alone):** after a landing, a jump to orbit left the show stuck — 188 chunks
+(L4…L11 under the landing site next to L1 targets) instead of ~12, seen as big black holes in the planet. Merges wait until all four kids
+are «up» (k and every edge k ≥ 1 − gate); edges next to a much coarser shown neighbour never got there, and with the camera still no
+select ran. Fix: planet-view selects every 0.5 s while the show waits (waitN), and when it waited 1 s with no split / merge, one select
+passes `flush` to P.lodShow (planet.js): shown nodes finer than their target leaf are dropped, step 2 shows the nearest ready target.
+Orbit after landing: 188 → 11 chunks within ~2 s, 1 flush; standing on the ground: 0 selects, 0 flushes per 5 s (unchanged); running 15 s:
+68 selects, 1 flush. Orbit frame ×4: 3.81 → 1.76 ms.
 
 ## 13. Step list → board tasks
 | Step | What | Size | After |

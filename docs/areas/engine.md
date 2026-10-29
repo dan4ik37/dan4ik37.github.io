@@ -143,6 +143,7 @@
 - Planet (wired in T-145): the planet scripts load wx.js and wx-fx.js; desert latitudes get sandstorms by themselves (class by the
   latitude's climate key). planet-demo `planetWx(v, st.wx.wfx)` passes the smoothed wx-fx numbers (dust, flat, vis; tint linear →
   sRGB) into planet-view `V.setWeather` 4×/s: sky dome toward the storm colour, sun dimmer, the ground fades into the tint at vis.
+  Only near the ground: fades from 2000 u, off from 8000 u (from orbit the planet is not tinted by the storm below).
 - «Новая земля» (terra-demo.js, T-145, flag TERRA_WX): calendar weather in metres of the world (anchor + u / U), climate of rain and
   snow by `biomes.climateAtFn`, specials by `wx.regionOf(biomes.t1(SEED, { gen: 2 }))`, the sky ends over the core height (no rain
   in caves). «Кубомир» v4 worlds: kubomir-weather.js kbRegion takes zone-0 cells from `D37E.biomes.region` (biomes.js in its scripts).
@@ -154,10 +155,12 @@
   world-reopen-e2e with REOPEN_WX=sandstorm (20× phone, no leaks).
 
 ## 🪐 Планета (D37E.planet; T-051, 22.10.2026; план и замеры — docs/plans/planet.md)
+- T-145, слияние: после посадки и прыжка на орбиту показ застревал (дыры в планете, 188 кусков вместо ~12) — выбор раз в 0,5 с, пока показ
+  ждёт, и через 1 с без делений/слияний один выбор со сбросом (P.lodShow flush: мельче цели — прочь, на месте — готовая цель); стоя — 0 выборов.
 - T-075 (PL-2 LOD v2 + PL-4 движок) — ВКЛЮЧЕНО с T-145 (29.10): флаги D37E.planetView.FLAGS (откат одной строкой: `const FLAGS = { ...FLAGS_OFF }`; на устройстве — localStorage d37_planet_v2 = '0' | '1'); выкл — старые пути (выбор кусков, 1 диапазон глубины, туман движка байт-в-байт, без погоды). T-145: показ после прыжка на землю не застревает, перетекание — атрибут куска, два прохода глубины — только с AO/отражениями, тени на земле 'auto' (телефон «средняя» — без них), тень солнечного затмения (флаг eclipse), крючок погоды V.setWeather({ …, dust, tint, vis, flat }); замеры — docs/plans/planet.md §12b. Всегда включено: E.setSunProvider, обод куска по диагонали физики, поток перезапускается (до 3), R.guardVolatile. Как продолжить — docs/plans/planet.md §12a; проверки: planet-lod-test (--fast в ci-run), gfx-strict PAGE=planet, planet-perf V2=1.
 - Владелец 22.10: «планета — основа мира и вселенной, параллельно, скоро»; «планету нужно будет реализовать в других играх» → ОБЩИЙ модуль
   движка, у игр — только переходники (план §10: «Мир Денчика», «Кубомир», «Подземье», «Студия 3D», космос). Сейчас — образец на скрытой
-  странице /play/planet (#/games/planet, GAMES_HIDDEN): полёт с орбиты до земли без загрузки, посадка, ходьба обычным player.js, сутки от вращения.
+  странице /play/planet (с T-145 — в каталоге для всех, «Планета», 0+; откат — T145_OPEN): полёт с орбиты до земли без загрузки, посадка, ходьба обычным player.js, сутки от вращения.
 - Файлы: js/engine/planet.js (без three.js — node, поток, страница: профиль PL.def/PL.HOME, куб-сфера, шум, выбор кусков, сетки, плоский кусок,
   солнце и луна), planet-worker.js (сетки кусков в потоке), planet-view.js (three.js: куски, атмосфера, звёзды, луна), js/games/planet-demo.js.
 - Решётка общая: вершина — целая точка куба M = N·2^L, искажение tan по оси → общие вершины соседних кусков (та же грань, другая, уровень
