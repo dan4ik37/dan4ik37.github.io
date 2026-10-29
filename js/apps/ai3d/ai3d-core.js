@@ -1673,7 +1673,8 @@ async function copyText(t){try{await navigator.clipboard.writeText(t);return tru
 $('#ins').onclick=async()=>{const ok=await copyText(PROMPT);say((ok?'Скопировано. Вставь ИИ в начале чата:\n\n':'Скопируй вручную и вставь ИИ:\n\n')+PROMPT)};
 $('#obj').onclick=async()=>{const t=obj();say(await copyText(t)?'OBJ скопирован ('+t.length+' символов). Вставь в файл с расширением .obj.':t)};
 function __exportGLB(){return env&&env.exportGLB?env.exportGLB(group,clips()):Promise.reject(new Error('экспорт GLB недоступен'))}   // site: ai3d-gltf.js
-$('#glb').onclick=()=>{say('Готовлю GLB…');__exportGLB().then(b=>{const a=document.createElement('a'),u=URL.createObjectURL(new Blob([b],{type:'model/gltf-binary'}));a.href=u;a.download='model.glb';a.click();setTimeout(()=>URL.revokeObjectURL(u),60000);say('GLB готов: '+Math.round(b.byteLength/1024)+' КБ')},e=>say('Экспорт GLB не удался: '+(e&&e.message||e),1))};
+$('#glb').onclick=()=>{   // site: the 60 s revoke timer gets no closure (an arrow here kept the closed editor alive for 60 s)
+ say('Готовлю GLB…');__exportGLB().then(b=>{const a=document.createElement('a'),u=URL.createObjectURL(new Blob([b],{type:'model/gltf-binary'}));a.href=u;a.download='model.glb';a.click();setTimeout(URL.revokeObjectURL,60000,u);say('GLB готов: '+Math.round(b.byteLength/1024)+' КБ')},e=>say('Экспорт GLB не удался: '+(e&&e.message||e),1))};
 $('#play').onclick=()=>{
  if(playing){cancelAnimationFrame(playing.id);state=JSON.parse(playing.keep);build();playing=null;$('#play').textContent='Играть';return}
  const names=(PLAYSEL.length?PLAYSEL:[Object.keys(ANIM).find(k=>ANIM[k].keys.length>1)]).filter(k=>k&&ANIM[k]&&ANIM[k].keys.length>1);if(!names.length)return say('Анимаций нет. Claude создаёт их командами key, gait, faceanim.');

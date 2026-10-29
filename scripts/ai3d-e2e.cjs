@@ -402,6 +402,7 @@ function wsBridge(){
         await openInPage();
         await demo(['dog', 'fox', 'land', 'human', 'dragon'][i % 5]); await drag(400);
         if (i % 4 === 0) await pageGLB();
+        if (i % 4 === 1) { await click('glb'); await sleep(1500); }   // «Скачать GLB»: its URL-revoke timer must not keep the editor alive
         if (i % 5 === 2) await click('snap');
         await sleep(300);
         await closeInPage(); await sleep(300);
