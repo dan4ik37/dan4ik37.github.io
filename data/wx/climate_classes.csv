@@ -1,0 +1,13 @@
+# BIOME_WEATHER.md v2 §3.1: the ONE definition of the climate class integers (HL needs-tokens and the T-116 logical biomes read it).
+# smask_default / f_default = the region record a game gets when it passes only a climate key (no wxRegionAt): surfaces ("snow" = can
+# hold snow, §1.2) and features.
+cls,key,name_ru,base_climate,game_keys,t116,smask_default,f_default
+0,temperate,умеренный,temperate,temperate,forest|taiga|temperate_forest|plains|birch|meadow,soil|grass|forest|road|town|snow,-
+1,steppe,степь,steppe,steppe,steppe|savanna|grassland|prairie,soil|grass|road|snow,-
+2,mountain,горы,mountain,mountain,mountains|alpine|highland,rock|snow|soil|grass,high
+3,desert,пустыня,desert,desert|kb_desert,desert|dunes|salt_flat|badlands,sand|soil|rock|road|salt,-
+4,sea,море,sea,sea,ocean|coast|beach|sea,water|sand,coast
+5,snow,снега,snow,snow|kb_snow,tundra|ice|snow|glacier,snow|ice|rock,-
+6,tropic,тропики,tropic,tropic,rainforest|jungle|tropical,soil|grass|forest|water,-
+7,swamp,болото,temperate,kb_swamp,swamp|marsh|bog,marsh|water|grass,-
+8,warm,тёплый край,tropic,kb_warm,warm|subtropic|mediterranean,soil|grass|sand,-

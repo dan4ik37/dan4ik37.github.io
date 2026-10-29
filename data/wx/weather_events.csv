@@ -1,0 +1,57 @@
+# BIOME_WEATHER.md v2 §3.3 (Layer-1, append-only: ids never renumber). Rows 1-48 = the spec starter rows; 20, 22, 25 carry the
+# coordinator decisions of 29.10 (hail harms for real, freezing rain slippery for cars); 49-53 = realism with rare exceptions. Start values.
+# Generated into js/engine/wx.js by scripts/make-wx.mjs; copy to E:\d37-core\spec\data when the Backrooms lead OKs the columns.
+id,key,name_ru,rules,climates,surfaces,seasons,hours,parent,cond,rarity_pm,group,dur,lead_ticks,wind_dms,precip,vis_m,amb_db,ladder,kids_max,sound,gfx_low,gfx_mid,gfx_high,body_shared,body_kids,world_fx,ai,signs,strong
+1,sandstorm,Песчаная буря,earth,desert,sand|soil,sp|su|au,any,none|cloud,dry>=8,40,1,15-35,1200-2400,140-230,none,25-60,12,W7-9,W9h,amb_sand+amb_wind,tint:sand+fog,tint:sand+fog+g225+s120+tum2,tint:sand+fog+g500+s270+drift+tum4,slow+push,slow_h+push_h,drift_sand+dust_coat,vis+amb+shelter_herb+tracks25,dust_horizon+wind_rise+animals_flee,1
+2,haboob,Стена пыли,earth,desert|steppe,sand|soil,su,12-23,thunder,dry>=8,500,1,par,6000-9000,172-240,par,20-40,18,W8-9,W9h,wall_roar+amb_sand,tint:dust+fog,band+tint:dust+fog+g225+s120,band2+tint:dust+fog+g500+s270+drift,slow+push,slow_h+push_h,drift_sand+dust_coat,vis+amb+flee_lead+shelter_all+tracks25,wall_brown+gust_cold+animals_flee+birds_low+lamps_on,1
+3,duststorm,Пыльная буря,earth,steppe|desert,soil|grass|road,sp|su,any,none|cloud,dry>=4,80,1,10-30,1200-3600,110-180,none,80-150,8,W6-8,W8h,amb_dust,tint:ochre+fog,tint:ochre+fog+g160+tum2,tint:ochre+fog+g360+s160+tum4,slow,slow_h,dust_coat,vis+amb+shelter_herb,yellow_horizon+dust_trails+wind_rise,1
+4,dust_devil,Пылевой вихрь,earth,desert|steppe,sand|soil,sp|su,11-17,heat,T>=26,500,2,s60-240,0,0-30,none,-,4,-,-,devil_whoosh,-,fun1,fun2+leaf40,wobble,wobble,-,none,visible_column,0
+5,heat_haze,Марево,earth,desert|steppe|tropic,sand|rock|road|salt,su,11-17,heat,T>=28,1000,0,par,0,par,none,-,0,-,-,-,-,-,haze,-,-,-,none,shimmer,0
+6,mirage,Мираж,earth,desert|steppe,sand|road|salt,sp|su,10-18,heat|none,T>=25,1000,0,par,0,par,none,-,0,-,-,-,-,mir,mir,-,-,-,none,fake_water,0
+7,cold_night,Холодная ночь,earth,desert,any,sp|au|wi,21-07,any,clear,1000,0,par,0,par,none,-,0,-,-,-,-,frost+breath4,frost+breath8,cold,-,frost,none,breath+frost_sand,0
+8,virga,Дождь не долетает,earth,desert|steppe,any,sp|su,any,precip,dry>=4,400,0,par,0,par,virga,-,0,-,-,-,-,curtain,curtain,-,-,-,none,hanging_streaks,0
+9,bloom,Цветение пустыни,earth,desert,sand,sp,any,none,after_precip<=32,300,0,d1,0,par,none,-,0,-,-,-,-,bloom,bloom,-,-,bloom,none,flowers,0
+10,tumble_wind,Перекати-поле,earth,steppe|desert,soil|grass|sand,au|wi|sp,any,none|cloud,-,70,1,15-40,600-1200,80-140,none,-,4,W5-7,W7h,amb_wind+tumble_rustle,-,tum4,tum8+leaf40,bump,bump,pile,amb,first_tumbleweed,0
+11,dry_thunder,Сухая гроза,earth,steppe,any,su,12-20,thunder,dry>=8,500,1,par,1200-3600,par,virga,-,6,-,-,thunder_dry,flash,flash+curtain,flash+curtain,-,-,fire+link:27,amb+shelter_herb,dark_cloud_no_rain+dust_gust,1
+12,fire_risk,Сушь,earth,steppe|desert|temperate,grass|soil,su|au,any,any,dry>=24,1000,3,cont,0,par,none,-,0,-,-,-,-,dry_grass,dry_grass+dust_trails,-,-,fire,none,yellow_grass+dust_behind_cars,0
+13,buran,Буран,earth,steppe|snow|mountain,any,wi,any,precip,T<=-2,100,1,par,1200-2400,139-220,snow,25-40,12,W7-9,W9h,amb_buran,tint:white+fog,tint:white+fog+s120,tint:white+fog+s270+drift,slow+push+cold,slow_h+push_h,drift_snow+link:26,vis+amb+shelter_all+tracks25,horizon_white+wind_howl+snow_snakes,1
+14,ground_blizzard,Позёмка,earth,steppe|snow|mountain,snow,wi|sp|au,any,none|cloud,snowq>=1,40,1,10-30,600-1200,108-190,none,60-120,8,W6-8,W8h,amb_buran,fog,fog+s120,fog+s270+drift,slow+cold,slow_h,drift_snow,vis+amb+tracks25,snow_snakes+clear_sky_white_ground,1
+15,whiteout,Белая мгла,earth,snow|mountain,snow,wi|sp|au,any,precip|fog|cloud,snowq>=1,60,1,par,600-1800,par,par,20-40,2,-,-,amb_wind,flat+tint:white+fog,flat+tint:white+fog,flat+tint:white+fog,-,-,-,vis,horizon_gone+shadows_gone,0
+16,diamond_dust,Алмазная пыль,earth,snow|steppe|mountain,any,wi,06-11|20-02,none|cloud,T<=-10,300,0,10-30,0,0-30,none,-,0,-,-,-,-,spark40+halo,spark60+halo,-,-,-,none,sparkle+sun_pillar+lamp_pillars,0
+17,aurora,Северное сияние,earth,snow|steppe|mountain,any,au|wi|sp,20-04,none,kp,kp,0,par,0,par,none,-,0,-,-,-,-,aur1,aur2,-,-,-,none,green_glow_north,0
+18,ice_fog,Ледяной туман,earth,snow,water|town,wi,18-10,fog,T<=-25,600,1,par,0,par,none,40-60,0,-,-,-,fog,fog+spark30,fog+spark60,cold,-,frost,vis,lamp_halos,0
+19,mountain_fog,Туман в горах,earth,mountain,any,any,any,fog|cloud|precip,high,300,1,par,200-600,par,par,20-40,0,-,-,-,fog,fog+cap,fog+cap+mist,-,-,-,vis+hunt_fog,cap_cloud_on_peak+fog_rolls_down,0
+20,hailstorm,Град,earth,mountain|temperate|steppe,any,sp|su,12-19,thunder,T>=8+T<=30+dry<8,400,1,par,600-1800,par,hail,100-150,15,HA1-4,HA1,hail_tick+thunder,tint:green,tint:green+hailb,tint:green+hailb+wallcloud,hail,hail_soft,crop_damage+dents,amb+shelter_all,cloud_green+gust_cold+sudden_quiet,1
+21,foehn,Фён,earth,mountain|steppe,any,wi|sp,any,none|cloud,lee,120,1,20-45,2400-6000,120-200,none,-,6,W6-8,W8h,amb_wind,-,cap+lenticular,cap+lenticular+snow_plumes,slow+warm,slow_h,melt3+link:25,amb,foehn_wall+lenticular+sudden_warm+snow_plumes,1
+22,supercell,Суперячейка,earth,temperate|steppe,any,su,14-20,thunder,I>=800+dry<8,300,1,par,1800-3600,172-240,rain:R2+hail,60-100,15,W8-9+HA2-5,W9h+HA1,hail_tick+thunder_big,tint:green+flash,wallcloud+tint:green+hailb+flash,wallcloud+tint:green+hailb+flash+curtain,slow+push+hail,slow_h+push_h+hail_soft,crop_damage+dents,vis+amb+flee_lead+shelter_all,wall_cloud+cloud_green+inflow_wind,1
+23,valley_mist,Туман в низинах,earth,temperate|steppe|mountain|swamp,any,sp|su|au,04-09,none|fog,calm_night+valley,400,1,par,0,0-20,none,40-80,0,-,-,-,fog,mist,mist,-,-,-,vis,mist_in_hollows,0
+24,hoarfrost,Иней,earth,temperate|steppe|snow,any,sp|au|wi,04-10,none,T>=-6+T<=-1+clear,700,0,par,0,par,none,-,0,-,-,-,-,frost,frost+spark30,-,-,frost,none,white_grass,0
+25,freezing_rain,Ледяной дождь,earth,temperate|steppe|sea,any,wi|sp|au,any,precip,T>=-4+T<=0+warm_layer,250,1,par,600-1800,par,glaze,150-250,6,-,-,ice_tinkle+amb_rain,-,glaze,glaze+icicles,slip+slip_car,slip+slip_car,glaze+twigs,amb,ice_on_branches+icy_coats,1
+26,sleet,Мокрый снег,earth,temperate|sea|steppe,any,sp|au|wi,any,precip,T>=0+T<=2,600,1,par,0,par,sleet,-,4,-,-,amb_rain,-,slush,slush,-,-,-,amb,heavy_wet_flakes,0
+27,leaf_storm,Листопад с ветром,earth,temperate|steppe|mountain,forest|grass|town,au,any,any,wind>=8,1000,0,cont,0,par,par,-,0,-,-,-,-,leaf80,leaf200,-,-,-,none,leaves_fly,0
+28,sea_fog_bank,Морской туман,earth,sea|temperate,water|coast,sp|su,08-18,fog,coast+onshore,500,1,par,1200-3600,0-60,none,30-50,0,-,-,foghorn,fog,band:white+fog,band:white+fog+mist,-,-,-,vis+hunt_fog,white_bank+foghorn+gulls_quiet,0
+29,waterspout,Водяной смерч,earth,sea|tropic|temperate,water,su|au,10-18,cloud|none,coast,100,2,s300-900,600-1200,0-40,none,-,10,W8,W8h,spout_roar,-,fun1,fun1+spray,push_boat,push_boat_h,-,amb+flee_lead,spout_stages,1
+30,squall,Шквал,earth,sea|temperate|steppe,any,su|au,any,thunder,dry<8,300,1,s120-300,600-1800,172-240,par,80-120,12,W8-9,W9h,gust_roar,tint:dark,shelf+tint:dark,shelf+tint:dark+whitecap_line,slow+push,slow_h+push_h,-,amb+shelter_herb,shelf_cloud+whitecap_line+gust_cold,1
+31,monsoon,Ливень сезона дождей,earth,tropic|warm,any,su,any,precip,wet_season,700,1,par,600-1200,par,rain:R2,80-120,15,R2,R2,amb_downpour,fog,curtain+puddle+,curtain+puddle++mist,-,-,-,vis+amb+tracks25,rain_wall+frogs,0
+32,afternoon_storm,Дневная гроза,earth,tropic|warm,any,sp|su,13-18,none,wet_season,450,1,10-25,1200-2400,par,rain:R2,100-150,12,-,-,amb_downpour+thunder,flash,flash+curtain,flash+curtain,-,-,-,amb,cumulus_towers+thunder_far,0
+33,steam,Пар над землёй,earth,tropic|swamp|warm,any,any,10-17,none|cloud,after_precip<=2+T>=24,800,0,par,0,par,none,-,0,-,-,-,-,steam20,steam40,-,-,-,none,steam_wisps,0
+34,fireflies,Светлячки,earth,tropic|swamp|warm|temperate,grass|marsh|forest,su,21-03,any,T>=16,500,0,par,0,par,none,-,0,-,-,-,-,glow20,glow40,-,-,-,none,glows,0
+35,swamp_mist,Болотная дымка,earth,swamp,marsh,any,18-09,any,calm_night,800,0,par,0,0-30,none,60-100,0,-,-,frogs,fog,mist,mist,-,-,-,vis,mist_low,0
+36,wisps,Блуждающие огоньки,earth,swamp,marsh,su|au,22-04,none|fog,-,200,0,par,0,par,none,-,0,-,-,-,-,glow3,glow3,-,-,-,none,wisps,0
+37,poplar_fluff,Тополиный пух,earth,temperate|steppe,town,any,10-19,none|cloud,ph:100-140,1000,0,cont,0,par,none,-,0,-,-,-,-,flake60,flake150,-,-,-,none,fluff,0
+38,heat_wave,Жара,earth,desert|steppe|temperate,any,su,any,heat,heat_run>=3,1000,0,par,0,par,none,-,0,-,-,-,-,tint:warm,tint:warm+haze,heat,-,-,none,shimmer+shade_seek,0
+39,smoke_haze,Дымка от пожара,earth,any,any,any,any,hz:wildfire,-,1000,0,par,0,par,none,120-200,0,-,-,-,tint:smoke+fog,tint:smoke+fog,tint:smoke+fog+g80,-,-,-,vis,orange_sun+ash_flakes,0
+40,breath,Пар изо рта,earth,any,any,any,any,any,T<=2,1000,0,cont,0,par,none,-,0,-,-,-,-,breath4,breath8,-,-,-,none,breath,0
+41,heat_lightning,Зарницы,earth,steppe|temperate|tropic,any,su,21-03,cloud|none,thunder_near,600,0,par,0,par,none,-,0,-,-,-,flash_far,flash_far,flash_far,-,-,-,none,silent_flashes,0
+42,ice_drift,Ледоход,earth,steppe|temperate|snow,water,sp,any,any,river+T>=3,1000,0,d1,0,par,none,-,2,-,-,ice_crack,-,floes,floes,-,-,-,none,floes+cracks,0
+43,squeaky_snow,Скрипучий снег,earth,snow|steppe|mountain,snow,wi,any,any,T<=-10,1000,0,cont,0,par,none,-,0,-,-,snow_squeak,-,-,-,-,-,-,steps+3,squeak,0
+44,upward_rain,Дождь вверх,absurd,any,any,any,any,precip,preset:absurd,300,1,par,0,par,rain_up,-,6,-,-,amb_rain,-,rain_up,rain_up,-,-,-,amb,drops_rise,0
+45,colour_snow,Цветной снег,absurd,any,any,any,any,precip,preset:absurd+T<=0,300,1,par,0,par,snow,-,0,-,-,-,tint:hue,tint:hue+snow_hue,tint:hue+snow_hue,-,-,-,none,coloured_flakes,0
+46,fog_tide,Прилив тумана,absurd,any,any,any,any,fog|none,preset:absurd,200,1,10-30,600-1200,0-20,none,15-30,0,-,-,fog_hum,fog,fog+mist,fog+mist,-,-,-,vis+hunt_fog,fog_from_floor,0
+47,thaw,Оттепель,earth,steppe|temperate|snow|mountain,any,sp,any,any,snow_melt,1000,3,d1,0,par,none,-,0,-,-,-,-,-,-,-,-,link:28,none,-,0
+48,heavy_snow,Сильный снегопад,earth,mountain|snow,any,any,any,precip,I>=800+T<=-2,1000,3,par,0,par,none,-,0,-,-,-,-,-,-,-,-,link:26,none,-,0
+49,desert_virga_wi,Сухой фронт в пустыне,earth,desert,any,wi,any,precip,-,700,1,par,0,par,virga,-,0,-,-,amb_wind,-,curtain,curtain,-,-,-,none,hanging_streaks,0
+50,desert_cold_rain,Холодный дождь в пустыне,earth,desert,any,wi,any,precip,-,297,1,par,0,par,rain,-,4,-,-,amb_rain,-,-,-,-,-,-,amb,-,0
+51,desert_snow,Снег в пустыне,earth,desert,any,wi,21-06,precip,T<=4,3,1,par,0,par,snow,-,0,-,-,-,-,-,-,-,-,-,none,-,0
+52,tropic_storm,Тропическая гроза,earth,tropic|warm,any,any,any,thunder,-,985,1,par,0,par,rain:R2,-,12,-,-,amb_downpour+thunder,flash,flash+curtain,flash+curtain,-,-,-,amb,cumulus_towers,0
+53,tropic_hail,Град в тропиках,earth,tropic|warm,any,any,12-19,thunder,I>=800,15,1,par,600-1800,par,hail,100-150,15,HA1-2,HA1,hail_tick+thunder,tint:green,tint:green+hailb,tint:green+hailb+wallcloud,hail,hail_soft,crop_damage+dents,amb+shelter_all,cloud_green+gust_cold+sudden_quiet,1
