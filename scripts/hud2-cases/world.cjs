@@ -6,7 +6,7 @@ module.exports = {
   ready: `window.GAME_IMPL?.world?._test?.state()?.zones?.wmv`,
   root: '.wld-wrap', extra: '.wld-top, .wld-top *', skip: '.wld-pop,.wld-panel,.mp',
   caps: { P: 8, L: 6, PC: 4 },   // §9.2: цели «Мира» (меньше общего предела)
-  sceneCaps: { 'idle-war': { P: 12, L: 10, PC: 4 } },   // §9.2 «War zone»
+  sceneCaps: { 'idle-war': { P: 12, L: 10, PC: 4 }, 'pose-hint': { P: 12, L: 10, PC: 8 } },   // §9.2 «War zone»; подсказка — +4 п. п. (§2.2)
   ls: { d37_mir_pos: '' },
   async prep(T){
     await T.ev(`(() => { localStorage.removeItem('d37_mir_pos'); const A = window.D37Age; if (A) { A.known = () => true; A.canOpen = () => true; A.allows = () => true; A.group = () => 'adult'; } ${W}.fixedTime = 13; return 1; })()`);
@@ -32,6 +32,19 @@ module.exports = {
       if (r.head > 0) throw new Error(`«Мир», 📱 закрывает голову персонажа на ${r.head} %`);
       if (r.viewAfterClose) throw new Error('«Мир», 📱 закрыт, а сдвиг картинки остался');
       if (T.P.mobile && T.P.h > T.P.w && r.phone > 61) throw new Error(`«Мир», 📱 стоя занимает ${r.phone} % экрана (лист ≤ 60 %)`);
+    },
+    // подсказка позы (T-123 fix 8): в покое её нет (не таймер поверх игры — idle-hub меряет покой без неё); игрок походил и
+    // остановился — показана один раз
+    async 'pose-hint'(T){
+      if (!T.P.mobile) return;
+      const r = await T.ev(`(async () => { const S = ${W}, q = () => [...document.querySelectorAll('.wld-wrap .e2-hint.on')].map(e => e.textContent);
+        const idle = q(), ph = S.poseHint; if (!ph) return { err: 'нет S.poseHint (телефон)' };
+        ph.moved = true; ph.at = 0; await new Promise(r => setTimeout(r, 700));
+        return { idle, after: q(), done: !S.poseHint }; })()`, 20000);
+      console.log('  подсказка позы:', JSON.stringify(r));
+      if (r.err) throw new Error('«Мир», подсказка позы: ' + r.err);
+      if (r.idle.length) throw new Error('«Мир»: в покое (игрок не ходил) уже висит подсказка: ' + JSON.stringify(r.idle));
+      if (!r.done || !r.after.some(t => /Удержи/.test(t))) throw new Error('«Мир»: походил и встал — подсказки позы нет: ' + JSON.stringify(r));
     },
     async city(T){ await T.ev(`(async () => { const z = ${W}.zones, zs = z.zoneState('metro'); if (zs && !zs.ready) await z.buildNow(zs); z.padGo('metro'); await new Promise(r => setTimeout(r, 7000)); ${clean}; return 1; })()`, 120000); },
     async 'idle-war'(T){

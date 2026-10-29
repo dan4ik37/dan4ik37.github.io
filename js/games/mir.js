@@ -1553,6 +1553,7 @@
         ...emoRecent().map(e => ({ id: 'emo:' + e, icon: e, label: EMO_L[e] || 'Эмоция' })), { id: 'more', icon: '➕', label: 'Ещё: эмоции, действия' }],
       onPick: it => {
         if (!S || S.stopped) return;
+        S.poseHint = null;   // круг позы уже нашли — подсказка не нужна
         if (it.id === 'sit') { if (S.zones?.sitHere) S.zones.sitHere(); else P.sitHere([]); }
         else if (it.id === 'lie') { if (S.zones?.sleepHere) S.zones.sleepHere(); else P.lieHere([]); }
         else if (it.id.startsWith('emo:')) emoUse(it.id.slice(4));
@@ -1562,8 +1563,9 @@
     // картинка уезжает из-под листа (персонаж виден): js/engine/ui.js D37E.viewOffset
     S.vo = window.D37E.viewOffset(S.R.camera);
     S.wrap.addEventListener('e2:inset', e => { if (S?.vo) S.vo.want(e.detail, S.wrap.clientWidth, S.wrap.clientHeight); });
-    // после подсказки управления (12 с); таймер снимает unmount — иначе 13 с держит закрытый мир с рендером в памяти (T-123 fix 4)
-    if (S.I.touch) { const s0 = S; s0.poseHintT = setTimeout(() => { s0.poseHintT = 0; if (S === s0 && !s0.stopped && s0.H === H) H.hint('pose', 'Удержи ⬇ — сесть, лечь, эмоции'); }, 13000); }
+    // подсказка позы — один раз на устройство, когда игрок впервые остановился, уже походив, и подсказка управления (12 с) ушла:
+    // к месту (встал — можно сесть), а не таймером поверх игры (T-123 fix 4/8: таймер держал закрытый мир, в покое — лишние пересчёты)
+    if (S.I.touch) S.poseHint = { at: performance.now() + 12500, moved: false };
     // подсказка управления (.wld-hint) — один раз на устройство (T-123, §5)
     const wh = S.q('.wld-hint'); if (wh && window.D37TouchLayout?.hintOnce && !window.D37TouchLayout.hintOnce('mir', 'h-start')) wh.remove();
   }
@@ -1586,6 +1588,8 @@
     const vk = veh ? '#veh' : P.mode === 'sit' ? '#sit' : X.cur && X.raw ? X.raw : '';
     if (vk !== S.vk) { S.vk = vk; H.act(!vk ? null : vk === '#veh' ? { icon: '🚪', label: 'Выйти' } : vk === '#sit' ? { icon: '⬆', label: 'Встать' } : { icon: window.D37E.verbIcon(vk), label: vk }); }
     H.poseIcon(poseNow(P));
+    const ph = S.poseHint;
+    if (ph) { if (P.moving) ph.moved = true; else if (ph.moved && performance.now() > ph.at) { S.poseHint = null; H.hint('pose', 'Удержи ⬇ — сесть, лечь, эмоции'); } }
     if (S.vo?.busy()) S.vo.tick(1 / 60);
   }
   function addLog(p, text){
@@ -1995,7 +1999,7 @@
     const seatedPlay = !!(s.playing && s.mySeat);
     if (s.playing) { try { window.MirPlay?.close('unmount'); } catch (e) { console.error(e); } s.playing = null; }
     s.stopped = true;
-    clearInterval(s.tick); clearTimeout(s.invT); clearTimeout(s.rejoinT); clearTimeout(s.poseHintT); s.poseHintT = 0;
+    clearInterval(s.tick); clearTimeout(s.invT); clearTimeout(s.rejoinT);
     if (s.mySeat) { s.mySeat = null; }
     try { s.menu?.close(); s.offCtx?.(); s.offFb?.(); s.stage?.classList.remove('gm-own-bar'); } catch (e) {}   // настройки/полный экран, страж графики
     leaveChannel();
