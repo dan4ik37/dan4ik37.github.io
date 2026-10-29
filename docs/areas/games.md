@@ -20,6 +20,12 @@
   (только если оба доиграли). Игра даёт `run(stage, rng, hooks)` и зовёт `hooks.progress/done`; случайность — только
   через rng, позиции/скорости — в долях поля. Если в комнату пришёл другой человек (или соперник обновил страницу),
   хозяин начинает новую партию — это же правило в шашках, крестиках-ноликах и «Городах».
+- 🕹 Мини-игры (T-140, 29.10.2026; рецепт — docs/ARCADE.md): общее ядро `js/games/arcade/core.js` (ArcadeKit — шаг 60 Гц, нажатия
+  по времени события, rng соперников, оболочка: старт / пауза / итог, рекорд, ⚔️ через versus.js, звук, без мусора), игра —
+  `js/games/arcade/<id>.js` + карточка `<id>.json` (каталог, SEO, правила, ключи сервера) + тесты `scripts/arcade/<id>.cjs`.
+  Общие места (GAMES, GAME_TAGS, GAME_AGE, games-seo-arcade.js, game_score_cap/game_win_xp, превью, rules-data) собирает
+  `node scripts/make-arcade.mjs` между маркерами «arcade» — руками не править. Проверки: `node scripts/arcade-test.cjs`,
+  `node scripts/arcade-e2e.cjs <id>` (Chrome, телефон ×4, ⚔️ двумя браузерами). Первые: «Чёрные плитки» (tiles), «Свет в окнах» (lights).
 - Рекорды: «За неделю» (`game_top_week`, по game_log) / «За всё время» (`game_top`); «Чемпионы дуэлей» (`duel_top`) —
   победы в `%_duel` и `%_online` во всех играх.
 - Задание дня: `daily_quest_code()` (12 заданий по кругу от даты по МСК), прогресс — по `game_log` (пишет game_result,
