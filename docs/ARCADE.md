@@ -78,7 +78,9 @@ clears it), `s.v` (DOM games: bump when the field must be redrawn).
 - **Originality** (owner red line + coordinator): genre mechanics are fine, but no original titles, characters, signature
   item chains, art or level layouts of commercial games, never named in title/desc/SEO. Own name, theme and at least one
   small twist. No paid randomness, no casino imitation (no bets, coins or wager multipliers). Age 0+, kids-safe visuals.
-- **Mobile first**: big targets (≥ 44 px on a 360 px wide phone), one-hand play; HUD = the kit's one line above the field.
+- **Mobile first**: big targets (≥ 44 px on a 360 px wide phone), one-hand play; HUD = the kit's two short rows above the
+  field (score · record, then your `hud(s)` line across the whole width, ≥ 340 px): keep `hud(s)` within ~320 px —
+  `arcade-e2e` measures every string your bot produced on a 360-px phone with the game's score cap.
 
 ## Card `js/games/arcade/<id>.json`
 

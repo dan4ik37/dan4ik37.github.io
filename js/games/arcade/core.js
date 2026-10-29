@@ -227,8 +227,12 @@
 
   // ── styles of the shell (once per page) ──
   const CSS = '.ak{display:flex;flex-direction:column;align-items:center;gap:.45rem;width:100%}'
-    + '.ak-hud{display:flex;justify-content:space-between;align-items:center;gap:.6rem;width:var(--ak-w,100%);max-width:100%;min-height:1.3rem;font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}'
-    + '.ak-hud b{color:var(--text)}.ak-hx{flex:1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ak-duel .ak-h1{display:none}'
+    // HUD — two short rows: «Очки · Рекорд», under them the game's line across the whole width (squeezed between the two it
+    // was cut with «…» on a 360-px phone); not narrower than 340 px (phone held sideways — the field itself is ~190 px)
+    + '.ak-hud{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"a . c" "x x x";align-items:center;column-gap:.6rem;row-gap:.1rem;'
+    + 'width:max(var(--ak-w,100%),min(100%,340px));max-width:100%;font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}'
+    + '.ak-hud b{color:var(--text)}.ak-h1{grid-area:a}.ak-h3{grid-area:c;text-align:right}'
+    + '.ak-hx{grid-area:x;min-width:0;min-height:1.25em;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ak-duel .ak-h1{display:none}'
     + '.ak-wrap{position:relative;width:var(--ak-w,100%);max-width:100%}'
     + '.ak-cv{display:block;width:100%;border-radius:14px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}'
     + '.ak-dom{position:relative;width:100%;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}'
@@ -371,7 +375,7 @@
   function size(I){
     const sp = I.spec, el = I.el;
     const avail = Math.max(200, (el.parentElement?.clientWidth || el.clientWidth || 360));
-    const maxH = Math.max(260, (window.innerHeight || 700) - (sp.kind === 'dom' ? 180 : 210));
+    const maxH = Math.max(260, (window.innerHeight || 700) - (sp.kind === 'dom' ? 180 : 210) - 18);   // − 18: the HUD's second row
     const w = Math.floor(Math.min(avail, sp.maxW || 420, maxH * sp.W / sp.H));
     el.style.setProperty('--ak-w', w + 'px');
     if (!I.cv) return;

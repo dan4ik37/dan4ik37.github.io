@@ -7,6 +7,9 @@
 //      счёт соперника вживую, итог «Ты победил» / «Победил …» у обоих.
 // Запуск из корня сайта:  node scripts/arcade-e2e.cjs [tiles,lights] [сек]   (Chrome — переменная CHROME; временное — D37_TMP)
 //   E2E_LEAK=id,id / E2E_DUEL=id,id — 2) и 3) только для этих игр (none — ни для одной; по умолчанию — для всех из списка).
+//   0) до игр (проверка T-140): E2E_CORE=none — без проверок самого ядра (два пальца в «Поп-ите», пауза под окнами сайта,
+//      пробел и стрелки не листают страницу, потеря фокуса отпускает клавишу); E2E_HUD=id,id|none — строка HUD на телефоне
+//      360 px: все строки HUD из партии бота (node) при счёте и рекорде в 5 цифр (предел очков игры) не обрезаются.
 // Снимки — <D37_TMP>/shots.
 const http = require('http'), fs = require('fs'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
@@ -16,7 +19,7 @@ const OUT = path.join(TMP, 'shots');
 const IDS = (process.argv[2] || 'tiles,lights').split(',');
 const SECS = +process.argv[3] || 15;
 const only = v => (v === undefined || v === '' || v === 'all' ? IDS : v === 'none' ? [] : v.split(','));
-const LEAK = only(process.env.E2E_LEAK), DUEL = only(process.env.E2E_DUEL);
+const LEAK = only(process.env.E2E_LEAK), DUEL = only(process.env.E2E_DUEL), HUD = only(process.env.E2E_HUD), CORE = process.env.E2E_CORE !== 'none';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) pass++; else { fail++; } console.log(c ? 'ok  ' : 'FAIL', name, extra === undefined ? '' : JSON.stringify(extra).slice(0, 700)); };
@@ -92,6 +95,139 @@ const STOP_BOT = 'clearInterval(window.__bot), 1';
 const CUR = id => `GAME_IMPL.${id}._test.cur()`;
 const conf = id => { const f = path.join(__dirname, 'arcade', id + '.cjs'); return fs.existsSync(f) ? require(f).e2e : null; };
 
+// ── 0) ядро в настоящем Chrome (проверка T-140) ──
+const PHONE = { width: 412, height: 915, deviceScaleFactor: 2.625, mobile: true };
+const KEYS = { Space: [' ', 32], Enter: ['Enter', 13], ArrowLeft: ['ArrowLeft', 37], ArrowUp: ['ArrowUp', 38], ArrowRight: ['ArrowRight', 39], ArrowDown: ['ArrowDown', 40] };
+const keyEv = (B, type, code) => { const [key, kc] = KEYS[code]; return B.send('Input.dispatchKeyEvent', { type, code, key, windowsVirtualKeyCode: kc, nativeVirtualKeyCode: kc, text: type === 'keyDown' && key.length === 1 ? key : type === 'keyDown' && code === 'Enter' ? '\r' : undefined }); };
+const press = async (B, code) => { await keyEv(B, 'keyDown', code); await sleep(40); await keyEv(B, 'keyUp', code); };
+const touch = (B, type, pts) => B.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(p => ({ x: p.x, y: p.y, id: p.id, radiusX: 4, radiusY: 4, force: 1 })) });
+async function openGame(B, BASE, id){
+  await B.go(`${BASE}/#/games/${id}`);
+  const ok1 = await B.waitFor(`!!document.querySelector('.ak .ak-go') && !!${CUR(id)}`, 30000);
+  await B.ev(`(() => { document.querySelector('.ak')?.scrollIntoView({ block: 'end' }); return 1; })()`); await sleep(300);
+  return ok1;
+}
+const RUN = id => `GAME_IMPL.${id}._test.running()`;
+const UI = `({ shown: !document.querySelector('.ak-over').hidden, title: document.querySelector('.ak-ot').textContent, btn: document.querySelector('.ak-go').textContent })`;
+async function coreE2E(A, BASE){
+  // P1: «Поп-ит» на телефоне — два пальца внахлёст (второй нажал до того, как отпустил первый): каждая пупырка лопается;
+  // одиночный тап — ровно одна (pointerdown, без второго счёта от click); Enter на пупырке с клавиатуры — тоже
+  if (await openGame(A, BASE, 'popit')) {
+    await A.ev(`document.querySelector('.ak-go').click(), 1`); await sleep(300);
+    const c = i => A.ev(`(() => { const r = document.querySelectorAll('.pp-b')[${i}].getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const pops = () => A.ev(`${CUR('popit')}.pops`);
+    for (let i = 0; i < 6; i++) { const p = await c(i); await touch(A, 'touchStart', [{ ...p, id: 1 }]); await sleep(50); await touch(A, 'touchEnd', []); await sleep(70); }
+    await sleep(150);
+    const single = await pops();
+    for (let i = 0; i < 6; i++) {
+      const L = await c(10 + i * 2), Rr = await c(11 + i * 2);
+      await touch(A, 'touchStart', [{ ...L, id: 1 }]); await sleep(40);
+      await touch(A, 'touchStart', [{ ...L, id: 1 }, { ...Rr, id: 2 }]); await sleep(40);
+      await touch(A, 'touchEnd', [{ ...Rr, id: 2 }]); await sleep(40);
+      await touch(A, 'touchEnd', []); await sleep(60);
+    }
+    await sleep(200);
+    const two = (await pops()) - single;
+    await A.ev(`document.querySelectorAll('.pp-b')[25].focus(), 1`); await press(A, 'Enter'); await sleep(250);
+    const kb = (await pops()) - single - two;
+    ok(single === 6 && two === 12 && kb === 1, 'core: «Поп-ит» — 6 одиночных тапов = 6, два пальца внахлёст 12 из 12, Enter с клавиатуры — 1', { single, two, kb });
+  } else ok(false, 'core: «Поп-ит» открылся');
+  // P4: окно сайта поверх игры — соло на паузе («⏸ Пауза»), закрыл — «▶ Продолжить»: 📖 правила (GameKit) в «Дроне»,
+  // ☰ меню игры и ⚙️ настройки в «Чёрной дыре»
+  if (await openGame(A, BASE, 'drone')) {
+    await A.ev(`document.querySelector('.ak-go').click(), 1`); await sleep(200);
+    const r0 = await A.ev(`(() => { const cv = document.querySelector('.ak-cv'), r = cv.getBoundingClientRect(), o = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, pointerId: 1, pointerType: 'touch', isPrimary: true };
+      cv.dispatchEvent(new PointerEvent('pointerdown', o)); GameKit.rules(''); return { run: ${RUN('drone')} }; })()`);
+    await sleep(2500);
+    const r1 = await A.ev(`({ over: ${CUR('drone')}.over, run: ${RUN('drone')}, modal: GameKit.isOpen(), ui: ${UI} })`);
+    await A.ev(`GameKit.close(), 1`); await sleep(500);
+    await A.ev(`document.querySelector('.ak-go').click(), 1`); await sleep(150);
+    const r2 = await A.ev(`({ run: ${RUN('drone')}, shown: !document.querySelector('.ak-over').hidden })`);
+    ok(r1.modal && !r1.over && !r1.run && r1.ui.shown && /Пауза/.test(r1.ui.title) && r2.run && !r2.shown, 'core: 📖 правила посреди полёта — «Дрон» на паузе (не разбился), «▶ Продолжить» — летит дальше', { r0, r1, r2 });
+  } else ok(false, 'core: «Дрон» открылся');
+  if (await openGame(A, BASE, 'hole')) {
+    await A.ev(`document.querySelector('.ak-go').click(), 1`); await sleep(400);
+    const t0 = await A.ev(`${CUR('hole')}.t`);
+    await A.ev(`(window.__m = D37Shell.menu(), 1)`); await sleep(1200);
+    const m1 = await A.ev(`({ t: ${CUR('hole')}.t, run: ${RUN('hole')}, menu: !!document.querySelector('.gs-menu'), ui: ${UI} })`);
+    await A.ev(`(window.__m?.close(), 1)`); await sleep(400);
+    await A.ev(`document.querySelector('.ak-go').click(), 1`); await sleep(300);
+    const run2 = await A.ev(RUN('hole'));
+    await A.ev(`(D37Settings.open({ ctx: 'game' }), 1)`); await sleep(800);
+    const s1 = await A.ev(`({ run: ${RUN('hole')}, open: D37Settings.isOpen(), ui: ${UI} })`);
+    await A.ev(`(D37Settings.close(), 1)`); await sleep(300);
+    ok(m1.menu && !m1.run && Math.abs(m1.t - t0) < 60 && /Пауза/.test(m1.ui.title) && run2 && s1.open && !s1.run && /Пауза/.test(s1.ui.title), 'core: ☰ меню и ⚙️ настройки поверх игры — «Чёрная дыра» на паузе, «Продолжить» — дальше', { t0, m1, run2, s1 });
+  } else ok(false, 'core: «Чёрная дыра» открылась');
+  // компьютер: мышь и клавиатура, без касаний
+  await A.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+  await A.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
+  // P5: пробел и стрелки, которые игре не нужны, во время партии не листают страницу (партия не уезжает с экрана)
+  const scroll = {};
+  for (const [id, codes] of [['descent', ['Space', 'Space', 'ArrowDown']], ['jumper', ['Space', 'Space', 'ArrowDown']], ['shield', ['Space', 'Space', 'ArrowDown']], ['slice', ['Space', 'Space', 'ArrowUp']], ['lights', ['Space', 'ArrowDown', 'Space']]]) {
+    if (!await openGame(A, BASE, id)) { scroll[id] = 'not open'; continue; }
+    await A.ev(`(document.activeElement?.blur?.(), scrollTo(0, 0), 1)`); await sleep(150);
+    const y0 = await A.ev('scrollY');
+    for (const k of codes) { await press(A, k); await sleep(250); }
+    scroll[id] = { dy: (await A.ev('scrollY')) - y0, run: await A.ev(RUN(id)), over: await A.ev(`${CUR(id)}.over`) };
+  }
+  ok(Object.values(scroll).every(v => v.dy === 0 && (v.run || v.over)), 'core: компьютер — пробел и стрелки во время партии не листают страницу (descent, jumper, shield, slice, lights)', scroll);
+  // R2: зажал ← и ушёл из окна (alt-tab, клик в рекламу): keyup не придёт — ядро отпускает клавишу, дощечка стоит
+  if (await openGame(A, BASE, 'bricks')) {
+    await A.ev(`(document.activeElement?.blur?.(), 1)`); await press(A, 'Space'); await sleep(300);
+    await keyEv(A, 'keyDown', 'ArrowLeft'); await sleep(250);
+    const k1 = await A.ev(`GAME_IMPL.bricks._test.inst().run.inp.keys`);
+    await A.ev(`(window.dispatchEvent(new Event('blur')), 1)`); await sleep(150);
+    const p1 = await A.ev(`${CUR('bricks')}.px`); await sleep(400);
+    const b = await A.ev(`({ keys: GAME_IMPL.bricks._test.inst().run.inp.keys, px: ${CUR('bricks')}.px, run: ${RUN('bricks')} })`);
+    await keyEv(A, 'keyUp', 'ArrowLeft');
+    ok(k1 !== 0 && b.keys === 0 && Math.abs(b.px - p1) < 1e-6 && b.run, 'core: потеря фокуса с зажатой ← — клавиша отпущена, дощечка стоит, игра идёт', { k1, p1, b });
+  } else ok(false, 'core: «Кирпичики» открылись');
+  await A.send('Emulation.setDeviceMetricsOverride', PHONE);
+  await A.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+}
+
+// ── 0) строка HUD на телефоне 360 px (проверка T-140, P6): все строки, что бот увидел за партию в node, при счёте и рекорде
+// с предел очков игры (5 цифр у многих) — не обрезаются многоточием ──
+function hudStrings(id){
+  const vm = require('vm'), DIR = path.join(SITE, 'js/games/arcade');
+  const sb = { console, setTimeout, clearTimeout, performance: { now: () => 0 }, GAME_IMPL: {} };
+  sb.window = sb; vm.createContext(sb);
+  for (const f of ['core.js', id + '.js']) vm.runInContext(fs.readFileSync(path.join(DIR, f), 'utf8'), sb, { filename: f });
+  const K = sb.ArcadeKit, spec = sb.GAME_IMPL[id]._test.spec, M = require(path.join(__dirname, 'arcade', id + '.cjs'));
+  const out = new Set();
+  if (!spec.hud) return [];
+  for (const seed of [1, 2, 3]) {
+    let last = NaN;
+    const inner = M.bot ? M.bot(K, spec) : null;
+    const s0 = spec.create(K.rng(seed), {}); out.add(spec.hud(s0));
+    K.sim(spec, { seed, fps: 60, maxMs: M.maxMs || 120000, bot: (s, k, push) => { const h = spec.hudKey(s); if (h !== last) { last = h; out.add(spec.hud(s)); } if (inner) inner(s, k, push); } });
+  }
+  return [...out];
+}
+async function hudE2E(A, BASE, ids){
+  await A.send('Emulation.setDeviceMetricsOverride', { width: 360, height: 740, deviceScaleFactor: 2, mobile: true });
+  const bad = {};
+  let n = 0;
+  for (const id of ids) {
+    const card = JSON.parse(fs.readFileSync(path.join(SITE, 'js/games/arcade', id + '.json'), 'utf8'));
+    const strs = hudStrings(id);
+    if (!strs.length) continue;
+    if (!await openGame(A, BASE, id)) { bad[id] = 'not open'; continue; }
+    const big = Number(card.server.cap).toLocaleString('ru');
+    const r = await A.ev(`(() => { const h = document.querySelector('.ak-hx'), sc = document.querySelector('.ak-sc'), be = document.querySelector('.ak-best'), t0 = [h.textContent, sc.textContent, be.textContent];
+      sc.textContent = be.textContent = ${JSON.stringify(big)};
+      const cut = []; let worst = 0;
+      for (const t of ${JSON.stringify(strs)}) { h.textContent = t; const over = h.scrollWidth - h.clientWidth; if (over > 1) cut.push(t + ' (+' + over + ' px)'); worst = Math.max(worst, over); }
+      [h.textContent, sc.textContent, be.textContent] = t0;
+      return { cut: cut.slice(0, 4), n: cut.length, worst, w: h.clientWidth }; })()`);
+    n += strs.length;
+    if (r.n) bad[id] = { score: big, ...r };
+  }
+  for (const [id, v] of Object.entries(bad)) console.log('  HUD 360 px —', id, typeof v === 'string' ? v : 'счёт ' + v.score + ', ширина ' + v.w + ' px, обрезано строк: ' + v.n + ', хуже всего +' + v.worst + ' px: ' + v.cut.join(' | '));
+  ok(!Object.keys(bad).length, `HUD: телефон 360 px, счёт и рекорд — предел игры: ${n} строк HUD из партий ботов (${ids.length} игр) не обрезаются`, bad);
+  await A.send('Emulation.setDeviceMetricsOverride', PHONE);
+}
+
 (async () => {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const BASE = `http://localhost:${server.address().port}`;
@@ -99,6 +235,8 @@ const conf = id => { const f = path.join(__dirname, 'arcade', id + '.cjs'); retu
   let A = null, Bp = null;
   try {
     A = await browser('a');
+    if (CORE) await coreE2E(A, BASE);
+    if (HUD.length) await hudE2E(A, BASE, HUD);
     for (const id of IDS) {
       const R = report[id] = {}, E = conf(id), cur = CUR(id);
       if (!E) { ok(false, id + ': нет scripts/arcade/' + id + '.cjs с e2e-ботом'); continue; }
