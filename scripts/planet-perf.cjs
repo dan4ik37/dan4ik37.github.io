@@ -7,6 +7,7 @@
 //                                                          ошибки и рост памяти по минутам
 //          node scripts/planet-perf.cjs reopen [раз=20]    — открыть/закрыть страницу планеты N раз: холсты, потоки, память
 //          node scripts/planet-perf.cjs map [раз=20]       — T-079: карта «🪐 Система» и телескоп N раз: узлы, слушатели, память
+//          node scripts/planet-perf.cjs ab [раундов=3]       — T-145: наборы флагов (AB) по кругу в одном Chrome, на земле: стоим и бежим
 //          node scripts/planet-perf.cjs golden             — T-079: «золотые» значения O.m / рельсов / неба в Chrome = в node (до бита)
 // Переменные: RATE (замедление ЦП, 4), Q (качество, mid), PC=1 — компьютер 1280 × 720 без замедления, CHROME, D37_TMP (временное — на E:).
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
@@ -99,6 +100,7 @@ const summary = f => {
   let failed = false;
   try {
     await send('Page.enable'); await send('Runtime.enable'); await send('Target.setDiscoverTargets', { discover: true });
+    await send('Page.setDownloadBehavior', { behavior: 'deny' }).catch(() => {});   // никаких загрузок в «Загрузки» на C
     if (PC) await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
     else {
       await send('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: 2, mobile: true });
@@ -191,6 +193,36 @@ const summary = f => {
         await ev(`${T}.look(['luna', 'desert'][${i} % 2])`); await sleep(250); await ev(`${T}.untele()`);
         if (i % 5 === 4) { await ev('window.gc && window.gc()'); await sleep(300); out.cycles.push({ i: i + 1, ...(await probe()), keydown: await lis() }); console.log('  ', JSON.stringify(out.cycles[out.cycles.length - 1])); }
       }
+    } else if (MODE === 'ab') {
+      // T-145: A/B в ОДНОМ Chrome, наборы флагов по кругу (меньше шума от соседних задач): AB='[["off","0",""],["on","1",""]]',
+      // раундов — ARG (3). На земле (29, 81): стоим 6 с, бежим 10 с; ЦП мс на кадр, вызовы, заливки чисел материала
+      const sets = process.env.AB ? JSON.parse(process.env.AB) : [['off', '0', ''], ['on', '1', '']], rounds = +ARG || 3;
+      await open(); await sleep(2000);
+      out.ab = {};
+      for (let r = 0; r < rounds; r++) for (const [name, v2, pf] of sets) {
+        await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        await ev(`(() => { try { ${v2 ? `localStorage.setItem('d37_planet_v2', '${v2}')` : `localStorage.removeItem('d37_planet_v2')`}; ${pf ? `localStorage.setItem('d37_planet_flags', ${JSON.stringify(pf)})` : `localStorage.removeItem('d37_planet_flags')`}; } catch (e) {} location.hash = '#/games'; })()`);
+        await sleep(700); await ev(`location.hash = '#/games/planet'`);
+        let ok = false; for (let q = 0; q < 80 && !ok; q++) { await sleep(400); try { ok = await ev(`!!(window.GAME_IMPL?.planet?._test?.S?.V)`, 5000); } catch (e) {} }
+        if (!ok) throw new Error('планета не открылась (' + name + ')');
+        await ev(SAMPLER);
+        await ev(`${T}.goto(29, 81, 30)`); await sleep(1500); await ev(`${T}.land()`); await sleep(2000);
+        // куски достроились (очередь, потоки, готовые к загрузке — пусто дважды подряд; до 45 с) — иначе меряем недостроенное
+        let calm = 0, waited = 0; for (; waited < 45 && calm < 2; waited++) { await sleep(1000); const q = await stats(); calm = q.queued + q.building + q.ready === 0 ? calm + 1 : 0; }
+        await send('Emulation.setCPUThrottlingRate', { rate: RATE }); await sleep(1500);
+        const s0 = await stats(), u0 = s0.uploads || 0, d0 = s0.direct || 0;
+        const g = await measure(6000), s1 = await stats();
+        const run = await measure(0, async () => { await ev(`${T}.move(0.4, 1, true)`); await sleep(10000); await ev(`${T}.move(0, 0, false)`); });
+        const row = { r, ground: g.cpuAvg, gP95: g.cpuP95, planet: g.planetAvg, run: run.cpuAvg, rP95: run.cpuP95, calls: g.callsAvg, long50: g.long50 + run.long50,
+          shown: s1.shown, uploadsPerS: +(((s1.uploads || 0) - u0) / 6).toFixed(0), directPerS: +(((s1.direct || 0) - d0) / 6).toFixed(0), settle: waited, gpuKB: s1.gpuKB, cacheKB: s1.cacheKB, heap: s1.heap, errors: s1.errors };
+        (out.ab[name] = out.ab[name] || []).push(row);
+        console.log('  ', name.padEnd(10), JSON.stringify(row));
+      }
+      await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      const avg = a => +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2);
+      out.abSum = {};
+      for (const k in out.ab) { const L = out.ab[k]; out.abSum[k] = { ground: avg(L.map(x => x.ground)), gP95: avg(L.map(x => x.gP95)), run: avg(L.map(x => x.run)), planet: avg(L.map(x => x.planet)), calls: avg(L.map(x => x.calls)), shown: avg(L.map(x => x.shown)), uploadsPerS: avg(L.map(x => x.uploadsPerS)), directPerS: avg(L.map(x => x.directPerS || 0)) }; console.log('СРЕДНЕЕ', k.padEnd(10), JSON.stringify(out.abSum[k])); }
+      out.guard = await guard();
     } else if (MODE === 'reopen') {
       const n = +ARG || 20;
       await open(); await sleep(4000);

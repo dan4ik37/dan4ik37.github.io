@@ -43,7 +43,8 @@
   // обычный, без погоды. Включить: localStorage d37_planet_v2 = '1' (всё сразу; читается при открытии вида, дымке нужна и
   // перезагрузка — gfx.js E.aerialFog) или o.flags в D37E.planetView(R, P, { flags }); навсегда — true здесь
   const FLAGS = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false };
-  const FLAGS_ON = { lod2: true, morph: true, prefetch: true, split: true, shadows: true, aerial: true, weather: true };
+  // direct — перетекание куска без перезаливки всех чисел материала (T-145); выкл — как в T-075 (замер «до»)
+  const FLAGS_ON = { lod2: true, morph: true, prefetch: true, split: true, shadows: true, aerial: true, weather: true, direct: true };
   const FLAGS_OFF = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false };
   const v2ls = () => { try { return typeof localStorage !== 'undefined' ? localStorage.getItem('d37_planet_v2') : null; } catch (e) { return null; } };
   // замеры по частям и отладка: localStorage d37_planet_flags = '{"weather":false}' — отдельные флаги поверх (только известные)
@@ -453,7 +454,7 @@ void main(){
     const chunks = new Map();   // ключ → { key, n, data, mesh, used, state: 0 нет / 1 в очереди / 2 строится / 3 готов / 4 данные пришли }
     P.onNode = n => { const c = chunks.get(n.key); if (c && c.data) { P.nodeRange(n, c.data.hmin, c.data.hmax); P.nodeErr(n, c.data.err); } };
     const ST = V.st = { built: 0, buildMs: 0, buildMax: 0, integ: 0, integMs: 0, integMax: 0, integKB: 0, selMs: 0, selMax: 0, sel: 0, mainBuilds: 0, rebases: 0, evicted: 0, errors: 0, workerOk: false,
-      respawns: 0, pre: 0, preBuilt: 0, splits: 0, merges: 0, popMax: 0, popSum: 0, popN: 0, morphMs: 0, upMs: 0, uploads: 0, gpuFreed: 0 };
+      respawns: 0, pre: 0, preBuilt: 0, splits: 0, merges: 0, popMax: 0, popSum: 0, popN: 0, morphMs: 0, upMs: 0, uploads: 0, direct: 0, gpuFreed: 0 };
     const queue = [], preQ = [];   // ждут сборки: шаг и листья; заранее (дети «вот-вот делимых» и «куда летим»)
     const workers = [];
     let reqId = 0;
@@ -501,9 +502,20 @@ void main(){
       g.setIndex(null); g.dispose(); g.setIndex(IDX[c.mask >= 0 ? c.mask : 0]);
       c.gpu = false; ST.gpuFreed++;
     }
-    // перед рисованием куска: его перетекание (k, k краёв, масштаб сдвига) — в общие числа материала; не изменилось — не трогаем
+    // перед рисованием куска: его перетекание (k, k краёв, масштаб сдвига) — в общие числа материала; не изменилось — не трогаем.
+    // T-145 (T-075 §12a): почти все куски на земле перетекают — раньше каждый заливал ВСЕ числа материала (uniformsNeedUpdate:
+    // ~30 чисел с проверкой кэша, ~115 тыс. раз в минуту). Теперь: программа земли уже стоит в GL (предыдущий вызов — тоже кусок;
+    // спрашиваем у GL, не у догадок) — ставим только uMk и uMe через их же кэш three; иначе (первый кусок прохода) — как раньше
     const MK = TU.uMk.value, ME = TU.uMe.value, LAST = [NaN, NaN, NaN, NaN, NaN, NaN];
-    function morphUp(){
+    let glr = null, glc = null;
+    function morphDirect(r){
+      if (r !== glr) { glr = r; glc = r && r.getContext ? r.getContext() : null; }
+      const pp = glc && r.properties ? r.properties.get(terrainMat) : null, pr = pp && pp.currentProgram;
+      if (!pr || !pr.program || glc.getParameter(glc.CURRENT_PROGRAM) !== pr.program) return false;
+      const pu = pr.getUniforms(); pu.setValue(glc, 'uMk', MK); pu.setValue(glc, 'uMe', ME);
+      return true;
+    }
+    function morphUp(r){
       const c = this.userData.c, n = c.n, on = F.morph && n && n.ke;
       const k = on ? n.k : 0, ke = on ? n.ke : null;
       const e0 = ke ? ke[0] : 0, e1 = ke ? ke[1] : 0, e2 = ke ? ke[2] : 0, e3 = ke ? ke[3] : 0;
@@ -512,6 +524,7 @@ void main(){
       if (k === LAST[0] && ms === LAST[1] && e0 === LAST[2] && e1 === LAST[3] && e2 === LAST[4] && e3 === LAST[5]) return;
       LAST[0] = k; LAST[1] = ms; LAST[2] = e0; LAST[3] = e1; LAST[4] = e2; LAST[5] = e3;
       MK.x = k; MK.y = ms; ME.set(e0, e1, e2, e3);
+      if (F.direct !== false && morphDirect(r)) { ST.direct++; return; }
       terrainMat.uniformsNeedUpdate = true; ST.uploads++;
     }
     // сетка из данных (на странице): атрибуты, общие индексы, матрица — от якоря
@@ -644,8 +657,11 @@ void main(){
         for (const n of st.need) q2(n, 4);
         for (const n of st.ahead) q2(n, 3);
         if (F.prefetch && SSE.pred) for (const n of P.peek(cx, cy, cz, PRED[0], PRED[1], PRED[2], { cap: PRE_MAX }, peekL)) q2(n, 2);
+        // путь от листа вверх до показанного — «нужен» весь (T-145): готовые дети и внуки делимого, который ждёт (сосед крупнее, ещё
+        // не «осел»), иначе при полном кэше выселялись тем же выбором и строились снова — после прыжка на землю показ стоял на 4–37
+        // кусках из 165 (сборка по кругу)
         for (const n of leaves) {
-          let a = n, dl = 0; while (a && a.dis !== st.mark) { a = a.par; dl++; }
+          let a = n, dl = 0; while (a && a.dis !== st.mark) { const ca = chunks.get(a.key); if (ca) ca.used = showMark; a = a.par; dl++; }
           const c = chunkOf(n); c.used = showMark;
           if (dl && dl <= 2) { n.imp = n.rho || 0; q2(n, 1); }
         }
@@ -660,6 +676,12 @@ void main(){
         }
         if (preQ.length > 1) preQ.sort((a, b) => (b.n.imp || 0) - (a.n.imp || 0));
         for (const n of vis) { const c = chunks.get(n.key); c.used = showMark; if (n.par) { const pc = chunks.get(n.par.key); if (pc) pc.used = showMark; } }
+        // делимый ждёт всех 4 детей (и шаг вперёд — внуков), даже тех, что за горизонтом и в выбор не попали: готовые — тоже «нужны»
+        // (T-145: без этого при полном кэше их выселял тот же выбор, и они строились по кругу — ~120 кусков в секунду, показ стоял)
+        for (const n of vis) {
+          if (!n.split || !n.kids) continue;
+          for (const k of n.kids) { const ck = chunks.get(k.key); if (ck) ck.used = showMark; if (k.split && k.kids) for (const g of k.kids) { const cg = chunks.get(g.key); if (cg) cg.used = showMark; } }
+        }
       } else oldShow(cx, cy, cz, vis);
       // маски сшивки — по показанному
       for (const n of vis) {
@@ -945,13 +967,14 @@ void main(){
       V.cpu = now() - t0;
     };
     V.shown = () => shown.size;
+    V._dbg = () => ({ chunks, leaves, shown, showList, queue, preQ });   // проверки (scripts/planet-*.cjs): внутренности выбора
     V.stats = () => ({
       shown: shown.size, leaves: leaves.length, cached: chunks.size, queued: queue.length + preQ.length, building: inflight.size, ready: ready.length,
       built: ST.built, buildAvg: ST.built ? ST.buildMs / ST.built : 0, buildMax: ST.buildMax, integ: ST.integ, integAvg: ST.integ ? ST.integMs / ST.integ : 0,
       integMax: ST.integMax, integKB: Math.round(ST.integKB), selAvg: ST.sel ? ST.selMs / ST.sel : 0, selMax: ST.selMax, mainBuilds: ST.mainBuilds, rebases: ST.rebases, evicted: ST.evicted,
       errors: ST.errors, respawns: ST.respawns, workers: workers.filter(W => W && W.ok && !W.dead).length, nodes: P.nodes.size, alt: V.alt, altG: V.altG, near: nearFar[0], far: nearFar[1],
       pre: ST.pre, preBuilt: ST.preBuilt, splits: ST.splits, merges: ST.merges, popMax: +ST.popMax.toFixed(3), popAvg: ST.popN ? +(ST.popSum / ST.popN).toFixed(4) : 0, popN: ST.popN,
-      uploads: ST.uploads, split: R.depthSplit === SPLIT ? SPLIT.dist : 0,
+      uploads: ST.uploads, direct: ST.direct, split: R.depthSplit === SPLIT ? SPLIT.dist : 0,
       // gpuKB — буферы кусков в видеокарте (показанные и спрятанные недавно; без LOD v2 — все с сеткой, как раньше), cacheKB — данные
       // всех кусков в памяти страницы
       gpuKB: Math.round([...chunks.values()].reduce((s, c) => s + (c.mesh && (!F.lod2 || c.gpu || c.root) ? c.bytes || 0 : 0), 0) / 1024),
