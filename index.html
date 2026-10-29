@@ -2067,6 +2067,9 @@ body.low .donation-alert-icon{animation:none}
 <!-- 🖼 ФОТОРЕДАКТОР /photo — редактор (fabric.js, js/apps/photo/*, css/photo.css) грузит js/apps/apps.js только при входе -->
 <div id="photo-page" style="display:none"><div id="photoRoot"></div></div>
 
+<!-- 🧊 3D-МАСТЕРСКАЯ AI3D /tools/3d (T-112, скрытая) — редактор владельца (three r149, js/apps/ai3d/*, css/ai3d.css) грузит js/apps/apps.js только при входе -->
+<div id="ai3d-page" style="display:none"><div id="ai3dRoot"></div></div>
+
 <!-- 📣 РЕКЛАМА ЗА 💎 — кабинет рекламодателя (js/features/adcab.js и css/adcab.css грузятся при входе; ads.sql) -->
 <div class="wrap reveal" id="adv-page">
   <div class="sec-title-row">
@@ -2734,7 +2737,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/games.js"></script>
 <script src="js/features/shop.js"></script>
 <script src="js/features/invite.js"></script>
-<!-- 🖼 инструменты (фоторедактор /photo): маленький загрузчик, сам редактор — только при входе в раздел -->
+<!-- 🖼 инструменты (фоторедактор /photo, 3D-мастерская /tools/3d): маленький загрузчик, сам редактор — только при входе в раздел -->
 <script src="js/apps/apps.js"></script>
 <script src="js/init.js"></script>
 <script>routerStart()</script>

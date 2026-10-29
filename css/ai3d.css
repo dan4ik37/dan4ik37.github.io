@@ -1,0 +1,54 @@
+/* ═══ 🧊 AI3D — 3D-мастерская /tools/3d (js/apps/ai3d/ai3d-ui.js), classes and ids a3-*. Loaded only on the route (js/apps/apps.js).
+   AI3D author: the site owner (dan4ik37); ported into the site 2026-10-29 (T-112). His page colours: dark tokens by default, light ones
+   with the site's light theme (html[data-theme="light"]); the 3D background is --bg of .a3 (ai3d-core.js bg()). ═══ */
+#ai3d-page{padding:0;margin:0;max-width:none}
+body.a3-on{overflow:hidden!important;overscroll-behavior:none}
+body.a3-on #bottomTabbar,body.a3-on #perfToggle,body.a3-on #scrollTop,body.a3-on #donateFab,body.a3-on footer,body.a3-on .d37-live,
+body.a3-on #readProgress,body.a3-on #pwaBanner,body.a3-on #cursorTrail,body.a3-on #cursorDot,body.a3-on .chat-toast{display:none!important}
+.a3-loading,.a3-fail{position:fixed;left:0;right:0;bottom:0;top:64px;z-index:440;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  background:var(--bg,#08080e);color:var(--muted,#8d8daa);font-size:.95rem;text-align:center;padding:16px}
+.a3-loading b,.a3-fail b{color:var(--text,#f0f0f8);font:800 1.1rem Montserrat,sans-serif}
+.a3-loading i{width:34px;height:34px;border-radius:50%;border:3px solid rgba(var(--fg-rgb,255,255,255),.15);border-top-color:var(--accent,#7c5cff);animation:a3-spin .8s linear infinite}
+.a3-fail small{max-width:440px;line-height:1.4}
+.a3-fail button{font:inherit;font-weight:700;min-height:44px;padding:0 18px;border-radius:12px;border:0;background:var(--accent,#7c5cff);color:#fff;cursor:pointer}
+@keyframes a3-spin{to{transform:rotate(360deg)}}
+
+.a3{--bg:#10171d;--panel:#18222b;--fg:#e6edf2;--mut:#8b9aa6;--line:#2a3945;--acc:#4da3ff;--accfg:#06121f;--bad:#ff6b6b;
+  position:fixed;left:0;right:0;bottom:0;top:var(--a3-top,64px);z-index:440;display:flex;flex-direction:column;background:var(--bg);color:var(--fg);
+  font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark;-webkit-tap-highlight-color:transparent}
+:root[data-theme="light"] .a3{--bg:#e9edf0;--panel:#f7f9fa;--fg:#14202a;--mut:#5d6b76;--line:#c9d2d9;--acc:#0a7cff;--accfg:#fff;--bad:#c81e1e;color-scheme:light}
+.a3-bar{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);flex:none;min-height:52px}
+.a3-title{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.15}
+.a3-title b{font-weight:800;font-size:15px}
+.a3-title span{font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#a3-stage{flex:1;min-height:38%;position:relative;overflow:hidden}
+#a3-c{width:100%;height:100%;display:block;touch-action:none;outline:none}
+#a3-hint{position:absolute;left:10px;top:8px;color:var(--mut);font-size:12px;pointer-events:none}
+.a3-lost{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);color:#fff;font-weight:700}
+.a3-lost[hidden]{display:none}
+#a3-panel{background:var(--panel);border-top:1px solid var(--line);padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));max-height:52%;overflow-y:auto;
+  display:flex;flex-direction:column;gap:8px;flex:none;overscroll-behavior:contain}
+#a3-panel>*{flex:none}   /* the panel scrolls; its children keep their size (the phone squeezed the command box to 53 px) */
+.a3 textarea{width:100%;box-sizing:border-box;height:110px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px;
+  font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;resize:vertical}
+.a3-row{display:flex;flex-wrap:wrap;gap:6px}
+.a3 button,.a3 select{font:inherit;min-height:40px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+.a3 select{max-width:42vw;padding-right:6px}
+.a3 button.p{background:var(--acc);color:var(--accfg);border-color:var(--acc);font-weight:600}
+.a3 button.on{border-color:#22c55e}
+.a3 button:focus-visible,.a3 select:focus-visible,.a3 textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.a3 pre{margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--mut);background:var(--bg);
+  border-radius:6px;padding:8px;max-height:150px;overflow:auto}
+.a3 pre.err{color:var(--bad)}
+.a3 details{font-size:12px;color:var(--mut)}
+.a3 details summary{cursor:pointer;padding:4px 0}
+.a3 details label{display:block;padding:3px 0}
+#a3-shot{max-width:100%;border-radius:6px;border:1px solid var(--line);display:none}
+/* wide screens: 3D on the left, commands on the right */
+@media (min-width:900px){
+  .a3{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,32%);grid-template-rows:auto minmax(0,1fr)}
+  .a3-bar{grid-column:1/-1}
+  #a3-stage{min-height:0}
+  #a3-panel{max-height:none;border-top:0;border-left:1px solid var(--line)}
+  .a3 select{max-width:none}
+}

@@ -60,6 +60,7 @@ const TESTS = [
   { f: 'kubomir-qol-test.cjs', args: ['{THREE}'], needs: 'three' },   // T-049: помощники «Кубомира» — шов, аксессуары, рецепты, подсказки, лежанка, вёдра, карта, задания
   { f: 'render-test.cjs', args: ['{THREE}'], needs: 'three', t: 240 }, { f: 'sprite-test.cjs', args: ['{THREE}'], needs: 'three' },
   { f: 'studio-modes-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'worldmap-test.cjs', args: ['{THREE}'], needs: 'three' },
+  { f: 'ai3d-test.cjs', args: ['{THREE}'], needs: 'three', t: 240 },   // T-112: AI3D /tools/3d — проверки владельца, настоящий three r149, GLB (двоичный, без extras, линейные цвета), D37E.models
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
   { f: 'war-hud-e2e.cjs', e2e: true, t: 600 },   // боевая зона: панель оружия отвечает (телефон, планшет, ПК)
@@ -71,6 +72,7 @@ const TESTS = [
   { f: 'menu-e2e.cjs', args: ['all'], env: { KB_WORLD: '0' }, e2e: true, t: 1500 },   // T-043: одно меню ☰ (мир, Кубомир, Подземье), окно ⚙️ (Главное, поиск), геймпад, скорость, утечки; T-090: память открытого мира целиком (ПК и телефон ×4, каждая зона — одна постройка), «Подземье»
   { f: 'touch-hud-e2e.cjs', e2e: true, t: 900, env: { TH_MODE: 'full', SCREENS: '[[844,390],[390,844]]' } },   // «Кубомир» на телефоне: кнопки компактно, каждая — своё действие, «Настроить кнопки»
   { f: 'photo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },
+  { f: 'ai3d-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },   // T-112: AI3D /tools/3d в Chrome — самотест, примеры, GLB, «В Студию 3D», 0 ошибок
   { f: 'ui-e2e.cjs', args: ['ci'], e2e: true, t: 600 },   // T-086: мини-карточка и профиль без утечек, тема до первого кадра (без «вспышки»), откат флагами   // фоторедактор: все команды, кнопки, отмена (fabric.js с jsDelivr)
   { f: 'city-e2e.cjs', e2e: true, needs: 'pglite', t: 900 },   // «Живой город»: работа с сервера (city.sql в PGlite), банк, окно экономики, два игрока
   { f: 'rt-e2e.cjs', e2e: true, needs: 'rt', t: 600 },   // свой сервер: два Chrome, io-игра и стол, сервер убит посреди партии → Supabase

@@ -109,6 +109,8 @@ function browser(startUrl, routing){
   for (const [p, h] of [['/about', '#/about'], ['/shop', '#/shop'], ['/forum', '#/forum'], ['/forum/42', '#/forum/42'], ['/ideas', '#/ideas'], ['/ideas/7', '#/ideas/7']])
     ok(R.toHash(p) === h, `${p} — общий адрес страницы для поиска и раздела ${h}`);
   ok(R.toHash('/play/chess/abcd?ref=k7m2qz') === '#/games/chess/abcd' && R.toHash('/chat/c/5#x') === '#/chat/c/5', 'адрес с ?… и #… — раздел без них');
+  ok(R.toPath('#/ai3d') === '/tools/3d' && R.toHash('/tools/3d') === '#/ai3d' && R.toHash('/tools/3d?ws=1') === '#/ai3d' && R.toHash('/tools/photo') === null && R.toHash('/tools/nick') === null,
+    'AI3D (T-112): #/ai3d ↔ /tools/3d, остальные /tools/* — серверные страницы');
 
   // Все старые ссылки из кода, SQL и сервера: «#/раздел…» → настоящий адрес, который сайт отдаёт (раздел или общая страница)
   const files = [];
@@ -175,7 +177,7 @@ function browser(startUrl, routing){
   const firstSpa = vj.rewrites.findIndex(r => r.destination === '/index.html');
   ok(firstSpa > 0 && vj.rewrites.slice(firstSpa).every(r => r.destination === '/index.html'), 'разделы SPA — в конце rewrites (серверные страницы раньше)');
   const spaRoots = new Set(vj.rewrites.filter(r => r.destination === '/index.html').map(r => r.source.split('/')[1]));
-  const needSpa = routes.filter(r => !['home', 'about', 'ideas', 'forum', 'shop'].includes(r)).map(r => (r === 'games' ? 'play' : r)).concat('app');
+  const needSpa = routes.filter(r => !['home', 'about', 'ideas', 'forum', 'shop'].includes(r)).map(r => (r === 'games' ? 'play' : r === 'ai3d' ? 'tools' : r)).concat('app');   // ai3d — /tools/3d
   ok(needSpa.every(r => spaRoots.has(r)), 'у каждого раздела PAGES есть rewrite → index.html (кроме общих с серверными страницами)', needSpa.filter(r => !spaRoots.has(r)));
   ok(fs.readdirSync(path.join(SITE, 'api')).filter(f => f.endsWith('.js')).length <= 12, 'функций Vercel — не больше 12');
 
@@ -247,6 +249,7 @@ function browser(startUrl, routing){
   {
     const B = browser('https://dan4ik37.vercel.app/');
     const M = (r, p) => B.R.routeMeta(r, p);
+    ok(M('ai3d').noindex && M('ai3d').canonical === 'https://dan4ik37.vercel.app/tools/3d', 'AI3D /tools/3d: noindex, canonical /tools/3d (скрытая страница)');
     ok(M('home').canonical === 'https://dan4ik37.vercel.app/' && !M('home').noindex, 'главная: canonical «/», индексируется');
     ok(M('forum', '42').canonical === 'https://dan4ik37.vercel.app/forum/42' && !M('forum', '42').noindex, 'тема форума: canonical /forum/42 (как у серверной страницы)');
     ok(M('ideas', '7').canonical === 'https://dan4ik37.vercel.app/ideas/7', 'идея: canonical /ideas/7');

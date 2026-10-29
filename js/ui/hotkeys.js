@@ -31,9 +31,11 @@ document.addEventListener('keydown', e=>{
   if(typeof gamesActive!=='undefined' && gamesActive) return;
   // Открыт фоторедактор (/photo) — клавиши его (V, B, стрелки двигают слой…)
   if(window.D37Photo?.active) return;
+  // Открыта 3D-мастерская AI3D (/tools/3d) — клавиатура её
+  if(window.D37AI3D?.active) return;
   // «/» — поиск по сайту (как на YouTube/GitHub)
   if(e.key==='/'){ e.preventDefault(); openCmdPalette(); return; }
-  const routes = Object.keys(PAGES);
+  const routes = Object.keys(PAGES).filter(r => r !== 'ai3d');   // скрытая 3D-мастерская — не листается стрелками
   if(e.key>='1' && e.key<='8'){
     const route = routes[+e.key-1];
     if(route){ e.preventDefault(); D37Route.go('#/'+route); }
