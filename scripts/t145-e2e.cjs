@@ -202,8 +202,9 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         ok(sk < -1, 'новая земля: в выкопанной яме небо ниже прежней земли (TS.skyTop с правками)', sk);
         await ev(`(() => { ${T.terra}.S.wx.force('clear'); ${T.terra}.fly(true); ${T.terra}.vert(1); return 1; })()`); await sleep(phone ? 9000 : 5000); await ev(`(() => { ${T.terra}.vert(0); ${T.terra}.look(0.6, -1.1); return 1; })()`); await sleep(4000);
         await shot('terra-air-' + PROF);
-        const air = await ev(`(() => { const s = ${T.terra}.state(), S = ${T.terra}.S, U = 2.1 / 1.8, g = Math.max(0, S.TS.height(s.fly.wx, s.fly.wz)) * U; return { y: Math.round(s.fly.y), above: Math.round(s.fly.y - g), fogFar: Math.round(S.R.scene.fog.far), fogNear: Math.round(S.R.scene.fog.near), far: Math.round(S.R.camera.far), wx: S.wx && S.wx.state.state }; })()`);
+        const air = await ev(`(() => { const s = ${T.terra}.state(), S = ${T.terra}.S, U = 2.1 / 1.8, g = Math.max(0, S.TS.height(s.fly.wx, s.fly.wz)) * U; return { y: Math.round(s.fly.y), above: Math.round(s.fly.y - g), fogFar: Math.round(S.R.scene.fog.far), fogNear: Math.round(S.R.scene.fog.near), far: Math.round(S.R.camera.far), wx: S.wx && S.wx.state.state, gh: +Math.max(...[0, 1, 2].map(j => Math.abs(S.R.sky.gnd[j] - S.R.sky.hor[j]))).toFixed(4), nk: S.R.lighting.fogNearK }; })()`);
         console.log('  полёт:', JSON.stringify(air));
+        ok(air.nk > .3 && air.gh < .02, 'новая земля: в полёте низ купола неба — цвета тумана (край колец блоков не стоит силуэтом на тёмном небе)', air);
         // земля прямо под тобой — меньше половины тумана (туман с fogNearK у высоты камеры), край колец — по косой дальше, в тумане
         air.nadir = +Math.max(0, (air.above - air.fogNear) / Math.max(1, air.fogFar - air.fogNear)).toFixed(2);
         ok(air.fogFar > air.above && air.nadir < .5, 'новая земля: в полёте в ясную погоду землю под собой видно (туман — от края на высоте камеры)', air);

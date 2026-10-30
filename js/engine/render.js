@@ -272,6 +272,10 @@
         for (let j = 0; j < 3; j++) { M.hor[j] = M.hor[j] * .4 + c3[j] * .6; M.fogSun[j] = M.fogSun[j] * .5 + c3[j] * .5; M.gnd[j] = M.gnd[j] * .5 + c3[j] * .3; }
       }
       if (wxSky && E.weatherSky) E.weatherSky(M, wxSky);   // погода: небо серее и темнее, солнце за тучами
+      // fogNearK (высоко над землёй, «Новая земля» в полёте; T-145 проверка D7): низ купола — цвета тумана, край колец блоков внизу
+      // тонет в дымке, а не стоит светлым силуэтом на тёмном низе неба
+      const gk = Math.min(1, num(Lg.fogNearK, 0) * 2.5);
+      if (gk > 0) for (let j = 0; j < 3; j++) M.gnd[j] += (M.hor[j] - M.gnd[j]) * gk;
       E.skyUniforms(skyMat.uniforms, M, skyT);
       if (skyMat.uniforms.uRb) skyMat.uniforms.uRb.value.x = wxSky ? Math.max(0, Math.min(1, +wxSky.rainbow || 0)) : 0;
       // свет: солнце/луна
