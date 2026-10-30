@@ -461,7 +461,8 @@
   `build.ps1 -Site <site>` (copies wasm + golden). Output is chunk-local (positions relative to cx*32, cy*32, cz*32).
 - Files: terra-core.js (core + wasm loader), terra-worker.js (wasm in workers, self-test, JS fallback on load error or trap, messages
   before init are queued, buffer pool), terra.js (rings, column probes `t1_column`, ≤ 2 jobs per worker, edits quantized to 1/64 m and
-  applied in order, affected blocks rebuilt first, `ground()` / `blocked()` from the shown mesh — cave floors, `ray()`), terra-mesh.js (pooled
+  applied in order, affected blocks rebuilt first, `ground()` / `blocked()` from the shown mesh — cave floors, `ray()`; an edited block —
+  from the density field at the edit's tick until its re-mesh is shown, T-145 review TECH-3, rollback `editDensity: false`), terra-mesh.js (pooled
   geometries, one shared index buffer — detach it before `dispose()`, sRGB→linear vertex colours in the vertex shader, anchor),
   js/games/terra-demo.js (hidden /play/terra; `D37E.terra.ON` — rollback; `localStorage d37_terra_wasm = '0'` forces the JS core).
   Units: core = meters; the game converts with U = E.UNIT; the floating anchor (multiple of 32 m) moves only in the logic step.

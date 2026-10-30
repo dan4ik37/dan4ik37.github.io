@@ -464,7 +464,11 @@ Orbit after landing: 188 → 11 chunks within ~2 s, 1 flush; standing on the gro
 year — the same declination as `P.sunDir` (before: the class row — 'temperate' at 10° N gave snow at −10 °C; both hemispheres one
 season). The snow on the ground near the camera fades from 0.25 · 3000 u (was 0.6: a hard disc). (3) World clock: `/time` only after
 `/health` says `time: 1`; the old live server answers `/time` with a 404 without CORS (TypeError + 2 console errors per sync).
-(4) The weather hour is taken at the moment asked (`st.CL.tOf(ms)`), not the current one. TECH-1 (v2 vs v1 on the ground, review:
+(4) The weather hour is taken at the moment asked (`st.CL.tOf(ms)`), not the current one. Fix run 2 (TECH-1 breakdown, phone ×4, trace,
+one Chrome, 3 rounds; thread ms per frame, wall in brackets): v1 ground 0.536–0.726 (2.0–2.7), run 0.545–0.712 (2.1–2.7); v2 ground
+0.625–0.830 (2.4–3.1), run 0.723–0.994 (2.8–3.8); v2 without weather run 0.762–0.817; v2 without aerial + eclipse 0.846–1.055 (noise);
+v2 without morph run 0.633–0.744; morph k in 1/255 steps — same as exact (reverted). So running costs morph (≈ 0.05–0.1 thread) plus
+LOD v2 itself. Earlier: TECH-1 (v2 vs v1 on the ground, review:
 standing +0.33 ms ×4 paired median, running +0.46) — not changed here: the difference is the v2 features themselves (weather particles,
 7 vertex attributes, +5 draw calls); the select-while-waiting rule costs nothing standing (0 selects once the show has converged).
 

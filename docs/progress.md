@@ -677,8 +677,13 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
   answer every later sync returned the old promise — the 10-min resync never ran). Server: /health `time: 1`, 404 / 405 with CORS.
 - Take: TECH-4 (one origin array), TECH-5 (T145_OPEN by literal spreads: the XSS scan proves the tables again, 16 allowlist entries
   removed), TECH-6 (TS.skyTop with edits), S1 (⛰️ and the other text-style icons with U+FE0F).
-- Skip: W4 hail harm (WX5, not built: no game reads WX.hailHarm yet — needs health in «Новая земля» / a body effects step);
-  TECH-3 (terra physics switches from the density field to the shown mesh when the block is uploaded — frame-rate dependent for a
-  few frames after a dig; the steady state is the same bits on every device; a deterministic switch needs a physics redesign);
-  TECH-1 (v2 on the ground costs +0.33…0.46 ms ×4 over v1 — mostly weather particles, 7 vertex attributes and +5 draw calls; kept, numbers
-  in planet.md §12b).
+- Take (fix run 2): TECH-3 — «Новая земля»: an edited block's physics reads the density field from the edit's tick (same tick on every
+  device); its old mesh is only drawn until the re-mesh is shown, then the shown re-mesh is the physics again (terra.js `editDensity`,
+  rollback `create({ editDensity: false })`; terra-test: in the pit at once, back on the drawn mesh, rollback = old behaviour). Left:
+  the density → mesh switch itself (≤ 0.4 m at crater rims) still happens at the upload moment — same bits once shown.
+- Skip: W4 hail harm (WX5). Hail falls only on the planet, in «Новая земля» and in Mir; the first two have no health at all, Mir has it
+  only inside war zones, Kubomir's weather has no hail. Needs its own step: health + shelter + the kids' softer table.
+- Skip: TECH-1 (v2 vs v1, phone ×4, trace A/B in one Chrome, 3 rounds, 30.10). Standing on the ground: thread +0.06…0.10 ms (≈ +0.25…0.4
+  wall ×4) — at the +0.3 target; running: thread +0.07…0.24 (wall +0.3…0.9) — over it. Breakdown: weather off −0.03, aerial + eclipse off
+  0 (noise), morph off −0.05…0.1 thread, the rest is LOD v2 itself (select / show). Tried: k of the morph in 1/255 steps (fewer aMk
+  uploads) — no measurable change, reverted. Kept ON: the planet seen from orbit and the landings need v2; numbers in planet.md §12b.
