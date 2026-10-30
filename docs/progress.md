@@ -721,3 +721,6 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
 - Skip D3: planet v2 stays ON. The board's T-075 condition (+2 ms on the ground) is met (+0.15 standing, +0.76 running ×4 in the
   verifier's A/B); V.update itself is 0.014 → 0.018 ms, so the running delta is three's per-draw cost (7 attributes, +5 draws) and the
   GPU (9.3 vs 5.7 MB). The planet seen from orbit and landings need v2; owner/coordinator may set FLAGS = { ...FLAGS_OFF } (one line).
+- 30.10 Владелец выбрал вид «Кубомира» на планете: гладкая земля (копать, насыпать) + постройки из блоков и деталей, которые рушатся по
+  нашей физике; один мир с «Миром Денчика» и планетой. План шагов — T-150 (после 4.11). Старый кубический «Кубомир» остаётся.
+
