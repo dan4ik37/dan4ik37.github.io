@@ -315,6 +315,9 @@
       const wv = wxSky ? Math.max(.18, 1 - .42 * (+wxSky.rain || 0) - .5 * (+wxSky.snow || 0) - .78 * (+wxSky.fog || 0) - .2 * (+wxSky.storm || 0) - .12 * (+wxSky.cloud || 0) ** 2) : 1;   // погода: видно ближе
       let fe = Math.max(40, num(Lg.fogEnd, 320) * wv) * O.dist * (O.fog ? 1 : 1.6);
       const vis = wxSky ? num(wxSky.vis, 0) : 0;   // особая погода (буря, мгла; wx.js): видно не дальше vis — как и существам (честно)
+      // fogNearK (по желанию; «Новая земля» в полёте, T-145): туман начинается с этой доли дальности, а не с 0,3 — сверху земля под
+      // тобой ясная, а край мира (дальше по косой) в тумане; буря (vis) — как без него
+      const nk = vis > 0 && vis < fe ? 0 : Math.min(.92, num(Lg.fogNearK, 0));
       if (vis > 0 && vis < fe) fe = Math.max(15, vis);
       const far = Math.min(3000, Math.max(160, fe * 1.08 + 30));
       if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
@@ -324,7 +327,7 @@
         GU.fogA[3] = 0; GU.fogB[3] = 0;
         return;
       }
-      fog.color.setRGB(M.hor[0], M.hor[1], M.hor[2]); fog.near = fe * (O.fog ? .3 : .6); fog.far = fe;
+      fog.color.setRGB(M.hor[0], M.hor[1], M.hor[2]); fog.near = fe * Math.max(O.fog ? .3 : .6, nk); fog.far = fe;
       scene.background.copy(fog.color);
       const sl = Math.hypot(M.sun[0], M.sun[2]) || 1, fx = O.fog && q !== 'low';   // low — только обычный туман (легко)
       GU.fogA[0] = M.sun[0] / sl; GU.fogA[1] = 0; GU.fogA[2] = M.sun[2] / sl; GU.fogA[3] = fx && !skyOver ? G.fog.sun : 0;   // к солнцу — по горизонтали

@@ -175,6 +175,9 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
   function fogEndOf(st, R, TS){
     const O = R.opt || {}, k = (+O.dist || 1) * (O.fog === false ? 1.6 : 1), E = (TS.radius - .55) * 32, c = R.camera.position;
     const h = st.ax === undefined ? 0 : Math.max(0, c.y / U - Math.max(0, TS.height(st.ax + c.x / U, st.az + c.z / U)));
+    // туман начинается чуть ближе земли под тобой (render.js fogNearK): высоко в полёте (телефон — 4 кольца блоков) земля внизу
+    // ясная, край мира по косой — в тумане (было: с 0,3 дальности — с высоты 230 м низ почти весь в тумане)
+    st.fogK = h > 2 ? Math.round(.97 * h / Math.sqrt(E * E + h * h) * 100) / 100 : 0;
     return Math.max(50, Math.sqrt(E * E + h * h) * U / k);
   }
   // раз в 2 с (в полёте — 0,5 с: высота меняется быстро): время суток (TERRA_DAY) и туман (TERRA_FOG) — одним вызовом, если поменялось
@@ -182,7 +185,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     st.lightT = st.mode === 'fly' ? .5 : 2;
     const R = st.R, L = {};
     if (TERRA_DAY) L.time = terraHour(Date.now());
-    if (TERRA_FOG) { const fe = fogEndOf(st, R, st.TS); if (Math.abs(fe - (R.lighting.fogEnd || 0)) > .5) L.fogEnd = fe; }
+    if (TERRA_FOG) { const fe = fogEndOf(st, R, st.TS); if (Math.abs(fe - (R.lighting.fogEnd || 0)) > .5 || st.fogK !== (R.lighting.fogNearK || 0)) { L.fogEnd = fe; L.fogNearK = st.fogK; } }
     if (L.time !== undefined || L.fogEnd !== undefined) R.setLighting(L);
   }
   function weatherInit(st){

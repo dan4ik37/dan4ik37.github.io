@@ -681,6 +681,11 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
   device); its old mesh is only drawn until the re-mesh is shown, then the shown re-mesh is the physics again (terra.js `editDensity`,
   rollback `create({ editDensity: false })`; terra-test: in the pit at once, back on the drawn mesh, rollback = old behaviour). Left:
   the density → mesh switch itself (≤ 0.4 m at crater rims) still happens at the upload moment — same bits once shown.
+- Take (fix run 2, after merging main): «Новая земля» in flight — the fog starts near the ground below (render.js `fogNearK`, optional,
+  used only by terra: 0.97 · height / slant distance to the ring edge; a storm's visibility ignores it). From 230 m up on a phone the
+  ground below is clear (nadir fog 0.26 instead of 0.88), the ring edge further along the slant is still in fog. Left of T1: from high
+  up the world's footprint shows as a fog-coloured shape against the darker lower sky dome, and looking ahead there is nothing to
+  see — needs the far low-detail horizon ring (next step). e2e looks down 63° in flight and checks the nadir fog < 0.5.
 - Skip: W4 hail harm (WX5). Hail falls only on the planet, in «Новая земля» and in Mir; the first two have no health at all, Mir has it
   only inside war zones, Kubomir's weather has no hail. Needs its own step: health + shelter + the kids' softer table.
 - Skip: TECH-1 (v2 vs v1, phone ×4, trace A/B in one Chrome, 3 rounds, 30.10). Standing on the ground: thread +0.06…0.10 ms (≈ +0.25…0.4

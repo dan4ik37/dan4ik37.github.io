@@ -187,11 +187,13 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         // T-145 проверка TECH-6: небо кончается над рельефом с правками — в выкопанной яме дождь доходит до дна
         const sk = await ev(`(() => { const S = ${T.terra}.S, s = ${T.terra}.state(), T1 = D37E.terraCore; let lo = 0; for (let dx = -10; dx <= 10; dx += 1) for (let dz = -10; dz <= 10; dz += 1) { const x = s.player.wx + dx, z = s.player.wz + dz, d = S.TS.skyTop(x, z) - T1.height(1337, x, z); if (d < lo) lo = d; } return +lo.toFixed(2); })()`);
         ok(sk < -1, 'новая земля: в выкопанной яме небо ниже прежней земли (TS.skyTop с правками)', sk);
-        await ev(`(() => { ${T.terra}.S.wx.force('clear'); ${T.terra}.fly(true); ${T.terra}.vert(1); return 1; })()`); await sleep(phone ? 9000 : 5000); await ev(`(() => { ${T.terra}.vert(0); ${T.terra}.look(0.6, -0.35); return 1; })()`); await sleep(4000);
+        await ev(`(() => { ${T.terra}.S.wx.force('clear'); ${T.terra}.fly(true); ${T.terra}.vert(1); return 1; })()`); await sleep(phone ? 9000 : 5000); await ev(`(() => { ${T.terra}.vert(0); ${T.terra}.look(0.6, -1.1); return 1; })()`); await sleep(4000);
         await shot('terra-air-' + PROF);
-        const air = await ev(`(() => { const s = ${T.terra}.state(), S = ${T.terra}.S, U = 2.1 / 1.8, g = Math.max(0, S.TS.height(s.fly.wx, s.fly.wz)) * U; return { y: Math.round(s.fly.y), above: Math.round(s.fly.y - g), fogFar: Math.round(S.R.scene.fog.far), far: Math.round(S.R.camera.far), wx: S.wx && S.wx.state.state }; })()`);
+        const air = await ev(`(() => { const s = ${T.terra}.state(), S = ${T.terra}.S, U = 2.1 / 1.8, g = Math.max(0, S.TS.height(s.fly.wx, s.fly.wz)) * U; return { y: Math.round(s.fly.y), above: Math.round(s.fly.y - g), fogFar: Math.round(S.R.scene.fog.far), fogNear: Math.round(S.R.scene.fog.near), far: Math.round(S.R.camera.far), wx: S.wx && S.wx.state.state }; })()`);
         console.log('  полёт:', JSON.stringify(air));
-        ok(air.fogFar > air.above * 1.15, 'новая земля: в полёте в ясную погоду землю под собой видно (туман — от края на высоте камеры)', air);
+        // земля прямо под тобой — меньше половины тумана (туман с fogNearK у высоты камеры), край колец — по косой дальше, в тумане
+        air.nadir = +Math.max(0, (air.above - air.fogNear) / Math.max(1, air.fogFar - air.fogNear)).toFixed(2);
+        ok(air.fogFar > air.above && air.nadir < .5, 'новая земля: в полёте в ясную погоду землю под собой видно (туман — от края на высоте камеры)', air);
         await ev(`${T.terra}.S.wx.force(null)`);
         await ev(`(() => { ${T.terra}.fly(false); return 1; })()`); await sleep(2500);
         await ev(`${T.terra}.S.wx.force('sandstorm')`); await sleep(9000);
