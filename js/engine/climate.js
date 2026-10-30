@@ -143,6 +143,7 @@
 
   // Состояния (для скриптов, телефона, подписей) — по силе частей
   C.STATES = ['clear', 'cloudy', 'overcast', 'rain', 'thunderstorm', 'snow', 'blizzard', 'fog', 'heat'];
+  C.STATES_BASE = Object.freeze(C.STATES.slice());   // девять прежних: их предлагает мир без особой погоды (Студия), что бы ни дописал wx.js
   C.STATE_NAMES = { clear: 'ясно', cloudy: 'облачно', overcast: 'пасмурно', rain: 'дождь', thunderstorm: 'гроза', snow: 'снег', blizzard: 'метель', fog: 'туман', heat: 'зной' };
   C.STATE_ICONS = { clear: '☀️', cloudy: '⛅', overcast: '☁️', rain: '🌧', thunderstorm: '⛈', snow: '🌨', blizzard: '❄️', fog: '🌫', heat: '🔥' };
   // Особая погода по биому (T-135, BIOME_WEATHER.md v2, js/engine/wx.js): её состояния (песчаная буря, буран…) дописывает в конец
@@ -193,6 +194,9 @@
       placeAt: typeof o.placeAt === 'function' ? o.placeAt : null,
       // особая погода (wx.js): запись места (класс климата, поверхности, приметы, детский городок), биом, мир детей/взрослых, «Стихии»
       wxRegionAt: typeof o.wxRegionAt === 'function' ? o.wxRegionAt : null, biomeAt: typeof o.biomeAt === 'function' ? o.biomeAt : null,
+      // особая погода — только миры, которые её просят (wx: true — игры, что грузят wx.js); без неё мир (Студия 3D, «Подземье»)
+      // считает погоду как до T-135, даже если wx.js остался в вкладке от прошлой игры (T-145 проверка D6)
+      wx: o.wx === true,
       realm: o.realm === 'adult' ? 'adult' : 'kids', elements: ['rare', 'real', 'off'].includes(o.elements) ? o.elements : 'rare', rules: o.rules === 'absurd' ? 'absurd' : 'earth',
     };
     // часы погоды и время суток
@@ -221,7 +225,7 @@
       if (W.weather !== 'auto') { const f = FIXED[W.weather] || FIXED.clear; tmp.precip = f.precip || 0; tmp.thunder = f.thunder || 0; tmp.fog = f.fog || 0; tmp.heat = f.heat || 0; tmp.cloud = f.cloud || 0; tmp.hail = 0; }
       else mix(W.seed, wl, c, seasonAt, tmp);   // одна лента событий на мир: фронт везде тот же, климат решает, во что он выльется
       // особая погода по биому (wx.js): в своём окне поднимает части ленты под себя; вне окон — null, и всё ниже — как было
-      const sp = C.SPECIAL && E.wx ? E.wx.apply(W, x, z, w, ms, cKey, tmp) : null;
+      const sp = C.SPECIAL && E.wx && W.wx ? E.wx.apply(W, x, z, w, ms, cKey, tmp) : null;
       if (!W.storm) { tmp.precip = Math.max(tmp.precip, tmp.thunder * .8); tmp.thunder = 0; tmp.hail = 0; }
       const sun = sm(6, 9, hour) * (1 - sm(18, 21, hour));   // день (0 — ночь)
       // температура: сезон + сутки (облака сглаживают) + высота + медленный шум
@@ -256,7 +260,7 @@
     // Накопители по прошлому этой точки: мокро, лужи, снег на земле, лёд на воде (30 w-ч назад, шаг 0,5 w-ч)
     function accum(x, z, y, w, ms, cKey){
       const PL = W.placeAt ? W.placeAt(x, z) : null, sh = PL ? shiftOf(PL) : 0;
-      const c = clim(cKey), key = cKey + '|' + Math.round(y / 8) + '|' + (W.front ? Math.round(x / 500) : 0) + '|' + Math.floor(w * 4) + '|' + W.weather + W.mode + (C.SPECIAL && E.wx ? '|wx' + Math.round(x / 128) + ',' + Math.round(z / 128) : '')
+      const c = clim(cKey), key = cKey + '|' + Math.round(y / 8) + '|' + (W.front ? Math.round(x / 500) : 0) + '|' + Math.floor(w * 4) + '|' + W.weather + W.mode + (C.SPECIAL && E.wx && W.wx ? '|wx' + Math.round(x / 128) + ',' + Math.round(z / 128) : '')
         + (PL ? '|p' + PL.t + ',' + PL.amp + ',' + sh : '');
       const hit = cache.get(key); if (hit) return hit;
       if (cache.size > 64) cache.clear();

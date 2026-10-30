@@ -636,8 +636,8 @@
     return s;
   };
   C.labelX = s => (s && s.sp > .35 && STATEX[s.special]) || (s ? s.state : 'clear');
-  // the new states are APPENDED (saved worlds, scripts and sanitize keep working); only where wx.js runs, so a page without it
-  // (the site, Studio until its «Особая погода» setting) keeps the nine old ones and never offers a state it cannot show
+  // the new states are APPENDED (saved worlds, scripts and sanitize keep working) once wx.js has run in the tab; a world without
+  // `wx: true` (Studio until its «Особая погода» setting, Podzem) computes weather as before T-135 and offers C.STATES_BASE only
   if (!C.STATES.includes('sandstorm')) C.STATES.push('sandstorm', 'duststorm', 'buran', 'whiteout', 'hail', 'downpour', 'freezing_rain', 'seafog');
   Object.assign(C.STATE_NAMES, { sandstorm: 'песчаная буря', duststorm: 'пыльная буря', buran: 'буран', whiteout: 'белая мгла', hail: 'град', downpour: 'ливень', freezing_rain: 'ледяной дождь', seafog: 'морской туман' });
   Object.assign(C.STATE_ICONS, { sandstorm: '🏜️', duststorm: '💨', buran: '🌬️', whiteout: '⚪', hail: '🧊', downpour: '☔', freezing_rain: '🥶', seafog: '🌁' });
@@ -679,7 +679,7 @@
   // limit at a place in the current world (C.current()) — cheap: one lookup per 64-unit cell per 2 s (AI think loops call it)
   WX.limitAt = (x, z, vk = 1000, ms = Date.now()) => {
     const W = C.current && C.current();
-    if (!W || !C.SPECIAL || !WX.AI || typeof W.climateAt !== 'function') return Infinity;
+    if (!W || !C.SPECIAL || !WX.AI || !W.wx || typeof W.climateAt !== 'function') return Infinity;   // мир без особой погоды (Студия) — без предела
     // the 2 s bucket clears the cache (a time term inside the key went past 2^53 and merged cells ~65 km apart);
     // the cell key stays an exact small integer, unique while |cell z| < 50000 (3.2 million units)
     const st = stOf(W), tb = Math.floor(ms / 2000), key = Math.floor(x / 64) * 100003 + Math.floor(z / 64);

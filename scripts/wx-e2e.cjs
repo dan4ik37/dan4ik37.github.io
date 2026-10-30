@@ -89,7 +89,7 @@ const MEASURE = `async (R, n = 240) => { const st = R.stats, T = window.__wxT, a
       await sleep(4000);
       ok(await ev(`!!(window.D37E?.wx && window.D37E?.wxfx && GAME_IMPL.world._test.state().wx.wfx)`), 'ядро погоды и картинка бурь загружены, подключены к погоде мира');
       // W.at before / after (C.SPECIAL off / on) on this device: fresh worlds of the same settings, 300 calls each, alternating
-      res.wat = await ev(`(() => { const C = D37E.climate, X = GAME_IMPL.world._test.state().wx, o = { seed: 'mir-bench', mode: 'calendar', climateAt: X.W.climateAt, wxRegionAt: X.W.wxRegionAt, hourAt: X.W.hourAt, seaY: 0, lapse: -.12 };
+      res.wat = await ev(`(() => { const C = D37E.climate, X = GAME_IMPL.world._test.state().wx, o = { seed: 'mir-bench', mode: 'calendar', climateAt: X.W.climateAt, wxRegionAt: X.W.wxRegionAt, hourAt: X.W.hourAt, seaY: 0, lapse: -.12, wx: true };
         const run = on => { C.SPECIAL = on; const W = C.world(o), t0 = performance.now(), ms0 = Date.now(); for (let i = 0; i < 300; i++) W.at(100 + i * 3, 40 + i, ms0 + i * 500, 5); return (performance.now() - t0) / 300; };
         let off = 0, on = 0; for (let k = 0; k < 3; k++) { off += run(false); on += run(true); } C.SPECIAL = true; return { off: +(off / 3).toFixed(4), on: +(on / 3).toFixed(4) }; })()`);
       console.log('  W.at (' + PROF + ', ×' + RATE + '): без особой погоды ' + res.wat.off + ' мс, с ней ' + res.wat.on + ' мс');

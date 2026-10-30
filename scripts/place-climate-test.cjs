@@ -28,7 +28,7 @@ const dayClock = (ms, cycle = 40, night = .2) => { const p = ((ms / 60000 / Math
 // ── 2. «Новая земля»: the game's own weather world (terra-demo.js weatherInit) ──
 const src = B.t1(1337, { gen: 2 });
 const terraWorld = () => C.world({ seed: 'terra-1337', mode: 'calendar', climateAt: B.climateAtFn(src), placeAt: B.placeAtFn(src), lapse: -.0065, seaY: 0, front: 4000,
-  hourAt: ms => dayClock(ms), wxRegionAt: WX.regionOf(src), realm: 'kids' });
+  hourAt: ms => dayClock(ms), wxRegionAt: WX.regionOf(src), wx: true, realm: 'kids' });
 const JAN = Date.UTC(2027, 0, 1);
 const january = (W, x, z, step = 2) => {   // two-hour samples over January
   const r = { snow: 0, min: 99, mean: 0, n: 0, sp: {} };
@@ -69,7 +69,7 @@ const january = (W, x, z, step = 2) => {   // two-hour samples over January
     }
     return r;
   };
-  const after = survey(W), before = survey(C.world({ seed: 'terra-1337', mode: 'calendar', climateAt: B.climateAtFn(src), lapse: -.0065, seaY: 0, front: 4000, hourAt: ms => dayClock(ms), wxRegionAt: WX.regionOf(src), realm: 'kids' }));
+  const after = survey(W), before = survey(C.world({ seed: 'terra-1337', mode: 'calendar', climateAt: B.climateAtFn(src), lapse: -.0065, seaY: 0, front: 4000, hourAt: ms => dayClock(ms), wxRegionAt: WX.regionOf(src), wx: true, realm: 'kids' }));
   console.log(`  land within 400 m of a desert: ${near.length} cells, sampled ${pick.length} (hot biomes ${after.hot}). January — class climate only: below −5 °C ${before.cold}, snow ${before.snowy}, coldest ${before.minT.toFixed(1)}; the place's own climate: below −5 °C ${after.cold}, snow ${after.snowy}, coldest ${after.minT.toFixed(1)}`);
   ok(after.hot > 10 && after.hotCold === 0 && after.hotSnow === 0, 'hot biomes next to a desert (savanna, jungle, beach): no frost, no snow in January', after);
   ok(after.cold <= Math.ceil(pick.length * .1) && after.snowy <= Math.ceil(pick.length * .15) && after.minT > -12 && after.cold * 4 <= before.cold && after.snowy * 3 <= before.snowy,
@@ -102,7 +102,7 @@ const january = (W, x, z, step = 2) => {   // two-hour samples over January
   // the same functions as planet-view.js V.climateAt / V.placeAt
   const climateAt = (x, z) => P.climateAt(P.dirFromLatLon(Math.max(-90, Math.min(90, -z / P.R / DEG)), x / P.R / DEG, WD));
   const placeAt = P.placeAtFn();
-  const W = C.world({ seed: 'planet-' + P.def.seed, mode: 'calendar', climateAt, placeAt, lapse: -6.5 / 1166, seaY: 0, front: 4000, hourAt: () => 14 });
+  const W = C.world({ seed: 'planet-' + P.def.seed, mode: 'calendar', climateAt, placeAt, lapse: -6.5 / 1166, seaY: 0, front: 4000, hourAt: () => 14, wx: true });
   const at = (lat, lon) => [lon * DEG * P.R, -lat * DEG * P.R];
   const jan = (lat, lon) => { const [x, z] = at(lat, lon); let sn = 0, mn = 99; for (let t = 0; t < 31 * 24; t += 3) { const s = W.at(x, z, JAN + t * 3600000, 0); if (s.snow > .05) sn++; if (s.temp < mn) mn = s.temp; } return { sn, mn }; };
   const e1 = jan(10, 120), e2 = jan(4.2, 150.3), e3 = jan(0, 133);

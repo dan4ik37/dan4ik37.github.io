@@ -131,7 +131,7 @@
     let cOver = null;   // свой климат на один замер (умеренный — для снега и луж обычной зоны)
     const seasonsMode = () => st.seasons || 'calendar';
     const worldCfg = () => { const m = seasonsMode(); return { seed: 'kb:' + W.seed, mode: m === 'off' ? 'fixed' : m === 'cycle' ? 'cycle' : 'calendar', season: 'summer', days: 3, lapse: 0, seaY: Vx.SEA || 52, front: 0,
-      climateAt: () => cOver || X.climKey, hourAt: () => R.lighting.time, gameTime: () => ({ day: st.meta?.day || 1, hour: R.lighting.time || 0 }), wxRegionAt: kbRegion, realm: 'kids' }; };
+      climateAt: () => cOver || X.climKey, hourAt: () => R.lighting.time, gameTime: () => ({ day: st.meta?.day || 1, hour: R.lighting.time || 0 }), wxRegionAt: kbRegion, wx: true, realm: 'kids' }; };
     if (C?.attach) {
       try {
         X.clim = C.attach(R, { world: worldCfg(), where: () => [st.P.x - st.ox, st.P.y, st.P.z - st.oz], origin: () => [st.ox, st.oz], particles: false, sky: false, occlusion: false });

@@ -823,7 +823,7 @@
     }
     const REF = [[F.ocean, -540, 280, WM ? WM.SEA : 0], [F.lake, 0, 0, 0], [F.canal, 215, 258, -2.4], [F.pond, POND.x, POND.z, POND.wl]];
     let W = null;
-    try { W = C?.world ? C.world({ seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour, wxRegionAt: mirWxRegion }) : null; } catch (e) {}
+    try { W = C?.world ? C.world({ seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour, wxRegionAt: mirWxRegion, wx: true }) : null; } catch (e) {}
     let tq = 0, forced = null;
     // прибой (T-085): шум у ближней мели моря (узел сетки глубиной 0,1…2,4 — там и пена прибоя в шейдере, waves.js) — петля
     // amb_water пониже (synth.js: тише издалека, сторона — по камере), громче в шторм; нет волн или мели рядом — тишина

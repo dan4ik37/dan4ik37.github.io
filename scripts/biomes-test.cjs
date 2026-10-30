@@ -208,7 +208,7 @@ run('js/engine/wx.js');
     ok(RO(des[0] + 1, des[1] + 1) === a || Math.floor((des[0] + 1) / 128) !== Math.floor(des[0] / 128), 'one record per 128 m cell (cached)');
   }
   // a year of the calendar weather at those cells: the desert gets sand / dust storms, the snow cell never does
-  const W = C2 => E.climate.world({ seed: 'terra-1337', mode: 'calendar', climateAt: B.climateAtFn(src), lapse: -.0065, seaY: 0, front: 4000, hourAt: () => 10.5, wxRegionAt: RO, realm: 'kids' });
+  const W = C2 => E.climate.world({ seed: 'terra-1337', mode: 'calendar', climateAt: B.climateAtFn(src), lapse: -.0065, seaY: 0, front: 4000, hourAt: () => 10.5, wxRegionAt: RO, wx: true, realm: 'kids' });
   const Wd = W(), t0y = Date.UTC(2026, 0, 1), seen = { des: {}, cold: {} };
   for (let i = 0; i < 365 * 24 * 2; i++) {
     const ms = t0y + i * 1800000;

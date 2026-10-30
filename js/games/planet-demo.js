@@ -78,7 +78,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
         // PLANET_PLACE (T-145, проверка): температура погоды — своя у места (V.placeAt: экватор без снега, на юге сезоны наоборот);
         // откат одной строкой — PLANET_PLACE = false (t и размах — у класса климата, как было)
         const PLANET_PLACE = true;
-        const W0 = Cl.world({ seed: 'planet-' + P.def.seed, mode: 'calendar', climateAt: V.climateAt, placeAt: PLANET_PLACE ? V.placeAt : null, lapse: -6.5 / 1166, seaY: 0, front: 4000,
+        const W0 = Cl.world({ seed: 'planet-' + P.def.seed, mode: 'calendar', climateAt: V.climateAt, placeAt: PLANET_PLACE ? V.placeAt : null, lapse: -6.5 / 1166, seaY: 0, front: 4000, wx: true,
           hourAt: ms => { const c = V.camBF, l = Math.hypot(c[0], c[1], c[2]) || 1; UPD[0] = c[0] / l; UPD[1] = c[1] / l; UPD[2] = c[2] / l; return P.localHour(UPD, st.CL?.tOf ? st.CL.tOf(ms) : st.t); } });   // час момента ms (окна особой погоды — по своему часу)
         const WA = Object.create(W0);
         WA.at = (x, z, ms, y) => { V.weatherPos(x, y, z, WP); return W0.at(WP[0], WP[1], st.CL.msOf(st.t), WP[2]); };
