@@ -110,9 +110,10 @@
   winter» zones by the temperature AT the height (tp), not by SEA + 40. Climate nodes every 32 blocks in a per-world typed cache
   (G.cn4, 4096 slots, no garbage); V.climateAt(G, x, z) → { b, ts, tp, m, … } (D37E.biomes reads it). v1–v3 digests (ids + biome +
   zone) unchanged (scripts/biomes-test.cjs). Snow next to a desert: v3 8–16 blocks → v4 712–1376; interior lonely patches 0.17–0.34 %
-  → 0.06–0.19 %; chunk generation (node, PC) about the same as v3 (1.4–2.2 ms). NEW WORLDS STILL GET v3 until the coordinator, after
-  merging t138-teardown, sets `KB_GEN = 4` in js/games/kubomir.js:25 AND lets js/games/kubomir-coop.js:689 accept genVer 4
-  (`w.genVer >= 2 && w.genVer <= 4 ? w.genVer : 1`) — without the second line a guest of a v4 world would build v1 terrain. Вещи: инструменты — пиксель-арт 32×32 (P.tool32 в
+  → 0.06–0.19 %; chunk generation (node, PC) about the same as v3 (1.4–2.2 ms). NEW WORLDS GET v4 since 30.10 (T-145 verify D4: `KB_GEN = 4`,
+  rollback 3; js/games/kubomir-coop.js accepts genVer 2…4 from the host, else 1). Hail harms in Kubomir (kubomir-weather.js →
+  wx.js hailStep, kids' table: never below half health; roof = block or water above the head); in a storm wall kubomir-light.js
+  keeps the fog at the engine's horizon colour (no biome / rain tint) so far land does not stand out against the sky. Вещи: инструменты — пиксель-арт 32×32 (P.tool32 в
   voxel-tex.js, TOOL_PAL по материалу, обводка цветом материала), плоские вещи в VR.itemGeo выдавлены на 1/16 (бока по краю
   пикселей своим цветом через почти белый слой «снег»; факел и растения — две плоскости, как были). Мотыги в игре нет.
   Дальше по картинкам (блоки, мобы, 3D-инструменты) — docs/KUBOMIR_ART.md. Тесты: hand-test 230, voxel-test 210.
