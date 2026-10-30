@@ -28,7 +28,7 @@ const opt = n => { const i = argv.indexOf('--' + n); return i >= 0 ? argv[i + 1]
 const TESTS = [
   // сначала самое дешёвое и самое важное: «собирается ли вообще» и свежесть сгенерированного
   { f: 'syntax-test.cjs', t: 120 },
-  { f: 'make-errlog.mjs', args: ['--check'], t: 60 }, { f: 'gen-city-defs.cjs', args: ['--check'], t: 60 }, { f: 'gen-evo-defs.cjs', args: ['--check'], t: 60 },
+  { f: 'make-errlog.mjs', args: ['--check'], t: 60 }, { f: 'make-arcade.mjs', args: ['--check'], t: 60 }, { f: 'gen-city-defs.cjs', args: ['--check'], t: 60 }, { f: 'gen-evo-defs.cjs', args: ['--check'], t: 60 },
   { f: 'routes-test.cjs' }, { f: 'pwa-test.cjs' }, { f: 'games-test.cjs' }, { f: 'auth-test.cjs' }, { f: 'age-test.cjs' },
   { f: 'xss-test.cjs', t: 300 },   // чужой текст не становится разметкой (T-011): разбор всех js/api + злые строки; ~30 с ЦП
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
@@ -51,6 +51,7 @@ const TESTS = [
   { f: 'voxel-test.cjs', serial: true, retry: 2 },
   { f: 'trees-test.cjs', args: ['--fast'], retry: 1 },   // T-022b: движок деревьев — по зерну одинаково, породы, связность, сетка, генератор «Кубомира» v1/v2 как было, v3
   // игры: бот против бота (число партий уменьшено — в CI достаточно)
+  { f: 'arcade-test.cjs', t: 480 },   // (34 игры: ~130 с одна, под нагрузкой — до 2–3 раз дольше) T-140 мини-игры (ArcadeKit): 30/60/144 FPS, повтор нажатий, seed соперников, сценарии, мусор на шаге
   { f: 'domino-test.cjs' }, { f: 'fillword-test.cjs' }, { f: 'balda-test.cjs', args: ['300'] }, { f: 'krokodil-test.cjs' },
   { f: 'kletochki-test.cjs' }, { f: 'chervyachki-test.cjs' },
   // «Путь клетки» (T-056): каталог и правила рода, мир пути, комнаты по биомам; evo.sql в PGlite (JS = SQL); время до «Готов к суше» у бота

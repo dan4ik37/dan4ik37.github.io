@@ -4,6 +4,7 @@
 // поменял правила игры — поправь и здесь.
 // id совпадают с GAMES в js/features/games.js: кнопка «Играть» ведёт на /play/<id> (раздел игр сайта).
 
+import { ARCADE_PAGES, ARCADE_UNITS } from './games-seo-arcade.js';
 // T-145: «Планета» и «Новая земля» открыты всем. Откат одной строкой: T145_OPEN = false — их страниц /games/<id> и строк карты
 // сайта нет (каталог сайта — тот же флаг в js/features/games.js). Таблица не меняется во время работы — разбор XSS видит её сам
 const T145_OPEN = true;
@@ -1500,6 +1501,8 @@ export const GAME_PAGES = [
       ['Можно играть с другом?', 'Да, в режиме «Соревнование»: у вас одинаковые ролики и варианты, побеждает тот, у кого больше очков.'],
     ],
   },
+  // мини-игры (js/games/arcade, T-140): страницы собирает node scripts/make-arcade.mjs из js/games/arcade/<id>.json
+  ...ARCADE_PAGES,
 ];
 
 
@@ -1526,6 +1529,6 @@ export function scoreLabel(id, s){
     case 'podzem':   return `${s.toLocaleString('ru')} м вглубь`;
     case 'kletochki': return `массу ${s.toLocaleString('ru')}`;     // «… набрал массу 1 234 в «Клеточки»» (название дописывает api/game.js)
     case 'chervyachki': return `длину ${s.toLocaleString('ru')}`;
-    default:         return `${s.toLocaleString('ru')} ${ru(s, 'очко', 'очка', 'очков')}`;
+    default:         return `${s.toLocaleString('ru')} ${ru(s, ...(ARCADE_UNITS[id] || ['очко', 'очка', 'очков']))}`;
   }
 }
