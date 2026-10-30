@@ -361,7 +361,7 @@
       && st.front === W.front && st.el === W.elements && st.rules === W.rules && st.hourAt === W.hourAt && st.placeAt === W.placeAt) return st;
     st = W.__wx = { gen: WX._gen, seed: W.seed, mode: W.mode, days: W.days, season: W.season, zone: W.zone, front: W.front, el: W.elements, rules: W.rules, hourAt: W.hourAt, placeAt: W.placeAt,
       kTag: new Float64Array(512).fill(NaN), kK: new Uint8Array(512), kA: new Float64Array(512), kE: new Float64Array(512), kI: new Int16Array(512),
-      rolls: new Map(), reg: { x: NaN, z: NaN, r: null }, regTmp: {}, kind: { k: 0, pa: 0, pe: 0, pI: 0 }, lim: new Map() };
+      rolls: new Map(), reg: { x: NaN, z: NaN, r: null }, regTmp: {}, kind: { k: 0, pa: 0, pe: 0, pI: 0 }, lim: new Map(), limT: NaN };
     return st;
   }
   // kind of slot s for climate cKey in season `sea` (memo ring, 512)
@@ -680,7 +680,10 @@
   WX.limitAt = (x, z, vk = 1000, ms = Date.now()) => {
     const W = C.current && C.current();
     if (!W || !C.SPECIAL || !WX.AI || typeof W.climateAt !== 'function') return Infinity;
-    const st = stOf(W), key = Math.floor(x / 64) * 100003 + Math.floor(z / 64) + Math.floor(ms / 2000) * 1e10;
+    // the 2 s bucket clears the cache (a time term inside the key went past 2^53 and merged cells ~65 km apart);
+    // the cell key stays an exact small integer, unique while |cell z| < 50000 (3.2 million units)
+    const st = stOf(W), tb = Math.floor(ms / 2000), key = Math.floor(x / 64) * 100003 + Math.floor(z / 64);
+    if (st.limT !== tb) { st.lim.clear(); st.limT = tb; }
     let v = st.lim.get(key);
     if (v === undefined) { if (st.lim.size > 256) st.lim.clear(); try { v = WX.visQ(W, x, z, ms); } catch (e) { v = 255; } st.lim.set(key, v); }
     return WX.sightLimit(v, vk);

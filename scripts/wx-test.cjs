@@ -271,6 +271,15 @@ sec('видимость и ИИ (§6.1): существо видит не дал
   const s = W.at(0, 0, Date.now(), 5), lim = X.limitAt(0, 0);
   ok(s.special === 'sandstorm' && s.vis < 100 && Math.abs(lim - s.vis) < 2.1, 'буря «одна всегда»: предел ИИ = видимость игрока', { vis: s.vis, lim, sx: s.stateX });
   ok(s.stateX === 'sandstorm' && s.state !== 'sandstorm', 'stateX — «песчаная буря», state — прежний', { state: s.state, stateX: s.stateX });
+  // D1: the cache must keep places apart (a time term in the key lost precision: cells ~65 km apart shared one value)
+  {
+    const vq0 = X.visQ, ms = Date.UTC(2026, 9, 30, 12);
+    X.visQ = (Wd, x, z) => (z < 0 ? 20 : 255);   // storm south of z = 0, clear north
+    const a = X.limitAt(10, -100, 1000, ms), b = X.limitAt(10, 5000, 1000, ms), c = X.limitAt(10, 5000, 1000, ms + 2000), d = X.limitAt(10, -100, 1000, ms + 2000);
+    let far = 0; for (let i = 1; i <= 300; i++) if (X.limitAt(64 * i, 64 * 300 * (i & 1 ? 1 : -1), 1000, ms + 4000) !== ((i & 1) ? Infinity : 40)) far++;
+    X.visQ = vq0;
+    ok(a === 40 && b === Infinity && c === Infinity && d === 40 && far === 0, 'кэш предела ИИ не смешивает места: буря и ясно в 5 км — каждое своё, в любом порядке', { a, b, c, d, far });
+  }
   C.use(null);
   ok(C.sanitize({ weather: 'buran' }).weather === 'buran' && C.sanitize({ weather: 'nope' }).weather === 'auto', 'sanitize знает новые состояния');
   const fx = ['sandstorm', 'duststorm', 'buran', 'whiteout', 'hail', 'downpour', 'freezing_rain', 'seafog'].map(st => { const Wf = worldOf('temperate', {}); Wf.set({ weather: st }); return Wf.at(0, 0, Date.now(), 5).stateX; });
