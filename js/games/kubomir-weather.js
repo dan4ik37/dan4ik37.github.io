@@ -94,15 +94,53 @@
       return v;
     };
     X.zoneAt = zoneAt; X.zone = 0; X.climKey = 'temperate';
+    // ── особая погода по биому (T-135, js/engine/wx.js): запись места — на клетку погоды 128×128 блоков (BIOME_WEATHER §7.1). Зоны 1
+    //    и 2 — свой класс (вечная зима — снега, пустыня, болото, тёплый край); обычная зона — большинство из пяти проб генератора
+    //    (центр и ±32): пустыня → песчаные бури (климат дождя и снега при этом умеренный — где идёт снег, туда он и ложится), снега,
+    //    болото, горы; поверхности и приметы (берег, река, вершины выше 95) — из тех же проб. От зерна мира: у всех игроков одна ──
+    const wxCells = new Map(), WXB = { desert: 3, snow: 5, swamp: 7, mountains: 2 }, WXS = { desert: 0x3, beach: 0x1, ocean: 0x80, river: 0x80, plains: 0x6 | 0x20, forest: 0xa | 0x20, birch: 0xa | 0x20, mountains: 0x30, snow: 0x60, swamp: 0x184 };
+    const wxCol = {}; let kbSrc = null, kbSrcG = null;   // kbSrc — источник D37E.biomes для мира (новый мир — новый источник)
+    function kbRegion(x, z){
+      const cx = Math.floor(x / 128), cz = Math.floor(z / 128), key = cx * 65536 + cz;
+      let r = wxCells.get(key);
+      if (r) return r;
+      const mx = cx * 128 + 64, mz = cz * 128 + 64, zone = zoneAt(mx, mz), votes = {};
+      // мир v4 (логичные биомы T-116, js/engine/biomes.js): обычная зона — запись места из D37E.biomes (степь и саванна — по жаре
+      // и сухости, тропики, берег, вершины), зоны 1 и 2 — как ниже
+      if (zone === 0 && st.G && st.G.ver >= 4 && window.D37E.biomes?.region) {
+        const q = window.D37E.biomes.region(kbSrcG === st.G ? kbSrc : (kbSrcG = st.G, kbSrc = window.D37E.biomes.kb(st.G)), mx, mz, 128, {});
+        r = { cls: q.cls | 0, smask: q.smask | 0, F: q.F | 0, alt: 0, kc: 0 };
+        if (wxCells.size > 512) wxCells.clear();
+        wxCells.set(key, r);
+        return r;
+      }
+      let smask = 0, F = 0, best = '', bn = 0;
+      for (const [dx, dz] of [[0, 0], [32, 0], [-32, 0], [0, 32], [0, -32]]) {
+        const col = st.G ? Vx.genColumn(st.G, mx + dx, mz + dz, wxCol) : null, b = col ? Vx.BIOME_IDS[col.b] : 'plains';
+        smask |= WXS[b] || 0x6;
+        if (b === 'ocean' || b === 'beach') F |= 1; if (b === 'river') F |= 2; if (col && col.h > 95) F |= 8;
+        votes[b] = (votes[b] || 0) + (dx === 0 && dz === 0 ? 1.5 : 1);   // ничья — к центру
+        if (votes[b] > bn) { bn = votes[b]; best = b; }
+      }
+      const cls = zone === 1 ? 5 : zone === 2 ? (best === 'desert' ? 3 : best === 'swamp' ? 7 : 8) : (WXB[best] ?? 0);
+      r = { cls, smask: smask | (zone === 1 ? 0x60 : 0), F, alt: 0, kc: 0 };
+      if (wxCells.size > 512) wxCells.clear();
+      wxCells.set(key, r);
+      return r;
+    }
     let cOver = null;   // свой климат на один замер (умеренный — для снега и луж обычной зоны)
     const seasonsMode = () => st.seasons || 'calendar';
     const worldCfg = () => { const m = seasonsMode(); return { seed: 'kb:' + W.seed, mode: m === 'off' ? 'fixed' : m === 'cycle' ? 'cycle' : 'calendar', season: 'summer', days: 3, lapse: 0, seaY: Vx.SEA || 52, front: 0,
-      climateAt: () => cOver || X.climKey, hourAt: () => R.lighting.time, gameTime: () => ({ day: st.meta?.day || 1, hour: R.lighting.time || 0 }) }; };
+      climateAt: () => cOver || X.climKey, hourAt: () => R.lighting.time, gameTime: () => ({ day: st.meta?.day || 1, hour: R.lighting.time || 0 }), wxRegionAt: kbRegion, realm: 'kids' }; };
     if (C?.attach) {
       try {
         X.clim = C.attach(R, { world: worldCfg(), where: () => [st.P.x - st.ox, st.P.y, st.P.z - st.oz], origin: () => [st.ox, st.oz], particles: false, sky: false, occlusion: false });
       } catch (e) { console.warn('Кубомир: погода движка', e); X.clim = null; }
     }
+    // картинка особой погоды (wx-fx.js): песок, пыль и снег в воздухе, позёмка; небо и туман «Кубомир» темнит сам — wx-fx только
+    // добавляет цвет бури и видимость (R.setWeather), пока она идёт
+    const WXO = [0, 0];
+    X.wfx = E.wxfx?.attach ? E.wxfx.attach(R, { top: (x, z) => top(x, z), origin: () => { WXO[0] = st.ox; WXO[1] = st.oz; return WXO; }, q }) : null;
     X.setSeasons = m => { st.seasons = m; X.clim?.setWorld(worldCfg()); tq = 0; X.cover = -1; };   // снег на земле — заново по новому календарю
     // осень и зима — цвет биома (трава, листва) по сезону; лёд — у воды под открытым небом (крючок шейдеров движка)
     const VR = st.VR, offShader = [];
@@ -361,6 +399,11 @@ if ( d37IZ > 0.0 ) {
     let hR = null, hS = null, thT = 20, thS = -1, fillR = true, fillS = true, naW = 0, nsW = 0;
     X.frame = (dt, t) => {
       try { X.clim?.frame(dt); } catch (e) {}   // состояние погоды, сезон, снег/лёд/листва для шейдеров (данные — на время кадра)
+      if (X.wfx) try {   // особая погода по биому: буря плавно, частицы, цвет неба и видимость (сломалась — без неё)
+        const o2 = X.clim?.opts, on = X.clim && !st.weatherOff && o2?.fx !== false;
+        X.wfx.frame(dt, on ? X.clim.state : null, o2 ? o2.amount : 1, 1 - Math.max(0, Math.min(1, R.night || 0)));
+        X.wfx.pushSky(R);
+      } catch (e) { console.warn('Кубомир: особая погода', e); try { X.wfx.dispose(); } catch (e2) {} X.wfx = null; }
       const d = Math.min(.05, Math.max(0, dt)), P = st.P;
       // лёд: мороз (с запасом), вид — плавно за ним, проруби — в шейдер (раз в 0,5 с или сразу, если новая)
       X.iceTick();
@@ -484,7 +527,8 @@ if ( d37IZ > 0.0 ) {
     X.dispose = () => {
       hR?.stop(); hS?.stop(); hR = hS = null;
       try { X.clim?.dispose(); } catch (e) {}
-      X.clim = null; for (const f of offShader) try { f(); } catch (e) {}
+      try { X.wfx?.dispose(); } catch (e) {}
+      X.clim = null; X.wfx = null; wxCells.clear(); for (const f of offShader) try { f(); } catch (e) {}
       if (Vx.iceTest) Vx.iceTest = null;
       const i = W.listeners ? W.listeners.indexOf(onEdit) : -1; if (i >= 0) W.listeners.splice(i, 1);
       for (const o of [rainO, snowO, ripO]) if (o) { R.scene.remove(o); o.geometry.dispose(); o.material.dispose(); }

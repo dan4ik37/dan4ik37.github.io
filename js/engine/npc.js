@@ -158,14 +158,16 @@
           let b = -1, d0 = Infinity;
           for (let j = 0; j < np; j++) { const p = players[j], d = hyp(p.x - ch.x, p.z - ch.z); if (d < d0 && Math.abs(p.y - ch.y) < 6 * U) { d0 = d; b = j; } }
           bi[i] = b;
+          e.see = seeAt(ch.x, ch.z);   // погода по биому: в бурю и тумане видит не дальше игрока (wx.js; ясно — без предела)
         }
         // выбранный — каждый шаг: расстояние до него (погоня, укус, поворот к нему)
         const best = bi[i] >= 0 && bi[i] < np ? players[bi[i]] : null;
         const bd = best ? hyp(best.x - ch.x, best.z - ch.z) : Infinity;
         const sp = Math.max(.2, Math.min(3, o.speed ?? 1));
         let dx = 0, dz = 0, run = false;
-        if (o.act === 'follow' && best && bd < 30 * U && bd > ((o.damage || 0) > 0 ? .9 : 1.6) * U) { dx = best.x - ch.x; dz = best.z - ch.z; run = bd > 8 * U; }   // кусачий подходит вплотную
-        else if (o.act === 'flee' && best && bd < 9 * U) { dx = ch.x - best.x; dz = ch.z - best.z; run = true; }
+        const see = e.see ?? Infinity;
+        if (o.act === 'follow' && best && bd < Math.min(30 * U, see) && bd > ((o.damage || 0) > 0 ? .9 : 1.6) * U) { dx = best.x - ch.x; dz = best.z - ch.z; run = bd > 8 * U; }   // кусачий подходит вплотную
+        else if (o.act === 'flee' && best && bd < Math.min(9 * U, see)) { dx = ch.x - best.x; dz = ch.z - best.z; run = true; }
         else if (o.act === 'wander' || (o.act === 'flee' && !(best && bd < 9 * U))) {
           // бродит: точка в радиусе от дома, дошёл или застрял — постоял и новая (новую выбирает, когда думает)
           const r = Math.max(1, o.radius ?? 8) * U;
@@ -210,15 +212,19 @@
         }
       }
     };
+    // видимость в точке (особая погода по биому, js/engine/wx.js): предел зрения в единицах мира; нет погоды — без предела
+    const seeAt = (x, z) => { const X = E.wx; return X && X.AI && X.limitAt ? X.limitAt(x, z) : Infinity; };
     function stepV1(dt, players){
       for (const e of list.values()) {
         const P = e.P, C = e.C, ch = P?.ch, o = e.o; if (!P) continue;
         let best = null, bd = Infinity;
         for (const p of players) { const d = Math.hypot(p.x - ch.x, p.z - ch.z); if (d < bd && Math.abs(p.y - ch.y) < 6 * U) { bd = d; best = p; } }
+        e.see = seeAt(ch.x, ch.z);
         const sp = Math.max(.2, Math.min(3, o.speed ?? 1));
         let dx = 0, dz = 0, run = false;
-        if (o.act === 'follow' && best && bd < 30 * U && bd > ((o.damage || 0) > 0 ? .9 : 1.6) * U) { dx = best.x - ch.x; dz = best.z - ch.z; run = bd > 8 * U; }   // кусачий подходит вплотную
-        else if (o.act === 'flee' && best && bd < 9 * U) { dx = ch.x - best.x; dz = ch.z - best.z; run = true; }
+        const see = e.see ?? Infinity;
+        if (o.act === 'follow' && best && bd < Math.min(30 * U, see) && bd > ((o.damage || 0) > 0 ? .9 : 1.6) * U) { dx = best.x - ch.x; dz = best.z - ch.z; run = bd > 8 * U; }   // кусачий подходит вплотную
+        else if (o.act === 'flee' && best && bd < Math.min(9 * U, see)) { dx = ch.x - best.x; dz = ch.z - best.z; run = true; }
         else if (o.act === 'wander' || (o.act === 'flee' && !(best && bd < 9 * U))) {
           // бродит: точка в радиусе от дома, дошёл или застрял — постоял и новая
           const r = Math.max(1, o.radius ?? 8) * U;

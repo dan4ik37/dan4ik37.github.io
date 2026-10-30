@@ -18,8 +18,8 @@
 // Движок (T-075, PL-4): солнце — через E.setSunProvider (gfx.js); глубина — два диапазона (R.depthSplit: ближний — человечки, AO,
 // отражения; дальний — земля и небо; post.js рисует оба); тени движка ложатся на землю у игрока (V.setShadows); дымка до вещей
 // движка — та же атмосфера (туман gfx.js: E.GFXU.apA…apD); погода — V.climateAt / V.weatherPos (по широте, js/engine/climate.js).
-// T-075 НА ПАУЗЕ (22.10): всё это ВЫКЛ по умолчанию (FLAGS ниже; без флагов — вид как до T-075). Включить — localStorage
-// d37_planet_v2 = '1' (всё сразу) или o.flags; что сделано и как продолжить — docs/plans/planet.md «T-075 — paused».
+// T-145 (29.10): всё это ВКЛ по умолчанию (FLAGS ниже). Откат одной строкой: FLAGS = { ...FLAGS_OFF } (вид как до T-075); на одном
+// устройстве — localStorage d37_planet_v2 = '0' (или '1' — всё, и тени на телефоне); замеры и что сделано — docs/plans/planet.md §12b.
 (() => {
   const E = window.D37E = window.D37E || {};
   const sqrt = Math.sqrt, max = Math.max, min = Math.min, abs = Math.abs;
@@ -38,13 +38,16 @@
     if (typeof E.setSunProvider === 'function') return E.setSunProvider(f);
     wrapSun(); SUNP.f = f; return () => { if (SUNP.f === f) SUNP.f = null; };
   };
-  // что включено. T-075 на паузе: всё новое ВЫКЛ, пока нет замеров на профиле телефона. Без флагов — как до T-075: прежний выбор
+  // что включено. T-145: ВКЛ (замеры на профиле телефона — docs/plans/planet.md §12b). FLAGS_OFF — как до T-075: прежний выбор
   // кусков и потоков, сборка без формы родителя, шейдер без перетекания и теней, небо и глубина — одним проходом, туман движка
-  // обычный, без погоды. Включить: localStorage d37_planet_v2 = '1' (всё сразу; читается при открытии вида, дымке нужна и
-  // перезагрузка — gfx.js E.aerialFog) или o.flags в D37E.planetView(R, P, { flags }); навсегда — true здесь
-  const FLAGS = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false };
-  const FLAGS_ON = { lod2: true, morph: true, prefetch: true, split: true, shadows: true, aerial: true, weather: true };
-  const FLAGS_OFF = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false };
+  // обычный, без погоды и тени затмения. Читается при открытии вида (дымке нужна и перезагрузка — gfx.js E.aerialFog); на устройстве —
+  // localStorage d37_planet_v2 = '0' | '1', отдельные — d37_planet_flags; в коде — o.flags в D37E.planetView(R, P, { flags }).
+  // shadows 'auto' — тени движка на земле, кроме телефона на «средней» и «низкой» (там у человечка своё пятно тени: +0,1 мс ЦП ×4
+  // за проход теней не стоят); split — два прохода глубины, только пока включены AO или отражения в экране
+  // ОТКАТ ОДНОЙ СТРОКОЙ: const FLAGS = { ...FLAGS_OFF };
+  const FLAGS_ON = { lod2: true, morph: true, prefetch: true, split: true, shadows: true, aerial: true, weather: true, eclipse: true };
+  const FLAGS_OFF = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false, eclipse: false };
+  const FLAGS = { lod2: true, morph: true, prefetch: true, split: true, shadows: 'auto', aerial: true, weather: true, eclipse: true };
   const v2ls = () => { try { return typeof localStorage !== 'undefined' ? localStorage.getItem('d37_planet_v2') : null; } catch (e) { return null; } };
   // замеры по частям и отладка: localStorage d37_planet_flags = '{"weather":false}' — отдельные флаги поверх (только известные)
   const v2flags = () => {
@@ -115,15 +118,17 @@ float d37PhM( float c, float g ){ float g2 = g * g; return 0.1193662 * ( 1.0 - g
   //    дымка до камеры (в вершине), пятно тени под игроком, тени движка у игрока (карта теней солнца движка) ──
   // Перетекание (CDLOD): k — 0 своя форма, 1 — форма родителя (сдвиг aMd × масштаб, нормаль и цвет родителя); k вершины — k куска,
   // у края — k края (общий с соседом: швов нет), между — плавно на ширине uMk.w клеток. D37_MORPH — перетекание, D37_PSH — тени
-  // движка (флаги morph, shadows; без обоих — шейдер как до T-075). 8 varying — минимум WebGL1 (с тенями «верх» — во фрагменте)
+  // движка (флаги morph, shadows; без обоих — шейдер как до T-075). 8 varying — минимум WebGL1 (с тенями «верх» — во фрагменте).
+  // T-145: k куска и краёв — его атрибут-«экземпляр» aMk (k, масштаб сдвига, края 0+1 и 2+3 — по 11 бит; в видеокарту — только
+  // когда сменились), не числа материала перед каждым вызовом. Атрибутов 7 (минимум WebGL1 — 8)
   const TERRAIN_V = `#define NSAMP 3
 attribute vec4 aCol;
 #ifdef D37_MORPH
 attribute vec4 aMd;
 attribute vec4 aNp;
 attribute vec4 aCp;
+attribute vec4 aMk;
 uniform vec4 uMk;
-uniform vec4 uMe;
 #endif
 ${ATMO}
 uniform vec3 uPlanetC;
@@ -137,20 +142,22 @@ varying vec3 vUp;
 varying vec4 vCol; varying vec3 vN; varying vec3 vW; varying vec3 vInR; varying vec3 vInM; varying vec3 vExt; varying vec3 vSunT;
 #ifdef D37_MORPH
 float d37Mk(){
-  float a = floor( aMd.w * 32767.0 + 0.5 ), b = floor( aNp.w * 127.0 + 0.5 ), N = uMk.z, W = uMk.w, k = uMk.x;
-  k = mix( uMe.x, k, clamp( a / W, 0.0, 1.0 ) );
-  k = mix( uMe.y, k, clamp( ( N - a ) / W, 0.0, 1.0 ) );
-  k = mix( uMe.z, k, clamp( b / W, 0.0, 1.0 ) );
-  k = mix( uMe.w, k, clamp( ( N - b ) / W, 0.0, 1.0 ) );
-  if ( b < 0.5 ) k = uMe.z; else if ( b > N - 0.5 ) k = uMe.w;
-  if ( a < 0.5 ) k = uMe.x; else if ( a > N - 0.5 ) k = uMe.y;
+  float a = floor( aMd.w * 32767.0 + 0.5 ), b = floor( aNp.w * 127.0 + 0.5 ), N = uMk.z, W = uMk.w, k = aMk.x;
+  float h1 = floor( aMk.z / 2048.0 ), h3 = floor( aMk.w / 2048.0 );
+  vec4 aMe = vec4( aMk.z - h1 * 2048.0, h1, aMk.w - h3 * 2048.0, h3 ) / 2047.0;
+  k = mix( aMe.x, k, clamp( a / W, 0.0, 1.0 ) );
+  k = mix( aMe.y, k, clamp( ( N - a ) / W, 0.0, 1.0 ) );
+  k = mix( aMe.z, k, clamp( b / W, 0.0, 1.0 ) );
+  k = mix( aMe.w, k, clamp( ( N - b ) / W, 0.0, 1.0 ) );
+  if ( b < 0.5 ) k = aMe.z; else if ( b > N - 0.5 ) k = aMe.w;
+  if ( a < 0.5 ) k = aMe.x; else if ( a > N - 0.5 ) k = aMe.y;
   return k;
 }
 #endif
 void main(){
 #ifdef D37_MORPH
   float k = d37Mk();
-  vec3 p = position + aMd.xyz * ( uMk.y * k );
+  vec3 p = position + aMd.xyz * ( aMk.y * k );
 #else
   vec3 p = position;
 #endif
@@ -192,6 +199,15 @@ uniform vec4 uLit;
 uniform vec4 uBlob;
 #ifdef D37_PWX
 uniform vec4 uWx;
+uniform vec4 uWt;
+uniform vec4 uWv;
+#endif
+#ifdef D37_ECL
+#ifndef D37_PSH
+uniform vec3 uPlanetC;
+#endif
+uniform vec4 uEcl;
+uniform vec4 uEcl2;
 #endif
 uniform float uTime;
 #ifdef D37_PSH
@@ -217,6 +233,18 @@ float d37Shadow(){
   return mix( 1.0, s * 0.25, fade * uShP.x );
 }
 #endif
+#ifdef D37_ECL
+// тень солнечного затмения (T-088): доля диска солнца из точки p (от центра планеты, оси куска): тело uEcl (центр, радиус) перед
+// солнцем (угловой радиус uEcl2.x); перекрытие дисков — гладко (как E.spaceView.eclFrac)
+float d37Ecl( vec3 p ){
+  vec3 d = uEcl.xyz - p; float dl = length( d ); d /= dl;
+  float c = dot( d, uSunL );
+  if ( c <= 0.0 ) return 1.0;
+  float sep = atan( length( cross( d, uSunL ) ), c );
+  float am = asin( min( uEcl.w / dl, 1.0 ) ), as = max( uEcl2.x, 1e-5 );
+  return 1.0 - min( 1.0, am * am / ( as * as ) ) * ( 1.0 - smoothstep( abs( as - am ), as + am, sep ) );
+}
+#endif
 float d37H( vec2 p ){ vec3 q = fract( vec3( p.xyx ) * 0.1031 ); q += dot( q, q.yzx + 33.33 ); return fract( ( q.x + q.y ) * q.z ); }
 float d37N( vec2 p ){ vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f ); return mix( mix( d37H( i ), d37H( i + vec2( 1.0, 0.0 ) ), f.x ), mix( d37H( i + vec2( 0.0, 1.0 ) ), d37H( i + vec2( 1.0, 1.0 ) ), f.x ), f.y ); }
 vec3 d37Amb( float mu ){
@@ -240,7 +268,7 @@ void main(){
   // погода у камеры (V.setWeather): снег ложится на смотрящее вверх (край — пятнами), мокрая земля темнее; дальше uWx.z — нет
   // (там свой климат); на воде — нет
   if ( uWx.x + uWx.y > 0.0 ) {
-    float wk = ( 1.0 - smoothstep( uWx.z * 0.6, uWx.z, cd ) ) * ( 1.0 - wf );
+    float wk = ( 1.0 - smoothstep( uWx.z * 0.25, uWx.z, cd ) ) * ( 1.0 - wf );   // мягкий край (T-145: не «диск» снега)
     float sn = uWx.x * wk * smoothstep( 0.62, 0.86, dot( N, vUp ) + ( d37N( vW.xz * 0.35 ) - 0.5 ) * 0.3 );
     alb = mix( alb * ( 1.0 - 0.35 * uWx.y * wk ), vec3( 0.80, 0.83, 0.87 ), sn );
   }
@@ -251,6 +279,15 @@ void main(){
   vec3 sun = uLit.x * vSunT;
 #endif
   vec3 amb = d37Amb( mu ) * uLit.y;
+#ifdef D37_ECL
+  // тень затмения: солнце, свет неба и дымка гаснут по точкам (вне затмения uEcl.w = 0 — как раньше)
+  float ek = uEcl.w > 0.0 ? d37Ecl( vW - uPlanetC ) : 1.0, eka = uEcl.w > 0.0 ? 0.12 + 0.88 * ek : 1.0;
+  sun *= ek; amb *= eka;
+#endif
+#ifdef D37_PWX
+  // «плоский» свет (белая мгла; крючок погоды T-145): солнца меньше, свет неба — ровный
+  if ( uWv.y > 0.0 ) { sun *= 1.0 - 0.75 * uWv.y; amb = mix( amb, vec3( dot( amb, vec3( 0.3333 ) ) * 1.6 ), uWv.y ); }
+#endif
   vec3 col = vec3( 0.0 ), colW = vec3( 0.0 );
   if ( wf > 0.0 ) {
     float dist = length( cameraPosition - vW ), k = 1.0 - smoothstep( 60.0, 900.0, dist );
@@ -262,6 +299,9 @@ void main(){
     vec3 Rf = reflect( -V, Nw );
     float sp = pow( max( dot( Rf, L ), 0.0 ), 260.0 );
     vec3 sky = d37Amb( mu ) * 1.6 * uLit.y;
+#ifdef D37_ECL
+    sky *= eka;
+#endif
     colW = deep * ( sun * max( dot( Nw, L ), 0.0 ) * 0.6 + amb ) * ( 1.0 - F ) + sky * F + sun * sp * 4.0;
   }
   if ( wf < 1.0 ) {
@@ -274,7 +314,15 @@ void main(){
   vec3 Vd = normalize( vW - cameraPosition );
   float c = dot( Vd, L );
   vec3 ins = uLit.z * ( uBetaR * vInR * d37PhR( c ) + uBetaM * vInM * d37PhM( c, uAtm3.z ) );
-  gl_FragColor = vec4( col * vExt + ins, 1.0 );
+#ifdef D37_ECL
+  if ( uEcl.w > 0.0 ) ins *= 0.03 + 0.97 * ek;
+#endif
+  vec3 fc = col * vExt + ins;
+#ifdef D37_PWX
+  // видимость (пыль, песок, дым, туман погоды): даль — в цвет погоды uWt (при свете неба); uWv.x = 1 / видимость
+  if ( uWv.x > 0.0 ) fc = mix( fc, uWt.rgb * ( length( d37Amb( mu ) ) * uLit.y * 0.9 + 0.02 ), 1.0 - exp( -3.0 * cd * uWv.x ) );
+#endif
+  gl_FragColor = vec4( fc, 1.0 );
   #include <tonemapping_fragment>
   #include <encodings_fragment>
 }`;
@@ -298,6 +346,7 @@ uniform vec3 uBetaR;
 uniform float uBetaM;
 uniform vec4 uAtm3;
 uniform vec4 uSky;
+uniform vec4 uSkyWx;
 varying vec3 vR; varying vec3 vM; varying vec3 vT; varying vec3 vDir;
 ${PHASE}
 void main(){
@@ -305,6 +354,9 @@ void main(){
   float c = dot( d, uSunL );
   vec3 col = uSky.x * ( uBetaR * vR * d37PhR( c ) + uBetaM * vM * d37PhM( c, uAtm3.z ) );
   float disc = smoothstep( uSky.y - 0.00004, uSky.y, c );
+  // погода (крючок T-145, V.setWeather tint / vis / dust): небо у камеры — к цвету пыли, песка, снега при той же яркости; солнце
+  // тонет в ней (купол; оболочка с орбиты — нет: погода местная)
+  if ( uSkyWx.w > 0.0 ) { col = mix( col, uSkyWx.rgb * dot( col, vec3( 0.2126, 0.7152, 0.0722 ) ) * 1.15, uSkyWx.w ); disc *= 1.0 - uSkyWx.w * 0.85; }
   col += vT * disc * uSky.z;
   gl_FragColor = vec4( col * uSky.w, 1.0 );
   #include <tonemapping_fragment>
@@ -365,6 +417,9 @@ void main(){
     const T = R.T, PL = E.planet, D = P.def, q = R.q || 'mid', mob = !!E.isMobile?.(), low = q === 'low';
     const v2 = v2ls(), F = { ...FLAGS, ...(v2 === '1' ? FLAGS_ON : v2 === '0' ? FLAGS_OFF : {}), ...v2flags(), ...(o.flags || {}) };
     if (!F.lod2) F.morph = F.prefetch = false;
+    if (F.shadows === 'auto') F.shadows = !(mob || low) || q === 'high' || q === 'ultra';
+    // перетекание — атрибут-«экземпляр» куска: WebGL1 без ANGLE_instanced_arrays (редкость) — без перетекания (куски видны)
+    try { const rr = R.r || R.renderer; if (F.morph && rr && rr.capabilities && !rr.capabilities.isWebGL2 && !(rr.extensions && rr.extensions.has('ANGLE_instanced_arrays'))) F.morph = false; } catch (e) {}
     const BO = { lite: !F.lod2 };   // без LOD v2 — кусок собирается как раньше (без формы родителя и его точности — дешевле)
     // дымка до вещей движка: кусок тумана с дымкой — только пока открыта планета (gfx.js E.aerialPatch; страж снимает — ключ 'aerial')
     const apOn = !!(F.aerial && E.aerialPatch && E.aerialPatch(T, true));
@@ -380,7 +435,8 @@ void main(){
     const V = { P, R, fr: P.patch(o.dir || P.dirFromLatLon(43.2, 76.9)), camBF: new Float64Array(3), t: 0, alt: 0, altG: 0, dead: false, sunK: 1, skyM: null, flags: F,
       vel: new Float64Array(3), onRebase: f => { lis.push(f); return () => { const i = lis.indexOf(f); if (i >= 0) lis.splice(i, 1); }; } };
     const lis = o.onRebase ? [o.onRebase] : [];
-    const grp = new T.Group(); grp.name = 'planet'; grp.matrixAutoUpdate = false;
+    // куски: матрицы ставит placeMesh (группа в начале координат) — обход сцены их не трогает (T-145: 165 кусков × 2 прохода за кадр)
+    const grp = new T.Group(); grp.name = 'planet'; grp.matrixAutoUpdate = false; grp.matrixWorldAutoUpdate = false;
     R.scene.add(grp);
     const own = [];
     // слой 1 — небо (купол, оболочка, звёзды, тела неба): только дальний проход глубины; камера движка видит оба слоя
@@ -403,18 +459,20 @@ void main(){
     };
     V.U = U;   // общие числа атмосферы — и для неба системы (space-view.js: тела в небе — сквозь тот же воздух)
     // поверхность: свои числа — перетекание куска (на каждый кусок — перед его рисованием) и тени движка
-    const TU = { ...U, uMk: { value: new T.Vector4(0, 0, N, 4) }, uMe: { value: new T.Vector4() }, uShM: { value: new T.Matrix4() }, uShMap: { value: null },
-      uShP: { value: new T.Vector4(0, 0, 0, 0) }, uWx: { value: new T.Vector4(0, 0, 3000, 0) } };
+    const TU = { ...U, uMk: { value: new T.Vector4(0, 0, N, 4) }, uShM: { value: new T.Matrix4() }, uShMap: { value: null },
+      uShP: { value: new T.Vector4(0, 0, 0, 0) }, uWx: { value: new T.Vector4(0, 0, 3000, 0) }, uWt: { value: new T.Vector4(.75, .62, .45, 0) }, uWv: { value: new T.Vector4(0, 0, 0, 0) },
+      uEcl: { value: new T.Vector4(0, 0, 0, 0) }, uEcl2: { value: new T.Vector4(.0047, 0, 0, 0) } };
     const terrainMat = new T.ShaderMaterial({ name: 'planet', uniforms: TU, vertexShader: TERRAIN_V, fragmentShader: TERRAIN_F, fog: false, lights: false,
-      defines: { D37_MORPH: F.morph ? 1 : false, D37_PSH: F.shadows ? 1 : false, D37_PWX: F.weather ? 1 : false } });
-    terrainMat.customProgramCacheKey = () => 'd37planet2' + (F.morph ? 'm' : '') + (F.shadows ? 's' : '') + (F.weather ? 'w' : '');
+      defines: { D37_MORPH: F.morph ? 1 : false, D37_PSH: F.shadows ? 1 : false, D37_PWX: F.weather ? 1 : false, D37_ECL: F.eclipse ? 1 : false } });
+    terrainMat.customProgramCacheKey = () => 'd37planet3' + (F.morph ? 'm' : '') + (F.shadows ? 's' : '') + (F.weather ? 'w' : '') + (F.eclipse ? 'e' : '');
     own.push(terrainMat);
-    // небо: купол (у камеры) и оболочка (вокруг планеты)
+    // небо: купол (у камеры) и оболочка (вокруг планеты); SKYWX — цвет и сила погоды в небе купола (V.setWeather)
+    const SKYWX = { value: new T.Vector4(0, 0, 0, 0) };
     const mkSky = mode => {
-      const u = { ...U, uMode: { value: mode }, uSky: { value: new T.Vector4().copy(U.uSky.value) } };
+      const u = { ...U, uMode: { value: mode }, uSky: { value: new T.Vector4().copy(U.uSky.value) }, uSkyWx: mode === 0 ? SKYWX : { value: new T.Vector4(0, 0, 0, 0) } };  // w = 0: Vector4() по умолчанию w = 1 (оболочка чернела)
       const m = new T.ShaderMaterial({ name: 'planet-sky', uniforms: u, vertexShader: SKY_V, fragmentShader: SKY_F, fog: false, lights: false, depthWrite: false,
         transparent: true, blending: T.AdditiveBlending, side: T.BackSide });
-      m.customProgramCacheKey = () => 'd37planetsky1';
+      m.customProgramCacheKey = () => 'd37planetsky2';
       own.push(m); return m;
     };
     const dome = new T.Mesh(domeGeo(T), mkSky(0)); dome.frustumCulled = false; dome.renderOrder = 901; own.push(dome.geometry); dome.layers.set(SKYL);
@@ -453,7 +511,9 @@ void main(){
     const chunks = new Map();   // ключ → { key, n, data, mesh, used, state: 0 нет / 1 в очереди / 2 строится / 3 готов / 4 данные пришли }
     P.onNode = n => { const c = chunks.get(n.key); if (c && c.data) { P.nodeRange(n, c.data.hmin, c.data.hmax); P.nodeErr(n, c.data.err); } };
     const ST = V.st = { built: 0, buildMs: 0, buildMax: 0, integ: 0, integMs: 0, integMax: 0, integKB: 0, selMs: 0, selMax: 0, sel: 0, mainBuilds: 0, rebases: 0, evicted: 0, errors: 0, workerOk: false,
-      respawns: 0, pre: 0, preBuilt: 0, splits: 0, merges: 0, popMax: 0, popSum: 0, popN: 0, morphMs: 0, upMs: 0, uploads: 0, gpuFreed: 0 };
+      respawns: 0, pre: 0, preBuilt: 0, splits: 0, merges: 0, popMax: 0, popSum: 0, popN: 0, morphMs: 0, upMs: 0, uploads: 0, morphRuns: 0, gpuFreed: 0 };
+    const morphAt = [NaN, NaN, NaN, -1, 0];   // перетекание: камера (BF), шаг показа, проекция — на последнем пересчёте
+    let morphBusy = true;
     const queue = [], preQ = [];   // ждут сборки: шаг и листья; заранее (дети «вот-вот делимых» и «куда летим»)
     const workers = [];
     let reqId = 0;
@@ -493,7 +553,8 @@ void main(){
       ready.push(c);
     }
     const ready = [];
-    function chunkOf(n){ let c = chunks.get(n.key); if (!c) { c = { key: n.key, n, data: null, mesh: null, used: 0, state: 0, mask: -1, pre: false, qm: 0, pri: 0, bytes: 0, root: false, gpu: false, hid: 0 }; chunks.set(n.key, c); } c.n = n; return c; }
+    // кусок узла: n.ch — без поиска в Map каждый кадр (ключи — большие числа); rad, msc — из данных потока (их объект медленный)
+    function chunkOf(n){ let c = chunks.get(n.key); if (!c) { c = { key: n.key, n, data: null, mesh: null, used: 0, state: 0, mask: -1, pre: false, qm: 0, pri: 0, bytes: 0, root: false, gpu: false, hid: 0, mk: null, rad: 0, msc: 0 }; chunks.set(n.key, c); } c.n = n; n.ch = c; return c; }
     // буферы куска в видеокарте — прочь (общие индексы — не трогаем: отвязать, освободить, привязать снова)
     let gpuAt = 0;
     function gpuFree(c){
@@ -501,38 +562,47 @@ void main(){
       g.setIndex(null); g.dispose(); g.setIndex(IDX[c.mask >= 0 ? c.mask : 0]);
       c.gpu = false; ST.gpuFreed++;
     }
-    // перед рисованием куска: его перетекание (k, k краёв, масштаб сдвига) — в общие числа материала; не изменилось — не трогаем
-    const MK = TU.uMk.value, ME = TU.uMe.value, LAST = [NaN, NaN, NaN, NaN, NaN, NaN];
-    function morphUp(){
-      const c = this.userData.c, n = c.n, on = F.morph && n && n.ke;
-      const k = on ? n.k : 0, ke = on ? n.ke : null;
-      const e0 = ke ? ke[0] : 0, e1 = ke ? ke[1] : 0, e2 = ke ? ke[2] : 0, e3 = ke ? ke[3] : 0;
-      // не перетекает (k и края 0) — масштаб не важен: у всех таких одно и то же (иначе каждый кусок перезаливал бы числа материала)
-      const ms = !(k > 0) && !(e0 > 0) && !(e1 > 0) && !(e2 > 0) && !(e3 > 0) ? 0 : c.data ? c.data.mscale : 0;
-      if (k === LAST[0] && ms === LAST[1] && e0 === LAST[2] && e1 === LAST[3] && e2 === LAST[4] && e3 === LAST[5]) return;
-      LAST[0] = k; LAST[1] = ms; LAST[2] = e0; LAST[3] = e1; LAST[4] = e2; LAST[5] = e3;
-      MK.x = k; MK.y = ms; ME.set(e0, e1, e2, e3);
-      terrainMat.uniformsNeedUpdate = true; ST.uploads++;
+    // перетекание показанных кусков (k, k краёв, масштаб сдвига) — в их атрибут-«экземпляр»; не изменилось — не трогаем (T-145:
+    // раньше — числа материала перед КАЖДЫМ вызовом отрисовки; стоим — теперь 0 загрузок, идём — только у перетекающих)
+    const fr32 = Math.fround;
+    function morphSet(){
+      for (let q = 0; q < showList.length; q++) {
+        const n = showList[q], c = n.ch || chunks.get(n.key), ib = c && c.mk;
+        if (!ib) continue;
+        const ke = n.ke, k = n.k || 0, e0 = ke ? ke[0] : 0, e1 = ke ? ke[1] : 0, e2 = ke ? ke[2] : 0, e3 = ke ? ke[3] : 0;
+        // не перетекает (k и края 0) — масштаб не важен
+        const ms = !(k > 0) && !(e0 > 0) && !(e1 > 0) && !(e2 > 0) && !(e3 > 0) ? 0 : c.msc, A4 = ib.array;
+        const p01 = Math.round(clamp(e0, 0, 1) * 2047) + Math.round(clamp(e1, 0, 1) * 2047) * 2048, p23 = Math.round(clamp(e2, 0, 1) * 2047) + Math.round(clamp(e3, 0, 1) * 2047) * 2048;
+        if (A4[0] === fr32(k) && A4[1] === fr32(ms) && A4[2] === p01 && A4[3] === p23) continue;
+        A4[0] = k; A4[1] = ms; A4[2] = p01; A4[3] = p23;
+        ib.needsUpdate = true; ST.uploads++;
+      }
     }
     // сетка из данных (на странице): атрибуты, общие индексы, матрица — от якоря
     function integrate(c){
       const t0 = now(), d = c.data;
-      const g = new T.BufferGeometry();
+      const mo = F.morph && !!d.md;   // перетекание выкл — без этих буферов (память видеокарты — как раньше)
+      const g = mo ? new T.InstancedBufferGeometry() : new T.BufferGeometry();
       g.setAttribute('position', new T.BufferAttribute(d.pos, 3));
       g.setAttribute('normal', new T.BufferAttribute(d.nrm, 3, true));
       g.setAttribute('aCol', new T.BufferAttribute(d.col, 4, true));
-      const mo = F.morph && !!d.md;   // перетекание выкл — без этих буферов (память видеокарты — как раньше)
       if (mo) {
         g.setAttribute('aMd', new T.BufferAttribute(d.md, 4, true));   // сдвиг к форме родителя (int16) и столбец a
         g.setAttribute('aNp', new T.BufferAttribute(d.np, 4, true));   // нормаль родителя (int8) и строка b
         g.setAttribute('aCp', new T.BufferAttribute(d.colp, 4, true));
+        // перетекание куска: один «экземпляр» — k, масштаб сдвига, k краёв (по два на число)
+        const ib = c.mk = new T.InstancedBufferAttribute(new Float32Array(4), 4);
+        ib.setUsage(T.DynamicDrawUsage);
+        g.setAttribute('aMk', ib);
+        g.instanceCount = 1;
       }
       g.setIndex(IDX[0]);
       g.boundingSphere = new T.Sphere(new T.Vector3(0, 0, 0), d.radius);
       const m = new T.Mesh(g, terrainMat);
-      m.matrixAutoUpdate = false; m.userData.planet = true; m.userData.c = c; if (mo) m.onBeforeRender = morphUp;
-      c.mesh = m; c.mask = 0; c.state = 3;
-      c.bytes = d.pos.byteLength + d.nrm.byteLength + d.col.byteLength + (mo ? d.md.byteLength + d.np.byteLength + d.colp.byteLength : 0);
+      m.matrixAutoUpdate = false; m.matrixWorldAutoUpdate = false; m.userData.planet = true; m.userData.c = c;
+      c.mesh = m; c.mask = 0; c.state = 3; c.rad = d.radius || 0; c.msc = d.mscale || 0;
+      c.bytes = d.pos.byteLength + d.nrm.byteLength + d.col.byteLength + (mo ? d.md.byteLength + d.np.byteLength + d.colp.byteLength + 16 : 0);
+      morphAt[3] = -1;   // новый кусок — перетекание посчитать в этом кадре
       placeMesh(c);
       if (c.n) { P.nodeRange(c.n, d.hmin, d.hmax); P.nodeErr(c.n, d.err); }
       const ms = now() - t0; ST.integ++; ST.integMs += ms; ST.integMax = max(ST.integMax, ms); ST.integKB += c.bytes / 1024;
@@ -548,13 +618,15 @@ void main(){
         B[3], B[4], B[5], B[3] * dx + B[4] * dy + B[5] * dz,
         B[6], B[7], B[8], B[6] * dx + B[7] * dy + B[8] * dz,
         0, 0, 0, 1);
-      c.mesh.matrixWorldNeedsUpdate = true;
+      // группа — в начале координат и вне обхода сцены (matrixWorldAutoUpdate = false): мировая матрица = своя, считаем здесь один раз
+      c.mesh.matrixWorld.copy(c.mesh.matrix); c.mesh.matrixWorldNeedsUpdate = false;
     }
     // индексы общие: перед dispose отвязать (иначе three удалит буфер, которым рисуют другие куски)
     const dropGeo = g => { g.setIndex(null); g.dispose(); };
     function freeChunk(c){
       if (c.mesh) { grp.remove(c.mesh); dropGeo(c.mesh.geometry); c.mesh = null; }
       c.data = null; c.state = 0; chunks.delete(c.key); ST.evicted++;
+      if (c.n && c.n.ch === c) c.n.ch = null;
     }
     // сразу: 6 корневых кусков (на странице) — всегда есть чем закрыть
     for (let f = 0; f < 6; f++) { const n = P.node(f, 0, 0, 0), c = chunkOf(n); c.data = P.buildChunk(f, 0, 0, 0, N, BO); c.root = true; ST.mainBuilds++; integrate(c); }
@@ -607,7 +679,7 @@ void main(){
     // бюджет кусков: выбрано больше — допустимая ошибка на экране растёт (плавно: куски перетекают), меньше 80 % — назад
     const LEAF_MAX = o.leafMax ?? (mob || low ? 220 : 450), PRE_MAX = mob || low ? 6 : 12;
     let bias = 1;
-    let showMark = 1, lastSel = -1e9, selX = Infinity, selY = Infinity, selZ = Infinity, waitMore = false, chgAt = 0;
+    let showMark = 1, lastSel = -1e9, selX = Infinity, selY = Infinity, selZ = Infinity, waitMore = false, chgAt = 0, waitN = 0, stuckAt = 0;
     const LS = { split: 0, merge: 0 };
     function select(){
       const t0 = now(), wasDirty = dirty;
@@ -627,7 +699,11 @@ void main(){
       showMark++;
       const vis = showList;
       if (F.lod2) {
-        const st = P.lodShow(isReady, t0, { gate: F.morph ? GATE : 2, leaves }, vis);
+        // застрял (ждёт, а делений и слияний нет 1 с — после прыжка с земли на орбиту края детей у крупного соседа не «поднимаются»,
+        // слияния ждали вечно: с орбиты планета с дырами) — один выбор со сбросом: мельче цели — прочь, на месте — готовая цель (T-145)
+        const flush = stuckAt > 0 && t0 - stuckAt > 1000;
+        const st = P.lodShow(isReady, t0, { gate: F.morph ? GATE : 2, leaves, flush }, vis);
+        if (flush) { stuckAt = 0; ST.flushes = (ST.flushes || 0) + 1; } else if (st.split || st.merge || !st.wait) stuckAt = 0; else if (!stuckAt) stuckAt = t0;
         // скачок на смене уровня (оценка сверху, пикселей): у делимого — его k × его точность; у сливаемых — (1 − k детей) × их точность
         if (st.splits) for (const d of st.splits) popAdd(F.morph ? d.k : 1, d.err, d, MORPH.proj);
         if (st.merges) for (const p of st.merges) { let kmin = 1, e = 0; for (const c of p.kids || []) { kmin = min(kmin, F.morph ? c.k : 0); e = max(e, c.err); } popAdd(1 - kmin, e, p, MORPH.proj); }
@@ -637,6 +713,7 @@ void main(){
         // выбор вхолостую: через 0,4 с после последней перемены — как обычно (сдвинулась камера, готов новый кусок)
         if (st.split || st.merge || st.stand || wasDirty) chgAt = t0;
         waitMore = st.split > 0 || st.merge > 0 || ((st.wait > 0 || st.need.length > 0) && t0 - chgAt < 400);
+        waitN = st.wait + st.need.length;   // показ ещё не сошёлся (ждёт перетекание или кусок) — выбор и без движения камеры, раз в 0,5 с
         if (leaves.length > LEAF_MAX) bias = min(4, bias * 1.06); else if (leaves.length < LEAF_MAX * .8) bias = max(1, bias / 1.03);
         // в очередь по ступеням: шаг показа (дети делимых, родители сливаемых, поднявшееся из-за горизонта), на уровень вперёд,
         // «куда летим» (из-за горизонта), листья не глубже 2 уровней под показанным; глубже — потом (их черёд придёт шагами)
@@ -644,8 +721,11 @@ void main(){
         for (const n of st.need) q2(n, 4);
         for (const n of st.ahead) q2(n, 3);
         if (F.prefetch && SSE.pred) for (const n of P.peek(cx, cy, cz, PRED[0], PRED[1], PRED[2], { cap: PRE_MAX }, peekL)) q2(n, 2);
+        // путь от листа вверх до показанного — «нужен» весь (T-145): готовые дети и внуки делимого, который ждёт (сосед крупнее, ещё
+        // не «осел»), иначе при полном кэше выселялись тем же выбором и строились снова — после прыжка на землю показ стоял на 4–37
+        // кусках из 165 (сборка по кругу)
         for (const n of leaves) {
-          let a = n, dl = 0; while (a && a.dis !== st.mark) { a = a.par; dl++; }
+          let a = n, dl = 0; while (a && a.dis !== st.mark) { const ca = chunks.get(a.key); if (ca) ca.used = showMark; a = a.par; dl++; }
           const c = chunkOf(n); c.used = showMark;
           if (dl && dl <= 2) { n.imp = n.rho || 0; q2(n, 1); }
         }
@@ -660,6 +740,12 @@ void main(){
         }
         if (preQ.length > 1) preQ.sort((a, b) => (b.n.imp || 0) - (a.n.imp || 0));
         for (const n of vis) { const c = chunks.get(n.key); c.used = showMark; if (n.par) { const pc = chunks.get(n.par.key); if (pc) pc.used = showMark; } }
+        // делимый ждёт всех 4 детей (и шаг вперёд — внуков), даже тех, что за горизонтом и в выбор не попали: готовые — тоже «нужны»
+        // (T-145: без этого при полном кэше их выселял тот же выбор, и они строились по кругу — ~120 кусков в секунду, показ стоял)
+        for (const n of vis) {
+          if (!n.split || !n.kids) continue;
+          for (const k of n.kids) { const ck = chunks.get(k.key); if (ck) ck.used = showMark; if (k.split && k.kids) for (const g of k.kids) { const cg = chunks.get(g.key); if (cg) cg.used = showMark; } }
+        }
       } else oldShow(cx, cy, cz, vis);
       // маски сшивки — по показанному
       for (const n of vis) {
@@ -746,6 +832,9 @@ void main(){
     //    планеты: x — на восток (долгота × R), z — на юг (−широта × R) — фронт идёт с запада, переезд якоря её не сдвигает ──
     const WD = [0, 0, 0];
     V.climateAt = (x, z) => P.climateAt(P.dirFromLatLon(clamp(-z / P.R * 180 / Math.PI, -90, 90), x / P.R * 180 / Math.PI, WD));
+    // свой климат места для погоды (C.world({ placeAt }), T-145): средняя за год по широте и рельефу, размах по году (у экватора ~0),
+    // на юге сезоны наоборот — как у солнца планеты (P.sunDir). Без него погода брала t и размах у класса: снег на экваторе
+    V.placeAt = P.placeAtFn ? P.placeAtFn() : null;
     // где камера (или точка куска x, y, z) для W.at(x, z, ms, высота над морем): [x, z, высота]
     V.weatherPos = (x, y, z, out = [0, 0, 0]) => {
       const X = P.toBF(V.fr, x, y, z, [0, 0, 0]), l = sqrt(X[0] * X[0] + X[1] * X[1] + X[2] * X[2]) || 1, ll = P.latLon([X[0] / l, X[1] / l, X[2] / l]);
@@ -754,14 +843,31 @@ void main(){
     };
     // погода → свет планеты: тучи гасят солнце и дымку, небо серее; снег на земле и мокрая земля — у камеры (шейдер, флаг weather)
     // (wx: { cloud, rain, fog, storm, snowCover, wet } 0…1 | null). Навесов на планете нет (рельеф — поле высот): укрытие от дождя
-    // (карта «что над головой» precip.js) не нужно, пока нет построек и пещер
+    // (карта «что над головой» precip.js) не нужно, пока нет построек и пещер.
+    // КРЮЧОК ДЛЯ ПОГОДЫ ПО БИОМАМ (T-145; BIOME_WEATHER.md v2 §WX2 — те же поля, что у R.setWeather): ОДИН вызов V.setWeather(wx)
+    // 4 раза в секунду, а wx может нести ещё: dust 0…1 (пыль, песок — солнце и небо тусклее), tint [r, g, b] 0…1 (sRGB: цвет
+    // пыли / песка / дыма / снега; или '#rrggbb'), vis — видимость в u (даль уходит в цвет tint; нет — как раньше), flat 0…1 (белая
+    // мгла: солнца почти нет, свет ровный). Сама погода (особые состояния, частицы, звук) — дорожка погоды (climate.js, precip.js);
+    // здесь — только земля планеты. Без новых полей — всё как раньше (числа шейдера 0: ветки не идут)
     let wxK = { sun: 1, sky: 1, gray: 0 };
+    const srgbLin = c => { c = clamp(+c || 0, 0, 1); return c <= .04045 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4); };
     V.setWeather = wx => {
-      const W4 = TU.uWx.value;
-      if (!wx) { wxK = { sun: 1, sky: 1, gray: 0 }; sunKAt = -1; W4.x = W4.y = 0; return; }
+      const W4 = TU.uWx.value, WT = TU.uWt.value, WV = TU.uWv.value;
+      if (!wx) { wxK = { sun: 1, sky: 1, gray: 0 }; sunKAt = -1; W4.x = W4.y = 0; WV.x = WV.y = 0; WT.w = 0; SKYWX.value.w = 0; return; }
       const over = clamp(+wx.cloud || 0, 0, 1) ** 2, rain = clamp(+wx.rain || 0, 0, 1), fog = clamp(+wx.fog || 0, 0, 1), storm = clamp(+wx.storm || 0, 0, 1);
-      wxK = { sun: clamp(1 - .78 * over - .1 * fog - .15 * storm, .08, 1), sky: clamp(1 - .35 * over - .15 * rain - .2 * storm, .3, 1), gray: clamp(.6 * over + .4 * fog, 0, 1) };
+      const dust = clamp(+wx.dust || 0, 0, 1), flat = clamp(+wx.flat || 0, 0, 1);
+      wxK = { sun: clamp(1 - .78 * over - .1 * fog - .15 * storm - .55 * dust, .08, 1), sky: clamp(1 - .35 * over - .15 * rain - .2 * storm - .25 * dust, .3, 1),
+        gray: clamp(.6 * over + .4 * fog + .3 * dust, 0, 1) };
       W4.x = clamp(+wx.snowCover || 0, 0, 1); W4.y = clamp(+wx.wet || 0, 0, 1);
+      // цвет погоды: [r, g, b] или '#rrggbb' (sRGB) → линейный; нет — песочный
+      let tc = wx.tint;
+      if (typeof tc === 'string' && /^#[0-9a-f]{6}$/i.test(tc)) { const n = parseInt(tc.slice(1), 16); tc = [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; }
+      if (Array.isArray(tc) && tc.length >= 3) { WT.set(srgbLin(tc[0]), srgbLin(tc[1]), srgbLin(tc[2]), 1); } else if (!WT.w) WT.set(.52, .37, .2, 0);
+      const vis = +wx.vis;
+      WV.x = vis > 0 && Number.isFinite(vis) ? 1 / max(15, vis) : 0; WV.y = flat;
+      // небо купола: видимость — как дымка на ~1500 u, без неё — по пыли; цвет — оттенок погоды (яркость — неба)
+      const sk = clamp(max(WV.x > 0 ? 1 - Math.exp(-4500 * WV.x) : 0, .6 * dust, .8 * flat), 0, 1), tm = max(WT.x, WT.y, WT.z, 1e-3);
+      SKYWX.value.set(WT.x / tm, WT.y / tm, WT.z / tm, sk);
       sunKAt = -1;
     };
 
@@ -777,6 +883,20 @@ void main(){
       dst.fov = src.fov; dst.aspect = src.aspect; dst.zoom = src.zoom; dst.filmGauge = src.filmGauge; dst.filmOffset = src.filmOffset; dst.view = src.view;
       dst.near = near; dst.far = far; dst.updateProjectionMatrix(); dst.updateMatrixWorld(true);
     };
+    const splitNeed = () => { const b = R.opt || R.optBase || {}; return (!!b.ao && b.ao !== 'off') || (!!b.rt && b.rt !== 'off'); };
+    // кусок целиком дальше ближнего прохода — на слой 1 (только дальний): ближний проход пропускает его до проверки кадром (T-145)
+    function layerChunks(cam, S){
+      const lim = S * 1.02, cx = cam.position.x, cy = cam.position.y, cz = cam.position.z;
+      for (let q = 0; q < showList.length; q++) {
+        const n = showList[q], c = n.ch || chunks.get(n.key), m = c && c.mesh;
+        if (!m) continue;
+        const e = m.matrixWorld.elements, dx = e[12] - cx, dy = e[13] - cy, dz = e[14] - cz, r = lim + c.rad;
+        m.layers.mask = dx * dx + dy * dy + dz * dz > r * r ? 2 : 1;
+      }
+    }
+    // два прохода: матрицы сцены считает дальний (первый), ближнему — не нужно заново (тот же кадр; в начале кадра — снова как обычно)
+    const scn = R.scene, aftWas = scn.onAfterRender;
+    if (F.split) scn.onAfterRender = function (rr, sc, cam){ scn.matrixWorldAutoUpdate = !(cam === farCam && R.depthSplit === SPLIT && !SPLIT.skipNear); return aftWas.apply(this, arguments); };
     function splitCams(cam, far){
       const S = clamp(max(600, V.altG * 2), 600, 6000);
       camSync(nearCam, cam, .12, S);
@@ -794,7 +914,8 @@ void main(){
 
     // ── Небо, свет, дальность — каждый кадр (перед рисованием) ──
     const SB = [0, 0, 0], ML = [0, 0, 0], MB = [0, 0, 0], UPD = [0, 0, 0];
-    let lightAt = -1e9, lastHour = -1, nearFar = [0, 0], sunKAt = 1, lightK = 1, lightB = false;
+    let lightAt = -1e9, lastHour = -1, nearFar = [0, 0], sunKAt = 1, lightK = 1, lightB = false, eclWas = false, litZ = 30 * (A ? A.sun : 0);
+    const EL3 = [0, 0, 0];
     const m4 = new T.Matrix4(), m4b = new T.Matrix4();
     const GU = E.GFXU;
     function sky(){
@@ -857,12 +978,16 @@ void main(){
         Mn.mesh.matrixWorldNeedsUpdate = true;
       }
       U.uTime.value = V.t % 1000;
-      // солнечное затмение (space-view.js: V.sunK — какая доля диска солнца видна у камеры) и погода: свет солнца, неба и дымки тусклее
-      const sk = V.sunK >= 0 && V.sunK <= 1 ? V.sunK : 1;
-      if (sk !== sunKAt) {
-        sunKAt = sk;
-        const as = A ? A.sun : 0, ks = .03 + .97 * sk;
-        U.uLit.value.x = 2.3 * sk * wxK.sun; U.uLit.value.y = (.12 + .88 * sk) * (1 - .25 * wxK.gray); U.uLit.value.z = 30 * as * ks * wxK.sky; U.uSky.value.x = 40 * as * ks * wxK.sky;
+      // солнечное затмение (space-view.js: V.sunK — какая доля диска солнца видна у камеры) и погода: свет солнца, неба и дымки тусклее.
+      // T-088 (флаг eclipse): тело перед солнцем (V.ecl) — тень на земле по точкам (шейдер d37Ecl), свет земли — без доли у камеры
+      const sk = V.sunK >= 0 && V.sunK <= 1 ? V.sunK : 1, EC = V.ecl, eOn = !!(F.eclipse && EC && EC[3] > 0);
+      if (eOn) { P.dirToL(fr, EC[0], EC[1], EC[2], EL3); TU.uEcl.value.set(EL3[0], EL3[1], EL3[2], EC[3]); TU.uEcl2.value.x = EC[4] || .0047; }
+      else if (TU.uEcl.value.w !== 0) TU.uEcl.value.w = 0;
+      if (sk !== sunKAt || eOn !== eclWas) {
+        sunKAt = sk; eclWas = eOn;
+        const as = A ? A.sun : 0, ks = .03 + .97 * sk, kT = eOn ? 1 : sk;
+        litZ = 30 * as * ks * wxK.sky;
+        U.uLit.value.x = 2.3 * kT * wxK.sun; U.uLit.value.y = (eOn ? 1 : .12 + .88 * sk) * (1 - .25 * wxK.gray); U.uLit.value.z = eOn ? 30 * as * wxK.sky : litZ; U.uSky.value.x = 40 * as * ks * wxK.sky;
         dome.material.uniforms.uSky.value.x = shell.material.uniforms.uSky.value.x = 40 * as * ks * wxK.sky;
       }
       // свет движка (человечки, предметы): небо по настоящему солнцу — не чаще 4 раз в секунду или когда солнце сдвинулось
@@ -873,8 +998,9 @@ void main(){
         try { R.setLighting(sk < 1 ? { time: hour, brightness: .1 + .9 * sk } : lightB ? { time: hour, brightness: 1 } : { time: hour }); lightB = sk < 1; } catch (e) {}
         cam.near = nearFar[0]; cam.far = nearFar[1]; cam.updateProjectionMatrix();   // setLighting сам ставит дальность (до 3000) — вернуть свою
       }
-      // два диапазона глубины
-      if (F.split) splitCams(cam, nearFar[1]); else if (R.depthSplit === SPLIT) R.depthSplit = null;
+      // два диапазона глубины — только когда они что-то дают: AO или отражения в экране (на «средней» и «низкой» их нет — второй
+      // проход сцены был бы чистой тратой: T-145, телефон ×4 на земле); игрок включил AO — со следующего кадра
+      if (F.split && splitNeed()) { splitCams(cam, nearFar[1]); layerChunks(cam, SPLIT.dist); } else if (R.depthSplit === SPLIT) R.depthSplit = null;
       // тени движка на земле у игрока: карта теней солнца движка (R.sun), её матрица — от последней перерисовки карты
       const sh = R.sun && R.sun.shadow, on = F.shadows && shOn && !low && R.sun.castShadow && sh && sh.map;
       if (on) {
@@ -891,7 +1017,7 @@ void main(){
       const tr = PL.chapman(Rg / A.Hr, h / A.Hr, mu) * A.Hr, tm = PL.chapman(Rg / A.Hm, h / A.Hm, mu) * A.Hm;
       GU.apA[0] = bR.x * rR; GU.apA[1] = bR.y * rR; GU.apA[2] = bR.z * rR; GU.apA[3] = 1;
       GU.apB[0] = bM * rM; GU.apB[1] = A.g; GU.apB[2] = 1 / A.Hr; GU.apB[3] = 1 / A.Hm;
-      GU.apC[0] = SUN[0]; GU.apC[1] = SUN[1]; GU.apC[2] = SUN[2]; GU.apC[3] = U.uLit.value.z;
+      GU.apC[0] = SUN[0]; GU.apC[1] = SUN[1]; GU.apC[2] = SUN[2]; GU.apC[3] = litZ;
       GU.apD[0] = Math.exp(-(bR.x * tr + bM * 1.1 * tm)); GU.apD[1] = Math.exp(-(bR.y * tr + bM * 1.1 * tm)); GU.apD[2] = Math.exp(-(bR.z * tr + bM * 1.1 * tm)); GU.apD[3] = 0;
     }
     const TMP_V = new T.Vector3();
@@ -914,7 +1040,7 @@ void main(){
       tamed = R.optBase;
     };
     tame();
-    const pre2 = () => { if (!V.dead) { tame(); sky(); } };
+    const pre2 = () => { scn.matrixWorldAutoUpdate = true; if (!V.dead) { tame(); sky(); } };
     R.preRender.push(pre2);
     R.setLighting({ fogEnd: 3000, shadows: false });
 
@@ -934,24 +1060,38 @@ void main(){
       PV.set(V.camBF); pvT = t0;
       const moved = Math.hypot(V.camBF[0] - selX, V.camBF[1] - selY, V.camBF[2] - selZ);
       const step = max(2, (V.altG > 0 ? V.altG : 10) * .05);
-      if (t0 - lastSel > (waitMore ? 60 : 125) && (moved > step || dirty || waitMore || queue.length || ready.length) || moved > step * 20) select();
+      // T-145 (слияние): показ ждёт (waitN) — выбирать раз в 0,5 с и стоя: после прыжка с земли на орбиту слияния ждали перетекания
+      // детей, а выбор без движения камеры больше не шёл — с орбиты планета была с дырами (188 кусков вместо ~12)
+      if (t0 - lastSel > (waitMore ? 60 : 125) && (moved > step || dirty || waitMore || queue.length || ready.length) || moved > step * 20 || (waitN > 0 && t0 - lastSel > 500)) select();
       pump(t0);
       if (F.lod2) {
         const tm = now();
         MORPH.proj = projNow();
-        if (F.morph) P.lodMorph(showList, V.camBF[0], V.camBF[1], V.camBF[2], t0, MORPH);
+        // перетекание: только если камера сдвинулась, сменился показ или угол, идёт плавный переход (T-145: стоим — 0 мс)
+        if (F.morph) {
+          const c3 = V.camBF, mv = abs(c3[0] - morphAt[0]) + abs(c3[1] - morphAt[1]) + abs(c3[2] - morphAt[2]);
+          if (morphBusy || mv > .002 || MORPH.proj !== morphAt[4] || showMark !== morphAt[3]) {
+            MORPH.dcMax = min(1, max(16, dt * 1000) / (FADE * 1000));   // после паузы переход идёт от этого кадра, а не скачком
+            const mb0 = morphBusy;
+            morphBusy = P.lodMorph(showList, c3[0], c3[1], c3[2], t0, MORPH);
+            if (mb0 && !morphBusy) dirty = true;   // переходы кончились — слияния, что их ждали, выбрать сейчас
+            morphSet();
+            morphAt[0] = c3[0]; morphAt[1] = c3[1]; morphAt[2] = c3[2]; morphAt[3] = showMark; morphAt[4] = MORPH.proj; ST.morphRuns++;
+          }
+        }
         ST.morphMs += now() - tm;
       }
       V.cpu = now() - t0;
     };
     V.shown = () => shown.size;
+    V._dbg = () => ({ chunks, leaves, shown, showList, queue, preQ });   // проверки (scripts/planet-*.cjs): внутренности выбора
     V.stats = () => ({
       shown: shown.size, leaves: leaves.length, cached: chunks.size, queued: queue.length + preQ.length, building: inflight.size, ready: ready.length,
       built: ST.built, buildAvg: ST.built ? ST.buildMs / ST.built : 0, buildMax: ST.buildMax, integ: ST.integ, integAvg: ST.integ ? ST.integMs / ST.integ : 0,
-      integMax: ST.integMax, integKB: Math.round(ST.integKB), selAvg: ST.sel ? ST.selMs / ST.sel : 0, selMax: ST.selMax, mainBuilds: ST.mainBuilds, rebases: ST.rebases, evicted: ST.evicted,
+      integMax: ST.integMax, integKB: Math.round(ST.integKB), selAvg: ST.sel ? ST.selMs / ST.sel : 0, selMax: ST.selMax, mainBuilds: ST.mainBuilds, rebases: ST.rebases, evicted: ST.evicted, flushes: ST.flushes || 0,
       errors: ST.errors, respawns: ST.respawns, workers: workers.filter(W => W && W.ok && !W.dead).length, nodes: P.nodes.size, alt: V.alt, altG: V.altG, near: nearFar[0], far: nearFar[1],
       pre: ST.pre, preBuilt: ST.preBuilt, splits: ST.splits, merges: ST.merges, popMax: +ST.popMax.toFixed(3), popAvg: ST.popN ? +(ST.popSum / ST.popN).toFixed(4) : 0, popN: ST.popN,
-      uploads: ST.uploads, split: R.depthSplit === SPLIT ? SPLIT.dist : 0,
+      uploads: ST.uploads, morphRuns: ST.morphRuns, split: R.depthSplit === SPLIT ? SPLIT.dist : 0,
       // gpuKB — буферы кусков в видеокарте (показанные и спрятанные недавно; без LOD v2 — все с сеткой, как раньше), cacheKB — данные
       // всех кусков в памяти страницы
       gpuKB: Math.round([...chunks.values()].reduce((s, c) => s + (c.mesh && (!F.lod2 || c.gpu || c.root) ? c.bytes || 0 : 0), 0) / 1024),
@@ -969,6 +1109,7 @@ void main(){
       const i = R.preRender.indexOf(pre2); if (i >= 0) R.preRender.splice(i, 1);
       if (engineSky) engineSky.visible = skyWas;
       if (R.depthSplit === SPLIT) R.depthSplit = null;
+      if (F.split) { scn.onAfterRender = aftWas; scn.matrixWorldAutoUpdate = true; }
       if (R.guardVolatile && R.guardVolatile !== guardVolWas) R.guardVolatile = guardVolWas || null;
       if (!camL1) R.camera.layers.disable(1);
       if (apOn) E.aerialPatch(T, false); else if (GU && GU.apA) GU.apA[3] = 0;   // дымка движка — снова обычный туман (и кусок — прежний)
@@ -982,7 +1123,7 @@ void main(){
 
   // куски шейдеров атмосферы — для неба системы (space-view.js): тела светят сквозь тот же воздух
   E.planetView.GLSL = { ATMO, PHASE };
-  E.planetView.FLAGS = FLAGS;   // что включено по умолчанию (T-075 на паузе — всё false; см. начало файла)
+  E.planetView.FLAGS = FLAGS;   // что включено по умолчанию (T-145: всё; см. начало файла)
 
   // купол неба: кольца гуще у горизонта (там небо меняется сильнее всего)
   function domeGeo(T){

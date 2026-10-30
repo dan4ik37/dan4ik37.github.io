@@ -153,21 +153,25 @@
       bLive = 1;
     };
     for (const ob of [rainO, snowO, ripO, splO]) if (ob) R.occHide?.add(ob);
+    // особая погода по биому (T-135, wx-fx.js): песок, пыль и снег в воздухе, позёмка, цвет неба и тумана, видимость
+    const WFX = E.wxfx?.attach ? E.wxfx.attach(R, { top, origin, q: qBase }) : null;
+    X.wfx = WFX;
 
     // капля / град / хлопок — в случайной точке над камерой, только если столб там открыт выше точки
     function spawnDrop(i, cx, cy, cz, fill, hail){
-      const [ox, oz] = origin();
+      const OO = origin(), ox = OO[0], oz = OO[1];
       for (let k = 0; k < 3; k++) {
         const x = cx + (FR() - .5) * 2 * RAD, z = cz + (FR() - .5) * 2 * RAD, y = fill ? cy - 5 + FR() * 19 : cy + 7 + FR() * 9, tp = top(x + ox, z + oz);
         if (tp >= y - .5) continue;
         rx[i] = x; ry[i] = y; rz[i] = z; rt[i] = Math.max(tp, cy - 40); rw[i] = topW ? 1 : 0; rh[i] = hail ? 1 : 0;
-        rv[i] = hail ? 19 + FR() * 4 : 13 + FR() * 4; rl[i] = hail ? .16 + FR() * .06 : .65 + FR() * .4; rlive[i] = 1; rcx[i] = Math.floor(x); rcz[i] = Math.floor(z);
+        const hs = hail ? +X.state.hailSize || 0 : 0;   // град особой погоды: длина по размеру (горошина … теннисный мяч)
+        rv[i] = hail ? 19 + FR() * 4 : 13 + FR() * 4; rl[i] = hail ? (hs > 0 ? .06 + hs * .07 : .16) + FR() * .06 : .65 + FR() * .4; rlive[i] = 1; rcx[i] = Math.floor(x); rcz[i] = Math.floor(z);
         return;
       }
       rlive[i] = 0;
     }
     function spawnFlake(i, cx, cy, cz, fill){
-      const [ox, oz] = origin();
+      const OO = origin(), ox = OO[0], oz = OO[1];
       for (let k = 0; k < 3; k++) {
         const x = cx + (FR() - .5) * 2 * RAD, z = cz + (FR() - .5) * 2 * RAD, y = fill ? cy - 5 + FR() * 17 : cy + 8 + FR() * 6, tp = top(x + ox, z + oz);
         if (tp >= y - .3) continue;
@@ -227,7 +231,7 @@ void main(){
     R.wx = {
       pre(now){
         if (!shadersOn()) { R.wxOn = false; return; }
-        const V = X.vis, p = cam.position, [ox, oz] = origin();
+        const V = X.vis, p = cam.position, OO = origin(), ox = OO[0], oz = OO[1];
         R.wxOn = V.snowCover + V.wet + V.puddle + V.ice + V.autumn + V.bare + V.fresh > .02;   // страж графики: проверить кадр с погодой
         const need = V.snowCover > .01 || V.wet > .01 || V.puddle > .01;
         if (need && o.occlusion !== false) { occInit(); occUpdate(now); }
@@ -252,7 +256,7 @@ void main(){
       if ((tOpt -= d) <= 0) { tOpt = 1; X.opts = PR.opts(); }
       if ((tq -= d) <= 0) {
         tq = .5;
-        const [px, py, pz] = where(), [ox, oz] = origin();
+        const [px, py, pz] = where(), OO = origin(), ox = OO[0], oz = OO[1];
         try { X.state = W.at(px + ox, pz + oz, Date.now(), py); } catch (e) { X.state = C.blank(); }
         // смена погоды — событие (после двух одинаковых замеров подряд: без дрожи на границе)
         const lb = X.state.state;
@@ -270,18 +274,20 @@ void main(){
       X.rainMem = Math.max(X.rainMem * Math.exp(-d / 150), V.rain);
       const M = R.sky, sunY = M?.sun ? M.sun[1] : 1, sunOk = M && M.lightI > .3 && sunY > .05 && sunY < .62 ? 1 : 0;
       X.rainbow += ((fx && useSky ? sm(.25, .6, X.rainMem) * (1 - sm(.04, .14, V.rain)) * (1 - sm(.45, .75, V.cloud)) * sunOk : 0) - X.rainbow) * k1;
+      if (WFX) WFX.frame(d, fx ? S : null, X.q * X.opts.amount, 1 - cl(R.night || 0, 0, 1));   // особая погода: плавно, частицы
       // небо, свет, туман — когда заметно сдвинулось (не чаще 4 раз в секунду)
       if (useSky && now - pushAt > 250) {
         const wx = { cloud: V.cloud, rain: V.rain, snow: V.snow, fog: V.fog, heat: V.heat, storm: V.thunder, rainbow: X.rainbow };
-        let ch = false; for (const k in wx) if (Math.abs((sent[k] ?? -1) - wx[k]) > .015) ch = true;
-        if (ch) { pushAt = now; Object.assign(sent, wx); R.setWeather(fx && (wx.cloud + wx.rain + wx.snow + wx.fog + wx.heat > .005 || wx.rainbow > .005) ? wx : null); }
+        if (WFX) WFX.skyInto(wx);   // + dust, tint, tintK, vis (м), flat — render.js / gfx.js
+        let ch = false; for (const k in wx) if (k !== 'tint' && Math.abs((sent[k] ?? -1) - wx[k]) > (k === 'vis' ? .5 : .015)) ch = true;
+        if (ch) { pushAt = now; Object.assign(sent, wx); R.setWeather(fx && (wx.cloud + wx.rain + wx.snow + wx.fog + wx.heat > .005 || wx.rainbow > .005 || (WFX && WFX.active())) ? wx : null); }
       }
       if (qBase) particles(d, now);
       if (A) sound(d);
     };
 
     function particles(d, now){
-      const V = X.vis, S = X.state, amt = X.q * X.opts.amount, p = cam.position, cx = p.x, cy = p.y, cz = p.z, [ox, oz] = origin();
+      const V = X.vis, S = X.state, amt = X.q * X.opts.amount, p = cam.position, cx = p.x, cy = p.y, cz = p.z, OO = origin(), ox = OO[0], oz = OO[1];
       if ((colsT -= d) <= 0) { colsT = 3; cols.clear(); }
       const day = 1 - cl(R.night || 0, 0, 1), lum = .34 + .56 * day;
       const wd = S.windDir || 0, ws = (V.wind || 0) * (.75 + .5 * (S.gust || .5)), windX = Math.cos(wd) * ws * .11, windZ = Math.sin(wd) * ws * .11;
@@ -386,12 +392,13 @@ void main(){
     // звук: шум дождя (под крышей — тише и глуше), ветер в метель и на сильном ветру
     function sound(d){
       if (!A?.loop) return;
-      const V = X.vis, [px, py, pz] = where(), [ox, oz] = origin(), covered = top(px + ox, pz + oz) > py + 2.5;
-      const vr = V.rain * .5 * (covered ? .35 : 1), vw = Math.max(V.snow * .35, cl((V.wind - 6) / 10, 0, 1) * .3) * (covered ? .4 : 1);
+      const V = X.vis, [px, py, pz] = where(), OO = origin(), ox = OO[0], oz = OO[1], covered = top(px + ox, pz + oz) > py + 2.5;
+      const du = WFX ? Math.max(WFX.K.dust, WFX.K.flat * .5) : 0;   // буря: ветер громче и ниже (песок шипит, буран воет)
+      const vr = V.rain * .5 * (covered ? .35 : 1), vw = Math.max(V.snow * .35, cl((V.wind - 6) / 10, 0, 1) * .3, du * .55) * (covered ? .4 : 1);
       if (vr > .005 && !hR) hR = A.loop('amb_rain', { vol: 0 });
       if (hR) { if (vr <= .005 && V.rain < .003) { hR.stop(); hR = null; } else hR.set({ vol: vr, rate: covered ? .76 : 1 }); }
       if (vw > .005 && !hW) hW = A.loop('amb_wind', { vol: 0 });
-      if (hW) { if (vw <= .005) { hW.stop(); hW = null; } else hW.set({ vol: vw, rate: covered ? .8 : 1 }); }
+      if (hW) { if (vw <= .005) { hW.stop(); hW = null; } else hW.set({ vol: vw, rate: (covered ? .8 : 1) * (1 - .18 * du) }); }
     }
 
     // ── управление ──
@@ -400,10 +407,11 @@ void main(){
     X.iceAt = (x, z) => X.vis.ice;   // по льду ходить — от .8
     X.stats = () => ({ state: X.label, season: X.state.season, temp: +(X.state.temp || 0).toFixed(1), rain: +X.vis.rain.toFixed(2), snow: +X.vis.snow.toFixed(2), cover: +X.vis.snowCover.toFixed(2),
       wet: +X.vis.wet.toFixed(2), drops: rainO?.visible ? rainO.geometry.drawRange.count / 2 : 0, flakes: snowO?.visible ? snowO.geometry.drawRange.count : 0, ripples: ripO?.visible ? ripO.count : 0,
-      occ: X.occ ? X.occ.n : 0, shaders: shadersOn() });
+      occ: X.occ ? X.occ.n : 0, shaders: shadersOn(), special: X.state.special || '', wx: WFX ? WFX.stats() : null });
     X.objects = () => ({ rain: rainO, snow: snowO, ripples: ripO, splash: splO, drops: { rx, ry, rz, rt, live: rlive, n: N_R }, flakes: { sx, sy, sz, stp, live: slive, n: N_S } });
     X.dispose = () => {
       hR?.stop(); hW?.stop(); hR = hW = null;
+      WFX?.dispose();
       if (R.wx) { R.wx.post?.(); R.wx = null; }
       R.wxOn = false;
       R.flashK = 0;

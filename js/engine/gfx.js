@@ -347,7 +347,27 @@
     M.lightI = li * (1 - .78 * over - .1 * fog);
     if (li > .021) M.lightI = Math.max(.021, M.lightI);   // тени не выключаются (castShadow — пересборка шейдеров)
     M.haze = Math.max(M.haze, .3 * cloud + .45 * fog + .35 * heat + .25 * rain);
-    M.wx = { over, dark, fog, rain, snow, storm, heat };
+    // особая погода по биому (T-135, js/engine/wx.js, wx-fx.js): небо и горизонт — к цвету бури (песок, охра, белая мгла, зелёная
+    // туча града), солнце — бледный диск, свет слабее, но не темнее 45 % (детский мир: без страшной тьмы); flat — белая мгла:
+    // небо цвета земли, без теней и горизонта. wx.tint — [r, g, b] (линейный), wx.tintK, wx.dust, wx.flat — 0…1
+    const tk = cl(num(wx.tintK, 0), 0, 1), du = cl(num(wx.dust, 0), 0, 1), fl = cl(num(wx.flat, 0), 0, 1), tn = wx.tint;
+    if (tk > 0 && tn && tn.length === 3) {
+      const lh = Math.max(lumA(M.hor), .035), lz = Math.max(lumA(M.zen), .03);
+      for (let j = 0; j < 3; j++) {
+        M.hor[j] += (tn[j] * lh * 1.25 - M.hor[j]) * tk;
+        M.zen[j] += (tn[j] * lz * 1.15 - M.zen[j]) * tk * (.55 + .4 * du + .45 * fl);
+        M.gnd[j] += (tn[j] * lh * .8 - M.gnd[j]) * tk * .6;
+        M.fogSun[j] += (M.hor[j] - M.fogSun[j]) * Math.min(1, tk * 1.2);
+        M.cloud[j] += (tn[j] * lumA(M.cloud) - M.cloud[j]) * tk * .5;
+        M.sunC[j] *= 1 - .75 * du - .9 * fl;
+        M.glow[j] *= 1 - .8 * Math.max(du, fl);
+      }
+      if (fl > 0) for (let j = 0; j < 3; j++) M.zen[j] += (M.hor[j] - M.zen[j]) * fl;
+      M.lightI = Math.max(Math.min(M.lightI, .021), M.lightI * (1 - .55 * Math.max(du * tk, fl * .8)));
+      M.stars *= 1 - Math.max(du, fl);
+      M.haze = Math.max(M.haze, .7 * du + .5 * fl);
+    }
+    M.wx = { over, dark, fog, rain, snow, storm, heat, dust: du, flat: fl };
     return M;
   };
 

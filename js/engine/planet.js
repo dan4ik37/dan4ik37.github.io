@@ -436,6 +436,26 @@
       if (m < .42) return 'steppe';
       return 'temperate';
     };
+    // Свой климат места для погоды (T-145, C.world({ placeAt }), WORLD_RULES §1): x, z — координаты погоды планеты (x — долгота × R,
+    // z — −широта × R, как V.climateAt). t — средняя за год у моря (tempAt без высоты: высоту добавит погода), amp — полуразмах по
+    // году: у экватора ~0, к полюсам до ~20° (над морем вдвое меньше), ph — сдвиг сезона: южное полушарие — на полгода (2 четверти:
+    // там лето, когда солнце над югом — то же склонение, что у P.sunDir). Клетки 64 ед., кольцо записей — без мусора
+    P.placeAtFn = (cell = 64) => {
+      const K = new Float64Array(256).fill(NaN), V = [], DD = [0, 0, 0];
+      for (let i = 0; i < 256; i++) V.push({ t: 0, amp: 0, ph: 0 });
+      return (x, z) => {
+        const ix = Math.floor(x / cell), iz = Math.floor(z / cell), key = ix * 1073741824 + iz, sl = (Math.imul(ix, 73856093) ^ Math.imul(iz, 19349663)) & 255;
+        const o = V[sl];
+        if (K[sl] === key) return o;
+        const lat = clamp(-(iz + .5) * cell / R / DEG, -90, 90), lon = (ix + .5) * cell / R / DEG;
+        const d = P.dirFromLatLon(lat, lon, DD), sea = D.sea != null && H(d[0], d[1], d[2]) < D.sea;
+        o.t = Math.round(tempAt(d[0], d[1], d[2], D.sea ?? 0) * 10) / 10;
+        o.amp = Math.round(20 * Math.pow(abs(d[1]), 1.2) * (sea ? .5 : 1) * 10) / 10;
+        o.ph = lat < 0 ? 2 : 0;
+        K[sl] = key;
+        return o;
+      };
+    };
     // всё о точке поверхности: { h, water (глубина ≥ 0 или 0), r, g, b }
     P.surf = (d, out = {}) => {
       const h = H(d[0], d[1], d[2]);
@@ -458,7 +478,7 @@
       n = { key: k, f, L, i, j, c: [0, 0, 0], cp: [0, 0, 0], ang: 0, size: 0, hc: 0, hmin: P.renderMin, hmax: P.maxH, built: false,
         split: false, leaf: 0, used: 0, mask: 0, par: null, kids: null, nb: null,
         // LOD v2: ошибки (своя, «4 ребёнка вместо меня» — измеренная и использованная), экранная, перетекание, показ
-        err: -1, eK: -1, eKs: 0, rho: 0, k: 0, kt: 0, kc: 1, kcT: 0, px: 0, mrg: 0, wantM: 0, standT: -1e9, ke: null, rel: null, nbs: null, tShow: 0, dis: 0, pm: 0, below: 0, below2: 0, needM: 0, imp: 0, vis: 0 };
+        err: -1, eK: -1, eKs: 0, rho: 0, k: 0, kt: 0, kc: 1, kcT: 0, px: 0, mrg: 0, wantM: 0, standT: -1e9, ke: null, rel: null, nbs: null, tShow: 0, dis: 0, pm: 0, below: 0, below2: 0, needM: 0, imp: 0, vis: 0, ch: null };   // ch — кусок вида (planet-view.js)
       const M = P2[L] * 2;   // решётка 2×2 на узел: центр — целая точка
       latK(f, i * 2 + 1, j * 2 + 1, M, tmpK); latDir(tmpK[0], tmpK[1], tmpK[2], M, n.c);
       let ang = 0;
@@ -641,6 +661,7 @@
         // не выбран: под целью (слишком мелко) — шаг вверх, когда все 4 брата показаны и уже в форме родителя
         let a = d.par; while (a && a.used !== sm) a = a.par;
         if (!a || a.leaf !== sm) continue;
+        if (o.flush) continue;   // T-145: слияние застряло (края k детей у крупного соседа не доходят до 1) — прочь, шаг 2 покажет готовую цель
         const p = d.par, k = kidsOf(p);
         if (p.dis === nm) continue;
         // брат не показан и под ним ничего не показано (за горизонтом, место пустое) — слиянию не мешает (родитель его и закроет)
@@ -714,6 +735,7 @@
     // o: { proj, tau, full (ρ, при котором k = 0; 1,7 · tau), fade (с) }; камера — точка в системе планеты
     P.lodMorph = (list, cx, cy, cz, now, o = {}) => {
       const tau = o.tau || 3, full = o.full || tau * 1.7, fade = (o.fade || .12) * 1000, pj = o.proj || 1000, span = 1 / (full - tau);
+      let busy = false;   // идёт плавный переход (время) — звать и в следующем кадре
       for (let q = 0; q < list.length; q++) {
         const n = list[q];
         let kn = 0;
@@ -726,12 +748,14 @@
         }
         // нужно мельче (выбор делит — в том числе ради 2 : 1): перетекание к родителю сходит на нет за fade — потом деление без
         // скачка; не нужно — потолок возвращается так же плавно
-        const want = n.split && n.used === selMark, dc = n.kcT ? (now - n.kcT) / fade : 1;
+        // dcMax: вид пропускал кадры без движения (T-145) — переход идёт от этого кадра, а не скачком на всю паузу
+        const want = n.split && n.used === selMark, dc = n.kcT ? min((now - n.kcT) / fade, o.dcMax || Infinity) : 1;
         n.kcT = now;
         n.kc = want ? max(0, n.kc - dc) : min(1, n.kc + dc);
         if (kn > n.kc) kn = n.kc;
         const kt = n.kt = n.tShow ? clamp(1 - (now - n.tShow) / fade, 0, 1) : 0;
         n.k = kn > kt ? kn : kt;
+        if (kt > 0 || (n.kc > 0 && n.kc < 1)) busy = true;
       }
       for (let q = 0; q < list.length; q++) {
         const n = list[q], ke = n.ke || (n.ke = new Float32Array(4)), rel = n.rel;
@@ -745,6 +769,7 @@
           else ke[e] = r === 2 ? 1 : r === 3 ? n.kt : n.k;
         }
       }
+      return busy;
     };
     // старые узлы (давно не нужны) — прочь вместе с потомками; ссылки на соседей — заново (чтобы не держать удалённых)
     function drop(n){ if (n.kids) { for (const k of n.kids) drop(k); n.kids = null; } nodes.delete(n.key); }

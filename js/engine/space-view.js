@@ -7,7 +7,8 @@
 //   (дымка днём, краснеет у горизонта), в тени планеты — лунное затмение по точкам диска (край тени ползёт, в тени — красная);
 //   далёкие планеты — точки с блеском по фазе и расстоянию; солнце из космоса — диск и свечение (в воздухе его рисует атмосфера).
 //   Каждый кадр перед V.update: SV.update(t, ms) — t секунды мира (D37E.clock.t()), ms — то же в мс (времена года).
-//   Отдаёт планете: V.skyM (поворот «небо системы → BF»: звёзды там же, где планеты) и V.sunK (доля солнца: солнечное затмение).
+//   Отдаёт планете: V.skyM (поворот «небо системы → BF»: звёзды там же, где планеты) и V.sunK (доля солнца: солнечное затмение),
+//   V.ecl (T-088: тело, чья полутень задевает планету — тень затмения бежит по земле; planet-view.js гасит свет по точкам).
 //   SV.list — что в небе (system.js S.sky), SV.moon — фаза Луны, SV.cpu — мс на кадр, SV.dispose().
 // M = D37E.spaceMap(el, S, { observer, time(), clock, stubs, onLook(id), onClose }) — карта «🪐 Система» (2D, холст): орбиты, тела
 //   с освещённой стороной, тень планеты, «ты здесь», фазы Луны и ближайшие затмения, предпросмотр времени (только на карте).
@@ -136,6 +137,7 @@ void main(){
     R.scene.add(mesh);
     const SV = { S, obs, list: [], t: 0, ms: 0, cpu: 0, dead: false, stubs: !!o.stubs, F: { M: new Float64Array(9), sun: new Float64Array(3) },
       moon: { id: '', lit: 0, wax: false, elong: 0 } };
+    const ECL = V.ecl || (V.ecl = new Float64Array(5));   // тень затмения на земле: [x, y, z, r тела (0 — нет), угловой радиус солнца]
     const CAM = new Float64Array(3), L3 = [0, 0, 0], COL = new Map(), SKYO = { stubs: false, F: SV.F };   // SKYO — один объект на все кадры
     const colOf = b => { let c = COL.get(b); if (!c) { c = lin(b.isStar ? '#fff4e0' : (b.look && b.look.color) || '#cccccc'); COL.set(b, c); } return c; };
     const moonId = (obs.def.moons || []).find(x => typeof x === 'string' && S.byId.get(x));
@@ -151,6 +153,7 @@ void main(){
       V.skyM = SV.F.M;
       const sun = SV.list[SV.list.length - 1];
       V.sunK = sun && sun.kind === 'sun' ? sun.light : 1;
+      E.spaceView.eclOf(SV.list, P.SEAR + (A ? A.top : 0), ECL);
       if (moonId) { const ph = S.phase(obs, moonId, t); SV.moon.id = moonId; SV.moon.lit = ph.lit; SV.moon.wax = ph.wax; SV.moon.elong = ph.elong; }
       ready = true;
       SV.cpu = now() - t0;
@@ -222,9 +225,43 @@ void main(){
       R.scene.remove(mesh); g.dispose(); mat.dispose();
       const i = R.preRender.indexOf(pre); if (i >= 0) R.preRender.splice(i, 1);
       if (V.skyM === SV.F.M) V.skyM = null;
-      V.sunK = 1;
+      V.sunK = 1; ECL[3] = 0;
     };
     return SV;
+  };
+  // ── T-088: тень солнечного затмения на земле ──
+  // eclOf(list, Rp, out) — из неба S.sky (list: тела и солнце последним): тело перед солнцем, чей конус полутени задевает шар Rp
+  // (планета с воздухом); out = [x, y, z, r, as] — центр тела от центра планеты (BF), его радиус (0 — затмения нет), угловой
+  // радиус солнца. Ближе всех к оси тени (по доле полутени) — оно. Без выделения памяти
+  E.spaceView.eclOf = (list, Rp, out) => {
+    out[3] = 0;
+    const sun = list[list.length - 1];
+    if (!sun || sun.kind !== 'sun') return out;
+    const sd = sun.d, ta = Math.tan(sun.rad);
+    out[4] = sun.rad;
+    let best = 1;
+    for (let k = 0; k < list.length - 1; k++) {
+      const e = list[k];
+      if (e.kind !== 'body' || !e.b || !(e.b.R > 0)) continue;
+      const c = e.cen, t = c[0] * sd[0] + c[1] * sd[1] + c[2] * sd[2];
+      if (!(t > 0)) continue;   // тело за планетой (от солнца)
+      const perp = sqrt(max(0, c[0] * c[0] + c[1] * c[1] + c[2] * c[2] - t * t)), q = perp / (Rp + e.b.R + t * ta);
+      if (q < best) { best = q; out[0] = c[0]; out[1] = c[1]; out[2] = c[2]; out[3] = e.b.R; }
+    }
+    return out;
+  };
+  // eclFrac(p, e, sd) — доля диска солнца из точки p (BF, от центра планеты): тело e (eclOf), sd — на солнце (единичный). Перекрытие
+  // дисков — гладко между |as − am| и as + am (как d37Ecl в шейдере земли, planet-view.js; точная площадь — orbit.js O.disc)
+  E.spaceView.eclFrac = (p, e, sd) => {
+    if (!(e[3] > 0)) return 1;
+    let dx = e[0] - p[0], dy = e[1] - p[1], dz = e[2] - p[2];
+    const dl = sqrt(dx * dx + dy * dy + dz * dz); dx /= dl; dy /= dl; dz /= dl;
+    const c = dx * sd[0] + dy * sd[1] + dz * sd[2];
+    if (c <= 0) return 1;
+    const cx = dy * sd[2] - dz * sd[1], cy = dz * sd[0] - dx * sd[2], cz = dx * sd[1] - dy * sd[0];
+    const sep = Math.atan2(sqrt(cx * cx + cy * cy + cz * cz), c), am = Math.asin(min(e[3] / dl, 1)), as = max(e[4], 1e-5);
+    const lo = abs(as - am), hi = as + am, x = clamp((sep - lo) / (hi - lo), 0, 1), sm = x * x * (3 - 2 * x);
+    return 1 - min(1, am * am / (as * as)) * (1 - sm);
   };
 
   // ═══ Карта системы «🪐 Система» (2D) ═══

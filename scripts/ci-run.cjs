@@ -34,11 +34,13 @@ const TESTS = [
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
   { f: 'ads-test.cjs' }, { f: 'ad-direct-test.cjs' }, { f: 'pay-test.cjs' }, { f: 'referral-test.cjs' }, { f: 'economy-test.cjs' },
   { f: 'community-test.cjs' }, { f: 'settings-test.cjs' }, { f: 'ui-test.cjs' }, { f: 'touch-layout-test.cjs' }, { f: 'radial-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },
-  { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'planet-test.cjs' }, { f: 'planet-lod-test.cjs', args: ['--fast'], t: 240 }, { f: 'orbit-test.cjs' }, { f: 'planet-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },   // orbit, planet-sql — T-079: небесная механика, часы мира; planet-lod-test — T-075: LOD v2 (скачки, покрытие, 2 : 1)
+  { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'wx-test.cjs', t: 240 }, { f: 'wxfx-test.cjs' }, { f: 'make-wx.mjs', args: ['--check'], t: 60 }, { f: 'planet-test.cjs' }, { f: 'planet-lod-test.cjs', args: ['--fast'], t: 240 }, { f: 'orbit-test.cjs' }, { f: 'planet-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },   // orbit, planet-sql — T-079: небесная механика, часы мира; planet-lod-test — T-075: LOD v2 (скачки, покрытие, 2 : 1)
   { f: 'physics-test.cjs', soft: 'rapier' }, { f: 'tiles-test.cjs' }, { f: 'mirplay-test.cjs' }, { f: 'kubomir-input-test.cjs' },
   { f: 'world-zones-test.cjs' }, { f: 'world-leak-test.cjs' }, { f: 'city-test.cjs' }, { f: 'city-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'city-sim.cjs', args: ['--days', '60', '--players', '20,100'], t: 180 },
   { f: 'vehicle-test.cjs' }, { f: 'waves-test.cjs', retry: 1 }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' }, { f: 'cloud-test.cjs' },
   { f: 'terra-test.cjs', t: 180 },   // T-111: ядро рельефа T1 — terra.wasm и запасной JS бит в бит с эталоном Rust (scripts/terra-golden.txt), правки, поток
+  { f: 'biomes-test.cjs', t: 180 },   // T-116: логичные биомы — «Кубомир» v4 и новая земля v2 (жара не рядом с зимой, без одиноких пятен), старые миры v1–v3 как были, D37E.biomes, странные миры
+  { f: 'place-climate-test.cjs', t: 180 },   // T-145 (проверка): погода — свой климат места (саванна у пустыни без зимы, экватор без снега, на юге сезоны наоборот)
   { f: 'support-test.cjs', args: ['--fast'] }, { f: 'support-load-test.cjs', args: ['--fast'] }, { f: 'topple-test.cjs', args: ['--fast'] }, { f: 'debris-test.cjs', args: ['--fast'] }, { f: 'podzem-support-test.cjs', args: ['--fast'] }, { f: 'mir-support-test.cjs' },   // T-022a: обрушение и прочность — ядро D37E.support, «Подземье», боевая зона «Мира»
   { f: 'fire-test.cjs', args: ['--fast', '{THREE}'], soft: 'three' }, { f: 'podzem-fire-test.cjs', args: ['--fast'] }, { f: 'mir-fire-test.cjs' }, { f: 'studio-fire-test.cjs' },   // T-022d: огонь — ядро D37E.fire (клетки и детали, ветер, дождь, бюджет, без мусора, 30/60/144) + «Подземье» (podzem-fire-test) + боевая зона «Мира» (mir-fire-test) + «Студия 3D» (studio-fire-test)
   { f: 'npc-lod-test.cjs' }, { f: 'horde-lod-test.cjs' }, { f: 'studio-waves-test.cjs' }, { f: 'mir-npc-lod-test.cjs' },   // T-127 «ум толпы» (AI LOD P1): npc.js 30/60/144, сон, пул, фазы, 0 мусора; «Орда» — один предел и радиус, забег одинаков на всех; «Выживание» — 64 живых, очередь, зерно; «Мир» — 16 жителей у всех, фигурки
@@ -70,7 +72,7 @@ const TESTS = [
   { f: 'trees-e2e.cjs', args: ['studio', 'ci'], e2e: true, t: 600 },   // T-022b: деревья пород в «Студии 3D» — все породы ставятся (замеры, снимки, 10 мин игры — режимы вручную)
   { f: 'waves-e2e.cjs', args: ['look'], e2e: true, t: 600 },   // волны (T-022c): видеокарта = JS, шейдеры собрались, катер качается
   { f: 'world-reopen-e2e.cjs', args: ['20'], e2e: true, t: 900 },   // T-085: 20 раз закрыть и открыть «Мир Денчика» — прошлые миры уходят из памяти, счётчики — как до
-  { f: 'terra-e2e.cjs', args: ['leak', '10'], e2e: true, t: 600 },   // T-111: «Терра» 10 раз закрыть и открыть — потоки и память уходят
+  { f: 'terra-e2e.cjs', args: ['leak', '10'], e2e: true, t: 600 },   // T-111: «Терра» 10 раз закрыть и открыть — падает, если куча +6 МБ, живой поток, счётчики three.js не как до, ошибки в консоли
   { f: 'evo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },   // «Путь клетки»: род, эволюция, Лужа и Глубина, колония, ДНК (ПК и телефон)
   { f: 'menu-e2e.cjs', args: ['all'], env: { KB_WORLD: '0' }, e2e: true, t: 1500 },   // T-043: одно меню ☰ (мир, Кубомир, Подземье), окно ⚙️ (Главное, поиск), геймпад, скорость, утечки; T-090: память открытого мира целиком (ПК и телефон ×4, каждая зона — одна постройка), «Подземье»
   { f: 'touch-hud-e2e.cjs', e2e: true, t: 900, env: { TH_MODE: 'full', SCREENS: '[[844,390],[390,844]]' } },   // «Кубомир» на телефоне: кнопки компактно, каждая — своё действие, «Настроить кнопки»
@@ -79,6 +81,8 @@ const TESTS = [
   { f: 'ui-e2e.cjs', args: ['ci'], e2e: true, t: 600 },   // T-086: мини-карточка и профиль без утечек, тема до первого кадра (без «вспышки»), откат флагами   // фоторедактор: все команды, кнопки, отмена (fabric.js с jsDelivr)
   { f: 'city-e2e.cjs', e2e: true, needs: 'pglite', t: 900 },   // «Живой город»: работа с сервера (city.sql в PGlite), банк, окно экономики, два игрока
   { f: 'rt-e2e.cjs', e2e: true, needs: 'rt', t: 600 },   // свой сервер: два Chrome, io-игра и стол, сервер убит посреди партии → Supabase
+  { f: 'wx-e2e.cjs', args: ['pc', 'all'], e2e: true, t: 1500 },   // T-135: погода по биомам — бури в «Мире» и «Кубомире» (картинка, видимость, замер), 0 ошибок
+  { f: 't145-e2e.cjs', args: ['pc', 'planet'], e2e: true, t: 900 }, { f: 't145-e2e.cjs', args: ['pc', 'terra'], e2e: true, t: 900 }, { f: 't145-e2e.cjs', args: ['pc', 'kubomir'], e2e: true, t: 900 },   // T-145: планета и новая земля в каталоге, песчаная буря на планете и в новой земле, «Кубомир» v4
 ];
 
 // ═══ Откуда брать пакеты ═══

@@ -107,11 +107,76 @@
 - Замер (ПК, 1280×720, «высокая», scripts/climate-e2e.cjs): студия — ЦП 0,96 мс / 53 вызова без погоды → 1,16 мс / 57 в снег, 1,20 мс /
   57 в дождь; «Кубомир» — 3,15 мс / 583 → 3,44 мс / 585. Снимки — E:\claude-tmp\climate\shots. X3595 на Direct3D — было и до погоды.
 
+## 🌪 Weather by biome — D37E.wx + D37E.wxfx (T-135, steps WX0–WX2, 29.10.2026, GAMES_VER 152; spec E:\d37-core\spec\BIOME_WEATHER.md v2)
+- Owner: «в разных биомах свои особенности: песчаная буря, пыльная буря, перекати-поле, зимой буран, град» + «реалистичнее, редкие
+  исключения» + «град вредит по-настоящему». Data (WX0, Layer-1, append-only): data/wx/weather_events.csv (53 rows: spec rows 1–48 +
+  49–53 realism: desert winter rain mostly evaporates or falls cold, snow in a desert ≈ 0.2 per game year on winter nights only, hail in
+  the tropics rare), climate_classes.csv (the ONE place of the class integers 0 temperate … 8 warm, default surfaces/features per
+  class), wx_levels.csv (hail harm by class: shared / kids ‰ per 10 s and health floors — kids never below 50 %, crop damage, dents;
+  VIS_RATE, dB, fire classes, Kp, glaze: walk ×0.5, car steering ×0.7, braking ×0.6, no spins). `node scripts/make-wx.mjs` writes them
+  into the <wx-data> block of js/engine/wx.js (`--check` in CI). Copy the CSVs to E:\d37-core\spec\data once the Backrooms lead OKs.
+- Core (WX1): js/engine/wx.js, loaded after climate.js only in games (index.html keeps the light climate.js). climate.js gets a ~25-line
+  hook: `sample()` calls `E.wx.apply()` after the ribbon mix — inside a special's window the parts follow the integer event (precip
+  type, hail, temperature band, wind ≥ the row's, direction), outside every window `null` → every old field bit-identical (golden vs
+  the pre-T-135 climate.js from git). New states are APPENDED by wx.js (only where it loads: the site and Studio keep nine) (sandstorm, duststorm, buran, whiteout, hail, downpour, freezing_rain,
+  seafog) and appear only in `s.stateX` (C.labelX); `state` / C.label unchanged. New fields: special, sp, vis (m, 510 = clear), dust,
+  dustC, tint, tintK, flat, hailSize (cm), freezing, fireRisk, sign/signKey (lead: in-world signs only), funnel, flav/flav2, glaze, drift.
+- Schedule: integer twin of the ribbon (`slotKindQ` = slotEvent, 0 mismatches in 168,000 slots), salts 0x5758 / 60+; one main special
+  per place per slot (rows own ‰ intervals, acc ≤ 1000 checked on a grid), groups 0/3 independent; fronts move west → east with
+  W.front (a place 8,000 u east sees the same special exactly 8,000 / front w-h later); «Стихии» `elements` 'rare' (default: strong rows
+  half as often) | 'real' | 'off'. Region record per place: `wxRegionAt(x, z)` → { cls, smask, F, alt, kc }; else `WX.biomeAt(W, x, z)`
+  (the ONE biome adapter — T-116 switches it; `W.biomeAt` callback until then) → `WX.regionOfBiome`; else the climate key.
+  T-145: a world on the logical biomes passes `wxRegionAt: D37E.wx.regionOf(src)` (src = `D37E.biomes.t1(seed, { gen })` |
+  `.kb(G)`) — `B.region` per 128 m weather cell (majority class of five samples, surfaces OR-ed, coast/high), cached; class, surface
+  and feature bit orders are the same in wx.js and biomes.js (climate_classes.csv). Used by «Новая земля» and by «Кубомир» v4 worlds.
+  Kids' city (kc) and W.storm === false: no strong rows. Realm 'kids' (default): hail at most HA1 (1.3 cm), wind W9 halved.
+- AI: `WX.visQ`, `WX.sight(d, vq, kind‰)`, `WX.limitAt(x, z)` (cell 64 u × 2 s cache) — creatures never see farther than the player's fog
+  (≤ 4× for natives); npc.js caps follow/flee radius by it (`E.wx.AI = false` — off).
+- Visuals (WX2): js/engine/wx-fx.js — sky/fog tint and visibility through R.setWeather (render.js applyFog: fog end = min(fog, vis),
+  floor 15; gfx.js E.weatherSky: horizon/zenith to the storm colour, pale sun, light ≥ 45 %, whiteout `flat`), grains (Points) and low
+  streaks (LineSegments) around the camera, lazily created, hidden = 0 draw calls, ≤ 2 draws in a storm; phone/'mid' 45 %, 'low' tint
+  only; louder/lower wind loop; hail streak length by size. precip.js attaches it itself (Mir, Studio when loaded, Planet when loaded);
+  Kubomir attaches its own (kubomir-weather.js: weather cells 128×128 by five generator samples, `pushSky` because Kubomir darkens its
+  own sky). Flags: `D37E.climate.SPECIAL = false` (all off), `D37E.wxfx.ON = false` (no visuals), graphics guard key 'wxfx'.
+- Mir: `mirWxRegion` (mir.js) — 64-u cells: steppe (dust storms, tumbleweed wind, буран, позёмка), mountains (high: fog, hail), sea /
+  war coast (coast: sea fog, squalls, waterspouts), capital and cities (town: hoarfrost, freezing rain, valley mist); kids' city kc.
+- Planet (wired in T-145): the planet scripts load wx.js and wx-fx.js; desert latitudes get sandstorms by themselves (class by the
+  latitude's climate key). planet-demo `planetWx(v, st.wx.wfx)` passes the smoothed wx-fx numbers (dust, flat, vis; tint linear →
+  sRGB) into planet-view `V.setWeather` 4×/s: sky dome toward the storm colour, sun dimmer, the ground fades into the tint at vis.
+  Only near the ground: fades from 2000 u, off from 8000 u (from orbit the planet is not tinted by the storm below).
+- «Новая земля» (terra-demo.js, T-145, flag TERRA_WX): calendar weather in metres of the world (anchor + u / U), climate of rain and
+  snow by `biomes.climateAtFn`, specials by `wx.regionOf(biomes.t1(SEED, { gen: 2 }))`, the sky ends over the core height (no rain
+  in caves). «Кубомир» v4 worlds: kubomir-weather.js kbRegion takes zone-0 cells from `D37E.biomes.region` (biomes.js in its scripts).
+  Phone ×4 'mid' (scripts/t145-e2e.cjs): «Новая земля» walking, clear, CPU per frame 4.24 ms with weather vs 4.32 ms without (noise);
+  walking in a sandstorm 4.70 ms (77 grains + 42 streaks, fog at 62 u). Coast: sea strips of 4 m only over core ground below the sea
+  (SEA_FINE) — a pit 4+ m from the shore is dry to the eye too, as for physics (TS.water).
+- **The place's own climate** (T-145 review, 30.10): `C.world({ placeAt(x, z) → { t, amp, ph } })` — the yearly mean °C, the seasonal
+  half-range and a season shift in quarters (2 — the southern hemisphere; not in mode fixed / off). climate.js takes the season
+  temperature from it instead of the class row (`seasonTemp`), the ribbon season and the accumulators too; wx.js `regionAt` copies it
+  into the region record (`t10`, `a10`, `pq`) and the integer `T_q`, the season and the roll cache key use it. No placeAt (Mir, Kubomir,
+  Studio) — bit-identical to before. Sources: `D37E.biomes.placeAtFn(src)` (32 m cells: `B.meanC(ts)` — the Whittaker borders ts .07 /
+  .22 / .40 / .62 / .80 are −15 / −3 / 7 / 17 / 24 °C; `B.ampC(tBase, m)` — 9…16 by dryness, ×0.35 where the sea-level base is hot)
+  and `P.placeAtFn()` (planet.js, 64 u cells: `tempAt` at sea level, half-range 20·|sin lat|^1.2, ×0.5 over the sea, south `ph = 2`
+  — the same declination as `P.sunDir`). Flags: TERRA_PLACE (terra-demo.js), PLANET_PLACE (planet-demo.js). Before: a hot savanna by a
+  desert used the steppe row (t 7, amp 21: −14 °C, snow, буран), the planet's 10° N used 'temperate' (snow at the equator) and both
+  hemispheres had one season. Numbers (scripts/place-climate-test.cjs, January, land within 400 m of a desert, 258 cells): class
+  climate — 164 below −5 °C and 171 with snow; the place's own — 7 and 13 (cool steppe hills only), hot biomes 0 / 0.
+- «Новая земля» since the review: day and night (TERRA_DAY: `E.dayClock(ms, 40, .2)` as Mir; the weather's `hourAt` is the same
+  function of the moment — before it was the page light fixed at 10:30, so hail, afternoon storms and night specials never came);
+  fog solid at the block ring's edge (TERRA_FOG: `(radius − 0.55) · 32 m` divided by the player's distance setting — from the air
+  the cut world edge is not seen); rain stops at `TS.skyTop(x, z)` — the height field plus the column's edits (a dug pit gets rain
+  to its floor, a fill shelters), the weather origin is one reused array.
+- Tests: wx-test (55: data, grid, twin, season, T_q ±1.1°, golden, §2.11 frequencies, kids, fronts, order, AI, WxRec, speed),
+  wxfx-test (11: pools, caps, low, roof, pushSky, 0.22 B/frame), wx-e2e (Chrome: Mir + Kubomir storms, phone ×4, soak),
+  world-reopen-e2e with REOPEN_WX=sandstorm (20× phone, no leaks).
+
 ## 🪐 Планета (D37E.planet; T-051, 22.10.2026; план и замеры — docs/plans/planet.md)
-- T-075 (PL-2 LOD v2 + PL-4 движок) — НА ПАУЗЕ 22.10 (лимит), влито ВЫКЛЮЧЕННЫМ: флаги D37E.planetView.FLAGS, включить — localStorage d37_planet_v2 = '1' + перезагрузка (или o.flags); выкл — старые пути (выбор кусков, 1 диапазон глубины, туман движка байт-в-байт, без погоды). Всегда включено: E.setSunProvider, обод куска по диагонали физики, поток перезапускается (до 3), R.guardVolatile. Как продолжить — docs/plans/planet.md §12a; проверки: planet-lod-test (--fast в ci-run), gfx-strict PAGE=planet, planet-perf V2=1.
+- T-145, слияние: после посадки и прыжка на орбиту показ застревал (дыры в планете, 188 кусков вместо ~12) — выбор раз в 0,5 с, пока показ
+  ждёт, и через 1 с без делений/слияний один выбор со сбросом (P.lodShow flush: мельче цели — прочь, на месте — готовая цель); стоя — 0 выборов.
+- T-075 (PL-2 LOD v2 + PL-4 движок) — ВКЛЮЧЕНО с T-145 (29.10): флаги D37E.planetView.FLAGS (откат одной строкой: `const FLAGS = { ...FLAGS_OFF }`; на устройстве — localStorage d37_planet_v2 = '0' | '1'); выкл — старые пути (выбор кусков, 1 диапазон глубины, туман движка байт-в-байт, без погоды). T-145: показ после прыжка на землю не застревает, перетекание — атрибут куска, два прохода глубины — только с AO/отражениями, тени на земле 'auto' (телефон «средняя» — без них), тень солнечного затмения (флаг eclipse), крючок погоды V.setWeather({ …, dust, tint, vis, flat }); замеры — docs/plans/planet.md §12b. Всегда включено: E.setSunProvider, обод куска по диагонали физики, поток перезапускается (до 3), R.guardVolatile. Как продолжить — docs/plans/planet.md §12a; проверки: planet-lod-test (--fast в ci-run), gfx-strict PAGE=planet, planet-perf V2=1.
 - Владелец 22.10: «планета — основа мира и вселенной, параллельно, скоро»; «планету нужно будет реализовать в других играх» → ОБЩИЙ модуль
   движка, у игр — только переходники (план §10: «Мир Денчика», «Кубомир», «Подземье», «Студия 3D», космос). Сейчас — образец на скрытой
-  странице /play/planet (#/games/planet, GAMES_HIDDEN): полёт с орбиты до земли без загрузки, посадка, ходьба обычным player.js, сутки от вращения.
+  странице /play/planet (с T-145 — в каталоге для всех, «Планета», 0+; откат — T145_OPEN): полёт с орбиты до земли без загрузки, посадка, ходьба обычным player.js, сутки от вращения.
 - Файлы: js/engine/planet.js (без three.js — node, поток, страница: профиль PL.def/PL.HOME, куб-сфера, шум, выбор кусков, сетки, плоский кусок,
   солнце и луна), planet-worker.js (сетки кусков в потоке), planet-view.js (three.js: куски, атмосфера, звёзды, луна), js/games/planet-demo.js.
 - Решётка общая: вершина — целая точка куба M = N·2^L, искажение tan по оси → общие вершины соседних кусков (та же грань, другая, уровень
@@ -396,14 +461,60 @@
   `build.ps1 -Site <site>` (copies wasm + golden). Output is chunk-local (positions relative to cx*32, cy*32, cz*32).
 - Files: terra-core.js (core + wasm loader), terra-worker.js (wasm in workers, self-test, JS fallback on load error or trap, messages
   before init are queued, buffer pool), terra.js (rings, column probes `t1_column`, ≤ 2 jobs per worker, edits quantized to 1/64 m and
-  applied in order, affected blocks rebuilt first, `ground()` from the density field — cave floors, `ray()`), terra-mesh.js (pooled
+  applied in order, affected blocks rebuilt first, `ground()` / `blocked()` from the shown mesh — cave floors, `ray()`; an edited block —
+  from the density field at the edit's tick until its re-mesh is shown, T-145 review TECH-3, rollback `editDensity: false`), terra-mesh.js (pooled
   geometries, one shared index buffer — detach it before `dispose()`, sRGB→linear vertex colours in the vertex shader, anchor),
   js/games/terra-demo.js (hidden /play/terra; `D37E.terra.ON` — rollback; `localStorage d37_terra_wasm = '0'` forces the JS core).
   Units: core = meters; the game converts with U = E.UNIT; the floating anchor (multiple of 32 m) moves only in the logic step.
+- Physics = the SHOWN mesh (review fix 29.10): at TS.recycle (terra-mesh showed the block) the block's triangles become its physics
+  (Uint16 copy packed by the worker after the mesh: buffer = q·104 B, T1.physPack; xz index 34×34 built on first query). TS.ground =
+  highest floor under yRef+1.1 on the vertical line; facing by parity from the open sky (column hmax + fills) — per-quad normals are
+  unreliable on near-vertical faces. Block not shown yet → the old density path (TS.densityGround). |ground − mesh| ≤ 7 mm (was up
+  to 0.4 m at craters, 8.3 m at river banks). Phys hooks, opt-in (other games unchanged): ph.terrain.col (terrain hits are grippable),
+  .blocked(x, z, y0, y1, r) (stand/mantle room), .normal(x, y, z, out, dx, dy, dz) (field normal; horizontal rays → the face 0.3 m
+  lower). Parkour then works on steep faces (river banks); dig/fill spheres at 1 m Surface Nets are ≤ ~55° cones — no ledge there.
+- Edits are bucketed by 32 m cell (EB): TS.ray / TS.solid / column probes read one cell's edits (sign-exact; 5040 edits: 0.21 ms per ray
+  vs 1.4 ms over all edits). TS.density stays the core's exact point density (all edits).
 - Pitfalls: a URL handed to a worker must be absolute and resolved against `document.baseURI` (real addresses /play/… + `<base href="/">`;
   `location.href` gave /play/js/… → 404 → silent JS fallback). Chrome CPU throttling does NOT slow workers (worker ms = desktop).
-- Tests: terra-test (golden, edit re-mesh, worker protocol in worker_threads, wasm vs JS timing); Chrome:
-  `node scripts/terra-e2e.cjs perf | leak [N] | soak [min] | shots` (PC=1 — desktop).
+  A stalled terra.wasm download → JS core after 6 s (init `wasmMs`). terra-e2e leak FAILS on heap +6 MB (LEAK_MB), live workers,
+  changed three.js counts or console errors (heap = least of 3 GC'd samples — one sample right after a close was noisy ±28 MB).
+- Tests: terra-test (golden, edit re-mesh, worker protocol in worker_threads incl. stalled wasm, ground == drawn mesh at craters /
+  fills / banks, parkour hooks, edit buckets, wasm vs JS timing); Chrome: `node scripts/terra-e2e.cjs perf | leak [N] | soak [min] |
+  shots` (PC=1 — desktop). C# (Unity) binding + managed port + tests: E:\d37-terrain\csharp, contract E:\d37-terrain\spec\API.md.
+
+## 🌍 T-145 track L — new land tails (T-115) and logical biomes (T-116), 29.10.2026 (branch t145-land)
+- Also merged here: the T-111 review fixes (d62cbfe, physics = drawn mesh, Phys terrain hooks, edit buckets) — they had never
+  reached main (main had merged the earlier f3535dd).
+- T1 core ABI 2 (E:\d37-terrain 12414bc, spec/API.md §3a): generator v2 (logical climate → Whittaker; biomes 11 Steppe, 12 Jungle),
+  world rules (0 earth, 1 mono, 2 patchwork, 3 absurd islands, 4 inverted), flatten edits (mode 2). Heights unchanged — only the
+  surface colour differs between v1 and v2. wasm == JS == DLL == C# bit for bit (golden G 200, R 72, Q2 50). terra.js:
+  create({ gen, rules, param, compact }), TS.flatten / TS.climate / TS.ceiling; workers get gen/rules in init and re-apply them
+  after a JS fallback; inverted worlds route edits through the mirrored test (TE.touchesW).
+- D37E.biomes (js/engine/biomes.js, new, English): one API for T1 and Kubomir v4 — at(src, x, z) → biome, class (climate_classes.csv
+  integers), surface bits, ts / tp / m, tempC; region(src, x, z, cell) → integer record { ck, cls, smask, F, alt } (BIOME_WEATHER
+  §1.2, five fixed samples); climateKey / climateAtFn (climate.js keys for C.world({ climateAt })); PRESETS (strange worlds as data,
+  mirror of E:\d37-terrain\data\world_presets.json). This is the name agreed for the weather track (T-135).
+- /play/terra flags (js/games/terra-demo.js, one-line rollbacks): TERRA_GEN = 2 (logical biomes; HUD shows the biome and °C),
+  SEA_TILES (sea = 32 m tiles over columns whose own terrain is below 0 — a pit on land stays dry; coast / river columns keep water),
+  CAM_CLIMB (camera rig option `climb`: in a crater the rig searches, every 0.2 s with 3 rays, a steeper pitch with a clear line
+  and eases into it — not into the back of the head), COMPACT (blocks as u16 positions = the physics numbers, octahedral normals u8×2,
+  rgb: 44 B per quad on the page and GPU instead of 80 B geometry + 24 B physics; TS.recycle(b, meshPosArray) — the physics reads
+  the mesh's own array). Tool «▭ Выровнять» (flatten pad r 6 m at the hit point). Phys: opt-in `terrain.ceiling(x, z, y)` — a jump
+  stops at a cave roof / overhang / fill (the DRAWN roof), walking under a roof lower than the head is blocked, crouching passes.
+- Tests: terra-test (+ compact block, compact physics == old, pad within 0.015 m, roofs = drawn mesh, Phys ceiling), biomes-test
+  (new, in ci-run), Rust `cargo test` (v2 adjacency / distance / patches / column == point / inverted mirror / flatten / 0 allocations
+  for every rule), C# tests. Chrome: `node scripts/terra-e2e.cjs t145` (phone ×4: biome, inland crater stays dry, camera climb on/off,
+  flatten pad level; Page.setDownloadBehavior deny).
+- Numbers 29.10 (Chrome headless, phone 412×915×2, CPU ×4, «mid», before = 2412cc0 / after, machine shared with other agents):
+  wasm walk frame CPU 4.68 → 3.26 ms (p95 9.3 → 5.0), fly 4.10 → 4.37 ms (p95 8.6 → 9.5); JS core walk 4.43 → 3.76, fly 4.12 → 4.09;
+  worker block 5.3 / 6.3 → 4.9 / 7.2 ms (walk / fly); upload per block 0.50 → 0.48 ms; GPU 37.1 → 20.1 MB; page heap after the run
+  77.4 → 46.7 MB (wasm), 125.4 → 66.1 MB (JS). 20× open / close: heap 14.2 → 15.1 MB (flat after 10), workers 0, renderers 1,
+  geometries 43, materials 18 — equal; 10 min soak: 287 edits, 11 540 blocks, heap 35–51 MB without growth, 0 errors, 0 fallbacks.
+  Crater (inland, 20 m deep, below the sea): no sea tile over it; camera 7.5 m from the head with climb, 3.1 m without. Flatten pad
+  r 6 m: ground inside within 0.001 m in Chrome (0.015 m in node). SSAO angle bias (post.js AO_ANGLE 0.2, rollback 0): AO darkening
+  on open terrain at «high» −40…50 % (mean 3.7 → 2.2 %, 1.2 → 0.6 %, 2.0 → 1.2 % in three close-ups); the bands themselves did not
+  show in headless shots — check on a real phone.
 
 ## 🧠 AI LOD P1 — «ум толпы» on the site (T-127, 29.10.2026, GAMES_VER 148, review fixes 149; spec E:\d37-core\spec\AI_LOD.md §10.2, §12 P1)
 - Owner decisions (docs/progress.md 29.10): D1 Horde — one enemy cap for every device; D4 Mir — the same 16 residents on phone

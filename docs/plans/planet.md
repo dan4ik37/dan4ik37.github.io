@@ -332,7 +332,7 @@ Screenshots: `E:\claude-tmp\t051\shots` (`1-orbit` … `7-time`, `phone-*`), Swi
 shadows on terrain, clouds, wave geometry, any game adapter (Мир/Кубомир/Подземье/Студия), rockets/orbits/network; the flight is a free camera, not a
 vehicle; the start is a natural coast because the `mir` spot is sea on seed 37 (M1 pins land there); real-phone GPU time is not measured.
 
-## 12a. T-075 — paused (PL-2 LOD v2 + PL-4 engine integration; 22.10.2026, weekly limit)
+## 12a. T-075 — paused (PL-2 LOD v2 + PL-4 engine integration; 22.10.2026, weekly limit) — finished and ON since T-145, see §12b
 Branch `worktree-agent-a22547bb6ee7652aa`. **Everything new is behind flags that are OFF by default** — `/play/planet` behaves as before
 T-075 (checked: `gfx-strict PAGE=planet PLANET_V2=0` on SwiftShader green — 1 depth range, no AO/shadows/haze, guard writes nothing; Chrome
 smoke — 214 chunks on the ground, 5.7 MB chunk memory, 1 worker on the phone profile, 0 errors). Turn on: `localStorage d37_planet_v2 = '1'`
@@ -394,6 +394,83 @@ re-upload (most shown chunks are mid-morph: ~115 k uploads per minute; fix — k
 attribute buffer or one draw per level), the second render pass (near + far scene traversal), engine shadows, weather particles.
 **Not done:** breakdown runs (`V2=1 PF='{"weather":false}'`, `{"split":false}`, `{"shadows":false}`, LOD only — runner
 `E:\claude-tmp\t075\meas2.cjs parts`), 10-min soak and reopen ×21 with the flag, real phone, CLAUDE.md / progress.md text for «on».
+
+## 12b. T-145 — T-075 finished and turned ON (29.10.2026); T-088 eclipse shadow, world clock from our server
+Branch `t145-planet`. **Default ON** (`D37E.planetView.FLAGS`); one-line rollback in planet-view.js: `const FLAGS = { ...FLAGS_OFF };` (= the
+pre-T-075 view); per device `localStorage d37_planet_v2 = '0' | '1'`, single flags `d37_planet_flags` (lod2, morph, prefetch, split, shadows,
+aerial, weather, eclipse).
+**Found and fixed.**
+- **LOD v2 stuck after a jump to the ground** (teleport, reopen, any `goto`): the show stayed on 4–37 of 165 chunks for ever while ~120 chunks
+  per second were built and evicted. Cause: with the cache over CAP, `select` evicted the *ready* children (and grandchildren) of a shown node
+  that waits to split (coarser neighbour, not settled, or children beyond the horizon that the selection culls) — next select needed them
+  again. Fix: the whole leaf→shown path and the 4 kids (+ grandkids of splitting kids) of every shown splitting node are «used». After: 165 shown
+  in ≤ 1 s, 0 evictions and 0 selects while standing (dbg run, 3 reopenings). This is also why the 22.10 numbers (ground +2 ms) were measured
+  on a half-built ground after a descent.
+- **Per-draw material re-upload (§12a suspect #1)**: morph numbers of a chunk (k, displacement scale, 4 edge k packed 11 bits each) are now one
+  instanced `vec4` attribute per chunk (`aMk`, `InstancedBufferGeometry`, 1 instance; 7 vertex attributes ≤ WebGL1 minimum 8; WebGL1 without
+  ANGLE_instanced_arrays → morph off). Uploaded only when a value changes: standing — 0 uploads (was 4 580–5 096 full material uploads per
+  second on the phone profile), walking — only chunks in the morph band. No `onBeforeRender` on chunks any more.
+- `P.lodMorph` runs only when the camera moved (> 0.002 u), the show / projection changed, or a fade is running (it now returns «busy»;
+  `o.dcMax` keeps fades smooth after a pause): standing — planet update 0.28 → 0.03 ms (×4).
+- Chunk matrices are set once in `placeMesh` (`matrixWorld = matrix`, the planet group is out of the scene's matrix traversal); the per-frame
+  loops reach the chunk through `node.ch` (no Map lookups with 47-bit keys).
+- **Two depth ranges only when they give something** (`split` + AO or screen-space reflections on): phone «средняя» / «низкая» have neither, so
+  the second scene pass was pure cost (profile: `Js.render` 581 → 498 ms/s). With split: far-only chunks go to layer 1 (the near pass skips them
+  before the frustum test) and the scene's matrices are updated once per frame (`scene.onAfterRender` after the far pass).
+- Ground shadows `shadows: 'auto'`: off on a phone at «средняя» / «низкая» (the player keeps the blob shadow), on elsewhere.
+**Numbers** (phone profile 412×915×2, CPU ×4, «средняя»; the machine was at 93–100 % CPU from other agents the whole evening, so wall ms per
+frame jumped 3–11 ms between identical rounds. New `planet-perf.cjs trace` mode: main-thread CPU per frame from Chrome trace `tdur` of rAF
+tasks — no preemption; ×4 throttling is not in it, so ×4 wall ≈ 4 × thread). On the ground at (29°, 81°), 10 paired rounds v1 (off) → v2 (default):
+thread median 1.161 → 1.378 ms, **median of paired differences +0.07 ms thread (≈ +0.3 ms at ×4)**; wall medians 4.40 → 5.29 ms (paired
+differences median +0.67, quiet pairs ≥ 130 fps: +0.16, +0.52, −0.54); running: thread 1.380 → 1.456, wall 5.64 → 5.84. 22.10 (before): ground
+3.27 → 5.24 (+1.97). LOD only (no weather / shadows / haze / eclipse), 4 rounds: thread 1.767 → 1.885 (morph attributes ≈ +0.03 of it).
+Profile (×4, ms of CPU per second, all v2 flags, before → after): `P.lodMorph` 30 → 0, `morphUp` 31 → 0, `updateMatrixWorld` 49 → 21 (v1 37),
+`intersectsObject` 44.5 → 30.7, `Js.render` (incl.) 581 → 498. What is left over v1: three's per-draw cost of 7 attributes instead of 3 (CDLOD
+parent data: `WebGLObjects.update`, `bindingStates.setup`, instanced draw) and +5 draw calls (69 vs 64), weather particles ≈ 0.1 ms ×4.
+10-min soak (orbit ↔ ground, 8 places, defaults): JS heap 28.5–31.4 MB flat, chunk cache 234–258, GPU 4.6–7.5 MB, three objects stable
+(geometries 372–400, materials 59, textures 32), 0 errors, guard clean. Reopen ×21: after GC 28.6–29.4 MB (no growth), workers 0 after close,
+renderers 1, geometries 43, materials 18, 0 errors. gfx-strict PAGE=planet SwiftShader «высокая»: green (split + AO, shadows, haze, sky).
+Tests: planet-test 109, planet-lod-test 17, orbit-test 105 (+10: clock from our server, eclipse shadow), render-test 391, rt-test 146 (+2: /time).
+**T-088.** Solar eclipse shadow on the ground (flag `eclipse`): see planet-space.md §2.1; screenshots from orbit show the umbra with a soft
+penumbra moving across the ground (~2 min of totality at a point). World clock: `GET <RT_URL>/time` first, Supabase `world_now()` — fallback
+(the live server needs the update below; until then the clock quietly uses Supabase).
+**Weather hook (for the weather track, BIOME_WEATHER.md v2 §WX2).** One call: `V.setWeather(wx)` (planet-demo.js `planetWx` passes the engine
+weather's visual state 4×/s) — besides `cloud, rain, fog, storm, snowCover, wet` it takes `dust` 0…1, `tint` [r, g, b] or '#rrggbb' (sRGB),
+`vis` (visibility, u: the distance fades into the tint) and `flat` 0…1 (whiteout); the sky dome around the camera takes the tint too (the
+shell seen from orbit does not: weather is local). Terrain and sky branches are uniform-gated (0 cost when unused). Screenshots: sandstorm,
+whiteout, smoke — E:/claude-tmp/t145/planet/wx2/shots; eclipse — E:/claude-tmp/t145/planet/ecl/shots.
+**Not done:** real phone check (owner); the old v1 path still drops a face to its root chunk for ~0.1 s when a new leaf is not ready yet while
+walking (pre-existing; v2 does not) — v1 is only the rollback now.
+
+**Integration (branch t145-planet-all, 29.10.2026).** The planet is in the site catalog for everyone (0+, tag «Новые»; SEO page
+/games/planet; rollback T145_OPEN in js/features/games.js and api/_lib/games-seo.js). Weather by biome is wired: the planet scripts load
+wx.js + wx-fx.js, planet-demo planetWx(v, st.wx.wfx) feeds V.setWeather with dust / flat / vis / tint (linear → sRGB) 4×/s; desert
+latitudes get sandstorms by their climate class; the weather fades above ~2000 u and is off from ~8000 u (from orbit the planet is not
+tinted by the storm below). Phone ×4 'mid' (scripts/t145-e2e.cjs, order A/B/A on one page): ground 3.60 / 3.49 ms CPU per frame with the
+specials vs 3.63 ms with the one-line rollback (D37E.climate.SPECIAL = false + wxfx.ON = false) — no measurable cost; in a sandstorm
+3.62 ms (fog at 62 u, 51 draw calls instead of 71); orbit 1.76 ms. The debug line (chunks, CPU) is hidden, F3 shows it.
+**Bug found and fixed in the merge (v2, also on t145-planet alone):** after a landing, a jump to orbit left the show stuck — 188 chunks
+(L4…L11 under the landing site next to L1 targets) instead of ~12, seen as big black holes in the planet. Merges wait until all four kids
+are «up» (k and every edge k ≥ 1 − gate); edges next to a much coarser shown neighbour never got there, and with the camera still no
+select ran. Fix: planet-view selects every 0.5 s while the show waits (waitN), and when it waited 1 s with no split / merge, one select
+passes `flush` to P.lodShow (planet.js): shown nodes finer than their target leaf are dropped, step 2 shows the nearest ready target.
+Orbit after landing: 188 → 11 chunks within ~2 s, 1 flush; standing on the ground: 0 selects, 0 flushes per 5 s (unchanged); running 15 s:
+68 selects, 1 flush. Orbit frame ×4: 3.81 → 1.76 ms.
+
+**Review fixes (30.10, GAMES_VER 157).** (1) The halo seen from orbit was gone in v2 with every flag: the outer sky shell got
+`uSkyWx = new Vector4()` — three.js starts w at 1, so the shader mixed the shell colour to black (additive: nothing drawn). Now
+(0, 0, 0, 0); t145-e2e checks the uniform. (2) Weather temperature: `P.placeAtFn()` gives the weather the planet's own yearly mean
+(`tempAt` at sea level), a half-range 20·|sin lat|^1.2 (×0.5 over the sea) and the southern hemisphere's season shifted by half a
+year — the same declination as `P.sunDir` (before: the class row — 'temperate' at 10° N gave snow at −10 °C; both hemispheres one
+season). The snow on the ground near the camera fades from 0.25 · 3000 u (was 0.6: a hard disc). (3) World clock: `/time` only after
+`/health` says `time: 1`; the old live server answers `/time` with a 404 without CORS (TypeError + 2 console errors per sync).
+(4) The weather hour is taken at the moment asked (`st.CL.tOf(ms)`), not the current one. Fix run 2 (TECH-1 breakdown, phone ×4, trace,
+one Chrome, 3 rounds; thread ms per frame, wall in brackets): v1 ground 0.536–0.726 (2.0–2.7), run 0.545–0.712 (2.1–2.7); v2 ground
+0.625–0.830 (2.4–3.1), run 0.723–0.994 (2.8–3.8); v2 without weather run 0.762–0.817; v2 without aerial + eclipse 0.846–1.055 (noise);
+v2 without morph run 0.633–0.744; morph k in 1/255 steps — same as exact (reverted). So running costs morph (≈ 0.05–0.1 thread) plus
+LOD v2 itself. Earlier: TECH-1 (v2 vs v1 on the ground, review:
+standing +0.33 ms ×4 paired median, running +0.46) — not changed here: the difference is the v2 features themselves (weather particles,
+7 vertex attributes, +5 draw calls); the select-while-waiting rule costs nothing standing (0 selects once the show has converged).
 
 ## 13. Step list → board tasks
 | Step | What | Size | After |

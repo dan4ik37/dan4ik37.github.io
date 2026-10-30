@@ -101,7 +101,18 @@
   Границы биомов: цвет травы и листвы в генераторе — «шатёр» до 8 блоков (было ступеньками по 4) — во всех мирах. Генератор v2
   (meta.genVer 2 — миры 16.10–22.10, с 22.10 новые — 3, «🌳 Деревья пород»; нет — 1, блоки ровно как раньше, контрольная сумма в hand-test): сдвиг шума температуры и
   влажности (извилистые границы), у снегов переходная полоса (снег пятнами по «температуре» −0,25…−0,42, ели и лиственные
-  вперемешку); версия идёт в потоки (voxel-stream / voxel-worker: ver). Вещи: инструменты — пиксель-арт 32×32 (P.tool32 в
+  вперемешку); версия идёт в потоки (voxel-stream / voxel-worker: ver).
+  Generator v4 (T-145 / T-116, 29.10, English): logical climate — latitude (triangle wave along a warped z, equator → pole 4096
+  blocks, the world origin at mid-latitude), smoothed altitude (lapse 0.004 per block above SEA + 8), moisture carried along the
+  prevailing wind from the ocean (6 upwind samples 64…2048 blocks, rain shadow behind mountain massifs), latitude belts, rivers →
+  Whittaker on the Kubomir biome ids (ts < .22 snow, desert ts ≥ .62 and m < .30, swamp m > .74, forest / birch m ≥ .52, else
+  plains); c.T / c.M keep the old scale (trees, tints, ice, weather zones unchanged code); snow caps on mountains and «always
+  winter» zones by the temperature AT the height (tp), not by SEA + 40. Climate nodes every 32 blocks in a per-world typed cache
+  (G.cn4, 4096 slots, no garbage); V.climateAt(G, x, z) → { b, ts, tp, m, … } (D37E.biomes reads it). v1–v3 digests (ids + biome +
+  zone) unchanged (scripts/biomes-test.cjs). Snow next to a desert: v3 8–16 blocks → v4 712–1376; interior lonely patches 0.17–0.34 %
+  → 0.06–0.19 %; chunk generation (node, PC) about the same as v3 (1.4–2.2 ms). NEW WORLDS STILL GET v3 until the coordinator, after
+  merging t138-teardown, sets `KB_GEN = 4` in js/games/kubomir.js:25 AND lets js/games/kubomir-coop.js:689 accept genVer 4
+  (`w.genVer >= 2 && w.genVer <= 4 ? w.genVer : 1`) — without the second line a guest of a v4 world would build v1 terrain. Вещи: инструменты — пиксель-арт 32×32 (P.tool32 в
   voxel-tex.js, TOOL_PAL по материалу, обводка цветом материала), плоские вещи в VR.itemGeo выдавлены на 1/16 (бока по краю
   пикселей своим цветом через почти белый слой «снег»; факел и растения — две плоскости, как были). Мотыги в игре нет.
   Дальше по картинкам (блоки, мобы, 3D-инструменты) — docs/KUBOMIR_ART.md. Тесты: hand-test 230, voxel-test 210.

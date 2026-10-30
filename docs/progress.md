@@ -466,6 +466,17 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
 - Backrooms (18+ по своим правилам): агрессия, урон, стаи, упорство погони, облик и звук — жёстче; настраивает его чат.
 - Сайт: опасность — через сложность («Сложно», «Кошмар» жёстче); облик по возрасту не меняется (дети — мультяшно, 18+ выключено до проверки возраста).
 
+## T-145 track L (land, T-115 / T-116) — decisions 29.10.2026
+- Took: the unmerged T-111 review fixes (d62cbfe) into the branch first — the tails (cave roofs, crater camera) build on its physics.
+- Took: logical biomes as a NEW generator version only (T1 gen 2, Kubomir v4); heights unchanged in T1 (old edits and places stay valid).
+- Took: latitude scale equator → pole 4096 m / blocks (one walk of a few minutes reaches another belt); spawn at mid-latitude.
+- Took: snow caps by the temperature at the height (no snow peaks next to deserts); «lonely patch» measured as interior regions
+  < 32 × 32 m (coastal slivers are terrain, not climate).
+- Took: strange-world presets in the T1 core (mono, patchwork, absurd islands, inverted) + data JSON; presentation laws (sky, rain
+  up, time rate, gravity zones) stay data for the host game (Backrooms).
+- Took: compact blocks (×2.4 less page memory) instead of indexed vertices (per-quad colours would have to become per-vertex).
+- Skipped: switching Kubomir new worlds to v4 (KB_GEN, coop genVer) — files of t138-teardown; one-line steps for the coordinator.
+
 ## Погода по биомам (BIOME_WEATHER.md v2) — решения координатора 29.10.2026 (владелец может поменять)
 - Град вредит по-настоящему (владелец 29.10: «Град вредит по настоящему»): портит посевы, оставляет вмятины, ранит под открытым небом (у детей мягче, без нокаута). Ледяной дождь — скользко и людям, и машинам
   (руль ×0,7, тормоз ×0,6, без заносов-«волчков»).
@@ -604,6 +615,83 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
   «как классика — не валится»: иначе в густом лесу заметная доля деревьев не падала бы целой), V2 — kt в 'wel' вместо PROTO 2 (старые и
   новые версии играют вместе после выкладки), V3 — поиск «где ляжет» с продолжением над пропастью, V4 — мусор в topple-test меряется
   (gc через флаги v8), V5 — поиск по частям и в общем потолке такта.
+
+## 29.10 — T-135 (T-145 track W): weather by biome WX0–WX2 (BIOME_WEATHER.md v2; docs/areas/engine.md «Weather by biome»)
+- Take: the core in a separate js/engine/wx.js (spec §4) with a ~25-line hook in climate.js — index.html loads climate.js on every page,
+  the 50 KB core loads only in games. Old fields bit-identical outside the specials' windows (golden vs pre-T-135 climate.js).
+- Take: Layer-1 tables in the site repo (data/wx/*.csv → wx.js by make-wx.mjs); copying them into E:\d37-core\spec\data waits for the
+  Backrooms lead's OK of the columns (spec WX0 «done when»).
+- Take (coordinator 29.10 «град вредит по-настоящему»): hail harms — wx_levels.csv hail table (shared and kids ‰ per 10 s, kids floor
+  50 % = never a knockout, crop damage, dents); rows 20, 22 `crop_damage+dents` (spec had crop_pause). Body effects themselves are WX5.
+- Take (realism with rare exceptions): rows 49–53 — desert winter precipitation mostly virga (700 ‰) or cold rain (297 ‰), desert snow
+  3 ‰ on winter nights (≈ 0.2 per game year), tropical thunderstorms without hail (985 ‰), tropical hail 15 ‰ (≈ 0.01 per summer day).
+- Take: duststorm visibility 60–110 u (spec 80–150: at Mir's scale 150 u looked clear); 'snow' (can hold snow) in the steppe and
+  temperate default surfaces, else позёмка never forms in the steppe.
+- Take: own lazy pools in wx-fx.js (grains + low streaks, ≤ 2 draws, hidden = 0) instead of recolouring precip's snow pool (spec §5):
+  a buран needs both falling snow and blowing snow at once; Kubomir keeps its own rain/snow path and gets the same wx-fx layer.
+- Take: AI visibility now — npc.js follow/flee radius capped by WX.limitAt (creatures never see farther than the player's fog).
+- Spec errata (report to the spec owner): §2.11 steppe summer dry thunderstorm 0.18/day — with the spec's own recurrence (thunder resets
+  the dry count) the expected value is 0.089; measured 0.093. All other §2.11 rows within ±4 %.
+- Skip (later steps): wall band, funnels, tumbleweeds (WX3); aurora/halo/haze/mirage/drift shaders (WX4); body effects — push, hail
+  damage, glaze friction (WX5); AI core call d37_mind_set_wx (WX6); links (WX7); Studio settings/props/API, Podzem layer, Backrooms
+  port, Mir mir_regions.csv features (WX8); the phone «Погода» showing stateX (phone.js — not this track).
+
+## 29.10 — T-145 integration (branch t145-planet-all: t145-planet + t145-land + t145-wx, GAMES_VER 154)
+- Take: «Планета» and «Новая земля» (id terra) moved from GAMES_HIDDEN into the catalog (0+, tag 'new'), SEO pages /games/planet and
+  /games/terra (api/_lib/games-seo.js → page, sitemap, in-game «📖 Правила» via make-rules), preview cards img/games/planet|terra.png.
+  Rollback: `T145_OPEN = false` in js/features/games.js (back to hidden pages) and in api/_lib/games-seo.js (no pages / sitemap rows).
+  The flag mutates the GAMES / GAME_PAGES tables, so xss-scan no longer proves their fields constant by itself — 18 findings
+  allowlisted as 'const' (the values are still the literal tables).
+- Take: weather by biome reaches the planet's own sky and ground: planet scripts load wx.js + wx-fx.js; planetWx(v, st.wx.wfx) passes
+  dust / flat / vis / tint (linear → sRGB) to V.setWeather 4×/s. Desert latitudes get sandstorms by the latitude's climate class.
+- Take: the biome adapter is `D37E.wx.regionOf(src)` (wx.js) over `D37E.biomes.region` — one region record per 128 m cell, cached;
+  «Новая земля» gets calendar weather on it (flag TERRA_WX in terra-demo.js), «Кубомир» v4 worlds take zone-0 cells from it
+  (biomes.js added to Kubomir's scripts). WX.biomeAt (id-based) stays for games with their own biome callback.
+- Take: the planet's debug line (chunks, cache, CPU) is hidden by default, F3 shows it (HUD rule: debug panels hidden); on a phone the
+  planet buttons stay in one row (scroll), ❓ no longer covers the altitude line.
+- Take (bug fix): planet v2 after landing → orbit showed black holes (stuck show, 188 chunks instead of ~12). planet-view: select every
+  0.5 s while the show waits; stuck 1 s → one `flush` select (P.lodShow drops nodes finer than the target, the nearest ready target shows).
+  Standing still: still 0 selects. Details: docs/plans/planet.md §12b «Bug found and fixed in the merge».
+- Take: planet weather only near the ground (fades 2000 → 8000 u); before, a sandstorm below tinted the whole planet seen from orbit.
+- Take: «Новая земля» coast — sea strips of 4 m only over core ground below the sea (SEA_FINE): a pit 4+ m from the shore is dry to the
+  eye as well as for physics (the 32 m tiles showed water in coastal pits while the player stood dry). Camera below the sea in a dry
+  column — the sea surface is not drawn (no full-screen «underwater» blue).
+- Skip (not this step): Kubomir v4 for NEW worlds (KB_GEN = 4 and the co-op genVer line are in T-138 files); hail harm and other body
+  effects (WX5); saving edits in «Новая земля» (honest FAQ line: «пока нет»).
+
+## 30.10 — T-145 review fixes (branch t145-planet-all, GAMES_VER 157)
+- Take: P1 — the planet's sky shell (halo seen from orbit) had `uSkyWx = new Vector4()` (w = 1): the shell colour was multiplied by 0.
+  Now (0, 0, 0, 0); the halo is back (e2e checks the uniform, screenshot planet-orbit-open).
+- Take: W1 / W2 — the weather takes the place's own climate (`C.world({ placeAt })`, climate.js + wx.js): «Новая земля» by the biome
+  table's temperature (B.meanC / B.ampC), the planet by its latitude temperature with the south's seasons reversed (the sun's
+  declination). Rollbacks: TERRA_PLACE, PLANET_PLACE. Without placeAt — bit-identical (Mir, Kubomir, Studio). Cool steppe hills by a
+  desert can still get a frosty January night (the generator's own lapse makes them a cold-band biome) — realistic, kept.
+- Take: W3 — «Новая земля» has day and night (E.dayClock as Mir, TERRA_DAY); the weather hour is a function of the moment, so hail,
+  afternoon storms and night specials happen. The planet's weather hour is also taken at the moment asked (st.CL.tOf(ms)).
+- Take: T1 (part) — fog solid at the block ring's edge (TERRA_FOG, divided by the player's distance setting): the cut edge is not
+  seen from the air. Skip: a far low-detail horizon (needs its own LOD ring; next step). Texts no longer promise looking far.
+- Take: T2 (texts only) — no «переходы плавные», a FAQ line «деревьев пока нет». Skip: vegetation and blended biome borders (the
+  colour is made in terra.wasm — needs a new ABI in E:\d37-terrain; owner priority).
+- Take: TECH-2 — the clock asks /time only when /health says `time: 1` (the old live server answers /time with a 404 without CORS:
+  TypeError + 2 console errors per sync); TypeError → 30 min without our server; `busy` is released on every exit (after an RT
+  answer every later sync returned the old promise — the 10-min resync never ran). Server: /health `time: 1`, 404 / 405 with CORS.
+- Take: TECH-4 (one origin array), TECH-5 (T145_OPEN by literal spreads: the XSS scan proves the tables again, 16 allowlist entries
+  removed), TECH-6 (TS.skyTop with edits), S1 (⛰️ and the other text-style icons with U+FE0F).
+- Take (fix run 2): TECH-3 — «Новая земля»: an edited block's physics reads the density field from the edit's tick (same tick on every
+  device); its old mesh is only drawn until the re-mesh is shown, then the shown re-mesh is the physics again (terra.js `editDensity`,
+  rollback `create({ editDensity: false })`; terra-test: in the pit at once, back on the drawn mesh, rollback = old behaviour). Left:
+  the density → mesh switch itself (≤ 0.4 m at crater rims) still happens at the upload moment — same bits once shown.
+- Take (fix run 2, after merging main): «Новая земля» in flight — the fog starts near the ground below (render.js `fogNearK`, optional,
+  used only by terra: 0.97 · height / slant distance to the ring edge; a storm's visibility ignores it). From 230 m up on a phone the
+  ground below is clear (nadir fog 0.26 instead of 0.88), the ring edge further along the slant is still in fog. Left of T1: from high
+  up the world's footprint shows as a fog-coloured shape against the darker lower sky dome, and looking ahead there is nothing to
+  see — needs the far low-detail horizon ring (next step). e2e looks down 63° in flight and checks the nadir fog < 0.5.
+- Skip: W4 hail harm (WX5). Hail falls only on the planet, in «Новая земля» and in Mir; the first two have no health at all, Mir has it
+  only inside war zones, Kubomir's weather has no hail. Needs its own step: health + shelter + the kids' softer table.
+- Skip: TECH-1 (v2 vs v1, phone ×4, trace A/B in one Chrome, 3 rounds, 30.10). Standing on the ground: thread +0.06…0.10 ms (≈ +0.25…0.4
+  wall ×4) — at the +0.3 target; running: thread +0.07…0.24 (wall +0.3…0.9) — over it. Breakdown: weather off −0.03, aerial + eclipse off
+  0 (noise), morph off −0.05…0.1 thread, the rest is LOD v2 itself (select / show). Tried: k of the morph in 1/255 steps (fewer aMk
+  uploads) — no measurable change, reverted. Kept ON: the planet seen from orbit and the landings need v2; numbers in planet.md §12b.
 - 30.10 T-140 принят (решения проверок): у всех 34 мини-игр строка сверху в 2 ряда (поле на 18 px ниже); «⚔️» — одни часы на двоих (без
   паузы, спрятанное время догоняется), одиночная игра встаёт на паузу при скрытой вкладке и под ☰ / 📖 / ⚙️; «Парковка» — после 3 «бип»
   приезжает эвакуатор (бездумный перебор машин больше не выигрывает); «Налей воды» — без нарисованной линии 0 звёзд, 3 ⭐ — победа;
