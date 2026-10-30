@@ -161,7 +161,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
   function step(st, dt){
     if (st.dead) return;
     const { C, P, V } = st;
-    C.blocked = !!window.D37Settings?.isOpen?.();
+    C.blocked = !!window.D37Settings?.isOpen?.() || !!st.menu;   // открыто ☰ планеты — клавиши и джойстик не летят
     C.step(dt);
     st.off += dt * (st.timeK - 1);   // ускорение — своё смещение от часов мира (шагами по 1/60 с: одинаково на любом экране)
     if (st.map && C.down('map')) st.map.toggle();   // M или Back на геймпаде (действие «Карта» controls.js)
