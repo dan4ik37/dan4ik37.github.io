@@ -297,6 +297,23 @@ const GOLDEN_EDITS = [10, 5, -20, 6, 0, 10, 14, -20, 4, 1, -300, -10, 400, 9, 0]
     }
     for (const TS of before) TS.dispose();
 
+    // T-145 review TECH-3: after a dig the feet follow the edit at ITS tick (the density field), not when the re-mesh happens to be
+    // uploaded (FPS / phone budget / worker); the old mesh is only drawn meanwhile. Then the shown re-mesh is the physics again.
+    for (const ed of [true, false]) {
+      const TS = TE.create({ seed, workers: 0, radius: 1, caveRadius: 1, editDensity: ed });
+      const x = 40, z = -25, h = T1.height(seed, x, z), tag = ed ? 'edit tick' : 'edit tick rollback';
+      check(await settle(TS, x, h, z), tag + ': blocks shown');
+      const g0 = TS.ground(x, z, h + 0.3);
+      TS.dig(x, h, z, 2.5);
+      const d0 = TS.st.phDens, g1 = TS.ground(x, z, h + 0.3);
+      if (ed) check(g1 < g0 - 1.5 && TS.st.phDens === d0 + 1, `${tag}: in the pit at once (${g0.toFixed(2)} → ${g1.toFixed(2)} m, density path)`);
+      else check(Math.abs(g1 - g0) < 1e-9 && TS.st.phDens === d0, `${tag}: old mesh until the upload (${g1.toFixed(2)} m)`);
+      check(await settle(TS, x, h, z), tag + ': re-mesh shown');
+      const m1 = TS.st.phMesh, g2 = TS.ground(x, z, h + 0.3);
+      check(TS.st.phMesh === m1 + 1 && g2 < g0 - 1.5 && (!ed || Math.abs(g2 - g1) < 0.45), `${tag}: on the drawn re-mesh (${g2.toFixed(3)} m; density said ${g1.toFixed(3)}, before ${g0.toFixed(3)})`);
+      TS.dispose();
+    }
+
     // parkour on the terrain (review: "never triggers — terrain hits have col: null"). With the hooks (terrain.col, .blocked,
     // .normal) a STEEP terrain face is a ledge; without them — never. At 1 m Surface Nets resolution a dig/fill sphere is drawn as
     // a ≤ ~55° cone (no ledge there for anyone); the river bank near (−168, −621) is ~85° → ledges. Gentle land → none.

@@ -278,6 +278,7 @@
         const b = blockOf(cx, cy, cz, inRing({ cx, cz }));
         if (!b) continue;
         b.need = ne;
+        if (b.pd && TS.editDensity) b.phOld = 1;   // its shown mesh is from before this edit: physics reads the field (pdOf)
         if (b.st === 1 || b.st === 0) { b.st = 0; continue; }   // in flight → result will be stale (ne) and rebuilt; waiting → just rebuilt
         if (b.st === 2) { giveBack(b); b.st = 0; continue; }
         if (b.st === 3) { b.st = 0; }   // shown: keeps showing the old mesh until the new one is uploaded (no hole)
@@ -378,6 +379,7 @@
     }
     function setPd(b, shared){
       const old = b.pd;
+      b.phOld = 0;
       if (b.q > 0 && shared) b.pd = { q: b.q, p: shared, up: null, off: null, ids: null, shared: true };
       else if (b.q > 0 && b.buf) {
         const q = b.q, c = pdCls(q), L = PDP.get(c);
@@ -411,7 +413,7 @@
     // block (cx, cy, cz) as physics: its shown mesh, PD_EMPTY (column known, the block is not part of the drawn set), null — unknown
     function pdOf(cx, cy, cz){
       const b = TS.blocks.get(TE.key(cx, cy, cz));
-      if (b) return b.pd;
+      if (b) return b.phOld ? null : b.pd;   // edited since shown → unknown → the density path (the edit counts at its tick on every device)
       const c = TS.cols.get(TE.colKey(cx, cz));
       return c && c.st === 2 ? PD_EMPTY : null;
     }
@@ -549,6 +551,10 @@
     }
     TS.st.phMesh = 0; TS.st.phDens = 0;
     TS.meshPhysics = o.meshPhysics !== false;   // false → always the density path (the old behaviour)
+    // T-145 review (TECH-3): an edited block keeps DRAWING its old mesh until the re-mesh is uploaded (no hole), but its physics
+    // switches to the density field at the edit's tick — before, the feet stood on the old mesh until the upload, a moment that
+    // depends on FPS, the phone/PC upload budget and the worker. Rollback: create({ editDensity: false }).
+    TS.editDensity = o.editDensity !== false;
     TS.ground = (x, z, yRef) => {
       const yt = yRef + 1.1;
       if (TS.meshPhysics) { const m = meshGround(x, z, yt); if (m === m) { TS.st.phMesh++; return m; } }
