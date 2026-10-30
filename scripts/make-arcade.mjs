@@ -44,11 +44,14 @@ const cards = fs.readdirSync(DIR).filter(f => f.endsWith('.json')).sort().map(f 
 
 const q = s => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, '\\n') + "'";
 const qa = a => '[' + a.map(q).join(', ') + ']';
+// T-145: значок из одного знака «текстового» вида (Emoji_Presentation = No: 🐿 ⛰ …) — с U+FE0F, иначе белый одноцветный среди
+// цветных (scripts/age-test.cjs); в картинку превью (_make-cards.py) — как в карточке игры
+const colorIcon = s => { const cs = [...s]; return cs.length === 1 && /\p{Emoji}/u.test(s) && !/\p{Emoji_Presentation}/u.test(s) && !/[0-9#*]/.test(s) ? s + '\uFE0F' : s; };
 const SCRIPTS = id => ['js/games/room.js', 'js/games/versus.js', 'js/games/arcade/core.js', `js/games/arcade/${id}.js`];
 
 // ── области ──
 const regions = [
-  { file: 'js/features/games.js', nth: 0, indent: '  ', lines: cards.map(c => `{ id: ${q(c.id)}, age: '0+', icon: ${q(c.icon)}, title: ${q(c.title)}, desc: ${q(c.desc)}, scripts: ${qa(SCRIPTS(c.id))}, top: ${q(c.id)}, topLabel: ${q(c.unit[2])}, unit: ${qa(c.unit)}, color: ${q(c.color)} },`) },
+  { file: 'js/features/games.js', nth: 0, indent: '  ', lines: cards.map(c => `{ id: ${q(c.id)}, age: '0+', icon: ${q(colorIcon(c.icon))}, title: ${q(c.title)}, desc: ${q(c.desc)}, scripts: ${qa(SCRIPTS(c.id))}, top: ${q(c.id)}, topLabel: ${q(c.unit[2])}, unit: ${qa(c.unit)}, color: ${q(c.color)} },`) },
   { file: 'js/features/games.js', nth: 1, indent: '  ', lines: cards.map(c => `${c.id}: ${q(c.tags)},`) },
   { file: 'api/_lib/age.js', nth: 0, indent: '  ', lines: cards.map(c => `${c.id}: [0, ''],`) },
   { file: 'games-more.sql', nth: 0, indent: '    ', lines: cards.flatMap(c => c.server.cap === c.server.capDuel
@@ -77,7 +80,7 @@ for (const R of regions) {
 }
 
 // ── страницы для поиска (целиком) ──
-const pages = cards.map(c => ({ id: c.id, icon: c.icon, name: c.title, ...c.seo }));
+const pages = cards.map(c => ({ id: c.id, icon: colorIcon(c.icon), name: c.title, ...c.seo }));
 out.set('api/_lib/games-seo-arcade.js', '// Страницы /games/<id> мини-игр (T-140). СОБРАНО: node scripts/make-arcade.mjs из js/games/arcade/<id>.json — руками не править.\n'
   + 'export const ARCADE_PAGES = ' + JSON.stringify(pages, null, 2) + ';\n'
   + 'export const ARCADE_UNITS = ' + JSON.stringify(Object.fromEntries(cards.map(c => [c.id, c.unit]))) + ';\n');
