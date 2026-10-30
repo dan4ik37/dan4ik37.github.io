@@ -20,7 +20,7 @@ class Obj { constructor(g, m){ this.geometry = g; this.material = m; this.visibl
 const T = { BufferGeometry: Geo, BufferAttribute: Attr, Points: Obj, LineSegments: Obj, PointsMaterial: Mat, LineBasicMaterial: Mat, DynamicDrawUsage: 1, RGBAFormat: 1, LinearFilter: 1,
   DataTexture: class { constructor(){ this.disposed = false; } dispose(){ this.disposed = true; } } };
 const mkR = () => { const kids = new Set(); return { T, kids, scene: { add: o => kids.add(o), remove: o => kids.delete(o) }, camera: { position: { x: 0, y: 1.7, z: 0 } }, setWeather(w){ this.wx = w ? { ...w } : null; this.pushes = (this.pushes || 0) + 1; } }; };
-const W = C.world({ seed: 'mir', climateAt: () => 'steppe' });
+const W = C.world({ seed: 'mir', climateAt: () => 'steppe', wx: true });
 const sample = st => { W.set({ weather: st }); return W.at(0, 0, Date.now(), 5); };
 
 console.log('— пулы: с первой бурей, в ясно спрятаны');

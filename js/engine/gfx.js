@@ -362,7 +362,11 @@
         M.sunC[j] *= 1 - .75 * du - .9 * fl;
         M.glow[j] *= 1 - .8 * Math.max(du, fl);
       }
-      if (fl > 0) for (let j = 0; j < 3; j++) M.zen[j] += (M.hor[j] - M.zen[j]) * fl;
+      // стена бури (песок, пыль, буран) и белая мгла: неба не видно — весь купол цвета горизонта (= цвет тумана), иначе дальняя
+      // земля в тумане стоит светлым силуэтом на тёмном верхе неба («Кубомир», T-145 проверка D2); облака — туда же
+      // сила стены: пыль × оттенок (с запасом) или сама видимость (меньше 150 м — неба не видно вовсе)
+      const vq = num(wx.vis, 0), wall = Math.max(fl, Math.min(1, 1.5 * du * tk), vq > 0 && vq < 400 ? cl((400 - vq) / 250, 0, 1) : 0);
+      if (wall > 0) for (let j = 0; j < 3; j++) { M.zen[j] += (M.hor[j] - M.zen[j]) * wall; M.gnd[j] += (M.hor[j] - M.gnd[j]) * wall; M.cloud[j] += (M.hor[j] - M.cloud[j]) * wall * .8; }
       M.lightI = Math.max(Math.min(M.lightI, .021), M.lightI * (1 - .55 * Math.max(du * tk, fl * .8)));
       M.stars *= 1 - Math.max(du, fl);
       M.haze = Math.max(M.haze, .7 * du + .5 * fl);

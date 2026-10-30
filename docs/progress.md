@@ -698,3 +698,26 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
   «Слияние планет» — тела крупнее ×1,6 и новое правило победы; «Шарик в цель» — удача жанра принята (слепые тапы набирают меньше бота).
   Не сделано: редкое «игра не открылась» за долгий сеанс — старая проблема загрузчика, вынесено в T-148.
 
+## 30.10 — T-145 final verification fixes (branch t145-planet-all, GAMES_VER 159)
+- Take D1: WX.limitAt cache — the 2-s window clears the map; the key is the exact cell integer (a time term ~9e18 in the key merged
+  cells ~65 km apart: a storm place gave its sight limit to a clear one). wx-test checks both orders and 300 far cells.
+- Take D10: npc.js — a fleeing creature that cannot see the player in a storm (see < d < 9U) wanders instead of freezing (both paths).
+- Take D6: special weather only for worlds with `wx: true` (Mir, planet, «Новая земля», Kubomir); Studio 3D and Podzem compute the
+  pre-T-135 weather even after another game loaded wx.js; Studio offers C.STATES_BASE. NPC sight there — no limit.
+- Take D4 (coordinator's two lines; T-138 is merged and done, so its files were safe to touch): new Kubomir worlds use generator v4
+  (KB_GEN = 4, rollback 3), a co-op guest of a v4 host builds v4. Separate commit, easy to revert.
+- Take D5: hail harms — wx.js hailStep (table b…e, kids never below 50 %, shelter = nothing, fixed step), wired in Kubomir only:
+  the planet, «Новая земля» and Mir outside war zones have no health. Rollback WX.HAIL_HARM = false. Hail still LOOKS like rain in
+  Kubomir (it draws its own rain) — for T-149 «погода заметнее».
+- Take D2: storm wall — the sky dome (zenith, below the horizon, clouds) goes to the horizon = fog colour by dust × tint or by
+  visibility (< 150 m: no sky at all); Kubomir keeps the fog at that colour in a wall. Chrome phone ×4: zenith − horizon 0.158 → 0.
+- Take D8: the planet on HUD 2.0 (HUD2.planet, rollback 0): the bar has the contextual 🛬/✈ and one ☰ (orbit, down, time, system map,
+  details, help + the shell items); one status line, details via ☰. Phone e2e: 2 buttons inside the window, 1 line, no second ☰.
+- Take D7 (part): high over «Новая земля» the dome below the horizon is fog-coloured (render.js with fogNearK) — the ring edge fades into
+  haze instead of a jagged pale cutout; the SEO tip no longer promises far views. The far low-detail horizon ring stays a next step.
+- Take D9 (test): terra-test walks 15 s over a crater rim and a fill at 30 / 60 / 144 FPS and twice — same bits on the mesh path and on
+  the density path. Left: a block's physics switches from the density field to its mesh when the mesh is shown (≤ 0.4 m at rims) — a
+  device-dependent moment; the fix is a synchronous physics-only mesh of the touched block (same core bits as the worker), next step.
+- Skip D3: planet v2 stays ON. The board's T-075 condition (+2 ms on the ground) is met (+0.15 standing, +0.76 running ×4 in the
+  verifier's A/B); V.update itself is 0.014 → 0.018 ms, so the running delta is three's per-draw cost (7 attributes, +5 draws) and the
+  GPU (9.3 vs 5.7 MB). The planet seen from orbit and landings need v2; owner/coordinator may set FLAGS = { ...FLAGS_OFF } (one line).

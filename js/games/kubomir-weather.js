@@ -131,7 +131,7 @@
     let cOver = null;   // свой климат на один замер (умеренный — для снега и луж обычной зоны)
     const seasonsMode = () => st.seasons || 'calendar';
     const worldCfg = () => { const m = seasonsMode(); return { seed: 'kb:' + W.seed, mode: m === 'off' ? 'fixed' : m === 'cycle' ? 'cycle' : 'calendar', season: 'summer', days: 3, lapse: 0, seaY: Vx.SEA || 52, front: 0,
-      climateAt: () => cOver || X.climKey, hourAt: () => R.lighting.time, gameTime: () => ({ day: st.meta?.day || 1, hour: R.lighting.time || 0 }), wxRegionAt: kbRegion, realm: 'kids' }; };
+      climateAt: () => cOver || X.climKey, hourAt: () => R.lighting.time, gameTime: () => ({ day: st.meta?.day || 1, hour: R.lighting.time || 0 }), wxRegionAt: kbRegion, wx: true, realm: 'kids' }; };
     if (C?.attach) {
       try {
         X.clim = C.attach(R, { world: worldCfg(), where: () => [st.P.x - st.ox, st.P.y, st.P.z - st.oz], origin: () => [st.ox, st.oz], particles: false, sky: false, occlusion: false });
@@ -361,6 +361,7 @@ if ( d37IZ > 0.0 ) {
     const snowM = st.meta ? (st.meta.snow && typeof st.meta.snow === 'object' ? st.meta.snow : (st.meta.snow = { c: 0, t: 0 })) : { c: 0, t: 0 };
     X.cover = snowM.t && Date.now() - snowM.t < 10 * 60000 && Number.isFinite(+snowM.c) ? Math.max(0, Math.min(1, +snowM.c)) : -1;
     let coverAt = 0;
+    X.hailAcc = { f: 0 };   // доля очка урона от града между шагами (wx.js hailStep)
     X.step = dt => {
       if ((tq -= dt) > 0) return;
       tq = .5;
@@ -383,6 +384,12 @@ if ( d37IZ > 0.0 ) {
           X.cover = coverStep(X.cover, dtr, sn, tp, forced ? X.wantR : tz.rain, tz.sun || 0, tz.cloud || 0);
         }
         snowM.c = Math.round(X.cover * 1000) / 1000; snowM.t = now;
+      }
+      // град ранит (T-145 проверка, wx.js hailStep: таблица града, детям мягко — ниже половины здоровья никогда): раз в 0,5 с шага
+      // игры (одинаково при любой частоте кадров); под крышей (над головой блок, вода) — нет; X.hurt даёт kubomir.js
+      if (X.clim && X.hurt && E.wx?.hailStep && !st.creative && !P.dead && !st.weatherOff) {
+        const n = E.wx.hailStep(X.hailAcc, X.clim.state, .5, P.hp, 20, X.clim.W?.realm !== 'adult', top(P.x, P.z) > P.y + 1);
+        if (n > 0) X.hurt(n);
       }
       if (X.clim && X.force == null) {
         const s = X.clim.state, off = st.weatherOff;

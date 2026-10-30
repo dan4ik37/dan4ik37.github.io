@@ -208,7 +208,7 @@ run('js/engine/wx.js');
     ok(RO(des[0] + 1, des[1] + 1) === a || Math.floor((des[0] + 1) / 128) !== Math.floor(des[0] / 128), 'one record per 128 m cell (cached)');
   }
   // a year of the calendar weather at those cells: the desert gets sand / dust storms, the snow cell never does
-  const W = C2 => E.climate.world({ seed: 'terra-1337', mode: 'calendar', climateAt: B.climateAtFn(src), lapse: -.0065, seaY: 0, front: 4000, hourAt: () => 10.5, wxRegionAt: RO, realm: 'kids' });
+  const W = C2 => E.climate.world({ seed: 'terra-1337', mode: 'calendar', climateAt: B.climateAtFn(src), lapse: -.0065, seaY: 0, front: 4000, hourAt: () => 10.5, wxRegionAt: RO, wx: true, realm: 'kids' });
   const Wd = W(), t0y = Date.UTC(2026, 0, 1), seen = { des: {}, cold: {} };
   for (let i = 0; i < 365 * 24 * 2; i++) {
     const ms = t0y + i * 1800000;
@@ -222,6 +222,17 @@ run('js/engine/wx.js');
   const RK = X.regionOf(B.kb(V.genInit('t145', { ver: 4 })));
   const rk = RK(300, -200);
   ok(rk && Number.isInteger(rk.cls) && rk.cls >= 0 && rk.cls <= 8, 'Kubomir v4: regionOf(kb src) gives a class 0…8', rk);
+}
+
+// ── Kubomir: NEW worlds get v4, a co-op guest of a v4 host builds v4 (T-145 verify D4) ──
+{
+  const kb = fs.readFileSync(path.join(SITE, 'js/games/kubomir.js'), 'utf8'), co = fs.readFileSync(path.join(SITE, 'js/games/kubomir-coop.js'), 'utf8');
+  const g = /const KB_GEN = (\d+);/.exec(kb);
+  ok(g && +g[1] === 4 && /genVer: KB_GEN \}/.test(kb), 'new Kubomir worlds: KB_GEN = 4 (rollback: 3)', g && g[1]);
+  const m = /genVer: (w\.genVer[^,]+), gen:/.exec(co);
+  const map = m ? new Function('w', 'return ' + m[1]) : null;
+  const got = map ? [undefined, 1, 2, 3, 4, 5, '4', 2.5].map(v => map({ genVer: v })) : null;
+  ok(got && got.join() === '1,1,2,3,4,1,4,2', 'co-op guest: genVer 1…4 as the host sent it, anything else → 1', got);
 }
 
 console.log(`biomes-test: ${pass} ok, ${fail} failed (${((Date.now() - t0) / 1000).toFixed(1)} s)`);

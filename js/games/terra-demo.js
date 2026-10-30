@@ -197,7 +197,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
       // температура — своя у места (placeAt), небо кончается над рельефом С ПРАВКАМИ (TS.skyTop: в выкопанной яме льёт до дна)
       const TS = st.TS, O2 = st.wxO = [0, 0];
       const W0 = Cl.world({ seed: 'terra-' + SEED, mode: 'calendar', climateAt: B.climateAtFn(src), placeAt: TERRA_PLACE && B.placeAtFn ? B.placeAtFn(src) : null, lapse: -.0065, seaY: 0, front: 4000,
-        hourAt: terraHour, wxRegionAt: E.wx?.regionOf ? E.wx.regionOf(src) : null, realm: 'kids' });
+        hourAt: terraHour, wxRegionAt: E.wx?.regionOf ? E.wx.regionOf(src) : null, wx: true, realm: 'kids' });
       const WA = Object.create(W0);
       WA.at = (x, z, ms, y) => W0.at(x / U, z / U, ms, y == null ? y : y / U);
       st.wxOrigin = () => { O2[0] = st.ax * U; O2[1] = st.az * U; return O2; };   // один массив на игру (кадр без мусора)

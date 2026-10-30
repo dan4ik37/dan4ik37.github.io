@@ -314,6 +314,47 @@ const GOLDEN_EDITS = [10, 5, -20, 6, 0, 10, 14, -20, 4, 1, -300, -10, 400, 9, 0]
       TS.dispose();
     }
 
+    // T-145 verify D9: walking on the terrain is the same at 30 / 60 / 144 FPS (60 Hz fixed steps through an accumulator, ≤ 5 per frame,
+    // as E.loop) — across a crater rim (dig) and a fill, jumping and turning; both physics paths (the shown mesh; meshPhysics false —
+    // the density field). Left (known, docs): which path a block uses switches when its mesh is shown — a device-dependent moment;
+    // here every block is shown before the walk, so the comparison is exact.
+    {
+      const walk = (TS, x0, z0, fps) => {
+        const ph = new E.Phys({ ground: null });
+        let refY = T1.height(seed, x0, z0) + 1;
+        ph.terrain = { sample: (x, z) => TS.ground(x / U, z / U, refY) * U };
+        const Pl = E.player(ph, { x: x0 * U, z: z0 * U, yaw: 0 }), cam = { yaw: 0 };
+        const C = { move: { x: 0, z: 0 }, run: false, jump: false, held(k){ return k === 'run' ? this.run : k === 'jump' ? this.jump : false; }, down(k){ return k === 'jump' && this.jump; }, up: () => false, hint: () => '', chordDown: () => false, look: { dx: 0, dy: 0 } };
+        Pl.place(x0 * U, ph.terrain.sample(x0 * U, z0 * U), z0 * U, 0);
+        let acc = 0, steps = 0, h = 2166136261 >>> 0;
+        const mix = v => { h = Math.imul(h ^ (Math.round(v * 1e6) | 0), 16777619) >>> 0; };
+        for (let fr = 0; steps < 900; fr++) {
+          acc += 1 / fps; let k = 0;
+          while (acc >= 1 / 60 - 1e-12 && k < 5 && steps < 900) {
+            acc -= 1 / 60; k++;
+            const s = steps++;   // inputs by step (input = action state): forward, then right, run, two jumps
+            C.move.z = s < 600 ? -1 : 0; C.move.x = s >= 300 && s < 750 ? 1 : 0; C.run = s >= 150 && s < 450; C.jump = s === 200 || s === 520;
+            cam.yaw = s * 0.004;
+            refY = Pl.ch.y / U;
+            Pl.update(1 / 60, C, cam);
+            mix(Pl.ch.x); mix(Pl.ch.y); mix(Pl.ch.z);
+          }
+        }
+        return { h, x: +(Pl.ch.x / U - x0).toFixed(2), z: +(Pl.ch.z / U - z0).toFixed(2), y: +(Pl.ch.y / U).toFixed(3) };
+      };
+      for (const mp of [true, false]) {
+        const TS = TE.create({ seed, workers: 0, radius: 1, caveRadius: 1, meshPhysics: mp });
+        const x = 40, z = -25, h0 = T1.height(seed, x, z);
+        TS.dig(x - 6, h0, z - 4, 3.2); TS.fill(x + 7, h0 + 1, z - 9, 2.2);
+        await settle(TS, x, h0, z);
+        const r30 = walk(TS, x, z, 30), r60 = walk(TS, x, z, 60), r144 = walk(TS, x, z, 144), r60b = walk(TS, x, z, 60);
+        const tag = mp ? 'mesh physics' : 'density physics (rollback)';
+        console.log(`walk 30/60/144 FPS, ${tag}: ${JSON.stringify([r30, r60, r144].map(r => r.h))}, moved ${r60.x}, ${r60.z} m, y ${r60.y}`);
+        check(r30.h === r60.h && r144.h === r60.h && r60b.h === r60.h && Math.hypot(r60.x, r60.z) > 8, `${tag}: walk 15 s over a crater rim and a fill — same bits at 30 / 60 / 144 FPS and in a second run (moved ${r60.x}, ${r60.z} m, y ${r60.y})`);
+        TS.dispose();
+      }
+    }
+
     // parkour on the terrain (review: "never triggers — terrain hits have col: null"). With the hooks (terrain.col, .blocked,
     // .normal) a STEEP terrain face is a ledge; without them — never. At 1 m Surface Nets resolution a dig/fill sphere is drawn as
     // a ≤ ~55° cone (no ledge there for anyone); the river bank near (−168, −621) is ~85° → ledges. Gentle land → none.

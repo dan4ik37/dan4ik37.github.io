@@ -168,7 +168,7 @@
         const see = e.see ?? Infinity;
         if (o.act === 'follow' && best && bd < Math.min(30 * U, see) && bd > ((o.damage || 0) > 0 ? .9 : 1.6) * U) { dx = best.x - ch.x; dz = best.z - ch.z; run = bd > 8 * U; }   // кусачий подходит вплотную
         else if (o.act === 'flee' && best && bd < Math.min(9 * U, see)) { dx = ch.x - best.x; dz = ch.z - best.z; run = true; }
-        else if (o.act === 'wander' || (o.act === 'flee' && !(best && bd < 9 * U))) {
+        else if (o.act === 'wander' || (o.act === 'flee' && !(best && bd < Math.min(9 * U, see)))) {   // пугливый не видит игрока в бурю — бродит, а не стоит
           // бродит: точка в радиусе от дома, дошёл или застрял — постоял и новая (новую выбирает, когда думает)
           const r = Math.max(1, o.radius ?? 8) * U;
           if (!hasT[i]) { if ((waitT[i] -= dt) <= 0 && think) { const a = rnd(i) * Math.PI * 2, d = Math.sqrt(rnd(i)) * r; tx[i] = e.home[0] + Math.cos(a) * d; tz[i] = e.home[2] + Math.sin(a) * d; hasT[i] = 1; stuckT[i] = 0; } }
@@ -225,7 +225,7 @@
         const see = e.see ?? Infinity;
         if (o.act === 'follow' && best && bd < Math.min(30 * U, see) && bd > ((o.damage || 0) > 0 ? .9 : 1.6) * U) { dx = best.x - ch.x; dz = best.z - ch.z; run = bd > 8 * U; }   // кусачий подходит вплотную
         else if (o.act === 'flee' && best && bd < Math.min(9 * U, see)) { dx = ch.x - best.x; dz = ch.z - best.z; run = true; }
-        else if (o.act === 'wander' || (o.act === 'flee' && !(best && bd < 9 * U))) {
+        else if (o.act === 'wander' || (o.act === 'flee' && !(best && bd < Math.min(9 * U, see)))) {
           // бродит: точка в радиусе от дома, дошёл или застрял — постоял и новая
           const r = Math.max(1, o.radius ?? 8) * U;
           if (!e.tgt) { if ((e.waitT -= dt) <= 0) { const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r; e.tgt = [e.home[0] + Math.cos(a) * d, e.home[2] + Math.sin(a) * d]; e.stuckT = 0; } }

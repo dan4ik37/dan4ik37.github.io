@@ -80,7 +80,7 @@
       ${c.mode === 'cycle' ? `<label>Игровых суток на сезон <b data-o="days">${esc(c.days)}</b><input type="range" min="1" max="30" step="1" value="${esc(c.days)}" data-k="days"></label>` : ''}
       ${c.mode === 'fixed' ? `<label><select data-k="season">${C.SEASONS.map(s => opt(s, C.SEASON_ICONS[s] + ' ' + C.SEASON_NAMES[s], c.season)).join('')}</select></label>` : ''}
       <h4>Погода</h4>
-      <label><select data-k="weather">${opt('auto', '🔄 Сама меняется', c.weather)}${C.STATES.map(s => opt(s, C.STATE_ICONS[s] + ' Всегда: ' + C.STATE_NAMES[s], c.weather)).join('')}</select></label>
+      <label><select data-k="weather">${opt('auto', '🔄 Сама меняется', c.weather)}${(C.STATES_BASE || C.STATES).map(s => opt(s, C.STATE_ICONS[s] + ' Всегда: ' + C.STATE_NAMES[s], c.weather)).join('')}</select></label>
       <label>Климат<select data-k="climate">${Object.entries(C.CLIMATES).map(([k, v]) => opt(k, v.name, c.climate)).join('')}</select></label>
       <p class="s3w-note">Сохраняется в мире — видят все игроки. Зимой на крышах и земле лежит снег, осенью желтеет листва, озёра замерзают; под крышей не льёт. Скрипты: <code>Weather.State</code>, <code>Weather.Temperature</code>, <code>Weather.Season</code>, <code>Weather.Changed</code>, <code>Weather.Holiday</code>, <code>Weather.Set("snow")</code>.</p>`;
   }

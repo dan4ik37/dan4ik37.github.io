@@ -130,7 +130,7 @@ sec('эталон: C.SPECIAL = false — как climate.js до T-135 (копи�
     const ctx = { globalThis: null, Math, Date, Number, Object, Map, Set, String, Array, JSON, console, parseFloat, isFinite };
     ctx.globalThis = ctx; vm.createContext(ctx); vm.runInContext(src, ctx);
     const C0 = ctx.D37E.climate;
-    const mk = (CC, o) => CC.world({ seed: 'mir', mode: 'calendar', climateAt: (x, z) => ['steppe', 'desert', 'snow', 'temperate', 'mountain', 'sea', 'tropic'][((Math.floor(x / 700) % 7) + 7) % 7], hourAt: ms => (ms / 60000) % 24, ...o });
+    const mk = (CC, o) => CC.world({ seed: 'mir', mode: 'calendar', climateAt: (x, z) => ['steppe', 'desert', 'snow', 'temperate', 'mountain', 'sea', 'tropic'][((Math.floor(x / 700) % 7) + 7) % 7], hourAt: ms => (ms / 60000) % 24, wx: true, ...o });
     const KEYS = ['season', 'phase', 'state', 'temp', 'feels', 'cloud', 'rain', 'snow', 'hail', 'thunder', 'fog', 'heat', 'wind', 'windDir', 'gust', 'humid', 'wet', 'puddle', 'snowCover', 'ice', 'autumn', 'bare', 'fresh', 'climate', 'hour', 'sun', 'w'];
     let bad = 0, badOn = 0, inWin = 0, n = 0, stOld = 0;
     const r = H.u01;
@@ -164,7 +164,7 @@ sec('эталон: C.SPECIAL = false — как climate.js до T-135 (копи�
 }
 
 // ═══ 4. Behaviour ═══
-const worldOf = (ck, o = {}) => C.world({ seed: o.seed || 'mir', mode: o.mode || 'calendar', season: o.season, climateAt: () => ck, elements: o.elements || 'real', wxRegionAt: o.reg, storm: o.storm, realm: o.realm });
+const worldOf = (ck, o = {}) => C.world({ wx: o.wx !== false, seed: o.seed || 'mir', mode: o.mode || 'calendar', season: o.season, climateAt: () => ck, elements: o.elements || 'real', wxRegionAt: o.reg, storm: o.storm, realm: o.realm });
 // picks of rows per real day over a simulated stretch (fixed season, calendar clock: 32 slots per day)
 function freq(ck, season, slots, o = {}){
   const W = worldOf(ck, { mode: 'fixed', season, elements: o.elements || 'real' }), ctx = X._ctx, st = ctx.stOf(W), c = C.CLIMATES[ck], q = ctx.climQ(c), cid = ctx.ckId(ck);
@@ -252,7 +252,7 @@ sec('фронт идёт с запада на восток: то же явлен
 sec('порядок запросов не меняет ответ (кэши — чистая память); два мира с одним зерном — одна погода');
 {
   const pts = []; for (let i = 0; i < 3000; i++) pts.push([(H.u01(9, i, 1) - .5) * 30000, (H.u01(9, i, 2) - .5) * 30000, Date.UTC(2026, 0, 1) + Math.floor(H.u01(9, i, 3) * 365 * 864e5)]);
-  const run = (order) => { const W = C.world({ seed: 'mir', mode: 'calendar', climateAt: (x) => x > 0 ? 'steppe' : 'desert', elements: 'real' }); const out = new Array(pts.length); for (const i of order) { const s = W.at(pts[i][0], pts[i][1], pts[i][2], 5); out[i] = s.special + '|' + s.sp.toFixed(6) + '|' + s.vis + '|' + s.temp.toFixed(9); } return out.join(';'); };
+  const run = (order) => { const W = C.world({ seed: 'mir', mode: 'calendar', climateAt: (x) => x > 0 ? 'steppe' : 'desert', elements: 'real', wx: true }); const out = new Array(pts.length); for (const i of order) { const s = W.at(pts[i][0], pts[i][1], pts[i][2], 5); out[i] = s.special + '|' + s.sp.toFixed(6) + '|' + s.vis + '|' + s.temp.toFixed(9); } return out.join(';'); };
   const ord = pts.map((_, i) => i), rev = ord.slice().reverse(), shuf = ord.slice().sort((a, b) => H.h32(3, a, 0) - H.h32(3, b, 0));
   const A = run(ord);
   ok(A === run(rev) && A === run(shuf), 'прямой, обратный и перемешанный порядок — одно и то же');
@@ -271,6 +271,15 @@ sec('видимость и ИИ (§6.1): существо видит не дал
   const s = W.at(0, 0, Date.now(), 5), lim = X.limitAt(0, 0);
   ok(s.special === 'sandstorm' && s.vis < 100 && Math.abs(lim - s.vis) < 2.1, 'буря «одна всегда»: предел ИИ = видимость игрока', { vis: s.vis, lim, sx: s.stateX });
   ok(s.stateX === 'sandstorm' && s.state !== 'sandstorm', 'stateX — «песчаная буря», state — прежний', { state: s.state, stateX: s.stateX });
+  // D1: the cache must keep places apart (a time term in the key lost precision: cells ~65 km apart shared one value)
+  {
+    const vq0 = X.visQ, ms = Date.UTC(2026, 9, 30, 12);
+    X.visQ = (Wd, x, z) => (z < 0 ? 20 : 255);   // storm south of z = 0, clear north
+    const a = X.limitAt(10, -100, 1000, ms), b = X.limitAt(10, 5000, 1000, ms), c = X.limitAt(10, 5000, 1000, ms + 2000), d = X.limitAt(10, -100, 1000, ms + 2000);
+    let far = 0; for (let i = 1; i <= 300; i++) if (X.limitAt(64 * i, 64 * 300 * (i & 1 ? 1 : -1), 1000, ms + 4000) !== ((i & 1) ? Infinity : 40)) far++;
+    X.visQ = vq0;
+    ok(a === 40 && b === Infinity && c === Infinity && d === 40 && far === 0, 'кэш предела ИИ не смешивает места: буря и ясно в 5 км — каждое своё, в любом порядке', { a, b, c, d, far });
+  }
   C.use(null);
   ok(C.sanitize({ weather: 'buran' }).weather === 'buran' && C.sanitize({ weather: 'nope' }).weather === 'auto', 'sanitize знает новые состояния');
   const fx = ['sandstorm', 'duststorm', 'buran', 'whiteout', 'hail', 'downpour', 'freezing_rain', 'seafog'].map(st => { const Wf = worldOf('temperate', {}); Wf.set({ weather: st }); return Wf.at(0, 0, Date.now(), 5).stateX; });
@@ -293,7 +302,7 @@ sec('целая запись для хостов (WxRec) и примеры ос�
 }
 sec('скорость (node)');
 {
-  const W = C.world({ seed: 'mir', mode: 'calendar', climateAt: () => 'steppe' }), W0 = C.world({ seed: 'mir', mode: 'calendar', climateAt: () => 'steppe' });
+  const W = C.world({ seed: 'mir', mode: 'calendar', climateAt: () => 'steppe', wx: true }), W0 = C.world({ seed: 'mir', mode: 'calendar', climateAt: () => 'steppe', wx: true });
   const t0 = Date.UTC(2026, 3, 1), M = 4000;
   const bench = (Wx, on) => { C.SPECIAL = on; let t = process.hrtime.bigint(); for (let i = 0; i < M; i++) Wx.at(100 + i * .3, 50, t0 + i * 500, 5); return Number(process.hrtime.bigint() - t) / 1e6 / M; };
   bench(W, true); bench(W0, false);
@@ -302,10 +311,59 @@ sec('скорость (node)');
   ok(on - off < .05, 'W.at с особой погодой — не дороже +0,05 мс (2 раза в секунду)', { on: +on.toFixed(4), off: +off.toFixed(4) });
   console.log(`  W.at: ${off.toFixed(4)} мс → ${on.toFixed(4)} мс (+${(on - off).toFixed(4)})`);
   // accum refill (new 0.25 w-h): 60 samples
-  const W2 = C.world({ seed: 'mir2', mode: 'calendar', climateAt: () => 'desert' });
+  const W2 = C.world({ seed: 'mir2', mode: 'calendar', climateAt: () => 'desert', wx: true });
   let worst = 0; for (let i = 0; i < 40; i++) { const ms = t0 + i * 112500 * 4; const t = process.hrtime.bigint(); W2.at(0, 0, ms, 5); worst = Math.max(worst, Number(process.hrtime.bigint() - t) / 1e6); }
   console.log('  пересчёт накопителей (60 замеров): худший ' + worst.toFixed(3) + ' мс');
   ok(worst < 6, 'пересчёт накопителей — меньше 6 мс в node', worst);
+}
+sec('град ранит (hailStep, таблица града): детям мягко и не ниже половины, под крышей — нет, при любой частоте кадров (D5)');
+{
+  // a host's fixed step: 60 Hz steps, the hail tick every 0.5 s of steps; frames of 30 / 60 / 144 FPS only change how many steps run per frame
+  const run = (fps, s, secs, kids, roof, hp0 = 20) => {
+    const acc = { f: 0 }; let hp = hp0, steps = 0, tq = .5, acc60 = 0, taken = 0;
+    for (let fr = 0; fr < secs * fps; fr++) {
+      acc60 += 1 / fps; let k = 0;
+      while (acc60 >= 1 / 60 - 1e-12 && k < 5) { acc60 -= 1 / 60; k++; steps++; if ((tq -= 1 / 60) <= 1e-9) { tq += .5; const n = X.hailStep(acc, s, .5, hp, 20, kids, roof); hp -= n; taken += n; } }
+    }
+    return { hp, taken, steps };
+  };
+  const marble = { hailCls: 1, hail: .8, sp: 1 }, golf = { hailCls: 4, hail: .9, sp: 1 };
+  const k30 = run(30, marble, 1000, true, false), k60 = run(60, marble, 1000, true, false), k144 = run(144, marble, 1000, true, false);
+  ok(k60.taken === 6 && k30.hp === k60.hp && k144.hp === k60.hp, 'дети, град-«шарик»: 3 ‰ здоровья за 10 с — 6 очков за 1000 с, одинаково при 30 / 60 / 144 кадрах', { k30, k60, k144 });
+  const kLong = run(60, golf, 20000, true, false);
+  ok(kLong.hp === 10, 'дети: даже долгий крупный град — не ниже половины (нокаута нет)', kLong);
+  const aGolf = run(60, golf, 1000, false, false);
+  ok(aGolf.taken === 80 - 62 && aGolf.hp === 2, 'взрослые (после проверки 18+), «мяч для гольфа»: 40 ‰ за 10 с, пол 10 %', aGolf);
+  ok(run(60, golf, 1000, true, true).taken === 0, 'под крышей — ни очка');
+  ok(run(60, { hailCls: 1, hail: .1, sp: 1 }, 1000, true, false).taken === 0 && run(60, { hailCls: 0, hail: .9, sp: 1 }, 1000, true, false).taken === 0, 'нет града (сила ≤ 0,25 или класс 0) — ни очка');
+  X.HAIL_HARM = false; const off = run(60, golf, 1000, true, false); X.HAIL_HARM = true;
+  ok(off.taken === 0, 'откат X.HAIL_HARM = false — град только вид');
+  // the live world: «всегда град» gives a sample hailStep reads
+  const W = worldOf('temperate', {}); W.set({ weather: 'hail' });
+  const s = W.at(0, 0, Date.UTC(2026, 6, 1, 14), 5), acc = { f: 0 }; let n = 0;
+  for (let i = 0; i < 2000; i++) n += X.hailStep(acc, s, .5, 20 - n, 20, true, false);
+  ok(s.hailCls > 0 && s.hail > .25 && n > 0 && 20 - n >= 10, 'мир «всегда град»: класс в пробе, урон идёт, не ниже половины', { cls: s.hailCls, hail: s.hail, sp: s.sp, n });
+}
+sec('мир без wx: true (Студия 3D, «Подземье») — погода как до T-135, хотя wx.js в вкладке (D6)');
+{
+  const base = { seed: 'mir', mode: 'calendar', climateAt: () => 'desert', elements: 'real' };
+  const Wn = C.world(base), Wy = C.world({ ...base, wx: true });
+  let spN = 0, spY = 0, diff = 0;
+  for (let i = 0; i < 3000; i++) {
+    const ms = Date.UTC(2026, 5, 1) + i * 1187001, a = Wn.at(0, 0, ms, 5), b = Wy.at(0, 0, ms, 5);
+    if (a.special) spN++; if (b.special) spY++;
+  }
+  C.SPECIAL = false; const Wo = C.world(base);
+  for (let i = 0; i < 400; i++) { const ms = Date.UTC(2026, 5, 1) + i * 7187001, a = Wo.at(0, 0, ms, 5), b = Wn.at(0, 0, ms, 5); if (a.temp !== b.temp || a.rain !== b.rain || a.state !== b.state || a.fog !== b.fog || a.wind !== b.wind) diff++; }
+  C.SPECIAL = true;
+  ok(spN === 0 && spY > 0, 'пустыня: особая погода только у мира с wx: true', { spN, spY });
+  ok(diff === 0, 'мир без wx: true — то же, что с выключенной особой погодой (температура, дождь, туман, ветер, состояние)', diff);
+  Wn.set({ weather: 'sandstorm' }); C.use(Wn);
+  ok(X.limitAt(0, 0) === Infinity && !Wn.at(0, 0, Date.now(), 5).special, 'без wx: true: «всегда буря» не включается, предел ИИ — без ограничения');
+  C.use(null);
+  ok(C.STATES_BASE.length === 9 && C.STATES.length > 9 && !C.STATES_BASE.includes('sandstorm'), 'C.STATES_BASE — девять прежних (их предлагает Студия), C.STATES — с новыми');
+  const sw = fs.readFileSync(path.join(SITE, 'js/games/studio3d-weather.js'), 'utf8');
+  ok(/\(C\.STATES_BASE \|\| C\.STATES\)\.map/.test(sw), 'выбор погоды Студии — из C.STATES_BASE');
 }
 sec('нет прогноза для интерфейса: файлы сайта вне движка не читают окна вперёд');
 {

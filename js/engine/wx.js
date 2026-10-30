@@ -361,7 +361,7 @@
       && st.front === W.front && st.el === W.elements && st.rules === W.rules && st.hourAt === W.hourAt && st.placeAt === W.placeAt) return st;
     st = W.__wx = { gen: WX._gen, seed: W.seed, mode: W.mode, days: W.days, season: W.season, zone: W.zone, front: W.front, el: W.elements, rules: W.rules, hourAt: W.hourAt, placeAt: W.placeAt,
       kTag: new Float64Array(512).fill(NaN), kK: new Uint8Array(512), kA: new Float64Array(512), kE: new Float64Array(512), kI: new Int16Array(512),
-      rolls: new Map(), reg: { x: NaN, z: NaN, r: null }, regTmp: {}, kind: { k: 0, pa: 0, pe: 0, pI: 0 }, lim: new Map() };
+      rolls: new Map(), reg: { x: NaN, z: NaN, r: null }, regTmp: {}, kind: { k: 0, pa: 0, pe: 0, pI: 0 }, lim: new Map(), limT: NaN };
     return st;
   }
   // kind of slot s for climate cKey in season `sea` (memo ring, 512)
@@ -616,7 +616,7 @@
   // new fields of a sample (appended; defaults when no special): special, sp, vis, dust, dustC, tint, tintK, flat, hailSize, freezing,
   // fireRisk, sign, signKey, funnel, flav, flav2 (group 0 / 3 masks by id), wall (WX3: null for now)
   WX.post = (o, s) => {
-    s.special = ''; s.sp = 0; s.vis = CLEAR; s.dust = 0; s.dustC = 0; s.tint = ''; s.tintK = 0; s.flat = 0; s.hailSize = 0; s.freezing = 0;
+    s.special = ''; s.sp = 0; s.vis = CLEAR; s.dust = 0; s.dustC = 0; s.tint = ''; s.tintK = 0; s.flat = 0; s.hailSize = 0; s.hailCls = 0; s.freezing = 0;
     s.fireRisk = 0; s.sign = 0; s.signKey = ''; s.funnel = ''; s.flav = 0; s.flav2 = 0; s.wall = null;
     if (!o) return s;
     s.vis = o.vis; s.fireRisk = o.fire; s.flav = o.fl0; s.flav2 = o.fl1; s.funnel = o.fun;
@@ -627,7 +627,7 @@
     if (r.dusty) { s.dust = k; s.dustC = r.dustC; }
     if (r.tint) { s.tint = r.tint; s.tintK = k * (r.dusty ? 1 : r.tint === 'white' ? .8 : .45); }
     if (r.look[2].flat) s.flat = k;
-    if (r.hail) { const hc = hailClass(r, o.I, o.kids); s.hailSize = hc ? LV.hail[hc].a / 10 : 0; }
+    if (r.hail) { const hc = hailClass(r, o.I, o.kids); s.hailSize = hc ? LV.hail[hc].a / 10 : 0; s.hailCls = hc; }
     if (r.pr === PR.glaze) s.freezing = k;
     // wind: raised to the row's speed (or calmed) and turned toward its direction
     if (o.wind > s.wind) s.wind = o.wind;
@@ -636,8 +636,8 @@
     return s;
   };
   C.labelX = s => (s && s.sp > .35 && STATEX[s.special]) || (s ? s.state : 'clear');
-  // the new states are APPENDED (saved worlds, scripts and sanitize keep working); only where wx.js runs, so a page without it
-  // (the site, Studio until its «Особая погода» setting) keeps the nine old ones and never offers a state it cannot show
+  // the new states are APPENDED (saved worlds, scripts and sanitize keep working) once wx.js has run in the tab; a world without
+  // `wx: true` (Studio until its «Особая погода» setting, Podzem) computes weather as before T-135 and offers C.STATES_BASE only
   if (!C.STATES.includes('sandstorm')) C.STATES.push('sandstorm', 'duststorm', 'buran', 'whiteout', 'hail', 'downpour', 'freezing_rain', 'seafog');
   Object.assign(C.STATE_NAMES, { sandstorm: 'песчаная буря', duststorm: 'пыльная буря', buran: 'буран', whiteout: 'белая мгла', hail: 'град', downpour: 'ливень', freezing_rain: 'ледяной дождь', seafog: 'морской туман' });
   Object.assign(C.STATE_ICONS, { sandstorm: '🏜️', duststorm: '💨', buran: '🌬️', whiteout: '⚪', hail: '🧊', downpour: '☔', freezing_rain: '🥶', seafog: '🌁' });
@@ -679,8 +679,11 @@
   // limit at a place in the current world (C.current()) — cheap: one lookup per 64-unit cell per 2 s (AI think loops call it)
   WX.limitAt = (x, z, vk = 1000, ms = Date.now()) => {
     const W = C.current && C.current();
-    if (!W || !C.SPECIAL || !WX.AI || typeof W.climateAt !== 'function') return Infinity;
-    const st = stOf(W), key = Math.floor(x / 64) * 100003 + Math.floor(z / 64) + Math.floor(ms / 2000) * 1e10;
+    if (!W || !C.SPECIAL || !WX.AI || !W.wx || typeof W.climateAt !== 'function') return Infinity;   // мир без особой погоды (Студия) — без предела
+    // the 2 s bucket clears the cache (a time term inside the key went past 2^53 and merged cells ~65 km apart);
+    // the cell key stays an exact small integer, unique while |cell z| < 50000 (3.2 million units)
+    const st = stOf(W), tb = Math.floor(ms / 2000), key = Math.floor(x / 64) * 100003 + Math.floor(z / 64);
+    if (st.limT !== tb) { st.lim.clear(); st.limT = tb; }
     let v = st.lim.get(key);
     if (v === undefined) { if (st.lim.size > 256) st.lim.clear(); try { v = WX.visQ(W, x, z, ms); } catch (e) { v = 255; } st.lim.set(key, v); }
     return WX.sightLimit(v, vk);
@@ -689,6 +692,22 @@
   // ═══ Body effects by realm (WX5 consumers; numbers are wx_levels.csv start values) ═══
   // hail: ‰ of max health per 10 s unsheltered and the floor it never goes below (kids: softer, never a knockout)
   WX.hailHarm = (cls, kids = true) => { const h = LV.hail[cls | 0]; return h ? { per10s: kids ? h.c : h.b, floor: kids ? h.e : h.d, crop: h.f, dents: h.g } : null; };
+  // hail on a body (coordinator 29.10 «град вредит по-настоящему», table hail b…e): a host with health calls it from its FIXED step with
+  // the sample the player stands in (s.hailCls, s.hail, s.sp from WX.post); acc = the host's { f: 0 } (a fraction of a point carried
+  // between calls). Returns whole points to take now; sheltered (the host's roof map: a block / roof above the head) — nothing; never
+  // below the floor (kids 500 ‰: never a knockout). Same numbers at any frame rate (dt is the host's fixed step).
+  WX.HAIL_HARM = true;   // rollback in one line: false — hail is only a look again
+  WX.hailStep = (acc, s, dt, hp, maxHp, kids = true, sheltered = false) => {
+    if (!WX.HAIL_HARM || !acc || !s || sheltered || !(s.hailCls > 0) || !(s.hail > .25) || !(dt > 0) || !(maxHp > 0)) return 0;
+    const h = WX.hailHarm(s.hailCls, kids); if (!h || !(h.per10s > 0)) return 0;
+    const room = Math.floor(hp - maxHp * h.floor / 1000 + 1e-9);   // points above the floor
+    if (room <= 0) { acc.f = 0; return 0; }
+    acc.f = (acc.f || 0) + maxHp * h.per10s / 1000 * Math.min(1, dt) / 10 * Math.min(1, Math.max(0, s.sp || 0));
+    const n = Math.floor(acc.f + 1e-9);
+    if (n <= 0) return 0;
+    acc.f -= n;
+    return Math.min(n, room);
+  };
   WX.glaze = () => ({ walk: LV.glaze[0].a / 1000, steer: LV.glaze[1].a / 1000, brake: LV.glaze[2].a / 1000, spin: LV.glaze[3].a });
   WX._ctx = { regionAt, rollAt, stOf, climQ, ckId, setCtx, dryOf, snowAt, TqOf, eligible, rarity, condOk, Ctx, CX };
 })();

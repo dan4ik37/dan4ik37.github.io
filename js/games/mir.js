@@ -823,7 +823,7 @@
     }
     const REF = [[F.ocean, -540, 280, WM ? WM.SEA : 0], [F.lake, 0, 0, 0], [F.canal, 215, 258, -2.4], [F.pond, POND.x, POND.z, POND.wl]];
     let W = null;
-    try { W = C?.world ? C.world({ seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour, wxRegionAt: mirWxRegion }) : null; } catch (e) {}
+    try { W = C?.world ? C.world({ seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour, wxRegionAt: mirWxRegion, wx: true }) : null; } catch (e) {}
     let tq = 0, forced = null;
     // прибой (T-085): шум у ближней мели моря (узел сетки глубиной 0,1…2,4 — там и пена прибоя в шейдере, waves.js) — петля
     // amb_water пониже (synth.js: тише издалека, сторона — по камере), громче в шторм; нет волн или мели рядом — тишина
@@ -880,7 +880,7 @@
     const ch = P.ch, WH = [0, 0, 0];
     try {
       return C.attach(R, {
-        world: { seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour, wxRegionAt: mirWxRegion },   // + особая погода по биому (wx.js)
+        world: { seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour, wxRegionAt: mirWxRegion, wx: true },   // + особая погода по биому (wx.js)
         // где игрок: не выше 6 над землёй (своя крыша — да; небоскрёб и самолёт — как у земли, иначе снег на весь город)
         where: () => { const g = ph.groundAt(ch.x, ch.z); WH[0] = ch.x; WH[1] = Math.max(g, Math.min(ch.y, g + 6)); WH[2] = ch.z; return WH; },
         // где кончается небо: верх самого высокого тела в столбе (крыши, навесы, машины) или земля — без луча по рельефу (дорого)

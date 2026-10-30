@@ -159,6 +159,19 @@ function runAt(fps, steps, lod = true, poison = true){
   ok(good('wander') && res.wander.st.awake + res.wander.st.asleep === 64, '64 бродят среди домов: без мусора на шаге (< 64 Б на всех, 0 сборок)', res ? res.wander : null);
   setTimeout(finish, 0);
 }
+// ═══ T-145 D10: in a storm a fleeing creature that cannot see the player (see < d < 9U) wanders, not freezes (both step paths) ═══
+for (const lod of [true, false]) {
+  const { E, box } = engine(lod);
+  if (!lod) box.Math.random = Math.random;   // the rollback path (old npc.js) wanders with Math.random
+  E.wx = { AI: true, limitAt: () => 2 };     // the storm: sight 2 units
+  const ph = new E.Phys({ ground: 0 }), N = E.npcs({}, ph);
+  N.add({ id: 'f', pos: [0, 0, 0], rot: [0, 0, 0], act: 'flee', radius: 8, seed: 'f' });
+  N.start({});
+  const pl = [{ x: 5, y: 0, z: 0 }];   // 5 m: within 9U, beyond the storm sight
+  for (let k = 0; k < 900; k++) N.step(1 / 60, pl);
+  const e = [...N.list.values()][0], ch = e && e.P && e.P.ch, moved = ch ? Math.hypot(ch.x, ch.z) : 0;
+  ok(ch && moved > .5, (lod ? 'LOD' : 'откат') + ': пугливый в бурю не видит игрока в 5 м — бродит, а не стоит', { moved, see: e && e.see });
+}
 // ═══ Rollback: LOD = false — как было (гонится и кусает) ═══
 {
   const { E } = engine(false);
