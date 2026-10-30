@@ -646,6 +646,7 @@
     st.weatherOff = opts.weather === false;
     st.seasons = ['calendar', 'cycle', 'off'].includes(opts.seasons) ? opts.seasons : 'calendar';   // времена года (движок погоды)
     st.WX = window.KubomirWeather ? window.KubomirWeather.create(st) : null;   // дождь и снег по биому (расписание — от зерна и дня)
+    if (st.WX) st.WX.hurt = n => hurt(st, n, 'hail');   // град ранит (kubomir-weather.js, wx.js hailStep)
     st.ui = window.KubomirUI ? window.KubomirUI.create(st, uiHooks()) : null;
     // ── KX:init ── помощники (T-049, kubomir-x.js): аксессуары, подсказки, книга рецептов, карта, лежанка, задания; не подключились — игра без них
     try { st.X = window.KubomirX ? window.KubomirX.attach(st, xHooks(st)) : null; } catch (e) { console.error(e); window.d37Err?.('kx:attach', e); st.X = null; }
@@ -1417,7 +1418,7 @@
   }
   // «Нокаут» вместо смерти (21.10.2026, правило сайта: без насилия на экране): экран темнеет и мутнеет, «Ты без сил», дальше —
   // как раньше (вещи по сложности, появляешься у кровати или в начале мира). Внутри кода — по-старому (die, P.dead)
-  const DEATH = { fall: 'упал с высоты', lava: 'обжёгся о лаву', fire: 'обжёгся в огне', cactus: 'укололся о кактус', starve: 'совсем ослаб от голода', drown: 'наглотался воды', void: 'выпал за край мира', mob: 'не справился с монстром' };
+  const DEATH = { fall: 'упал с высоты', lava: 'обжёгся о лаву', fire: 'обжёгся в огне', cactus: 'укололся о кактус', starve: 'совсем ослаб от голода', drown: 'наглотался воды', void: 'выпал за край мира', mob: 'не справился с монстром', hail: 'попал под сильный град' };
   function die(st, why){
     const P = st.P; P.dead = true; P.pk = null; P.hang = null;
     st.I.unlock();

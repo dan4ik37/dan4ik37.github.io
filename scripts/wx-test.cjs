@@ -316,6 +316,34 @@ sec('скорость (node)');
   console.log('  пересчёт накопителей (60 замеров): худший ' + worst.toFixed(3) + ' мс');
   ok(worst < 6, 'пересчёт накопителей — меньше 6 мс в node', worst);
 }
+sec('град ранит (hailStep, таблица града): детям мягко и не ниже половины, под крышей — нет, при любой частоте кадров (D5)');
+{
+  // a host's fixed step: 60 Hz steps, the hail tick every 0.5 s of steps; frames of 30 / 60 / 144 FPS only change how many steps run per frame
+  const run = (fps, s, secs, kids, roof, hp0 = 20) => {
+    const acc = { f: 0 }; let hp = hp0, steps = 0, tq = .5, acc60 = 0, taken = 0;
+    for (let fr = 0; fr < secs * fps; fr++) {
+      acc60 += 1 / fps; let k = 0;
+      while (acc60 >= 1 / 60 - 1e-12 && k < 5) { acc60 -= 1 / 60; k++; steps++; if ((tq -= 1 / 60) <= 1e-9) { tq += .5; const n = X.hailStep(acc, s, .5, hp, 20, kids, roof); hp -= n; taken += n; } }
+    }
+    return { hp, taken, steps };
+  };
+  const marble = { hailCls: 1, hail: .8, sp: 1 }, golf = { hailCls: 4, hail: .9, sp: 1 };
+  const k30 = run(30, marble, 1000, true, false), k60 = run(60, marble, 1000, true, false), k144 = run(144, marble, 1000, true, false);
+  ok(k60.taken === 6 && k30.hp === k60.hp && k144.hp === k60.hp, 'дети, град-«шарик»: 3 ‰ здоровья за 10 с — 6 очков за 1000 с, одинаково при 30 / 60 / 144 кадрах', { k30, k60, k144 });
+  const kLong = run(60, golf, 20000, true, false);
+  ok(kLong.hp === 10, 'дети: даже долгий крупный град — не ниже половины (нокаута нет)', kLong);
+  const aGolf = run(60, golf, 1000, false, false);
+  ok(aGolf.taken === 80 - 62 && aGolf.hp === 2, 'взрослые (после проверки 18+), «мяч для гольфа»: 40 ‰ за 10 с, пол 10 %', aGolf);
+  ok(run(60, golf, 1000, true, true).taken === 0, 'под крышей — ни очка');
+  ok(run(60, { hailCls: 1, hail: .1, sp: 1 }, 1000, true, false).taken === 0 && run(60, { hailCls: 0, hail: .9, sp: 1 }, 1000, true, false).taken === 0, 'нет града (сила ≤ 0,25 или класс 0) — ни очка');
+  X.HAIL_HARM = false; const off = run(60, golf, 1000, true, false); X.HAIL_HARM = true;
+  ok(off.taken === 0, 'откат X.HAIL_HARM = false — град только вид');
+  // the live world: «всегда град» gives a sample hailStep reads
+  const W = worldOf('temperate', {}); W.set({ weather: 'hail' });
+  const s = W.at(0, 0, Date.UTC(2026, 6, 1, 14), 5), acc = { f: 0 }; let n = 0;
+  for (let i = 0; i < 2000; i++) n += X.hailStep(acc, s, .5, 20 - n, 20, true, false);
+  ok(s.hailCls > 0 && s.hail > .25 && n > 0 && 20 - n >= 10, 'мир «всегда град»: класс в пробе, урон идёт, не ниже половины', { cls: s.hailCls, hail: s.hail, sp: s.sp, n });
+}
 sec('мир без wx: true (Студия 3D, «Подземье») — погода как до T-135, хотя wx.js в вкладке (D6)');
 {
   const base = { seed: 'mir', mode: 'calendar', climateAt: () => 'desert', elements: 'real' };

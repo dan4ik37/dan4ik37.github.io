@@ -361,6 +361,7 @@ if ( d37IZ > 0.0 ) {
     const snowM = st.meta ? (st.meta.snow && typeof st.meta.snow === 'object' ? st.meta.snow : (st.meta.snow = { c: 0, t: 0 })) : { c: 0, t: 0 };
     X.cover = snowM.t && Date.now() - snowM.t < 10 * 60000 && Number.isFinite(+snowM.c) ? Math.max(0, Math.min(1, +snowM.c)) : -1;
     let coverAt = 0;
+    X.hailAcc = { f: 0 };   // доля очка урона от града между шагами (wx.js hailStep)
     X.step = dt => {
       if ((tq -= dt) > 0) return;
       tq = .5;
@@ -383,6 +384,12 @@ if ( d37IZ > 0.0 ) {
           X.cover = coverStep(X.cover, dtr, sn, tp, forced ? X.wantR : tz.rain, tz.sun || 0, tz.cloud || 0);
         }
         snowM.c = Math.round(X.cover * 1000) / 1000; snowM.t = now;
+      }
+      // град ранит (T-145 проверка, wx.js hailStep: таблица града, детям мягко — ниже половины здоровья никогда): раз в 0,5 с шага
+      // игры (одинаково при любой частоте кадров); под крышей (над головой блок, вода) — нет; X.hurt даёт kubomir.js
+      if (X.clim && X.hurt && E.wx?.hailStep && !st.creative && !P.dead && !st.weatherOff) {
+        const n = E.wx.hailStep(X.hailAcc, X.clim.state, .5, P.hp, 20, X.clim.W?.realm !== 'adult', top(P.x, P.z) > P.y + 1);
+        if (n > 0) X.hurt(n);
       }
       if (X.clim && X.force == null) {
         const s = X.clim.state, off = st.weatherOff;
