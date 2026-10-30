@@ -102,7 +102,8 @@
       const c = f.color.clone();
       // стена бури (песок, пыль, буран, белая мгла; wx-fx): небо движок красит в цвет горизонта — туман того же цвета, без своих
       // оттенков, иначе дальняя земля стоит силуэтом на небе (T-145 проверка D2)
-      const K = st.WX?.wfx?.K, keep = 1 - (K ? Math.min(1, Math.max((K.dust || 0) * (K.tintK || 0), K.flat || 0)) : 0);
+      const K = st.WX?.wfx?.K, vq = K ? +K.vis || 510 : 510;
+      const keep = 1 - (K && (K.tintK || 0) > 0 ? Math.min(1, Math.max(1.5 * (K.dust || 0) * K.tintK, K.flat || 0, vq < 400 ? (400 - vq) / 250 : 0)) : 0);   // как gfx.js weatherSky
       // биом (днём; ночью туман и так тёмный)
       try {
         const col = st.G ? V().genColumn(st.G, Math.floor(st.P.x), Math.floor(st.P.z), {}) : null, id = col ? V().BIOME_IDS[col.b] : '', bt = BIOME_FOG[id];

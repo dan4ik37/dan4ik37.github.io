@@ -122,6 +122,19 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
         await ev(`${T.planet}.goto(${ll[0]}, ${ll[1]}, 30)`); await sleep(2500); await ev(`${T.planet}.land()`); await sleep(6000);
         const g0 = await ev(`(() => { const s = ${T.planet}.state(); return { mode: s.mode, grounded: s.player?.grounded, shown: ${T.planet}.stats().shown, region: ${T.planet}.S.W?.__wx?.reg?.r || null }; })()`);
         ok(g0.mode === 'walk', 'планета: сели на землю в пустыне', g0);
+        // HUD 2.0 (D8): on the bar only the contextual button and ☰, inside the window; one status line; ☰ → «Подняться на орбиту» works
+        const hu = await ev(`(() => { const w = document.querySelector('.pl-wrap'), wr = w.getBoundingClientRect(), bs = [...w.querySelectorAll('.pl-bar button')].filter(b => b.offsetParent && getComputedStyle(b).opacity > .3);
+          return { v2: w.classList.contains('pl-v2'), n: bs.length, inside: bs.every(b => { const r = b.getBoundingClientRect(); return r.left >= wr.left - 1 && r.right <= wr.right + 1; }), lines: (w.querySelector('.pl-hud > div')?.textContent || '').split('\\n').length,
+            shellMenu: [...document.querySelectorAll('#gamesStage .gs2-menubtn')].filter(b => b.offsetParent).length }; })()`);
+        console.log('  планета, интерфейс:', JSON.stringify(hu));
+        ok(hu.v2 && hu.n === 2 && hu.inside && hu.lines === 1 && hu.shellMenu === 0, 'планета: интерфейс 2.0 — на панели 2 кнопки (по делу и ☰) в окне, одна строка состояния, одно ☰', hu);
+        await ev(`document.querySelector('.pl-bar .pl-menu').click()`); await sleep(500);
+        const mi = await ev(`[...document.querySelectorAll('.gs-menu-it')].map(b => b.dataset.mi)`);
+        await ev(`document.querySelector('.gs-menu-it[data-mi="orbit"]')?.click()`); await sleep(5000);
+        const mo = await ev(`(() => ({ mode: ${T.planet}.state().mode, alt: Math.round((${T.planet}.state().alt || 0) / 1000), open: !!document.querySelector('.gs-menu-it') }))()`);
+        ok(mi.includes('orbit') && mi.includes('time') && mi.includes('sh-back') && mo.mode === 'fly' && !mo.open, 'планета: ☰ — орбита, время, «Все игры»; «Подняться на орбиту» из ☰ взлетает', { mi, mo });
+        await shot('planet-hud2-orbit-' + PROF);
+        await ev(`${T.planet}.goto(${ll[0]}, ${ll[1]}, 30)`); await sleep(2500); await ev(`${T.planet}.land()`); await sleep(6000);
         res.planetGround = await ev(`(${MEASURE})(${T.planet}.S.R, ${phone ? 150 : 300})`, 240000);
         console.log('  планета, земля (' + PROF + ' ×' + RATE + '):', JSON.stringify(res.planetGround));
         // A/B on the same page: without the specials core and visuals (D37E.climate.SPECIAL / D37E.wxfx.ON — the one-line rollbacks)
@@ -216,12 +229,12 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
     if (WHAT === 'all' || WHAT === 'kubomir') {
       await ev(`location.hash = '#/games/kubomir'`);
       for (let i = 0; i < 160 && !(await ev(`!!document.querySelector('.kb-menu .kb-worlds') && !!window.D37E?.vox?.store`).catch(() => false)); i++) await sleep(250);
-      const wid = 'wt145v4';
-      await ev(`D37E.vox.store.putWorld({ id: '${wid}', name: 'T-145 v4', seed: 't145-biomes', mode: 'creative', diff: 'easy', created: Date.now(), played: Date.now() + 1e6, time: 10, mods: [], palette: null, player: null, v: 1, genVer: 4 })`);
-      await ev(`location.hash = '#/home'`); await sleep(1200); await ev(`location.hash = '#/games/kubomir'`);
-      for (let i = 0; i < 120 && !(await ev(`!!document.querySelector('.kb-world[data-id="${wid}"] [data-w="play"]')`).catch(() => false)); i++) await sleep(250);
-      await ev(`document.querySelector('.kb-world[data-id="${wid}"] [data-w="play"]')?.click()`);
+      // a NEW world made through the menu (survival): the generator version comes from KB_GEN (D4), hail harms (D5), storm sky (D2)
+      await sleep(800);
+      await ev(`(() => { const b = [...document.querySelectorAll('.kb-mbtns button')].find(x => /Новый мир/.test(x.textContent)); b && b.click(); return !!b; })()`); await sleep(600);
+      await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 't145-biomes'; document.querySelector('[data-f="mode"] [data-v="survival"]')?.click(); document.querySelector('[data-n="go"]')?.click(); })()`);
       let up = false; for (let i = 0; i < 360 && !up; i++) { await sleep(500); up = await ev(`!!GAME_IMPL.kubomir?._test?.state()?.ready`).catch(() => false); }
+      const wid = up ? await ev(`GAME_IMPL.kubomir._test.state().meta.id`) : '';
       ok(up, 'Кубомир: новый мир v4 открылся');
       if (up) {
         await sleep(5000);
@@ -230,7 +243,22 @@ const PRE = `(() => { const W0 = window.Worker; if (!W0 || W0.__t) return; const
           for (let i = -8; i <= 8; i++) for (let j = -8; j <= 8; j++) { const r = B.at(src, x + i * 128, z + j * 128); seen[r.id] = (seen[r.id] || 0) + 1; }
           const W = S.WX?.clim?.W, rec = W && W.wxRegionAt ? W.wxRegionAt(x, z) : null, q = B.region(src, x, z, 128, {});
           return { ver: S.G.ver, here: B.at(src, x, z).id, seen, rec, q: { cls: q.cls, smask: q.smask, F: q.F } }; })()`);
-        ok(k.ver === 4, 'Кубомир: мир генератора v4 (логичные биомы)', k.ver);
+        ok(k.ver === 4 && (await ev(`GAME_IMPL.kubomir._test.state().meta.genVer`)) === 4, 'Кубомир: новый мир из меню — генератор v4 (логичные биомы), meta.genVer 4', k.ver);
+        // hail harms (D5): «всегда град», a nearly full fraction of a point → the next 0.5 s weather tick takes one point (or the roof saves)
+        await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); window.__hail = 0; const h0 = S.WX.hurt; S.WX.hurt = n => { window.__hail += n; h0(n); }; S.P.hp = 20; S.WX.clim.force('hail'); const P = S.P, t = S.WX.top(P.x, P.z); if (t > P.y + 1) P.y = t + .02; return 1; })()`);   // под деревом — на его верх (открытое небо)
+        await sleep(4000);
+        await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), P = S.P, t = S.WX.top(P.x, P.z); if (t > P.y + 1) P.y = t + .02; S.WX.hailAcc.f = .999; return 1; })()`); await sleep(2500);
+        const hl = await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), c = S.WX.clim.state, P = S.P; return { hit: window.__hail, hp: P.hp, special: c.special, cls: c.hailCls, hail: +(c.hail || 0).toFixed(2), sp: +(c.sp || 0).toFixed(2), roof: S.WX.top(P.x, P.z) > P.y + 1, creative: !!S.creative }; })()`);
+        console.log('  Кубомир, град:', JSON.stringify(hl));
+        ok(hl.cls > 0 && hl.hail > .25 && (hl.roof ? hl.hit === 0 : hl.hit >= 1 && hl.hp >= 10), 'Кубомир: град ранит под открытым небом (не ниже половины), под крышей — нет', hl);
+        // storm wall (D2): the sky dome is the horizon colour = fog colour
+        await ev(`GAME_IMPL.kubomir._test.state().WX.clim.force('sandstorm')`); await sleep(9000);
+        const sk = await ev(`(() => { const R = GAME_IMPL.kubomir._test.state().R, M = R.sky, f = R.scene.fog.color, d = (a, b) => Math.max(...[0, 1, 2].map(j => Math.abs(a[j] - b[j])));
+          return { zh: +d(M.zen, M.hor).toFixed(4), gh: +d(M.gnd, M.hor).toFixed(4), fh: +d([f.r, f.g, f.b], M.hor).toFixed(4), far: Math.round(R.scene.fog.far) }; })()`);
+        console.log('  Кубомир, песчаная буря — небо:', JSON.stringify(sk));
+        await shot('kubomir-sandstorm-' + PROF);
+        ok(sk.zh < .02 && sk.gh < .02 && sk.fh < .03, 'Кубомир: песчаная буря — купол неба цвета горизонта и тумана (без силуэта земли)', sk);
+        await ev(`GAME_IMPL.kubomir._test.state().WX.clim.force(null)`);
         ok(Object.keys(k.seen).length >= 2, 'Кубомир v4: несколько биомов вокруг (2 км)', k.seen);
         ok(!k.rec || (k.rec.cls === k.q.cls && k.rec.smask === k.q.smask), 'Кубомир v4: запись погоды клетки = D37E.biomes.region', { rec: k.rec, q: k.q, here: k.here });
         res.kubomirV4 = k;
