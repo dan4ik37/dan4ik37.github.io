@@ -100,14 +100,17 @@
     X.afterSky = () => {
       const f = R.scene.fog; if (!f || st.uwK > 0) { X.base = null; return; }   // под водой туман ведёт R.setUnder
       const c = f.color.clone();
+      // стена бури (песок, пыль, буран, белая мгла; wx-fx): небо движок красит в цвет горизонта — туман того же цвета, без своих
+      // оттенков, иначе дальняя земля стоит силуэтом на небе (T-145 проверка D2)
+      const K = st.WX?.wfx?.K, keep = 1 - (K ? Math.min(1, Math.max((K.dust || 0) * (K.tintK || 0), K.flat || 0)) : 0);
       // биом (днём; ночью туман и так тёмный)
       try {
         const col = st.G ? V().genColumn(st.G, Math.floor(st.P.x), Math.floor(st.P.z), {}) : null, id = col ? V().BIOME_IDS[col.b] : '', bt = BIOME_FOG[id];
-        if (bt) { const k = .22 * (1 - (R.night || 0)); c.r += (bt[0] * c.r * 1.4 - c.r) * k; c.g += (bt[1] * c.g * 1.4 - c.g) * k; c.b += (bt[2] * c.b * 1.4 - c.b) * k; }
+        if (bt) { const k = .22 * (1 - (R.night || 0)) * keep; c.r += (bt[0] * c.r * 1.4 - c.r) * k; c.g += (bt[1] * c.g * 1.4 - c.g) * k; c.b += (bt[2] * c.b * 1.4 - c.b) * k; }
       } catch (e) {}
       // непогода (kubomir-weather.js, W.k 0…1): туман серее, темнее и ближе
-      const wk = st.WX?.k || 0;
-      if (wk > 0) { const g = (c.r + c.g + c.b) / 3; for (const ch of ['r', 'g', 'b']) c[ch] = (c[ch] + (g * .9 - c[ch]) * .65 * wk) * (1 - .38 * wk); }
+      const wk = st.WX?.k || 0, wc = wk * keep;
+      if (wc > 0) { const g = (c.r + c.g + c.b) / 3; for (const ch of ['r', 'g', 'b']) c[ch] = (c[ch] + (g * .9 - c[ch]) * .65 * wc) * (1 - .38 * wc); }
       X.base = { c, near: f.near * (1 - .4 * wk), far: f.far * (1 - .25 * wk) };   // дымка в непогоду — мягче (не «мыло»)
       applyFog();
     };

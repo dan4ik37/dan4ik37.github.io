@@ -1592,6 +1592,11 @@ function boundsOk(R){
   ok(lum(M1.zen) < lum(M0.zen) * .8 && M1.sunC[0] < M0.sunC[0] * .1 && M1.lightI < M0.lightI * .4 && M1.lightI >= .021 && M1.haze > M0.haze, 'пасмурно в грозу: небо темнее, солнце за тучами, прямой свет слабее, но > 0,02', [lum(M0.zen), lum(M1.zen), M0.lightI, M1.lightI]);
   const M2 = E.weatherSky(E.skyModel(13), null);
   ok(JSON.stringify(M2.zen) === JSON.stringify(M0.zen) && M2.lightI === M0.lightI, 'без погоды — небо как было');
+  // стена бури (T-145 проверка D2): весь купол — цвет горизонта (= туман), даже если игра сама темнит небо; лёгкая дымка — с градиентом
+  { const dk = E.skyModel(13); for (let j = 0; j < 3; j++) { dk.zen[j] *= .35; dk.gnd[j] *= .5; }   // «Кубомир»: своё тёмное небо
+    const Mw = E.weatherSky(dk, { cloud: .35, dust: 1, tintK: 1, tint: [.6, .42, .2], vis: 40 }), dz = Math.max(...[0, 1, 2].map(j => Math.abs(Mw.zen[j] - Mw.hor[j]) + Math.abs(Mw.gnd[j] - Mw.hor[j])));
+    const Ml = E.weatherSky(E.skyModel(13), { cloud: .1, dust: .2, tintK: .2, tint: [.6, .42, .2] }), dl = Math.max(...[0, 1, 2].map(j => Math.abs(Ml.zen[j] - Ml.hor[j])));
+    ok(dz < 1e-9 && dl > .01, 'песчаная буря: зенит и низ купола = горизонт (силуэта земли на небе нет); слабая пыль — небо с градиентом', { dz, dl }); }
   // листва: define до первого кадра, хвоя — 3; склейка переносит метку
   const lm = new T.MeshStandardMaterial(); E.leafMaterial(lm, 'needles');
   const lw = new T.MeshStandardMaterial(); E.waveMaterial(lw, { kind: 'leaves' });
