@@ -26,7 +26,9 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
 .pl-tele{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:6;border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:.34rem .8rem;background:rgba(10,8,24,.72);color:#fff;font:800 .76rem Montserrat,sans-serif;cursor:pointer;min-height:36px}
 .pl-tele[hidden]{display:none}
 @media (max-width:640px){.pl-bar{left:10px;right:10px;max-width:none;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.pl-bar::-webkit-scrollbar{display:none}.pl-bar button{flex:none;padding:.3rem .55rem;font-size:.72rem}.pl-tele{bottom:150px}.pl-lbl{display:none}
-.pl-hud{top:58px;max-width:calc(100% - 20px);font-size:11px;padding:5px 8px}.pl-st{font-size:10px}}`;
+.pl-hud{top:58px;max-width:calc(100% - 20px);font-size:11px;padding:5px 8px}.pl-st{font-size:10px}
+.pl-v2 .pl-bar{left:auto;right:10px}.pl-v2 .pl-hud{top:10px;max-width:calc(100% - 160px)}}
+.pl-v2 .pl-bar .pl-menu{min-width:40px;font-size:1rem;padding:.3rem .6rem}`;
   const css = () => { if (document.getElementById('pl-css')) return; const s = document.createElement('style'); s.id = 'pl-css'; s.textContent = CSS; document.head.appendChild(s); };
   const DEG = Math.PI / 180, U = 2.1 / 1.8, HOME_LL = [29, 81];
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -108,16 +110,25 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     h2.hidden = !dbg;
     st.h1 = h1; st.h2 = h2;
     const bar = document.createElement('div'); bar.className = 'pl-bar'; wrap.appendChild(bar);
-    const btn = (txt, title, f) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.title = title; b.addEventListener('click', e => { e.stopPropagation(); f(b); }); bar.appendChild(b); return b; };
+    // интерфейс 2.0 (T-145 проверка, docs/HUD_V2.md; откат — HUD2.planet = 0 в js/core/config.js): на экране одна кнопка по делу
+    // (🛬 Сесть / ✈ Взлететь) и одно ☰ (орбита, вниз, время, карта системы, подробности, помощь и пункты шапки игры), строка
+    // состояния — одна (высота, скорость, час; подробно — пунктом ☰); клавиши — как были
+    const v2 = st.v2 = typeof HUD2 !== 'undefined' && !!HUD2.kit && !!HUD2.planet;
+    const btn = (txt, title, f, put = true) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.title = title; b.addEventListener('click', e => { e.stopPropagation(); f(b); }); if (put) bar.appendChild(b); return b; };
     st.bLand = btn('🛬 Сесть', 'Сесть на землю под собой / взлететь (L)', () => toggleLand(st));
-    btn('🛰 Орбита', 'Подняться на орбиту', () => goOrbit(st));
-    btn('⬇ Вниз', 'Сам спустится к земле', () => descend(st, 40));
-    st.bTime = btn('⏩ ×1', 'Время быстрее (T)', () => cycleTime(st));
-    if (st.map) { const b = btn('🪐', 'Карта системы: орбиты, фазы Луны, затмения (M)', () => st.map.toggle()), s = document.createElement('span'); s.className = 'pl-lbl'; s.textContent = ' Система'; b.appendChild(s); }
+    btn('🛰 Орбита', 'Подняться на орбиту', () => goOrbit(st), !v2);
+    btn('⬇ Вниз', 'Сам спустится к земле', () => descend(st, 40), !v2);
+    st.bTime = btn('⏩ ×1', 'Время быстрее (T)', () => cycleTime(st), !v2);
+    if (st.map && !v2) { const b = btn('🪐', 'Карта системы: орбиты, фазы Луны, затмения (M)', () => st.map.toggle()), s = document.createElement('span'); s.className = 'pl-lbl'; s.textContent = ' Система'; b.appendChild(s); }
     const tele = st.tele = document.createElement('button'); tele.type = 'button'; tele.className = 'pl-tele'; tele.hidden = true;
     tele.addEventListener('click', e => { e.stopPropagation(); untele(st); });
     wrap.appendChild(tele);
-    btn('❓', 'Как управлять', () => { st.help.hidden = !st.help.hidden; });
+    if (v2) {
+      try { st.info = localStorage.getItem('d37_planet_info') === '1'; } catch (e) { st.info = false; }
+      wrap.classList.add('pl-v2');
+      btn('☰', 'Меню: орбита, время, карта системы, помощь', () => planetMenu(st)).classList.add('pl-menu');
+      window.D37Shell?.own?.();   // одно ☰: у шапки игры своего нет (сбрасывает games.js при закрытии игры)
+    } else btn('❓', 'Как управлять', () => { st.help.hidden = !st.help.hidden; });
     const help = st.help = document.createElement('div'); help.className = 'pl-help';
     help.textContent = I.touch ? 'Полёт: джойстик — лететь, палец — смотреть, ⬆ ⬇ — вверх и вниз, 🚀 — быстрее. «🛬 Сесть» — идти пешком.'
       : 'Полёт: W/S — вперёд/назад, A/D — вбок, Пробел/C — вверх/вниз, Shift — быстрее, мышь (тянуть) — смотреть. L — сесть/взлететь, T — время быстрее, M — карта системы.';
@@ -289,7 +300,10 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     const moonS = pc < 0 ? '' : ` · 🌙 ${pc < 3 ? 'новолуние' : pc > 97 ? 'полнолуние' : pc + ' %' + (mo.wax ? ' ↑' : ' ↓')}`;
     const sk = V.sunK < .98 ? ` · ☀🌑 затмение ${Math.round((1 - V.sunK) * 100)} %` : '';
     const own = Math.abs(st.off) > 1 ? `⏩ своё время ${st.off > 0 ? '+' : '−'}${fmtMin(st.off)}` : '🌍 время мира';
-    st.h1.textContent = `🪐 ${st.mode === 'fly' ? '✈ полёт' : '🚶 пешком'} · высота ${altS} · ${spdS}\n${lat}, ${lon} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} местного${moonS}${sk}\n${own}`;
+    const hm = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    const line = st.v2 && !st.info ? `${st.mode === 'fly' ? '✈' : '🚶'} ${altS} · ${spdS} · ${hm}${sk}`   // HUD 2.0: одна строка, подробно — пунктом ☰
+      : `🪐 ${st.mode === 'fly' ? '✈ полёт' : '🚶 пешком'} · высота ${altS} · ${spdS}\n${lat}, ${lon} · ${hm} местного${moonS}${sk}\n${own}`;
+    if (line !== st.h1Txt) { st.h1Txt = line; st.h1.textContent = line; }
     const s = V.stats(), rs = R.stats;
     const fps = rs.frames ? 1000 / (rs.sumDt / rs.frames) : 0, cpu = rs.frames ? rs.sumCpu / rs.frames : 0;
     if (!st.h2.hidden) st.h2.textContent = `кусков ${s.shown} · кэш ${s.cached} · в очереди ${s.queued + s.building} · вызовов ${rs.calls} · FPS ${fps.toFixed(0)} · ЦП ${cpu.toFixed(1)} мс`;
@@ -358,6 +372,32 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     F.pos[0] *= r / l; F.pos[1] *= r / l; F.pos[2] *= r / l; F.vel.fill(0); F.pitch = -1.25; F.auto = null;
   }
   function descend(st, sec){ if (st.mode !== 'fly') return; st.fly.auto = { left: sec }; }
+  // ☰ планеты (HUD 2.0): то, что раньше было рядом кнопок, и пункты шапки игры (звук, настройки, телефон, экран, все игры)
+  function planetMenu(st){
+    const SS = window.D37Settings; if (!SS?.menu || st.menu) return;
+    st.menu = SS.menu(st.wrap, {
+      title: '🪐 Планета',
+      items: () => [
+        { id: 'orbit', icon: '🛰', text: 'Подняться на орбиту', group: 'Полёт' },
+        ...(st.mode === 'fly' ? [{ id: 'down', icon: '⬇', text: 'Спуститься к земле', group: 'Полёт' }] : []),
+        { id: 'time', icon: '⏩', text: `Время быстрее: сейчас ×${st.timeK}`, group: 'Полёт' },
+        ...(st.map ? [{ id: 'map', icon: '🪐', text: 'Карта системы: орбиты, Луна, затмения', group: 'Полёт' }] : []),
+        { id: 'info', icon: 'ℹ️', text: st.info ? 'Короткая строка вверху' : 'Подробно вверху: широта, Луна, время', group: 'Экран и помощь' },
+        { id: 'help', icon: '❓', text: 'Как управлять', group: 'Экран и помощь' },
+        ...(window.D37Shell?.items?.('planet') || []),
+      ],
+      onPick: id => {
+        if (window.D37Shell?.pick?.(id, st.menu)) return;
+        const keep = id === 'time' || id === 'info';
+        if (!keep) st.menu?.close?.();
+        if (id === 'orbit') goOrbit(st); else if (id === 'down') descend(st, 40); else if (id === 'time') cycleTime(st);
+        else if (id === 'map') st.map?.toggle(); else if (id === 'help') st.help.hidden = !st.help.hidden;
+        else if (id === 'info') { st.info = !st.info; try { localStorage.setItem('d37_planet_info', st.info ? '1' : '0'); } catch (e) {} hudAt = 0; }
+        if (keep) st.menu?.redraw?.();
+      },
+      onClose: () => { st.menu = null; st.C?.reset_state?.(); },
+    });
+  }
   function cycleTime(st){ const L = [1, 30, 300]; st.timeK = L[(L.indexOf(st.timeK) + 1) % L.length]; st.bTime.textContent = '⏩ ×' + st.timeK; st.bTime.classList.toggle('on', st.timeK > 1); }
 
   // ═══ Небо системы: «👁 Посмотреть» (телескоп), слежение, «ты здесь» на карте ═══
@@ -405,6 +445,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     const st = S; S = null;
     if (!st) return;
     st.dead = true;
+    try { st.menu?.close?.(); } catch (e) {}
     clearTimeout(st.helpT);
     try { st.loop?.stop(); } catch (e) {}
     window.removeEventListener('keydown', st.keyT);

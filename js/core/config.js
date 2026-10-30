@@ -36,7 +36,7 @@ if (UI_V2) document.documentElement.classList.add('ui2');
 // листы, подсказки один раз); shell — шапка игры «← · название · ☰ · ⛶» (остальное — в ☰); portrait — телефон стоя: игра с
 // персонажем на весь экран; chrome — фон сайта не анимируется, пока открыта игра; дальше — по игре. warShoulder — прицел
 // «из-за плеча» в боевой зоне (по умолчанию выкл).
-const HUD2 = { kit: 1, shell: 1, portrait: 1, chrome: 1, mir: 1, studio: 1, terra: 1, kubomir: 1, podzem: 1, io: 1, horde: 1, arena: 1, raid: 1, warShoulder: 0 };
+const HUD2 = { kit: 1, shell: 1, portrait: 1, chrome: 1, mir: 1, studio: 1, terra: 1, planet: 1, kubomir: 1, podzem: 1, io: 1, horde: 1, arena: 1, raid: 1, warShoulder: 0 };
 
 // ═══════════════════════════════════════
 //  СВОЙ СЕРВЕР ДЛЯ ИГР (T-045, docs/SERVER.md) — комнаты онлайн-игр через сервер владельца, Supabase — запасной путь
