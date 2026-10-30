@@ -880,7 +880,7 @@
     const ch = P.ch, WH = [0, 0, 0];
     try {
       return C.attach(R, {
-        world: { seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour, wxRegionAt: mirWxRegion },   // + особая погода по биому (wx.js)
+        world: { seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour, wxRegionAt: mirWxRegion, wx: true },   // + особая погода по биому (wx.js)
         // где игрок: не выше 6 над землёй (своя крыша — да; небоскрёб и самолёт — как у земли, иначе снег на весь город)
         where: () => { const g = ph.groundAt(ch.x, ch.z); WH[0] = ch.x; WH[1] = Math.max(g, Math.min(ch.y, g + 6)); WH[2] = ch.z; return WH; },
         // где кончается небо: верх самого высокого тела в столбе (крыши, навесы, машины) или земля — без луча по рельефу (дорого)
