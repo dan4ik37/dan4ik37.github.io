@@ -224,5 +224,16 @@ run('js/engine/wx.js');
   ok(rk && Number.isInteger(rk.cls) && rk.cls >= 0 && rk.cls <= 8, 'Kubomir v4: regionOf(kb src) gives a class 0…8', rk);
 }
 
+// ── Kubomir: NEW worlds get v4, a co-op guest of a v4 host builds v4 (T-145 verify D4) ──
+{
+  const kb = fs.readFileSync(path.join(SITE, 'js/games/kubomir.js'), 'utf8'), co = fs.readFileSync(path.join(SITE, 'js/games/kubomir-coop.js'), 'utf8');
+  const g = /const KB_GEN = (\d+);/.exec(kb);
+  ok(g && +g[1] === 4 && /genVer: KB_GEN \}/.test(kb), 'new Kubomir worlds: KB_GEN = 4 (rollback: 3)', g && g[1]);
+  const m = /genVer: (w\.genVer[^,]+), gen:/.exec(co);
+  const map = m ? new Function('w', 'return ' + m[1]) : null;
+  const got = map ? [undefined, 1, 2, 3, 4, 5, '4', 2.5].map(v => map({ genVer: v })) : null;
+  ok(got && got.join() === '1,1,2,3,4,1,4,2', 'co-op guest: genVer 1…4 as the host sent it, anything else → 1', got);
+}
+
 console.log(`biomes-test: ${pass} ok, ${fail} failed (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 process.exit(fail ? 1 : 0);

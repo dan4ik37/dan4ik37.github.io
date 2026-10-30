@@ -710,7 +710,7 @@
       G.pid = m.pid | 0; G.items = Array.isArray(m.items) ? m.items.map(String) : []; G.kt = Number.isInteger(m.kt) ? m.kt : 0;
       try { const u = unb64(m.edited || ''), a = new Int16Array(u.buffer, u.byteOffset, u.byteLength >> 1); for (let i = 0; i + 1 < a.length; i += 2) G.edited.add(a[i] + '|' + a[i + 1]); } catch (e) {}
       G.meta = { id: 'coop-' + code, coop: { guest: true, code }, name: String(w.name || 'Мир друга').slice(0, 40), seed: w.seed, mode: w.mode === 'creative' ? 'creative' : 'survival', diff: ['peaceful', 'easy', 'normal', 'hard'].includes(w.diff) ? w.diff : 'easy',
-        genVer: w.genVer === 3 ? 3 : w.genVer === 2 ? 2 : 1, gen: w.gen === 'void' ? 'void' : undefined, mc: w.mc && Array.isArray(w.mc.blocks) ? { blocks: w.mc.blocks.slice(0, 2000).map(String) } : undefined,
+        genVer: w.genVer >= 2 && w.genVer <= 4 ? w.genVer | 0 : 1, gen: w.gen === 'void' ? 'void' : undefined, mc: w.mc && Array.isArray(w.mc.blocks) ? { blocks: w.mc.blocks.slice(0, 2000).map(String) } : undefined,
         palette: Array.isArray(w.palette) ? w.palette.slice(0, 4096).map(String) : null, spawn: w.spawn && fin(w.spawn.x) ? { x: w.spawn.x, y: w.spawn.y, z: w.spawn.z } : null, time: fin(w.time) ? w.time : 8, day: w.day | 0 || 1,
         ice: w.ice || undefined, snow: w.snow || undefined, mods: [], tips: false, cheats: !!w.cheats, played: Date.now(), support: w.support === 'soft' || w.support === 'real' ? w.support : undefined };
       G.seasons = w.seasons; G.wf = w.wf;
