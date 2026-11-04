@@ -16,7 +16,8 @@ touching the same files run one after another.
 - Task T-NNN (and C-NNN), the owner's exact words with date; which docs/areas/*.md file(s) to read (one or two, never all).
 - Worktree: `git -C E:\site\dan4ik37.github.io worktree add .claude/worktrees/<name> -b <branch> main`; commit per sub-step with
   the harness attribution trailer; stage paths explicitly; never push, never merge to main (skill d37-merge is the coordinator's).
-- Files it owns / must not touch (always: D:\UnityProjects\Backrooms* read-only, E:\oci, obs-websocket\config.json, secrets).
+- Files it owns / must not touch (always: D:\UnityProjects\Backrooms* read-only; the secret folders and files listed in CLAUDE.md
+  "Security and machine rules").
 - SQL only into the area's existing SQL file (skill d37-sql-verify); no keys anywhere (the repo is PUBLIC).
 - Any game / engine file change → bump GAMES_VER in js/features/games.js; foreign text only via esc() / jsAttr() / textContent.
 - Simulation logic goes to the core first (E:\d37-core\spec\PLAN.md «Core first»): a JS prototype sits behind a flag and names
