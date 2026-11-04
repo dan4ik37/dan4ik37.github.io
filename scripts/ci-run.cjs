@@ -42,6 +42,7 @@ const TESTS = [
   { f: 'world-zones-test.cjs' }, { f: 'world-leak-test.cjs' }, { f: 'city-test.cjs' }, { f: 'city-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'city-sim.cjs', args: ['--days', '60', '--players', '20,100'], t: 180 },
   { f: 'vehicle-test.cjs' }, { f: 'waves-test.cjs', retry: 1 }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' }, { f: 'cloud-test.cjs' },
   { f: 'terra-test.cjs', t: 180 },   // T-111: ядро рельефа T1 — terra.wasm и запасной JS бит в бит с эталоном Rust (scripts/terra-golden.txt), правки, поток
+  { f: 'core-world-test.cjs', t: 180 },   // C-002: общее ядро D37 на сайте (js/engine/core-world.js) — wasm и запасной JS бит в бит с эталоном ядра (hash/contact/world + M1/M2), падения wasm и потока, 30/60/144, 0 мусора
   { f: 'biomes-test.cjs', t: 180 },   // T-116: логичные биомы — «Кубомир» v4 и новая земля v2 (жара не рядом с зимой, без одиноких пятен), старые миры v1–v3 как были, D37E.biomes, странные миры
   { f: 'place-climate-test.cjs', t: 180 },   // T-145 (проверка): погода — свой климат места (саванна у пустыни без зимы, экватор без снега, на юге сезоны наоборот)
   { f: 'support-test.cjs', args: ['--fast'] }, { f: 'support-load-test.cjs', args: ['--fast'] }, { f: 'topple-test.cjs', args: ['--fast'] }, { f: 'debris-test.cjs', args: ['--fast'] }, { f: 'podzem-support-test.cjs', args: ['--fast'] }, { f: 'mir-support-test.cjs' },   // T-022a: обрушение и прочность — ядро D37E.support, «Подземье», боевая зона «Мира»
