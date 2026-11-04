@@ -254,7 +254,7 @@ Engine files → games that load them (a change here means: bump GAMES_VER, open
 | js/engine/clock.js | 11.9 | planet |
 | js/engine/combat.js | 26.1 | kubomir |
 | js/engine/controls.js | 27.0 | kubomir, planet, podzem, studio3d, terra, world |
-| js/engine/core-world.js | 48.2 | terra |
+| js/engine/core-world.js | 49.2 | terra |
 | js/engine/core.js | 8.0 | kubomir, planet, podzem, studio3d, terra, world |
 | js/engine/d37core.js | 65.6 | terra |
 | js/engine/debris.js | 13.7 | kubomir |

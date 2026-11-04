@@ -9,7 +9,7 @@
 //   5 wasm memory growth: memory.grow forced between calls → results still == JS; d37_world_create reserves once (pages flat)
 //   6 zero garbage: 0 GC during 200 rounds of world + contact calls; 0 GC during 10 000 session steps (in-thread)
 //   7 30 / 60 / 144 FPS host loops → identical world hash (wasm, JS; in-thread and worker)
-//   8 worker transport (node worker_threads running js/engine/core-world.js?worker=1 as a Worker): == in-thread; worker crash → reset to
+//   8 worker transport (node worker_threads running js/engine/core-world.js as a Worker named d37-core-world): == in-thread; worker crash → reset to
 //     in-thread, onReset re-sends; missing worker script → in-thread; no ready → in-thread; wasm trap → reset
 //   9 numbers (node, this PC): load + init, 10 000 commands, a session tick
 // Prints one summary line; exit 1 on any FAIL.
@@ -358,11 +358,12 @@ const out = {};
   const SHIM = path.join(GOLD, 'worker-shim.cjs');
   const workers = new Set();
   class FakeWorker {
-    constructor(u) {
-      const f = String(u).split('?')[0], search = String(u).indexOf('?') >= 0 ? String(u).slice(String(u).indexOf('?')) : '';
+    constructor(u, o) {
+      const s0 = String(u), name = (o && o.name) || '';
+      const f = s0.split('?')[0], search = s0.indexOf('?') >= 0 ? s0.slice(s0.indexOf('?')) : '';
       this.onmessage = null; this.onerror = null;
       if (!fs.existsSync(f)) { setTimeout(() => this.onerror && this.onerror({ message: 'not found', preventDefault() {} }), 5); return; }
-      this.w = new WT.Worker(SHIM, { workerData: { dir: path.dirname(f), script: f, search } });
+      this.w = new WT.Worker(SHIM, { workerData: { dir: path.dirname(f), script: f, search, name } });
       workers.add(this.w);
       this.w.on('message', d => this.onmessage && this.onmessage({ data: d }));
       this.w.on('error', e => this.onerror && this.onerror({ message: String(e && e.message), preventDefault() {} }));
@@ -371,7 +372,7 @@ const out = {};
     terminate() { if (this.w) { this.w.terminate(); workers.delete(this.w); } }
   }
   global.Worker = FakeWorker; global.document = { baseURI: 'file:///site/' };
-  const WORKER = path.join(ENG, 'core-world.js') + '?worker=1';
+  const WORKER = path.join(ENG, 'core-world.js') + '?v=t';
   // the game side: E.loop's fixed 60 Hz step from frame times; commands depend only on the step index
   async function play(fps, opts, totalSteps, cmdsWanted) {
     let resets = 0;

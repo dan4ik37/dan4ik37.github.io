@@ -21,7 +21,7 @@
 //    port of grid / flow yet, only C#): core.createGrid(desc4, edgesU8, layersU8|null, costU8|null, linksWords, nlinks, valWords)
 //    → { code, grid }; core.createFlow(grid, desc4) → { code, flow } (see "M1 / M2" below for the word layouts).
 // 2) Worker transport (addendum §3.4: the wasm runs single-threaded inside a dedicated Worker — this same file started with
-//    ?worker=1, it loads d37core.js next to itself; postMessage with transferable
+//    the Worker name 'd37-core-world', it loads d37core.js next to itself; postMessage with transferable
 //    ArrayBuffers, no SharedArrayBuffer / COOP / COEP — ads and YouTube iframes keep working):
 //    host = await D37CoreWorld.host({ worker: true })  — never rejects; host.kind 'worker' | 'inline' (no Worker or it failed →
 //    the same API in-thread), host.backend, host.error. hw = (await host.createWorld(desc)).world;
@@ -47,8 +47,12 @@
   var absUrl = function (u) {
     try { return new URL(u, (root.document && root.document.baseURI) || (root.location && root.location.href) || 'http://x/').href; } catch (e) { return u; }
   };
-  // the worker runs this same file (?worker=1 → it loads d37core.js next to itself and serves; one fetch less than a separate entry)
-  var workerUrl = function () { var u = url('core-world.js'); return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'worker=1'; };
+  // the worker runs this same file, started with the Worker name WORKER_NAME (→ it loads d37core.js next to itself and serves; one
+  // fetch less than a separate entry file). The mark is the name, not the URL: the URL stays the game's own <script> URL (sw.js
+  // keeps one cache entry per path and drops other query strings, so a second query would evict the page's copy on every open;
+  // a #fragment does not reach a worker's location in Chrome)
+  var WORKER_NAME = 'd37-core-world';
+  var workerUrl = function () { return url('core-world.js'); };
   var ls = function (k) { try { return root.localStorage ? root.localStorage.getItem(k) : null; } catch (e) { return null; } };
   // a silent fallback must be visible (addendum §3.4): one errlog entry per kind per page (window.d37Err, api/_lib/errlog.js)
   var told = {};
@@ -387,9 +391,11 @@
     scope.onmessage = function (ev) {
       var d = ev.data || {};
       if (d.t === 'init') {
+        var tInit = now(); // ms since the worker started: its own script loading
         load({ wasm: d.wasm === null ? false : d.wasm, timeoutMs: d.timeoutMs, force: d.force }).then(function (c) {
           core = c; ready = true;
-          post({ t: 'ready', backend: c.backend, error: c.error, fetchMs: c.fetchMs, initMs: c.initMs, abi: c.abi, pages: c.pages() });
+          post({ t: 'ready', backend: c.backend, error: c.error, fetchMs: c.fetchMs, initMs: c.initMs, abi: c.abi, pages: c.pages(), bootMs: tInit, readyAt: now(),
+            origin: root.performance && root.performance.timeOrigin || 0 });
           while (waiting.length) handle(waiting.shift());
         });
         return;
@@ -418,7 +424,7 @@
         resolve(inlineHost(opts, 'worker: ' + why));
       };
       try {
-        w = new root.Worker(opts.workerUrl || workerUrl());
+        w = new root.Worker(opts.workerUrl || workerUrl(), { name: WORKER_NAME });
         S.workersLive++;
       } catch (err) { w = null; fail(String(err && err.message || err)); return; }
       H = workerHost(w, t0);
@@ -448,6 +454,9 @@
       var d = ev.data || {};
       if (d.t === 'ready') {
         H.backend = d.backend; H.error = d.error || ''; H.fetchMs = d.fetchMs; H.initMs = d.initMs; H.abi = d.abi; H.readyMs = now() - t0; H.ready = true;
+        // where the start time goes (page clock): the worker thread started, its scripts loaded, its core ready, the page got it
+        var po = root.performance && root.performance.timeOrigin || 0;
+        if (d.origin && po) { var ws = d.origin - po; H.boot = { spawnMs: ws - t0, scriptsMs: d.bootMs, coreMs: d.readyAt - d.bootMs, deliverMs: now() - (ws + d.readyAt) }; }
         if (d.backend !== 'wasm') tell('js-fallback', d.error);
         if (H.onReady) H.onReady();
         return;
@@ -474,7 +483,7 @@
       if (H.onDead) try { H.onDead(why); } catch (e) {}
     }
     H = {
-      kind: 'worker', backend: '', error: '', fetchMs: 0, initMs: 0, readyMs: 0, abi: 0, ready: false,
+      kind: 'worker', backend: '', error: '', fetchMs: 0, initMs: 0, readyMs: 0, abi: 0, ready: false, boot: null,
       dead: false, onDead: null, onReady: null, first: null,
       createWorld: function (desc) {
         return new Promise(function (ok) {
@@ -624,8 +633,9 @@
     // page's main thread (copy in / out, postMessage, result handling incl. onTick): C-012 budget ≤ 0.3 ms dev PC, ≤ 1 ms phone ×4
     var st = { ticks: 0, cmds: 0, applied: 0, refused: 0, events: 0, tickMs: 0, tickMax: 0, rtMs: 0, backlog: 0, resets: 0, overflows: 0, errors: 0, pages: 0, early: 0,
       sendMs: 0, recvMs: 0, mainMs: 0, mainMax: 0 };
+    var t0s = now();
     var s = {
-      ready: false, backend: '', transport: '', error: '', hash: new Uint32Array(2), stats: st, opts: opts, world: null, host: null, started: null,
+      ready: false, backend: '', transport: '', error: '', hash: new Uint32Array(2), stats: st, opts: opts, world: null, host: null, started: null, readyMs: 0,
       cmd: function (op, actor, tLo, tHi, ver, p0, p1, p2, p3, p4, p5) {
         if (disposed) return 0;
         if ((n + 1) * 13 > cmds.length) { var c2 = new Int32Array(cmds.length * 2); c2.set(cmds); cmds = c2; }
@@ -739,6 +749,7 @@
           if (!r.world) { s.error = 'create ' + r.code; s.ready = false; return null; }
           hw = r.world; s.world = hw;
           s.ready = true; s.backend = h.backend; s.transport = h.kind; s.error = h.error;
+          if (!s.readyMs) s.readyMs = now() - t0s; // session() → the first world ready (load + init as the game sees it)
           // order: the game's setup (onReset) as a tick without a step, then the ticks that waited, each with its own batch;
           // commands queued since the last waiting tick stay queued for the next normal tick
           var rest = n ? new Int32Array(cmds.subarray(0, n * 13)) : null, rn = n;
@@ -779,12 +790,11 @@
     // the flag (js/core/config.js CORE_WASM); a function, not a getter
     on: function () { try { return typeof CORE_WASM !== 'undefined' && !!CORE_WASM; } catch (e) { return false; } },
     _reset: function () { cache = {}; told = {}; } };
-  // started as a dedicated Worker (D37CoreWorld.host → new Worker('js/engine/core-world.js?v=…&worker=1')): load the core files
-  // next to this one with the same ?v= and serve the protocol of § 2
-  if (typeof window === 'undefined' && typeof importScripts === 'function' && root.location && /[?&]worker=1(&|$)/.test(root.location.search || '')) {
-    var qv = String(root.location.search).replace(/[?&]worker=1(?=&|$)/, '').replace(/^&/, '?');
+  // started as a dedicated Worker (D37CoreWorld.host → new Worker('js/engine/core-world.js?v=…', { name: 'd37-core-world' })): load
+  // the core files next to this one with the same ?v= and serve the protocol of § 2
+  if (typeof window === 'undefined' && typeof importScripts === 'function' && root.name === WORKER_NAME && root.location) {
     root.D37CoreWorld = api;
-    importScripts('d37core.js' + qv);
+    importScripts('d37core.js' + (root.location.search || ''));
     serve(root);
   }
   return api;
