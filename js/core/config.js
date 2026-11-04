@@ -38,6 +38,10 @@ if (UI_V2) document.documentElement.classList.add('ui2');
 // «из-за плеча» в боевой зоне (по умолчанию выкл).
 const HUD2 = { kit: 1, shell: 1, portrait: 1, chrome: 1, mir: 1, studio: 1, terra: 1, planet: 1, kubomir: 1, podzem: 1, io: 1, horde: 1, arena: 1, raid: 1, warShoulder: 0 };
 
+// ЯДРО D37 (C-002, план движка — шаг 2): общее ядро сайта и Backrooms (js/engine/d37core.wasm в своём потоке, нет wasm — тот же код
+// на JS) через js/engine/core-world.js; пока «Новая земля» (игрок — тело в ядре, такт 20 Гц, F3 — строка «ядро D37»). Откат: false
+const CORE_WASM = true;
+
 // ═══════════════════════════════════════
 //  СВОЙ СЕРВЕР ДЛЯ ИГР (T-045, docs/SERVER.md) — комнаты онлайн-игр через сервер владельца, Supabase — запасной путь
 // ═══════════════════════════════════════

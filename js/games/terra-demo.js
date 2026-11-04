@@ -164,7 +164,20 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     st.ro = window.ResizeObserver ? new ResizeObserver(() => { if (!R.dead) R.resize(); }) : null;
     st.ro?.observe(wrap);
     R.resize();
+    // ядро D37 (C-002, флаг CORE_WASM в js/core/config.js): общий движок сайта и Backrooms — мир команд и событий в своём потоке
+    // (d37core.wasm; нет wasm — тот же код на JS). Пока адаптер: игрок — тело 75 кг и действующее лицо 1, такт ядра 20 Гц из шага
+    // логики; вид игры не меняется. Строка «ядро D37» — в окне отладки (F3)
+    if (window.D37CoreWorld?.on?.()) st.core = coreStart();
     st.loop = E.loop(dt => step(st, dt), dt => frame(st, dt));
+  }
+  // замыкание не держит st (T-085): ядро пересоздаёт мир (сбой потока, ловушка wasm) — игрок заводится заново здесь же
+  function coreStart(){
+    const CWo = window.D37CoreWorld, P = CWo.pack, id = new Uint32Array(2);
+    return CWo.session({ seed: SEED, sender: 1, onReset: s => {
+      CWo.worldId(SEED, 0, 1, 0, 0, 0, 0, id);
+      s.cmd(1, 0, id[0], id[1], 0, P.spawnKind(1, 0, 1, 0), 0, 0, 0, P.hpBrk(1600, 0), 75000);   // SPAWN: тело игрока (ckind 1), 100 hp, 75 кг
+      s.cmd(7, 0, 0, 0, 0, 1, 1, id[0], id[1], 0, 0);   // ACTOR 1 ↔ это тело (удары идут массой тела)
+    } });
   }
   // погода: координаты погоды — метры мира (якорь + ед. / U; переезд якоря её не сдвигает), климат дождя и снега — по классу места
   // (biomes.climateAtFn), особая погода — по записи места (wx.regionOf), небо кончается над рельефом ядра (в пещере не льёт). Время
@@ -276,6 +289,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     if (st.dead) return;
     const { C, TS } = st;
     C.blocked = !!window.D37Settings?.isOpen?.();
+    st.core?.step();   // каждый 3-й шаг (60 Гц) — такт ядра 20 Гц
     C.step(dt);
     if (st.v2 && st.mode === 'walk' && !C.blocked && C.down('emote')) st.H.poseRadial();   // T (интерфейс 2.0): круг позы и эмоций
     while (st.pend.length) {   // копать / насыпать: луч по плотности — первая точка земли (до 60 м)
@@ -442,7 +456,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     const s = st.TS.stats(), m = st.TM.stats(), rs = st.R.stats;
     const fps = rs.frames ? 1000 / (rs.sumDt / rs.frames) : 0, cpu = rs.frames ? rs.sumCpu / rs.frames : 0;
     st.h1.textContent = `⛰ ${st.mode === 'fly' ? '✈ полёт' : '🚶 пешком'} · ${Math.round(wx)}, ${Math.round(wy)}, ${Math.round(wz)} м · ${BIO[b] || ''}${tC}`;
-    st.h2.textContent = `ядро ${s.kinds} · блоков ${m.live}/${s.blocks} · очередь ${s.queued + s.inflight} · сборка ${s.buildAvg.toFixed(1)} мс · загрузка ${m.upAvg.toFixed(2)} мс · правок ${s.edits}\nвызовов ${rs.calls} · FPS ${fps.toFixed(0)} · ЦП ${cpu.toFixed(1)} мс`;
+    st.h2.textContent = `ядро ${s.kinds} · блоков ${m.live}/${s.blocks} · очередь ${s.queued + s.inflight} · сборка ${s.buildAvg.toFixed(1)} мс · загрузка ${m.upAvg.toFixed(2)} мс · правок ${s.edits}\nвызовов ${rs.calls} · FPS ${fps.toFixed(0)} · ЦП ${cpu.toFixed(1)} мс` + (st.core ? '\n' + st.core.line() : '');
     rs.frames = 0; rs.sumDt = 0; rs.sumCpu = 0; rs.maxDt = 0; rs.maxCpu = 0; rs.sumR = 0;
   }
 
@@ -458,6 +472,8 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     try { st.offCtx?.(); } catch (e) {}
     try { st.ro?.disconnect(); } catch (e) {}
     try { st.unfollow?.(); } catch (e) {}
+    try { st.core?.dispose(); } catch (e) { console.error(e); }
+    st.core = null;
     try { st.TM?.dispose(); } catch (e) { console.error(e); }
     try { st.TS?.dispose(); } catch (e) { console.error(e); }
     try { st.sea?.geometry.dispose(); } catch (e) {}
@@ -484,6 +500,7 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     t145: () => S && { gen: S.TS.gen, seaTiles: S.seaN ?? null, climbP: S.rig.climbP, compact: !!S.TM.compact, biome: S.TS.climate(S.ax + (S.mode === 'walk' ? S.Pl.ch.x : S.fly.x) / U, S.az + (S.mode === 'walk' ? S.Pl.ch.z : S.fly.z) / U) },
     tp: (x, z) => { if (!S) return; const ax = Math.floor(x / 32) * 32, az = Math.floor(z / 32) * 32; rebase(S, ax - S.ax, az - S.az); const lx = (x - S.ax) * U, lz = (z - S.az) * U; if (S.mode === 'fly') { S.fly.x = lx; S.fly.z = lz; } else { S.refY = S.TS.height(x, z) + 2; S.Pl.place(lx, S.ph.terrain.sample(lx, lz), lz, S.Pl.yaw); } },
     wx: () => S && S.wx && Object.assign(S.wx.stats(), { region: S.W && S.W.wxRegionAt ? S.W.wxRegionAt(S.ax + (S.mode === 'walk' ? S.Pl.ch.x : S.fly.x) / U, S.az + (S.mode === 'walk' ? S.Pl.ch.z : S.fly.z) / U) : null }),
+    core: () => S && S.core && { ready: S.core.ready, backend: S.core.backend, transport: S.core.transport, error: S.core.error, stats: Object.assign({}, S.core.stats), line: S.core.line() },
     get S(){ return S; },
   };
   window.GAME_IMPL = window.GAME_IMPL || {};
