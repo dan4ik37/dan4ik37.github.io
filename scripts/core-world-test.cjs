@@ -1,8 +1,8 @@
 // node scripts/core-world-test.cjs — C-002: the site really uses the shared core d37-core (E:\d37-core\spec\contracts\C-002-site-uses-core.md).
 // Everything goes through the site API js/engine/core-world.js, on the wasm backend AND the JS fallback:
 //   1 the copied drop: js/engine/d37core.wasm / d37core.js and scripts/d37core-golden/*.txt == E:\d37-core-release\c1b (SHA256 pinned)
-//   2 golden: hash.txt (M0), contact.txt + world.txt (C-001) — wasm == JS fallback == golden, every line; M1 / M2 (grid, flow): the
-//     preset section of grid.txt / flow.txt through the wasm API (the JS fallback has no grid / flow port: E_UNSUPPORTED, checked)
+//   2 golden: hash.txt (M0), contact.txt + world.txt (C-001) — wasm == JS fallback == golden, every line; M1 / M2 (grid, flow): every
+//     line of grid.txt / flow.txt through the wasm API (the JS fallback has no grid / flow port: E_UNSUPPORTED, checked)
 //   3 JS == wasm on random command streams (results, events, hashes after every batch) and query == apply
 //   4 fallback: missing (HTTP 404), stalled download (timeout), corrupted bytes, truncated, another ABI, no d37core.js → the game
 //     lives (a world works and gives the same hash as the wasm world)
@@ -81,10 +81,9 @@ const out = {};
   {
     const presetLines = require(path.join(GOLD, 'grid-golden.cjs'))(D37Core.js, W);
     const g = presetLines();
-    const wantG = rd('grid.txt').filter(l => /^(grid|visq|vis|list|chg|vischg) /.test(l));
-    const wantF = rd('flow.txt').filter(l => /^(sched|flow|stale|sched2|flowchg) /.test(l));
-    cmpLines('grid (M1, presets 0-5)/wasm', g.grid, wantG);
-    cmpLines('flow (M2, presets 0-5)/wasm', g.flow, wantF);
+    const wantG = rd('grid.txt'), wantF = rd('flow.txt');
+    cmpLines('grid (M1)/wasm', g.grid, wantG);
+    cmpLines('flow (M2)/wasm', g.flow, wantF);
     const all = rd('grid.txt').length + rd('flow.txt').length;
     out.m12 = { goldenChecked: wantG.length + wantF.length, goldenTotal: all };
     const rg = J.createGrid(Int32Array.from([4, 4, 1, 0]), new Uint8Array(64), null, null, new Int32Array(0), 0, null);
