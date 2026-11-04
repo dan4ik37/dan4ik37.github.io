@@ -9,7 +9,7 @@
 //   5 wasm memory growth: memory.grow forced between calls → results still == JS; d37_world_create reserves once (pages flat)
 //   6 zero garbage: 0 GC during 200 rounds of world + contact calls; 0 GC during 10 000 session steps (in-thread)
 //   7 30 / 60 / 144 FPS host loops → identical world hash (wasm, JS; in-thread and worker)
-//   8 worker transport (node worker_threads running js/engine/core-worker.js as a Worker): == in-thread; worker crash → reset to
+//   8 worker transport (node worker_threads running js/engine/core-world.js?worker=1 as a Worker): == in-thread; worker crash → reset to
 //     in-thread, onReset re-sends; missing worker script → in-thread; no ready → in-thread; wasm trap → reset
 //   9 numbers (node, this PC): load + init, 10 000 commands, a session tick
 // Prints one summary line; exit 1 on any FAIL.
@@ -200,6 +200,8 @@ const out = {};
     const server = http.createServer((req, res) => {
       if (req.url.startsWith('/stall')) return; // never answers
       if (req.url.startsWith('/ok')) { res.writeHead(200, { 'Content-Type': 'application/wasm' }); res.end(wasmBytes); return; }
+      if (req.url.startsWith('/bad')) { const b = Buffer.from(wasmBytes); b[3000] ^= 0xFF; b[9000] ^= 0xFF; res.writeHead(200, { 'Content-Type': 'application/wasm' }); res.end(b); return; }
+      if (req.url.startsWith('/octet')) { res.writeHead(200, { 'Content-Type': 'application/octet-stream' }); res.end(wasmBytes); return; }
       res.writeHead(404); res.end('no');
     });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -214,6 +216,7 @@ const out = {};
       ['truncated', { wasm: new Uint8Array(wasmBytes.subarray(0, 70000)) }, /./],
       ['another ABI (3)', { wasm: abi3 }, /abi mismatch/],
       ['empty file', { wasm: new Uint8Array(0) }, /./],
+      ['corrupted over HTTP (streaming compile)', { wasm: base + '/bad.wasm' }, /./],
     ];
     const lines = [];
     for (const [label, o, re] of cases) {
@@ -223,8 +226,10 @@ const out = {};
       ok(good, `fallback ${label}: backend ${c.backend} (${c.error}) scenario ${s === scenWasm ? 'equal' : 'DIFFERS'}`);
       lines.push(`${label} → ${c.backend} (${c.error.slice(0, 40)})`);
     }
-    const viaHttp = await CW.load({ wasm: base + '/ok.wasm', fresh: true });
-    ok(viaHttp.backend === 'wasm' && scen(viaHttp) === scenWasm, 'wasm over HTTP');
+    const viaHttp = await CW.load({ wasm: base + '/ok.wasm', fresh: true }), viaOctet = await CW.load({ wasm: base + '/octet.wasm', fresh: true });
+    ok(viaHttp.backend === 'wasm' && scen(viaHttp) === scenWasm, 'wasm over HTTP (application/wasm: streaming compile)');
+    ok(viaOctet.backend === 'wasm' && scen(viaOctet) === scenWasm, 'wasm over HTTP (octet-stream: bytes)');
+    lines.push(`HTTP application/wasm → ${viaHttp.backend}, octet-stream → ${viaOctet.backend}`);
     // no d37core.js on the page at all: core-world.js still loads; every call answers E_UNSUPPORTED, nothing throws
     {
       const ctx = { console, setTimeout, clearTimeout, Promise, Math, Uint8Array, Int32Array, Uint32Array, Float64Array, ArrayBuffer, Error, Object, String, Number, Date, performance };
@@ -236,7 +241,7 @@ const out = {};
       lines.push(`no d37core.js → ${c.backend} (${c.error})`);
     }
     server.close();
-    console.log('fallback (7 cases, each then runs the fixed scenario == wasm): ' + lines.join('; '));
+    console.log('fallback (8 cases, each then runs the fixed scenario == wasm) + 2 good paths: ' + lines.join('; '));
   }
 
   // ════ 5 wasm memory growth: forced memory.grow between calls; create reserves once
@@ -354,10 +359,10 @@ const out = {};
   const workers = new Set();
   class FakeWorker {
     constructor(u) {
-      const f = String(u).split('?')[0];
+      const f = String(u).split('?')[0], search = String(u).indexOf('?') >= 0 ? String(u).slice(String(u).indexOf('?')) : '';
       this.onmessage = null; this.onerror = null;
       if (!fs.existsSync(f)) { setTimeout(() => this.onerror && this.onerror({ message: 'not found', preventDefault() {} }), 5); return; }
-      this.w = new WT.Worker(SHIM, { workerData: { dir: path.dirname(f), script: f } });
+      this.w = new WT.Worker(SHIM, { workerData: { dir: path.dirname(f), script: f, search } });
       workers.add(this.w);
       this.w.on('message', d => this.onmessage && this.onmessage({ data: d }));
       this.w.on('error', e => this.onerror && this.onerror({ message: String(e && e.message), preventDefault() {} }));
@@ -366,7 +371,7 @@ const out = {};
     terminate() { if (this.w) { this.w.terminate(); workers.delete(this.w); } }
   }
   global.Worker = FakeWorker; global.document = { baseURI: 'file:///site/' };
-  const WORKER = path.join(ENG, 'core-worker.js');
+  const WORKER = path.join(ENG, 'core-world.js') + '?worker=1';
   // the game side: E.loop's fixed 60 Hz step from frame times; commands depend only on the step index
   async function play(fps, opts, totalSteps, cmdsWanted) {
     let resets = 0;

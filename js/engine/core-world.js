@@ -20,7 +20,8 @@
 //    M1 / M2 (wasm only; core.has.grid / core.has.flow; on the JS fallback they return E_UNSUPPORTED −101 — the core has no JS
 //    port of grid / flow yet, only C#): core.createGrid(desc4, edgesU8, layersU8|null, costU8|null, linksWords, nlinks, valWords)
 //    → { code, grid }; core.createFlow(grid, desc4) → { code, flow } (see "M1 / M2" below for the word layouts).
-// 2) Worker transport (addendum §3.4: the wasm runs single-threaded inside a dedicated Worker, postMessage with transferable
+// 2) Worker transport (addendum §3.4: the wasm runs single-threaded inside a dedicated Worker — this same file started with
+//    ?worker=1, it loads d37core.js next to itself; postMessage with transferable
 //    ArrayBuffers, no SharedArrayBuffer / COOP / COEP — ads and YouTube iframes keep working):
 //    host = await D37CoreWorld.host({ worker: true })  — never rejects; host.kind 'worker' | 'inline' (no Worker or it failed →
 //    the same API in-thread), host.backend, host.error. hw = (await host.createWorld(desc)).world;
@@ -46,6 +47,8 @@
   var absUrl = function (u) {
     try { return new URL(u, (root.document && root.document.baseURI) || (root.location && root.location.href) || 'http://x/').href; } catch (e) { return u; }
   };
+  // the worker runs this same file (?worker=1 → it loads d37core.js next to itself and serves; one fetch less than a separate entry)
+  var workerUrl = function () { var u = url('core-world.js'); return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'worker=1'; };
   var ls = function (k) { try { return root.localStorage ? root.localStorage.getItem(k) : null; } catch (e) { return null; } };
   // a silent fallback must be visible (addendum §3.4): one errlog entry per kind per page (window.d37Err, api/_lib/errlog.js)
   var told = {};
@@ -83,6 +86,10 @@
       timer = setTimeout(function () { try { if (ac) ac.abort(); } catch (e) {} bad(new Error('wasm timeout ' + ms + ' ms')); }, ms);
       fetch(src, ac ? { signal: ac.signal } : undefined).then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
+        // application/wasm (Vercel, the test servers): compile while downloading, off the main thread → a WebAssembly.Module;
+        // otherwise the bytes (d37core.js compiles them). A compile error → the JS core, as with bad bytes.
+        var ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+        if (typeof WebAssembly === 'object' && typeof WebAssembly.compileStreaming === 'function' && /application\/wasm/i.test(ct)) return WebAssembly.compileStreaming(r);
         return r.arrayBuffer();
       }).then(ok, bad);
     });
@@ -402,35 +409,33 @@
       return inlineHost(opts, opts.worker === false || !noWorker ? '' : 'no worker');
     }
     return new Promise(function (resolve) {
-      var t0 = now(), w = null, done = false, timer = 0;
+      var t0 = now(), w = null, done = false, timer = 0, H = null;
       var fail = function (why) {
         if (done) return;
         done = true; clearTimeout(timer);
-        if (w) { try { w.terminate(); } catch (e) {} S.workersLive--; }
+        if (H) H._stop(); else if (w) { try { w.terminate(); } catch (e) {} S.workersLive--; }
         tell('worker failed', why);
         resolve(inlineHost(opts, 'worker: ' + why));
       };
       try {
-        w = new root.Worker(opts.workerUrl || url('core-worker.js'));
+        w = new root.Worker(opts.workerUrl || workerUrl());
         S.workersLive++;
       } catch (err) { w = null; fail(String(err && err.message || err)); return; }
+      H = workerHost(w, t0);
+      H.onReady = function () { if (done) return; done = true; clearTimeout(timer); resolve(H); };
+      H.onDead = function (why) { if (!done) fail(why); };
       timer = setTimeout(function () { fail('no ready in ' + (opts.readyMs || 10000) + ' ms'); }, opts.readyMs || 10000);
-      w.onerror = function (ev) { try { ev.preventDefault(); } catch (e) {} if (!done) fail('error ' + String(ev && ev.message || 'load')); };
-      w.onmessage = function (ev) {
-        var d = ev.data || {};
-        if (d.t !== 'ready' || done) return;
-        done = true; clearTimeout(timer);
-        resolve(workerHost(w, d, now() - t0));
-      };
       // the wasm: an absolute URL (the worker resolves relative to its own folder), raw bytes (tests) or none (JS core)
       var wasm = opts.wasm === false ? null : (typeof opts.wasm === 'string' || opts.wasm == null) ? absUrl(opts.wasm || url('d37core.wasm')) : opts.wasm;
       try { w.postMessage({ t: 'init', wasm: wasm, timeoutMs: opts.timeoutMs || 8000, force: opts.force || ls('d37_core') || '' }); }
-      catch (err) { fail(String(err && err.message || err)); }
+      catch (err) { fail(String(err && err.message || err)); return; }
+      // the first world goes with init (the worker queues calls until its core is loaded): one round trip less at start
+      if (opts.desc) H.first = H.createWorld(opts.desc);
     });
   }
-  function workerHost(w, ready, readyMs) {
+  // the worker side of a host; calls made before 'ready' are posted at once and wait in the worker
+  function workerHost(w, t0) {
     S.hostsLive++;
-    if (ready.backend !== 'wasm') tell('js-fallback', ready.error);
     var seq = 0, q = [], H;
     function call(m, h, a, b, cb) {
       if (H.dead) { cb(E_DEAD_HOST, null, null); return; }
@@ -441,11 +446,17 @@
     }
     w.onmessage = function (ev) {
       var d = ev.data || {};
+      if (d.t === 'ready') {
+        H.backend = d.backend; H.error = d.error || ''; H.fetchMs = d.fetchMs; H.initMs = d.initMs; H.abi = d.abi; H.readyMs = now() - t0; H.ready = true;
+        if (d.backend !== 'wasm') tell('js-fallback', d.error);
+        if (H.onReady) H.onReady();
+        return;
+      }
       if (d.t !== 'r') return;
       var k = q.shift();
       if (k && k.id === d.id) k.cb(d.r, d.x, d.b);
     };
-    w.onerror = function (ev) { try { ev.preventDefault(); } catch (e) {} kill('worker error: ' + String(ev && ev.message || '')); };
+    w.onerror = function (ev) { try { ev.preventDefault(); } catch (e) {} kill('worker error: ' + String(ev && ev.message || 'load')); };
     function stop() {
       if (H.dead) return false;
       H.dead = true;
@@ -458,13 +469,13 @@
     function kill(why) {
       if (H.dead) return;
       H.error = why;
-      tell('worker died', why);
+      if (H.ready) tell('worker died', why);
       stop();
       if (H.onDead) try { H.onDead(why); } catch (e) {}
     }
     H = {
-      kind: 'worker', backend: ready.backend, error: ready.error || '', fetchMs: ready.fetchMs, initMs: ready.initMs, readyMs: readyMs, abi: ready.abi,
-      dead: false, onDead: null,
+      kind: 'worker', backend: '', error: '', fetchMs: 0, initMs: 0, readyMs: 0, abi: 0, ready: false,
+      dead: false, onDead: null, onReady: null, first: null,
       createWorld: function (desc) {
         return new Promise(function (ok) {
           var d = descWords(desc).slice();
@@ -479,6 +490,7 @@
       },
       pages: function () { return new Promise(function (ok) { call('pages', 0, null, null, function (r, x) { ok(x ? x[0] : 0); }); }); },
       _kill: kill, // tests: a worker crash
+      _stop: stop,
       dispose: function () { stop(); }
     };
     return H;
@@ -608,7 +620,10 @@
     var evCap = opts.evCap || 512, drCap = opts.drCap || 1024, hashEvery = opts.hashEvery == null ? 20 : opts.hashEvery;
     var cmds = new Int32Array(64 * 13), n = 0, counter = 0, steps = 0, H = null, hw = null, starting = null, disposed = false, noWorker = opts.worker === false;
     var early = [], tickNo = 0;
-    var st = { ticks: 0, cmds: 0, applied: 0, refused: 0, events: 0, tickMs: 0, tickMax: 0, rtMs: 0, backlog: 0, resets: 0, overflows: 0, errors: 0, pages: 0, early: 0 };
+    // tickMs — the core's own time per tick (in the worker when there is one); mainMs = sendMs + recvMs — what the tick costs the
+    // page's main thread (copy in / out, postMessage, result handling incl. onTick): C-012 budget ≤ 0.3 ms dev PC, ≤ 1 ms phone ×4
+    var st = { ticks: 0, cmds: 0, applied: 0, refused: 0, events: 0, tickMs: 0, tickMax: 0, rtMs: 0, backlog: 0, resets: 0, overflows: 0, errors: 0, pages: 0, early: 0,
+      sendMs: 0, recvMs: 0, mainMs: 0, mainMax: 0 };
     var s = {
       ready: false, backend: '', transport: '', error: '', hash: new Uint32Array(2), stats: st, opts: opts, world: null, host: null, started: null,
       cmd: function (op, actor, tLo, tHi, ver, p0, p1, p2, p3, p4, p5) {
@@ -628,11 +643,16 @@
         steps++;
         if (steps % stepsPerTick !== 0) return;
         if (!hw) { pendTick(); return; }
+        var t0 = now();
         sendTick();
+        var dt = now() - t0;
+        st.sendMs = st.sendMs ? st.sendMs * 0.9 + dt * 0.1 : dt;
+        if (dt > st.mainMax) st.mainMax = dt;
+        st.mainMs = st.sendMs + (s.transport === 'worker' ? st.recvMs : 0); // in-thread: the result is handled inside the send
       },
       line: function () {
         if (!s.ready) return 'ядро D37: ' + (s.error ? 'нет (' + s.error + ')' : 'загрузка…');
-        return 'ядро D37: ' + s.backend + ' · ' + s.transport + ' · такт ' + st.tickMs.toFixed(3) + ' мс (макс ' + st.tickMax.toFixed(2) + ') · ответ ' + st.rtMs.toFixed(1) +
+        return 'ядро D37: ' + s.backend + ' · ' + s.transport + ' · такт ' + st.tickMs.toFixed(3) + ' мс (макс ' + st.tickMax.toFixed(2) + ') · страница ' + st.mainMs.toFixed(3) + ' мс · ответ ' + st.rtMs.toFixed(1) +
           ' мс · тактов ' + st.ticks + ' · команд ' + st.cmds + '/' + st.applied + ' · событий ' + st.events + (st.resets ? ' · сбросов ' + st.resets : '') +
           (st.backlog > 1 ? ' · очередь ' + st.backlog : '') + (hashEvery ? ' · хеш ' + hex8(s.hash[1]) + hex8(s.hash[0]) : '');
       },
@@ -672,6 +692,14 @@
       var k = kq[qh % RQ], g = gq[qh % RQ];
       qh++;
       if (disposed || g !== gen) return; // a result of a world that is already gone
+      var t1 = now();
+      gotRes(r, k);
+      var dt = now() - t1;
+      st.recvMs = st.recvMs ? st.recvMs * 0.9 + dt * 0.1 : dt;
+      if (dt > st.mainMax) st.mainMax = dt;
+      st.mainMs = st.sendMs + (s.transport === 'worker' ? st.recvMs : 0); // in-thread: the result is handled inside the send
+    }
+    function gotRes(r, k) {
       if (r.code === E_DEAD_HOST || r.code === E_PANIC || r.step === E_PANIC) { st.errors++; reset(r.code === E_DEAD_HOST ? 'worker died' : 'wasm trap'); return; }
       st.ticks++; S.ticks++;
       st.tickMs = st.tickMs ? st.tickMs * 0.9 + r.ms * 0.1 : r.ms;
@@ -699,12 +727,13 @@
     }
     function start() {
       if (starting) return starting;
-      var hostP = H ? Promise.resolve(H) : host({ worker: noWorker ? false : opts.worker, wasm: opts.wasm, timeoutMs: opts.timeoutMs, workerUrl: opts.workerUrl, readyMs: opts.readyMs });
+      var hostP = H ? Promise.resolve(H) : host({ worker: noWorker ? false : opts.worker, wasm: opts.wasm, timeoutMs: opts.timeoutMs, workerUrl: opts.workerUrl, readyMs: opts.readyMs, desc: desc });
       starting = hostP.then(function (h) {
         if (disposed) { h.dispose(); starting = null; return null; }
         H = h; s.host = h;
         h.onDead = function (why) { if (!disposed && H === h) { st.errors++; reset(why); } };
-        return h.createWorld(desc).then(function (r) {
+        var first = h.first; h.first = null; // the world sent with init (a new host only)
+        return (first || h.createWorld(desc)).then(function (r) {
           starting = null;
           if (disposed) { if (r.world) r.world.destroy(); return null; }
           if (!r.world) { s.error = 'create ' + r.code; s.ready = false; return null; }
@@ -750,5 +779,13 @@
     // the flag (js/core/config.js CORE_WASM); a function, not a getter
     on: function () { try { return typeof CORE_WASM !== 'undefined' && !!CORE_WASM; } catch (e) { return false; } },
     _reset: function () { cache = {}; told = {}; } };
+  // started as a dedicated Worker (D37CoreWorld.host → new Worker('js/engine/core-world.js?v=…&worker=1')): load the core files
+  // next to this one with the same ?v= and serve the protocol of § 2
+  if (typeof window === 'undefined' && typeof importScripts === 'function' && root.location && /[?&]worker=1(&|$)/.test(root.location.search || '')) {
+    var qv = String(root.location.search).replace(/[?&]worker=1(?=&|$)/, '').replace(/^&/, '?');
+    root.D37CoreWorld = api;
+    importScripts('d37core.js' + qv);
+    serve(root);
+  }
   return api;
 });
