@@ -794,7 +794,9 @@
   // the core files next to this one with the same ?v= and serve the protocol of § 2
   if (typeof window === 'undefined' && typeof importScripts === 'function' && root.name === WORKER_NAME && root.location) {
     root.D37CoreWorld = api;
-    importScripts('d37core.js' + (root.location.search || ''));
+    // only our own cache-busting query (?v=<GAMES_VER>) is passed on; anything else loads the file without one
+    var qv = /^\?v=[\w.-]{1,40}$/.test(root.location.search || '') ? root.location.search : '';
+    importScripts('d37core.js' + qv);
     serve(root);
   }
   return api;

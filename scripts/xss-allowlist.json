@@ -922,6 +922,16 @@
    ]
   },
   {
+   "f": "js/engine/core-world.js",
+   "fn": "<top>",
+   "k": "sink:importScripts [importScripts]",
+   "c": "url-checked",
+   "n": "свой путь d37core.js рядом с файлом + только ?v=<версия игр> (проверено регуляркой); поток запускает только D37CoreWorld.host",
+   "xs": [
+    "'d37core.js' + qv"
+   ]
+  },
+  {
    "f": "js/engine/gfx.js",
    "fn": "onBeforeCompile",
    "k": "markup:text",

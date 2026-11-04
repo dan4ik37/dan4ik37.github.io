@@ -254,7 +254,7 @@ Engine files → games that load them (a change here means: bump GAMES_VER, open
 | js/engine/clock.js | 11.9 | planet |
 | js/engine/combat.js | 26.1 | kubomir |
 | js/engine/controls.js | 27.0 | kubomir, planet, podzem, studio3d, terra, world |
-| js/engine/core-world.js | 49.2 | terra |
+| js/engine/core-world.js | 49.3 | terra |
 | js/engine/core.js | 8.0 | kubomir, planet, podzem, studio3d, terra, world |
 | js/engine/d37core.js | 65.6 | terra |
 | js/engine/debris.js | 13.7 | kubomir |
@@ -1056,7 +1056,7 @@ Called but not defined in any root .sql (built-in, removed, or a typo — check)
 
 ## 4. Tests
 
-scripts/ci-run.cjs runs 128 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take E:\claude-tmp\HEAVY.lock first (E:\d37-core\spec\HEAVY_LOCK.md).
+scripts/ci-run.cjs runs 129 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take E:\claude-tmp\HEAVY.lock first (E:\d37-core\spec\HEAVY_LOCK.md).
 
 | CI entry | Flags |
 |---|---|
@@ -1175,6 +1175,7 @@ scripts/ci-run.cjs runs 128 entries (= GitHub Actions on push; `--e2e` adds the 
 | trees-e2e.cjs | args studio ci, e2e, t 600 s |
 | waves-e2e.cjs | args look, e2e, t 600 s |
 | world-reopen-e2e.cjs | args 20, e2e, t 900 s |
+| core-world-e2e.cjs | args leak 10, e2e, t 600 s |
 | terra-e2e.cjs | args leak 10, e2e, t 600 s |
 | evo-e2e.cjs | args smoke, e2e, t 600 s |
 | menu-e2e.cjs | args all, env KB_WORLD=0, e2e, t 1500 s |
@@ -1189,4 +1190,4 @@ scripts/ci-run.cjs runs 128 entries (= GitHub Actions on push; `--e2e` adds the 
 | t145-e2e.cjs | args pc terra, e2e, t 900 s |
 | t145-e2e.cjs | args pc kubomir, e2e, t 900 s |
 
-Test / e2e / perf scripts NOT in the CI list (23; run by hand when their area changes): ailod-bench.cjs, ailod-e2e.cjs, anim-e2e.cjs, arcade-e2e.cjs, climate-e2e.cjs, core-world-e2e.cjs, economy-sim.cjs, hud2-e2e.cjs, iogames-e2e.cjs, iogames-online-e2e.cjs, kubomir-coop-e2e.cjs, kubomir-e2e.cjs, kubomir-look-e2e.cjs, kubomir-qol-e2e.cjs, make-raid-sim.mjs, planet-perf.cjs, podzem-fire-e2e.cjs, podzem-sim.cjs, podzem-support-e2e.cjs, raid-e2e.cjs, room-net-e2e.cjs, studio-fire-e2e.cjs, world-perf.cjs.
+Test / e2e / perf scripts NOT in the CI list (22; run by hand when their area changes): ailod-bench.cjs, ailod-e2e.cjs, anim-e2e.cjs, arcade-e2e.cjs, climate-e2e.cjs, economy-sim.cjs, hud2-e2e.cjs, iogames-e2e.cjs, iogames-online-e2e.cjs, kubomir-coop-e2e.cjs, kubomir-e2e.cjs, kubomir-look-e2e.cjs, kubomir-qol-e2e.cjs, make-raid-sim.mjs, planet-perf.cjs, podzem-fire-e2e.cjs, podzem-sim.cjs, podzem-support-e2e.cjs, raid-e2e.cjs, room-net-e2e.cjs, studio-fire-e2e.cjs, world-perf.cjs.
