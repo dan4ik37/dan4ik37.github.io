@@ -31,3 +31,12 @@ backups/
 *.sql.gz.tmp
 *.sql.tmp
 *.dump
+# Claude Code: проектные скиллы (.claude/skills/*/SKILL.md) — в репозитории (общие процедуры, без ключей и путей к секретам);
+# всё остальное в .claude/ (worktrees, settings.local.json, launch.json) — нет. .git/info/exclude исключает .claude/ целиком,
+# поэтому сначала вернуть папку (!.claude/), потом снова исключить содержимое и вернуть только skills.
+!.claude/
+.claude/*
+!.claude/skills/
+# Копии и снимки Codex (247 МБ картинок и таблиц, в CHANGES.md — локальные пути) и дампы Git Bash — не в открытый репозиторий
+docs/codex-repair/
+*.stackdump
