@@ -2,7 +2,8 @@
 // функции базы (RPC) и кто их зовёт, проверки — в docs/MODULES.md. Файл СОБИРАЕТСЯ, руками не править.
 // Запуск из корня сайта:  node scripts/module-map.cjs           — перезаписать docs/MODULES.md
 //                         node scripts/module-map.cjs --check   — код выхода 1, если docs/MODULES.md устарел (в ci-run — предупреждение)
-// Вывод детерминированный: всё отсортировано, без дат и хэшей коммитов. Карта ядра (ABI d37-core / d37-terrain) — E:\d37-core\spec\MODULES.md.
+// Вывод детерминированный: всё отсортировано (по кодам символов), без дат и хэшей; размеры — по тексту с LF (одинаково в Windows
+// с autocrlf и в GitHub Actions). Карта ядра (ABI d37-core / d37-terrain) — E:\d37-core\spec\MODULES.md.
 const fs = require('fs'), path = require('path');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'docs', 'MODULES.md');
@@ -38,7 +39,7 @@ function routes(L) {
   const rm = /const ROUTES = \{([\s\S]*?)\};/.exec(p), rts = [];
   if (rm) for (const part of rm[1].replace(/\/\/.*$/gm, '').split(',')) { const x = /^\s*([\w-]+)(?:\s*:\s*(\w+))?\s*$/.exec(part); if (x) rts.push([x[1], imp.get(x[2] || x[1]) || '?']); }
   L.push('', `Server pages (api/pages.js ROUTES, ${rts.length}; one Vercel function serves them all):`, '', '| Key | Module |', '|---|---|');
-  for (const [k, f] of rts.sort((a, b) => a[0].localeCompare(b[0]))) L.push(`| ${k} | ${f} |`);
+  for (const [k, f] of rts.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)) L.push(`| ${k} | ${f} |`);
   L.push('', 'Vercel rewrites (vercel.json, in file order — order matters):', '', '| # | Source | Destination |', '|---|---|---|');
   rw.forEach(([s, d], i) => L.push(`| ${i + 1} | ${cell(s)} | ${cell(d)} |`));
   const fns = walk('api', f => /\.js$/.test(f) && !/[\\/]_lib[\\/]/.test(f));
@@ -64,7 +65,7 @@ function games(L) {
   for (const r of rows) for (const s of r.scripts) { if (!use.has(s)) use.set(s, new Set()); use.get(s).add(r.id); }
   const eng = walk('js/engine', f => f.endsWith('.js'));
   L.push('', 'Engine files → games that load them (a change here means: bump GAMES_VER, open these games once):', '', '| File | KiB | Games |', '|---|---|---|');
-  for (const f of eng) { const n = use.get(f); L.push(`| ${f} | ${(fs.statSync(path.join(ROOT, f)).size / 1024).toFixed(1)} | ${n ? [...n].sort().join(', ') : '— (not in any game\'s scripts)'} |`); }
+  for (const f of eng) { const n = use.get(f); L.push(`| ${f} | ${(Buffer.byteLength(rd(f)) / 1024).toFixed(1)} | ${n ? [...n].sort().join(', ') : '— (not in any game\'s scripts)'} |`); }
   const missing = [...use.keys()].filter(s => !fs.existsSync(path.join(ROOT, s))).sort();
   L.push('', `Scripts listed by games but missing on disk: ${missing.length ? missing.join(', ') : 'none'}.`, '');
 }

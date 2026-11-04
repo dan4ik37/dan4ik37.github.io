@@ -244,98 +244,98 @@ Engine files → games that load them (a change here means: bump GAMES_VER, open
 
 | File | KiB | Games |
 |---|---|---|
-| js/engine/accessories.js | 7.3 | kubomir |
-| js/engine/actors.js | 20.9 | kubomir, planet, studio3d, terra, world |
-| js/engine/batch.js | 32.2 | studio3d |
-| js/engine/biomes.js | 12.6 | kubomir, terra |
-| js/engine/build.js | 44.9 | — (not in any game's scripts) |
-| js/engine/camera.js | 16.8 | kubomir, planet, studio3d, terra, world |
-| js/engine/climate.js | 40.3 | kubomir, planet, studio3d, terra, world |
-| js/engine/clock.js | 12.0 | planet |
-| js/engine/combat.js | 26.4 | kubomir |
-| js/engine/controls.js | 27.3 | kubomir, planet, podzem, studio3d, terra, world |
-| js/engine/core.js | 8.1 | kubomir, planet, podzem, studio3d, terra, world |
-| js/engine/debris.js | 13.9 | kubomir |
-| js/engine/destruct.js | 25.5 | world |
-| js/engine/edit-input.js | 10.4 | studio3d |
-| js/engine/fell.js | 6.6 | kubomir |
-| js/engine/fire.js | 34.9 | kubomir, podzem, studio3d, world |
-| js/engine/fx.js | 30.4 | kubomir, studio3d, world |
-| js/engine/gfx.js | 98.7 | kubomir, planet, studio3d, terra, world |
-| js/engine/gizmo.js | 10.4 | studio3d |
-| js/engine/host.js | 6.6 | kubomir |
-| js/engine/info.js | 15.8 | kubomir |
-| js/engine/input.js | 11.6 | kubomir, planet, studio3d, terra, world |
-| js/engine/interact.js | 5.0 | studio3d, world |
-| js/engine/interior.js | 53.0 | world |
-| js/engine/inventory.js | 8.6 | — (not in any game's scripts) |
-| js/engine/lang-cs.js | 279.1 | studio3d |
-| js/engine/lang-java.js | 463.3 | studio3d |
-| js/engine/lang-lua.js | 137.3 | studio3d |
-| js/engine/lang-wasm.js | 59.8 | studio3d |
-| js/engine/mapkit.js | 11.8 | kubomir |
-| js/engine/mc-formats.js | 23.0 | kubomir |
-| js/engine/mc-map.js | 35.6 | kubomir |
-| js/engine/mc-nbt.js | 12.5 | kubomir |
-| js/engine/mc-packs.js | 76.1 | kubomir |
-| js/engine/mc-worker.js | 8.9 | kubomir |
-| js/engine/model.js | 72.2 | studio3d |
-| js/engine/modes.js | 26.3 | studio3d |
-| js/engine/net-transport.js | 9.8 | studio3d |
-| js/engine/net.js | 78.2 | studio3d |
-| js/engine/npc.js | 22.9 | studio3d, world |
-| js/engine/orbit.js | 34.3 | planet |
-| js/engine/pathtrace.js | 39.6 | — (not in any game's scripts) |
-| js/engine/perf.js | 14.2 | kubomir, planet, studio3d, terra, world |
-| js/engine/physics.js | 39.6 | planet, studio3d, terra, world |
-| js/engine/planet-view.js | 87.5 | planet |
-| js/engine/planet-worker.js | 2.3 | planet |
-| js/engine/planet.js | 92.0 | planet |
-| js/engine/player.js | 44.0 | kubomir, planet, studio3d, terra, world |
-| js/engine/post.js | 130.8 | kubomir, planet, studio3d, terra, world |
-| js/engine/precip.js | 30.5 | kubomir, planet, studio3d, terra, world |
-| js/engine/quests.js | 11.9 | kubomir |
-| js/engine/recipes.js | 9.5 | kubomir |
-| js/engine/render.js | 95.1 | kubomir, planet, studio3d, terra, world |
-| js/engine/rigid.js | 61.6 | studio3d |
-| js/engine/scene.js | 37.4 | studio3d |
-| js/engine/script.js | 71.8 | studio3d |
-| js/engine/shade2d.js | 26.8 | podzem |
-| js/engine/shash.js | 8.9 | horde, studio3d, world |
-| js/engine/sheet.js | 17.2 | kubomir |
-| js/engine/skel.js | 50.9 | studio3d |
+| js/engine/accessories.js | 7.2 | kubomir |
+| js/engine/actors.js | 20.7 | kubomir, planet, studio3d, terra, world |
+| js/engine/batch.js | 31.7 | studio3d |
+| js/engine/biomes.js | 12.5 | kubomir, terra |
+| js/engine/build.js | 44.3 | — (not in any game's scripts) |
+| js/engine/camera.js | 16.6 | kubomir, planet, studio3d, terra, world |
+| js/engine/climate.js | 39.9 | kubomir, planet, studio3d, terra, world |
+| js/engine/clock.js | 11.9 | planet |
+| js/engine/combat.js | 26.1 | kubomir |
+| js/engine/controls.js | 27.0 | kubomir, planet, podzem, studio3d, terra, world |
+| js/engine/core.js | 8.0 | kubomir, planet, podzem, studio3d, terra, world |
+| js/engine/debris.js | 13.7 | kubomir |
+| js/engine/destruct.js | 25.2 | world |
+| js/engine/edit-input.js | 10.2 | studio3d |
+| js/engine/fell.js | 6.5 | kubomir |
+| js/engine/fire.js | 34.4 | kubomir, podzem, studio3d, world |
+| js/engine/fx.js | 30.0 | kubomir, studio3d, world |
+| js/engine/gfx.js | 97.5 | kubomir, planet, studio3d, terra, world |
+| js/engine/gizmo.js | 10.2 | studio3d |
+| js/engine/host.js | 6.5 | kubomir |
+| js/engine/info.js | 15.6 | kubomir |
+| js/engine/input.js | 11.4 | kubomir, planet, studio3d, terra, world |
+| js/engine/interact.js | 4.9 | studio3d, world |
+| js/engine/interior.js | 52.4 | world |
+| js/engine/inventory.js | 8.5 | — (not in any game's scripts) |
+| js/engine/lang-cs.js | 275.5 | studio3d |
+| js/engine/lang-java.js | 457.9 | studio3d |
+| js/engine/lang-lua.js | 135.2 | studio3d |
+| js/engine/lang-wasm.js | 59.0 | studio3d |
+| js/engine/mapkit.js | 11.7 | kubomir |
+| js/engine/mc-formats.js | 22.7 | kubomir |
+| js/engine/mc-map.js | 35.2 | kubomir |
+| js/engine/mc-nbt.js | 12.4 | kubomir |
+| js/engine/mc-packs.js | 75.3 | kubomir |
+| js/engine/mc-worker.js | 8.8 | kubomir |
+| js/engine/model.js | 71.3 | studio3d |
+| js/engine/modes.js | 25.9 | studio3d |
+| js/engine/net-transport.js | 9.7 | studio3d |
+| js/engine/net.js | 77.1 | studio3d |
+| js/engine/npc.js | 22.6 | studio3d, world |
+| js/engine/orbit.js | 33.8 | planet |
+| js/engine/pathtrace.js | 39.1 | — (not in any game's scripts) |
+| js/engine/perf.js | 14.0 | kubomir, planet, studio3d, terra, world |
+| js/engine/physics.js | 39.0 | planet, studio3d, terra, world |
+| js/engine/planet-view.js | 86.4 | planet |
+| js/engine/planet-worker.js | 2.2 | planet |
+| js/engine/planet.js | 90.9 | planet |
+| js/engine/player.js | 43.4 | kubomir, planet, studio3d, terra, world |
+| js/engine/post.js | 129.3 | kubomir, planet, studio3d, terra, world |
+| js/engine/precip.js | 30.0 | kubomir, planet, studio3d, terra, world |
+| js/engine/quests.js | 11.8 | kubomir |
+| js/engine/recipes.js | 9.4 | kubomir |
+| js/engine/render.js | 93.9 | kubomir, planet, studio3d, terra, world |
+| js/engine/rigid.js | 60.7 | studio3d |
+| js/engine/scene.js | 36.9 | studio3d |
+| js/engine/script.js | 71.0 | studio3d |
+| js/engine/shade2d.js | 26.5 | podzem |
+| js/engine/shash.js | 8.8 | horde, studio3d, world |
+| js/engine/sheet.js | 17.0 | kubomir |
+| js/engine/skel.js | 50.2 | studio3d |
 | js/engine/sleep.js | 2.0 | kubomir |
-| js/engine/space-view.js | 41.2 | planet |
-| js/engine/support.js | 78.2 | kubomir, podzem, studio3d, world |
-| js/engine/synth.js | 32.1 | kubomir, podzem, studio3d, world |
-| js/engine/system.js | 31.5 | planet |
-| js/engine/terra-core.js | 42.1 | terra |
-| js/engine/terra-mesh.js | 10.0 | terra |
-| js/engine/terra-worker.js | 7.5 | terra |
-| js/engine/terra.js | 40.3 | terra |
-| js/engine/terrain.js | 13.3 | studio3d |
-| js/engine/topple.js | 29.4 | kubomir |
-| js/engine/trees.js | 48.0 | kubomir, podzem, studio3d, world |
-| js/engine/trees3d.js | 12.8 | studio3d, world |
-| js/engine/ui.js | 48.2 | arena, chervyachki, horde, kletochki, kubomir, planet, podzem, raid, studio3d, terra, world |
-| js/engine/vehicle-air.js | 11.3 | world |
-| js/engine/vehicle-ground.js | 12.0 | world |
-| js/engine/vehicle-water.js | 13.4 | world |
-| js/engine/vehicle.js | 28.4 | world |
-| js/engine/views.js | 12.2 | studio3d |
-| js/engine/voxel-gen.js | 49.5 | kubomir |
-| js/engine/voxel-mesh.js | 46.3 | kubomir |
-| js/engine/voxel-mods.js | 78.8 | kubomir |
-| js/engine/voxel-render.js | 87.5 | kubomir |
-| js/engine/voxel-store.js | 18.1 | kubomir |
-| js/engine/voxel-stream.js | 16.2 | kubomir |
-| js/engine/voxel-tex.js | 57.4 | kubomir |
-| js/engine/voxel-worker.js | 3.1 | kubomir |
-| js/engine/voxel.js | 81.9 | kubomir |
-| js/engine/waves.js | 33.5 | podzem, studio3d, world |
-| js/engine/worldmap.js | 46.2 | world |
-| js/engine/wx-fx.js | 14.5 | kubomir, planet, terra, world |
-| js/engine/wx.js | 57.1 | kubomir, planet, terra, world |
+| js/engine/space-view.js | 40.7 | planet |
+| js/engine/support.js | 77.2 | kubomir, podzem, studio3d, world |
+| js/engine/synth.js | 31.7 | kubomir, podzem, studio3d, world |
+| js/engine/system.js | 31.1 | planet |
+| js/engine/terra-core.js | 41.4 | terra |
+| js/engine/terra-mesh.js | 9.8 | terra |
+| js/engine/terra-worker.js | 7.4 | terra |
+| js/engine/terra.js | 39.6 | terra |
+| js/engine/terrain.js | 13.2 | studio3d |
+| js/engine/topple.js | 29.1 | kubomir |
+| js/engine/trees.js | 47.5 | kubomir, podzem, studio3d, world |
+| js/engine/trees3d.js | 12.6 | studio3d, world |
+| js/engine/ui.js | 47.6 | arena, chervyachki, horde, kletochki, kubomir, planet, podzem, raid, studio3d, terra, world |
+| js/engine/vehicle-air.js | 11.2 | world |
+| js/engine/vehicle-ground.js | 11.9 | world |
+| js/engine/vehicle-water.js | 13.2 | world |
+| js/engine/vehicle.js | 28.0 | world |
+| js/engine/views.js | 12.0 | studio3d |
+| js/engine/voxel-gen.js | 48.9 | kubomir |
+| js/engine/voxel-mesh.js | 45.7 | kubomir |
+| js/engine/voxel-mods.js | 77.9 | kubomir |
+| js/engine/voxel-render.js | 86.3 | kubomir |
+| js/engine/voxel-store.js | 17.9 | kubomir |
+| js/engine/voxel-stream.js | 16.0 | kubomir |
+| js/engine/voxel-tex.js | 56.8 | kubomir |
+| js/engine/voxel-worker.js | 3.0 | kubomir |
+| js/engine/voxel.js | 81.0 | kubomir |
+| js/engine/waves.js | 33.0 | podzem, studio3d, world |
+| js/engine/worldmap.js | 45.6 | world |
+| js/engine/wx-fx.js | 14.3 | kubomir, planet, terra, world |
+| js/engine/wx.js | 56.4 | kubomir, planet, terra, world |
 
 Scripts listed by games but missing on disk: none.
 
