@@ -11,6 +11,9 @@
 //   7 30 / 60 / 144 FPS host loops → identical world hash (wasm, JS; in-thread and worker)
 //   8 worker transport (node worker_threads running js/engine/core-world.js as a Worker named d37-core-world): == in-thread; worker crash → reset to
 //     in-thread, onReset re-sends; missing worker script → in-thread; no ready → in-thread; wasm trap → reset
+//   8b a Worker the game started first (GameKit.core) adopted by the host (== the 12 runs' hash; failed script → in-thread); the
+//     worker's wasm prefetch over HTTP (compiled while its scripts load; corrupted → JS fallback); main-thread allocations per tick on
+//     both transports (sampling heap profiler, attributed to core-world.js): worker ≤ 400 B, in-thread ≤ 160 B
 //   9 numbers (node, this PC): load + init, 10 000 commands, a session tick
 // Prints one summary line; exit 1 on any FAIL.
 'use strict';
@@ -358,11 +361,12 @@ const out = {};
   const workers = new Set();
   class FakeWorker {
     constructor(u, o) {
-      const s0 = String(u), name = (o && o.name) || '';
-      const f = s0.split('?')[0], search = s0.indexOf('?') >= 0 ? s0.slice(s0.indexOf('?')) : '';
+      const s0 = String(u), name = (o && o.name) || '', http = /^https?:/.test(s0);
+      // an http URL (the prefetch test) runs the same local file, with location.href = that URL (the worker fetches its wasm there)
+      const f = http ? path.join(ENG, path.basename(new URL(s0).pathname)) : s0.split('?')[0], search = s0.indexOf('?') >= 0 ? s0.slice(s0.indexOf('?')) : '';
       this.onmessage = null; this.onerror = null;
       if (!fs.existsSync(f)) { setTimeout(() => this.onerror && this.onerror({ message: 'not found', preventDefault() {} }), 5); return; }
-      this.w = new WT.Worker(SHIM, { workerData: { dir: path.dirname(f), script: f, search, name } });
+      this.w = new WT.Worker(SHIM, { workerData: { dir: path.dirname(f), script: f, search, name, href: http ? s0 : '' } });
       workers.add(this.w);
       this.w.on('message', d => this.onmessage && this.onmessage({ data: d }));
       this.w.on('error', e => this.onerror && this.onerror({ message: String(e && e.message), preventDefault() {} }));
@@ -531,6 +535,105 @@ const out = {};
       ok(rc === 0 && hw2[0] === hh[0] && hw2[1] === hh[1], 'worker restore');
       await hw.destroy(); iw.destroy(); wh.dispose();
     }
+  }
+
+  // ════ 8b a core Worker started by the game before core-world.js is on the page (GameKit.core): adopted by the host; the
+  //    worker compiles its default wasm while its scripts load (prefetch); then the main-thread allocations per tick
+  {
+    const lines = [];
+    const adoptOf = (err) => ({ worker: new FakeWorker(WORKER, { name: 'd37-core-world' }), t0: performance.now(), error: err || '' });
+    const live0 = workers.size;
+    {
+      const a = adoptOf(), h = await CW.host({ adopt: a, wasm: new Uint8Array(wasmBytes) });
+      const w = (await h.createWorld({ seed: 4 })).world, i8 = new Int32Array(8), ic = w ? await w.info(i8) : -1;
+      const b = h.boot || {};
+      ok(h.kind === 'worker' && h.backend === 'wasm' && ic === 0 && b.workMs > 0 && b.coreMs >= 0, `adopted worker: ${h.kind}/${h.backend}, info ${ic}, boot ${JSON.stringify(b)}`);
+      lines.push(`adopted → ${h.kind}/${h.backend} (worker's own ${(+b.workMs).toFixed(1)} ms: script ${(+b.scriptMs).toFixed(1)}, lib ${(+b.libMs).toFixed(1)}, core ${(+b.coreMs).toFixed(1)})`);
+      await w.destroy(); h.dispose();
+    }
+    {
+      const a = adoptOf('worker script'), h = await CW.host({ adopt: a, wasm: new Uint8Array(wasmBytes) });
+      ok(h.kind === 'inline' && h.backend === 'wasm' && /worker script/.test(h.error) && !workers.has(a.worker.w), 'adopted worker that failed to load → inline: ' + h.kind + ' ' + h.error);
+      lines.push(`adopted, its script failed → ${h.kind}/${h.backend}`);
+      h.dispose();
+      const a2 = adoptOf(), h2 = await CW.host({ adopt: a2, worker: false, wasm: new Uint8Array(wasmBytes) });
+      ok(h2.kind === 'inline' && !workers.has(a2.worker.w), 'worker: false + adopt → inline, the adopted worker terminated');
+      lines.push(`worker: false + adopt → ${h2.kind}, adopted worker terminated`);
+      h2.dispose();
+    }
+    {
+      const r = await play(60, { adopt: adoptOf(), wasm: new Uint8Array(wasmBytes) }, 1200, 100);
+      ok(r.hash === out.determinism.hash && r.transport === 'worker' && r.backend === 'wasm' && r.cmds === 102, `session with an adopted worker: ${r.hash} ${r.transport}/${r.backend} (want ${out.determinism.hash})`);
+      lines.push(`session with an adopted worker @60 → ${r.hash} (= the 12 runs)`);
+      r.s.dispose();
+    }
+    // prefetch over HTTP: the worker at http://…/js/engine/core-world.js compiles …/d37core.wasm at its top; init with that URL
+    // takes it (boot.preHit); a corrupted wasm there → the prefetch fails, init downloads it again → JS fallback, error named
+    {
+      const ENGF = p => path.join(ENG, path.basename(p));
+      const server = http.createServer((req, res) => {
+        const p = new URL(req.url, 'http://x').pathname;
+        if (!/\/js\/engine\/[\w.-]+$/.test(p) || !fs.existsSync(ENGF(p))) { res.writeHead(404); res.end(); return; }
+        let b = fs.readFileSync(ENGF(p));
+        if (p.endsWith('.wasm') && p.startsWith('/bad/')) { b = Buffer.from(b); b[3000] ^= 0xFF; b[9000] ^= 0xFF; }
+        res.writeHead(200, { 'Content-Type': p.endsWith('.wasm') ? 'application/wasm' : 'text/javascript' }); res.end(b);
+      });
+      await new Promise(r => server.listen(0, '127.0.0.1', r));
+      const base = 'http://127.0.0.1:' + server.address().port;
+      for (const [label, pre, want] of [['prefetch', '', 'wasm'], ['prefetch of a corrupted wasm', '/bad', 'js-fallback']]) {
+        const h = await CW.host({ workerUrl: base + pre + '/js/engine/core-world.js?v=t', wasm: base + pre + '/js/engine/d37core.wasm?v=t' });
+        const b = h.boot || {};
+        ok(h.kind === 'worker' && h.backend === want && (want === 'wasm' ? b.preHit === true : b.preHit === false && /./.test(h.error)), `${label}: ${h.kind}/${h.backend} preHit ${b.preHit} (${h.error})`);
+        lines.push(`${label} → ${h.kind}/${h.backend}${b.preHit ? ' (the module compiled while the scripts loaded)' : ' (' + h.error.slice(0, 50) + ')'}`);
+        h.dispose();
+      }
+      server.close();
+    }
+    ok(workers.size <= live0 + 1, 'adopt tests left workers: ' + (workers.size - live0));
+    console.log('adopted worker / prefetch: ' + lines.join('; '));
+  }
+  // allocations per core tick on the page's main thread, both transports: the sampling heap profiler (node inspector, objects
+  // freed by minor GCs included) attributes every allocation to the JS function that made it. Ours = frames in core-world.js plus
+  // the typed-array views they create; the rest is postMessage's own delivery (node: "(V8 API)", the message-port glue)
+  {
+    const inspector = require('inspector'), ses = new inspector.Session();
+    ses.connect();
+    const post = (m, p) => new Promise((okk, bad) => ses.post(m, p || {}, (e, r) => e ? bad(e) : okk(r)));
+    const walk = (node, acc, parent) => {
+      const u = node.callFrame.url || '', fn = node.callFrame.functionName || '';
+      const mine = /core-world\.js/.test(u) || (!u && /^(Int32Array|Uint32Array|Uint8Array|subarray)$/.test(fn) && parent);
+      acc[mine ? 'ours' : 'other'] += node.selfSize;
+      if (/core-world\.js/.test(u)) acc.by[fn + ':' + node.callFrame.lineNumber] = (acc.by[fn + ':' + node.callFrame.lineNumber] || 0) + node.selfSize;
+      for (const c of node.children) walk(c, acc, /core-world\.js/.test(u));
+      return acc;
+    };
+    await post('HeapProfiler.enable');
+    const res = {}, lines = [];
+    for (const mode of ['worker', 'inline']) {
+      let target = 0, done = null, i = 0, s = null;
+      const tickN = () => { for (let k = 0; k < 3; k++) { if ((i++ & 1) === 0) s.cmd(6, 0, 1, 0, 0, i & 7, -1, 0, 0, 0, 0); s.step(); } };
+      s = CW.session({ seed: 5, worker: mode === 'worker', workerUrl: WORKER, wasm: new Uint8Array(wasmBytes), hashEvery: 20,
+        onTick() { if (mode !== 'worker') return; if (s.stats.ticks >= target) { if (done) { const d = done; done = null; d(); } return; } tickN(); } });
+      await s.started;
+      // the worker path: each result sends the next tick (no timers or promises in the window); in-thread: a plain loop
+      const run = n => mode === 'worker' ? new Promise(okk => { target = s.stats.ticks + n; done = okk; tickN(); }) : (() => { const t = s.stats.ticks + n; while (s.stats.ticks < t) tickN(); })();
+      await run(3000); await sleep(20);
+      const t0 = s.stats.ticks;
+      await post('HeapProfiler.startSampling', { samplingInterval: 32, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
+      await run(3000);
+      const prof = (await post('HeapProfiler.stopSampling')).profile, ticks = s.stats.ticks - t0;
+      const a = walk(prof.head, { ours: 0, other: 0, by: {} }, false);
+      res[mode] = { ticks, ours: Math.round(a.ours / ticks), total: Math.round((a.ours + a.other) / ticks), top: Object.entries(a.by).sort((x, y) => y[1] - x[1]).slice(0, 4).map(([k, v]) => k + ' ' + Math.round(v / ticks)).join(', ') };
+      lines.push(`${mode}: ours ${res[mode].ours} B/tick (${res[mode].top}), all ${res[mode].total} B/tick over ${ticks} ticks`);
+      s.dispose(); await sleep(30);
+    }
+    await post('HeapProfiler.disable'); ses.disconnect();
+    out.allocPerTick = res;
+    // worker: the one Int32Array over the returned tick buffer + timing reads (performance.now) — was 753 + 524 (views) B before
+    // the C002-R3 fix; in-thread: timing reads only (node's performance.now allocates)
+    ok(res.worker.ours <= 400, `worker path allocates ${res.worker.ours} B per tick in core-world.js (≤ 400)`);
+    ok(res.inline.ours <= 160, `in-thread path allocates ${res.inline.ours} B per tick in core-world.js (≤ 160)`);
+    console.log('allocations per tick (main thread, sampling heap profiler): ' + lines.join('; '));
   }
 
   // ════ 9 numbers (node, this PC; the phone ×4 numbers come from scripts/core-world-e2e.cjs in Chrome)

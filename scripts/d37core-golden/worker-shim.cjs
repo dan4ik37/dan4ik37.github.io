@@ -4,7 +4,7 @@
 const { parentPort, workerData } = require('worker_threads');
 const vm = require('vm'), fs = require('fs'), path = require('path');
 globalThis.self = globalThis;
-globalThis.location = { search: workerData.search || '' };
+globalThis.location = { search: workerData.search || '', href: workerData.href || '' };
 globalThis.name = workerData.name || '';
 globalThis.importScripts = (...names) => {
   for (const n of names) { const f = path.join(workerData.dir, String(n).split('?')[0]); vm.runInThisContext(fs.readFileSync(f, 'utf8'), { filename: f }); }

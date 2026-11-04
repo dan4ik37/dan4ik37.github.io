@@ -5,8 +5,10 @@
 // event core d37_world_* + the contact law d37_ix_contact (C-001, ABI 5) and the M1 / M2 calls (grid visibility, flow fields).
 // The core files are copied from a drop, never edited here: js/engine/d37core.wasm + js/engine/d37core.js = E:\d37-core-release\c1b
 // (scripts/core-world-test.cjs checks the SHA256). Bugs go back to the core as a fix + a new drop.
-// Classic script (window.D37CoreWorld / self.D37CoreWorld) or CommonJS (node tests). Needs d37core.js loaded first (window.D37Core).
-// Flag: CORE_WASM in js/core/config.js (games call nothing here when it is false). localStorage d37_core = 'js' forces the JS
+// Classic script (window.D37CoreWorld / self.D37CoreWorld) or CommonJS (node tests). Needs d37core.js (window.D37Core) before the
+// first call, not before this file runs (the two load in parallel). Games do not list the core files: GameKit.core (js/games/
+// gamekit.js) loads them lazily, only when the flag is on, without holding the game's start.
+// Flag: CORE_WASM in js/core/config.js (when false nothing of the core is requested). localStorage d37_core = 'js' forces the JS
 // fallback, 'inline' forces no worker (debug).
 //
 // 1) In-thread core (one per page, cached):   core = await D37CoreWorld.load({ wasm: url | bytes | false, timeoutMs })  — never rejects
@@ -23,11 +25,13 @@
 // 2) Worker transport (addendum §3.4: the wasm runs single-threaded inside a dedicated Worker — this same file started with
 //    the Worker name 'd37-core-world', it loads d37core.js next to itself; postMessage with transferable
 //    ArrayBuffers, no SharedArrayBuffer / COOP / COEP — ads and YouTube iframes keep working):
-//    host = await D37CoreWorld.host({ worker: true })  — never rejects; host.kind 'worker' | 'inline' (no Worker or it failed →
-//    the same API in-thread), host.backend, host.error. hw = (await host.createWorld(desc)).world;
-//    hw.tick(cmds, n, steps, cb, wantHash) → cb(r) once, in order: r = { code, res, step, evCode, evN, ev, drCode, drN, dr, hash,
-//      ms } (views valid only inside cb); hw.query / read / info / hash / snapshot / restore / destroy → Promise.
-// 3) Game adapter: s = D37CoreWorld.session({ seed, sender, onReset(s), onTick(r, cmds, n) }) — call s.step() once per fixed
+//    host = await D37CoreWorld.host({ worker: true, adopt })  — never rejects; host.kind 'worker' | 'inline' (no Worker or it
+//    failed → the same API in-thread), host.backend, host.error, host.boot (where the start time went). adopt = { worker, t0,
+//    error } — a core Worker the game already started (GameKit.core). The worker compiles its wasm while its scripts load.
+//    hw = (await host.createWorld(desc)).world; hw.tick(cmds, n, steps, cb, wantHash) → cb(r) once, in order: r = { code, res,
+//      step, evCode, evN, ev, drCode, drN, dr, hash, ms } (res / ev / dr — the world's own arrays, valid only inside cb, read by
+//      the counts n / evN / drN); hw.query / read / info / hash / snapshot / restore / destroy → Promise.
+// 3) Game adapter: s = D37CoreWorld.session({ seed, sender, onReset(s), onTick(r, cmds, n), t0, adopt }) — call s.step() once per fixed
 //    game step (E.loop, 60 Hz): every 3rd step is one core tick (20 Hz, identical at 30 / 60 / 144 FPS); s.cmd(op, actor, tLo,
 //    tHi, expectedVer, p0..p5) queues a command (id: hi = sender, lo = counter); onReset(s) runs whenever the world is (re)created
 //    (start, worker crash, wasm trap) — the game re-sends its objects there; s.line() — the debug panel text; s.dispose().
@@ -86,16 +90,21 @@
     if (src === false || src === null) return Promise.resolve(makeCore(B.js, force === 'js' ? 'forced (d37_core = js)' : 'wasm off', t0, 0, t0));
     var ms = opts.timeoutMs || 8000, timer = 0, ac = null;
     var fetched = typeof src !== 'string' ? Promise.resolve(src) : new Promise(function (ok, bad) {
-      try { ac = typeof AbortController === 'function' ? new AbortController() : null; } catch (e) { ac = null; }
       timer = setTimeout(function () { try { if (ac) ac.abort(); } catch (e) {} bad(new Error('wasm timeout ' + ms + ' ms')); }, ms);
-      fetch(src, ac ? { signal: ac.signal } : undefined).then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        // application/wasm (Vercel, the test servers): compile while downloading, off the main thread → a WebAssembly.Module;
-        // otherwise the bytes (d37core.js compiles them). A compile error → the JS core, as with bad bytes.
-        var ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
-        if (typeof WebAssembly === 'object' && typeof WebAssembly.compileStreaming === 'function' && /application\/wasm/i.test(ct)) return WebAssembly.compileStreaming(r);
-        return r.arrayBuffer();
-      }).then(ok, bad);
+      var go = function () {
+        try { ac = typeof AbortController === 'function' ? new AbortController() : null; } catch (e) { ac = null; }
+        fetch(src, ac ? { signal: ac.signal } : undefined).then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          // application/wasm (Vercel, the test servers): compile while downloading, off the main thread → a WebAssembly.Module;
+          // otherwise the bytes (d37core.js compiles them). A compile error → the JS core, as with bad bytes.
+          var ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+          if (typeof WebAssembly === 'object' && typeof WebAssembly.compileStreaming === 'function' && /application\/wasm/i.test(ct)) return WebAssembly.compileStreaming(r);
+          return r.arrayBuffer();
+        }).then(ok, bad);
+      };
+      // opts.module: a Promise of this URL's WebAssembly.Module, already compiling (the worker starts it before its scripts load,
+      // § 2). It failing → the normal download, which then names the error (HTTP 404, compile error, …); the timeout covers both
+      if (opts.module && typeof opts.module.then === 'function') opts.module.then(ok, go); else go();
     });
     var tf = 0;
     return fetched.then(function (bytes) {
@@ -332,21 +341,28 @@
   }
 
   // ════════════════════════════════════ 2) worker transport
-  // Messages (main → worker): { t: 'init', wasm, timeoutMs, force } → { t: 'ready', backend, error, fetchMs, initMs, abi, pages }
+  // Messages (main → worker): { t: 'init', wasm, timeoutMs, force } → { t: 'ready', backend, error, fetchMs, initMs, abi, pages,
+  //   start times (topMs, libMs, initAt, readyAt, origin, preHit) }
   //   { t: 'call', id, m, h, a: [numbers], b: [ArrayBuffer…] } → { t: 'r', id, r: code, x: [numbers], b: [the same buffers back] }
-  //   m: create (b0 desc) → x [handle] | tick (a n, steps, evCap, drCap, wantHash; b cmds, res, ev, dr) → x [step, evCode, evN,
-  //   drCode, drN, hashLo, hashHi, ms] | query (a n; b q, out) | read (a n; b ids, out) | info (b out) | hash → x [lo, hi] |
-  //   snapshot → x [len], b [bytes] | restore (a len; b bytes) | contact (a n; b in, out) | destroy | pages → x [pages]
+  //   m: create (b0 desc) → x [handle] | tick (b [one tick buffer, layout TB below]; in / out words in its header) | query (a n;
+  //   b q, out) | read (a n; b ids, out) | info (b out) | hash → x [lo, hi] | snapshot → x [len], b [bytes] | restore (a len;
+  //   b bytes) | contact (a n; b in, out) | destroy | pages → x [pages]
+  // Tick buffer TB (Int32 words): header 16 — [0] n, [1] steps, [2] event cap, [3] dirty cap, [4] want hash (in); [5] code,
+  //   [6] step, [7] evCode, [8] evN, [9] drCode, [10] drN, [11] hash lo, [12] hash hi, [13] tick µs (out); [14] nCap, [15] evCapL
+  //   (the layout) — then commands nCap × 13, results nCap × 4, events evCapL × 13, dirty (the rest) × 4.
   // The worker answers in order; every buffer goes there and back (transferred, never copied).
-  function serve(scope) {
+  var TB_HEAD = 16;
+  function serve(scope, boot) {
+    boot = boot || {};
     var core = null, ready = false, waiting = [], worlds = [null];
-    var h2 = new Uint32Array(2);
-    function post(m, tr) { try { scope.postMessage(m, tr || []); } catch (err) {} }
-    function answer(d, r, x, b) { post({ t: 'r', id: d.id, r: r, x: x || null, b: b || null }, b || []); }
+    var h2 = new Uint32Array(2), RE = { t: 'r', id: 0, r: 0, x: null, b: null }, NB = [];
+    function post(m, tr) { try { scope.postMessage(m, tr || NB); } catch (err) {} }
+    // one reply object, reused (postMessage copies it at once)
+    function answer(d, r, x, b) { RE.id = d.id; RE.r = r; RE.x = x || null; RE.b = b || null; post(RE, b || NB); RE.x = null; RE.b = null; }
     function I(b) { return b ? new Int32Array(b) : null; }
     function handle(d) {
       if (d.t !== 'call') return;
-      var b = d.b || [], a = d.a || [], w = worlds[d.h | 0] || null;
+      var b = d.b || NB, a = d.a || NB, w = worlds[d.h | 0] || null;
       try {
         switch (d.m) {
           case 'create': {
@@ -362,14 +378,16 @@
         if (!w) { answer(d, -1, null, b); return; }
         switch (d.m) {
           case 'tick': {
-            var t0 = now(), n = a[0], steps = a[1], cmds = I(b[0]), res = I(b[1]), ev = I(b[2]), dr = I(b[3]);
-            var code = n ? w.apply(cmds, n, res) : 0;
-            var st = code >= 0 && steps ? w.step(steps) : 0;
-            var evc = w.events(ev, a[2]), evn = w.count;
-            var drc = w.dirty(dr, a[3]), drn = w.count;
-            var hl = 0, hh = 0;
-            if (a[4]) { w.hash(h2); hl = h2[0]; hh = h2[1]; }
-            answer(d, code, [st, evc, evn, drc, drn, hl, hh, now() - t0], b);
+            // one buffer per tick (TB): the views below are the only objects this tick makes here (off the page's thread)
+            var t0 = now(), V = new Int32Array(b[0]), n = V[0], nCap = V[14], ro = TB_HEAD + nCap * 13, eo = ro + nCap * 4, dq = eo + V[15] * 13;
+            var code = n ? w.apply(V.subarray(TB_HEAD, TB_HEAD + n * 13), n, V.subarray(ro, eo)) : 0;
+            var st = code >= 0 && V[1] ? w.step(V[1]) : 0;
+            var evc = w.events(V.subarray(eo, dq), V[2]), evn = w.count;
+            var drc = w.dirty(V.subarray(dq), V[3]), drn = w.count;
+            V[5] = code; V[6] = st; V[7] = evc; V[8] = evn; V[9] = drc; V[10] = drn; V[11] = 0; V[12] = 0;
+            if (V[4]) { w.hash(h2); V[11] = h2[0] | 0; V[12] = h2[1] | 0; }
+            V[13] = Math.round((now() - t0) * 1000);
+            answer(d, code, null, b);
             return;
           }
           case 'query': answer(d, w.query(I(b[0]), a[0], I(b[1])), null, b); return;
@@ -391,11 +409,13 @@
     scope.onmessage = function (ev) {
       var d = ev.data || {};
       if (d.t === 'init') {
-        var tInit = now(); // ms since the worker started: its own script loading
-        load({ wasm: d.wasm === null ? false : d.wasm, timeoutMs: d.timeoutMs, force: d.force }).then(function (c) {
+        var tInit = now(); // ms since the worker started (the worker clock)
+        // the default wasm is already compiling (started at the top of this file, § worker entry): take it for the same URL
+        var hit = false, pre = boot.pre && typeof d.wasm === 'string' && d.wasm === boot.pre.url && d.force !== 'js' ? boot.pre.p.then(function (m) { hit = true; return m; }) : null;
+        load({ wasm: d.wasm === null ? false : d.wasm, timeoutMs: d.timeoutMs, force: d.force, module: pre }).then(function (c) {
           core = c; ready = true;
-          post({ t: 'ready', backend: c.backend, error: c.error, fetchMs: c.fetchMs, initMs: c.initMs, abi: c.abi, pages: c.pages(), bootMs: tInit, readyAt: now(),
-            origin: root.performance && root.performance.timeOrigin || 0 });
+          post({ t: 'ready', backend: c.backend, error: c.error, fetchMs: c.fetchMs, initMs: c.initMs, abi: c.abi, pages: c.pages(), topMs: boot.topMs || 0,
+            libMs: boot.libMs || 0, initAt: tInit, readyAt: now(), preHit: hit, origin: root.performance && root.performance.timeOrigin || 0 });
           while (waiting.length) handle(waiting.shift());
         });
         return;
@@ -406,16 +426,21 @@
 
   // the host side: one Worker (or the in-thread core) per host; calls resolve in order. No getters on per-host / per-world
   // objects (T-085: an own getter keeps the last closed game alive through the shared object shape) — plain fields only.
+  // opts.adopt = { worker, t0, error }: a core Worker the game already started before this file was on the page (GameKit.core,
+  // js/games/gamekit.js: the worker starts at once, in parallel with the page loading d37core.js + core-world.js); error — its
+  // script failed to load before the hand-over. The worker posts nothing before init, so no message can be lost.
   function host(opts) {
     opts = opts || {};
+    var boot = opts.adopt && opts.adopt.worker ? opts.adopt : null;
     var noWorker = typeof root.Worker !== 'function' || !root.document;
-    var want = opts.worker !== false && ls('d37_core') !== 'inline' && !noWorker;
+    var want = opts.worker !== false && ls('d37_core') !== 'inline' && (!noWorker || !!boot);
     if (!want) {
+      if (boot) { try { boot.worker.terminate(); } catch (e) {} }
       if (noWorker && opts.worker !== false) tell('no worker', 'Worker unavailable');
       return inlineHost(opts, opts.worker === false || !noWorker ? '' : 'no worker');
     }
     return new Promise(function (resolve) {
-      var t0 = now(), w = null, done = false, timer = 0, H = null;
+      var t0 = boot && boot.t0 || now(), w = null, done = false, timer = 0, H = null;
       var fail = function (why) {
         if (done) return;
         done = true; clearTimeout(timer);
@@ -424,12 +449,13 @@
         resolve(inlineHost(opts, 'worker: ' + why));
       };
       try {
-        w = new root.Worker(opts.workerUrl || workerUrl(), { name: WORKER_NAME });
+        w = boot ? boot.worker : new root.Worker(opts.workerUrl || workerUrl(), { name: WORKER_NAME });
         S.workersLive++;
       } catch (err) { w = null; fail(String(err && err.message || err)); return; }
       H = workerHost(w, t0);
       H.onReady = function () { if (done) return; done = true; clearTimeout(timer); resolve(H); };
       H.onDead = function (why) { if (!done) fail(why); };
+      if (boot && boot.error) { fail(boot.error); return; }
       timer = setTimeout(function () { fail('no ready in ' + (opts.readyMs || 10000) + ' ms'); }, opts.readyMs || 10000);
       // the wasm: an absolute URL (the worker resolves relative to its own folder), raw bytes (tests) or none (JS core)
       var wasm = opts.wasm === false ? null : (typeof opts.wasm === 'string' || opts.wasm == null) ? absUrl(opts.wasm || url('d37core.wasm')) : opts.wasm;
@@ -442,28 +468,56 @@
   // the worker side of a host; calls made before 'ready' are posted at once and wait in the worker
   function workerHost(w, t0) {
     S.hostsLive++;
-    var seq = 0, q = [], H;
+    // calls in flight: a ring (ids, callbacks, one argument each) — no object per call; it doubles when full (rare: > 256 in flight)
+    var seq = 0, RN = 256, qi = new Int32Array(RN), qc = new Array(RN), qa = new Array(RN), qh = 0, qt = 0, H;
+    function enq(id, cb, arg) {
+      if (qt - qh >= RN) {
+        var n2 = RN * 2, i2 = new Int32Array(n2), c2 = new Array(n2), a2 = new Array(n2), k = 0;
+        for (var j = qh; j < qt; j++, k++) { i2[k] = qi[j % RN]; c2[k] = qc[j % RN]; a2[k] = qa[j % RN]; }
+        qi = i2; qc = c2; qa = a2; qh = 0; qt = k; RN = n2;
+      }
+      var p = qt % RN; qi[p] = id; qc[p] = cb; qa[p] = arg; qt++;
+    }
+    function unq() { qt--; var p = qt % RN; qc[p] = null; qa[p] = null; }
+    // the rare calls (create, query, read, info, hash, snapshot, restore, destroy, contact, pages): a message each
     function call(m, h, a, b, cb) {
-      if (H.dead) { cb(E_DEAD_HOST, null, null); return; }
+      if (H.dead) { cb(E_DEAD_HOST, null, null, null); return; }
       var id = ++seq;
-      q.push({ id: id, cb: cb });
+      enq(id, cb, null);
       try { w.postMessage({ t: 'call', id: id, m: m, h: h, a: a, b: b }, b || []); }
-      catch (err) { q.pop(); cb(E_PANIC, null, null); }
+      catch (err) { unq(); cb(E_PANIC, null, null, null); }
+    }
+    // a tick: the world's own message object and transfer list, reused (postMessage copies them at once) — nothing allocated here
+    function send(msg, tl, cb, arg) {
+      if (H.dead) { cb(E_DEAD_HOST, null, null, arg); return; }
+      var id = ++seq;
+      msg.id = id;
+      enq(id, cb, arg);
+      try { w.postMessage(msg, tl); }
+      catch (err) { unq(); cb(E_PANIC, null, null, arg); }
     }
     w.onmessage = function (ev) {
       var d = ev.data || {};
       if (d.t === 'ready') {
         H.backend = d.backend; H.error = d.error || ''; H.fetchMs = d.fetchMs; H.initMs = d.initMs; H.abi = d.abi; H.readyMs = now() - t0; H.ready = true;
-        // where the start time goes (page clock): the worker thread started, its scripts loaded, its core ready, the page got it
+        // where the start time goes (page clock): Chrome starts the thread (spawn), its own script (core-world.js) and d37core.js
+        // load there, it waits for init (the page loads its copy of the scripts meanwhile), its core is ready, the page gets it.
+        // workMs = what the worker itself runs (script + lib + core): the part a slower phone CPU multiplies (CDP cannot throttle
+        // a worker: "Operation is only supported for pages, not workers")
         var po = root.performance && root.performance.timeOrigin || 0;
-        if (d.origin && po) { var ws = d.origin - po; H.boot = { spawnMs: ws - t0, scriptsMs: d.bootMs, coreMs: d.readyAt - d.bootMs, deliverMs: now() - (ws + d.readyAt) }; }
+        if (d.origin && po) {
+          var ws = d.origin - po, lib = d.libMs - d.topMs, core = d.readyAt - d.initAt;
+          H.boot = { spawnMs: ws - t0, scriptMs: d.topMs, libMs: lib, waitMs: Math.max(0, d.initAt - d.libMs), coreMs: core, deliverMs: now() - (ws + d.readyAt),
+            workMs: d.topMs + lib + core, preHit: !!d.preHit };
+        }
         if (d.backend !== 'wasm') tell('js-fallback', d.error);
         if (H.onReady) H.onReady();
         return;
       }
-      if (d.t !== 'r') return;
-      var k = q.shift();
-      if (k && k.id === d.id) k.cb(d.r, d.x, d.b);
+      if (d.t !== 'r' || qh === qt) return;
+      var p = qh % RN, id = qi[p], cb = qc[p], arg = qa[p];
+      qc[p] = null; qa[p] = null; qh++;
+      if (id === d.id) cb(d.r, d.x, d.b, arg);
     };
     w.onerror = function (ev) { try { ev.preventDefault(); } catch (e) {} kill('worker error: ' + String(ev && ev.message || 'load')); };
     function stop() {
@@ -471,8 +525,9 @@
       H.dead = true;
       try { w.terminate(); } catch (e) {}
       S.workersLive--; S.hostsLive--;
-      var pend = q; q = [];
-      for (var i = 0; i < pend.length; i++) pend[i].cb(E_DEAD_HOST, null, null);
+      var pend = [];
+      while (qh < qt) { var p = qh % RN; pend.push(qc[p], qa[p]); qc[p] = null; qa[p] = null; qh++; }
+      for (var i = 0; i < pend.length; i += 2) pend[i](E_DEAD_HOST, null, null, pend[i + 1]);
       return true;
     }
     function kill(why) {
@@ -488,7 +543,7 @@
       createWorld: function (desc) {
         return new Promise(function (ok) {
           var d = descWords(desc).slice();
-          call('create', 0, null, [d.buffer], function (r, x) { ok(r === 0 && x && x[0] ? { code: 0, world: new WorkerWorld(call, x[0]) } : { code: r, world: null }); });
+          call('create', 0, null, [d.buffer], function (r, x) { ok(r === 0 && x && x[0] ? { code: 0, world: new WorkerWorld(H, x[0]) } : { code: r, world: null }); });
         });
       },
       contact: function (inp, n, out) {
@@ -500,50 +555,75 @@
       pages: function () { return new Promise(function (ok) { call('pages', 0, null, null, function (r, x) { ok(x ? x[0] : 0); }); }); },
       _kill: kill, // tests: a worker crash
       _stop: stop,
+      call: call, send: send, // WorkerWorld
       dispose: function () { stop(); }
     };
     return H;
   }
-  // one world inside the worker. Every in-flight tick owns its four buffers (a small pool; nothing allocated in the steady
-  // state except the message itself)
-  function WorkerWorld(call, h) {
-    this.call = call; this.h = h; this.pool = []; this.r = mkTick(); this.inflight = 0; this.dead = false; this.gone = false; this.hashOut = new Uint32Array(2);
+  // one world inside the worker. Every in-flight tick owns one tick buffer (TB, § 2) from a small pool; the message object, its
+  // transfer list and the reply callback are the world's own, made once. Per tick the page's main thread allocates only what
+  // postMessage itself delivers (the reply event and its copy of the message) and one Int32Array view over the returned buffer;
+  // the results are copied into the world's own arrays (r.res / r.ev / r.dr — valid inside cb, as on the in-thread path)
+  function WorkerWorld(H, h) {
+    this.H = H; this.h = h; this.pool = []; this.r = mkTick(); this.inflight = 0; this.dead = false; this.gone = false; this.hashOut = new Uint32Array(2);
+    this.msg = { t: 'call', id: 0, m: 'tick', h: h, a: null, b: null }; this.tl = [null];
+    this.res = null; this.ev = null; this.dr = null;
+    var self = this;
+    this.back = function (code, x, b, B) { self.tickBack(code, b, B); };
     S.worldsLive++;
   }
   function mkTick() { return { code: 0, res: null, step: 0, evCode: 0, evN: 0, ev: null, drCode: 0, drN: 0, dr: null, hash: new Uint32Array(2), ms: 0, rtMs: 0 }; }
   var WW = WorkerWorld.prototype;
   WW.bufs = function (n, evCap, drCap) {
-    var B = this.pool.pop() || { c: null, r: null, e: null, d: null };
-    if (!B.c || B.c.byteLength < n * 52) B.c = new ArrayBuffer(Math.max(1024, n * 52 * 2));
-    if (!B.r || B.r.byteLength < n * 16) B.r = new ArrayBuffer(Math.max(256, n * 16 * 2));
-    if (!B.e || B.e.byteLength < evCap * 52) B.e = new ArrayBuffer(evCap * 52);
-    if (!B.d || B.d.byteLength < drCap * 16) B.d = new ArrayBuffer(drCap * 16);
+    var B = this.pool.pop() || { buf: null, v: null, nCap: 0, evCap: 0, drCap: 0, n: 0, cb: null, t0: 0 };
+    if (!B.buf || B.nCap < n || B.evCap < evCap || B.drCap < drCap) {
+      var nc = Math.max(64, n * 2, B.nCap), ec = Math.max(evCap, B.evCap), dc = Math.max(drCap, B.drCap);
+      B.buf = new ArrayBuffer((TB_HEAD + nc * 17 + ec * 13 + dc * 4) * 4); B.v = new Int32Array(B.buf); B.nCap = nc; B.evCap = ec; B.drCap = dc;
+    }
     return B;
   };
   WW.tick = function (cmds, n, steps, cb, wantHash, evCap, drCap) {
-    var self = this, r = this.r;
+    var r = this.r;
     evCap = evCap || 512; drCap = drCap || 1024;
     if (this.dead) { r.code = E_DEAD_HOST; r.evN = 0; r.drN = 0; cb(r); return; }
-    var B = this.bufs(n, evCap, drCap), t0 = now();
-    if (n) new Int32Array(B.c, 0, n * 13).set(cmds.subarray(0, n * 13));
+    var B = this.bufs(n, evCap, drCap), v = B.v, k = n * 13, i;
+    v[0] = n; v[1] = steps; v[2] = evCap; v[3] = drCap; v[4] = wantHash ? 1 : 0; v[14] = B.nCap; v[15] = B.evCap;
+    for (i = 0; i < k; i++) v[TB_HEAD + i] = cmds[i];
+    B.n = n; B.cb = cb; B.t0 = now();
     this.inflight++;
-    this.call('tick', this.h, [n, steps, evCap, drCap, wantHash ? 1 : 0], [B.c, B.r, B.e, B.d], function (code, x, b) {
-      self.inflight--;
-      r.code = code; r.rtMs = now() - t0;
-      var back = !!(b && x);
-      if (back) {
-        B.c = b[0]; B.r = b[1]; B.e = b[2]; B.d = b[3];
-        r.step = x[0]; r.evCode = x[1]; r.evN = x[2]; r.drCode = x[3]; r.drN = x[4]; r.hash[0] = x[5]; r.hash[1] = x[6]; r.ms = x[7];
-        r.res = new Int32Array(B.r, 0, n * 4); r.ev = new Int32Array(B.e, 0, r.evN * 13); r.dr = new Int32Array(B.d, 0, r.drN * 4);
-      } else { r.step = 0; r.evN = 0; r.drN = 0; r.res = null; r.ev = null; r.dr = null; r.hash[0] = 0; r.hash[1] = 0; if (code === E_DEAD_HOST) self.dead = true; }
-      try { cb(r); }
-      finally { r.res = null; r.ev = null; r.dr = null; if (back) self.pool.push(B); } // back to the pool only after cb read them
-    });
+    var msg = this.msg, tl = this.tl;
+    tl[0] = B.buf; msg.b = tl;
+    B.buf = null; B.v = null; // transferred: the reply brings it back
+    this.H.send(msg, tl, this.back, B);
+    tl[0] = null; msg.b = null;
+  };
+  WW.tickBack = function (code, b, B) {
+    this.inflight--;
+    var r = this.r, buf = b && b[0], cb = B.cb;
+    B.cb = null;
+    r.code = code; r.rtMs = now() - B.t0;
+    if (buf) {
+      var v = new Int32Array(buf), n = B.n, ro = TB_HEAD + B.nCap * 13, eo = ro + B.nCap * 4, dq = eo + B.evCap * 13, i, k;
+      B.buf = buf; B.v = v;
+      r.step = v[6]; r.evCode = v[7]; r.evN = Math.min(v[8], B.evCap); r.drCode = v[9]; r.drN = Math.min(v[10], B.drCap);
+      r.hash[0] = v[11]; r.hash[1] = v[12]; r.ms = v[13] / 1000;
+      if (!this.res || this.res.length < n * 4) this.res = new Int32Array(Math.max(256, n * 8));
+      if (!this.ev || this.ev.length < B.evCap * 13) this.ev = new Int32Array(B.evCap * 13);
+      if (!this.dr || this.dr.length < B.drCap * 4) this.dr = new Int32Array(B.drCap * 4);
+      var R = this.res, E = this.ev, D = this.dr;
+      for (i = 0, k = n * 4; i < k; i++) R[i] = v[ro + i];
+      for (i = 0, k = r.evN * 13; i < k; i++) E[i] = v[eo + i];
+      for (i = 0, k = r.drN * 4; i < k; i++) D[i] = v[dq + i];
+      r.res = R; r.ev = E; r.dr = D;
+      this.pool.push(B);
+    } else { r.step = 0; r.evN = 0; r.drN = 0; r.res = null; r.ev = null; r.dr = null; r.hash[0] = 0; r.hash[1] = 0; if (code === E_DEAD_HOST) this.dead = true; }
+    try { cb(r); }
+    finally { r.res = null; r.ev = null; r.dr = null; }
   };
   function wwAsk(self, m, a, bufs, after) {
     return new Promise(function (ok) {
       if (self.dead) { ok(after ? after(E_DEAD_HOST, null, null) : E_DEAD_HOST); return; }
-      self.call(m, self.h, a, bufs, function (code, x, b) { if (code === E_DEAD_HOST) self.dead = true; ok(after ? after(code, x, b) : code); });
+      self.H.call(m, self.h, a, bufs, function (code, x, b) { if (code === E_DEAD_HOST) self.dead = true; ok(after ? after(code, x, b) : code); });
     });
   }
   WW.query = function (q, n, out) {
@@ -633,7 +713,9 @@
     // page's main thread (copy in / out, postMessage, result handling incl. onTick): C-012 budget ≤ 0.3 ms dev PC, ≤ 1 ms phone ×4
     var st = { ticks: 0, cmds: 0, applied: 0, refused: 0, events: 0, tickMs: 0, tickMax: 0, rtMs: 0, backlog: 0, resets: 0, overflows: 0, errors: 0, pages: 0, early: 0,
       sendMs: 0, recvMs: 0, mainMs: 0, mainMax: 0 };
-    var t0s = now();
+    // opts.t0 — when the game asked for the core (GameKit.core: before d37core.js / core-world.js were on the page), so readyMs is
+    // load + init as the game sees it; opts.adopt — the core Worker it already started (used once: a reset makes a new host)
+    var t0s = opts.t0 || now(), adopt = opts.adopt || null;
     var s = {
       ready: false, backend: '', transport: '', error: '', hash: new Uint32Array(2), stats: st, opts: opts, world: null, host: null, started: null, readyMs: 0,
       cmd: function (op, actor, tLo, tHi, ver, p0, p1, p2, p3, p4, p5) {
@@ -737,7 +819,8 @@
     }
     function start() {
       if (starting) return starting;
-      var hostP = H ? Promise.resolve(H) : host({ worker: noWorker ? false : opts.worker, wasm: opts.wasm, timeoutMs: opts.timeoutMs, workerUrl: opts.workerUrl, readyMs: opts.readyMs, desc: desc });
+      var a = adopt; adopt = null;
+      var hostP = H ? Promise.resolve(H) : host({ worker: noWorker ? false : opts.worker, wasm: opts.wasm, timeoutMs: opts.timeoutMs, workerUrl: opts.workerUrl, readyMs: opts.readyMs, desc: desc, adopt: a });
       starting = hostP.then(function (h) {
         if (disposed) { h.dispose(); starting = null; return null; }
         H = h; s.host = h;
@@ -793,11 +876,22 @@
   // started as a dedicated Worker (D37CoreWorld.host → new Worker('js/engine/core-world.js?v=…', { name: 'd37-core-world' })): load
   // the core files next to this one with the same ?v= and serve the protocol of § 2
   if (typeof window === 'undefined' && typeof importScripts === 'function' && root.name === WORKER_NAME && root.location) {
+    var wb = { topMs: now(), libMs: 0, pre: null };
     root.D37CoreWorld = api;
     // only our own cache-busting query (?v=<GAMES_VER>) is passed on; anything else loads the file without one
     var qv = /^\?v=[\w.-]{1,40}$/.test(root.location.search || '') ? root.location.search : '';
+    // the default wasm (next to this file, the same ?v=) starts downloading and compiling now, while d37core.js loads; init with
+    // that URL takes the module (serve). It failing here → init downloads it again and names the error
+    try {
+      if (typeof fetch === 'function' && typeof WebAssembly === 'object' && typeof WebAssembly.compileStreaming === 'function' && root.location.href) {
+        var wu = new URL('d37core.wasm' + qv, root.location.href).href;
+        wb.pre = { url: wu, p: WebAssembly.compileStreaming(fetch(wu)) };
+        wb.pre.p.catch(function () {});
+      }
+    } catch (e) { wb.pre = null; }
     importScripts('d37core.js' + qv);
-    serve(root);
+    wb.libMs = now();
+    serve(root, wb);
   }
   return api;
 });
