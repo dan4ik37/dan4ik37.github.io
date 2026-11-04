@@ -71,6 +71,13 @@ function games(L) {
 }
 
 // ═══ 3. Функции базы (RPC) и SQL ═══
+// Имена RPC, которые файл зовёт по имени: .rpc('x'), обёртки rpc('x') / sbRpc / rpcOk / pushRpc / kidRpc… (любое имя с «rpc»,
+// первый аргумент — строка) и адрес /rpc/x. Имя, собранное из переменной (`x_${…}`), не видно — так и пишем в карте.
+function rpcNames(t) {
+  const seen = new Set();
+  for (const m of t.matchAll(/(?<![\w$])[\w$.]*?(?:rpc|Rpc|RPC)[\w$]*\(\s*['"`]([a-z_0-9]+)['"`]|\/rpc\/([a-z_0-9]+)/g)) seen.add(m[1] || m[2]);
+  return [...seen];
+}
 function rpc(L) {
   const sql = fs.readdirSync(ROOT).filter(f => f.endsWith('.sql')).sort(), def = new Map(), tables = new Map();
   for (const f of sql) {
@@ -80,32 +87,46 @@ function rpc(L) {
   }
   const call = new Map();
   for (const f of [...walk('js', p => p.endsWith('.js')), ...walk('api', p => p.endsWith('.js'))]) {
-    const t = rd(f), seen = new Set();
-    for (const m of t.matchAll(/\.rpc\(\s*['"`]([a-z_0-9]+)['"`]|\/rpc\/([a-z_0-9]+)/g)) seen.add(m[1] || m[2]);
-    for (const n of seen) { if (!call.has(n)) call.set(n, new Set()); call.get(n).add(f); }
+    for (const n of rpcNames(rd(f))) { if (!call.has(n)) call.set(n, new Set()); call.get(n).add(f); }
   }
   L.push('## 3. RPC and SQL', '', `${sql.length} SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), ${def.size} functions, ` +
-    `${call.size} names called from js/ or api/.`, '');
+    `${call.size} names called from js/ or api/ (\`.rpc('x')\`, any \`*rpc*('x')\` wrapper such as rpc / sbRpc / rpcOk / pushRpc, or \`/rpc/x\`).`, '');
   L.push('| SQL file | Functions | Tables created |', '|---|---|---|');
   for (const f of sql) L.push(`| ${f} | ${[...def].filter(([, s]) => s.has(f)).length} | ${cell([...tables.get(f)].sort().join(', ') || '—')} |`);
   L.push('', '| Function | Defined in | Called from |', '|---|---|---|');
-  for (const n of [...def.keys()].sort()) L.push(`| ${n} | ${[...def.get(n)].sort().join(', ')} | ${call.has(n) ? [...call.get(n)].sort().join(', ') : '— (no literal call: server-side, trigger, or called through a variable)'} |`);
+  for (const n of [...def.keys()].sort()) L.push(`| ${n} | ${[...def.get(n)].sort().join(', ')} | ${call.has(n) ? [...call.get(n)].sort().join(', ') : '— (no call by name in js/ or api/: server-side, trigger, or the name is built at run time)'} |`);
   const und = [...call.keys()].filter(n => !def.has(n)).sort();
   L.push('', `Called but not defined in any root .sql (built-in, removed, or a typo — check): ${und.length ? und.map(n => `${n} (${[...call.get(n)].sort().join(', ')})`).join('; ') : 'none'}.`, '');
 }
 
 // ═══ 4. Проверки ═══
+// Объекты верхнего уровня `{…}` из текста массива: скобки внутри строк ('{THREE}') и комментарии // не считаются.
+function topObjects(src) {
+  const out = []; let depth = 0, start = -1, q = null;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (q) { if (ch === '\\') i++; else if (ch === q) q = null; continue; }
+    if (ch === "'" || ch === '"' || ch === '`') { q = ch; continue; }
+    if (ch === '/' && src[i + 1] === '/') { const e = src.indexOf('\n', i); i = e < 0 ? src.length : e; continue; }
+    if (ch === '{') { if (!depth++) start = i; } else if (ch === '}' && depth && !--depth) out.push(src.slice(start, i + 1));
+  }
+  return out;
+}
+// одна запись TESTS `{ f: '…', args: […], env: {…}, needs, soft, e2e, optional, serial, t, retry }` → [файл, 'флаги'] или null
+function ciEntry(obj) {
+  const x = /^\{\s*f:\s*'([^']+)'([\s\S]*)\}$/.exec(obj); if (!x) return null;
+  const o = x[2], fl = [];
+  const a = /args:\s*\[([^\]]*)\]/.exec(o); if (a) fl.push('args ' + (a[1].match(/'([^']*)'/g) || []).map(s => s.slice(1, -1)).join(' '));
+  const ev = /env:\s*\{([^}]*)\}/.exec(o); if (ev) fl.push('env ' + [...ev[1].matchAll(/(\w+):\s*'([^']*)'/g)].map(y => y[1] + '=' + y[2]).join(' '));
+  for (const k of ['needs', 'soft']) { const v = new RegExp('\\b' + k + ":\\s*'([^']+)'").exec(o); if (v) fl.push(k + ' ' + v[1]); }
+  for (const k of ['e2e', 'optional', 'serial']) if (new RegExp('\\b' + k + ':\\s*true').test(o)) fl.push(k);
+  const t = /\bt:\s*(\d+)/.exec(o); if (t) fl.push('t ' + t[1] + ' s');
+  const r = /\bretry:\s*(\d+)/.exec(o); if (r) fl.push('retry ' + r[1]);
+  return [x[1], fl.join(', ')];
+}
 function tests(L) {
   const c = rd('scripts/ci-run.cjs'), m = /const TESTS = \[([\s\S]*?)\n\];/.exec(c), ci = [];
-  if (m) for (const x of m[1].replace(/\/\/.*$/gm, '').matchAll(/\{\s*f:\s*'([^']+)'([^}]*)\}/g)) {
-    const o = x[2], fl = [];
-    const a = /args:\s*\[([^\]]*)\]/.exec(o); if (a) fl.push('args ' + (a[1].match(/'([^']*)'/g) || []).map(s => s.slice(1, -1)).join(' '));
-    for (const k of ['needs', 'soft']) { const v = new RegExp(k + ":\\s*'([^']+)'").exec(o); if (v) fl.push(k + ' ' + v[1]); }
-    for (const k of ['e2e', 'optional', 'serial']) if (new RegExp(k + ':\\s*true').test(o)) fl.push(k);
-    const t = /\bt:\s*(\d+)/.exec(o); if (t) fl.push('t ' + t[1] + ' s');
-    const r = /retry:\s*(\d+)/.exec(o); if (r) fl.push('retry ' + r[1]);
-    ci.push([x[1], fl.join(', ')]);
-  }
+  if (m) for (const obj of topObjects(m[1])) { const e = ciEntry(obj); if (e) ci.push(e); }
   const inCi = new Set(ci.map(x => x[0]));
   const all = fs.readdirSync(path.join(ROOT, 'scripts')).filter(f => /-(test|e2e|sim|bench|perf)\.(c?js|mjs)$|^(world|planet)-perf\.cjs$/.test(f)).sort();
   L.push('## 4. Tests', '', `scripts/ci-run.cjs runs ${ci.length} entries (= GitHub Actions on push; \`--e2e\` adds the Chrome ones). ` +
@@ -116,15 +137,22 @@ function tests(L) {
   L.push('', `Test / e2e / perf scripts NOT in the CI list (${out.length}; run by hand when their area changes): ${out.join(', ') || 'none'}.`, '');
 }
 
-const L = ['# Site module map — GENERATED by scripts/module-map.cjs, do not edit', '',
-  'Regenerate: `node scripts/module-map.cjs` (check: `--check`; ci-run.cjs warns when stale). Core ABI map: E:\\d37-core\\spec\\MODULES.md;',
-  'shared board: E:\\d37-core\\spec\\BOARD.md; site board: docs/TASKS.md.', ''];
-routes(L); games(L); rpc(L); tests(L);
-const text = L.join('\n');
-if (process.argv.includes('--check')) {
-  const cur = rd('docs/MODULES.md');
-  if (cur !== text) { console.log('docs/MODULES.md устарел — запусти: node scripts/module-map.cjs'); process.exit(1); }
-  console.log('docs/MODULES.md актуален'); process.exit(0);
+function build() {
+  const L = ['# Site module map — GENERATED by scripts/module-map.cjs, do not edit', '',
+    'Regenerate: `node scripts/module-map.cjs` (check: `--check`; ci-run.cjs warns when stale). Core ABI map: E:\\d37-core\\spec\\MODULES.md;',
+    'shared board: E:\\d37-core\\spec\\BOARD.md; site board: docs/TASKS.md.', ''];
+  routes(L); games(L); rpc(L); tests(L);
+  return L.join('\n');
 }
-fs.writeFileSync(OUT, text, 'utf8');
-console.log(`docs/MODULES.md: ${text.split('\n').length} строк`);
+module.exports = { topObjects, ciEntry, rpcNames, build };   // для scripts/module-map-test.cjs
+
+if (require.main === module) {
+  const text = build();
+  if (process.argv.includes('--check')) {
+    const cur = rd('docs/MODULES.md');
+    if (cur !== text) { console.log('docs/MODULES.md устарел — запусти: node scripts/module-map.cjs'); process.exit(1); }
+    console.log('docs/MODULES.md актуален'); process.exit(0);
+  }
+  fs.writeFileSync(OUT, text, 'utf8');
+  console.log(`docs/MODULES.md: ${text.split('\n').length} строк`);
+}

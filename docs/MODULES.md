@@ -341,7 +341,7 @@ Scripts listed by games but missing on disk: none.
 
 ## 3. RPC and SQL
 
-52 SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), 649 functions, 141 names called from js/ or api/.
+52 SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), 649 functions, 244 names called from js/ or api/ (`.rpc('x')`, any `*rpc*('x')` wrapper such as rpc / sbRpc / rpcOk / pushRpc, or `/rpc/x`).
 
 | SQL file | Functions | Tables created |
 |---|---|---|
@@ -400,198 +400,198 @@ Scripts listed by games but missing on disk: none.
 
 | Function | Defined in | Called from |
 |---|---|---|
-| accepts_friend_requests | privacy.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| achievement_xp | economy.sql, progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_act | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_admin | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_admin_act | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_admin_list | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_admin_settings | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_age_group | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_age_max | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_bad | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_bad_words | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_card | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_dayprice | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_finish | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_floor | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_get | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_go | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_groups | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_hash | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_hash_with | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_headers | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_host | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_img_count | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_img_live | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_is_bot | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_kind_group | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_kind_size | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_live | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_log_add | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_my | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_new_id | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_norm | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_notify | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_notify_admins | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_perks | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_pick | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_place_group | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_place_ok | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_prices | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_refund | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_report | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_save | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_short_hosts | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_sign | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_sweep | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_terms_accept | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_today | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_token | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_token_check | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_url_ok | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_vh | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_view | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ad_viewer | ads.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| accepts_friend_requests | privacy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| achievement_xp | economy.sql, progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_act | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_admin | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_admin_act | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_admin_list | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_admin_settings | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_age_group | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_age_max | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_bad | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_bad_words | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_card | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_dayprice | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_finish | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_floor | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_get | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_go | ads.sql | api/_lib/routes/adgo.js |
+| ad_groups | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_hash | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_hash_with | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_headers | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_host | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_img_count | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_img_live | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_is_bot | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_kind_group | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_kind_size | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_live | ads.sql | js/core/ad-direct.js |
+| ad_log_add | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_my | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_new_id | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_norm | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_notify | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_notify_admins | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_perks | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_pick | ads.sql | js/core/ad-direct.js |
+| ad_place_group | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_place_ok | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_prices | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_refund | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_report | ads.sql | js/core/ad-direct.js |
+| ad_save | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_short_hosts | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_sign | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_sweep | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_terms_accept | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_today | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_token | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_token_check | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_url_ok | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_vh | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ad_view | ads.sql | js/core/ad-direct.js |
+| ad_viewer | ads.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | admin_close_claim_manual | premium.sql, vip-claims.sql | js/features/donation-claims.js |
 | admin_donation_claims | vip-claims.sql | js/features/donation-claims.js |
 | admin_resolve_claim | premium.sql, vip-claims.sql | js/features/donation-claims.js |
-| advance_backfill | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| advance_backfill | server-hardening.sql | api/vip-sync.js |
 | advent_claim | games-more.sql | js/core/celebrate.js |
-| advent_claim_at | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| advent_claim_at | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | advent_state | games-more.sql | js/core/celebrate.js |
-| advent_state_at | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| advent_task | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| advent_verified | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| advent_year | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_clear | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_group_of | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_group_year | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_kid_defaults | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_public_kids | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_rank | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_set | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_set_rating | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_shop_caps | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_state | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_u9 | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| age_year_now | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| apply_unmatched_donation | premium.sql, vip-claims.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| are_friends | privacy.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_autolink_ok | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_ban_logins | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_clean_avatar | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_clean_name | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_email_real | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_identity_guard | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_identity_note | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_identity_unlink_guard | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_is_fresh | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_jwt_auth_at | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_limits | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_link_add | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_link_banned | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_link_hide | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_link_intent | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_link_key | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_link_notify | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_link_remove | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_links_on_ban | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_links_staff | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_login_methods | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_once_use | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_provider_name | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_social_begin | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_social_bind | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_social_ready | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_user_banned | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| auth_ways | auth-links.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_act | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_arg | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_builders | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_busy | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_can_enter | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_cap | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_claim | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_coins_ | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_collect_ | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_defs | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_ffits | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_ffp | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_fits | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_fp | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_house_lv | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_norm | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_now | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_pay_ | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_prod | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_qnorm | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_room | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_state | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_street | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_th | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_today | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| base_view | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| bot_event_remind | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| bot_post | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| advent_state_at | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| advent_task | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| advent_verified | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| advent_year | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| age_clear | age.sql | js/core/age.js |
+| age_group_of | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| age_group_year | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| age_kid_defaults | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| age_public_kids | age.sql | api/_lib/age.js |
+| age_rank | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| age_set | age.sql | js/core/age.js |
+| age_set_rating | age.sql | js/core/age.js |
+| age_shop_caps | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| age_state | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| age_u9 | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| age_year_now | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| apply_unmatched_donation | premium.sql, vip-claims.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| are_friends | privacy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_autolink_ok | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_ban_logins | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_clean_avatar | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_clean_name | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_email_real | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_identity_guard | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_identity_note | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_identity_unlink_guard | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_is_fresh | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_jwt_auth_at | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_limits | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_link_add | auth-links.sql | api/_lib/routes/oauth.js |
+| auth_link_banned | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_link_hide | auth-links.sql | js/features/social-login.js |
+| auth_link_intent | auth-links.sql | js/features/social-login.js |
+| auth_link_key | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_link_notify | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_link_remove | auth-links.sql | js/features/social-login.js |
+| auth_links_on_ban | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_links_staff | auth-links.sql | js/features/social-login.js |
+| auth_login_methods | auth-links.sql | js/features/social-login.js |
+| auth_once_use | auth-links.sql | api/_lib/social.js |
+| auth_provider_name | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_social_begin | auth-links.sql | api/_lib/social.js |
+| auth_social_bind | auth-links.sql | api/_lib/social.js |
+| auth_social_ready | auth-links.sql | api/_lib/social.js |
+| auth_user_banned | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| auth_ways | auth-links.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_act | bases.sql | js/games/mir-base.js |
+| base_arg | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_builders | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_busy | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_can_enter | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_cap | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_claim | bases.sql | js/games/mir-base.js |
+| base_coins_ | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_collect_ | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_defs | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_ffits | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_ffp | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_fits | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_fp | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_house_lv | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_norm | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_now | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_pay_ | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_prod | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_qnorm | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_room | bases.sql | js/games/mir-base.js |
+| base_state | bases.sql | js/games/mir-base.js |
+| base_street | bases.sql | js/games/mir-base.js |
+| base_th | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_today | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| base_view | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| bot_event_remind | community.sql | api/push-check.js |
+| bot_post | community.sql | api/push-check.js |
 | call_check | community.sql | js/features/calls.js |
 | call_pass | community.sql | js/features/calls.js |
-| can_be_invisible | premium.sql, progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| can_send_friend_requests | premium.sql, progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| chan_can_manage | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| can_be_invisible | premium.sql, progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| can_send_friend_requests | premium.sql, progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| chan_can_manage | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | char_looks | coins.sql | js/core/avatar.js |
-| char_save | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| chat_automod | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| char_save | coins.sql | js/core/coins.js |
+| chat_automod | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | chat_automod_note | community.sql | js/features/community2.js |
 | chat_chan_add | community.sql | js/features/community2.js |
-| chat_chan_delete | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| chat_chan_delete | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | chat_channel_set | community.sql | js/features/chat.js |
 | chat_delete_own | community.sql | js/features/chat.js |
 | chat_edit | community.sql | js/features/chat.js |
-| chat_guard | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| chat_guard | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | chat_info | community.sql | js/features/chat.js |
-| chat_log_ban | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| chat_log_msg | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| chat_log_mute | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| chat_log_ban | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| chat_log_msg | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| chat_log_mute | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | chat_mod | community.sql | js/features/community2.js |
-| chat_mod_delete | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| chat_mod_delete | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | chat_mute | community.sql | js/features/chat.js |
-| chat_purge | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| chat_reply_notify | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| chat_purge | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| chat_reply_notify | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | chat_report | community.sql | js/features/chat.js |
 | chat_report_resolve | community.sql | js/features/chat.js |
 | chat_reports_list | community.sql | js/features/chat.js |
-| chat_staff_role | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| check_level_rewards | economy.sql, progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_act | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_admin | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_age_ok_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_banned_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_buff_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_cfgok_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_defs | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_defs0 | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_fail_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_inc_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_int_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_knext_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_lock_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_lvl_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_mark_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_nonce_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_now | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_people_gone_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_price_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_pub_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_public | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_rate_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_settle_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_st_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_stage_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_state | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_stats0_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_tick_ | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| city_today | city.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| chat_staff_role | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| check_level_rewards | economy.sql, progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_act | city.sql | js/games/mir-econ.js |
+| city_admin | city.sql | js/features/city-admin.js |
+| city_age_ok_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_banned_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_buff_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_cfgok_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_defs | city.sql | js/games/mir-econ.js |
+| city_defs0 | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_fail_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_inc_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_int_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_knext_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_lock_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_lvl_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_mark_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_nonce_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_now | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_people_gone_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_price_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_pub_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_public | city.sql | js/games/mir-econ.js |
+| city_rate_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_settle_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_st_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_stage_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_state | city.sql | js/games/mir-econ.js |
+| city_stats0_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_tick_ | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| city_today | city.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | claim_achievements | progression.sql | js/features/achievements.js |
 | claim_daily_quest | economy.sql, games.sql | js/features/games.js |
 | claim_donation | premium.sql, vip-claims.sql | js/features/donation-claims.js |
@@ -600,17 +600,17 @@ Scripts listed by games but missing on disk: none.
 | cloud_begin | ugc.sql | js/core/cloud.js |
 | cloud_commit | ugc.sql | js/core/cloud.js |
 | cloud_delete | ugc.sql | js/core/cloud.js |
-| cloud_full | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| cloud_full | ugc.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | cloud_list | ugc.sql | js/core/cloud.js |
-| cloud_max | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| cloud_plus | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| cloud_rule | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| cloud_site_bytes | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| cloud_slots | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| cloud_max | ugc.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cloud_plus | ugc.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cloud_rule | ugc.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cloud_site_bytes | ugc.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cloud_slots | ugc.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | cloud_usage | ugc.sql | js/core/cloud.js, js/features/profile.js |
 | cm_automod_get | community.sql | js/features/community2.js |
 | cm_automod_set | community.sql | js/features/community2.js |
-| cm_ban | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| cm_ban | community.sql | js/features/community.js |
 | cm_bans | community.sql | js/features/community.js |
 | cm_boost_buy | community.sql | js/features/community2.js |
 | cm_boost_info | community.sql | js/features/community2.js |
@@ -630,24 +630,24 @@ Scripts listed by games but missing on disk: none.
 | cm_event_rsvp | community.sql | js/features/msgview.js |
 | cm_event_save | community.sql | js/features/community2.js |
 | cm_events | community.sql | js/features/community2.js |
-| cm_invite_info | community.sql | js/features/community.js, js/features/msgview.js |
+| cm_invite_info | community.sql | api/_lib/routes/invite.js, js/features/community.js, js/features/msgview.js |
 | cm_invite_reset | community.sql | js/features/community.js |
 | cm_join | community.sql | js/features/community.js, js/features/community2.js |
-| cm_kick | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| cm_kick | community.sql | js/features/community.js |
 | cm_layout | community.sql | js/features/community2.js |
-| cm_leave | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| cm_leave | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | cm_list_public | community.sql | js/features/community.js, js/features/community2.js |
 | cm_members | community.sql | js/features/community.js |
 | cm_mod | community.sql | js/features/community2.js |
-| cm_mod_delete | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| cm_mod_delete | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | cm_modlog | community.sql | js/features/community2.js |
-| cm_mute | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| cm_mute | community.sql | js/features/community.js |
 | cm_my | community.sql | js/features/community.js |
 | cm_notif_get | community.sql | js/features/community2.js |
 | cm_notif_set | community.sql | js/features/community2.js |
 | cm_open | community.sql | js/features/community.js |
 | cm_pin | community.sql | js/features/community.js |
-| cm_purge | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| cm_purge | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | cm_react | community.sql | js/features/community.js |
 | cm_report | community.sql | js/features/community.js |
 | cm_report_resolve | community.sql | js/features/community.js, js/features/community2.js |
@@ -658,185 +658,185 @@ Scripts listed by games but missing on disk: none.
 | cm_roles | community.sql | js/features/community2.js |
 | cm_send | community.sql | js/features/community.js |
 | cm_set_meta | community.sql | js/features/community2.js |
-| cm_set_role | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| cm_staff_status | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| cm_set_role | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cm_staff_status | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | cm_unban | community.sql | js/features/community.js |
 | cm_update | community.sql | js/features/community.js |
-| coin_add | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coin_gems_item | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coin_level_item | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coin_price | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coin_rule | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coin_run_cap | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coin_today | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coin_vip_item | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coins_ad | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coins_buy | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coins_daily | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coins_import | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coins_on_daily_quest | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coins_on_game_win | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coins_revive | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coins_run | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| coins_state | coins.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_age_cap | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_automod_check | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_automod_text | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_bad | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_banned | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_blocked | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_boost_price | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_boosted | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_bucket | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_by_code | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_can_mod | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_can_see_log | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_code | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_ev_can | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_ev_json | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_ev_remind_run | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_ev_remind_soft | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_ev_visible | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_everyone_notify | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_friends | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_has_link | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_is_member | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_is_mod | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_is_staff | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_log | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_log_ban | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_log_member | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_log_msg | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_members_count | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_norm | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_notify | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_perm | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| coin_add | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| coin_gems_item | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| coin_level_item | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| coin_price | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| coin_rule | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| coin_run_cap | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| coin_today | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| coin_vip_item | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| coins_ad | coins.sql | js/core/coins.js |
+| coins_buy | coins.sql | js/core/coins.js |
+| coins_daily | coins.sql | js/core/coins.js |
+| coins_import | coins.sql | js/core/coins.js |
+| coins_on_daily_quest | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| coins_on_game_win | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| coins_revive | coins.sql | js/core/coins.js |
+| coins_run | coins.sql | js/core/coins.js |
+| coins_state | coins.sql | js/core/coins.js |
+| comm_age_cap | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_automod_check | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_automod_text | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_bad | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_banned | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_blocked | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_boost_price | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_boosted | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_bucket | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_by_code | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_can_mod | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_can_see_log | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_code | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_ev_can | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_ev_json | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_ev_remind_run | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_ev_remind_soft | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_ev_visible | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_everyone_notify | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_friends | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_has_link | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_is_member | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_is_mod | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_is_staff | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_log | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_log_ban | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_log_member | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_log_msg | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_members_count | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_norm | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_notify | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_perm | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | comm_ping | community.sql | js/features/phone.js |
-| comm_reason | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_role | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_role_bits | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_role_top | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_roles_on_leave | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| comm_touch_active | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| credit_donation | premium.sql, server-hardening.sql | js/features/profile.js |
+| comm_reason | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_role | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_role_bits | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_role_top | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_roles_on_leave | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| comm_touch_active | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| credit_donation | premium.sql, server-hardening.sql | api/vip-sync.js, js/features/profile.js |
 | current_streak | streaks-achievements.sql | js/features/achievements.js |
 | cv_check | community.sql | js/features/calls.js |
 | cv_pass | community.sql | js/features/calls.js |
-| d37_lev | vip-claims.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| d37_norm_name | vip-claims.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| d37_lev | vip-claims.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| d37_norm_name | vip-claims.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | daily_quest | games.sql | js/features/games.js |
-| daily_quest_code | games.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| daily_quest_done | games.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| daily_quest_code | games.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| daily_quest_done | games.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | daily_top | games-more.sql | js/games/fillword.js, js/games/sudoku.js |
-| dm_kidsafe | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| dm_only_read_at | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donate_rewards_mode | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| dm_kidsafe | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| dm_only_read_at | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donate_rewards_mode | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | donor_admin_assign | premium.sql | js/features/donation-claims.js |
 | donor_admin_checked | premium.sql | js/features/donation-claims.js |
 | donor_admin_exclude | premium.sql | js/features/donation-claims.js |
 | donor_admin_set | premium.sql | js/features/shop.js |
 | donor_admin_state | premium.sql | js/features/donation-claims.js |
-| donor_apply | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_badges | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_convert_pending | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_level_for | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_level_of | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_levels | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_me | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_name_key | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_name_reserved | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_names_levels | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_notify | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_perk_of | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_roman | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_rule | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_status | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| donor_sum | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| donor_apply | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_badges | premium.sql | js/core/premium.js |
+| donor_convert_pending | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_level_for | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_level_of | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_levels | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_me | premium.sql | js/core/premium.js |
+| donor_name_key | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_name_reserved | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_names_levels | premium.sql | api/donations.js |
+| donor_notify | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_perk_of | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_roman | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_rule | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_status | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| donor_sum | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | duel_top | games.sql | js/features/games.js |
-| enforce_unique_donate_login | vip-donate-login.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| enforce_unique_nick | vip-secure.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_act | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_admin | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_banned_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_cap_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_cfgok_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_day_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_defs | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_defs0 | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_design_why_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_fail_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_home_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_i_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_inc_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_nonce_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_now | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_parts_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_skin_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_st_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_stage_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_stat_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_state | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| evo_task_ok_ | evo.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| finish_vip_sync | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| forum_posts_guard | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| forum_threads_guard | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| friend_count | progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| friend_kidsafe | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| friend_limit | economy.sql, premium.sql, progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| enforce_unique_donate_login | vip-donate-login.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| enforce_unique_nick | vip-secure.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_act | evo.sql | js/games/evo.js |
+| evo_admin | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_banned_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_cap_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_cfgok_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_day_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_defs | evo.sql | js/games/evo.js |
+| evo_defs0 | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_design_why_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_fail_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_home_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_i_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_inc_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_nonce_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_now | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_parts_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_skin_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_st_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_stage_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_stat_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| evo_state | evo.sql | js/games/evo.js |
+| evo_task_ok_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| finish_vip_sync | server-hardening.sql | api/vip-sync.js |
+| forum_posts_guard | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| forum_threads_guard | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| friend_count | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| friend_kidsafe | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| friend_limit | economy.sql, premium.sql, progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | friends_online | community.sql | js/features/phone.js |
-| game_family | economy.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| game_family | economy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | game_result | economy.sql, games.sql | js/features/games.js, js/games/mir-war.js |
-| game_score_cap | games-more.sql, games.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| game_score_cap | games-more.sql, games.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | game_top | games.sql | js/features/games.js |
 | game_top_week | games.sql | js/features/games.js |
-| game_win_xp | games-more.sql, games.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| game_xp_award | economy.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| goal_progress | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| grant_level_vip | economy.sql, progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| handle_new_user | referrals.sql, registration.sql, vip-secure.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| has_perks | premium.sql, vip-balance.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| idea_votes_count | ideas.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ideas_before_insert | ideas.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ideas_before_update | ideas.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| is_admin_user | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| is_client_session | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| is_invisible | privacy.sql, progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| is_staff_user | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| game_win_xp | games-more.sql, games.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| game_xp_award | economy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| goal_progress | server-hardening.sql | api/donations.js |
+| grant_level_vip | economy.sql, progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| handle_new_user | referrals.sql, registration.sql, vip-secure.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| has_perks | premium.sql, vip-balance.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| idea_votes_count | ideas.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ideas_before_insert | ideas.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ideas_before_update | ideas.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| is_admin_user | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| is_client_session | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| is_invisible | privacy.sql, progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| is_staff_user | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | kid_contact | age.sql | js/core/age.js |
-| kid_pair_ok | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| kid_why | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| kidsafe_on | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| level_ladder | economy.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| list_ideas | ideas.sql | js/features/ideas.js |
+| kid_pair_ok | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| kid_why | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| kidsafe_on | age.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| level_ladder | economy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| list_ideas | ideas.sql | api/_lib/routes/forum.js, js/features/ideas.js |
 | mark_notifications_read | notifications.sql | js/features/notifications.js, js/features/phone-apps.js |
-| message_reactions_before_insert | polls-reactions-secure.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| messages_enforce_status | vip-balance.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| messages_flood_guard | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| message_reactions_before_insert | polls-reactions-secure.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| messages_enforce_status | vip-balance.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| messages_flood_guard | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | my_achievements | economy.sql, progression.sql, streaks-achievements.sql | js/features/achievements.js |
-| my_age_group | age.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| my_age_group | age.sql | js/core/age.js |
 | my_friend_status | progression.sql | js/features/profile.js |
 | nick_extras | progression.sql | js/features/xp.js |
 | nick_fx | economy.sql | js/features/secrets.js |
 | nick_fx_users | economy.sql, secrets.sql | js/features/secrets.js |
-| notif_on_forum_post | notifications.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| notif_on_friendship | notifications.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| notif_on_idea | notifications.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| notif_on_message | notifications.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| notif_on_referral | notifications.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| notify | notifications.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ops_admin | ops.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ops_cfg | ops.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| notif_on_forum_post | notifications.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| notif_on_friendship | notifications.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| notif_on_idea | notifications.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| notif_on_message | notifications.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| notif_on_referral | notifications.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| notify | notifications.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ops_admin | ops.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ops_cfg | ops.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ops_err_act | ops.sql | js/features/ops-admin.js |
 | ops_err_admin | ops.sql | js/features/ops-admin.js |
-| ops_err_ingest | ops.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ops_inc | ops.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ops_secs_left | ops.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ops_today | ops.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| perk_tier_of | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| ops_err_ingest | ops.sql | api/_lib/routes/diag.js |
+| ops_inc | ops.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ops_secs_left | ops.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ops_today | ops.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| perk_tier_of | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | pin_own_message | chat-pin-balance.sql, chat-pin.sql, premium.sql, vip-balance.sql | js/features/chat.js |
-| poll_votes_before_insert | polls-reactions-secure.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_add | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_admin_check | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| poll_votes_before_insert | polls-reactions-secure.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_add | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_admin_check | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | premium_admin_find | premium.sql | js/features/donation-claims.js, js/features/shop.js |
 | premium_admin_grant | premium.sql | js/features/shop.js |
 | premium_admin_history | premium.sql | js/features/shop.js |
@@ -845,216 +845,216 @@ Scripts listed by games but missing on disk: none.
 | premium_admin_orders | premium.sql | js/features/shop.js |
 | premium_admin_refund | premium.sql | js/features/shop.js |
 | premium_admin_settings | premium.sql | js/features/shop.js |
-| premium_credit | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_donation_credit | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_donation_gems | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_extend_vip | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_item | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_items | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_mode | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_notify | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_order_create | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_order_fail | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_order_get | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_order_status | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_pack | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_packs | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_pay_age | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_refund | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_set_mode | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_spend | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| premium_state | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| prevent_referred_by_tamper | referrals.sql, referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| prevent_self_role_escalation | registration.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| profile_nick_sanitize | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| profile_reserved_names | premium.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| protect_profile_columns | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| protect_thread_moderation_fields | forum.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| premium_credit | premium.sql | api/pay.js |
+| premium_donation_credit | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_donation_gems | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_extend_vip | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_item | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_items | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_mode | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_notify | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_order_create | premium.sql | api/pay.js |
+| premium_order_fail | premium.sql | api/pay.js |
+| premium_order_get | premium.sql | api/pay.js |
+| premium_order_status | premium.sql | js/core/premium.js |
+| premium_pack | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_packs | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_pay_age | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| premium_refund | premium.sql | api/pay.js |
+| premium_set_mode | premium.sql | js/core/premium.js |
+| premium_spend | premium.sql | js/core/premium.js |
+| premium_state | premium.sql | js/core/premium.js |
+| prevent_referred_by_tamper | referrals.sql, referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| prevent_self_role_escalation | registration.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| profile_nick_sanitize | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| profile_reserved_names | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| protect_profile_columns | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| protect_thread_moderation_fields | forum.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | push_set_words | push-words.sql | js/features/push-pwa.js |
-| push_subscribe | push.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| push_unsubscribe | push.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| push_subscribe | push.sql | js/features/push-pwa.js |
+| push_unsubscribe | push.sql | js/features/push-pwa.js |
 | quest_hub | games-more.sql | js/features/games.js |
-| quest_rule | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| quest_week | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_alt_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_alt_base_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_army_add_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_bprof_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_buy | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_cancel | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_chest | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_close_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_expire_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_go | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_league | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_load | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_mark_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_notify_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_notify_base_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_offer_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_prof_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_prot_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_replay | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_settle | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_skin | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_start | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_state | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_token_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_top | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_trophies_ | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| raid_week | raids.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| quest_rule | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| quest_week | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_alt_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_alt_base_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_army_add_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_bprof_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_buy | raids.sql | js/games/raid.js |
+| raid_cancel | raids.sql | js/games/raid.js |
+| raid_chest | raids.sql | js/games/raid.js |
+| raid_close_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_expire_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_go | raids.sql | js/games/raid.js |
+| raid_league | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_load | raids.sql | api/_lib/routes/raid.js |
+| raid_mark_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_notify_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_notify_base_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_offer_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_prof_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_prot_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_replay | raids.sql | js/games/raid.js |
+| raid_settle | raids.sql | api/_lib/routes/raid.js |
+| raid_skin | raids.sql | js/games/raid.js |
+| raid_start | raids.sql | js/games/raid.js |
+| raid_state | raids.sql | js/games/raid.js |
+| raid_token_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_top | raids.sql | js/games/raid.js |
+| raid_trophies_ | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| raid_week | raids.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | record_visit | streaks-achievements.sql | js/features/achievements.js |
 | ref_admin_list | referrals2.sql | js/features/invite.js |
 | ref_admin_review | referrals2.sql | js/features/invite.js |
 | ref_admin_stats | referrals2.sql | js/features/invite.js |
-| ref_aff | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_aff_back | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_apply | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_assess | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_check | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| ref_aff | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_aff_back | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_apply | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_assess | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_check | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ref_claim | referrals2.sql | js/core/ref.js |
-| ref_claim_answer | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_code_of | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| ref_claim_answer | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_code_of | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ref_frames | referrals2.sql | js/core/ref.js |
-| ref_gift_text | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_hash | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_ip | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_is_kid | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_ladder | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_mark | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| ref_gift_text | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_hash | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_ip | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_is_kid | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_ladder | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_mark | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ref_me | referrals2.sql | js/features/invite.js |
-| ref_new_code | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_nick | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_notify | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_on_donation | premium.sql, referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_on_ledger | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_on_level | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_on_profile | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_open | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_over_cap | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_pay | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| ref_new_code | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_nick | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_notify | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_on_donation | premium.sql, referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_on_ledger | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_on_level | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_on_profile | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_open | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_over_cap | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_pay | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ref_ping | referrals2.sql | js/core/ref.js |
-| ref_public | referrals2.sql | js/core/ref.js |
-| ref_reassess | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_release | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_resolve | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_rule | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| ref_public | referrals2.sql | api/_lib/routes/ref.js, js/core/ref.js |
+| ref_reassess | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_release | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_resolve | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_rule | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ref_set | referrals2.sql | js/features/invite.js |
-| ref_status_of | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ref_tiers | referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| ref_status_of | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ref_tiers | referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ref_top | referrals2.sql | js/features/invite.js |
 | referral_count | referrals.sql, referrals2.sql | js/features/profile.js |
-| reset_backfill | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| save_vip_snapshot | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| season_add | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| reset_backfill | server-hardening.sql | api/vip-sync.js |
+| save_vip_snapshot | server-hardening.sql | api/vip-sync.js |
+| season_add | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | season_claim | games-more.sql | js/features/games.js |
-| season_claim_at | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| season_claim_at | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | season_frame_set | games-more.sql | js/features/games.js |
 | season_frames | games-more.sql | js/features/games.js |
-| season_ladder | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| season_no | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| season_on_daily_quest | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| season_on_game_win | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| season_paid_on | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| season_start | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| season_state | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| season_state_at | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| season_theme | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| season_themes | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| season_ladder | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| season_no | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| season_on_daily_quest | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| season_on_game_win | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| season_paid_on | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| season_start | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| season_state | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| season_state_at | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| season_theme | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| season_themes | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | season_title_set | games-more.sql | js/features/achievements.js, js/features/games.js |
-| secret_codes | secrets.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| secret_codes | secrets.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | secret_found | economy.sql, secrets.sql | js/features/secrets.js |
 | secret_status | secrets.sql | js/features/secrets.js |
 | set_title | progression.sql | js/features/achievements.js, js/features/games.js |
-| site_creator_id | progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| sync_level | progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| top_referrers | referrals.sql, referrals2.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| site_creator_id | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| sync_level | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| top_referrers | referrals.sql, referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | top_xp_week | xp.sql | js/features/xp.js |
-| try_lock_backfill | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| try_lock_vip_sync | server-hardening.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_is_staff | ugc.sql, unity.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_like | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_model_delete | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_model_review | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_model_save | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_new_id | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_play | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_report | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_review | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_save | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| ugc_status | ugc.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| unity_like | unity.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| unity_new_id | unity.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| unity_play | unity.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| unity_report | unity.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| unity_result | economy.sql, unity.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| unity_review | unity.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| unity_save | unity.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| unity_status | unity.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| try_lock_backfill | server-hardening.sql | api/vip-sync.js |
+| try_lock_vip_sync | server-hardening.sql | api/vip-sync.js |
+| ugc_is_staff | ugc.sql, unity.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ugc_like | ugc.sql | js/games/studio.js, js/games/studio3d.js |
+| ugc_model_delete | ugc.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ugc_model_review | ugc.sql | js/games/studio3d.js |
+| ugc_model_save | ugc.sql | js/games/studio3d.js |
+| ugc_new_id | ugc.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ugc_play | ugc.sql | js/games/studio.js, js/games/studio3d.js |
+| ugc_report | ugc.sql | js/games/studio.js |
+| ugc_review | ugc.sql | js/games/studio.js |
+| ugc_save | ugc.sql | js/games/studio.js, js/games/studio3d.js |
+| ugc_status | ugc.sql | js/games/studio.js, js/games/studio3d.js |
+| unity_like | unity.sql | js/games/unity-host.js |
+| unity_new_id | unity.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| unity_play | unity.sql | js/games/unity-host.js |
+| unity_report | unity.sql | js/games/unity-host.js |
+| unity_result | economy.sql, unity.sql | js/games/unity-host.js |
+| unity_review | unity.sql | js/games/unity-host.js |
+| unity_save | unity.sql | js/games/unity-host.js |
+| unity_status | unity.sql | js/games/unity-host.js |
 | unity_top | unity.sql | js/games/unity-host.js |
-| unity_url | unity.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| unity_url | unity.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | unpin_message | chat-pin.sql | js/features/chat.js |
-| user_block | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| user_block | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | user_level | progression.sql | js/core/coins.js, js/features/achievements.js |
-| user_unblock | community.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| viewer_role | privacy.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| vip_days_label | economy.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| vip_effective_until | progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| vip_tier_of | progression.sql, vip-balance.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| vip_tier_rank | progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_act | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_age_ok | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_barracks_lv | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_barracks_n | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_best_lv | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_box | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_builders | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_cap | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_claim | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_code_ | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_collect_ | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_defs | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_fits | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_fp | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_invite_info | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_join | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_leave | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_member | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_norm | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_prod | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_sector | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_set | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_slots | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_space | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_state | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_veh_in | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| war_view | bases.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| weekly_quest_codes | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| weekly_quest_pool | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| weekly_quest_stats | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| weekly_quests | games-more.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| user_unblock | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| viewer_role | privacy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| vip_days_label | economy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| vip_effective_until | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| vip_tier_of | progression.sql, vip-balance.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| vip_tier_rank | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_act | bases.sql | js/games/mir-base.js, js/games/raid.js |
+| war_age_ok | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_barracks_lv | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_barracks_n | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_best_lv | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_box | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_builders | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_cap | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_claim | bases.sql | js/games/mir-base.js |
+| war_code_ | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_collect_ | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_defs | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_fits | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_fp | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_invite_info | bases.sql | js/games/raid.js |
+| war_join | bases.sql | js/games/raid.js |
+| war_leave | bases.sql | js/games/mir-base.js |
+| war_member | bases.sql | js/games/mir-base.js |
+| war_norm | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_prod | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_sector | bases.sql | js/games/mir-base.js, js/games/raid.js |
+| war_set | bases.sql | js/games/mir-base.js |
+| war_slots | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_space | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_state | bases.sql | js/games/mir-base.js, js/games/raid.js |
+| war_veh_in | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| war_view | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| weekly_quest_codes | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| weekly_quest_pool | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| weekly_quest_stats | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| weekly_quests | games-more.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | world_check | world.sql | js/features/worldchat.js, js/games/mir.js, js/games/world.js |
 | world_now | planet.sql | js/engine/clock.js |
 | world_pass | world.sql | js/games/mir.js, js/games/world.js |
-| xp_award | xp.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| xp_ledger_level_check | progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| xp_level | xp.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| xp_award | xp.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| xp_ledger_level_check | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| xp_level | xp.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | xp_levels | xp.sql | js/features/xp.js |
-| xp_on_donation | premium.sql, progression.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| xp_on_forum_post | economy.sql, xp.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| xp_on_forum_thread | economy.sql, xp.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| xp_on_idea | economy.sql, xp.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| xp_on_message | economy.sql, xp.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| xp_on_referral | economy.sql, xp.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| xp_on_visit | economy.sql, xp.sql | — (no literal call: server-side, trigger, or called through a variable) |
-| xp_rule | economy.sql | — (no literal call: server-side, trigger, or called through a variable) |
+| xp_on_donation | premium.sql, progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| xp_on_forum_post | economy.sql, xp.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| xp_on_forum_thread | economy.sql, xp.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| xp_on_idea | economy.sql, xp.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| xp_on_message | economy.sql, xp.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| xp_on_referral | economy.sql, xp.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| xp_on_visit | economy.sql, xp.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| xp_rule | economy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | xp_summary | xp.sql | js/features/xp.js |
 
 Called but not defined in any root .sql (built-in, removed, or a typo — check): none.
 
 ## 4. Tests
 
-scripts/ci-run.cjs runs 125 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take E:\claude-tmp\HEAVY.lock first (E:\d37-core\spec\HEAVY_LOCK.md).
+scripts/ci-run.cjs runs 126 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take E:\claude-tmp\HEAVY.lock first (E:\d37-core\spec\HEAVY_LOCK.md).
 
 | CI entry | Flags |
 |---|---|
@@ -1064,6 +1064,7 @@ scripts/ci-run.cjs runs 125 entries (= GitHub Actions on push; `--e2e` adds the 
 | gen-city-defs.cjs | args --check, t 60 s |
 | gen-evo-defs.cjs | args --check, t 60 s |
 | module-map.cjs | args --check, optional, t 60 s |
+| module-map-test.cjs | t 60 s |
 | routes-test.cjs | — |
 | pwa-test.cjs | — |
 | games-test.cjs | — |
@@ -1123,7 +1124,7 @@ scripts/ci-run.cjs runs 125 entries (= GitHub Actions on push; `--e2e` adds the 
 | debris-test.cjs | args --fast |
 | podzem-support-test.cjs | args --fast |
 | mir-support-test.cjs | — |
-| fire-test.cjs | — |
+| fire-test.cjs | args --fast {THREE}, soft three |
 | podzem-fire-test.cjs | args --fast |
 | mir-fire-test.cjs | — |
 | studio-fire-test.cjs | — |
@@ -1135,7 +1136,7 @@ scripts/ci-run.cjs runs 125 entries (= GitHub Actions on push; `--e2e` adds the 
 | lang-cs-test.cjs | serial |
 | lang-java-test.cjs | serial |
 | lang-lua-test.cjs | serial |
-| lang-wasm-test.cjs | — |
+| lang-wasm-test.cjs | env D37_SKIP=cpp,rust |
 | studio-support-test.cjs | serial |
 | voxel-test.cjs | serial, retry 2 |
 | trees-test.cjs | args --fast, retry 1 |
@@ -1151,18 +1152,18 @@ scripts/ci-run.cjs runs 125 entries (= GitHub Actions on push; `--e2e` adds the 
 | evo-sim.cjs | args --fast, t 300 s |
 | rt-test.cjs | needs rt, serial, t 240 s |
 | rt-load-test.cjs | args --quick, needs rt, optional, serial, t 200 s |
-| char-test.cjs | — |
-| destruct-test.cjs | — |
-| kubomir-hand-test.cjs | — |
-| kubomir-move-test.cjs | — |
-| kubomir-combat-test.cjs | — |
-| kubomir-qol-test.cjs | — |
-| render-test.cjs | — |
-| sprite-test.cjs | — |
-| studio-modes-test.cjs | — |
-| worldmap-test.cjs | — |
-| ai3d-test.cjs | — |
-| anim-test.cjs | — |
+| char-test.cjs | args {THREE}, needs three |
+| destruct-test.cjs | args {THREE}, needs three |
+| kubomir-hand-test.cjs | args {THREE}, needs three |
+| kubomir-move-test.cjs | args {THREE}, needs three |
+| kubomir-combat-test.cjs | args {THREE}, needs three |
+| kubomir-qol-test.cjs | args {THREE}, needs three |
+| render-test.cjs | args {THREE}, needs three, t 240 s |
+| sprite-test.cjs | args {THREE}, needs three |
+| studio-modes-test.cjs | args {THREE}, needs three |
+| worldmap-test.cjs | args {THREE}, needs three |
+| ai3d-test.cjs | args {THREE}, needs three, t 240 s |
+| anim-test.cjs | args {THREE}, needs three, t 180 s |
 | errlog-e2e.cjs | e2e, t 400 s |
 | routes-e2e.cjs | e2e, t 600 s |
 | pwa-e2e.cjs | e2e, t 400 s |
@@ -1172,8 +1173,8 @@ scripts/ci-run.cjs runs 125 entries (= GitHub Actions on push; `--e2e` adds the 
 | world-reopen-e2e.cjs | args 20, e2e, t 900 s |
 | terra-e2e.cjs | args leak 10, e2e, t 600 s |
 | evo-e2e.cjs | args smoke, e2e, t 600 s |
-| menu-e2e.cjs | args all |
-| touch-hud-e2e.cjs | e2e, t 900 s |
+| menu-e2e.cjs | args all, env KB_WORLD=0, e2e, t 1500 s |
+| touch-hud-e2e.cjs | env TH_MODE=full SCREENS=[[844,390],[390,844]], e2e, t 900 s |
 | photo-e2e.cjs | args smoke, e2e, t 600 s |
 | ai3d-e2e.cjs | args smoke, e2e, t 600 s |
 | ui-e2e.cjs | args ci, e2e, t 600 s |
