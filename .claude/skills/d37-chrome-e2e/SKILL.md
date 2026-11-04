@@ -19,7 +19,8 @@ object counters). Copy its pattern; do not add npm packages.
   --ignore-gpu-blocklist --enable-precise-memory-info --js-flags=--expose-gc`.
 - Phone profile (default): viewport 412 × 915 × DPR 2, `Emulation.setCPUThrottlingRate {rate: 4}`, quality "mid"; PC profile
   (`PC=1`): 1280 × 720, no throttle, "high". Chrome does NOT throttle workers: worker times are desktop numbers (× 4 to estimate).
-- Lock: `node E:\d37-core\scripts\heavy-lock.mjs run --session site --job "<test> e2e" --min <M> -- node scripts/<test>-e2e.cjs <mode>`.
+- Lock: `node E:\d37-core\scripts\heavy-lock.mjs run --session site/<agent> --job "<test> e2e" --min <M> -- node scripts/<test>-e2e.cjs <mode>`
+  (exit 3 = another heavy job runs, yours included — the lock is never re-entrant: wait with `--wait <min>` or do light work).
 - Fresh JS: serve the worktree with `Cache-Control: no-cache` (the built-in browser caches old js; there use
   `fetch(url, {cache:'reload'})`). Service workers do not run in the built-in browser.
 

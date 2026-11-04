@@ -1054,7 +1054,7 @@ Called but not defined in any root .sql (built-in, removed, or a typo — check)
 
 ## 4. Tests
 
-scripts/ci-run.cjs runs 126 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take E:\claude-tmp\HEAVY.lock first (E:\d37-core\spec\HEAVY_LOCK.md).
+scripts/ci-run.cjs runs 127 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take E:\claude-tmp\HEAVY.lock first (E:\d37-core\spec\HEAVY_LOCK.md).
 
 | CI entry | Flags |
 |---|---|
@@ -1065,6 +1065,7 @@ scripts/ci-run.cjs runs 126 entries (= GitHub Actions on push; `--e2e` adds the 
 | gen-evo-defs.cjs | args --check, t 60 s |
 | module-map.cjs | args --check, optional, t 60 s |
 | module-map-test.cjs | t 60 s |
+| sql-rest-test.cjs | t 30 s |
 | routes-test.cjs | — |
 | pwa-test.cjs | — |
 | games-test.cjs | — |

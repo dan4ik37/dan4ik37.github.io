@@ -31,6 +31,7 @@ const TESTS = [
   { f: 'make-errlog.mjs', args: ['--check'], t: 60 }, { f: 'make-arcade.mjs', args: ['--check'], t: 60 }, { f: 'gen-city-defs.cjs', args: ['--check'], t: 60 }, { f: 'gen-evo-defs.cjs', args: ['--check'], t: 60 },
   { f: 'module-map.cjs', args: ['--check'], t: 60, optional: true },   // карта модулей docs/MODULES.md (план движка, шаг 0): устарела — предупреждение, перезапусти node scripts/module-map.cjs
   { f: 'module-map-test.cjs', t: 60 },   // разборщики карты: RPC через обёртки rpc/sbRpc/rpcOk/pushRpc, флаги CI с '{THREE}' и env {…}
+  { f: 'sql-rest-test.cjs', t: 30 },     // разбор ответов scripts/sql-rest.cjs без сети: «нет функции» ≠ «неверные аргументы проверки»
   { f: 'routes-test.cjs' }, { f: 'pwa-test.cjs' }, { f: 'games-test.cjs' }, { f: 'auth-test.cjs' }, { f: 'age-test.cjs' },
   { f: 'xss-test.cjs', t: 300 },   // чужой текст не становится разметкой (T-011): разбор всех js/api + злые строки; ~30 с ЦП
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
