@@ -1,3 +1,7 @@
+> Owner-approved Codex repair work is isolated in separate copies. Read [CODEX_REPAIR_NOTICE.md](CODEX_REPAIR_NOTICE.md) and the live status before integrating changes.
+
+> NORTH STAR (owner 04.11): the overall goal and checklist are in E:\d37-core\spec\GOAL.md — read it first when resuming.
+
 # dan4ik37 — streamer site (short index for agents)
 
 Static SPA, no build step: `index.html` (markup + big inline style) + `css/premium.css` + `js/**` (plain `<script>`s, globals, no
