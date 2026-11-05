@@ -246,7 +246,16 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
 // ═══ 1. Диспетчер ═══
 {
   fresh();
-  ok(M.why('loading') === '' && M.net('loading') === 'g', 'Google: у загрузки нет своего блока — берёт game_over', M.why('loading'));
+  // 05.11.2026 (RULES.gStrict): Google — только на экранах со своим содержимым; загрузка, перерыв, столбик, плеер в чате — без Google
+  ok(M.RULES.gStrict === true, 'gStrict включён по умолчанию');
+  ok(M.why('loading') === 'id' && M.net('loading') === '', 'Google: на экране загрузки блока Google нет (gStrict)', M.why('loading'));
+  ok(['loading', 'break', 'rail', 'chat_player'].every(k => M.ids(k).g === ''), 'Google: loading / break / rail / chat_player — без блока Google', ['loading', 'break', 'rail', 'chat_player'].map(k => M.ids(k).g));
+  window.ADS_IDS.google.loading = '1111'; window.ADS_IDS.google.chat_player = '2222';
+  ok(M.ids('loading').g === '' && M.ids('chat_player').g === '', 'и свой номер Google там не берётся');
+  window.ADS_IDS.google = JSON.parse(JSON.stringify(IDS.google));
+  ok(M.ids('feed_games').g === IDS.google.games_hub && M.ids('game_over').g === IDS.google.game_over, 'лента и под игрой — Google как раньше');
+  M.RULES.gStrict = false;   // как было до 05.11 (откат одной строкой)
+  ok(M.why('loading') === '' && M.net('loading') === 'g', 'gStrict=false: у загрузки нет своего блока — берёт game_over', M.why('loading'));
   window.ADS_IDS.google = {};
   ok(M.why('loading') === 'id', 'нет номера блока — нельзя (id)');
   window.ADS_IDS.yandex.loading = 'R-A-1-1';
@@ -255,6 +264,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   // запасные номера
   ok(M.ids('loading').g === IDS.google.game_over, 'Google: loading берёт блок game_over');
   ok(M.ids('feed_games').g === IDS.google.games_hub && M.ids('rail').g === IDS.google.game_over, 'Google: feed → games_hub, rail → game_over');
+  M.RULES.gStrict = true;
   window.ADS_IDS.yandex.game_over = 'R-A-1-9';
   ok(M.ids('break').ya === 'R-A-1-9', 'Яндекс: перерыв без своего блока — блок game_over');
   window.ADS_IDS.yandex.feed = 'R-A-1-5';
@@ -287,7 +297,10 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(M.why('break') === 'desk', 'перерыв — только компьютер');
   ENV.coarse = false;
   // под плеером в чате (chatplayer.js): тот же блок, что под игрой; только компьютер; раз в 2 минуты, до 8; кейсы — нельзя
-  ok(M.why('chat_player') === '', 'место под плеером чата — можно (запасной блок game_over)', M.why('chat_player'));
+  window.ADS_IDS.yandex.game_over = '';
+  ok(M.why('chat_player') === 'id', 'под плеером чата Google нет (gStrict) — без РСЯ места нет', M.why('chat_player'));
+  window.ADS_IDS.yandex.game_over = 'R-A-1-9';
+  ok(M.why('chat_player') === '' && M.net('chat_player') === 'ya', 'место под плеером чата — только РСЯ (блок game_over)', M.why('chat_player'));
   M.mark('chat_player'); advance(60e3);
   ok(M.why('chat_player') === 'gap', 'под плеером — не чаще раза в 2 минуты');
   advance(61e3);
@@ -395,7 +408,11 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(ins && ins.getAttribute('data-ad-slot') === IDS.google.games_hub && ins.getAttribute('data-tag-for-age-treatment') === '1', 'Google: data-tag-for-age-treatment="1"', ins && ins.attrs);
   ok(ins.getAttribute('data-ad-format') === 'auto' && ins.getAttribute('data-full-width-responsive') === 'true', 'Google: обычное место — auto, на всю ширину');
   const gr = new El('div'); body.appendChild(gr);
+  M.RULES.gStrict = false;
   ok(M.show(gr, 'rail', { checked: true }) && gr.querySelector('ins')?.getAttribute('data-ad-format') === 'vertical' && !gr.querySelector('ins').hasAttribute('data-full-width-responsive'), 'Google: столбик — вертикальный формат, не растягивать');
+  M.RULES.gStrict = true;
+  gr.innerHTML = '';
+  ok(M.show(gr, 'rail', { checked: true }) === false && !gr.querySelector('ins'), 'gStrict: столбик Google не ставит');
   gr.remove();
   // VIP — даже прямой вызов render не показывает
   currentUser = { id: 'v' }; currentProfile = { id: 'v', is_vip: true };
@@ -479,6 +496,10 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   // компилятор: карточка в углу, если окно не тесное
   advance(100e3);
   const view = new El('div'); view._rect = { left: 0, top: 0, width: 900, height: 600 }; body.appendChild(view);
+  const c0 = M.loading({ host: view, card: '⚙️ Сборка C++', tip: 'compile' }); advance(1600);
+  ok(!view.querySelector('.d37-adcard'), 'gStrict: карточки с рекламой поверх Студии 3D нет');
+  c0.done(); advance(100e3);
+  M.RULES.gStrict = false;
   const c1 = M.loading({ host: view, card: '⚙️ Сборка C++', tip: 'compile' });
   c1.step('загрузка компилятора 12%'); advance(1600);
   const card = view.querySelector('.d37-adcard');
@@ -493,6 +514,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   const c2 = M.loading({ host: view, card: '⚙️', tip: 'compile' }); advance(2000);
   ok(!view.querySelector('.d37-adcard'), 'тесное окно (телефон) — без карточки');
   c2.done();
+  M.RULES.gStrict = true;
   advance(100e3); currentUser = { id: 'v' }; currentProfile = { id: 'v', is_vip: true };
   const g6 = M.loading({ anchor: box.firstChild, game: 'horde' }); advance(2000);
   ok(!box.querySelector('.d37-adload'), 'VIP — экран загрузки без рекламы');
@@ -542,10 +564,21 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(res[2] === 'game_over' && !box.querySelector('.d37-break'), 'телефон: перерывов нет (там полноэкранная от игры)', res);
   // Google: без обновлений и без перерыва в том же месте
   fresh({ hash: '#/games/snake' }); window.ADS_IDS.yandex = {};
-  box.innerHTML = ''; delete box.dataset.net;
+  box.innerHTML = ''; delete box.dataset.net; delete box.dataset.gDone;
   ok(M.afterRound(stage) === 'game_over' && box.dataset.net === 'g', 'Google: место под игрой');
   advance(200e3);
   ok(M.afterRound(stage) === false && M.afterRound(stage) === false, 'Google: то же объявление, обновлять нельзя (только по просьбе человека)');
+  for (let i = 0; i < 6; i++) { advance(91e3); ok(M.afterRound(stage) !== 'break', 'Google: «☕ Перерыв» Google не ставит (gStrict)'); }
+  // снова играет — блок Google убран совсем (не спрятан); в этой игре — больше нет; в другой — снова один
+  advance(1000); sb.dispatch('pointerdown');
+  ok(box.innerHTML === '' && box.hidden && !box.dataset.net, 'Google: снова играет — блок убран (рядом с идущей игрой Google нет)');
+  advance(200e3);
+  ok(M.afterRound(stage) === false && box.innerHTML === '', 'Google: в той же игре новый блок не ставим (не обновление)');
+  setHash('#/games/td'); advance(200e3);
+  ok(M.afterRound(stage) === 'game_over' && box.dataset.net === 'g', 'Google: другая игра — снова один блок');
+  dispatchEvent({ type: 'd37:fullscreen', detail: { on: true } });
+  ok(box.innerHTML === '' && !box.dataset.net, 'игра во весь экран — блок под игрой убран (не display:none)');
+  setHash('#/games/snake');
   // лимит визита кончился — показанное не стираем
   fresh({ hash: '#/games/snake' }); window.ADS_IDS.google = {}; window.ADS_IDS.yandex.game_over = 'R-A-4-1';
   box.innerHTML = ''; delete box.dataset.net;
@@ -554,6 +587,21 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   advance(100e3);
   ok(M.afterRound(stage) === false && !!box.querySelector('[id^="yandex_rtb"]'), 'лимит визита — новое не показываем, показанное не стираем');
   stage.remove();
+}
+
+// ═══ 4б. Серверные страницы: место грузится, когда подъедет к экрану (05.11.2026 — у всех) ═══
+{
+  fresh(); window.ADS_IDS.yandex = {};
+  const d = new El('div'); d.dataset.ad = 'seo_game'; d.hidden = true; body.appendChild(d);
+  const n = new El('div'); n.dataset.ad = 'video_page'; n.setAttribute('data-ad-now', ''); n.hidden = true; body.appendChild(n);
+  window.adsbygoogle = [];
+  M.fillAll();
+  ok(!d.hidden && !d.querySelector('ins') && IO.list.has(d), 'data-ad: сначала только наблюдаем (пустой div виден наблюдателю), блока ещё нет');
+  ok(!!n.querySelector('ins'), 'data-ad-now — сразу');
+  showIO(d);
+  const ins = d.querySelector('ins');
+  ok(ins && ins.getAttribute('data-ad-slot') === IDS.google.seo_game && d.classList.contains('d37-ad'), 'подъехал к экрану — блок Google с подписью', d.innerHTML);
+  d.remove(); n.remove(); window.adsbygoogle = [];
 }
 
 // ═══ 5. Карточки «Реклама» в списках ═══
@@ -695,7 +743,8 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ENV.coarse = true; M.railTick();
   ok(!T.RAIL.el, 'сенсорный экран (планшет) — нет: липкие только на компьютере');
   ENV.coarse = false;
-  // Google: от края игры не ближе 150 px
+  // Google: от края игры не ближе 150 px (как было до gStrict)
+  M.RULES.gStrict = false;
   window.ADS_IDS.yandex.rail = ''; window.ADS_IDS.google = { game_over: 'G-1' };
   advance(61e3); layout(1920); M.railTick();
   const gl = parseFloat(T.RAIL.el?.style.left) + 360;
@@ -725,6 +774,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(r2 && !r2.isConnected, 'реклама не пришла (блокировщик) — через 8 с пустой столбик убран');
   page.remove(); window.adsbygoogle = [];
   timers.push(...savedIntervals);
+  M.RULES.gStrict = true;
 }
 
 // ═══ 8. Спонсор щитов и щиты «Мира Денчика» ═══
