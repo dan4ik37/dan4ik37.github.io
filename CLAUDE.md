@@ -31,7 +31,9 @@ Russian). Read only the area file(s) your task needs — never all of them.
 
 ## Red lines (always)
 - No paid randomness (chests, wheels, lootboxes). Nothing bought gives an edge in ratings, tournaments, auctions, quizzes.
-  🪙 are never sold for money; 💎 never go to bets or random rewards; boosts only speed up XP and the season path; only 💎 /
+  🪙 are not sold for money directly, but the 💎 → 🪙 exchange is allowed (owner 05.11 «обмен можно»); 🪙 for watching ads only
+  through an approved rewarded-ad format, never by rewarding views or clicks of ordinary ads (owner 05.11 «рекламу за монеты»);
+  💎 never go to bets or random rewards; boosts only speed up XP and the season path; only 💎 /
   marketplace limited items are tradeable; no cash-out; no dark patterns. Prices, amounts, limits, legal texts — owner only.
 - Age: kids realm (<18, unknown or unverified) and adults realm (18+ reliably verified), separated in DB (realm + RLS),
   realtime, servers, search, P2P. Chat bands <9 / 9–12 / 13–15 / 16–17; <9 chat only with parent consent. Payments: <14 none,
