@@ -141,3 +141,5 @@ game_score_cap('sudoku_daily') = 1200, coin_run_cap('sudoku') = 60 — то ес
 push-words.sql применён 10.10.2026 (проверено: push_set_words → 200 null, подписки гостю — []).
 vip-claims.sql применён 09.10.2026 (проверено: claim_donation гостю → 42501, admin_* → «Только для админа»).
 secrets.sql, games.sql, progression.sql применены (03.10.2026, проверено с сервера).
+05.11.2026: games-more.sql применён (новая версия без w_watch5 «Посмотри 5 роликов» — награды за просмотр YouTube запрещены):
+проверено с сервера — weekly_quest_pool гостем → 16 заданий, w_watch5 нет. game_win_xp tiles → 4, lights_duel → 5, raid_league(100) → 1.
