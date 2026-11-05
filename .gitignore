@@ -44,5 +44,5 @@ docs/codex-repair/
 # VRM player test model: licence Redistribution_Prohibited (piapro PCL) — keep local only, never in the public repo
 assets/*.vrm
 
-# Local notes left by Codex for Claude (local paths; kept in E:%-corespecsourcedex-notices) — not for the public repo
+# Local notes left by Codex for Claude (local paths; a copy is in d37-core spec/source/codex-notices) - not for the public repo
 CODEX_*_NOTICE.md
