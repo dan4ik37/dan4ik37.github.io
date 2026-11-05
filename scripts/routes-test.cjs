@@ -172,6 +172,10 @@ function browser(startUrl, routing){
   for (const p of ['/nope', '/chatx', '/play2', '/about/x', '/forum/42/x', '/donate/x', '/api/nope', '/home/x', '/.env', '/wp-login.php'])
     ok(serve(p).status === 404 || (serve(p).api && /page=nope/.test(serve(p).api)) || (p === '/api/nope' && serve(p).status === 404), `vercel.json: ${p} — 404`, serve(p));
   ok(serve('/home').redirect === '/' && serve('/home').permanent, '/home → / (постоянная переадресация)');
+  // 05.11.2026: /index.html — та же главная по второму адресу (200) → постоянная переадресация; /play… — noindex и для робота без JS
+  ok(serve('/index.html').redirect === '/' && serve('/index.html').permanent && serve('/').file === '/index.html', '/index.html → / (постоянная), «/» — как было');
+  const xr = src => (vj.headers.find(h => h.source === src)?.headers || []).some(h => h.key === 'X-Robots-Tag' && h.value === 'noindex');
+  ok(xr('/play') && xr('/play/:path+'), 'vercel.json: /play и /play/… — X-Robots-Tag: noindex (как роутер, но без JS)');
   ok(serve('/games/chess/abcd').redirect === '/play/chess/abcd' && serve('/games/horde/coop/ab12cd').redirect === '/play/horde/coop/ab12cd', '/games/<игра>/<код> (без решётки) → /play/…');
   ok(!vj.rewrites.some(r => /^\/(\(\.\*\)|:path\*)$/.test(r.source) || r.source === '/:path*'), 'нет переписывания «всё → index.html» (иначе мусор отдавал бы 200)');
   const firstSpa = vj.rewrites.findIndex(r => r.destination === '/index.html');
@@ -375,6 +379,7 @@ function browser(startUrl, routing){
     ok(new RegExp('^Disallow: ' + d.replace(/[/.]/g, '\\$&') + '\\s*$', 'm').test(robots), `robots.txt: закрыто ${d}`);
   ok(/^Allow: \/api\/feed$/m.test(robots) && /^Sitemap: https:\/\/dan4ik37\.vercel\.app\/sitemap\.xml$/m.test(robots) && !/^Disallow: \/\s*$/m.test(robots), 'robots.txt: /api/feed открыт (ролики главной), карта сайта, сайт не закрыт целиком');
   for (const p of ['/forum', '/ideas', '/chat', '/about', '/shop', '/play/chess', '/games/chess']) ok(!robotsBlocked(robots, p), `robots.txt: ${p} открыт`);
+  ok(/^User-agent: Mediapartners-Google\r?\nDisallow:\s*$/m.test(robots), 'robots.txt: робот AdSense (Mediapartners-Google) — своя группа без запретов');
   function robotsBlocked(txt, p){
     let best = null;
     for (const m of txt.matchAll(/^(Allow|Disallow):\s*(\S*)\s*$/gm)) if (m[2] && p.startsWith(m[2]) && (!best || m[2].length >= best[1].length)) best = [m[1], m[2]];

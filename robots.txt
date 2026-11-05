@@ -22,4 +22,8 @@ Disallow: /play/unity/mod
 # Яндекс: ?ref=<код приглашения> не меняет страницу
 Clean-param: ref /
 
+# Робот AdSense (подбирает рекламу по содержимому страницы) — без запретов: реклама и так только на страницах со своим содержимым
+User-agent: Mediapartners-Google
+Disallow:
+
 Sitemap: https://dan4ik37.vercel.app/sitemap.xml
