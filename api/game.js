@@ -34,10 +34,11 @@ export default function handler(req, res) {
     }));
   }
   // Ссылка-вызов: /games/<id>?s=<очки>&n=<ник> — в превью мессенджера «Ник набрал N — побьёшь?»
+  // 05.11.2026 (как /tools/cps): вызов — не в поиск (canonical — чистый /games/<id>), ник из ссылки — чужой текст без проверки,
+  // поэтому с ним без рекламы; без ника («Друг») — своё содержимое целиком, реклама можно (page.js SHARE_ADS)
   const s = Number(req.query.s);
-  const ch = Number.isInteger(s) && s > 0 && s <= 1000000
-    ? { score: s, nick: String(req.query.n || '').replace(/[<>"'\u0000-\u001f]/g, '').trim().slice(0, 24) || 'Друг' }
-    : null;
+  const nick = String(req.query.n || '').replace(/[<>"'\u0000-\u001f]/g, '').trim().slice(0, 24);
+  const ch = Number.isInteger(s) && s > 0 && s <= 1000000 ? { score: s, nick: nick || 'Друг', fromUrl: !!nick } : null;
   return sendPage(res, gamePage(g, ch));
 }
 
@@ -171,7 +172,7 @@ function gamePage(g, ch) {
   const verb = g.id === 'words' ? 'угадал слово' : 'набрал';
   const title = ch ? `${ch.nick} ${verb} ${scoreLabel(g.id, ch.score)} в «${g.name}» — побьёшь?` : `${g.title} | dan4ik37`;
   const description = ch ? `Сыграй в «${g.name}» бесплатно и без регистрации и побей результат. ${g.description}` : g.description;
-  return page({ title, description, url, image: cardImage(g.id), ld, body, css: GAME_CSS, script: SHARE_JS });
+  return page({ title, description, url, image: cardImage(g.id), ld, body, css: GAME_CSS, script: SHARE_JS, noindex: !!ch, share: !!ch && !ch.fromUrl });
 }
 
 function joinBlock() {

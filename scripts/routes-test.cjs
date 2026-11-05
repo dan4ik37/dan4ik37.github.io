@@ -384,6 +384,10 @@ function browser(startUrl, routing){
     ok(!/Документ готовится/.test(r.body) && /<meta name="robots" content="noindex">/.test(r.body), '/terms без реквизитов: без плашки «Документ готовится», noindex');
     r = await call(pages, { page: 'refund' });
     ok(r.code === 200 && !/Документ готовится/.test(r.body) && /<meta name="robots" content="noindex">/.test(r.body), '/refund без реквизитов: без плашки, noindex');
+    // 05.11.2026: правила рекламы — то же правило: строки «это шаблон… реквизиты появятся после регистрации ИП» нет, noindex, не в карте
+    r = await call(pages, { page: 'adsterms' });
+    ok(r.code === 200 && /Правила рекламы на сайте/.test(r.body) && !/Это шаблон правил/.test(r.body) && !/после регистрации ИП/.test(r.body) && /<meta name="robots" content="noindex">/.test(r.body),
+      '/ads-terms без реквизитов: без строки «это шаблон… после регистрации ИП», noindex (как /terms)');
     r = await call(pages, { page: 'shop' });
     ok(!/уточняется/.test(r.body) && !/Продавец:/.test(r.body) && /href="\/contacts"/.test(r.body), '/shop: строки «Продавец: уточняется» нет, ссылки на документы остались');
     r = await call(pages, { page: 'about' });
@@ -396,7 +400,7 @@ function browser(startUrl, routing){
     for (const u of ['/forum', '/forum/5', '/forum/6', '/ideas', '/ideas/9', '/shorts', '/chat', '/games', '/about'])
       ok(r.body.includes(`<loc>https://dan4ik37.vercel.app${u}</loc>`), `карта сайта: ${u}`);
     // 05.11.2026: разделы-приложения без своего HTML (сервер отдаёт главную) — не в карте
-    for (const u of ['/profile', '/phone', '/adv', '/invite', '/play', '/shop/', '/donate', '/lfg', '/soundboard', '/poll', '/clicker', '/terms', '/refund'])
+    for (const u of ['/profile', '/phone', '/adv', '/invite', '/play', '/shop/', '/donate', '/lfg', '/soundboard', '/poll', '/clicker', '/terms', '/refund', '/ads-terms'])
       ok(!r.body.includes(`<loc>https://dan4ik37.vercel.app${u}`), `карта сайта: без ${u}`);
     ok(r.body.includes('<loc>https://dan4ik37.vercel.app/forum/6</loc><lastmod>2026-10-03</lastmod>'), 'карта сайта: дата темы');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

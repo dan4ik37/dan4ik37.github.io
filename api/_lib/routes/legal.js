@@ -12,8 +12,9 @@ const mail = () => `<a href="mailto:${esc(S.email)}">${esc(S.email)}</a>`;
 // 05.11.2026: плашки «Документ готовится» нет (для проверки AdSense — «сайт не готов»). Пока реквизитов нет (sellerReady), оферта и
 // возврат — noindex и не в карте сайта (DRAFT_NOINDEX ниже): покупок ещё нет, документ не окончательный; страницы открываются по
 // ссылкам магазина как раньше. Реквизиты вписаны (seller.js) — сами станут обычными страницами. Вернуть плашку — DRAFT_NOTE = true.
-const DRAFT_NOTE = false;
-export const DRAFT_NOINDEX = ['terms', 'refund'];
+// Те же правила — у /ads-terms (routes/adterms.js: строка «это шаблон… реквизиты появятся после регистрации ИП», noindex).
+export const DRAFT_NOTE = false;
+export const DRAFT_NOINDEX = ['terms', 'refund', 'ads-terms'];
 const draft = () => sellerReady() || !DRAFT_NOTE ? '' : '<p class="lg-draft">Документ готовится: реквизиты продавца появятся здесь после регистрации ИП.</p>';
 
 function terms() {
