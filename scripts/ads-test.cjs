@@ -578,6 +578,13 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(M.afterRound(stage) === 'game_over' && box.dataset.net === 'g', 'Google: другая игра — снова один блок');
   dispatchEvent({ type: 'd37:fullscreen', detail: { on: true } });
   ok(box.innerHTML === '' && !box.dataset.net, 'игра во весь экран — блок под игрой убран (не display:none)');
+  // партия кончилась, а игра всё ещё во весь экран (html.gs-full прячет #gamesAd) — в спрятанное место ничего не ставим
+  setHash('#/games/chess'); advance(200e3); html.classList.add('gs-full');
+  ok(M.afterRound(stage) === false && box.innerHTML === '' && !box.dataset.net, 'конец партии во весь экран — рекламу в спрятанный #gamesAd не ставим');
+  html.classList.remove('gs-full'); doc.fullscreenElement = stage;
+  ok(M.afterRound(stage) === false && box.innerHTML === '', 'и при document.fullscreenElement');
+  doc.fullscreenElement = null;
+  ok(M.afterRound(stage) === 'game_over' && box.dataset.net === 'g', 'вышел из полноэкранного — после партии блок снова есть');
   setHash('#/games/snake');
   // лимит визита кончился — показанное не стираем
   fresh({ hash: '#/games/snake' }); window.ADS_IDS.google = {}; window.ADS_IDS.yandex.game_over = 'R-A-4-1';

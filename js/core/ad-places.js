@@ -340,6 +340,9 @@
     if (!stage || stage.hidden) return false;
     const s = st(); s.rounds = (s.rounds || 0) + 1; save();
     G.playing = false;
+    // Игра во весь экран (js/core/fullscreen.js: html.gs-full прячет #gamesAd, display:none) — в спрятанное место рекламу не ставим
+    // (скрытой рекламы не бывает); вышел из полноэкранного — блок встанет после следующей партии
+    if (document.documentElement?.classList?.contains('gs-full') || document.fullscreenElement) { log('game_over', 'fullscreen'); return false; }
     let box = stage.querySelector('#gamesAd');
     if (!box) { box = document.createElement('div'); box.id = 'gamesAd'; stage.appendChild(box); }
     const R = rule('break');
