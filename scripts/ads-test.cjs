@@ -662,6 +662,17 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   const wrap = new El('div'); wrap.id = 'ad-mid'; wrap.className = 'wrap-sm'; wrap.innerHTML = '<ins class="adsbygoogle" data-slot-key="home_mid"></ins>'; body.appendChild(wrap);
   wrap._rect = { left: 0, top: 500, width: 412, height: 331 };
   ok(M.settle(wrap) === 'own' && !wrap.querySelector('ins') && wrap.querySelector('.d37-house.d37-solo') && wrap.style.height === '331px' && !wrap.classList.contains('ad-empty'), '#ad-mid на экране — своя подсказка внутри обёртки, высота 331 px', wrap.outerHTML.slice(0, 200));
+  // схлопывание отступов (как в браузере): верх обёртки = база + max(нижний отступ соседа выше 10 px, свой margin-top, отступ подписи
+  // ::before 16 px — пока есть <ins> и нет overflow:hidden); верх после замены — ровно тот же, высота та же
+  const wc = new El('div'); wc.id = 'ad-mid'; wc.innerHTML = '<ins class="adsbygoogle"></ins>'; body.appendChild(wc);
+  wc.getBoundingClientRect = function(){
+    const label = !!this.querySelector('ins.adsbygoogle') && this.style.overflow !== 'hidden' ? 16 : 0;
+    const top = 400 + Math.max(10, parseFloat(this.style.marginTop) || 0, label), height = this.style.height ? parseFloat(this.style.height) : 317;
+    return { left: 0, top, width: 412, height, right: 412, bottom: top + height, x: 0, y: top };
+  };
+  const t0c = wc.getBoundingClientRect().top;
+  ok(M.settle(wc) === 'own' && Math.abs(wc.getBoundingClientRect().top - t0c) <= 0.5 && wc.getBoundingClientRect().height === 317, 'схлопнутый отступ подписи и соседа: верх и высота обёртки — те же (без сдвига)', [t0c, wc.getBoundingClientRect().top, wc.style.marginTop]);
+  wc.remove();
   const wrap2 = new El('div'); wrap2.id = 'ad-top'; wrap2.innerHTML = '<ins class="adsbygoogle"></ins>'; body.appendChild(wrap2); wrap2._rect = { left: 0, top: 2000, width: 412, height: 331 };
   ok(M.settle(wrap2) === 'gone' && wrap2.classList.contains('ad-empty') && !wrap2.querySelector('ins'), '#ad-top ниже экрана — убран (ad-empty, <ins> удалён — скрытой рекламы нет)');
   const wrap3 = new El('div'); wrap3.id = 'ad-bottom'; wrap3.innerHTML = '<ins class="adsbygoogle"></ins>'; body.appendChild(wrap3); wrap3._rect = { left: 0, top: 300, width: 412, height: 30 };

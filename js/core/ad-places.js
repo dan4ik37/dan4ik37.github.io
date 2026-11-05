@@ -290,10 +290,13 @@
     const b0 = el.getBoundingClientRect();
     mutate();
     Object.assign(el.style, { boxSizing: 'border-box', height: b0.height + 'px', overflow: 'hidden' });
-    const b1 = el.getBoundingClientRect();
-    if (Math.abs(b1.top - b0.top) > 0.5) {
-      const mt = parseFloat(typeof getComputedStyle === 'function' ? getComputedStyle(el).marginTop : 0) || 0;
-      el.style.marginTop = (mt + b0.top - b1.top) + 'px';
+    // отступ сверху «схлопывается» и с нижним отступом соседа выше (берётся больший) — поэтому подгоняем за несколько шагов,
+    // пока верх не встанет ровно туда же (обычно 1–3 шага; всё до отрисовки)
+    for (let i = 0; i < 6; i++) {
+      const d = b0.top - el.getBoundingClientRect().top;
+      if (Math.abs(d) <= 0.5) break;
+      const mt = parseFloat(typeof getComputedStyle === 'function' ? getComputedStyle(el).marginTop : el.style.marginTop) || parseFloat(el.style.marginTop) || 0;
+      el.style.marginTop = (mt + d) + 'px';
     }
   }
   // Блок Google: ответ сети — атрибут data-ad-status у <ins> (filled / unfilled). Блокировщик: страница загрузилась (async-скрипт
