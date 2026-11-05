@@ -6,6 +6,7 @@ import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
 import { QUIZZES, quizOf } from '../quizzes.js';
 import { topicOf } from '../topics.js';
+import { tmNote, TM_CSS } from '../trademarks.js';   // «FNAF» — товарный знак владельца; тест не связан с ним
 
 export default function handler(req, res) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -44,6 +45,7 @@ export default function handler(req, res) {
   ${topic ? `<aside class="join"><div><b>Ролики по ${esc(topic.name)} на канале</b><span>${esc(topic.about)}</span></div><a class="btn btn-acc" href="/topic/${topic.slug}">▶ Смотреть</a></aside>` : `<aside class="join"><div><b>Канал dan4ik37</b><span>Тысячи игровых роликов, стримы и живой чат.</span></div><a class="btn btn-acc" href="/about">Кто такой dan4ik37</a></aside>`}
   <section class="box"><h2>Другие тесты</h2><div class="qz-cards">${others.map(card).join('')}</div>
     <p class="muted" style="margin-top:.8rem">А ещё — <a href="/games">игры с друзьями онлайн</a>: «5 букв», морской бой, города.</p></section>
+  ${tmNote('тест', Q.title, Q.lead)}
 </main>`;
   const data = { slug: Q.slug, title: Q.title, results: Q.results, questions: Q.questions };
   const script = `
@@ -74,7 +76,7 @@ export default function handler(req, res) {
   return res.status(200).send(page({
     title: friend ? `Я — ${friend.name}! ${Q.title} Пройди тест` : `${Q.title} Тест — пройди и узнай | dan4ik37`,
     description: friend ? friend.text : `${Q.lead} Бесплатно, без регистрации — поделись результатом с друзьями.`,
-    url, image: `${SITE}/img/share/quiz-${Q.slug}.png`, ld, body, script, css: CSS, noindex: !!friend
+    url, image: `${SITE}/img/share/quiz-${Q.slug}.png`, ld, body, script, css: CSS + TM_CSS, noindex: !!friend
   }));
 }
 
@@ -89,6 +91,7 @@ function hub(res) {
   <p class="lead">Короткие тесты по играм с канала dan4ik37 — Майнкрафт, FNAF, Роблокс, CS2, Hollow Knight, Poppy Playtime и хорроры, «Какая ты игра?» и «Какой ты стример?» для всех и тест для зрителей. 8 вопросов, минута времени, результатом можно поделиться с друзьями.</p>
   <div class="qz-cards">${QUIZZES.map(card).join('')}</div>
   <div data-ad="seo_game" hidden></div>
+  __TM__
   <aside class="join"><div><b>Хочешь поиграть с друзьями?</b><span>«5 букв» со словом дня, морской бой, города, шашки — бесплатно, по ссылке.</span></div><a class="btn btn-acc" href="/games">🎮 Игры</a></aside>
 </main>`;
   const ld = { '@context': 'https://schema.org', '@type': 'ItemList', name: 'Тесты dan4ik37', url,
@@ -97,7 +100,7 @@ function hub(res) {
   return res.status(200).send(page({
     title: 'Тесты: какой ты моб из Майнкрафта, кто ты из FNAF, Роблокса и Poppy Playtime | dan4ik37',
     description: 'Бесплатные тесты по играм: какой ты моб из Майнкрафта, кто ты из FNAF и Poppy Playtime, кто ты в Роблоксе, какая ты игра. 8 вопросов — и результат, которым можно поделиться.',
-    url, image: SITE + '/img/share/quiz.png', ld, body, css: CSS
+    url, image: SITE + '/img/share/quiz.png', ld, body: body.replace('__TM__', () => tmNote('тесты', ...QUIZZES.map(q => q.title))), css: CSS + TM_CSS
   }));
 }
 

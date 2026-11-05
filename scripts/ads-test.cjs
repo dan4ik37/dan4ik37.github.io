@@ -924,6 +924,22 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
     if (HIDE_GAMBLING) ok(!gp, 'роликов про кейсы на сайте нет (28.10.2026) — все страницы архива с рекламой');
     else ok(gp > 0, 'нашлась страница архива с роликами про кейсы');
     }
+    // чужие товарные знаки («игра как Майнкрафт», «кто ты из FNAF»): одна строка «не связана и не официальная» (api/_lib/trademarks.js)
+    const TM = await imp('api/_lib/trademarks.js');
+    ok(TM.trademarksIn('Кубомир — игра как Майнкрафт').join() === 'Minecraft' && TM.trademarksIn('Шашки онлайн').length === 0, 'trademarksIn: Майнкрафт — да, шашки — нет');
+    const { default: game } = await imp('api/game.js');
+    const { GAME_PAGES } = await imp('api/_lib/games-seo.js');
+    const kub = GAME_PAGES.find(g => /майнкрафт/i.test(g.title));
+    const gk = mkRes(); game({ query: { id: kub.id } }, gk);
+    ok(/class="tm-note">«Minecraft»[^<]*товарный знак его владельца; игра не связана с ним и не является официальной/.test(gk.html), `/games/${kub.id}: строка про товарный знак Minecraft`);
+    const plain = GAME_PAGES.find(g => !TM.trademarksIn(g.name, g.title, g.h1, g.description, g.lead).length);
+    const gp0 = mkRes(); game({ query: { id: plain.id } }, gp0);
+    ok(!/class="tm-note"/.test(gp0.html), `/games/${plain.id}: без чужих названий — без строки`);
+    const { default: quiz } = await imp('api/_lib/routes/quiz.js');
+    const qf = mkRes(); quiz({ query: { slug: 'fnaf' } }, qf);
+    ok(qf.code === 200 && /class="tm-note">[^<]*«Five Nights at Freddy’s»[^<]*тест не связан/.test(qf.html), '/quiz/fnaf: строка про товарный знак FNAF');
+    const qh = mkRes(); quiz({ query: {} }, qh);
+    ok(/class="tm-note">[^<]*«Minecraft»[^<]*тесты сайта не связаны/.test(qh.html), '/quiz: строка про товарные знаки');
     // карта сайта: без шортсов и без разделов-приложений (одна и та же главная по пяти адресам)
     const { default: sm } = await imp('api/sitemap.js');
     const sv = await call(sm, { part: 'videos' }), sp = await call(sm, { part: 'pages' });
