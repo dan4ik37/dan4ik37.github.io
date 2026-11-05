@@ -38,6 +38,8 @@ if (UI_V2) document.documentElement.classList.add('ui2');
 // «из-за плеча» в боевой зоне (по умолчанию выкл).
 const HUD2 = { kit: 1, shell: 1, portrait: 1, chrome: 1, mir: 1, studio: 1, terra: 1, planet: 1, kubomir: 1, podzem: 1, io: 1, horde: 1, arena: 1, raid: 1, warShoulder: 0 };
 
+const CORE_WASM = true;   // C-002: игры берут общее ядро D37 (js/engine/core-world.js; пока «Новая земля»). Откат — false
+
 // ═══════════════════════════════════════
 //  СВОЙ СЕРВЕР ДЛЯ ИГР (T-045, docs/SERVER.md) — комнаты онлайн-игр через сервер владельца, Supabase — запасной путь
 // ═══════════════════════════════════════

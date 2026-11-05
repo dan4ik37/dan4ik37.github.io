@@ -12,6 +12,7 @@
 // GameKit.cd() — отсчёт хода онлайн: игра рисует <span class="gk-cd" data-gk-cd="<до какого Date.now()>">, отсчёт виден
 //   в последние 15 с («⏳ 9 с — потом ход сделают за тебя»). Звать после каждой перерисовки (сам выключается).
 // GameKit.vipPerk() — VIP, донатер или персонал (больше отмен в «2048», подсказка в «5 букв» — с ними игра без рекорда).
+// GameKit.core(opts) — ядро D37 для игры (C-002, флаг CORE_WASM): грузится лениво, параллельно, игру не держит (см. ниже).
 (() => {
   if (window.GameKit) return;
   const HOWTO = {
@@ -239,6 +240,67 @@ body.high .gk-go.pulse{animation:gkTurn 1.4s ease-in-out infinite}
     catch (e) { return false; }
   }
 
+  // ── Ядро D37 (C-002; общий движок сайта и Backrooms, E:\d37-core) ──
+  // Игра зовёт в mount. Флаг CORE_WASM (js/core/config.js) выключен — null и ни одного запроса ядра (откат одной строкой — старая
+  // игра). Иначе поток ядра (Worker) стартует сразу, а файлы ядра на странице (js/engine/d37core.js + core-world.js) грузятся
+  // параллельно и запуск игры не держат (в списке scripts игры их нет); не загрузились — игра идёт без ядра (строка «ядро D37: нет
+  // (…)», запись в журнал ошибок). c.s — сессия D37CoreWorld.session(o) (null, пока файлы грузятся), c.step() — раз в шаг логики
+  // (до сессии шаги не считаются: такты ядра — от её начала), c.line() — строка окна отладки, c.dispose() — в unmount. o — как у
+  // session(); o.v — своя версия файлов (проверки: холодный старт мимо кэша)
+  function core(o = {}){
+    if (typeof CORE_WASM === 'undefined' || !CORE_WASM) return null;
+    const v = o.v || (typeof GAMES_VER !== 'undefined' ? GAMES_VER : ''), q = v ? '?v=' + v : '', t0 = performance.now();
+    const c = { s: null, error: '', t0, scriptsMs: 0, dead: false, boot: null,
+      step(){ if (c.s) c.s.step(); },
+      line(){ return c.s ? c.s.line() : 'ядро D37: ' + (c.error ? 'нет (' + c.error + ')' : 'загрузка…'); },
+      dispose(){
+        if (c.dead) return;
+        c.dead = true;
+        if (c.s) c.s.dispose(); else if (c.boot) { try { c.boot.worker.terminate(); } catch (e) {} }
+        c.s = null; c.boot = null;
+      } };
+    let force = '';
+    try { force = localStorage.getItem('d37_core') || ''; } catch (e) {}
+    // поток — первым: ему файлы страницы не нужны (он грузит своё сам, wasm собирается там же, пока грузятся скрипты). init — сразу,
+    // с настройками первого мира (мир готов в потоке ещё до того, как страница догрузит файлы ядра); что поток успел сказать до
+    // передачи сессии — копится в b.early (протокол — core-world.js § 2)
+    if (typeof Worker === 'function' && o.worker !== false && force !== 'inline') {
+      try {
+        const b = { worker: new Worker('js/engine/core-world.js' + q, { name: 'd37-core-world' }), t0, error: '', inited: false, early: [] };
+        b.worker.onerror = e => { try { e.preventDefault(); } catch (x) {} b.error = 'worker script'; };
+        b.worker.onmessage = e => { if (b.early) b.early.push(e.data); };
+        if (o.wasm === undefined || typeof o.wasm === 'string') {
+          const world = {};
+          for (const k of ['desc', 'seed', 'seedHi', 'genVersion', 'maxObjects', 'eventCap', 'cmdRing', 'maxActors', 'reachMm']) if (o[k] !== undefined) world[k] = o[k];
+          b.worker.postMessage({ t: 'init', wasm: new URL(o.wasm || 'js/engine/d37core.wasm' + q, document.baseURI).href, timeoutMs: o.timeoutMs || 8000, force, world });
+          b.inited = true;
+        }
+        c.boot = b;
+      } catch (e) { c.boot = null; }
+    }
+    const tag = src => new Promise((ok, bad) => {
+      const s = document.createElement('script');
+      s.src = src + q; s.async = false; s.onload = ok; s.onerror = () => bad(new Error('Не загрузилось: ' + src));
+      document.head.appendChild(s);
+    });
+    const get = src => !o.v && typeof gamesLoadScript === 'function' ? gamesLoadScript(src) : tag(src);
+    Promise.all([get('js/engine/d37core.js'), get('js/engine/core-world.js')]).then(() => {
+      if (c.dead) return;
+      c.scriptsMs = performance.now() - t0;
+      const b = c.boot; c.boot = null;
+      // своя версия (o.v) — и wasm той же версии: поток уже собирает именно его
+      c.s = window.D37CoreWorld.session(Object.assign({}, o, { t0, adopt: b }, o.v && o.wasm === undefined ? { wasm: 'js/engine/d37core.wasm' + q } : null));
+    }).catch(e => {
+      if (c.dead) return;
+      c.error = 'файлы ядра не загрузились';
+      try { c.boot?.worker.terminate(); } catch (x) {}
+      c.boot = null;
+      try { window.d37Err?.('core-world: scripts', e); } catch (x) {}
+      console.warn('[d37 core] scripts: ' + (e?.message || e));
+    });
+    return c;
+  }
+
   css();
-  window.GameKit = { ask, rules, isOpen: () => !!cur, close: () => cur?.done(false), turn, cd, vipPerk, HOWTO, NO_RULES };
+  window.GameKit = { ask, rules, isOpen: () => !!cur, close: () => cur?.done(false), turn, cd, vipPerk, core, HOWTO, NO_RULES };
 })();

@@ -29,6 +29,9 @@ const TESTS = [
   // сначала самое дешёвое и самое важное: «собирается ли вообще» и свежесть сгенерированного
   { f: 'syntax-test.cjs', t: 120 },
   { f: 'make-errlog.mjs', args: ['--check'], t: 60 }, { f: 'make-arcade.mjs', args: ['--check'], t: 60 }, { f: 'gen-city-defs.cjs', args: ['--check'], t: 60 }, { f: 'gen-evo-defs.cjs', args: ['--check'], t: 60 },
+  { f: 'module-map.cjs', args: ['--check'], t: 60, optional: true },   // карта модулей docs/MODULES.md (план движка, шаг 0): устарела — предупреждение, перезапусти node scripts/module-map.cjs
+  { f: 'module-map-test.cjs', t: 60 },   // разборщики карты: RPC через обёртки rpc/sbRpc/rpcOk/pushRpc, флаги CI с '{THREE}' и env {…}
+  { f: 'sql-rest-test.cjs', t: 30 },     // разбор ответов scripts/sql-rest.cjs без сети: «нет функции» ≠ «неверные аргументы проверки»
   { f: 'routes-test.cjs' }, { f: 'pwa-test.cjs' }, { f: 'games-test.cjs' }, { f: 'auth-test.cjs' }, { f: 'age-test.cjs' },
   { f: 'xss-test.cjs', t: 300 },   // чужой текст не становится разметкой (T-011): разбор всех js/api + злые строки; ~30 с ЦП
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
@@ -39,6 +42,7 @@ const TESTS = [
   { f: 'world-zones-test.cjs' }, { f: 'world-leak-test.cjs' }, { f: 'city-test.cjs' }, { f: 'city-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'city-sim.cjs', args: ['--days', '60', '--players', '20,100'], t: 180 },
   { f: 'vehicle-test.cjs' }, { f: 'waves-test.cjs', retry: 1 }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' }, { f: 'cloud-test.cjs' },
   { f: 'terra-test.cjs', t: 180 },   // T-111: ядро рельефа T1 — terra.wasm и запасной JS бит в бит с эталоном Rust (scripts/terra-golden.txt), правки, поток
+  { f: 'core-world-test.cjs', t: 180 },   // C-002: общее ядро D37 на сайте (js/engine/core-world.js) — wasm и запасной JS бит в бит с эталоном ядра (hash/contact/world + M1/M2), падения wasm и потока, 30/60/144, поток ядра от GameKit.core (передача сессии), память на такт (через поток ≤ 450 Б, в потоке страницы ≤ 320 Б)
   { f: 'biomes-test.cjs', t: 180 },   // T-116: логичные биомы — «Кубомир» v4 и новая земля v2 (жара не рядом с зимой, без одиноких пятен), старые миры v1–v3 как были, D37E.biomes, странные миры
   { f: 'place-climate-test.cjs', t: 180 },   // T-145 (проверка): погода — свой климат места (саванна у пустыни без зимы, экватор без снега, на юге сезоны наоборот)
   { f: 'support-test.cjs', args: ['--fast'] }, { f: 'support-load-test.cjs', args: ['--fast'] }, { f: 'topple-test.cjs', args: ['--fast'] }, { f: 'debris-test.cjs', args: ['--fast'] }, { f: 'podzem-support-test.cjs', args: ['--fast'] }, { f: 'mir-support-test.cjs' },   // T-022a: обрушение и прочность — ядро D37E.support, «Подземье», боевая зона «Мира»
@@ -72,6 +76,7 @@ const TESTS = [
   { f: 'trees-e2e.cjs', args: ['studio', 'ci'], e2e: true, t: 600 },   // T-022b: деревья пород в «Студии 3D» — все породы ставятся (замеры, снимки, 10 мин игры — режимы вручную)
   { f: 'waves-e2e.cjs', args: ['look'], e2e: true, t: 600 },   // волны (T-022c): видеокарта = JS, шейдеры собрались, катер качается
   { f: 'world-reopen-e2e.cjs', args: ['20'], e2e: true, t: 900 },   // T-085: 20 раз закрыть и открыть «Мир Денчика» — прошлые миры уходят из памяти, счётчики — как до
+  { f: 'core-world-e2e.cjs', args: ['leak', '10'], e2e: true, t: 600 },   // C-002: «Новая земля» с ядром D37 10 раз открыть и закрыть — куча, потоки, счётчики ядра как до (режимы load / soak — руками, см. шапку файла)
   { f: 'terra-e2e.cjs', args: ['leak', '10'], e2e: true, t: 600 },   // T-111: «Терра» 10 раз закрыть и открыть — падает, если куча +6 МБ, живой поток, счётчики three.js не как до, ошибки в консоли
   { f: 'evo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },   // «Путь клетки»: род, эволюция, Лужа и Глубина, колония, ДНК (ПК и телефон)
   { f: 'menu-e2e.cjs', args: ['all'], env: { KB_WORLD: '0' }, e2e: true, t: 1500 },   // T-043: одно меню ☰ (мир, Кубомир, Подземье), окно ⚙️ (Главное, поиск), геймпад, скорость, утечки; T-090: память открытого мира целиком (ПК и телефон ×4, каждая зона — одна постройка), «Подземье»
