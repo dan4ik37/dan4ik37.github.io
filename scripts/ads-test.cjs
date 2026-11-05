@@ -632,8 +632,18 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(M.feed(grid, { place: 'feed_games', every: 10 }) === 0, 'короткий список — без рекламы');
   fill(40, i => i === 33 ? 'Открываю кейсы GGDROP' : 'Ролик ' + i);
   ok(M.feed(grid, { place: 'feed_videos', every: 12, start: 16, titles: grid.children.map(c => c.textContent) }) === 0, 'в списке есть ролик про кейсы — в нём рекламы нет совсем');
+  // 05.11.2026 (RULES.videoFeed = false): лента роликов на главной — одни данные YouTube; рекламы сетей и прямой нет, свои подсказки
+  ok(M.RULES.videoFeed === false, 'videoFeed выключен по умолчанию (лента роликов без рекламы)');
+  window.ADS_IDS.google = JSON.parse(JSON.stringify(IDS.google));
+  fill(40); yaCalls.length = 0; const n0 = T.st().n;
+  ok(M.feed(grid, { place: 'feed_videos', every: 12, start: 16, max: 3 }) === 2, 'лента роликов: 2 места (после 16-й и 28-й)');
+  const own = grid.children.filter(k => k.classList.contains('d37-feed'));
+  ok(own.length === 2 && own.every(c => c.classList.contains('d37-house') && !c.classList.contains('d37-ad') && c.querySelector('a') && !c.querySelector('ins') && !/Реклама/.test(c.textContent)) && !yaCalls.length && T.st().n === n0,
+    'лента роликов: сразу свои подсказки (игры сайта) — без Google/РСЯ, без «Реклама», не в счёт показов', own.map(c => c.outerHTML.slice(0, 120)));
+  window.ADS_IDS.google = {};
+  M.RULES.videoFeed = true;   // как было до 05.11 (откат одной строкой) — дальше проверки сети в ленте роликов
   fill(40);
-  ok(M.feed(grid, { place: 'feed_videos', every: 12, start: 16, max: 3 }) === 2 && grid.children[16].classList.contains('d37-feed'), 'видео: после 16-й и 28-й', grid.children.map(k => k.className).join(','));
+  ok(M.feed(grid, { place: 'feed_videos', every: 12, start: 16, max: 3 }) === 2 && grid.children[16].classList.contains('d37-feed') && !grid.children[16].classList.contains('d37-house'), 'videoFeed=true: видео — места под рекламу после 16-й и 28-й', grid.children.map(k => k.className).join(','));
   // нет рекламы у сети — своя подсказка (место не пустует и не прыгает)
   showIO(grid.children[16]); flushYa(); yaCalls.pop().alt();
   const hc = grid.children[16];
@@ -646,6 +656,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(a1.classList.contains('d37-house'), 'блокировщик: через 8 с пустая карточка «Реклама» → своя подсказка');
   YA.fill = true; showIO(a2); flushYa(); advance(8100); YA.fill = false;
   ok(a2.classList.contains('d37-ad') && !a2.classList.contains('d37-house') && a2.querySelector('iframe'), 'реклама пришла — карточка остаётся рекламой');
+  M.RULES.videoFeed = false;
   // строка на всю ширину (мелкие карточки «Студии игр»)
   fill(30);
   M.feed(grid, { place: 'feed_ugc', every: 8, row: true, max: 2 });

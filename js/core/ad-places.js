@@ -27,6 +27,11 @@
     // прямая реклама), блок Google после партии — один на экран игры и убирается, как только снова играешь.
     // Вернуть как было — false.
     gStrict: true,
+    // Лента роликов на главной (js/features/youtube.js): карточки — одни данные YouTube (название и превью), своего текста нет —
+    // как списки роликов на сервере (api/_lib/page.js VIDEO_LIST_ADS; AdSense — «скопированное без своего содержимого», YouTube API
+    // III.G.1.d). false: рекламы сетей и прямой между роликами нет, на месте карточки «Реклама» — своя подсказка (игры сайта).
+    // Вернуть как было — true.
+    videoFeed: false,
     places: {
       loading:      { delay: 1500, gap: 90, max: 6 },
       break:        { every: 3, first: 120, gap: 300, max: 4, desk: true },
@@ -419,15 +424,18 @@
     if (o.titles && gambling(o.titles)) { log(place, 'gambling'); return 0; }
     const r = why(place, { ignoreId: true, nocap: true });
     if (r) { log(place, r); return 0; }
-    if (!hasId(place) && !dbg.frames) { log(place, 'id'); return 0; }
+    // лента роликов (RULES.videoFeed = false): только свои подсказки, без сети и прямой рекламы — номер блока не нужен
+    const own = place === 'feed_videos' && RULES.videoFeed === false;
+    if (!own && !hasId(place) && !dbg.frames) { log(place, 'id'); return 0; }
     const s = st(), p = s.p.feed || {}, R = rule(place);
-    let left = Math.min(o.max ?? 3, dbg.nocaps ? 99 : (R.max ?? 99) - (p.n || 0), dbg.nocaps || !budget() ? 99 : budget() - s.n);
+    let left = own ? o.max ?? 3 : Math.min(o.max ?? 3, dbg.nocaps ? 99 : (R.max ?? 99) - (p.n || 0), dbg.nocaps || !budget() ? 99 : budget() - s.n);
     let n = 0;
     for (let i = start; i < items.length && n < left; i += every) {
       const c = document.createElement('div');
       c.className = 'd37-feed' + (o.row ? ' row' : '') + (o.cls ? ' ' + o.cls : '');
       c.dataset.place = place;
       items[i - 1].after(c); n++;
+      if (own) { house(c); log(place, 'own'); continue; }
       lazy(c, () => {
         if (why(place, { ignoreId: true, nocap: true })) { c.remove(); return; }   // пока листал, вошёл VIP
         if (!show(c, place, { checked: true, onEmpty: () => house(c) })) house(c);
@@ -660,8 +668,10 @@
       if (el.dataset.adDone) return;
       el.dataset.adDone = '1';
       const key = el.dataset.ad;
+      const feedCard = el.classList.contains('d37-feed');
+      if (feedCard && key === 'feed_videos' && RULES.videoFeed === false) { el.remove(); return; }   // лента роликов — без рекламы (RULES.videoFeed)
       const go = () => {
-        if (el.classList.contains('d37-feed')) { if (!show(el, key, { onEmpty: () => house(el) })) el.remove(); return; }
+        if (feedCard) { if (!show(el, key, { onEmpty: () => house(el) })) el.remove(); return; }
         if (!show(el, key)) el.hidden = true;
       };
       if (el.hasAttribute('data-ad-now')) { go(); return; }
