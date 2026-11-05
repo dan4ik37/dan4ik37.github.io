@@ -88,6 +88,8 @@ Russian). Read only the area file(s) your task needs — never all of them.
   open the changed game once in Chrome.
 - SQL Editor applies a file all-or-nothing. Check columns/functions on the live DB via REST before relying on them; new SQL
   adds what it needs itself. Test SQL in PGlite with stubs identical to the live DB. "Done" from the owner ≠ applied — verify.
+- `git rm --cached <f>` then `git commit -- <f>` RE-ADDS the file (pathspec commits take the working tree): to untrack, commit the
+  index without paths (05.11 the Miku VRM stayed public after efa4242). Check `git ls-files <f>` and the public URLs after.
 - Python with Russian text: `python -X utf8`; complex edits via a script file written with Write (bash heredocs with quotes or
   `$` break). In JS `s.replace(a, b)` treats `$` in b specially — use `s.replace(a, () => b)`.
 - `\u2028` / `\u200b` escapes become real characters when written via Write/heredoc — build them with String.fromCharCode, then
