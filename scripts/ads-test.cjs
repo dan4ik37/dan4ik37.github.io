@@ -1030,7 +1030,14 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
     const kub = GAME_PAGES.find(g => /майнкрафт/i.test(g.title));
     const gk = mkRes(); game({ query: { id: kub.id } }, gk);
     ok(/class="tm-note">«Minecraft»[^<]*товарный знак его владельца; игра не связана с ним и не является официальной/.test(gk.html), `/games/${kub.id}: строка про товарный знак Minecraft`);
-    const plain = GAME_PAGES.find(g => !TM.trademarksIn(g.name, g.title, g.h1, g.description, g.lead).length);
+    // 05.11.2026: по настоящему списку игр — Windows (Сапёр, Косынка, Паук, Свободная ячейка), Block Blast и 1010!, Ludo King, UNO,
+    // Wordle, GTA, Марио, Unity; весь видимый текст страницы (правила, советы, вопросы), границы слов
+    const tmOf = id => { const r = mkRes(); game({ query: { id } }, r); return (/<p class="tm-note">([^<]*)<\/p>/.exec(r.html) || [])[1] || ''; };
+    for (const [id, names] of [['miner', ['Windows']], ['kosynka', ['Windows']], ['pauk', ['Windows']], ['freecell', ['Windows']], ['blocks', ['Block Blast', '1010!']], ['ludo', ['Ludo King']], ['uno', ['UNO']], ['words', ['Wordle']], ['unity', ['Unity']], ['emoji', ['Grand Theft Auto', 'Super Mario', 'Tetris']]])
+      if (GAME_PAGES.some(g => g.id === id)) { const t = tmOf(id); ok(names.every(n => t.includes(`«${n}»`)), `/games/${id}: строка про товарный знак ${names.join(', ')}`, t); }
+    ok(['community', 'рисунок', 'уночи', 'Юнона', 'Маринованный'].every(w => !TM.trademarksIn(w).length) && TM.trademarksIn('как Уно онлайн').join() === 'UNO' && TM.trademarksIn('ГТА 5').join() === 'Grand Theft Auto' && TM.trademarksIn('Robux').join() === 'Roblox',
+      'trademarksIn: границы слов (community, рисунок — нет; Уно, ГТА, Robux — да)');
+    const plain = GAME_PAGES.find(g => !TM.trademarksIn(g.name, g.title, g.h1, g.description, g.lead, ...[g.features, g.rules, g.tips, g.faq].flat(2)).length);
     const gp0 = mkRes(); game({ query: { id: plain.id } }, gp0);
     ok(!/class="tm-note"/.test(gp0.html), `/games/${plain.id}: без чужих названий — без строки`);
     const { default: quiz } = await imp('api/_lib/routes/quiz.js');

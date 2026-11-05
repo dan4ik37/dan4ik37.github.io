@@ -45,7 +45,7 @@ export default function handler(req, res) {
   ${topic ? `<aside class="join"><div><b>Ролики по ${esc(topic.name)} на канале</b><span>${esc(topic.about)}</span></div><a class="btn btn-acc" href="/topic/${topic.slug}">▶ Смотреть</a></aside>` : `<aside class="join"><div><b>Канал dan4ik37</b><span>Тысячи игровых роликов, стримы и живой чат.</span></div><a class="btn btn-acc" href="/about">Кто такой dan4ik37</a></aside>`}
   <section class="box"><h2>Другие тесты</h2><div class="qz-cards">${others.map(card).join('')}</div>
     <p class="muted" style="margin-top:.8rem">А ещё — <a href="/games">игры с друзьями онлайн</a>: «5 букв», морской бой, города.</p></section>
-  ${tmNote('тест', Q.title, Q.lead)}
+  ${tmNote('тест', Q.title, Q.lead, ...Q.results.flatMap(r => [r.name, r.text]), ...Q.questions.flatMap(x => [x.q, ...x.a.map(a => a.t)]))}
 </main>`;
   const data = { slug: Q.slug, title: Q.title, results: Q.results, questions: Q.questions };
   const script = `

@@ -6,6 +6,8 @@
 // Тексты — api/_lib/games-seo.js.
 import { SITE, esc } from './_lib/yt.js';
 import { tmNote, TM_CSS } from './_lib/trademarks.js';   // «X» — товарный знак владельца (игры «как X»)
+// весь видимый текст страницы игры (названия чужих игр бывают и в правилах, советах, вопросах — «Это Block Blast?»)
+const gameTexts = g => [g.name, g.title, g.h1, g.description, g.lead, ...[g.features, g.rules, g.tips, g.faq].flat(2)];
 import { page } from './_lib/page.js';
 import { GAME_PAGES, HUB, scoreLabel } from './_lib/games-seo.js';
 import { GAME_AGE, ageBadge } from './_lib/age.js';
@@ -163,7 +165,7 @@ function gamePage(g, ch) {
   <section class="more"><h2>Другие игры</h2><div class="ggrid">${others.map(card).join('')}</div>
     <p class="all"><a href="/games">Все игры →</a></p></section>
   ${joinBlock()}
-  ${tmNote('игра', g.name, g.title, g.h1, g.description, g.lead)}
+  ${tmNote('игра', ...gameTexts(g))}
 </main>`;
   // canonical — всегда чистый /games/<id>, чтобы вызовы не плодили дубли в поиске
   const verb = g.id === 'words' ? 'угадал слово' : 'набрал';
