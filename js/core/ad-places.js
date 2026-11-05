@@ -168,7 +168,7 @@
   const ugcRoute = () => /^#\/games\/(?:studio|unity)\/(?:play|edit|new|mod)\b|^#\/games\/studio3d\/(?:play|join)\b/.test(routeHash());
   const isOn = c => c === 'ugc' ? ugcRoute() || ctxOn.has(c) : c === 'playing' ? G.playing || ctxOn.has(c) : ctxOn.has(c);
   // Ролики про кейсы/промокоды на депозит — как GAMBLING_RE в api/_lib/yt.js (тест сверяет)
-  const GAMBLING_RE = /ggdrop|ггдроп|case\s*battle|casebattle|кейс\s*батл|кейсбатл|казино|casino|промокод на деп|\bдеп\b|депозит|рулетк|ставк[аиу]/i;
+  const GAMBLING_RE = /ggdrop|ггдроп|case\s*battle|casebattle|кейс\s*батл|кейсбатл|казино|casino|промокод на деп|(?:^|[^а-яёa-z0-9_])деп(?![а-яёa-z0-9_])|депозит|рулетк|ставк[аиу]/i;
   const gambling = list => (list || []).some(t => GAMBLING_RE.test(String(t || '')));
 
   // ── Номера блоков ──
