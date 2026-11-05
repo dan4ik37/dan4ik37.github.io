@@ -936,6 +936,11 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   // крючки: что и где подключено (если кто-то случайно удалит строку при слиянии)
   const has = (f, re, name) => ok(re.test(read(f)), name);
   has('index.html', /ads-core\.js"><\/script>\s*<script src="js\/core\/ad-places\.js"><\/script>/, 'index.html: ad-places.js сразу после ads-core.js');
+  // 05.11.2026: /privacy (privacy.html, ссылка в подвале каждой страницы) — Метрика, сторонние поставщики рекламы, дети; без заметок для юриста
+  has('privacy.html', /Яндекс Метрик[аи][\s\S]*Вебвизор\) выключена/, 'privacy.html: Яндекс Метрика (cookies, Вебвизор выключен)');
+  has('privacy.html', /Сторонние поставщики, в том числе Google, используют cookies[\s\S]*aboutads\.info/, 'privacy.html: сторонние поставщики (Google) и отказ — aboutads.info');
+  has('privacy.html', /id="kids"[\s\S]*Родителям/, 'privacy.html: раздел «Дети» (что хранится, защита, как удалить)');
+  ok(!/\[Текст для юриста|сейчас — через Kaspi/.test(read('privacy.html')), 'privacy.html: без «[Текст для юриста…]» и «сейчас — через Kaspi»');
   has('index.html', /pauseAdRequests=1}catch\(e\){}<\/script>\s*<script async src="https:\/\/pagead2/, 'index.html: пауза AdSense для VIP — до скрипта AdSense');
   has('js/features/games.js', /D37AdPlaces\?\.loading\(\{ anchor: box\.firstChild, game: id/, 'games.js: экран загрузки игры');
   has('js/features/games.js', /finally \{ adL\?\.done\(\); \}/, 'games.js: загрузка кончилась — реклама убирается');
