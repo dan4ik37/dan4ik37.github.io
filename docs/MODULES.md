@@ -148,7 +148,7 @@ Serverless functions (api/*.js outside _lib; Vercel Hobby limit 12): 10 — api/
 
 ## 2. Games
 
-js/features/games.js: 87 rows, GAMES_VER '161' (bump on any game / engine file change; merge rule: skill d37-merge). Lists: T145_ROWS 2, GAMES 84, GAMES_HIDDEN 1.
+js/features/games.js: 87 rows, GAMES_VER '162' (bump on any game / engine file change; merge rule: skill d37-merge). Lists: T145_ROWS 2, GAMES 84, GAMES_HIDDEN 1.
 
 | Game | List | Age | Title | Scripts | Own scripts (not js/engine, js/core) |
 |---|---|---|---|---|---|
