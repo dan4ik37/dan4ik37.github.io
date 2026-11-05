@@ -5,7 +5,7 @@ shared board: E:\d37-core\spec\BOARD.md; site board: docs/TASKS.md.
 
 ## 1. Routes
 
-SPA sections: js/ui/router.js `PAGES` (20); service-worker shell: sw.js `SPA_PATH`; rewrites: vercel.json (72); server pages: api/pages.js `ROUTES`.
+SPA sections: js/ui/router.js `PAGES` (20); service-worker shell: sw.js `SPA_PATH`; rewrites: vercel.json (73); server pages: api/pages.js `ROUTES`.
 
 | Section id | URL | Page blocks | sw.js shell | vercel.json rewrite |
 |---|---|---|---|---|
@@ -30,7 +30,7 @@ SPA sections: js/ui/router.js `PAGES` (20); service-worker shell: sw.js `SPA_PAT
 | photo | /photo | photo-page | yes | /photo → /index.html; /photo/:path+ → /index.html |
 | ai3d | /tools/3d | ai3d-page | yes | /tools/3d → /index.html; /tools/3d/:path+ → /index.html |
 
-Server pages (api/pages.js ROUTES, 32; one Vercel function serves them all):
+Server pages (api/pages.js ROUTES, 33; one Vercel function serves them all):
 
 | Key | Module |
 |---|---|
@@ -65,6 +65,7 @@ Server pages (api/pages.js ROUTES, 32; one Vercel function serves them all):
 | ugc | api/_lib/routes/ugc.js |
 | videos | api/_lib/routes/videos.js |
 | vip | api/_lib/routes/vip.js |
+| vstats | api/_lib/routes/vstats.js |
 | wheel | api/_lib/routes/wheel.js |
 
 Vercel rewrites (vercel.json, in file order — order matters):
@@ -83,66 +84,67 @@ Vercel rewrites (vercel.json, in file order — order matters):
 | 10 | /api/raid | /api/pages?page=raid |
 | 11 | /api/diag | /api/pages?page=diag |
 | 12 | /api/feed | /api/pages?page=feed |
-| 13 | /history | /api/pages?page=history |
-| 14 | /tools/nick | /api/pages?page=nick |
-| 15 | /tools/fonts | /api/pages?page=fonts |
-| 16 | /tools/cps | /api/pages?page=cps |
-| 17 | /tools/wheel | /api/pages?page=wheel |
-| 18 | /tools/random | /api/pages?page=random |
-| 19 | /tools/typing | /api/pages?page=typing |
-| 20 | /tools/photo | /api/pages?page=photo |
-| 21 | /quiz | /api/pages?page=quiz |
-| 22 | /quiz/:slug | /api/pages?page=quiz&slug=:slug |
-| 23 | /topics | /api/pages?page=topic |
-| 24 | /topic/:slug | /api/pages?page=topic&slug=:slug |
-| 25 | /videos | /api/pages?page=videos |
-| 26 | /top | /api/pages?page=top |
-| 27 | /studio | /api/pages?page=ugc |
-| 28 | /g/:id | /api/pages?page=ugc&id=:id |
-| 29 | /c/:code | /api/pages?page=invite&code=:code |
-| 30 | /r/:code | /api/pages?page=r&code=:code |
-| 31 | /go/:id | /api/pages?page=go&id=:id |
-| 32 | /api/geo | /api/pages?page=geo |
-| 33 | /ads-terms | /api/pages?page=adsterms |
-| 34 | /auth/:p/start | /api/pages?page=oauth&a=start&p=:p |
-| 35 | /auth/:p/callback | /api/pages?page=oauth&a=callback&p=:p |
-| 36 | /api/oauth | /api/pages?page=oauth |
-| 37 | /games | /api/game |
-| 38 | /games/:id | /api/game?id=:id |
-| 39 | /forum | /api/pages?page=forum |
-| 40 | /forum/:id | /api/pages?page=forum&id=:id |
-| 41 | /ideas | /api/pages?page=ideas |
-| 42 | /ideas/:id | /api/pages?page=ideas&id=:id |
-| 43 | /sitemap.xml | /api/sitemap |
-| 44 | /sitemap-videos.xml | /api/sitemap?part=videos |
-| 45 | /sitemap-pages.xml | /api/sitemap?part=pages |
-| 46 | /privacy | /privacy.html |
-| 47 | /play | /index.html |
-| 48 | /play/:path+ | /index.html |
-| 49 | /chat | /index.html |
-| 50 | /chat/:path+ | /index.html |
-| 51 | /profile | /index.html |
-| 52 | /profile/:path+ | /index.html |
-| 53 | /phone | /index.html |
-| 54 | /phone/:path+ | /index.html |
-| 55 | /shorts | /index.html |
-| 56 | /shorts/:path+ | /index.html |
-| 57 | /invite | /index.html |
-| 58 | /invite/:path+ | /index.html |
-| 59 | /adv | /index.html |
-| 60 | /adv/:path+ | /index.html |
-| 61 | /donate | /index.html |
-| 62 | /poll | /index.html |
-| 63 | /soundboard | /index.html |
-| 64 | /clicker | /index.html |
-| 65 | /lfg | /index.html |
-| 66 | /ads | /index.html |
-| 67 | /app | /index.html |
-| 68 | /photo | /index.html |
-| 69 | /photo/:path+ | /index.html |
-| 70 | /tools/3d | /index.html |
-| 71 | /tools/3d/:path+ | /index.html |
-| 72 | /shop/:path+ | /index.html |
+| 13 | /api/vstats | /api/pages?page=vstats |
+| 14 | /history | /api/pages?page=history |
+| 15 | /tools/nick | /api/pages?page=nick |
+| 16 | /tools/fonts | /api/pages?page=fonts |
+| 17 | /tools/cps | /api/pages?page=cps |
+| 18 | /tools/wheel | /api/pages?page=wheel |
+| 19 | /tools/random | /api/pages?page=random |
+| 20 | /tools/typing | /api/pages?page=typing |
+| 21 | /tools/photo | /api/pages?page=photo |
+| 22 | /quiz | /api/pages?page=quiz |
+| 23 | /quiz/:slug | /api/pages?page=quiz&slug=:slug |
+| 24 | /topics | /api/pages?page=topic |
+| 25 | /topic/:slug | /api/pages?page=topic&slug=:slug |
+| 26 | /videos | /api/pages?page=videos |
+| 27 | /top | /api/pages?page=top |
+| 28 | /studio | /api/pages?page=ugc |
+| 29 | /g/:id | /api/pages?page=ugc&id=:id |
+| 30 | /c/:code | /api/pages?page=invite&code=:code |
+| 31 | /r/:code | /api/pages?page=r&code=:code |
+| 32 | /go/:id | /api/pages?page=go&id=:id |
+| 33 | /api/geo | /api/pages?page=geo |
+| 34 | /ads-terms | /api/pages?page=adsterms |
+| 35 | /auth/:p/start | /api/pages?page=oauth&a=start&p=:p |
+| 36 | /auth/:p/callback | /api/pages?page=oauth&a=callback&p=:p |
+| 37 | /api/oauth | /api/pages?page=oauth |
+| 38 | /games | /api/game |
+| 39 | /games/:id | /api/game?id=:id |
+| 40 | /forum | /api/pages?page=forum |
+| 41 | /forum/:id | /api/pages?page=forum&id=:id |
+| 42 | /ideas | /api/pages?page=ideas |
+| 43 | /ideas/:id | /api/pages?page=ideas&id=:id |
+| 44 | /sitemap.xml | /api/sitemap |
+| 45 | /sitemap-videos.xml | /api/sitemap?part=videos |
+| 46 | /sitemap-pages.xml | /api/sitemap?part=pages |
+| 47 | /privacy | /privacy.html |
+| 48 | /play | /index.html |
+| 49 | /play/:path+ | /index.html |
+| 50 | /chat | /index.html |
+| 51 | /chat/:path+ | /index.html |
+| 52 | /profile | /index.html |
+| 53 | /profile/:path+ | /index.html |
+| 54 | /phone | /index.html |
+| 55 | /phone/:path+ | /index.html |
+| 56 | /shorts | /index.html |
+| 57 | /shorts/:path+ | /index.html |
+| 58 | /invite | /index.html |
+| 59 | /invite/:path+ | /index.html |
+| 60 | /adv | /index.html |
+| 61 | /adv/:path+ | /index.html |
+| 62 | /donate | /index.html |
+| 63 | /poll | /index.html |
+| 64 | /soundboard | /index.html |
+| 65 | /clicker | /index.html |
+| 66 | /lfg | /index.html |
+| 67 | /ads | /index.html |
+| 68 | /app | /index.html |
+| 69 | /photo | /index.html |
+| 70 | /photo/:path+ | /index.html |
+| 71 | /tools/3d | /index.html |
+| 72 | /tools/3d/:path+ | /index.html |
+| 73 | /shop/:path+ | /index.html |
 
 Serverless functions (api/*.js outside _lib; Vercel Hobby limit 12): 10 — api/auth.js, api/donations.js, api/game.js, api/pages.js, api/pay.js, api/push-check.js, api/sitemap.js, api/socket-token.js, api/video.js, api/vip-sync.js.
 
@@ -1056,7 +1058,7 @@ Called but not defined in any root .sql (built-in, removed, or a typo — check)
 
 ## 4. Tests
 
-scripts/ci-run.cjs runs 129 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take E:\claude-tmp\HEAVY.lock first (E:\d37-core\spec\HEAVY_LOCK.md).
+scripts/ci-run.cjs runs 127 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take E:\claude-tmp\HEAVY.lock first (E:\d37-core\spec\HEAVY_LOCK.md).
 
 | CI entry | Flags |
 |---|---|
@@ -1080,9 +1082,7 @@ scripts/ci-run.cjs runs 129 entries (= GitHub Actions on push; `--e2e` adds the 
 | ops-sql-test.mjs | needs pglite, t 180 s |
 | ads-test.cjs | — |
 | ad-direct-test.cjs | — |
-| pay-test.cjs | — |
-| referral-test.cjs | — |
-| economy-test.cjs | — |
+| video-test.cjs | — |
 | community-test.cjs | — |
 | settings-test.cjs | — |
 | ui-test.cjs | — |
@@ -1190,4 +1190,4 @@ scripts/ci-run.cjs runs 129 entries (= GitHub Actions on push; `--e2e` adds the 
 | t145-e2e.cjs | args pc terra, e2e, t 900 s |
 | t145-e2e.cjs | args pc kubomir, e2e, t 900 s |
 
-Test / e2e / perf scripts NOT in the CI list (22; run by hand when their area changes): ailod-bench.cjs, ailod-e2e.cjs, anim-e2e.cjs, arcade-e2e.cjs, climate-e2e.cjs, economy-sim.cjs, hud2-e2e.cjs, iogames-e2e.cjs, iogames-online-e2e.cjs, kubomir-coop-e2e.cjs, kubomir-e2e.cjs, kubomir-look-e2e.cjs, kubomir-qol-e2e.cjs, make-raid-sim.mjs, planet-perf.cjs, podzem-fire-e2e.cjs, podzem-sim.cjs, podzem-support-e2e.cjs, raid-e2e.cjs, room-net-e2e.cjs, studio-fire-e2e.cjs, world-perf.cjs.
+Test / e2e / perf scripts NOT in the CI list (25; run by hand when their area changes): ailod-bench.cjs, ailod-e2e.cjs, anim-e2e.cjs, arcade-e2e.cjs, climate-e2e.cjs, economy-sim.cjs, economy-test.cjs, hud2-e2e.cjs, iogames-e2e.cjs, iogames-online-e2e.cjs, kubomir-coop-e2e.cjs, kubomir-e2e.cjs, kubomir-look-e2e.cjs, kubomir-qol-e2e.cjs, make-raid-sim.mjs, pay-test.cjs, planet-perf.cjs, podzem-fire-e2e.cjs, podzem-sim.cjs, podzem-support-e2e.cjs, raid-e2e.cjs, referral-test.cjs, room-net-e2e.cjs, studio-fire-e2e.cjs, world-perf.cjs.
