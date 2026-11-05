@@ -31,5 +31,13 @@
 - GGDROP banner on streams May 2025 - Jan 2026: every video of that window is hidden (yt.js HIDE_GG_WINDOW, GG_WINDOW).
 - Shorts: /v/<id> noindex, not in sitemap-videos (2651 long videos left). App routes /donate /lfg /soundboard /poll /clicker are
   not in sitemap-pages (the server returns the home HTML there). /play/* — X-Robots-Tag noindex; /index.html → / (308).
+- Round 2 (05.11): home video grid has no network/direct ads between YouTube cards, own promo cards only (ad-places.js
+  ADS_RULES.videoFeed = false). Unfilled / blocked Google units never shift the page: below the screen the slot is removed, on or above
+  the screen it becomes own promo of the same height (ADS_RULES.settle, guard() watches data-ad-status, adsbygoogle.loaded and the
+  adblock stub); server slots are inserted only while still below the screen (lazyBelow). No after-round unit while fullscreen.
+  Share landings with own content (/tools/cps?s= without a nick, /tools/typing?s=, /quiz/<slug>?r=) are noindex but keep ads
+  (page.js share, SHARE_ADS). /terms and /refund: no «Документ готовится», noindex + not in sitemap until seller.js is filled.
+  trademarks.js covers Windows, Block Blast, 1010!, Ludo King, UNO, Wordle, GTA, Mario, Unity (whole page text). YouTube snapshot
+  refreshed 2026-11-05 (rerun scripts/snapshot-uploads.mjs at least every 30 days). Watch achievements hidden (XP_WATCH).
 - Owner-only (AdSense UI): Auto ads off or page exclusions (/play, /chat, /phone, /profile, /adv, /invite), EEA consent message,
   blocking controls (gambling, dating, alcohol), «Запросить проверку» after deploy; GitHub Pages mirror off (Settings → Pages).
