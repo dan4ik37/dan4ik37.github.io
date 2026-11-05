@@ -148,12 +148,12 @@ Serverless functions (api/*.js outside _lib; Vercel Hobby limit 12): 10 — api/
 
 ## 2. Games
 
-js/features/games.js: 87 rows, GAMES_VER '160' (bump on any game / engine file change; merge rule: skill d37-merge). Lists: T145_ROWS 2, GAMES 84, GAMES_HIDDEN 1.
+js/features/games.js: 87 rows, GAMES_VER '161' (bump on any game / engine file change; merge rule: skill d37-merge). Lists: T145_ROWS 2, GAMES 84, GAMES_HIDDEN 1.
 
 | Game | List | Age | Title | Scripts | Own scripts (not js/engine, js/core) |
 |---|---|---|---|---|---|
 | planet | T145_ROWS | 0+ | Планета | 25 | js/games/world3d.js, js/games/planet-demo.js |
-| terra | T145_ROWS | 0+ | Новая земля | 25 | js/games/world3d.js, js/games/terra-demo.js |
+| terra | T145_ROWS | 0+ | Новая земля | 23 | js/games/world3d.js, js/games/terra-demo.js |
 | world | GAMES | 12+ | Мир Денчика | 47 | js/games/room.js, js/games/world3d.js, js/games/charedit.js, js/games/world.js, js/games/mir-support.js, js/games/mir-fire.js, js/games/mir-play.js, js/games/mir-base.js, js/games/mir-zones.js, js/games/mir-econ.js, js/games/mir-city.js, js/games/mir-war.js, js/games/mir-veh.js, js/games/mir.js |
 | kletochki | GAMES | 6+ | Клеточки | 7 | js/games/room.js, js/games/netplay.js, js/games/iokit.js, js/games/evo.js, js/games/kletochki.js, js/games/kletochki-path.js |
 | chervyachki | GAMES | 6+ | Червячки | 5 | js/games/room.js, js/games/netplay.js, js/games/iokit.js, js/games/chervyachki.js |
@@ -254,9 +254,9 @@ Engine files → games that load them (a change here means: bump GAMES_VER, open
 | js/engine/clock.js | 11.9 | planet |
 | js/engine/combat.js | 26.1 | kubomir |
 | js/engine/controls.js | 27.0 | kubomir, planet, podzem, studio3d, terra, world |
-| js/engine/core-world.js | 49.3 | terra |
+| js/engine/core-world.js | 58.5 | — (not in any game's scripts) |
 | js/engine/core.js | 8.0 | kubomir, planet, podzem, studio3d, terra, world |
-| js/engine/d37core.js | 65.6 | terra |
+| js/engine/d37core.js | 65.6 | — (not in any game's scripts) |
 | js/engine/debris.js | 13.7 | kubomir |
 | js/engine/destruct.js | 25.2 | world |
 | js/engine/edit-input.js | 10.2 | studio3d |

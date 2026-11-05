@@ -926,7 +926,7 @@
    "fn": "<top>",
    "k": "sink:importScripts [importScripts]",
    "c": "url-checked",
-   "n": "свой путь d37core.js рядом с файлом + только ?v=<версия игр> (проверено регуляркой); поток запускает только D37CoreWorld.host",
+   "n": "свой путь d37core.js рядом с файлом + только ?v=<версия игр> (проверено регуляркой); поток запускают только D37CoreWorld.host и GameKit.core (js/games/gamekit.js), оба — свой путь js/engine/core-world.js",
    "xs": [
     "'d37core.js' + qv"
    ]

@@ -743,7 +743,7 @@
     // tickMs — the core's own time per tick (in the worker when there is one); mainMs = sendMs + recvMs — what the tick costs the
     // page's main thread (copy in / out, postMessage, result handling incl. onTick): C-012 budget ≤ 0.3 ms dev PC, ≤ 1 ms phone ×4
     var st = { ticks: 0, cmds: 0, applied: 0, refused: 0, events: 0, tickMs: 0, tickMax: 0, rtMs: 0, backlog: 0, resets: 0, overflows: 0, errors: 0, pages: 0, early: 0,
-      sendMs: 0, recvMs: 0, mainMs: 0, mainMax: 0 };
+      sendMs: 0, recvMs: 0, mainMs: 0, mainMax: 0, sendSum: 0, recvSum: 0 }; // *Sum: totals in ms (a window's average = Δsum / Δticks)
     // opts.t0 — when the game asked for the core (GameKit.core: before d37core.js / core-world.js were on the page), so readyMs is
     // load + init as the game sees it; opts.adopt — the core Worker it already started (used once: a reset makes a new host)
     var t0s = opts.t0 || now(), adopt = opts.adopt || null;
@@ -770,6 +770,7 @@
         sendTick();
         var dt = now() - t0;
         st.sendMs = st.sendMs ? st.sendMs * 0.9 + dt * 0.1 : dt;
+        st.sendSum += dt;
         if (dt > st.mainMax) st.mainMax = dt;
         st.mainMs = st.sendMs + (s.transport === 'worker' ? st.recvMs : 0); // in-thread: the result is handled inside the send
       },
@@ -819,6 +820,7 @@
       gotRes(r, k);
       var dt = now() - t1;
       st.recvMs = st.recvMs ? st.recvMs * 0.9 + dt * 0.1 : dt;
+      st.recvSum += dt;
       if (dt > st.mainMax) st.mainMax = dt;
       st.mainMs = st.sendMs + (s.transport === 'worker' ? st.recvMs : 0); // in-thread: the result is handled inside the send
     }

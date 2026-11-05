@@ -13,7 +13,7 @@
 //     in-thread, onReset re-sends; missing worker script → in-thread; no ready → in-thread; wasm trap → reset
 //   8b a Worker the game started first (GameKit.core) adopted by the host (== the 12 runs' hash; failed script → in-thread); the
 //     worker's wasm prefetch over HTTP (compiled while its scripts load; corrupted → JS fallback); main-thread allocations per tick on
-//     both transports (sampling heap profiler, attributed to core-world.js): worker ≤ 400 B, in-thread ≤ 160 B
+//     both transports (sampling heap profiler, attributed to core-world.js): worker ≤ 450 B, in-thread ≤ 320 B
 //   9 numbers (node, this PC): load + init, 10 000 commands, a session tick
 // Prints one summary line; exit 1 on any FAIL.
 'use strict';
@@ -650,10 +650,12 @@ const out = {};
     }
     await post('HeapProfiler.disable'); ses.disconnect();
     out.allocPerTick = res;
-    // worker: the one Int32Array over the returned tick buffer + timing reads (performance.now) — was 753 + 524 (views) B before
-    // the C002-R3 fix; in-thread: timing reads only (node's performance.now allocates)
-    ok(res.worker.ours <= 400, `worker path allocates ${res.worker.ours} B per tick in core-world.js (≤ 400)`);
-    ok(res.inline.ours <= 160, `in-thread path allocates ${res.inline.ours} B per tick in core-world.js (≤ 160)`);
+    // worker: the one Int32Array over the returned tick buffer (104 B) + timing reads (performance.now and the stats' doubles) —
+    // 1 241–1 333 B before the C002-R3 fix (a closure, arrays, a queue entry, a message object, subarray + 4 views per tick);
+    // in-thread: timing reads only. The bounds leave room for a less optimised JIT state (the interpreter boxes the stats' double
+    // intermediates: up to ~230 B more per tick seen in a second session) and still catch any object or view made per tick again
+    ok(res.worker.ours <= 450, `worker path allocates ${res.worker.ours} B per tick in core-world.js (≤ 450)`);
+    ok(res.inline.ours <= 320, `in-thread path allocates ${res.inline.ours} B per tick in core-world.js (≤ 320)`);
     console.log('allocations per tick (main thread, sampling heap profiler): ' + lines.join('; '));
   }
 

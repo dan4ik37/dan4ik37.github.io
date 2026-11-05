@@ -420,7 +420,7 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
       await ev(`${T}.fly(false)`); await ev(`${T}.look(${yaw})`); await ev(`${T}.move(0, 1, true)`);
       await ev(`(window.__trS.f = [], window.__trS.on = true)`);
       const t0 = Date.now();
-      let nextDig = 60000, minuteAt = 60000;
+      let nextDig = 60000, minuteAt = 60000, prevSum = 0, prevTicks = 0;
       while (Date.now() - t0 < min * 60000) {
         await sleep(1000);
         const [x, z] = await pos();
@@ -434,8 +434,11 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
           minuteAt += 60000;
           const f = summary(await ev(`(() => { const f = window.__trS.f; window.__trS.f = []; return f; })()`));
           const c = await ev(`${T}.core()`), pages = await ev(`${T}.S.core.s.host.pages()`);
+          // the core's main-thread cost per tick, averaged over this minute (sums), the EMA is only a point sample
+          const sum = c.stats.sendSum + c.stats.recvSum, mainAvg = c.stats.ticks > prevTicks ? (sum - prevSum) / (c.stats.ticks - prevTicks) : 0;
+          prevSum = sum; prevTicks = c.stats.ticks;
           const m = { min: out.minutes.length + 1, distM: Math.round(dist), heap: await heap(), errors: logs.length, fps: f.fps, cpuAvg: f.cpuAvg, cpuP95: f.cpuP95, long50: f.long50,
-            ticks: c.stats.ticks, tickMs: +c.stats.tickMs.toFixed(4), mainMs: +c.stats.mainMs.toFixed(4), mainMax: +c.stats.mainMax.toFixed(3), rtMs: +c.stats.rtMs.toFixed(2), pages, resets: c.stats.resets, coreErr: c.stats.errors, backend: c.backend, transport: c.transport };
+            ticks: c.stats.ticks, tickMs: +c.stats.tickMs.toFixed(4), mainAvg: +mainAvg.toFixed(4), mainMs: +c.stats.mainMs.toFixed(4), mainMax: +c.stats.mainMax.toFixed(3), rtMs: +c.stats.rtMs.toFixed(2), pages, resets: c.stats.resets, coreErr: c.stats.errors, backend: c.backend, transport: c.transport };
           out.minutes.push(m); console.log('  ', JSON.stringify(m));
         }
       }
@@ -445,8 +448,8 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
       check(M.length >= Math.min(10, min), 'too few minutes measured');
       check(out.distM >= 2000 || min < 10, `walked ${out.distM} m < 2 km`);
       if (a && b) {
-        out.flat = { cpuMin1: a.cpuAvg, cpuMin10: b.cpuAvg, mainMin1: a.mainMs, mainMin10: b.mainMs, pagesMin1: a.pages, pagesLast: M[M.length - 1].pages };
-        check(b.mainMs <= a.mainMs * 1.05 + 0.005, `core main-thread cost minute-10 ${b.mainMs} > minute-1 ${a.mainMs} + 5 %`);
+        out.flat = { cpuMin1: a.cpuAvg, cpuMin10: b.cpuAvg, mainMin1: a.mainAvg, mainMin10: b.mainAvg, mainEmaMin1: a.mainMs, mainEmaMin10: b.mainMs, pagesMin1: a.pages, pagesLast: M[M.length - 1].pages };
+        check(b.mainAvg <= a.mainAvg * 1.05 + 0.005, `core main-thread cost (minute average) minute-10 ${b.mainAvg} > minute-1 ${a.mainAvg} + 5 %`);
         check(M[M.length - 1].pages === a.pages, `wasm pages ${a.pages} → ${M[M.length - 1].pages}`);
         out.flat.frameCpuFlat = b.cpuAvg <= a.cpuAvg * 1.05;   // frame CPU: terrain-dependent, reported (the core's own share is mainMs)
       }
