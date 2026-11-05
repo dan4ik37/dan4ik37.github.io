@@ -1,4 +1,4 @@
-> Owner-approved Codex repair work is isolated in separate copies. Read [CODEX_REPAIR_NOTICE.md](CODEX_REPAIR_NOTICE.md) and the live status before integrating changes.
+> Codex (owner-approved, 31.10–03.11) worked only in separate copies; all its documents are read and mapped in E:\d37-core\spec\ENGINE_PLAN_2026-11_ADDENDUM.md (Appendix A) and the action plan E:\d37-core\spec\MASTER_PLAN.md. Its notices: E:\d37-core\spec\source\codex-notices\. Never copy a Codex copy over the originals.
 
 > NORTH STAR (owner 04.11): the overall goal and checklist are in E:\d37-core\spec\GOAL.md — read it first when resuming.
 
