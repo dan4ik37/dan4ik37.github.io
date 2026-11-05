@@ -353,7 +353,6 @@ const WEEKLY_QUESTS = {
   w_hard1:     { slot: 5, n: 1, stat: 'hard', icon: '💪', text: 'Победи компьютер на самом сложном уровне', go: '/play' },
   w_boards4:   { slot: 5, n: 4, stat: 'boards', icon: '♟️', text: 'Выиграй 4 партии в настольные или карточные игры', go: '/play' },
   w_visit5:    { slot: 6, n: 5, stat: 'visits', icon: '📅', text: 'Заходи на сайт 5 разных дней', go: null },
-  w_watch5:    { slot: 6, n: 5, stat: 'watch', icon: '📺', text: 'Посмотри 5 роликов на сайте (от минуты)', go: '/' },
   w_puzzle5:   { slot: 6, n: 5, stat: 'puzzles', icon: '🧩', text: 'Реши 5 головоломок: судоку, пасьянсы, сапёр, маджонг, филворд', go: '/play' },
 };
 // Лестница сезона — как season_ladder(): coins — 🪙, title — 1 «участник» / 2 «легенда», item — вещь темы, frame — рамка темы

@@ -275,6 +275,7 @@ create or replace function public.quest_week(p_day date default (now() at time z
 returns date language sql immutable as $$ select p_day - (extract(isodow from p_day)::int - 1) $$;
 grant execute on function public.quest_week(date) to anon, authenticated;
 
+-- 05.11.2026: без w_watch5 («Посмотри 5 роликов») — награды за просмотр YouTube запрещены правилами YouTube API (III.F.3.c)
 create or replace function public.weekly_quest_pool() returns jsonb language sql immutable as $$
   select '[
     {"code":"w_play15","slot":1,"n":15,"stat":"plays"},
@@ -292,7 +293,6 @@ create or replace function public.weekly_quest_pool() returns jsonb language sql
     {"code":"w_hard1","slot":5,"n":1,"stat":"hard"},
     {"code":"w_boards4","slot":5,"n":4,"stat":"boards"},
     {"code":"w_visit5","slot":6,"n":5,"stat":"visits"},
-    {"code":"w_watch5","slot":6,"n":5,"stat":"watch"},
     {"code":"w_puzzle5","slot":6,"n":5,"stat":"puzzles"}
   ]'::jsonb
 $$;

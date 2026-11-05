@@ -2,7 +2,7 @@
 //  XP И УРОВНИ — таблицы, правила и лимиты в xp.sql
 // ═══════════════════════════════════════
 // Начисляет только БД (триггеры на визиты/чат/форум/идеи/рефералов).
-// Отсюда — единственный «клиентский» источник: просмотр видео на сайте.
+// Отсюда — единственный «клиентский» источник: просмотр видео на сайте (с 05.11.2026 выключен — XP_WATCH ниже).
 // Сколько реально играет ролик, узнаём из YouTube IFrame API без загрузки
 // самой библиотеки: подписываемся на postMessage-события плеера
 // ('listening' → 'infoDelivery' с currentTime) и копим только время, когда
@@ -190,8 +190,12 @@ async function renderProfileXp(uid, isOwn){
 // iframe должен быть с enablejsapi=1&origin=<сайт>. minSec — сколько секунд реального
 // воспроизведения нужно для награды.
 const xpTracked = new Map(); // contentWindow → { id, minSec, acc, last, done }
+// 05.11.2026: XP за просмотр роликов YouTube выключены — правила YouTube API (developers.google.com/youtube/terms/developer-policies,
+// III.F.3.c) запрещают награды за просмотр встроенного плеера; нарушение — Google может отозвать ключ API (ленты и страницы роликов,
+// на которых держится сайт). Задание недели «Посмотри 5 роликов» убрано (games.js WEEKLY_QUESTS = games-more.sql). Вернуть — true.
+const XP_WATCH = false;
 function xpTrackIframe(iframe, videoId, minSec){
-  if (!iframe || !videoId) return;
+  if (!XP_WATCH || !iframe || !videoId) return;
   const start = () => {
     const w = iframe.contentWindow;
     if (!w) return;
