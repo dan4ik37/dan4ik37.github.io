@@ -649,8 +649,8 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
     ok(hb.dataset.hold === 'ya' && !!hb.querySelector('[id^="yandex_rtb"]'), 'РСЯ: снова играет — блок остаётся местом под игрой, коробка той же высоты');
     // CSS: высота коробки — как у блока (подпись + 280 px, телефон 300 px) и отступ 150 px у Google
     const cssT = doc.getElementById('d37AdsCss')?.textContent || '';
-    ok(/#gamesAd\[data-hold\]\{--d37-hold:calc\(280px \+ 2\.8rem\);display:flow-root;min-height:var\(--d37-hold\)\}/.test(cssT) && /#gamesAd\[data-hold="g"\]\{margin-top:150px\}/.test(cssT) && /max-width:768px\)\{#gamesAd\[data-hold\]\{--d37-hold:calc\(300px \+ 2\.8rem\)/.test(cssT),
-      'CSS: коробка держит высоту блока (280 / 300 px + подпись) и 150 px от игры у Google');
+    ok(/#gamesAd\[data-hold\]\{--d37-hold:calc\(280px \+ 2\.8rem\);display:flow-root;min-height:var\(--d37-hold\)\}/.test(cssT) && /#gamesAd\[data-hold="g"\]\{margin-top:150px\}/.test(cssT) && /max-width:768px\)\{#gamesAd\[data-hold\]\{--d37-hold:calc\(300px \+ 2\.8rem\)/.test(cssT) && /#gamesAd\[data-hold\]\[hidden\]\{display:none\}/.test(cssT),
+      'CSS: коробка держит высоту блока (280 / 300 px + подпись) и 150 px от игры у Google; спрятанная — не видна (display:flow-root не перебивает hidden)');
     setHash('#/games/hold5');
   }
   stage.remove();

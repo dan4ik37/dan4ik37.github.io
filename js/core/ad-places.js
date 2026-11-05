@@ -838,6 +838,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 @media(max-width:768px){.d37-ad>ins.adsbygoogle[data-full-width-responsive]{min-height:300px}}
 #gamesAd[data-net="g"]{margin-top:150px}
 #gamesAd[data-hold]{--d37-hold:calc(280px + 2.8rem);display:flow-root;min-height:var(--d37-hold)}
+#gamesAd[data-hold][hidden]{display:none}
 #gamesAd[data-hold="g"]{margin-top:150px}
 #gamesAd[data-hold]>.d37-house{min-height:var(--d37-hold);box-sizing:border-box}
 @media(max-width:768px){#gamesAd[data-hold]{--d37-hold:calc(300px + 2.8rem)}}
