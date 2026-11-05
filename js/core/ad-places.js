@@ -287,6 +287,9 @@
   // Поменять содержимое так, чтобы место осталось ровно тем же: верх (поправка margin-top — подпись с отступом сверху могла
   // «схлопнуться» с отступом коробки) и высота (фиксированная — новое содержимое не растянет). Всё в одной задаче, до отрисовки
   function keepBox(el, mutate){
+    // без переходов: на «Слабом» и «Среднем» (index.html: body:not(.high) * { transition-duration:.01ms }) у каждого элемента
+    // любое свойство «переходит» — новый отступ встал бы только кадром позже (замер: на кадр уезжало на 16 px вверх, потом на 96 вниз)
+    el.style.transitionProperty = 'none';
     const b0 = el.getBoundingClientRect();
     mutate();
     Object.assign(el.style, { boxSizing: 'border-box', height: b0.height + 'px', overflow: 'hidden' });
