@@ -35,6 +35,11 @@
     // Блок Google остался пустым (сеть ничего не отдала, блокировщик) — без сдвига вёрстки: ниже экрана место убираем, на экране —
     // своя подсказка той же высоты (settle ниже). Вернуть как было (убрать сразу) — false.
     settle: true,
+    // Место под рекламу после партии держим, пока идёт партия (05.11.2026): с первого нажатия в игре под ней коробка #gamesAd той
+    // же высоты, что и будущий блок (с отступом 150 px у Google), со своими подсказками (игры сайта); кончилась партия — реклама
+    // встаёт в эту же коробку, и ничего ниже не сдвигается (а коробка, вставленная по нажатию, в CLS не считается).
+    // Вернуть как было (коробка появляется только после партии и сдвигает всё под собой) — false.
+    roundHold: true,
     places: {
       loading:      { delay: 1500, gap: 90, max: 6 },
       break:        { every: 3, first: 120, gap: 300, max: 4, desk: true },
@@ -164,7 +169,7 @@
     document.querySelectorAll('.d37-feed, .d37-adload, .d37-adcard').forEach(e => e.remove());
     railOff();
     document.querySelectorAll('.d37-ad').forEach(e => { e.innerHTML = ''; e.hidden = true; });
-    const ga = document.getElementById('gamesAd'); if (ga) { ga.innerHTML = ''; ga.hidden = true; delete ga.dataset.net; }   // и «Перерыв»
+    const ga = document.getElementById('gamesAd'); if (ga) { ga.innerHTML = ''; ga.hidden = true; delete ga.dataset.net; delete ga.dataset.hold; }   // и «Перерыв», и место «на будущее»
     ['ad-mid', 'ad-top', 'ad-bottom'].forEach(id => { const e = document.getElementById(id); if (!e) return; e.querySelectorAll('ins.adsbygoogle').forEach(i => { if (i.dataset.adFilled) i.remove(); }); e.classList.add('ad-empty'); });   // показанное — убрать, не прятать
   }
 
@@ -438,17 +443,48 @@
     if (!isTouch() && s.rounds % (R.every || 3) === 0 && refreshOk(box) && !why('break', { ignoreId: true }) && (hasId('break') || dbg.frames)) {
       box.hidden = false; box.className = ''; box.dataset.at = now(); box.dataset.net = netOf('break');
       box.innerHTML = `<div class="d37-break"><div class="d37-break-t">☕ <b>Перерыв</b> · ${s.rounds} ${plural(s.rounds, 'партия', 'партии', 'партий')} подряд — отдохни минутку, следующая подождёт</div><div class="d37-break-ad"></div></div>`;
-      if (show(box.querySelector('.d37-break-ad'), 'break', { checked: true, onEmpty: () => { box.hidden = true; } })) return 'break';
+      if (show(box.querySelector('.d37-break-ad'), 'break', { checked: true, onEmpty: () => { if (box.dataset.hold) holdFill(box); else box.hidden = true; } })) return 'break';
     }
     if (!refreshOk(box)) return false;
     const r = why('game_over', { ignoreId: true });
     if (r || (!hasId('game_over') && !dbg.frames)) { log('game_over', r || 'id'); return false; }   // показанное не трогаем
     // Google (gStrict): один блок на экран игры — снова играет, блок убран (onGameInput); новый — только в другой игре
     if (gStrict() && box.dataset.gDone && netOf('game_over') === 'g' && !window.D37AdDirect?.has?.('game_over')) { log('game_over', 'g-once'); return false; }
+    // место держали всю партию (hold) — блок встаёт в ту же коробку; сеть ничего не дала — снова свои подсказки той же высоты
+    const held = !!box.dataset.hold;
     box.hidden = false; box.className = ''; box.innerHTML = '<div></div>'; box.dataset.at = now(); box.dataset.net = netOf('game_over');
-    if (show(box.firstChild, 'game_over', { checked: true })) { if (box.dataset.net === 'g') box.dataset.gDone = '1'; return 'game_over'; }
-    box.innerHTML = ''; delete box.dataset.net;
+    if (show(box.firstChild, 'game_over', { checked: true, onEmpty: held ? () => holdFill(box) : undefined })) { if (box.dataset.net === 'g') box.dataset.gDone = '1'; return 'game_over'; }
+    if (held) holdFill(box); else box.innerHTML = '';
+    delete box.dataset.net;
     return false;
+  }
+  // ── Место под рекламу после партии — заранее, пока идёт партия (RULES.roundHold) ──
+  // Первое нажатие в игре (onGameInput) — под игрой коробка #gamesAd высотой с будущий блок (CSS: [data-hold], у Google ещё
+  // отступ 150 px от игры) со своими подсказками; afterRound кладёт рекламу в неё же. Не держим: VIP, нет блока, Google уже
+  // был в этой игре (g-once), во весь экран, у игр со своим местом после партии (Студия игр, Unity, Студия 3D, мир)
+  const HOLD_NO = /^#\/games\/(?:studio|unity|studio3d|world)(?:\/|$)/;
+  function holdFill(box){
+    const c = document.createElement('div');
+    box.innerHTML = ''; box.appendChild(c);
+    house(c, 3); c.classList.add('d37-solo');
+  }
+  function hold(){
+    if (RULES.roundHold === false) return '';
+    const h = routeHash();
+    if (!/^#\/games\/./.test(h) || HOLD_NO.test(h)) return '';
+    const stage = document.getElementById('gamesStage');
+    if (!stage || stage.hidden || document.documentElement?.classList?.contains('gs-full') || document.fullscreenElement) return '';
+    let box = stage.querySelector('#gamesAd');
+    if (box && (box.dataset.hold || box.dataset.net)) return '';   // уже держим или уже реклама
+    const r = why('game_over', { ignoreId: true });
+    if (r || (!hasId('game_over') && !dbg.frames)) return '';
+    const n = netOf('game_over');
+    if (gStrict() && box?.dataset.gDone && n === 'g' && !window.D37AdDirect?.has?.('game_over')) return '';
+    if (!box) { box = document.createElement('div'); box.id = 'gamesAd'; stage.appendChild(box); }
+    box.hidden = false; box.className = ''; box.dataset.hold = n || 'x';
+    holdFill(box);
+    log('game_over', 'hold');
+    return box.dataset.hold;
   }
   // Снова играет (нажал в игре): «перерыв» гаснет — реклама остаётся обычным местом под игрой, без перезагрузки
   function onGameInput(e){
@@ -458,15 +494,16 @@
     // Google рядом с идущей игрой не стоит (≥ 150 px от игры и её кнопок, support.google.com/adsense/answer/1346295): снова
     // играет — блок убираем совсем (не прячем: скрытой рекламы не бывает). РСЯ и прямая реклама остаются местом под игрой.
     const ga = document.getElementById('gamesAd');
-    if (gStrict() && ga && ga.dataset.net === 'g' && now() - (+ga.dataset.at || 0) > 1500) { ga.innerHTML = ''; ga.hidden = true; delete ga.dataset.net; log('game_over', 'g-off'); return; }
+    if (gStrict() && ga && ga.dataset.net === 'g' && now() - (+ga.dataset.at || 0) > 1500) { ga.innerHTML = ''; ga.hidden = true; delete ga.dataset.net; delete ga.dataset.hold; log('game_over', 'g-off'); return; }
     const b = document.querySelector('#gamesAd .d37-break'), box = b?.parentNode;
     if (b && now() - (+box.dataset.at || 0) > 1500) { b.querySelector('.d37-break-t')?.remove(); b.classList.remove('d37-break'); b.classList.add('d37-break-off'); }
+    if (!ga || (!ga.dataset.net && !ga.dataset.hold)) hold();   // партия идёт — место под рекламу после неё держим уже сейчас
   }
   // Игра во весь экран (js/core/fullscreen.js прячет всё вокруг): рекламу под игрой — убрать, а не прятать display:none
   function onFull(e){
     if (!e?.detail?.on) return;
     const ga = document.getElementById('gamesAd');
-    if (ga && ga.dataset.net) { ga.innerHTML = ''; ga.hidden = true; delete ga.dataset.net; log('game_over', 'fullscreen'); }
+    if (ga && (ga.dataset.net || ga.dataset.hold)) { ga.innerHTML = ''; ga.hidden = true; delete ga.dataset.net; delete ga.dataset.hold; log('game_over', 'fullscreen'); }
   }
   // Телефон, полноэкранная между партиями: игры зовут D37Ads.interstitial() — здесь счёт партий и частота
   function interRound(){
@@ -762,24 +799,29 @@
 
   // ═══ Серверные страницы: <div data-ad="ключ"> — грузится, когда подъедет к экрану (за 300 px; 05.11.2026 — у всех мест: блок
   // встаёт и пустой убирается ниже экрана, текст под ним не прыгает); data-ad-now — сразу ═══
-  function fillAll(){
-    document.querySelectorAll('[data-ad]').forEach(el => {
-      if (el.dataset.adDone) return;
-      el.dataset.adDone = '1';
-      const key = el.dataset.ad;
-      const feedCard = el.classList.contains('d37-feed');
-      if (feedCard && key === 'feed_videos' && RULES.videoFeed === false) { el.remove(); return; }   // лента роликов — без рекламы (RULES.videoFeed)
-      const go = () => {
-        if (feedCard) { if (!show(el, key, { onEmpty: () => house(el) })) el.remove(); return; }
-        if (!show(el, key)) el.hidden = true;
-      };
-      if (el.hasAttribute('data-ad-now')) { go(); return; }
-      el.hidden = false;   // display:none экран «не видит» (IntersectionObserver молчит): пустой div высотой 0 — видит; карточка ленты — своё место
-      // карточка ленты — своё место в сетке; обычное место (пустой div высотой 0) — встаёт только ниже экрана (05.11.2026, CLS):
-      // блок с запасом высоты появляется там, где его ещё не видно, и текст на экране не сдвигается
-      if (feedCard || RULES.settle === false) lazy(el, go); else lazyBelow(el, go, key);
-    });
+  // Место на первом экране (05.11.2026): page.js (SLOT_RSV) держит его, пока страница рисуется, — data-ad-rsv: подпись «Реклама»
+  // и высота блока уже стоят, текста под ними на экране ещё не было — сдвигать нечего. Такое место заполняем сразу (не ждём, пока
+  // подъедет снизу: на первом экране этого не бывает — у тестов, рандомайзера, теста печати и генератора ников рекламы не было вовсе);
+  // не вышло (VIP, нет номера, сеть пуста, блокировщик) — своя подсказка той же высоты (settle), ничего не прыгает.
+  // slot(el, ключ) — то же для мест SPA (витрина игр #gamesHubAd)
+  function slot(el, key){
+    if (!el || el.dataset.adDone) return;
+    el.dataset.adDone = '1';
+    key = key || el.dataset.ad;
+    const feedCard = el.classList.contains('d37-feed'), held = el.hasAttribute('data-ad-rsv');
+    if (feedCard && key === 'feed_videos' && RULES.videoFeed === false) { el.remove(); return; }   // лента роликов — без рекламы (RULES.videoFeed)
+    const go = () => {
+      if (feedCard) { if (!show(el, key, { onEmpty: () => house(el) })) el.remove(); return; }
+      if (held) { if (!show(el, key, { onEmpty: settle })) settle(el); return; }
+      if (!show(el, key)) el.hidden = true;
+    };
+    if (held || el.hasAttribute('data-ad-now')) { go(); return; }
+    el.hidden = false;   // display:none экран «не видит» (IntersectionObserver молчит): пустой div высотой 0 — видит; карточка ленты — своё место
+    // карточка ленты — своё место в сетке; обычное место (пустой div высотой 0) — встаёт только ниже экрана (05.11.2026, CLS):
+    // блок с запасом высоты появляется там, где его ещё не видно, и текст на экране не сдвигается
+    if (feedCard || RULES.settle === false) lazy(el, go); else lazyBelow(el, go, key);
   }
+  function fillAll(){ document.querySelectorAll('[data-ad]').forEach(el => slot(el)); }
 
   // ═══ Стили (свои — чтобы не трогать общий premium.css; и для серверных страниц) ═══
   function css(){
@@ -795,6 +837,10 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 .d37-ad>ins.adsbygoogle[data-full-width-responsive]{min-height:280px}
 @media(max-width:768px){.d37-ad>ins.adsbygoogle[data-full-width-responsive]{min-height:300px}}
 #gamesAd[data-net="g"]{margin-top:150px}
+#gamesAd[data-hold]{--d37-hold:calc(280px + 2.8rem);display:flow-root;min-height:var(--d37-hold)}
+#gamesAd[data-hold="g"]{margin-top:150px}
+#gamesAd[data-hold]>.d37-house{min-height:var(--d37-hold);box-sizing:border-box}
+@media(max-width:768px){#gamesAd[data-hold]{--d37-hold:calc(300px + 2.8rem)}}
 .d37-adload{display:flex;flex-direction:column;align-items:center;gap:6px;width:min(100%,728px);margin:10px auto 0;font-weight:600;flex:none}
 .d37-adload>*{flex:none}
 .s3-loading:has(>.d37-adload){align-content:center;row-gap:4px}
@@ -858,7 +904,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
     window.addEventListener('d37:route', () => {   // переход раздела (js/ui/router.js)
       G.playing = false;
       const b = document.getElementById('gamesAd');   // ушли из игры — рекламу под ней убираем совсем (а не прячем)
-      if (b) { b.innerHTML = ''; b.className = ''; delete b.dataset.net; delete b.dataset.at; delete b.dataset.gDone; }
+      if (b) { b.innerHTML = ''; b.className = ''; delete b.dataset.net; delete b.dataset.at; delete b.dataset.gDone; delete b.dataset.hold; }
       setTimeout(railTick, 450);   // роутер меняет разделы через 150 мс
     });
     let rt = 0;
@@ -877,7 +923,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 
   window.D37AdPlaces = {
     RULES, why, mark, show, ids, hasId, net, loading, afterRound, interRound, feed, coinOffer, worldPromo, sponsor, fillAll, noAdsPerk,
-    placeholder, gambling, railTick, direct, hasNet, guard, settle,
+    placeholder, gambling, railTick, direct, hasNet, guard, settle, slot, hold,
     adAge, ageOff, gate, googleTag: () => ageRule().tfat || 0,   // возраст: группа рекламы, место выключено, «обработка» Google
     ctx(name, on){ if (on) ctxOn.add(name); else ctxOn.delete(name); if (on && name !== 'playing') { railOff(); } },
     debug: () => dbg.on, frames: () => dbg.frames,
