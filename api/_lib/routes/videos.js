@@ -63,7 +63,7 @@ export default async function handler(req, res) {
   <h1>Все видео dan4ik37</h1>
   <p class="lead">Архив YouTube-канала dan4ik37 — ${n.toLocaleString('ru')} ${plural}, от новых к старым. Нажми на ролик — откроется его страница с описанием и похожими видео.</p>
   <div class="cta">
-    <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на канал</a>
+    <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
     <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Удиви меня</button>
     <a class="btn btn-ghost" href="/games">🎮 Игры на сайте</a>
   </div>

@@ -63,16 +63,36 @@ function shareCurrentVid(){
   }, ()=>prompt('Скопируй ссылку:', url));
 }
 
+// Цифры ролика в окне: «· 👁 … · 👍 … · обновлено ЧЧ:ММ» (вернулся с YouTube после «Лайк на YouTube» — js/core/vlike.js,
+// событие d37:vstats в youtube.js). Отдельный span — возрастная метка в начале строки не стирается.
+function modalVidSet(s, when){
+  if (!s || s.id !== modalVidId) return;
+  const el = document.getElementById('mVs'); if (!el) return;
+  el.textContent = (s.views ? ' · 👁 ' + fmt(s.views) : '') + (s.likes ? ' · 👍 ' + fmt(s.likes) : '') + (when ? ' · ' + when : '');
+}
 function openVid(id,title,date,views){
   modalVidId = id;
   const pageLink = document.getElementById('mPage'); if (pageLink) pageLink.href = '/v/' + id;
   document.getElementById('mTitle').textContent=title;
-  document.getElementById('mMeta').textContent=`YouTube · @Dan4ik37Yt${date?' · '+date:''}${views?' · 👁 '+views:''}`;
+  const meta = document.getElementById('mMeta'), vo = (typeof allVids !== 'undefined' ? allVids : []).find(x => x.id === id);
+  meta.textContent=`YouTube · @Dan4ik37Yt${date?' · '+date:''}`;
+  const vs = document.createElement('span'); vs.id = 'mVs';
+  vs.textContent = (views ? ' · 👁 ' + views : '') + (vo?.likes ? ' · 👍 ' + vo.likes : '');
+  meta.append(vs);
+  // «👍 Лайк на YouTube» — ссылка на ролик там (сайт сам лайк не ставит; отметка ✓ — только в этом браузере)
+  const like = document.getElementById('mLike');
+  if (like) {
+    like.setAttribute('data-vlike', id);
+    like.href = window.D37VLike ? D37VLike.url(id) : 'https://www.youtube.com/watch?v=' + encodeURIComponent(id);
+    like.hidden = false;
+    window.D37VLike?.paint(like.parentNode);
+  }
   // Возраст (js/core/age.js): ролик не по возрасту — вместо плеера «обложка» (метка — по названию, как на /v/<id>)
   const va = window.D37Age?.video(title), box = document.getElementById('mVid');
   box.classList.remove('age-on');
   if (va) document.getElementById('mMeta').insertAdjacentHTML('afterbegin', D37Age.badge(va.age, { title: va.why }) + ' ');
   if (va && D37Age.cover(box, va.age, { why: va.why, compact: true, back: closeModal, onOpen: () => openVid(id, title, date, views) })) {
+    if (like) like.hidden = true;   // ролик не по возрасту — и на YouTube за лайком не отправляем
     document.getElementById('modal').classList.add('open'); document.body.style.overflow='hidden';
     trapModalFocus(document.getElementById('modal'));
     return;

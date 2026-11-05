@@ -124,12 +124,12 @@ function renderShortsFeed(){
           <div class="sh-info">
             <div class="sh-title">${esc(v.title)}</div>
             <div class="sh-meta">${v.views ? '👁 ' + v.views : ''}${v.date ? ' · ' + v.date : ''}</div>
-            <a class="sh-sub" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться</a>
+            <a class="sh-sub" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
           </div>
         </div>
         <div class="sh-side">
           <button type="button" class="sh-btn sh-sound" onclick="toggleShortsSound()" aria-label="Звук"><span>${shortsMuted ? '🔇' : '🔊'}</span></button>
-          <a class="sh-btn" href="https://www.youtube.com/shorts/${v.id}" target="_blank" rel="noopener" aria-label="Лайк на YouTube"><span>❤</span><small>Лайк</small></a>
+          <a class="sh-btn sh-like" data-vlike="${v.id}" href="https://www.youtube.com/shorts/${v.id}" target="_blank" rel="noopener" aria-label="Лайк на YouTube — откроется YouTube"><span>👍</span><small>Лайк <br>на YouTube</small><small class="vl-mark"></small></a>
           <button type="button" class="sh-btn" onclick="shareShort('${v.id}',this)" aria-label="Поделиться"><span>🔗</span><small>Ссылка</small></button>
         </div>
       </section>`).join('') + `
@@ -138,12 +138,13 @@ function renderShortsFeed(){
           <div class="sh-empty-ic">⚡</div>
           <b>Это все Shorts на сайте</b>
           <span>Новые выходят регулярно — подпишись, чтобы не пропустить.</span>
-          <a class="yt-sub" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">❤ Подписаться</a>
+          <a class="yt-sub" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
           <a class="sh-row-all" href="#/home">← К видео</a>
         </div>
       </section>`;
     setupShortsObserver(feed);
     feed.addEventListener('keydown', shortsKeys);
+    window.D37VLike?.paint(feed);   // ✓ на «Лайк на YouTube» — отметка этого браузера (js/core/vlike.js)
   }
   updateSoundButtons();
 
@@ -224,6 +225,18 @@ function shareShort(id, btn){
     () => { const t = btn?.querySelector('small'); if (t) { t.textContent = 'Готово'; setTimeout(() => t.textContent = 'Ссылка', 1500); } },
     () => prompt('Скопируй ссылку:', url));
 }
+
+// Вернулся с YouTube после «Лайк на YouTube» — свежие цифры этого шортса (js/core/vlike.js → /api/vstats)
+window.addEventListener('d37:vstats', e => {
+  const s = e.detail, it = s && document.querySelector(`.sh-item[data-id="${CSS.escape(s.id)}"]`);
+  if (!it) return;
+  const m = it.querySelector('.sh-meta'), v = shortsList.find(x => x.id === s.id);
+  if (v) { v.views = s.views ? fmt(s.views) : ''; v.likes = s.likes ? fmt(s.likes) : ''; }
+  if (m) m.textContent = [s.views ? '👁 ' + fmt(s.views) : '', s.likes ? '👍 ' + fmt(s.likes) : '', window.D37VLike ? D37VLike.when(s) : ''].filter(Boolean).join(' · ');
+  const b = it.querySelector('.sh-like');
+  if (b && s.likes) b.setAttribute('aria-label', `Лайк на YouTube — откроется YouTube (лайков: ${fmt(s.likes)}, ${window.D37VLike ? D37VLike.when(s) : ''})`);
+  window.D37VLike?.paint(it);
+});
 
 function shortsKeys(e){
   const feed = e.currentTarget;

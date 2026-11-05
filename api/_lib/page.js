@@ -115,7 +115,7 @@ ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.a
     <a href="/chat">Чат</a>
     <a href="/forum">Форум</a>
     <a class="vip" href="/vip">✨ VIP</a>
-    <a class="sub" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">Подписаться</a>
+    <a class="sub" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener" title="Подписаться на канал — на YouTube">▶ Подписаться<span class="sub-yt"> на YouTube</span></a>
   </nav>
   <details class="mmenu"><summary aria-label="Меню">☰</summary><div class="mm">
     <a href="/">🏠 Главная</a>
@@ -175,6 +175,7 @@ a{color:inherit}
 .top nav a{text-decoration:none;color:rgba(var(--text-rgb),.75)}
 .top nav a:hover{color:var(--text-hi)}
 .top nav .sub{padding:.45rem .9rem;border-radius:10px;background:var(--yt);color:#fff}
+@media(max-width:400px){.top nav .sub .sub-yt{display:none}}
 .top nav .vip{color:var(--gold-t)}
 .top nav{margin-left:auto}
 .mmenu{display:none;position:relative;margin-left:.5rem}
