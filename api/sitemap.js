@@ -12,6 +12,7 @@ import { GAME_PAGES } from './_lib/games-seo.js';
 import { TOPICS } from './_lib/topics.js';
 import { QUIZZES } from './_lib/quizzes.js';
 import { sbSelect, storeConfigured } from './_lib/store.js';
+import { payConfig } from './_lib/pay.js';
 
 const url = (loc, freq, prio, lastmod) =>
   `<url><loc>${loc}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}${freq ? `<changefreq>${freq}</changefreq>` : ''}<priority>${prio}</priority></url>`;
@@ -83,7 +84,7 @@ export default async function handler(req, res) {
       }),
       url(`${SITE}/history`, 'monthly', '0.6'),
       url(`${SITE}/vip`, 'monthly', '0.6'),
-      url(`${SITE}/shop`, 'monthly', '0.6'),
+      ...(payConfig().any ? [url(`${SITE}/shop`, 'monthly', '0.6')] : []),   // оплата не подключена — /shop noindex (routes/shop.js)
       url(`${SITE}/reklama`, 'weekly', '0.5'),
       ...Array.from({ length: Math.max(0, Math.ceil(vids.length / 240) - 1) }, (_, i) => url(`${SITE}/videos?p=${i + 2}`, 'weekly', '0.4')),
       url(`${SITE}/privacy`, 'yearly', '0.2'),

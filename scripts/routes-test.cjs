@@ -349,6 +349,12 @@ function browser(startUrl, routing){
     ok(r.code === 404, 'нет идеи — 404');
     r = await call(pages, { page: 'shop' });
     ok(r.code === 200 && r.body.includes('location.replace("/#/shop")') && r.body.includes('href="/#/shop"'), '/shop: вкладка-приложение — сразу в раздел, «Открыть магазин» → раздел');
+    // 05.11.2026: оплата не подключена (нет переменных PAY_*) — честная плашка и noindex; на страницах документов — без заглушек
+    ok(/<meta name="robots" content="noindex">/.test(r.body) && /Покупка кристаллов пока не работает/.test(r.body), '/shop без оплаты: плашка «пока не работает» и noindex');
+    r = await call(pages, { page: 'contacts' });
+    ok(r.code === 200 && !/уточняется/.test(r.body) && /Республика Казахстан/.test(r.body), '/contacts: без строк «уточняется» — только то, что есть');
+    r = await call(pages, { page: 'terms' });
+    ok(r.code === 200 && !/\[Текст для юриста/.test(r.body), '/terms: заметка для юриста не видна на странице');
     r = await call(pages, { page: 'about' });
     ok(!/d37_spa/.test(r.body), '/about: без перехода в раздел (раздел «Обо мне» сам ссылается на эту страницу)');
     r = await call(pages, { page: 'shop', o: 'D37-abc123', r: 'ok' });
