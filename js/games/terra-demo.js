@@ -59,10 +59,11 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     wrap.appendChild(msg); el.appendChild(wrap);
     const st = S = { el, wrap, msg, dead: false, v2, t0: performance.now() };
     // ядро D37 (C-002, флаг CORE_WASM в js/core/config.js): общий движок сайта и Backrooms — мир команд и событий в своём потоке
-    // (d37core.wasm; нет wasm — тот же код на JS). Запуск сразу, вместе с загрузкой движка: к первому шагу игры ядро уже готово.
-    // Пока адаптер: игрок — тело 75 кг и действующее лицо 1, такт ядра 20 Гц из шага логики; вид игры не меняется. Строка «ядро
-    // D37» — в окне отладки (F3)
-    if (window.D37CoreWorld?.on?.()) st.core = coreStart();
+    // (d37core.wasm; нет wasm — тот же код на JS). GameKit.core (js/games/gamekit.js): файлы ядра — не в списке scripts игры, грузятся
+    // параллельно с движком и запуск не держат; флаг выключен — ни одного запроса ядра; не загрузились — игра без ядра. К первому
+    // шагу игры ядро уже готово. Пока адаптер: игрок — тело 75 кг и действующее лицо 1, такт ядра 20 Гц из шага логики; вид игры не
+    // меняется. Строка «ядро D37» — в окне отладки (F3)
+    st.core = window.GameKit?.core ? coreStart() : null;
     window.D37E.load().then(ok => {
       if (S !== st) return;
       if (!window.D37E.terra?.ON) { msg.textContent = 'Новая земля временно выключена'; return; }
@@ -174,8 +175,9 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
   }
   // замыкание не держит st (T-085): ядро пересоздаёт мир (сбой потока, ловушка wasm) — игрок заводится заново здесь же
   function coreStart(){
-    const CWo = window.D37CoreWorld, P = CWo.pack, id = new Uint32Array(2);
-    return CWo.session({ seed: SEED, sender: 1, onReset: s => {
+    const id = new Uint32Array(2);
+    return window.GameKit.core({ seed: SEED, sender: 1, onReset: s => {
+      const CWo = window.D37CoreWorld, P = CWo.pack;   // к onReset файлы ядра уже на странице
       CWo.worldId(SEED, 0, 1, 0, 0, 0, 0, id);
       s.cmd(1, 0, id[0], id[1], 0, P.spawnKind(1, 0, 1, 0), 0, 0, 0, P.hpBrk(1600, 0), 75000);   // SPAWN: тело игрока (ckind 1), 100 hp, 75 кг
       s.cmd(7, 0, 0, 0, 0, 1, 1, id[0], id[1], 0, 0);   // ACTOR 1 ↔ это тело (удары идут массой тела)
@@ -502,7 +504,9 @@ body.game-on .tr-wrap{height:calc(100dvh - 210px);min-height:300px}
     t145: () => S && { gen: S.TS.gen, seaTiles: S.seaN ?? null, climbP: S.rig.climbP, compact: !!S.TM.compact, biome: S.TS.climate(S.ax + (S.mode === 'walk' ? S.Pl.ch.x : S.fly.x) / U, S.az + (S.mode === 'walk' ? S.Pl.ch.z : S.fly.z) / U) },
     tp: (x, z) => { if (!S) return; const ax = Math.floor(x / 32) * 32, az = Math.floor(z / 32) * 32; rebase(S, ax - S.ax, az - S.az); const lx = (x - S.ax) * U, lz = (z - S.az) * U; if (S.mode === 'fly') { S.fly.x = lx; S.fly.z = lz; } else { S.refY = S.TS.height(x, z) + 2; S.Pl.place(lx, S.ph.terrain.sample(lx, lz), lz, S.Pl.yaw); } },
     wx: () => S && S.wx && Object.assign(S.wx.stats(), { region: S.W && S.W.wxRegionAt ? S.W.wxRegionAt(S.ax + (S.mode === 'walk' ? S.Pl.ch.x : S.fly.x) / U, S.az + (S.mode === 'walk' ? S.Pl.ch.z : S.fly.z) / U) : null }),
-    core: () => S && S.core && { ready: S.core.ready, backend: S.core.backend, transport: S.core.transport, error: S.core.error, readyMs: S.core.readyMs, gameStartMs: S.startMs, stats: Object.assign({}, S.core.stats), line: S.core.line() },
+    // ядро: readyMs и scriptsMs — от mount (просьбы игры) до первого мира / файлов ядра на странице; boot — куда ушло время старта потока
+    core: () => { const c = S && S.core, s = c && c.s; return c ? { ready: !!(s && s.ready), backend: s ? s.backend : '', transport: s ? s.transport : '', error: c.error || (s ? s.error : ''),
+      readyMs: s ? s.readyMs : 0, scriptsMs: c.scriptsMs, gameStartMs: S.startMs, stats: s ? Object.assign({}, s.stats) : null, boot: s && s.host && s.host.boot || null, line: c.line() } : null; },
     get S(){ return S; },
   };
   window.GAME_IMPL = window.GAME_IMPL || {};

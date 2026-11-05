@@ -1,14 +1,20 @@
 // C-002 in REAL headless Chrome (DevTools Protocol, no npm): the shared core d37-core on the site through js/engine/core-world.js.
 // Modes:  node scripts/core-world-e2e.cjs load        — home page: 0 bytes of the core, startup JS (gzip) and LCP / CLS before (main
-//                                                      checkout, MAIN_DIR) vs after (this checkout); core load + init in the page (in-thread
-//                                                      and Worker, 5× each), fallbacks in the browser, 30 / 60 / 144 FPS → one hash (the same
-//                                                      hash as node scripts/core-world-test.cjs), «Новая земля» with CORE_WASM on (wasm in a
-//                                                      Worker, the debug line) and off (no core request, no core worker)
-//         node scripts/core-world-e2e.cjs leak [20]   — «Новая земля» opened and closed N times: heap after GC, workers, core counters flat
+//                                                      checkout, MAIN_DIR) vs after (this checkout); core load + init as a game gets it
+//                                                      (GameKit.core, cold: from the call, core scripts included; Worker and in-thread, 5×
+//                                                      each, + the phone estimate of the worker's own time), fallbacks in the browser, 30 /
+//                                                      60 / 144 FPS → one hash (the same hash as node scripts/core-world-test.cjs), «Новая
+//                                                      земля» at ×4 from the open: CORE_WASM on (wasm in a Worker, prefetched module, core
+//                                                      ready before the game's first step, the debug line), off (no core file requested, no
+//                                                      core worker), a broken core file (d37core.js 404: the game runs without the core)
+//         node scripts/core-world-e2e.cjs leak [20]   — «Новая земля» opened and closed N times: heap after GC, workers, core counters flat;
+//                                                      + 5 games closed while their core files still load (the started worker is terminated)
 //         node scripts/core-world-e2e.cjs soak [15]   — N minutes walking (≥ 2 km) with digs: 0 errors, core ticks, minute-10 vs minute-1
 //                                                      (frame CPU, the core's main-thread cost), wasm memory pages flat
 // Profiles: phone (default) — 412 × 915 × 2, CPU ×4 (RATE), quality "mid"; PC=1 — 1280 × 720, no throttle, "high".
-// NOTE: Chrome's CPU throttling does not slow workers down — the core worker's own times are desktop numbers (×4 for a phone estimate).
+// NOTE: Chrome's CPU throttling does not slow workers down, and CDP cannot throttle a worker target ("Operation is only supported
+// for pages, not workers", checked 05.11) — the core worker's own times (boot.workMs) are desktop numbers; the load mode adds
+// (RATE − 1) × workMs as the phone estimate.
 // Heavy job: node E:\d37-core\scripts\heavy-lock.mjs run --session site/<agent> --job "core-world e2e <mode>" --min 15 -- node scripts/core-world-e2e.cjs <mode>
 'use strict';
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), zlib = require('zlib'), { spawn } = require('child_process');
@@ -24,7 +30,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
   '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain', '.ico': 'image/x-icon', '.wasm': 'application/wasm' };
 // server switches (set between phases): flagOff → js/core/config.js with CORE_WASM = false; ?corrupt=1 / ?abi3=1 on the wasm
-const SW = { flagOff: !!process.env.FLAG_OFF, root: SITE };   // FLAG_OFF=1 leak — the same run with CORE_WASM = false (what the game alone costs)
+const SW = { flagOff: !!process.env.FLAG_OFF, brokenCore: false, root: SITE };   // FLAG_OFF=1 leak — the same run with CORE_WASM = false (what the game alone costs)
 const name = Array.from('d37_abi_version', ch => ch.charCodeAt(0));
 const ABI3 = Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0, 1, 5, 1, 0x60, 0, 1, 0x7f, 3, 2, 1, 0, 7, 4 + name.length, 1, name.length, ...name, 0, 0, 10, 6, 1, 4, 0, 0x41, 3, 0x0b]);
 function serve(req, res) {
@@ -33,6 +39,7 @@ function serve(req, res) {
   const root = SW.root, f = path.join(root, p);
   if (!f.startsWith(root) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end('404'); return; }
   let body = fs.readFileSync(f);
+  if (SW.brokenCore && p.endsWith('/d37core.js')) { res.writeHead(404); res.end('404'); return; }
   if (p === '/js/core/config.js' && SW.flagOff) body = Buffer.from(body.toString('utf8').replace('const CORE_WASM = true;', 'const CORE_WASM = false;'));
   if (p.endsWith('d37core.wasm') && u.searchParams.get('corrupt')) { body = Buffer.from(body); for (const k of [3000, 9000, 40000]) body[k] ^= 0xFF; }
   if (p.endsWith('d37core.wasm') && u.searchParams.get('abi3')) body = ABI3;
@@ -113,7 +120,7 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
   const BASE = 'http://localhost:' + server.address().port, port = 9300 + Math.floor(Math.random() * 400);
   const profile = fs.mkdtempSync(path.join(TMP, 'd37-core-e2e-'));
   const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio',
-    '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMP, TEMP: TMP } });
+    '--ignore-gpu-blocklist', '--disable-features=BackForwardCache', '--enable-precise-memory-info', '--js-flags=--expose-gc', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMP, TEMP: TMP } });
   let page = null, ver = null;
   for (let i = 0; i < 80 && !page; i++) { try { page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); ver = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); } catch (e) {} if (!page) await sleep(250); }
   if (!page) { console.log('Chrome did not start'); proc.kill(); server.close(); process.exit(1); }
@@ -223,16 +230,29 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
         check(Math.abs(dGz) < 0.5, `home startup JS gzip changed by ${dGz.toFixed(2)} KiB`);
         check(out.homeAfter.startupScripts === out.homeBefore.startupScripts, `home startup scripts ${out.homeBefore.startupScripts} → ${out.homeAfter.startupScripts}`);
       }
-      // ── core load + init in the page (the way a game does it), phone ×4: in-thread 5× fresh, worker host 5×
+      // ── core load + init as a game gets it (GameKit.core, js/games/gamekit.js), phone ×4, COLD: every run its own ?v= (the page
+      //    downloads + runs d37core.js and core-world.js again, the worker its scripts and its wasm) — t0 = the game's call, before
+      //    any core file is on the page; ready = the first world ready (s.readyMs). Worker 5×, in-thread 5×. CDP cannot throttle a
+      //    worker ("Operation is only supported for pages, not workers"): the worker's own run time (workMs) is a desktop number,
+      //    so the phone estimate adds (RATE − 1) × workMs. Long tasks (> 50 ms) inside each start window are counted.
       await nav(BASE + '/', 6000);
-      await ev(LOADCORE); await ev(PLAY);
+      await ev(`(window.__lt = [], new PerformanceObserver(l => { for (const e of l.getEntries()) window.__lt.push([e.startTime, e.duration]); }).observe({ type: 'longtask', buffered: true }), 1)`);
+      await ev(`gamesLoadScript('js/games/gamekit.js').then(() => 1)`);
       await throttle();
-      const parseMs = await ev(`__loadCore()`);
-      const inl = await ev(`(async () => { const r = []; for (let k = 0; k < 5; k++) { const t0 = performance.now(); const c = await D37CoreWorld.load({ fresh: true }); const t1 = performance.now(); const w = c.createWorld({ seed: 1 }); const t2 = performance.now(); w.world.destroy();
-        r.push({ backend: c.backend, err: c.error, fetch: +c.fetchMs.toFixed(2), init: +c.initMs.toFixed(2), loadInit: +(t2 - t0).toFixed(2), create: +(t2 - t1).toFixed(2) }); } return r; })()`);
-      const wk = await ev(`(async () => { const r = []; for (let k = 0; k < 5; k++) { const t0 = performance.now(); const h = await D37CoreWorld.host({ desc: { seed: 1 } }); const t1 = performance.now(); const w = await (h.first || h.createWorld({ seed: 1 })); const t2 = performance.now();
-        await w.world.destroy(); h.dispose(); const b = h.boot || {}; r.push({ kind: h.kind, backend: h.backend, err: h.error, workerFetch: +(h.fetchMs || 0).toFixed(2), workerInit: +(h.initMs || 0).toFixed(2), ready: +(t1 - t0).toFixed(2), loadInit: +(t2 - t0).toFixed(2),
-          spawn: +(b.spawnMs || 0).toFixed(1), scripts: +(b.scriptsMs || 0).toFixed(1), core: +(b.coreMs || 0).toFixed(1), deliver: +(b.deliverMs || 0).toFixed(1) }); } return r; })()`);
+      const START = worker => `(async () => { const r = []; const v0 = typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1';
+        for (let k = 0; k < 5; k++) {
+          const c = GameKit.core({ seed: 1, hashEvery: 0, worker: ${worker}, v: v0 + '${worker ? 'w' : 'i'}' + k + '-' + Date.now() % 1e6 });
+          for (let i = 0; i < 400 && !(c.s && (c.s.ready || c.s.error)); i++) await new Promise(ok => setTimeout(ok, 5));
+          const s = c.s, h = s && s.host, b = h && h.boot || {}, lt = window.__lt.filter(x => x[0] >= c.t0 && x[0] <= c.t0 + (s ? s.readyMs : 0));
+          r.push({ transport: s && s.transport, backend: s && s.backend, err: (s && s.error) || c.error, ready: +(s ? s.readyMs : -1).toFixed(1), scripts: +c.scriptsMs.toFixed(1),
+            spawn: +(b.spawnMs || 0).toFixed(1), script: +(b.scriptMs || 0).toFixed(1), lib: +(b.libMs || 0).toFixed(1), wait: +(b.waitMs || 0).toFixed(1), core: +(b.coreMs || 0).toFixed(1),
+            deliver: +(b.deliverMs || 0).toFixed(1), workMs: +(b.workMs || 0).toFixed(1), preHit: !!b.preHit, fetch: h ? +(h.fetchMs || 0).toFixed(1) : 0, init: h ? +(h.initMs || 0).toFixed(1) : 0,
+            longTasks: lt.length, longMs: Math.round(lt.reduce((a, x) => a + x[1], 0)) });
+          c.dispose(); await new Promise(ok => setTimeout(ok, 300));
+        } return r; })()`;
+      const wk = await ev(START(true)), inl = await ev(START(false));
+      await ev(LOADCORE); await ev(PLAY);
+      await ev(`__loadCore()`);
       // where the worker path's time goes: a bare worker (Blob, posts at once) vs the core worker with the JS core (no wasm)
       const boot = await ev(`(async () => { const r = []; const v = typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1';
         for (let k = 0; k < 5; k++) {
@@ -243,21 +263,20 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
           r.push({ bare: +bare.toFixed(1), newWorker: +tNew.toFixed(2), scriptsReadyJs: +jsReady.toFixed(1) }); }
         return r; })()`);
       await throttle(1);
-      const med = (a, k) => a.map(x => x[k]).sort((p, q) => p - q)[2];
+      const med = (a, k) => a.map(x => x[k]).sort((p, q) => p - q)[a.length >> 1];
       out.workerBoot = { rows: boot, bareMed: med(boot, 'bare'), newWorkerMed: med(boot, 'newWorker'), scriptsReadyJsMed: med(boot, 'scriptsReadyJs') };
       console.log('worker boot', JSON.stringify(out.workerBoot));
-      out.coreLoad = { rate: RATE, scriptsParseMs: +parseMs.toFixed(1), inThread: inl, worker: wk,
-        inThreadLoadInitMedMs: med(inl, 'loadInit'), inThreadInitMedMs: med(inl, 'init'), inThreadFetchMedMs: med(inl, 'fetch'), workerLoadInitMedMs: med(wk, 'loadInit'), workerInitMedMs: med(wk, 'workerInit') };
-      console.log('core load + init', JSON.stringify(out.coreLoad));
-      check(inl.every(x => x.backend === 'wasm'), 'in-thread backend not wasm: ' + JSON.stringify(inl[0]));
-      check(wk.every(x => x.kind === 'worker' && x.backend === 'wasm'), 'worker host not worker/wasm: ' + JSON.stringify(wk[0]));
-      check(out.coreLoad.inThreadLoadInitMedMs <= 50, `in-thread load + init ${out.coreLoad.inThreadLoadInitMedMs} ms > 50 ms at ×${RATE}`);
-      // the worker path's wall time = Chrome's worker thread start (spawn) + our scripts + the core + delivering 'ready' to the busy
-      // throttled page; the part the core owns (scripts + core) has the 50 ms budget, the wall time is reported and the game must
-      // never wait for it (checked on «Новая земля» below: the core is ready before the game's first step)
-      out.coreLoad.workerOwnMedMs = med(wk.map(x => ({ own: +(x.scripts + x.core).toFixed(1) })), 'own');
-      out.coreLoad.workerSpawnMedMs = med(wk, 'spawn'); out.coreLoad.workerDeliverMedMs = med(wk, 'deliver');
-      check(out.coreLoad.workerOwnMedMs <= 50, `worker: scripts + core ${out.coreLoad.workerOwnMedMs} ms > 50 ms`);
+      // phone estimate of the worker path: the measured wall time + (RATE − 1) × the worker's own run time (the page side is throttled)
+      for (const x of wk) x.estX = +(x.ready + (RATE - 1) * x.workMs).toFixed(1);
+      out.coreLoad = { rate: RATE, cold: true, worker: wk, inThread: inl,
+        workerReadyMedMs: med(wk, 'ready'), workerEstMedMs: med(wk, 'estX'), workerWorkMedMs: med(wk, 'workMs'), workerSpawnMedMs: med(wk, 'spawn'), workerDeliverMedMs: med(wk, 'deliver'),
+        workerScriptsMedMs: med(wk, 'scripts'), inThreadReadyMedMs: med(inl, 'ready'), inThreadScriptsMedMs: med(inl, 'scripts'), inThreadFetchMedMs: med(inl, 'fetch'),
+        longTasks: wk.concat(inl).reduce((a, x) => a + x.longTasks, 0) };
+      console.log('core load + init (cold, as the game gets it)', JSON.stringify(out.coreLoad));
+      check(inl.every(x => x.transport === 'inline' && x.backend === 'wasm'), 'in-thread start not inline/wasm: ' + JSON.stringify(inl[0]));
+      check(wk.every(x => x.transport === 'worker' && x.backend === 'wasm' && x.preHit), 'worker start not worker/wasm with the prefetched module: ' + JSON.stringify(wk[0]));
+      // the home page here is a stress case (continuous animations under body.high at ×4: every main-thread hop waits — the worker's
+      // spawn, its init, the reply): reported; the ≤ 50 ms check runs in the game itself («Новая земля», below)
       // ── fallbacks in the browser (warnings expected here: not counted)
       const nLog = logs.length;
       const fb = await ev(`(async () => {
@@ -285,10 +304,29 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
       console.log('determinism (Chrome)', JSON.stringify(out.determinism));
       check(hashes.size === 1 && hashes.has('bb1cc99c96f90a01'), `Chrome 30/60/144: ${hashes.size} hashes ${[...hashes].join(',')} (node: bb1cc99c96f90a01)`);
       check(det.every(x => / 102$/.test(x)), 'a determinism run lost commands');
-      // ── «Новая земля» with CORE_WASM on (phone ×4)
-      await nav('about:blank', 300);
-      net.length = 0; netOn = true;
-      await nav(BASE + '/#/games/terra', 500); await ready(); await ev(SAMPLER); await throttle();
+      // ── «Новая земля» with CORE_WASM on, phone ×4 from the open (the throttle is on before the game starts), COLD core files (no
+      //    service worker, no HTTP cache: the first open after a deploy), TERRA_RUNS opens: load + init as the game gets it (mount →
+      //    the first core world, the core scripts included) ≤ 50 ms median, and before the game's first step every time
+      const TR = +(process.env.TERRA_RUNS || 5), terraRuns = [];
+      await send('Network.setBypassServiceWorker', { bypass: true }); await send('Network.setCacheDisabled', { cacheDisabled: true });
+      for (let k = 0; k < TR; k++) {
+        await throttle(1); await nav('about:blank', 300);
+        if (k === TR - 1) { net.length = 0; netOn = true; }
+        await throttle(); await nav(BASE + '/#/games/terra', 500); await ready();
+        const c = await coreReady(), b = (c && c.boot) || {};
+        terraRuns.push({ ready: c ? +c.readyMs.toFixed(1) : -1, scripts: c ? +c.scriptsMs.toFixed(1) : -1, gameStart: c ? +c.gameStartMs.toFixed(1) : -1,
+          spawn: +(b.spawnMs || 0).toFixed(1), script: +(b.scriptMs || 0).toFixed(1), lib: +(b.libMs || 0).toFixed(1), wait: +(b.waitMs || 0).toFixed(1), core: +(b.coreMs || 0).toFixed(1),
+          deliver: +(b.deliverMs || 0).toFixed(1), workMs: +(b.workMs || 0).toFixed(1), estX: c ? +(c.readyMs + (RATE - 1) * (b.workMs || 0)).toFixed(1) : -1, preHit: !!b.preHit,
+          transport: c && c.transport, backend: c && c.backend });
+      }
+      await send('Network.setBypassServiceWorker', { bypass: false }); await send('Network.setCacheDisabled', { cacheDisabled: false });
+      out.terraStart = { rate: RATE, runs: terraRuns, readyMedMs: med(terraRuns, 'ready'), estMedMs: med(terraRuns, 'estX'), scriptsMedMs: med(terraRuns, 'scripts'),
+        workMedMs: med(terraRuns, 'workMs'), spawnMedMs: med(terraRuns, 'spawn'), gameStartMedMs: med(terraRuns, 'gameStart') };
+      console.log('terra core start (cold core files, ×' + RATE + ' from the open)', JSON.stringify(out.terraStart));
+      check(terraRuns.every(x => x.transport === 'worker' && x.backend === 'wasm' && x.preHit), 'terra start: not worker/wasm with the prefetched module: ' + JSON.stringify(terraRuns[0]));
+      check(out.terraStart.readyMedMs > 0 && out.terraStart.readyMedMs <= 50, `terra: load + init ${out.terraStart.readyMedMs} ms > 50 ms at ×${RATE} (cold core files, from the game's call)`);
+      check(terraRuns.every(x => x.ready > 0 && x.ready < x.gameStart), 'terra: the core was not ready before the game\'s first step: ' + JSON.stringify(terraRuns.map(x => [x.ready, x.gameStart])));
+      await ev(SAMPLER);
       const t0 = Date.now();
       const c = await coreReady();
       out.terraOn = { core: c, readyAfterTerraMs: Date.now() - t0, workers: await workers() };
@@ -304,6 +342,8 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
       check(out.terraOn.core && out.terraOn.core.backend === 'wasm' && out.terraOn.core.transport === 'worker' && out.terraOn.core.stats.ticks > 50, 'terra core not wasm/worker or no ticks');
       check(out.terraOn.core && out.terraOn.core.stats.applied === 2 && out.terraOn.core.stats.errors === 0 && out.terraOn.core.stats.resets === 0, 'terra core: player spawn + actor not applied, or errors');
       check(/^ядро D37: wasm · worker/.test(out.terraOn.debug), 'debug panel line: ' + out.terraOn.debug);
+      check(out.terraOn.core && out.terraOn.core.boot && out.terraOn.core.boot.preHit, 'terra: the worker did not take its prefetched wasm module');
+      // mount → the first core world (incl. the core scripts, loaded in parallel) vs mount → the game's first step, both at ×4
       check(out.terraOn.core && out.terraOn.core.readyMs > 0 && out.terraOn.core.readyMs < out.terraOn.core.gameStartMs, `the game waited for the core: core ready ${out.terraOn.core && out.terraOn.core.readyMs} ms, game start ${out.terraOn.core && out.terraOn.core.gameStartMs} ms`);
       // ── CORE_WASM = false (the one-line rollback): no core request, no core worker, the game runs
       await go('#/games'); await sleep(1500);
@@ -317,8 +357,25 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
       SW.flagOff = false;
       out.terraOff = off;
       console.log('terra CORE_WASM off', JSON.stringify(off));
-      check(off.core === null && off.on === false && off.wasmRequests === 0 && off.state && off.state.player, 'flag off: the core still ran or the game did not: ' + JSON.stringify(off).slice(0, 200));
+      check(off.core === null && off.on === null && off.wasmRequests === 0 && off.scriptsLoaded.length === 0 && off.state && off.state.player, 'flag off: a core file was requested, the core ran or the game did not: ' + JSON.stringify(off).slice(0, 240));
       check(off.workers === out.terraOn.workers - 1, `flag off: workers ${off.workers} (on: ${out.terraOn.workers}) — the core worker must be the only difference`);
+      // ── a broken core deploy (js/engine/d37core.js 404, flag on): the game still opens and runs without the core, the error is
+      //    logged once (d37Err + one console warning, expected here), no core worker is left
+      await go('#/games'); await sleep(1500);
+      SW.brokenCore = true;
+      // a deploy is a new GAMES_VER: nothing of it is cached yet — the page's service worker (sw.js) and the HTTP cache bypassed
+      await send('Network.setBypassServiceWorker', { bypass: true }); await send('Network.setCacheDisabled', { cacheDisabled: true });
+      await nav('about:blank', 300);
+      const nLog2 = logs.length;
+      await nav(BASE + '/#/games/terra', 500); await ready(); await sleep(4000);
+      const brk = { core: await ev(`${T}.core()`), workers: await workers(), state: await ev(`${T}.state()`), errlog: await ev(`window.__errs.slice()`), warns: logs.slice(nLog2) };
+      logs.length = nLog2;
+      SW.brokenCore = false;
+      await send('Network.setBypassServiceWorker', { bypass: false }); await send('Network.setCacheDisabled', { cacheDisabled: false });
+      out.terraBrokenCore = brk;
+      console.log('terra with d37core.js 404', JSON.stringify(brk).slice(0, 600));
+      check(brk.core && !brk.core.ready && /не загрузились/.test(brk.core.error) && /нет \(/.test(brk.core.line) && brk.state && brk.state.player, 'broken core files: the game did not run without the core: ' + JSON.stringify(brk.core));
+      check(brk.workers === off.workers && brk.errlog.some(x => /core-world: scripts/.test(x)), `broken core files: workers ${brk.workers} (flag off: ${off.workers}), errlog ${JSON.stringify(brk.errlog)}`);
     } else if (MODE === 'leak') {
       const n = +ARG || 20;
       await setLs({});
@@ -342,6 +399,15 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
       const k = last && last.core;
       if (!OFF) check(k && k.sessionsLive === 0 && k.worldsLive === 0 && k.hostsLive === 0 && k.workersLive === 0, 'core counters after close: ' + JSON.stringify(k));
       if (!OFF) check(k && k.loads === out.base.core.loads, 'the in-page core was loaded again on reopen: ' + (k && k.loads));
+      // the game closed while its core files are still loading (GameKit.core disposed at once, cold files): the worker it had
+      // started is terminated, no session is made
+      if (!OFF) {
+        const fast = await ev(`(async () => { const r = []; for (let k = 0; k < 5; k++) { const c = GameKit.core({ seed: 1, v: 'fast' + k + '-' + Date.now() % 1e6 }); r.push(!!c.boot); c.dispose(); r.push(!c.s && !c.boot); }
+          await new Promise(ok => setTimeout(ok, 2000)); return r; })()`);
+        out.fastClose = { started: fast.filter((x, i) => i % 2 === 0 && x).length, clean: fast.filter((x, i) => i % 2 === 1 && x).length, workers: await workers() };
+        console.log('  closed during the core load ×5', JSON.stringify(out.fastClose));
+        check(out.fastClose.started === 5 && out.fastClose.clean === 5 && out.fastClose.workers === 0, 'closed during the core load: ' + JSON.stringify(out.fastClose));
+      }
     } else if (MODE === 'soak') {
       const min = +ARG || 15;
       await setLs({});
@@ -367,7 +433,7 @@ const LOADCORE = `window.__loadCore = () => new Promise(ok => {
         if (Date.now() - t0 >= minuteAt) {
           minuteAt += 60000;
           const f = summary(await ev(`(() => { const f = window.__trS.f; window.__trS.f = []; return f; })()`));
-          const c = await ev(`${T}.core()`), pages = await ev(`${T}.S.core.host.pages()`);
+          const c = await ev(`${T}.core()`), pages = await ev(`${T}.S.core.s.host.pages()`);
           const m = { min: out.minutes.length + 1, distM: Math.round(dist), heap: await heap(), errors: logs.length, fps: f.fps, cpuAvg: f.cpuAvg, cpuP95: f.cpuP95, long50: f.long50,
             ticks: c.stats.ticks, tickMs: +c.stats.tickMs.toFixed(4), mainMs: +c.stats.mainMs.toFixed(4), mainMax: +c.stats.mainMax.toFixed(3), rtMs: +c.stats.rtMs.toFixed(2), pages, resets: c.stats.resets, coreErr: c.stats.errors, backend: c.backend, transport: c.transport };
           out.minutes.push(m); console.log('  ', JSON.stringify(m));

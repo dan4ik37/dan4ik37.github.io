@@ -567,6 +567,27 @@ const out = {};
       lines.push(`session with an adopted worker @60 → ${r.hash} (= the 12 runs)`);
       r.s.dispose();
     }
+    // started like GameKit.core: init posted by the starter with the session's world settings (the first world is made in the
+    // worker at once), the worker's messages buffered until the hand-over — ready before (replayed) or after the adoption
+    {
+      const started = world => {
+        const b = { worker: new FakeWorker(WORKER, { name: 'd37-core-world' }), t0: performance.now(), error: '', inited: true, early: [] };
+        b.worker.onmessage = e => { if (b.early) b.early.push(e.data); };
+        b.worker.postMessage({ t: 'init', wasm: new Uint8Array(wasmBytes), timeoutMs: 8000, force: '', world });
+        return b;
+      };
+      const b1 = started({ seed: 937 });
+      for (let i = 0; i < 200 && !b1.early.length; i++) await sleep(5);
+      const buffered = b1.early.length;
+      const r = await play(60, { adopt: b1, wasm: new Uint8Array(wasmBytes) }, 1200, 100);
+      ok(buffered === 1 && b1.early === null && r.hash === out.determinism.hash && r.transport === 'worker' && r.cmds === 102, `inited + ready buffered (${buffered}) → replayed: ${r.hash} ${r.transport} (want ${out.determinism.hash})`);
+      r.s.dispose();
+      const b2 = started({ seed: 937 });
+      const r2 = await play(144, { adopt: b2, wasm: new Uint8Array(wasmBytes) }, 1200, 100);
+      ok(r2.hash === out.determinism.hash && r2.transport === 'worker', `inited, ready after the hand-over: ${r2.hash} ${r2.transport}`);
+      r2.s.dispose();
+      lines.push(`started like GameKit.core (init + first world in the worker): ready buffered → ${r.hash}, ready later @144 → ${r2.hash}`);
+    }
     // prefetch over HTTP: the worker at http://…/js/engine/core-world.js compiles …/d37core.wasm at its top; init with that URL
     // takes it (boot.preHit); a corrupted wasm there → the prefetch fails, init downloads it again → JS fallback, error named
     {

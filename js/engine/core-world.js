@@ -126,9 +126,15 @@
       createGrid: function () { return { code: E_UNSUPPORTED, grid: null }; }, createFlow: function () { return { code: E_UNSUPPORTED, flow: null }; },
       pages: function () { return 0; }, W: null, C: null };
   }
+  // the session's world settings → the 10 words; the session and the worker's first world (init.world) use the same defaults
+  function sessionDesc(o) {
+    o = o || {};
+    return descWords(o.desc || { seed: o.seed | 0, seedHi: o.seedHi | 0, genVersion: o.genVersion == null ? 1 : o.genVersion,
+      maxObjects: o.maxObjects || 1024, eventCap: o.eventCap || 1024, cmdRing: o.cmdRing || 1024, maxActors: o.maxActors || 16, reachMm: o.reachMm || 0 });
+  }
   function descWords(d) {
     if (!d) return new Int32Array(10);
-    if (d.length === 10) return d;
+    if (d.length === 10) return d instanceof Int32Array ? d : Int32Array.from(d);
     var w = new Int32Array(10);
     w[0] = d.seed | 0; w[1] = d.seedHi | 0; w[2] = d.genVersion == null ? 1 : d.genVersion | 0; w[3] = d.maxObjects | 0; w[4] = d.eventCap | 0;
     w[5] = d.cmdRing | 0; w[6] = d.maxActors | 0; w[7] = d.reachMm | 0;
@@ -341,8 +347,10 @@
   }
 
   // ════════════════════════════════════ 2) worker transport
-  // Messages (main → worker): { t: 'init', wasm, timeoutMs, force } → { t: 'ready', backend, error, fetchMs, initMs, abi, pages,
-  //   start times (topMs, libMs, initAt, readyAt, origin, preHit) }
+  // Messages (main → worker): { t: 'init', wasm, timeoutMs, force, world } → { t: 'ready', backend, error, fetchMs, initMs, abi,
+  //   pages, first: [code, handle] (when init.world: the first world, made at once), start times (topMs, libMs, initAt, readyAt,
+  //   origin, preHit) }. One init per worker: the host posts it, or the game's starter does (GameKit.core, js/games/gamekit.js —
+  //   at once, before this file is on the page: then the host adopts the worker and replays what it has already said, adopt.early)
   //   { t: 'call', id, m, h, a: [numbers], b: [ArrayBuffer…] } → { t: 'r', id, r: code, x: [numbers], b: [the same buffers back] }
   //   m: create (b0 desc) → x [handle] | tick (b [one tick buffer, layout TB below]; in / out words in its header) | query (a n;
   //   b q, out) | read (a n; b ids, out) | info (b out) | hash → x [lo, hi] | snapshot → x [len], b [bytes] | restore (a len;
@@ -406,16 +414,25 @@
         answer(d, -2, null, b);
       } catch (err) { answer(d, E_PANIC, null, b); }
     }
+    var inited = false;
     scope.onmessage = function (ev) {
       var d = ev.data || {};
       if (d.t === 'init') {
+        if (inited) return; // one init per worker (the starter's, GameKit.core, or the host's)
+        inited = true;
         var tInit = now(); // ms since the worker started (the worker clock)
         // the default wasm is already compiling (started at the top of this file, § worker entry): take it for the same URL
         var hit = false, pre = boot.pre && typeof d.wasm === 'string' && d.wasm === boot.pre.url && d.force !== 'js' ? boot.pre.p.then(function (m) { hit = true; return m; }) : null;
         load({ wasm: d.wasm === null ? false : d.wasm, timeoutMs: d.timeoutMs, force: d.force, module: pre }).then(function (c) {
           core = c; ready = true;
+          // init.world (the session's settings, sessionDesc): the first world is made here at once, its handle goes with ready
+          var first = null;
+          if (d.world) {
+            try { var fr = c.createWorld(sessionDesc(d.world)), fh = 0; if (fr.world) { fh = worlds.length; worlds.push(fr.world); } first = [fr.code, fh]; }
+            catch (err) { first = [E_PANIC, 0]; }
+          }
           post({ t: 'ready', backend: c.backend, error: c.error, fetchMs: c.fetchMs, initMs: c.initMs, abi: c.abi, pages: c.pages(), topMs: boot.topMs || 0,
-            libMs: boot.libMs || 0, initAt: tInit, readyAt: now(), preHit: hit, origin: root.performance && root.performance.timeOrigin || 0 });
+            libMs: boot.libMs || 0, initAt: tInit, readyAt: now(), preHit: hit, first: first, origin: root.performance && root.performance.timeOrigin || 0 });
           while (waiting.length) handle(waiting.shift());
         });
         return;
@@ -426,9 +443,11 @@
 
   // the host side: one Worker (or the in-thread core) per host; calls resolve in order. No getters on per-host / per-world
   // objects (T-085: an own getter keeps the last closed game alive through the shared object shape) — plain fields only.
-  // opts.adopt = { worker, t0, error }: a core Worker the game already started before this file was on the page (GameKit.core,
-  // js/games/gamekit.js: the worker starts at once, in parallel with the page loading d37core.js + core-world.js); error — its
-  // script failed to load before the hand-over. The worker posts nothing before init, so no message can be lost.
+  // opts.adopt = { worker, t0, error, inited, early }: a core Worker the game already started before this file was on the page
+  // (GameKit.core, js/games/gamekit.js: the worker starts at once, in parallel with the page loading d37core.js + core-world.js);
+  // error — its script failed to load before the hand-over; inited — the starter already posted init (with world = the session's
+  // settings: the first world is made in the worker at once); early — the worker's messages so far (buffered by the starter),
+  // replayed here in order, so nothing is lost.
   function host(opts) {
     opts = opts || {};
     var boot = opts.adopt && opts.adopt.worker ? opts.adopt : null;
@@ -457,6 +476,14 @@
       H.onDead = function (why) { if (!done) fail(why); };
       if (boot && boot.error) { fail(boot.error); return; }
       timer = setTimeout(function () { fail('no ready in ' + (opts.readyMs || 10000) + ' ms'); }, opts.readyMs || 10000);
+      if (boot && boot.inited) {
+        // the first world comes with ready (init.world); then what the worker said before the hand-over, in order
+        H.first = new Promise(function (ok) { H._first = ok; });
+        var early = boot.early || [];
+        boot.early = null;
+        for (var i = 0; i < early.length; i++) w.onmessage({ data: early[i] });
+        return;
+      }
       // the wasm: an absolute URL (the worker resolves relative to its own folder), raw bytes (tests) or none (JS core)
       var wasm = opts.wasm === false ? null : (typeof opts.wasm === 'string' || opts.wasm == null) ? absUrl(opts.wasm || url('d37core.wasm')) : opts.wasm;
       try { w.postMessage({ t: 'init', wasm: wasm, timeoutMs: opts.timeoutMs || 8000, force: opts.force || ls('d37_core') || '' }); }
@@ -511,6 +538,11 @@
             workMs: d.topMs + lib + core, preHit: !!d.preHit };
         }
         if (d.backend !== 'wasm') tell('js-fallback', d.error);
+        if (H._first) {
+          var ok = H._first, f = d.first;
+          H._first = null;
+          ok(f ? (f[0] === 0 && f[1] ? { code: 0, world: new WorkerWorld(H, f[1]) } : { code: f[0], world: null }) : null);
+        }
         if (H.onReady) H.onReady();
         return;
       }
@@ -539,7 +571,7 @@
     }
     H = {
       kind: 'worker', backend: '', error: '', fetchMs: 0, initMs: 0, readyMs: 0, abi: 0, ready: false, boot: null,
-      dead: false, onDead: null, onReady: null, first: null,
+      dead: false, onDead: null, onReady: null, first: null, _first: null,
       createWorld: function (desc) {
         return new Promise(function (ok) {
           var d = descWords(desc).slice();
@@ -704,8 +736,7 @@
     opts = opts || {};
     var stepsPerTick = Math.max(1, Math.round((opts.stepHz || 60) / (opts.tickHz || 20)));
     var sender = (opts.sender == null ? 1 : opts.sender) | 0;
-    var desc = descWords(opts.desc || { seed: opts.seed | 0, seedHi: opts.seedHi | 0, genVersion: opts.genVersion == null ? 1 : opts.genVersion,
-      maxObjects: opts.maxObjects || 1024, eventCap: opts.eventCap || 1024, cmdRing: opts.cmdRing || 1024, maxActors: opts.maxActors || 16, reachMm: opts.reachMm || 0 });
+    var desc = sessionDesc(opts);
     var evCap = opts.evCap || 512, drCap = opts.drCap || 1024, hashEvery = opts.hashEvery == null ? 20 : opts.hashEvery;
     var cmds = new Int32Array(64 * 13), n = 0, counter = 0, steps = 0, H = null, hw = null, starting = null, disposed = false, noWorker = opts.worker === false;
     var early = [], tickNo = 0;
@@ -825,8 +856,8 @@
         if (disposed) { h.dispose(); starting = null; return null; }
         H = h; s.host = h;
         h.onDead = function (why) { if (!disposed && H === h) { st.errors++; reset(why); } };
-        var first = h.first; h.first = null; // the world sent with init (a new host only)
-        return (first || h.createWorld(desc)).then(function (r) {
+        var first = h.first; h.first = null; // the world sent with init (a new host only); null → make it now
+        return (first ? first.then(function (r) { return r || h.createWorld(desc); }) : h.createWorld(desc)).then(function (r) {
           starting = null;
           if (disposed) { if (r.world) r.world.destroy(); return null; }
           if (!r.world) { s.error = 'create ' + r.code; s.ready = false; return null; }
