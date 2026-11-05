@@ -92,7 +92,10 @@ export default function handler(req, res) {
   }));
 }
 
+// Реклама под полем для кликов — не ближе 150 px (05.11.2026): тут кликают как можно быстрее, а место под полем часто уже на первом
+// экране (page.js SLOT_RSV) — промах по полю не должен попасть в рекламу (AdSense: «случайные клики», как 150 px от игры)
 const CSS = `
+.cp+.d37-ad{margin-top:150px}
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
 .lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:760px}

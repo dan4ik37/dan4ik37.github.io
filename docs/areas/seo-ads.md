@@ -39,5 +39,13 @@
   (page.js share, SHARE_ADS). /terms and /refund: no «Документ готовится», noindex + not in sitemap until seller.js is filled.
   trademarks.js covers Windows, Block Blast, 1010!, Ludo King, UNO, Wordle, GTA, Mario, Unity (whole page text). YouTube snapshot
   refreshed 2026-11-05 (rerun scripts/snapshot-uploads.mjs at least every 30 days). Watch achievements hidden (XP_WATCH).
+- Round 3 (05.11, branch ads-fix3): first-screen server slots are reserved while the page parses (page.js SLOT_RSV: an inline
+  script right after `<div data-ad>` gives it the label + 280/300 px box before the text below exists; VIP via d37_noads — no
+  reserve) and ad-places.js slot() fills a reserved slot at once (empty → own promo of the same height; ad scripts blocked → own
+  link after load + 2 s). /tools/cps keeps the slot 150 px below the click pad. The after-round #gamesAd box is reserved from the
+  first input in the game (RULES.roundHold; input-driven shifts are not CLS) and the ad goes into the same box. Games hub, Studio
+  and Unity after-round units go through D37AdPlaces (slot / show → guard / settle). /ads-terms: no «шаблон… после регистрации ИП»
+  line, noindex until seller.js is filled (legal.js DRAFT_NOTE / DRAFT_NOINDEX). /games/<id>?s=&n= challenge links: noindex; nick
+  from the URL → no ads, without a nick → ads (SHARE_ADS). Watch achievements are not offered or shown as a title (achShown).
 - Owner-only (AdSense UI): Auto ads off or page exclusions (/play, /chat, /phone, /profile, /adv, /invite), EEA consent message,
   blocking controls (gambling, dating, alcohol), «Запросить проверку» after deploy; GitHub Pages mirror off (Settings → Pages).

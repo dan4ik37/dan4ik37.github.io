@@ -970,7 +970,9 @@
       // реклама — только вокруг игр из каталога (прошли модерацию), после раунда, не во время игры
       if (g.status === 'public' && !opt.preview) {
         const ad = q('.st-ad');
-        if (ad && !ad.dataset.done && window.D37Ads?.render(ad, 'game_over')) { ad.hidden = false; ad.dataset.done = '1'; }
+        // через диспетчер (ad-places.js show): пусто или блокировщик — своя подсказка той же высоты / место убрано, без пустой рамки
+        const AP = window.D37AdPlaces;
+        if (ad && !ad.dataset.done && (AP ? AP.show(ad, 'game_over') : window.D37Ads?.render(ad, 'game_over'))) { ad.hidden = false; ad.dataset.done = '1'; }
         if (X.rounds >= 2 && !X.room) window.D37Ads?.interstitial?.();   // в комнате не перекрываем игру — хоста ждут другие
       }
     }

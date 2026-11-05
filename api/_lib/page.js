@@ -66,8 +66,21 @@ export const SHARE_ADS = true;
 // Реклама на списках роликов (/videos, /top, /topics, /topic/<slug>, /history): там только данные YouTube (названия и превью) —
 // для AdSense это «скопированное без своего текста», для YouTube API — III.G.1.d. false — без рекламы; вернуть как было — true.
 export const VIDEO_LIST_ADS = false;
+// Место рекламы на первом экране (05.11.2026). Место <div data-ad> встаёт, только когда подъезжает снизу (ad-places.js lazyBelow:
+// блок не сдвигает видимый текст), — а у тестов /quiz/<тест>, рандомайзера, теста печати и генератора ников оно уже на первом
+// экране, и рекламы там не было вовсе. Теперь сразу за местом — крошечный скрипт (SLOT_JS): место на первом экране и не VIP —
+// держим его, пока страница рисуется (подпись «Реклама» и высота блока; текста под ним ещё нет — сдвигать нечего), ad-places.js
+// заполняет такое место сразу, пусто — своя подсказка той же высоты. Скрипты рекламы не пришли совсем (блокировщик вырезал
+// ad-places.js) — через 2 с после загрузки страницы на месте своя ссылка той же высоты, без «Реклама». Ниже экрана — как раньше.
+// Вернуть как было — SLOT_RSV = false.
+export const SLOT_RSV = true;
+const RSV_HEAD = `<script>window.__d37Rsv=function(){try{var s=document.currentScript,el=s&&s.previousElementSibling;if(!el||!el.hasAttribute('data-ad')||el.classList.contains('d37-feed'))return;var c=null;try{c=JSON.parse(localStorage.getItem('d37_noads')||'null')}catch(e){}if(c&&c.until>Date.now())return;el.hidden=false;if(el.getBoundingClientRect().top>=(innerHeight||document.documentElement.clientHeight)){el.hidden=true;return}el.className='d37-ad';el.setAttribute('data-ad-rsv','');el.innerHTML='<span class="d37-ad-label">Реклама</span><div class="d37-rsv"></div>';el.style.minHeight=el.getBoundingClientRect().height+'px';addEventListener('load',function(){setTimeout(function(){if(el.getAttribute('data-ad-done')||!el.isConnected)return;el.classList.add('d37-rsv-off');el.innerHTML='<a class="d37-rsv-own" href="/games">🎮 <b>Игры онлайн с друзьями</b><small>«5 букв», морской бой, шашки и города — бесплатно, без регистрации</small></a>'},2000)})}catch(e){}}</script>`;
+const SLOT_JS = '<script>window.__d37Rsv&&__d37Rsv()</script>';
+// обычное место (не карточка ленты): <div data-ad="ключ" hidden></div> → и скрипт сразу за ним ($& — само найденное место)
+const withRsv = body => String(body).replace(/<div data-ad="[\w-]+" hidden><\/div>/g, '$&' + SLOT_JS);
 export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false, spa = '', share = false }) {
   if (noindex && !(share && SHARE_ADS)) noAds = true;
+  const rsv = SLOT_RSV && !noAds;
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -99,6 +112,7 @@ ${AGE_HEAD}
 ${THEME_HEAD}
 ${REF_HEAD}
 ${ERR_HEAD}
+${rsv ? RSV_HEAD : ''}
 ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>`}
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>
@@ -135,7 +149,7 @@ ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.a
     <a href="/profile">👤 Профиль / Войти</a>
   </div></details>
 </header>
-${body}
+${rsv ? withRsv(body) : body}
 <footer class="foot">
   <a href="/">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/studio">Студия игр</a> · <a href="/forum">Форум</a> · <a href="/ideas">Идеи для видео</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/tools/random">Рандомайзер</a> · <a href="/tools/typing">Тест печати</a> · <a href="/tools/photo">Фоторедактор</a> · <a href="/vip">VIP</a> · <a href="/shop">💎 Магазин</a> · <a href="/donate">💝 Поддержать</a> · <a href="/reklama">Реклама</a> · <a href="/adv">Разместить рекламу</a> · <a href="/ads-terms">Правила рекламы</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> ·<a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
   <a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch</a> ·
@@ -230,6 +244,10 @@ h2{font-family:Oswald,sans-serif;font-weight:600;font-size:1.3rem;text-transform
 .d37-ad{display:block;margin:1.6rem auto 0;min-height:90px;text-align:center}
 .d37-ad[hidden]{display:none}
 .d37-ad-label{display:block;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.3rem;opacity:.7}
+.d37-rsv{min-height:280px}
+@media(max-width:768px){.d37-rsv{min-height:300px}}
+.d37-rsv-own{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.35rem;min-height:inherit;box-sizing:border-box;padding:1rem;border-radius:18px;border:1px solid var(--line);background:var(--card);color:var(--text);text-decoration:none}
+.d37-rsv-own small{color:var(--muted);font-size:.8rem}
 .topics{margin-top:1.2rem;font-size:.85rem;color:var(--muted)}
 .topics a{display:inline-block;margin:.2rem .3rem 0 0;padding:.3rem .75rem;border-radius:999px;border:1px solid var(--line);text-decoration:none;font-weight:700;color:var(--text)}
 .topics a:hover{border-color:var(--accent)}

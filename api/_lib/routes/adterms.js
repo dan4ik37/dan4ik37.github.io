@@ -7,7 +7,11 @@ import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
 import { SELLER, sv, sellerReady } from '../seller.js';
 import { DEF, FORMATS } from '../ad-rules.js';
-import { CSS as LEGAL_CSS } from './legal.js';
+import { CSS as LEGAL_CSS, DRAFT_NOTE, DRAFT_NOINDEX } from './legal.js';
+// 05.11.2026: строки «Это шаблон правил… реквизиты появятся после регистрации ИП» на странице нет (для проверки AdSense — «сайт не
+// готов», как плашка «Документ готовится» у /terms), и пока реквизитов нет (seller.js) — noindex; страница открывается по ссылкам
+// как раньше. Реквизиты вписаны — обычная страница. Вернуть строку — DRAFT_NOTE, noindex — DRAFT_NOINDEX (routes/legal.js)
+const draft = () => sellerReady() || !DRAFT_NOTE ? '' : '<p class="lg-draft">Это шаблон правил, написанный простыми словами. Перед тем как принимать оплату за рекламу, его стоит показать юристу; реквизиты сайта появятся здесь после регистрации ИП.</p>';
 
 const S = SELLER;
 const mail = () => `<a href="mailto:${esc(S.email)}">${esc(S.email)}</a>`;
@@ -19,7 +23,7 @@ export default function handler(req, res) {
   <nav class="crumbs"><a href="/">Главная</a> › <a href="/reklama">Реклама</a> › <span>Правила рекламы</span></nav>
   <h1>Правила рекламы на сайте</h1>
   <div class="lg-body">
-<p class="lg-draft">Это шаблон правил, написанный простыми словами. Перед тем как принимать оплату за рекламу, его стоит показать юристу${sellerReady() ? '' : '; реквизиты сайта появятся здесь после регистрации ИП'}.</p>
+${draft()}
 <p>Эти правила — условия, на которых любой зарегистрированный пользователь (дальше — «рекламодатель») сам размещает рекламу на сайте <a href="${SITE}">${SITE.replace('https://', '')}</a> через <a href="/adv">кабинет рекламодателя</a>. Сайт ведёт ${esc(sv(S.name, 'владелец сайта'))} (дальше — «мы»). Перед первой кампанией рекламодатель ставит галочку «прочитал(а) и согласен(на)» — это и есть согласие с правилами (редакция ${esc(ru(DEF.terms))}). Остальное — <a href="/terms">пользовательское соглашение</a>.</p>
 
 <h2>1. Что можно разместить и где</h2>
@@ -109,5 +113,6 @@ export default function handler(req, res) {
     title: 'Правила рекламы на сайте — dan4ik37',
     description: 'Как разместить рекламу на сайте dan4ik37 за кристаллы 💎: форматы, цены, проверка, запрещённые темы, пометка «Реклама» и erid, возраст, возврат бюджета.',
     url: `${SITE}/ads-terms`, image: SITE + '/og-image.jpg', body, css: LEGAL_CSS, noAds: true,
+    noindex: !sellerReady() && DRAFT_NOINDEX.includes('ads-terms'),
   }));
 }
