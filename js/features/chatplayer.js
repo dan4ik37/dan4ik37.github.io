@@ -86,7 +86,7 @@
     el.className = 'ds-player' + (S.mini ? ' mini' : '');
     el.dataset.k = S.kind + ':' + S.id;
     const h = +localStorage.getItem(LH) || 0;
-    if (h >= 140 && !narrow()) el.style.setProperty('--plh', h + 'px');
+    if (h >= 200 && !narrow()) el.style.setProperty('--plh', h + 'px');   // плеер не ниже 200 px (правила YouTube, css/ds.css)
     el.innerHTML = `<div class="ds-plbar"><b>${S.kind === 'tw' ? '🔴 Эфир Денчика' : '🎬 ' + e(S.title)}</b><span class="ds-plbtns">
         ${S.kind === 'yt' ? `<a href="/v/${e(S.id)}" title="Открыть страницу ролика">↗</a>` : `<a href="https://www.twitch.tv/${e(TW)}" target="_blank" rel="noopener" title="Открыть на Twitch">↗</a>`}
         <button type="button" data-pl="mini" title="Свернуть / развернуть" aria-label="Свернуть плеер">▾</button><button type="button" data-pl="close" title="Закрыть" aria-label="Закрыть плеер">✕</button></span></div>
@@ -107,7 +107,7 @@
       if (narrow() || S?.mini) return;
       ev.preventDefault();
       const y0 = ev.clientY, h0 = el.querySelector('.ds-plframe').getBoundingClientRect().height;
-      const mv = e2 => { const hh = Math.max(140, Math.min(window.innerHeight * .7, h0 + e2.clientY - y0)); el.style.setProperty('--plh', Math.round(hh) + 'px'); };
+      const mv = e2 => { const hh = Math.max(200, Math.min(window.innerHeight * .7, h0 + e2.clientY - y0)); el.style.setProperty('--plh', Math.round(hh) + 'px'); };
       const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
         const v = parseInt(el.style.getPropertyValue('--plh'), 10); if (v) try { localStorage.setItem(LH, String(v)); } catch (er) {} };
       window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
