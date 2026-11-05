@@ -817,7 +817,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 .d37-house-ic{font-size:2rem;line-height:1}.d37-house small{color:var(--muted,#8d8daa);font-size:.76rem}
 .d37-house-go{font-size:.74rem;font-weight:800;color:var(--accent,#ff2d55)}
 .d37-house.d37-solo{border:1px solid var(--border,var(--line,rgba(var(--fg-rgb),.14)));border-radius:18px;background:rgba(var(--fg-rgb),.025);margin-left:auto;margin-right:auto;overflow:hidden;text-align:center}
-.d37-house-n{flex-wrap:wrap}.d37-house-n a{min-width:min(150px,100%);padding:.8rem .6rem}
+.d37-house-n a{flex:1 1 0;min-width:0;padding:.8rem .45rem}.d37-house-n small{font-size:.7rem}
 .d37-rail{position:absolute;z-index:3}
 .d37-rail-in{position:absolute;top:0;left:0;width:100%}
 .d37-rail .d37-ad{margin:0;max-width:none;min-height:600px}
