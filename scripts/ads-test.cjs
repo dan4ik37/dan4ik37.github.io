@@ -1079,6 +1079,17 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   has('js/games/studio.js', /eq\('status', 'public'\)[\s\S]{0,900}feed\(box\.firstChild, \{ place: 'feed_ugc'/, 'studio.js: реклама только в каталоге проверенных игр');
   has('js/games/unity-host.js', /eq\('status', 'public'\)[\s\S]{0,900}feed\(box\.firstChild, \{ place: 'feed_ugc'/, 'unity-host.js: реклама только в каталоге проверенных игр');
   has('js/features/youtube.js', /feed\(grid, \{ place: 'feed_videos'[^\n]*titles: vids\.map/, 'youtube.js: карточки в ленте видео (с проверкой «азартных»)');
+  // XP за просмотр роликов выключены (xp.js XP_WATCH = false, правила YouTube API III.F.3.c): ни строки «Смотреть видео» в «Как
+  // получить XP», ни ачивок «Зритель» / «Киноман» (сервер их ещё считает — economy.sql, решает владелец)
+  {
+    ok(/const XP_WATCH = false;[\s\S]*const XP_RULES = \[\s*\.\.\.\(XP_WATCH \?/.test(read('js/features/xp.js')), 'xp.js: XP_WATCH = false до XP_RULES; строка «Смотреть видео» — только при XP_WATCH');
+    const cx = vm.createContext({});
+    vm.runInContext(read('js/features/achievements.js') + '\n;this.r = achVisibleDefs(new Set(["watcher_10", "chatty_10"]));', cx);
+    ok(!cx.r.regular.some(d => /^watcher_/.test(d.code)) && cx.r.regular.some(d => d.code === 'chatty_10'), 'achievements.js: ачивок за просмотр роликов в списке нет');
+    vm.runInContext('var XP_WATCH = true; this.r2 = achVisibleDefs(new Set());', cx);
+    ok(cx.r2.regular.some(d => d.code === 'watcher_10'), 'XP_WATCH = true — ачивки снова видны (откат одной строкой)');
+    has('js/features/profile.js', /earned\.has\(d\.code\) && \(typeof achShown !== 'function' \|\| achShown\(d\.code\)\)/, 'profile.js: витрина ачивок — без ачивок за просмотр');
+  }
   // 05.11.2026 (CLS): пустой блок Google на главной — под присмотром guard; CSS держит место и не прячет его сам, пока guard решает
   has('js/features/ads.js', /M\.guard\(ins, \(\) => M\.settle\(box\)\)/, 'ads.js: блоки главной под присмотром guard (пусто — без сдвига)');
   has('css/premium.css', /#ad-mid>ins\.adsbygoogle,#ad-top>ins\.adsbygoogle\{min-height:280px\}/, 'premium.css: место под блок на главной держится заранее');
