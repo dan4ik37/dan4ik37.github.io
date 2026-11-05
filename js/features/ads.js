@@ -48,6 +48,9 @@ function fillVisibleAds(){
     ins.dataset.adFilled = '1';
     M?.mark(ins.dataset.slotKey);
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+    // Сеть ничего не отдала или блокировщик — вёрстка не прыгает: ниже экрана место убираем, на экране — своя подсказка той же
+    // высоты (ad-places.js settle, 05.11.2026)
+    if (M?.guard && box !== ins) M.guard(ins, () => M.settle(box));
   });
 }
 

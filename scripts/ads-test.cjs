@@ -596,19 +596,82 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   stage.remove();
 }
 
-// ═══ 4б. Серверные страницы: место грузится, когда подъедет к экрану (05.11.2026 — у всех) ═══
+// ═══ 4б. Серверные страницы: место встаёт, только когда подъезжает снизу (05.11.2026, CLS) ═══
+// и пустой блок Google (сеть ничего не отдала / блокировщик) — без сдвига: ниже экрана убрать, на экране — своя подсказка той же высоты
 {
+  Object.defineProperty(globalThis, 'innerHeight', { get: () => 915, configurable: true });
+  El.prototype.getClientRects = function(){ let n = this; while (n && n.nodeType === 1) { if (n.hidden) return []; n = n.parentNode; } return [this.getBoundingClientRect()]; };
   fresh(); window.ADS_IDS.yandex = {};
-  const d = new El('div'); d.dataset.ad = 'seo_game'; d.hidden = true; body.appendChild(d);
+  const slot = (top, h) => { const d = new El('div'); d.dataset.ad = 'seo_game'; d.hidden = true; d._rect = { left: 0, top, width: 412, height: h || 0 }; body.appendChild(d); return d; };
+  const d = slot(1400);
   const n = new El('div'); n.dataset.ad = 'video_page'; n.setAttribute('data-ad-now', ''); n.hidden = true; body.appendChild(n);
+  const top1 = slot(300);   // на первом экране
   window.adsbygoogle = [];
   M.fillAll();
   ok(!d.hidden && !d.querySelector('ins') && IO.list.has(d), 'data-ad: сначала только наблюдаем (пустой div виден наблюдателю), блока ещё нет');
   ok(!!n.querySelector('ins'), 'data-ad-now — сразу');
   showIO(d);
   const ins = d.querySelector('ins');
-  ok(ins && ins.getAttribute('data-ad-slot') === IDS.google.seo_game && d.classList.contains('d37-ad'), 'подъехал к экрану — блок Google с подписью', d.innerHTML);
-  d.remove(); n.remove(); window.adsbygoogle = [];
+  ok(ins && ins.getAttribute('data-ad-slot') === IDS.google.seo_game && d.classList.contains('d37-ad') && ins.dataset.guard === '1', 'подъехал снизу (ещё ниже экрана) — блок Google с подписью и под присмотром guard', d.innerHTML);
+  showIO(top1);
+  ok(!top1.querySelector('ins') && IO.list.has(top1), 'место уже на первом экране — блок не ставим (сдвинул бы текст), ждём, пока подъедет снизу');
+  top1._rect.top = 1300; showIO(top1);
+  ok(!!top1.querySelector('ins'), 'пролистал вверх, место снова ниже экрана — подъехало снизу, блок есть');
+  // ответ сети: unfilled, место ниже экрана — убрать
+  window.adsbygoogle = { loaded: true, push(){} };
+  ins.setAttribute('data-adsbygoogle-status', 'done'); ins.setAttribute('data-ad-status', 'unfilled'); advance(4100);
+  ok(d.hidden && d.innerHTML === '', 'unfilled ниже экрана — место убрано (на экране ничего не сдвинулось)', d.outerHTML);
+  // unfilled на экране — своя подсказка ровно той же высоты, без пометки «Реклама»
+  const v = slot(1300); M.fillAll(); showIO(v); v._rect = { left: 0, top: 320, width: 412, height: 336 };
+  const vi = v.querySelector('ins'); vi.setAttribute('data-adsbygoogle-status', 'done'); vi.setAttribute('data-ad-status', 'unfilled'); advance(4100);
+  ok(v.classList.contains('d37-house') && v.classList.contains('d37-solo') && !v.classList.contains('d37-ad') && v.style.height === '336px' && v.style.boxSizing === 'border-box' && v.querySelectorAll('a').length === 3 && !/Реклама/.test(v.textContent) && !v.querySelector('ins'),
+    'unfilled на экране — 3 свои подсказки в том же месте (высота 336 px), без «Реклама» и без <ins>', v.outerHTML.slice(0, 300));
+  // пришла реклама — ничего не трогаем
+  const f = slot(1300); M.fillAll(); showIO(f); f._rect.top = 200;
+  const fi = f.querySelector('ins'); fi.setAttribute('data-adsbygoogle-status', 'done'); fi.setAttribute('data-ad-status', 'filled'); advance(30e3);
+  ok(f.classList.contains('d37-ad') && !!f.querySelector('ins') && !f.style.height, 'реклама пришла — блок остаётся как есть');
+  // сеть взяла блок, ответа ещё нет — ждём (не выдумываем «пусто»)
+  const w = slot(1300); M.fillAll(); showIO(w); w._rect.top = 200;
+  w.querySelector('ins').setAttribute('data-adsbygoogle-status', 'done'); advance(60e3);
+  ok(w.classList.contains('d37-ad') && !!w.querySelector('ins'), 'блок взят сетью (data-adsbygoogle-status), ответа ещё нет — место ждёт');
+  // блокировщик: скрипт не загрузился (у adsbygoogle нет loaded), страница уже загружена
+  window.adsbygoogle = [];
+  const bl = slot(1300); M.fillAll(); showIO(bl); bl._rect = { left: 0, top: 100, width: 412, height: 330 }; advance(4100);
+  ok(bl.classList.contains('d37-house') && bl.style.height === '330px' && !/Реклама/.test(bl.textContent), 'блокировщик (скрипт не пришёл) — на экране своя подсказка, пустой рамки «Реклама» нет', bl.outerHTML.slice(0, 200));
+  const bl2 = slot(1300); M.fillAll(); showIO(bl2); advance(4100);
+  ok(bl2.hidden && bl2.innerHTML === '', 'блокировщик, место ниже экрана — убрано');
+  // пустышка блокировщика: loaded есть, но блок никто не взял (нет data-adsbygoogle-status) — после трёх проверок «пусто»
+  window.adsbygoogle = { loaded: true, push(){} };
+  const st0 = slot(1300); M.fillAll(); showIO(st0); advance(4100 + 3000);
+  ok(!!st0.querySelector('ins'), 'пустышка: сразу не решаем');
+  advance(7000);
+  ok(st0.hidden, 'пустышка блокировщика (loaded, но блок не взят) — через ~13 с убрано', st0.outerHTML.slice(0, 200));
+  // запросы на паузе (ждём возраст) — не «пусто»
+  window.adsbygoogle = { loaded: true, push(){}, pauseAdRequests: 1 };
+  const pz = slot(1300); M.fillAll(); showIO(pz); advance(40e3);
+  ok(!!pz.querySelector('ins') && !pz.hidden, 'пауза запросов — место ждёт');
+  window.adsbygoogle.pauseAdRequests = 0; pz.querySelector('ins').setAttribute('data-ad-status', 'unfilled'); advance(3100);
+  ok(pz.hidden, 'пауза снята, пусто — убрано');
+  // страница ещё грузится (async-скрипт не пришёл) — блокировщиком не считаем
+  doc.readyState = 'interactive'; window.adsbygoogle = [];
+  const ld = slot(1300); M.fillAll(); showIO(ld); advance(20e3);
+  ok(!!ld.querySelector('ins'), 'страница ещё грузится — не решаем');
+  doc.readyState = 'complete'; advance(3100);
+  ok(ld.hidden, 'загрузилась, скрипта рекламы нет — убрано');
+  // SPA: обёртка #ad-mid (js/features/ads.js) — на экране своя подсказка внутри, подпись ::before уходит вместе с <ins>, высота та же
+  const wrap = new El('div'); wrap.id = 'ad-mid'; wrap.className = 'wrap-sm'; wrap.innerHTML = '<ins class="adsbygoogle" data-slot-key="home_mid"></ins>'; body.appendChild(wrap);
+  wrap._rect = { left: 0, top: 500, width: 412, height: 331 };
+  ok(M.settle(wrap) === 'own' && !wrap.querySelector('ins') && wrap.querySelector('.d37-house.d37-solo') && wrap.style.height === '331px' && !wrap.classList.contains('ad-empty'), '#ad-mid на экране — своя подсказка внутри обёртки, высота 331 px', wrap.outerHTML.slice(0, 200));
+  const wrap2 = new El('div'); wrap2.id = 'ad-top'; wrap2.innerHTML = '<ins class="adsbygoogle"></ins>'; body.appendChild(wrap2); wrap2._rect = { left: 0, top: 2000, width: 412, height: 331 };
+  ok(M.settle(wrap2) === 'gone' && wrap2.classList.contains('ad-empty') && !wrap2.querySelector('ins'), '#ad-top ниже экрана — убран (ad-empty, <ins> удалён — скрытой рекламы нет)');
+  const wrap3 = new El('div'); wrap3.id = 'ad-bottom'; wrap3.innerHTML = '<ins class="adsbygoogle"></ins>'; body.appendChild(wrap3); wrap3._rect = { left: 0, top: 300, width: 412, height: 30 };
+  ok(M.settle(wrap3) === 'own' && !wrap3.querySelector('ins') && !wrap3.querySelector('a') && wrap3.style.height === '30px', 'от блока осталась одна подпись (фильтр спрятал <ins>) — пустой промежуток той же высоты, без подсказки');
+  M.RULES.settle = false;
+  const old = new El('div'); old.className = 'd37-ad'; old.innerHTML = '<ins class="adsbygoogle"></ins>'; body.appendChild(old); old._rect = { left: 0, top: 100, width: 412, height: 330 };
+  ok(M.settle(old) === 'gone' && old.hidden, 'RULES.settle = false — как раньше: пустое убрать сразу');
+  M.RULES.settle = true;
+  [d, n, top1, v, f, w, bl, bl2, st0, pz, ld, wrap, wrap2, wrap3, old].forEach(e => e.remove()); window.adsbygoogle = [];
+  delete El.prototype.getClientRects; delete globalThis.innerHeight;
 }
 
 // ═══ 5. Карточки «Реклама» в списках ═══
@@ -992,6 +1055,11 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   has('js/games/studio.js', /eq\('status', 'public'\)[\s\S]{0,900}feed\(box\.firstChild, \{ place: 'feed_ugc'/, 'studio.js: реклама только в каталоге проверенных игр');
   has('js/games/unity-host.js', /eq\('status', 'public'\)[\s\S]{0,900}feed\(box\.firstChild, \{ place: 'feed_ugc'/, 'unity-host.js: реклама только в каталоге проверенных игр');
   has('js/features/youtube.js', /feed\(grid, \{ place: 'feed_videos'[^\n]*titles: vids\.map/, 'youtube.js: карточки в ленте видео (с проверкой «азартных»)');
+  // 05.11.2026 (CLS): пустой блок Google на главной — под присмотром guard; CSS держит место и не прячет его сам, пока guard решает
+  has('js/features/ads.js', /M\.guard\(ins, \(\) => M\.settle\(box\)\)/, 'ads.js: блоки главной под присмотром guard (пусто — без сдвига)');
+  has('css/premium.css', /#ad-mid>ins\.adsbygoogle,#ad-top>ins\.adsbygoogle\{min-height:280px\}/, 'premium.css: место под блок на главной держится заранее');
+  has('css/premium.css', /#ad-mid:has\(>ins\.adsbygoogle\[data-ad-status="unfilled"\]:not\(\[data-guard\]\)\)/, 'premium.css: CSS прячет пустой блок, только если guard не работает');
+  ok(!/#ad-mid:has\(>ins\.adsbygoogle\[data-ad-status="unfilled"\]\),/.test(read('css/premium.css')), 'premium.css: пустой блок на экране не схлопывается сам (раньше — сдвиг на 330 px)');
   has('js/games/horde.js', /coinOffer\?\.\('horde_shop'\)/, 'horde.js: монеты за рекламу в магазине');
   has('js/games/horde.js', /'d37:coinad'/, 'horde.js: после награды магазин перерисовывается');
   // каждая кнопка «за рекламу» в играх — только когда есть блок (rewardReady) и говорит, что дадут

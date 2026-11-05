@@ -32,6 +32,9 @@
     // III.G.1.d). false: рекламы сетей и прямой между роликами нет, на месте карточки «Реклама» — своя подсказка (игры сайта).
     // Вернуть как было — true.
     videoFeed: false,
+    // Блок Google остался пустым (сеть ничего не отдала, блокировщик) — без сдвига вёрстки: ниже экрана место убираем, на экране —
+    // своя подсказка той же высоты (settle ниже). Вернуть как было (убрать сразу) — false.
+    settle: true,
     places: {
       loading:      { delay: 1500, gap: 90, max: 6 },
       break:        { every: 3, first: 120, gap: 300, max: 4, desk: true },
@@ -240,11 +243,84 @@
   }
   // Реклама сети в el (показ засчитывает вызывающий)
   function netShow(el, key, o){
-    const empty = o.onEmpty && (() => { if (el.dataset.adEmpty) return; el.dataset.adEmpty = '1'; log(key, 'unfilled'); o.onEmpty(el); });
-    const ok = !!window.D37Ads?.render(el, key, { checked: true, onEmpty: empty, format: FORMAT[base(key)] });
-    // блокировщик рекламы или сеть молчит: через 8 с пустое место с подписью «Реклама» — убрать (или своя подсказка)
-    if (ok && empty) setTimeout(() => { if (el.isConnected && !filled(el)) empty(); }, 8000);
+    const empty = () => { if (el.dataset.adEmpty) return; el.dataset.adEmpty = '1'; log(key, 'unfilled'); if (o.onEmpty) o.onEmpty(el); else settle(el); };
+    const ok = !!window.D37Ads?.render(el, key, { checked: true, onEmpty: o.onEmpty && empty, format: FORMAT[base(key)] });
+    if (!ok) return ok;
+    // Google: ответ сети и блокировщик — guard (место не прыгает); РСЯ: блокировщик или сеть молчит — через 8 с пустое место
+    // с подписью «Реклама» — своя подсказка
+    const ins = el.querySelector?.('ins.adsbygoogle');
+    if (ins) guard(ins, empty);
+    else if (o.onEmpty) setTimeout(() => { if (el.isConnected && !filled(el)) empty(); }, 8000);
     return ok;
+  }
+  // ── Пустое место без сдвига вёрстки (05.11.2026, CLS) ──
+  // Место под блок Google держим заранее (min-height в CSS), чтобы текст не прыгал, когда реклама придёт. Сеть ничего не отдала
+  // (data-ad-status="unfilled" — сейчас так у большинства запросов) или реклама не пришла совсем (блокировщик: скрипт
+  // adsbygoogle.js не загрузился, подменён «пустышкой» или <ins> спрятан фильтром) — место НИЖЕ экрана (и в скрытом разделе)
+  // убираем: на экране ничего не двигается; на экране и выше него — своя подсказка (игры сайта) той же высоты и с теми же
+  // отступами: ничего не сдвигается, пустой рамки «Реклама» нет. RULES.settle = false — как раньше (убрать сразу, CSS).
+  const belowScreen = el => { const b = el.getBoundingClientRect(); return b.top >= (window.innerHeight || document.documentElement.clientHeight || 0); };
+  const rendered = el => !!(el.getClientRects && el.getClientRects().length);
+  function settle(el){
+    if (!el || !el.isConnected) return '';
+    const wrap = el.matches?.('#ad-mid, #ad-top, #ad-bottom');   // обёртка SPA (js/features/ads.js): внутри <ins> и подпись ::before
+    if (RULES.settle === false || !rendered(el) || belowScreen(el)) {
+      if (wrap) { el.querySelectorAll('ins.adsbygoogle').forEach(i => i.remove()); el.classList.add('ad-empty'); }
+      else { el.innerHTML = ''; el.hidden = true; }
+      return 'gone';
+    }
+    keepBox(el, () => {
+      const h = el.getBoundingClientRect().height, n = h >= 200 ? 3 : 1;
+      if (h < 90) {   // от блока осталась одна подпись (фильтр блокировщика спрятал сам <ins>) — пустой промежуток той же высоты
+        if (wrap) el.querySelectorAll('ins.adsbygoogle').forEach(i => i.remove()); else el.innerHTML = '';
+        return;
+      }
+      if (wrap) {
+        const d = document.createElement('div');
+        const ins = el.querySelector('ins.adsbygoogle');
+        if (ins) ins.replaceWith(d); else el.appendChild(d);
+        house(d, n); d.classList.add('d37-solo'); d.style.height = '100%';
+      } else { house(el, n); el.classList.add('d37-solo'); }
+    });
+    return 'own';
+  }
+  // Поменять содержимое так, чтобы место осталось ровно тем же: верх (поправка margin-top — подпись с отступом сверху могла
+  // «схлопнуться» с отступом коробки) и высота (фиксированная — новое содержимое не растянет). Всё в одной задаче, до отрисовки
+  function keepBox(el, mutate){
+    const b0 = el.getBoundingClientRect();
+    mutate();
+    Object.assign(el.style, { boxSizing: 'border-box', height: b0.height + 'px', overflow: 'hidden' });
+    const b1 = el.getBoundingClientRect();
+    if (Math.abs(b1.top - b0.top) > 0.5) {
+      const mt = parseFloat(typeof getComputedStyle === 'function' ? getComputedStyle(el).marginTop : 0) || 0;
+      el.style.marginTop = (mt + b0.top - b1.top) + 'px';
+    }
+  }
+  // Блок Google: ответ сети — атрибут data-ad-status у <ins> (filled / unfilled). Блокировщик: страница загрузилась (async-скрипт
+  // держит событие load), а настоящего adsbygoogle.js нет (loaded) или он не обработал <ins> (data-adsbygoogle-status — пустышка
+  // блокировщика ставит loaded, но <ins> не трогает), или фильтр спрятал сам <ins>. Пауза запросов (ждём возраст) — не «пусто».
+  function guard(ins, empty){
+    if (!ins || ins.dataset.guard) return;
+    ins.dataset.guard = '1';
+    const status = () => ins.getAttribute('data-ad-status');
+    let mo = null, quiet = 0;
+    if (typeof MutationObserver === 'function') {
+      mo = new MutationObserver(() => { const s = status(); if (s === 'unfilled') { mo.disconnect(); empty(); } else if (s === 'filled') mo.disconnect(); });
+      mo.observe(ins, { attributes: true, attributeFilter: ['data-ad-status'] });
+    }
+    const check = () => {
+      if (!ins.isConnected) { mo?.disconnect(); return; }
+      const s = status();
+      if (s === 'filled') return;
+      if (s === 'unfilled') { mo?.disconnect(); empty(); return; }
+      const A = window.adsbygoogle;
+      const hid = typeof getComputedStyle === 'function' && getComputedStyle(ins).display === 'none';
+      if (!hid && (document.readyState !== 'complete' || A?.pauseAdRequests)) { setTimeout(check, 3000); return; }
+      const blocked = hid || !A?.loaded || (!ins.hasAttribute('data-adsbygoogle-status') && ++quiet >= 3);
+      if (blocked) { mo?.disconnect(); empty(); return; }
+      if (!ins.hasAttribute('data-adsbygoogle-status')) setTimeout(check, 3000);   // скрипт есть, блок ещё не взят — подождём
+    };
+    setTimeout(check, 4000);
   }
   // ── Прямая реклама (кабинет рекламодателя #/adv: ads.sql, js/core/ad-direct.js) ──
   // Есть работающая кампания этого формата → место её: сервер выберет по таргетингу; не нашлось — как раньше
@@ -403,10 +479,12 @@
     ['🔤', 'Слово дня', 'Угадай слово из 5 букв — новое каждый день', '/play/words'], ['🧱', 'Студия 3D', 'Построй свой мир со скриптами, как в Roblox', '/play/studio3d'],
     ['✨', 'VIP', 'Цветной ник, стикеры и сайт без рекламы', '/vip']];
   const spaHref = h => h[0] === '#' && location.pathname !== '/' && location.pathname !== '/index.html' ? '/' + h : h;
-  function house(c){
-    const [ic, t, d, href] = HOUSE[Math.floor(Math.random() * HOUSE.length)];
-    c.className = c.className.replace(/\bd37-ad\b/g, '').trim() + ' d37-house';
-    c.innerHTML = `<a href="${esc(spaHref(href))}"><span class="d37-house-ic">${ic}</span><b>${esc(t)}</b><small>${esc(d)}</small><span class="d37-house-go">Открыть →</span></a>`;
+  // n — сколько подсказок (разных) в одном месте: высокое место (≥ 200 px) — три в ряд, а не одна посреди пустоты
+  function house(c, n = 1){
+    const pool = HOUSE.slice(), pick = [];
+    while (pick.length < Math.min(n, pool.length)) pick.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    c.className = c.className.replace(/\bd37-ad\b/g, '').trim() + ' d37-house' + (pick.length > 1 ? ' d37-house-n' : '');
+    c.innerHTML = pick.map(([ic, t, d, href]) => `<a href="${esc(spaHref(href))}"><span class="d37-house-ic">${ic}</span><b>${esc(t)}</b><small>${esc(d)}</small><span class="d37-house-go">Открыть →</span></a>`).join('');
   }
   let io = null;
   const lazyFns = new WeakMap();
@@ -414,6 +492,21 @@
     if (typeof IntersectionObserver !== 'function') { fn(); return; }
     if (!io) io = new IntersectionObserver(es => es.forEach(e => { if (!e.isIntersecting) return; io.unobserve(e.target); const f = lazyFns.get(e.target); lazyFns.delete(e.target); if (f && e.target.isConnected) f(); }), { rootMargin: '300px 0px' });
     lazyFns.set(el, fn); io.observe(el);
+  }
+  // Как lazy, но только когда место подъезжает СНИЗУ (ещё ниже экрана, ≤ 300 px). Место уже на первом экране или пролистали мимо —
+  // не ставим: появившийся блок сдвинул бы видимый текст (CLS); подъедет снизу ещё раз — поставим
+  let ioB = null;
+  const belowFns = new WeakMap();
+  function lazyBelow(el, fn, key){
+    if (typeof IntersectionObserver !== 'function') { if (belowScreen(el)) fn(); return; }
+    if (!ioB) ioB = new IntersectionObserver(es => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      const f = belowFns.get(e.target);
+      if (!f || !e.target.isConnected) { ioB.unobserve(e.target); return; }
+      if (!belowScreen(e.target)) { log(f.key || 'slot', 'fold'); return; }
+      ioB.unobserve(e.target); belowFns.delete(e.target); f.fn();
+    }), { rootMargin: '0px 0px 300px 0px' });
+    belowFns.set(el, { fn, key }); ioB.observe(el);
   }
   function feed(box, o = {}){
     if (!box) return 0;
@@ -676,7 +769,9 @@
       };
       if (el.hasAttribute('data-ad-now')) { go(); return; }
       el.hidden = false;   // display:none экран «не видит» (IntersectionObserver молчит): пустой div высотой 0 — видит; карточка ленты — своё место
-      lazy(el, go);
+      // карточка ленты — своё место в сетке; обычное место (пустой div высотой 0) — встаёт только ниже экрана (05.11.2026, CLS):
+      // блок с запасом высоты появляется там, где его ещё не видно, и текст на экране не сдвигается
+      if (feedCard || RULES.settle === false) lazy(el, go); else lazyBelow(el, go, key);
     });
   }
 
@@ -690,9 +785,9 @@
 .d37-ad-ph span{font-weight:600;opacity:.9}.d37-ad-ph small{font-weight:600;opacity:.6;font-size:10.5px}
 .d37-ad-ph[data-k="rail"]{min-height:600px}.d37-ad-ph[data-k="feed"]{min-height:190px}.d37-ad-ph[data-k="loading"]{min-height:100px}
 html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
-.d37-ad:has(ins[data-ad-status="unfilled"]){display:none!important}
-.d37-ad>ins.adsbygoogle[data-full-width-responsive]:not([data-ad-status="unfilled"]){min-height:280px}
-@media(max-width:768px){.d37-ad>ins.adsbygoogle[data-full-width-responsive]:not([data-ad-status="unfilled"]){min-height:300px}}
+.d37-ad:has(ins[data-ad-status="unfilled"]:not([data-guard])){display:none!important}
+.d37-ad>ins.adsbygoogle[data-full-width-responsive]{min-height:280px}
+@media(max-width:768px){.d37-ad>ins.adsbygoogle[data-full-width-responsive]{min-height:300px}}
 #gamesAd[data-net="g"]{margin-top:150px}
 .d37-adload{display:flex;flex-direction:column;align-items:center;gap:6px;width:min(100%,728px);margin:10px auto 0;font-weight:600;flex:none}
 .d37-adload>*{flex:none}
@@ -721,6 +816,8 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 .d37-house a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.35rem;padding:1.1rem;color:inherit;text-decoration:none}
 .d37-house-ic{font-size:2rem;line-height:1}.d37-house small{color:var(--muted,#8d8daa);font-size:.76rem}
 .d37-house-go{font-size:.74rem;font-weight:800;color:var(--accent,#ff2d55)}
+.d37-house.d37-solo{border:1px solid var(--border,var(--line,rgba(var(--fg-rgb),.14)));border-radius:18px;background:rgba(var(--fg-rgb),.025);margin-left:auto;margin-right:auto;overflow:hidden;text-align:center}
+.d37-house-n{flex-wrap:wrap}.d37-house-n a{min-width:min(150px,100%);padding:.8rem .6rem}
 .d37-rail{position:absolute;z-index:3}
 .d37-rail-in{position:absolute;top:0;left:0;width:100%}
 .d37-rail .d37-ad{margin:0;max-width:none;min-height:600px}
@@ -774,7 +871,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 
   window.D37AdPlaces = {
     RULES, why, mark, show, ids, hasId, net, loading, afterRound, interRound, feed, coinOffer, worldPromo, sponsor, fillAll, noAdsPerk,
-    placeholder, gambling, railTick, direct, hasNet,
+    placeholder, gambling, railTick, direct, hasNet, guard, settle,
     adAge, ageOff, gate, googleTag: () => ageRule().tfat || 0,   // возраст: группа рекламы, место выключено, «обработка» Google
     ctx(name, on){ if (on) ctxOn.add(name); else ctxOn.delete(name); if (on && name !== 'playing') { railOff(); } },
     debug: () => dbg.on, frames: () => dbg.frames,
