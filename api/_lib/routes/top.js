@@ -2,7 +2,7 @@
 // video-details.js на дату снимка, без квоты API). Отдельно ролики и шортсы. Ролики про кейсы/промокоды на депозит
 // (isGambling) сюда не попадают — на странице реклама, а AdSense запрещает её рядом с азартными играми.
 import { SITE, ALL_UPLOADS, getUploads, isGambling, esc, fmtCount, fmtDuration } from '../yt.js';
-import { page } from '../page.js';
+import { page, VIDEO_LIST_ADS } from '../page.js';
 import { videoFromSnapshot } from '../video-snap.js';
 import { DETAILS_AT } from '../video-details.js';
 
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
   <p class="lead">Топ по просмотрам из всех ${rows.length.toLocaleString('ru')} роликов канала — отдельно видео и шортсы. Просмотры по данным YouTube на ${esc(onDate)}.</p>
   <nav class="tp-tabs"><a href="#videos">🎬 Видео</a><a href="#shorts">⚡ Шортсы</a><a href="/history">📜 История канала</a></nav>
   <section id="videos"><h2>Видео — топ ${longs.length}</h2><div class="tp-grid">${longs.map(card).join('')}</div></section>
-  <div data-ad="video_page" hidden></div>
+  ${VIDEO_LIST_ADS ? '<div data-ad="video_page" hidden></div>' : ''}
   <section id="shorts"><h2>Шортсы — топ ${shorts.length}</h2><div class="tp-grid">${shorts.map(card).join('')}</div></section>
   <p class="all"><a href="/videos">Все видео по годам →</a> · <a href="/topics">Игры канала</a> · <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Удиви меня</button></p>
 </main>`;
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
   return res.status(200).send(page({
     title: 'Самые популярные видео dan4ik37 — топ по просмотрам',
     description: `Топ-${N} видео и шортсов dan4ik37 по просмотрам: ${longs.slice(0, 3).map(v => v.title).join(' · ').slice(0, 200)}`,
-    url, image: SITE + '/img/share/top.png', ld, body, css: CSS
+    url, image: SITE + '/img/share/top.png', ld, body, css: CSS, noAds: !VIDEO_LIST_ADS
   }));
 }
 

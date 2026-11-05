@@ -2,7 +2,7 @@
 // сколько роликов вышло за год, во что больше всего играл (темы из api/_lib/topics.js), первое видео
 // года. Ничего не выдумываем: текста «от автора» тут нет — только цифры и ссылки на ролики.
 import { SITE, ALL_UPLOADS, getUploads, isGambling, esc } from '../yt.js';
-import { page, YT_CHANNEL } from '../page.js';
+import { page, YT_CHANNEL, VIDEO_LIST_ADS } from '../page.js';
 import { TOPICS } from '../topics.js';
 
 const ru = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
@@ -52,14 +52,14 @@ export default async function handler(req, res) {
   <p class="lead">Канал на YouTube — с ${year(first)} года: ${vids.length.toLocaleString('ru')} ${ru(vids.length, 'ролик', 'ролика', 'роликов')}. Год за годом — сколько вышло видео и во что больше всего играли. Всё посчитано по самим роликам.</p>
   <a class="hy-origin" href="/v/${esc(first.id)}"><img src="${esc(first.thumb)}" alt="${esc(first.title)}" width="320" height="180"><span><small>С чего всё началось · ${esc(date(first))}</small><b>${esc(first.title)}</b></span></a>
   <div class="hy-list">${yearsHtml}</div>
-  <div data-ad="video_page" hidden></div>
+  ${VIDEO_LIST_ADS ? '<div data-ad="video_page" hidden></div>' : ''}
   <p class="all"><a href="/videos">Все видео →</a> · <a href="/topics">Игры канала</a> · <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Удиви меня</button></p>
 </main>`;
   res.setHeader('Cache-Control', 'public, s-maxage=43200, stale-while-revalidate=604800');
   return res.status(200).send(page({
     title: `История канала dan4ik37 — ${years[0]}–${years[years.length - 1]}`,
     description: `Как менялся канал dan4ik37 с ${years[0]} года: ${vids.length.toLocaleString('ru')} роликов, по годам — сколько видео и во что играл.`,
-    url, image: first.thumb ? first.thumb.replace('mqdefault', 'hqdefault') : SITE + '/og-image.jpg', body, css: CSS,
+    url, image: first.thumb ? first.thumb.replace('mqdefault', 'hqdefault') : SITE + '/og-image.jpg', body, css: CSS, noAds: !VIDEO_LIST_ADS,
     ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'История канала dan4ik37', url, inLanguage: 'ru' }
   }));
 }

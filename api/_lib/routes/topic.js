@@ -5,7 +5,7 @@
 import { SITE, ALL_UPLOADS, getUploads, isGambling, esc, fmtCount } from '../yt.js';
 import { videoFromSnapshot } from '../video-snap.js';
 import { QUIZZES } from '../quizzes.js';
-import { page, YT_CHANNEL } from '../page.js';
+import { page, YT_CHANNEL, VIDEO_LIST_ADS } from '../page.js';
 import { TOPICS, TOPIC_INTRO, topicOf } from '../topics.js';
 import { videoAge, ageBadge, ageAttr } from '../age.js';
 
@@ -59,11 +59,11 @@ function hubPage(counts){
   <h1>Во что играет dan4ik37</h1>
   <p class="lead">Все ролики канала, разложенные по играм. Выбери игру — откроются все видео по ней, от новых к старым.</p>
   <div class="tgrid">${list.map(x => `<a class="tcard" href="/topic/${x.slug}"><b>${esc(x.name)} ${ageBadge(x.age, { title: x.ageWhy })}</b><small>${vids(counts.get(x.slug))}</small><span>${esc(x.about)}</span></a>`).join('')}</div>
-  <div data-ad="video_page" hidden></div>
+  ${VIDEO_LIST_ADS ? '<div data-ad="video_page" hidden></div>' : ''}
   <p class="all"><a href="/videos">Все видео канала →</a> · <a href="/games">🎮 Игры на сайте</a></p>
 </main>`;
   return page({ title: 'Во что играет dan4ik37 — все игры канала', description: `Ролики dan4ik37 по играм: ${list.slice(0, 8).map(x => x.name).join(', ')} и другие.`,
-    url, image: SITE + '/og-image.jpg', ld, body, css: CSS });
+    url, image: SITE + '/og-image.jpg', ld, body, css: CSS, noAds: !VIDEO_LIST_ADS });
 }
 
 // «Самые популярные» по теме — просмотры из снимка (video-details.js), без роликов про кейсы/депозит (на странице реклама)
@@ -81,6 +81,8 @@ function topicPage(t, all, counts, req){
   const href = k => `/topic/${t.slug}${k > 1 ? '?p=' + k : ''}`;
   const url = SITE + href(p);
   const slice = list.slice((p - 1) * PER, p * PER);
+  // реклама: только если включена на списках роликов (page.js VIDEO_LIST_ADS) и тема не 16+ (хорроры с жестокостью, стрельба)
+  const ads = VIDEO_LIST_ADS && t.age < 16;
   const first = list.length ? new Date(list[list.length - 1].publishedAt).getFullYear() : '';
   const last = list.length ? new Date(list[0].publishedAt).getFullYear() : '';
   const ld = { '@context': 'https://schema.org', '@graph': [
@@ -106,12 +108,12 @@ function topicPage(t, all, counts, req){
   ${p === 1 && list.length >= 16 ? (() => { const pop = popularOf(list, 8); return pop.length >= 4 ? `<section class="more"><h2>🔥 Самые популярные</h2><div class="grid">${pop.map(x => card(x.v, x.views)).join('')}</div></section><h2 class="all-h">Все видео — от новых к старым</h2>` : ''; })() : ''}
   <section class="more"><div class="grid">${slice.map(v => card(v)).join('')}</div></section>
   ${pager}
-  <div data-ad="video_page" hidden></div>
+  ${ads ? '<div data-ad="video_page" hidden></div>' : ''}
   <section class="more"><h2>Другие игры канала</h2>${chips(counts, t.slug)}</section>
   ${t.slug === 'horror' ? '<div class="secret-spot"><button type="button" class="d37-secret" data-secret="horror" aria-label="Секретный знак">✦</button></div>' : ''}
 </main>`;
   const title = p > 1 ? `${t.name} — видео dan4ik37, страница ${p}` : `${t.name} — все видео dan4ik37 (${n.toLocaleString('ru')})`;
-  return page({ title, description: `${t.name}: ${vids(n)} dan4ik37 — ${t.about}`.slice(0, 300), url, image: list[0]?.thumb || SITE + '/og-image.jpg', ld, body, css: CSS });
+  return page({ title, description: `${t.name}: ${vids(n)} dan4ik37 — ${t.about}`.slice(0, 300), url, image: list[0]?.thumb || SITE + '/og-image.jpg', ld, body, css: CSS, noAds: !ads });
 }
 
 const CSS = `

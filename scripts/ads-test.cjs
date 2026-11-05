@@ -858,9 +858,8 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
 {
   const os = require('os'), { pathToFileURL } = require('url');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'd37-ads-'));
-  fs.mkdirSync(path.join(tmp, 'api/_lib/routes'), { recursive: true });
+  fs.cpSync(path.join(SITE, 'api'), path.join(tmp, 'api'), { recursive: true });
   fs.writeFileSync(path.join(tmp, 'package.json'), '{"type":"module"}');
-  for (const f of ['yt.js', 'page.js', 'errlog.js', 'topics.js', 'age.js', 'uploads-snapshot.js', 'video-details.js', 'routes/videos.js']) fs.copyFileSync(path.join(SITE, 'api/_lib', f), path.join(tmp, 'api/_lib', f));
   globalThis.fetch = async () => { throw new Error('нет сети'); };   // свежих роликов нет — только снимок
   try {
     const { page } = await import(pathToFileURL(path.join(tmp, 'api/_lib/page.js')).href);
@@ -869,16 +868,69 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
     ok(/ads-core\.js"><\/script>\s*<script src="\/js\/core\/ad-places\.js"><\/script>/.test(html1), 'серверные страницы: ad-places.js сразу после ads-core.js');
     const html2 = page({ title: 't', body: '<main></main>', noAds: true });
     ok(!/adsbygoogle\.js/.test(html2) && /ctx\("gambling",true\)/.test(html2), 'страница с роликом про кейсы: без AdSense, и полоска РСЯ тоже нельзя (gambling)');
-    const { default: videos } = await import(pathToFileURL(path.join(tmp, 'api/_lib/routes/videos.js')).href);
-    const run = async p => { const res = { h: {}, setHeader(k, v){ this.h[k] = v; }, status(c){ this.code = c; return this; }, send(x){ this.html = x; } }; await videos({ query: { p: String(p) } }, res); return res; };
+    const imp = f => import(pathToFileURL(path.join(tmp, f)).href);
+    const mkRes = () => ({ h: {}, setHeader(k, v){ this.h[k] = v; }, status(c){ this.code = c; return this; }, send(x){ this.html = x; } });
+    const call = async (h, query) => { const res = mkRes(); await h({ query }, res); return res; };
+    const adsOn = h => /adsbygoogle\.js/.test(h) || /data-ad="/.test(h);
+    // 05.11.2026: noindex — без рекламы (404, «временно недоступно»)
+    ok(!/adsbygoogle\.js/.test(page({ title: 't', body: '<main></main>', noindex: true })), 'page({ noindex }) — без AdSense (экраны ошибок и служебные)');
+    const Y = await imp('api/_lib/yt.js'), PG = await imp('api/_lib/page.js');
+    const { videoFromSnapshot } = await imp('api/_lib/video-snap.js');
+    const { videoAge } = await imp('api/_lib/age.js');
+    const { default: video } = await imp('api/video.js');
+    // /v/<id>: свой текст, кейсы, 16+, шортсы, баннер GGDROP (окно дат)
+    ok(Y.ownWords('🤗Поддержите подпиской - https://youtube.com/x\n😼Телеграмм канал - https://t.me/x\n#roblox #shorts\nобязательно можешь глянуть теги roblox роблокс') === 0, 'ownWords: подписка, соцсети, хэштеги, «глянуть теги» — не свой текст');
+    ok(Y.ownWords('Сегодня проходим вторую главу и ищем все секреты на уровне') === 9, 'ownWords: свой текст считается (слова от 2 букв)');
+    ok(!/Made with Restream/.test(Y.cleanDesc('Made with Restream. Livestream on 30+ platforms at once via https://restream.io\nМой текст\nМой текст')) && Y.cleanDesc('a\nb\na') === 'a\nb', 'cleanDesc: без Restream и повторов строк');
+    ok(Y.isShortVideo('x #shorts', '2025-06-01', 'PT1H2M') === false && Y.isShortVideo('x', '2025-06-01', 'PT40S') && Y.isShortVideo('x', '2024-01-01', 'PT2M') === false && Y.isShortVideo('a #shorts', '', ''), 'isShortVideo: по длительности (3 мин с 15.10.2024), без неё — по #shorts');
+    const { SNAPSHOT } = await imp('api/_lib/uploads-snapshot.js');
+    const rows = SNAPSHOT.split('\n').map(l => l.split('\t')).map(([id, at, title]) => ({ id, at, title, dur: videoFromSnapshot(id)?.contentDetails?.duration || '' }));
+    const shown = rows.filter(r => !Y.hiddenVideo(r.id, r.title));
+    if (Y.HIDE_GG_WINDOW) {
+      const inWin = rows.filter(r => r.at >= Y.GG_WINDOW[0] && r.at < Y.GG_WINDOW[1]);
+      ok(inWin.length > 1000 && inWin.every(r => Y.hiddenVideo(r.id, r.title)), 'баннер GGDROP на стримах (окно дат): все ролики этого времени скрыты', inWin.length);
+      const r14 = await call(video, { id: '14n46v57Biw' });
+      ok(r14.code === 404 && !/adsbygoogle\.js/.test(r14.html) && /noindex/.test(r14.html), '/v/14n46v57Biw (баннер GGDROP на превью): 404, noindex, без AdSense');
+    }
+    const longOne = shown.find(r => !Y.isShortVideo(r.title, r.at, r.dur) && videoAge(r.title).age < 16);
+    const rl = await call(video, { id: longOne.id });
+    ok(rl.code === 200 && !adsOn(rl.html) && !/<ul class="tags">/.test(rl.html) && /max-image-preview/.test(rl.html), '/v/<длинный, без своего текста>: 200, в поиске, без рекламы и без списка тегов', longOne);
+    ok(!/Made with Restream/.test(rl.html.split('<main')[1] || ''), '/v/<id>: строки Restream в описании не печатаются');
+    const shortOne = shown.find(r => Y.isShortVideo(r.title, r.at, r.dur));
+    const rs = await call(video, { id: shortOne.id });
+    ok(rs.code === 200 && /<meta name="robots" content="noindex">/.test(rs.html) && !adsOn(rs.html), '/v/<шортс>: страница есть, noindex, без рекламы', shortOne);
+    const nf = await call(video, { id: 'AAAAAAAAAAA' });
+    ok([404, 503].includes(nf.code) && !/adsbygoogle\.js/.test(nf.html), '/v/<нет в снимке, YouTube API недоступен>: 503 без AdSense', nf.code);
+    const ads200 = shown.slice(0, 400).filter(r => r.id).length;
+    let withAds = 0;
+    for (const r of shown.slice(0, 400)) { const x = await call(video, { id: r.id }); if (adsOn(x.html)) withAds++; }
+    ok(withAds === 0, `/v/<id>: 400 первых роликов — с рекламой ${withAds} (своего текста ≥ ${Y.VIDEO_OWN_WORDS} слов нет ни у одного)`, { withAds, ads200 });
+    // списки роликов: только данные YouTube — без рекламы (page.js VIDEO_LIST_ADS)
+    const { default: videos } = await imp('api/_lib/routes/videos.js');
+    const run = async p => call(videos, { p: String(p) });
     const r1 = await run(1);
     const n1 = (r1.html.match(/data-ad="feed_videos"/g) || []).length;
+    if (!PG.VIDEO_LIST_ADS) {
+      ok(r1.code === 200 && !adsOn(r1.html), '/videos: список роликов — без рекламы и без скрипта AdSense (VIDEO_LIST_ADS)');
+      for (const [f, q, name] of [['api/_lib/routes/top.js', {}, '/top'], ['api/_lib/routes/topic.js', {}, '/topics'], ['api/_lib/routes/topic.js', { slug: 'roblox' }, '/topic/roblox'], ['api/_lib/routes/history.js', {}, '/history']]) {
+        const { default: h } = await imp(f); const x = await call(h, q);
+        ok(x.code === 200 && !adsOn(x.html), `${name}: без рекламы (только данные YouTube)`);
+      }
+    } else {
     ok(r1.code === 200 && n1 === 7 && /class="d37-feed" data-ad="feed_videos" data-ad-lazy hidden/.test(r1.html), '/videos: 240 роликов — 7 карточек «Реклама» (каждая 30-я, не последней), грузятся у экрана', n1);
     let gp = 0;
     for (let p = 2; p <= 12 && !gp; p++) { const r = await run(p); if (!/adsbygoogle\.js/.test(r.html)) { gp = p; ok(!/data-ad=/.test(r.html), `/videos?p=${p} (есть ролики про кейсы) — ни одного места рекламы`); } }
     const { HIDE_GAMBLING } = await import(pathToFileURL(path.join(tmp, 'api/_lib/yt.js')).href);
     if (HIDE_GAMBLING) ok(!gp, 'роликов про кейсы на сайте нет (28.10.2026) — все страницы архива с рекламой');
     else ok(gp > 0, 'нашлась страница архива с роликами про кейсы');
+    }
+    // карта сайта: без шортсов и без разделов-приложений (одна и та же главная по пяти адресам)
+    const { default: sm } = await imp('api/sitemap.js');
+    const sv = await call(sm, { part: 'videos' }), sp = await call(sm, { part: 'pages' });
+    const locs = (sv.html.match(/<loc>[^<]+<\/loc>/g) || []).map(x => x.slice(5 + Y.SITE.length + 3, -6));
+    const byId = new Map(rows.map(r => [r.id, r]));
+    ok(locs.length > 500 && locs.every(id => { const r = byId.get(id); return r && !Y.isShortVideo(r.title, r.at, r.dur); }), `sitemap-videos: ${locs.length} роликов, шортсов нет`);
+    ok(!/\/(lfg|soundboard|poll|clicker|donate)</.test(sp.html) && /\/games</.test(sp.html), 'sitemap-pages: /lfg, /soundboard, /poll, /clicker, /donate — не в карте');
   } catch (e) { ok(false, 'серверные страницы', String(e && e.stack || e)); }
   fs.rmSync(tmp, { recursive: true, force: true });
   // крючки: что и где подключено (если кто-то случайно удалит строку при слиянии)

@@ -356,9 +356,10 @@ function browser(startUrl, routing){
     // карта сайта
     const sitemap = (await import(pathToFileURL(path.join(tmp, 'api/sitemap.js')).href)).default;
     r = await call(sitemap, { part: 'pages' });
-    for (const u of ['/forum', '/forum/5', '/forum/6', '/ideas', '/ideas/9', '/shorts', '/chat', '/donate', '/lfg', '/games', '/about'])
+    for (const u of ['/forum', '/forum/5', '/forum/6', '/ideas', '/ideas/9', '/shorts', '/chat', '/games', '/about'])
       ok(r.body.includes(`<loc>https://dan4ik37.vercel.app${u}</loc>`), `карта сайта: ${u}`);
-    for (const u of ['/profile', '/phone', '/adv', '/invite', '/play', '/shop/'])
+    // 05.11.2026: разделы-приложения без своего HTML (сервер отдаёт главную) — не в карте
+    for (const u of ['/profile', '/phone', '/adv', '/invite', '/play', '/shop/', '/donate', '/lfg', '/soundboard', '/poll', '/clicker'])
       ok(!r.body.includes(`<loc>https://dan4ik37.vercel.app${u}`), `карта сайта: без ${u}`);
     ok(r.body.includes('<loc>https://dan4ik37.vercel.app/forum/6</loc><lastmod>2026-10-03</lastmod>'), 'карта сайта: дата темы');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

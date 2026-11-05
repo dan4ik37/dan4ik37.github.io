@@ -57,7 +57,13 @@ export const AGE_MARK = `<span class="age-mark" title="Сайт для ${SITE_AG
 // spa — у страницы есть раздел сайта-приложения с тем же адресом (/forum/42 ↔ '#/forum/42', js/ui/router.js): вкладка, где сайт уже
 // открыт как приложение (sessionStorage d37_spa ставит роутер), сразу уходит в раздел — перезагрузка не выкидывает из приложения.
 // Поисковики и новые посетители видят эту страницу. ld — объект или массив объектов JSON-LD
+// 05.11.2026: noindex — и без рекламы (404, «временно недоступно», служебные страницы: AdSense не разрешает рекламу на экранах
+// ошибок и без своего содержимого — support.google.com/publisherpolicies/answer/11112688)
+// Реклама на списках роликов (/videos, /top, /topics, /topic/<slug>, /history): там только данные YouTube (названия и превью) —
+// для AdSense это «скопированное без своего текста», для YouTube API — III.G.1.d. false — без рекламы; вернуть как было — true.
+export const VIDEO_LIST_ADS = false;
 export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false, spa = '' }) {
+  if (noindex) noAds = true;
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>
