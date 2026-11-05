@@ -40,3 +40,6 @@ backups/
 # Копии и снимки Codex (247 МБ картинок и таблиц, в CHANGES.md — локальные пути) и дампы Git Bash — не в открытый репозиторий
 docs/codex-repair/
 *.stackdump
+
+# VRM player test model: licence Redistribution_Prohibited (piapro PCL) — keep local only, never in the public repo
+assets/*.vrm
