@@ -636,7 +636,9 @@ let last = performance.now();
       // реклама — только у игр из каталога (прошли модерацию), не во время игры
       if (st.pub) {
         const ad = root.querySelector('.st-ad');
-        if (ad && !ad.dataset.done && window.D37Ads?.render(ad, 'game_over')) ad.dataset.done = '1';
+        // через диспетчер (ad-places.js show): пусто или блокировщик — своя подсказка той же высоты / место убрано, без пустой рамки
+        const AP = window.D37AdPlaces;
+        if (ad && !ad.dataset.done && (AP ? AP.show(ad, 'game_over') : window.D37Ads?.render(ad, 'game_over'))) ad.dataset.done = '1';
         if (st.rounds >= 2) window.D37Ads?.interstitial?.();
       }
     }
