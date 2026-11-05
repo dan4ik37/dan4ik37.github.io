@@ -76,7 +76,7 @@ export default function handler(req, res) {
   return res.status(200).send(page({
     title: friend ? `Я — ${friend.name}! ${Q.title} Пройди тест` : `${Q.title} Тест — пройди и узнай | dan4ik37`,
     description: friend ? friend.text : `${Q.lead} Бесплатно, без регистрации — поделись результатом с друзьями.`,
-    url, image: `${SITE}/img/share/quiz-${Q.slug}.png`, ld, body, script, css: CSS + TM_CSS, noindex: !!friend
+    url, image: `${SITE}/img/share/quiz-${Q.slug}.png`, ld, body, script, css: CSS + TM_CSS, noindex: !!friend, share: !!friend   // результат друга: не в поиск, тест целиком свой — реклама можно (page.js SHARE_ADS)
   }));
 }
 

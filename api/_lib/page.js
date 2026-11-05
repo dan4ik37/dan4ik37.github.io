@@ -58,12 +58,16 @@ export const AGE_MARK = `<span class="age-mark" title="Сайт для ${SITE_AG
 // открыт как приложение (sessionStorage d37_spa ставит роутер), сразу уходит в раздел — перезагрузка не выкидывает из приложения.
 // Поисковики и новые посетители видят эту страницу. ld — объект или массив объектов JSON-LD
 // 05.11.2026: noindex — и без рекламы (404, «временно недоступно», служебные страницы: AdSense не разрешает рекламу на экранах
-// ошибок и без своего содержимого — support.google.com/publisherpolicies/answer/11112688)
+// ошибок и без своего содержимого — support.google.com/publisherpolicies/answer/11112688).
+// share — ссылка-вызов от друга (/tools/cps?s=…, /tools/typing?s=…, /quiz/<тест>?r=…): noindex, чтобы в поиске не было дублей
+// (canonical — чистый адрес), но на странице то же своё содержимое (тест, правила, вопросы) — реклама там можно. Только для своих
+// страниц: чужой текст из ссылки (варианты колеса, отклонённые идеи) — без рекламы, как раньше. Вернуть как было — SHARE_ADS = false.
+export const SHARE_ADS = true;
 // Реклама на списках роликов (/videos, /top, /topics, /topic/<slug>, /history): там только данные YouTube (названия и превью) —
 // для AdSense это «скопированное без своего текста», для YouTube API — III.G.1.d. false — без рекламы; вернуть как было — true.
 export const VIDEO_LIST_ADS = false;
-export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false, spa = '' }) {
-  if (noindex) noAds = true;
+export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false, spa = '', share = false }) {
+  if (noindex && !(share && SHARE_ADS)) noAds = true;
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>

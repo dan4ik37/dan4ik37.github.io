@@ -955,6 +955,23 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
     const adsOn = h => /adsbygoogle\.js/.test(h) || /data-ad="/.test(h);
     // 05.11.2026: noindex — без рекламы (404, «временно недоступно»)
     ok(!/adsbygoogle\.js/.test(page({ title: 't', body: '<main></main>', noindex: true })), 'page({ noindex }) — без AdSense (экраны ошибок и служебные)');
+    // ссылки-вызовы друзей (noindex, но своё содержимое целиком) — реклама можно (page.js SHARE_ADS); чужой текст из ссылки — нет
+    ok(/adsbygoogle\.js/.test(page({ title: 't', body: '<main></main>', noindex: true, share: true })) && /<meta name="robots" content="noindex">/.test(page({ title: 't', body: '', noindex: true, share: true })), 'page({ noindex, share }) — не в поиск, но с AdSense');
+    {
+      const { default: cps } = await imp('api/_lib/routes/cps.js'), { default: typing } = await imp('api/_lib/routes/typing.js');
+      const { default: quiz } = await imp('api/_lib/routes/quiz.js'), { default: wheel } = await imp('api/_lib/routes/wheel.js');
+      const { QUIZZES } = await imp('api/_lib/quizzes.js');
+      const off = h => !/adsbygoogle\.js/.test(h) && /ctx\("gambling",true\)/.test(h);   // noAds: ни скрипта, ни мест (диспетчер закрыт)
+      const c1 = await call(cps, { s: '8.4' }), c2 = await call(cps, { s: '8.4', n: 'Кто-то' });
+      ok(/noindex/.test(c1.html) && /adsbygoogle.js/.test(c1.html) && /data-ad="seo_game"/.test(c1.html), '/tools/cps?s= (вызов друга, «Друг») — noindex, реклама есть (своё содержимое)');
+      ok(/noindex/.test(c2.html) && off(c2.html), '/tools/cps?s=&n= — ник из ссылки (чужой текст без проверки) — без рекламы');
+      const t1 = await call(typing, { s: '250' });
+      ok(/noindex/.test(t1.html) && /adsbygoogle.js/.test(t1.html), '/tools/typing?s= — noindex, реклама есть');
+      const Q0 = QUIZZES[0], q1 = await call(quiz, { slug: Q0.slug, r: Q0.results[0].id });
+      ok(q1.code === 200 && /noindex/.test(q1.html) && /adsbygoogle.js/.test(q1.html), '/quiz/<тест>?r= (результат друга) — noindex, реклама есть', q1.code);
+      const w1 = await call(wheel, { o: 'Вася|Петя|Маша' });
+      ok(/noindex/.test(w1.html) && off(w1.html), '/tools/wheel?o= (варианты из ссылки — чужой текст) — без рекламы');
+    }
     const Y = await imp('api/_lib/yt.js'), PG = await imp('api/_lib/page.js');
     const { videoFromSnapshot } = await imp('api/_lib/video-snap.js');
     const { videoAge } = await imp('api/_lib/age.js');
