@@ -75,8 +75,10 @@ const ACH_BY_CODE = Object.fromEntries(ACHIEVEMENT_DEFS.map(d => [d.code, d]));
 const ACH_WATCH = new Set(['watcher_10', 'watcher_100']);
 const achShown = c => !ACH_WATCH.has(c) || (typeof XP_WATCH !== 'undefined' && XP_WATCH === true);
 const TITLE_MIN_LEVEL = 10;
-// Титул рядом с ником: ачивка или титул сезона ('ss:ГГГГ-ММ:1|2' — seasonTitleDef в games.js, season_claim в games-more.sql)
+// Титул рядом с ником: ачивка или титул сезона ('ss:ГГГГ-ММ:1|2' — seasonTitleDef в games.js, season_claim в games-more.sql).
+// Ачивки за просмотр роликов (achShown) — и титулом не показываем: ни у ника (xp.js, minicard.js), ни в профиле (05.11.2026)
 function achTitleDef(code){
+  if (code && ACH_BY_CODE[code] && !achShown(code)) return null;
   return (code && ACH_BY_CODE[code]) || (typeof seasonTitleDef === 'function' ? seasonTitleDef(code) : null) || null;
 }
 
@@ -212,7 +214,7 @@ async function renderTitlePicker(earned){
     return;
   }
   const cur = curRes.data?.code || '';
-  const opts = ACHIEVEMENT_DEFS.filter(d => earned.has(d.code));
+  const opts = ACHIEVEMENT_DEFS.filter(d => earned.has(d.code) && achShown(d.code));   // ачивки за просмотр роликов — не титул (XP_WATCH)
   // надет титул сезона — тоже в списке (выбрать другой сезонный — «Игры» → сезон → «Мои награды сезонов»)
   const ss = /^ss:/.test(cur) && achTitleDef(cur);
   box.innerHTML = `<label class="tp-row"><span>🏷 Титул рядом с ником</span>
