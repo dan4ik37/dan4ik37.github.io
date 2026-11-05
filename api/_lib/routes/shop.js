@@ -7,7 +7,7 @@
 import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
 import { GEMS, PACKS, ITEMS, LIMITS, gemWord, money } from '../premium.js';
-import { SELLER, sv } from '../seller.js';
+import { SELLER, sv, isPlaceholder } from '../seller.js';
 import { payConfig } from '../pay.js';
 
 export default function handler(req, res) {
@@ -83,7 +83,7 @@ export default function handler(req, res) {
   </ul></section>
 
   <section class="box faq"><h2>Частые вопросы</h2>${faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
-  <p class="muted small sp-legal">Продавец: ${esc(sv(SELLER.name, 'уточняется'))} · <a href="/terms">Пользовательское соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a></p>
+  <p class="muted small sp-legal">${isPlaceholder(SELLER.name) ? '' : `Продавец: ${esc(sv(SELLER.name))} · `}<a href="/terms">Пользовательское соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a></p>
 </main>`;
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
   res.status(200).send(page({

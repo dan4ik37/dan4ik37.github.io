@@ -1,6 +1,6 @@
 // /terms, /refund, /contacts → api/pages.js?page=… — пользовательское соглашение (оферта), политика возврата,
 // реквизиты и контакты. Их требуют платёжные системы (TipTop Pay, Freedom Pay) для подключения сайта.
-// Реквизиты — api/_lib/seller.js (пока заглушки — на странице «уточняется»). Цены — api/_lib/premium.js.
+// Реквизиты — api/_lib/seller.js (пока заглушки — строк-заглушек на странице нет). Цены — api/_lib/premium.js.
 // ШАБЛОН: тексты простые и честные, но перед приёмом платежей их стоит показать юристу (docs/PAYMENTS_SETUP.md).
 import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
@@ -9,7 +9,12 @@ import { GEMS, PACKS, ITEMS, LIMITS, gemWord, money } from '../premium.js';
 
 const S = SELLER;
 const mail = () => `<a href="mailto:${esc(S.email)}">${esc(S.email)}</a>`;
-const draft = () => sellerReady() ? '' : '<p class="lg-draft">Документ готовится: реквизиты продавца появятся здесь после регистрации ИП.</p>';
+// 05.11.2026: плашки «Документ готовится» нет (для проверки AdSense — «сайт не готов»). Пока реквизитов нет (sellerReady), оферта и
+// возврат — noindex и не в карте сайта (DRAFT_NOINDEX ниже): покупок ещё нет, документ не окончательный; страницы открываются по
+// ссылкам магазина как раньше. Реквизиты вписаны (seller.js) — сами станут обычными страницами. Вернуть плашку — DRAFT_NOTE = true.
+const DRAFT_NOTE = false;
+export const DRAFT_NOINDEX = ['terms', 'refund'];
+const draft = () => sellerReady() || !DRAFT_NOTE ? '' : '<p class="lg-draft">Документ готовится: реквизиты продавца появятся здесь после регистрации ИП.</p>';
 
 function terms() {
   const vip = ITEMS.filter(i => i.kind === 'vip').map(i => `${i.title.replace('VIP на ', '')} — ${i.price} ${GEMS.icon}`).join(', ');
@@ -122,7 +127,8 @@ export default function handler(req, res) {
 </main>`;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
-  res.status(200).send(page({ title: p.title, description: p.description, url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true }));
+  res.status(200).send(page({ title: p.title, description: p.description, url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true,
+    noindex: !sellerReady() && DRAFT_NOINDEX.includes(key) }));
 }
 
 export const CSS = `

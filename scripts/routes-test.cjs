@@ -377,8 +377,15 @@ function browser(startUrl, routing){
     ok(/<meta name="robots" content="noindex">/.test(r.body) && /Покупка кристаллов пока не работает/.test(r.body), '/shop без оплаты: плашка «пока не работает» и noindex');
     r = await call(pages, { page: 'contacts' });
     ok(r.code === 200 && !/уточняется/.test(r.body) && /Республика Казахстан/.test(r.body), '/contacts: без строк «уточняется» — только то, что есть');
+    ok(!/Документ готовится/.test(r.body) && !/<meta name="robots" content="noindex">/.test(r.body), '/contacts: без плашки «Документ готовится», в поиске (почта и страна — настоящие)');
     r = await call(pages, { page: 'terms' });
     ok(r.code === 200 && !/\[Текст для юриста/.test(r.body), '/terms: заметка для юриста не видна на странице');
+    // реквизитов нет (seller.js — заглушки): оферта и возврат — без плашки «Документ готовится», noindex и не в карте сайта
+    ok(!/Документ готовится/.test(r.body) && /<meta name="robots" content="noindex">/.test(r.body), '/terms без реквизитов: без плашки «Документ готовится», noindex');
+    r = await call(pages, { page: 'refund' });
+    ok(r.code === 200 && !/Документ готовится/.test(r.body) && /<meta name="robots" content="noindex">/.test(r.body), '/refund без реквизитов: без плашки, noindex');
+    r = await call(pages, { page: 'shop' });
+    ok(!/уточняется/.test(r.body) && !/Продавец:/.test(r.body) && /href="\/contacts"/.test(r.body), '/shop: строки «Продавец: уточняется» нет, ссылки на документы остались');
     r = await call(pages, { page: 'about' });
     ok(!/d37_spa/.test(r.body), '/about: без перехода в раздел (раздел «Обо мне» сам ссылается на эту страницу)');
     r = await call(pages, { page: 'shop', o: 'D37-abc123', r: 'ok' });
@@ -389,7 +396,7 @@ function browser(startUrl, routing){
     for (const u of ['/forum', '/forum/5', '/forum/6', '/ideas', '/ideas/9', '/shorts', '/chat', '/games', '/about'])
       ok(r.body.includes(`<loc>https://dan4ik37.vercel.app${u}</loc>`), `карта сайта: ${u}`);
     // 05.11.2026: разделы-приложения без своего HTML (сервер отдаёт главную) — не в карте
-    for (const u of ['/profile', '/phone', '/adv', '/invite', '/play', '/shop/', '/donate', '/lfg', '/soundboard', '/poll', '/clicker'])
+    for (const u of ['/profile', '/phone', '/adv', '/invite', '/play', '/shop/', '/donate', '/lfg', '/soundboard', '/poll', '/clicker', '/terms', '/refund'])
       ok(!r.body.includes(`<loc>https://dan4ik37.vercel.app${u}`), `карта сайта: без ${u}`);
     ok(r.body.includes('<loc>https://dan4ik37.vercel.app/forum/6</loc><lastmod>2026-10-03</lastmod>'), 'карта сайта: дата темы');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

@@ -13,6 +13,7 @@ import { TOPICS } from './_lib/topics.js';
 import { QUIZZES } from './_lib/quizzes.js';
 import { sbSelect, storeConfigured } from './_lib/store.js';
 import { payConfig } from './_lib/pay.js';
+import { sellerReady } from './_lib/seller.js';
 
 const url = (loc, freq, prio, lastmod) =>
   `<url><loc>${loc}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}${freq ? `<changefreq>${freq}</changefreq>` : ''}<priority>${prio}</priority></url>`;
@@ -88,8 +89,7 @@ export default async function handler(req, res) {
       url(`${SITE}/reklama`, 'weekly', '0.5'),
       ...Array.from({ length: Math.max(0, Math.ceil(vids.length / 240) - 1) }, (_, i) => url(`${SITE}/videos?p=${i + 2}`, 'weekly', '0.4')),
       url(`${SITE}/privacy`, 'yearly', '0.2'),
-      url(`${SITE}/terms`, 'yearly', '0.2'),
-      url(`${SITE}/refund`, 'yearly', '0.2'),
+      ...(sellerReady() ? [url(`${SITE}/terms`, 'yearly', '0.2'), url(`${SITE}/refund`, 'yearly', '0.2')] : []),   // без реквизитов — noindex (routes/legal.js)
       url(`${SITE}/contacts`, 'yearly', '0.3'),
     ];
 
