@@ -6,7 +6,7 @@
 // перелинковкой, который видят и Google/Яндекс, и превью мессенджеров.
 // Плеер — «фасад»: сначала превью, iframe YouTube грузится по клику
 // (страница лёгкая, просмотр при воспроизведении засчитывается каналу).
-import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, isGambling, hiddenVideo, esc, fmtDuration, fmtCount } from './_lib/yt.js';
+import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, isGambling, hiddenVideo, esc, fmtDuration, fmtCount, cleanDesc, ownWords, VIDEO_OWN_WORDS, isShortVideo } from './_lib/yt.js';
 import { page, YT_CHANNEL } from './_lib/page.js';
 import { videoFromSnapshot } from './_lib/video-snap.js';
 import { topicsFor } from './_lib/topics.js';
@@ -40,7 +40,8 @@ export default async function handler(req, res) {
   const sn = v.snippet, st = v.statistics || {};
   const url = `${SITE}/v/${id}`;
   const thumb = sn.thumbnails?.maxres?.url || sn.thumbnails?.high?.url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
-  const desc = (sn.description || '').trim();
+  const rawDesc = (sn.description || '').trim();
+  const desc = cleanDesc(rawDesc);   // без повторов и строк-рекламы Restream / «глянуть теги» (yt.js cleanDesc)
   const metaDesc = (desc.replace(/\s+/g, ' ').slice(0, 155) || `${sn.title} — видео dan4ik37 на YouTube.`);
   const date = new Date(sn.publishedAt);
   const dateRu = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Moscow' });
@@ -49,10 +50,14 @@ export default async function handler(req, res) {
   const related = rel.list;
   const topics = topicsFor(sn.title);
   const quiz = QUIZZES.find(q => q.topic && topics.some(t => t.slug === q.topic));
-  const noAds = isGambling(sn.title, desc);
-  const tags = (sn.tags || []).slice(0, 12);
   // Возрастная метка (api/_lib/age.js): не по возрасту — браузер накроет страницу обложкой (js/core/age.js, data-age-page)
-  const va = videoAge(sn.title, desc);
+  const va = videoAge(sn.title, rawDesc);
+  // Реклама (05.11.2026): только если в описании есть свой текст автора (≥ VIDEO_OWN_WORDS слов, yt.js ownWords) — иначе страница —
+  // одни данные YouTube (AdSense: «бесполезный» и скопированный контент; YouTube API III.G.1.d); не рядом с кейсами (isGambling) и
+  // не на роликах 16+ / 18+ (хорроры с жестокостью, стрельба по людям, мат — правила AdSense о шокирующем; красная линия сайта)
+  const noAds = isGambling(sn.title, rawDesc) || va.age >= 16 || ownWords(rawDesc) < VIDEO_OWN_WORDS;
+  // Шортс — короткий клип (часто кусок того же стрима, что и длинный ролик): страница есть, в поиск — нет (yt.js isShortVideo)
+  const short = isShortVideo(sn.title, sn.publishedAt, v.contentDetails?.duration);
 
   const ld = {
     '@context': 'https://schema.org',
@@ -93,7 +98,6 @@ export default async function handler(req, res) {
     ${desc ? `<section class="desc"><h2>Описание</h2><p>${linkify(desc)}</p></section>` : ''}
     ${noAds ? '' : '<div data-ad="video_page" hidden></div>'}
     ${topics.length ? `<p class="topics">Ещё по теме: ${topics.map(t => `<a href="/topic/${t.slug}">${esc(t.name)} →</a>`).join(' ')}${quiz ? ` <a href="/quiz/${quiz.slug}">🧩 Тест: ${esc(quiz.title)}</a>` : ''}</p>` : ''}
-    ${tags.length ? `<ul class="tags">${tags.map(t => `<li>#${esc(t)}</li>`).join('')}</ul>` : ''}
   </article>
 
   <nav class="next3" aria-label="Что ещё на сайте">
@@ -112,7 +116,7 @@ export default async function handler(req, res) {
   return res.status(200).send(page({
     title: `${sn.title} — dan4ik37`,
     description: metaDesc,
-    url, image: thumb, ld, body, script: playerJs(id), ogType: 'video.other', noAds
+    url, image: thumb, ld, body, script: playerJs(id), ogType: 'video.other', noAds, noindex: short
   }));
 }
 

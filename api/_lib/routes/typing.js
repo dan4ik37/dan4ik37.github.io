@@ -96,7 +96,7 @@ export default function handler(req, res) {
   res.status(200).send(page({
     title: challenge ? `${challenge} | Тест скорости печати` : 'Тест скорости печати онлайн — сколько знаков в минуту | dan4ik37',
     description: 'Бесплатный тест скорости печати: набери короткий текст и узнай, сколько знаков и слов в минуту ты печатаешь и с какой точностью. Рекорд и вызов другу.',
-    url, image: SITE + '/img/share/typing.png', ld, body, script, css: CSS, noindex: !!challenge
+    url, image: SITE + '/img/share/typing.png', ld, body, script, css: CSS, noindex: !!challenge, share: !!challenge   // вызов друга: не в поиск, но своё содержимое — реклама можно (page.js SHARE_ADS)
   }));
 }
 

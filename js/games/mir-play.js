@@ -32,7 +32,11 @@
   const AGAIN_TXT = /^\s*(↻|🔄)|ещё (раз|парти)|реванш|заново|снова|новая (игра|парти|раздача)/i;
   const PAID = /реклам|монет|🪙|📺|купить/i;   // такие кнопки сами не нажимаем
   const WAIT = /ждём|ожида/i;
-  const P = { back: 10, sig: 1500 };   // секунд до возврата в мир; через сколько мс запомнить экран итога (тесты меняют)
+  // back — секунд до возврата в мир; sig — через сколько мс запомнить экран итога (тесты меняют); ad — реклама в полоске итога окна.
+  // 05.11.2026: ad false — окно на весь экран поверх мира, реклама в нём была в 7–26 px под «▶ Ещё партию» (на телефоне — случайные
+  // нажатия; AdSense: от игры и её кнопок ≥ 150 px, support.google.com/adsense/answer/1346295). Пока окно открыто — рекламы нет,
+  // и под мир (за окном) её тоже не кладём. Вернуть как было — true.
+  const P = { back: 10, sig: 1500, ad: false };
   let cur = null, seq = 0;
 
   const list = () => (typeof GAMES !== 'undefined' && Array.isArray(GAMES) ? GAMES : root.GAMES) || [];
@@ -399,7 +403,8 @@ body:not(.high) .mp-panel{animation:none}
     can, open, close, onHash, shell, P,
     isOpen: () => !!cur,
     // куда класть рекламу после партии (games.js gamesAdAfterRound): пока открыто окно — в полоску итога, не под мир
-    adStage: () => (cur?.endAd?.isConnected !== false ? cur?.endAd : null) || null,
+    // false — окно открыто, рекламы после партии нет вовсе (P.ad); null — окна нет, реклама как обычно под игрой
+    adStage: () => cur && !P.ad ? false : (cur?.endAd?.isConnected !== false ? cur?.endAd : null) || null,
     state: () => cur ? { g: cur.g, param: cur.param, p0: cur.p0, phase: cur.phase, left: cur.left, depth: cur.depth, pushed: cur.pushed } : null,
     _test: { parse, decide, findAgain, sig, rematch, tick: () => cur && tick(cur), flag, track },
   };

@@ -69,6 +69,11 @@ const ACHIEVEMENT_DEFS = [
   { code: 'level_100',     icon: '💎', title: 'Бессмертный',     desc: 'Достиг 100 уровня' },
 ];
 const ACH_BY_CODE = Object.fromEntries(ACHIEVEMENT_DEFS.map(d => [d.code, d]));
+// Ачивки за просмотр роликов («Зритель», «Киноман») обещают XP за просмотр — с 05.11.2026 их не видно (XP_WATCH в js/features/xp.js
+// = false: правила YouTube API III.F.3.c). Сервер (economy.sql) их ещё считает — убрать там может только владелец; здесь не
+// показываем ни в списке, ни в тостах. Флаг — тот же XP_WATCH (xp.js грузится позже, читаем при показе)
+const ACH_WATCH = new Set(['watcher_10', 'watcher_100']);
+const achShown = c => !ACH_WATCH.has(c) || (typeof XP_WATCH !== 'undefined' && XP_WATCH === true);
 const TITLE_MIN_LEVEL = 10;
 // Титул рядом с ником: ачивка или титул сезона ('ss:ГГГГ-ММ:1|2' — seasonTitleDef в games.js, season_claim в games-more.sql)
 function achTitleDef(code){
@@ -91,7 +96,7 @@ async function claimAchievements(){
     const { data, error } = await sbClient.rpc('claim_achievements');
     if (error || !data?.length) return [];
     const total = data.reduce((s, r) => s + (r.ach_xp || 0), 0);
-    const first = ACH_BY_CODE[data[0].ach_code];
+    const first = achShown(data[0].ach_code) ? ACH_BY_CODE[data[0].ach_code] : null;
     achToast(data.length === 1 && first
       ? `${first.icon} «${first.title}» — +${total} XP`
       : `🏆 Ачивки: +${total} XP (${data.length} шт.)`);
@@ -117,7 +122,7 @@ function notifyNewAchievements(uid, earnedCodes){
   let seen = [];
   try { seen = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
   const seenSet = new Set(seen);
-  const fresh = earnedCodes.filter(c => !seenSet.has(c) && ACH_BY_CODE[c]);
+  const fresh = earnedCodes.filter(c => !seenSet.has(c) && ACH_BY_CODE[c] && achShown(c));
   try { localStorage.setItem(key, JSON.stringify(earnedCodes)); } catch(e) {}
   if (!fresh.length || !seen.length) return; // первый расчёт — не спамим тостами за всю историю разом
   const def = ACH_BY_CODE[fresh[0]];
@@ -128,7 +133,7 @@ function notifyNewAchievements(uid, earnedCodes){
 function achVisibleDefs(earned){
   const vipTop = Math.max(0, ...ACHIEVEMENT_DEFS.filter(d => d.vip && earned.has(d.code)).map(d => d.vip));
   const special = ACHIEVEMENT_DEFS.filter(d => d.special && earned.has(d.code) && (!d.vip || d.vip === vipTop));
-  const regular = ACHIEVEMENT_DEFS.filter(d => !d.special)
+  const regular = ACHIEVEMENT_DEFS.filter(d => !d.special && achShown(d.code))
     .sort((a, b) => (earned.has(b.code) - earned.has(a.code)));   // полученные — вперёд, порядок внутри сохраняется
   return { special, regular };
 }

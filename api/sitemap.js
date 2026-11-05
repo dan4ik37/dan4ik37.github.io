@@ -6,11 +6,14 @@
 // Зачем две: через неделю Google «обнаружил» 6000+ адресов, но читал в основном тонкие страницы роликов,
 // а до главной и игр не дошёл. Раздельно — основные идут своей картой, и в Search Console видно, что из
 // каждой попало в поиск.
-import { SITE, ALL_UPLOADS, getUploads, esc } from './_lib/yt.js';
+import { SITE, ALL_UPLOADS, getUploads, esc, isShortVideo } from './_lib/yt.js';
+import { videoFromSnapshot } from './_lib/video-snap.js';
 import { GAME_PAGES } from './_lib/games-seo.js';
 import { TOPICS } from './_lib/topics.js';
 import { QUIZZES } from './_lib/quizzes.js';
 import { sbSelect, storeConfigured } from './_lib/store.js';
+import { payConfig } from './_lib/pay.js';
+import { sellerReady } from './_lib/seller.js';
 
 const url = (loc, freq, prio, lastmod) =>
   `<url><loc>${loc}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}${freq ? `<changefreq>${freq}</changefreq>` : ''}<priority>${prio}</priority></url>`;
@@ -43,8 +46,10 @@ export default async function handler(req, res) {
   }
   const day = d => esc(String(d || '').slice(0, 10));
 
+  // 05.11.2026: шортсы — не в карте (их страницы noindex: короткий клип, часто кусок того же стрима; api/video.js)
+  const longVid = v => !isShortVideo(v.title, v.publishedAt, videoFromSnapshot(v.id)?.contentDetails?.duration || '');
   const urls = part === 'videos'
-    ? vids.map(v => url(`${SITE}/v/${esc(v.id)}`, '', '0.4', esc(String(v.publishedAt).slice(0, 10))))
+    ? vids.filter(longVid).map(v => url(`${SITE}/v/${esc(v.id)}`, '', '0.4', esc(String(v.publishedAt).slice(0, 10))))
     : [
       url(`${SITE}/`, 'daily', '1.0'),
       url(`${SITE}/about`, 'weekly', '0.9'),
@@ -55,11 +60,8 @@ export default async function handler(req, res) {
       ...threads.map(t => url(`${SITE}/forum/${esc(t.id)}`, 'weekly', '0.5', day(t.created_at))),
       url(`${SITE}/ideas`, 'daily', '0.6'),
       ...ideas.map(i => url(`${SITE}/ideas/${esc(i.id)}`, 'monthly', '0.4', day(i.status_changed_at || i.created_at))),
-      url(`${SITE}/donate`, 'weekly', '0.5'),
-      url(`${SITE}/lfg`, 'daily', '0.4'),
-      url(`${SITE}/soundboard`, 'monthly', '0.4'),
-      url(`${SITE}/poll`, 'weekly', '0.3'),
-      url(`${SITE}/clicker`, 'monthly', '0.3'),
+      // 05.11.2026: /donate, /lfg, /soundboard, /poll, /clicker — разделы-приложения: сервер отдаёт по этим адресам ту же главную
+      // (index.html), своё у них появляется только после JS — роботу без JS это 5 копий главной. В карте их нет (сами разделы есть).
       url(`${SITE}/games`, 'weekly', '0.9'),
       ...GAME_PAGES.map(g => url(`${SITE}/games/${g.id}`, 'monthly', '0.9')),
       url(`${SITE}/tools/nick`, 'monthly', '0.8'),
@@ -83,12 +85,11 @@ export default async function handler(req, res) {
       }),
       url(`${SITE}/history`, 'monthly', '0.6'),
       url(`${SITE}/vip`, 'monthly', '0.6'),
-      url(`${SITE}/shop`, 'monthly', '0.6'),
+      ...(payConfig().any ? [url(`${SITE}/shop`, 'monthly', '0.6')] : []),   // оплата не подключена — /shop noindex (routes/shop.js)
       url(`${SITE}/reklama`, 'weekly', '0.5'),
       ...Array.from({ length: Math.max(0, Math.ceil(vids.length / 240) - 1) }, (_, i) => url(`${SITE}/videos?p=${i + 2}`, 'weekly', '0.4')),
       url(`${SITE}/privacy`, 'yearly', '0.2'),
-      url(`${SITE}/terms`, 'yearly', '0.2'),
-      url(`${SITE}/refund`, 'yearly', '0.2'),
+      ...(sellerReady() ? [url(`${SITE}/terms`, 'yearly', '0.2'), url(`${SITE}/refund`, 'yearly', '0.2')] : []),   // без реквизитов — noindex (routes/legal.js)
       url(`${SITE}/contacts`, 'yearly', '0.3'),
     ];
 

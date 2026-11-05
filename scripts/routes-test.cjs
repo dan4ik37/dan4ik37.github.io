@@ -90,6 +90,26 @@ function browser(startUrl, routing){
   const B0 = browser('https://dan4ik37.vercel.app/');
   const R = B0.R, PAGES = B0.run('PAGES');
   const routes = Object.keys(PAGES);
+  // 05.11.2026: первый кадр (index.html <head>, стиль d37Boot) — та же карта разделов; прячет всё, кроме раздела адреса
+  {
+    const idxB = src('index.html'), mB = /<script>\(function\(\)\{try\{var P=(\{[^}]*\}),p=location/.exec(idxB);
+    const PB = mB ? Function('return ' + mB[1])() : null;
+    ok(PB && JSON.stringify(Object.keys(PB)) === JSON.stringify(routes) && routes.every(r => PB[r] === PAGES[r].join(',')), 'index.html: карта первого кадра = PAGES (router.js)');
+    const boot = (pathname, hash = '') => {
+      const head = { kids: [], appendChild(e){ this.kids.push(e); } };
+      const doc = { head, createElement: () => ({}), documentElement: { setAttribute(k, v){ this[k] = v; } } };
+      const code = /<script>(\(function\(\)\{try\{var P=[\s\S]*?\}\)\(\);)<\/script>/.exec(idxB)[1];
+      Function('document', 'location', code)(doc, { pathname, hash });
+      const st = head.kids[0];
+      const hidden = st ? st.textContent.replace(/\{display:none!important\}$/, '').split(',').map(x => x.slice(1)) : [];
+      return ALL => ALL.filter(id => !hidden.includes(id));
+    };
+    const ALL = Object.values(PAGES).flat();
+    const vis = (p, h) => boot(p, h)(ALL).join(',');
+    ok(vis('/') === PAGES.home.join(',') && vis('/chat/c/5') === 'chat' && vis('/play/2048') === 'games-page' && vis('/tools/3d') === 'ai3d-page'
+      && vis('/c/abc123') === 'chat' && vis('/nope') === PAGES.home.join(',') && vis('/', '#/forum/42') === 'forum-page', 'первый кадр: виден только раздел адреса (/, /chat, /play, /tools/3d, /c/…, неизвестный → главная, #/старые ссылки)');
+    ok(src('js/ui/router.js').includes("document.getElementById('d37Boot')?.remove();"), 'роутер убирает стиль первого кадра');
+  }
   for (const r of routes) {
     const p = R.toPath('#/' + r);
     const back = R.toHash(p);
@@ -172,6 +192,10 @@ function browser(startUrl, routing){
   for (const p of ['/nope', '/chatx', '/play2', '/about/x', '/forum/42/x', '/donate/x', '/api/nope', '/home/x', '/.env', '/wp-login.php'])
     ok(serve(p).status === 404 || (serve(p).api && /page=nope/.test(serve(p).api)) || (p === '/api/nope' && serve(p).status === 404), `vercel.json: ${p} — 404`, serve(p));
   ok(serve('/home').redirect === '/' && serve('/home').permanent, '/home → / (постоянная переадресация)');
+  // 05.11.2026: /index.html — та же главная по второму адресу (200) → постоянная переадресация; /play… — noindex и для робота без JS
+  ok(serve('/index.html').redirect === '/' && serve('/index.html').permanent && serve('/').file === '/index.html', '/index.html → / (постоянная), «/» — как было');
+  const xr = src => (vj.headers.find(h => h.source === src)?.headers || []).some(h => h.key === 'X-Robots-Tag' && h.value === 'noindex');
+  ok(xr('/play') && xr('/play/:path+'), 'vercel.json: /play и /play/… — X-Robots-Tag: noindex (как роутер, но без JS)');
   ok(serve('/games/chess/abcd').redirect === '/play/chess/abcd' && serve('/games/horde/coop/ab12cd').redirect === '/play/horde/coop/ab12cd', '/games/<игра>/<код> (без решётки) → /play/…');
   ok(!vj.rewrites.some(r => /^\/(\(\.\*\)|:path\*)$/.test(r.source) || r.source === '/:path*'), 'нет переписывания «всё → index.html» (иначе мусор отдавал бы 200)');
   const firstSpa = vj.rewrites.findIndex(r => r.destination === '/index.html');
@@ -349,6 +373,19 @@ function browser(startUrl, routing){
     ok(r.code === 404, 'нет идеи — 404');
     r = await call(pages, { page: 'shop' });
     ok(r.code === 200 && r.body.includes('location.replace("/#/shop")') && r.body.includes('href="/#/shop"'), '/shop: вкладка-приложение — сразу в раздел, «Открыть магазин» → раздел');
+    // 05.11.2026: оплата не подключена (нет переменных PAY_*) — честная плашка и noindex; на страницах документов — без заглушек
+    ok(/<meta name="robots" content="noindex">/.test(r.body) && /Покупка кристаллов пока не работает/.test(r.body), '/shop без оплаты: плашка «пока не работает» и noindex');
+    r = await call(pages, { page: 'contacts' });
+    ok(r.code === 200 && !/уточняется/.test(r.body) && /Республика Казахстан/.test(r.body), '/contacts: без строк «уточняется» — только то, что есть');
+    ok(!/Документ готовится/.test(r.body) && !/<meta name="robots" content="noindex">/.test(r.body), '/contacts: без плашки «Документ готовится», в поиске (почта и страна — настоящие)');
+    r = await call(pages, { page: 'terms' });
+    ok(r.code === 200 && !/\[Текст для юриста/.test(r.body), '/terms: заметка для юриста не видна на странице');
+    // реквизитов нет (seller.js — заглушки): оферта и возврат — без плашки «Документ готовится», noindex и не в карте сайта
+    ok(!/Документ готовится/.test(r.body) && /<meta name="robots" content="noindex">/.test(r.body), '/terms без реквизитов: без плашки «Документ готовится», noindex');
+    r = await call(pages, { page: 'refund' });
+    ok(r.code === 200 && !/Документ готовится/.test(r.body) && /<meta name="robots" content="noindex">/.test(r.body), '/refund без реквизитов: без плашки, noindex');
+    r = await call(pages, { page: 'shop' });
+    ok(!/уточняется/.test(r.body) && !/Продавец:/.test(r.body) && /href="\/contacts"/.test(r.body), '/shop: строки «Продавец: уточняется» нет, ссылки на документы остались');
     r = await call(pages, { page: 'about' });
     ok(!/d37_spa/.test(r.body), '/about: без перехода в раздел (раздел «Обо мне» сам ссылается на эту страницу)');
     r = await call(pages, { page: 'shop', o: 'D37-abc123', r: 'ok' });
@@ -356,9 +393,10 @@ function browser(startUrl, routing){
     // карта сайта
     const sitemap = (await import(pathToFileURL(path.join(tmp, 'api/sitemap.js')).href)).default;
     r = await call(sitemap, { part: 'pages' });
-    for (const u of ['/forum', '/forum/5', '/forum/6', '/ideas', '/ideas/9', '/shorts', '/chat', '/donate', '/lfg', '/games', '/about'])
+    for (const u of ['/forum', '/forum/5', '/forum/6', '/ideas', '/ideas/9', '/shorts', '/chat', '/games', '/about'])
       ok(r.body.includes(`<loc>https://dan4ik37.vercel.app${u}</loc>`), `карта сайта: ${u}`);
-    for (const u of ['/profile', '/phone', '/adv', '/invite', '/play', '/shop/'])
+    // 05.11.2026: разделы-приложения без своего HTML (сервер отдаёт главную) — не в карте
+    for (const u of ['/profile', '/phone', '/adv', '/invite', '/play', '/shop/', '/donate', '/lfg', '/soundboard', '/poll', '/clicker', '/terms', '/refund'])
       ok(!r.body.includes(`<loc>https://dan4ik37.vercel.app${u}`), `карта сайта: без ${u}`);
     ok(r.body.includes('<loc>https://dan4ik37.vercel.app/forum/6</loc><lastmod>2026-10-03</lastmod>'), 'карта сайта: дата темы');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
@@ -368,6 +406,7 @@ function browser(startUrl, routing){
     ok(new RegExp('^Disallow: ' + d.replace(/[/.]/g, '\\$&') + '\\s*$', 'm').test(robots), `robots.txt: закрыто ${d}`);
   ok(/^Allow: \/api\/feed$/m.test(robots) && /^Sitemap: https:\/\/dan4ik37\.vercel\.app\/sitemap\.xml$/m.test(robots) && !/^Disallow: \/\s*$/m.test(robots), 'robots.txt: /api/feed открыт (ролики главной), карта сайта, сайт не закрыт целиком');
   for (const p of ['/forum', '/ideas', '/chat', '/about', '/shop', '/play/chess', '/games/chess']) ok(!robotsBlocked(robots, p), `robots.txt: ${p} открыт`);
+  ok(/^User-agent: Mediapartners-Google\r?\nDisallow:\s*$/m.test(robots), 'robots.txt: робот AdSense (Mediapartners-Google) — своя группа без запретов');
   function robotsBlocked(txt, p){
     let best = null;
     for (const m of txt.matchAll(/^(Allow|Disallow):\s*(\S*)\s*$/gm)) if (m[2] && p.startsWith(m[2]) && (!best || m[2].length >= best[1].length)) best = [m[1], m[2]];

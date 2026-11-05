@@ -391,7 +391,8 @@ function renderVids(vids){
     });
     grid.appendChild(card);
   });
-  // «Показать ещё»: карточка «Реклама» после 16-й и каждой 12-й; есть ролики про кейсы/депозиты — без неё (ad-places.js)
+  // «Показать ещё»: после 16-й и каждой 12-й — своя подсказка (игры сайта); рекламы между роликами нет — карточки только из данных
+  // YouTube (ad-places.js RULES.videoFeed = false; true — карточка «Реклама», как до 05.11); есть ролики про кейсы/депозиты — без неё
   window.D37AdPlaces?.feed(grid, { place: 'feed_videos', every: 12, start: 16, max: 3, titles: vids.map(v => v.title) });
 }
 

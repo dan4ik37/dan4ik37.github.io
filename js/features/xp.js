@@ -2,7 +2,7 @@
 //  XP И УРОВНИ — таблицы, правила и лимиты в xp.sql
 // ═══════════════════════════════════════
 // Начисляет только БД (триггеры на визиты/чат/форум/идеи/рефералов).
-// Отсюда — единственный «клиентский» источник: просмотр видео на сайте.
+// Отсюда — единственный «клиентский» источник: просмотр видео на сайте (с 05.11.2026 выключен — XP_WATCH ниже).
 // Сколько реально играет ролик, узнаём из YouTube IFrame API без загрузки
 // самой библиотеки: подписываемся на postMessage-события плеера
 // ('listening' → 'infoDelivery' с currentTime) и копим только время, когда
@@ -14,8 +14,13 @@
 // Пока economy.sql не запущен, сервер даёт по-старому — подписи здесь уже новые (разница — несколько дней).
 const XP_NUM = { visit: 5, streak7: 25, streak30: 100, chat: 1, chat_day: 15, forum_thread: 8, forum_thread_day: 3, forum_post: 2, forum_post_day: 10,
   idea: 3, idea_day: 3, idea_done: 50, referral: 50, watch: 3, watch_day: 10, daily: 25, secret: 50, game_family: 3, game_day: 100, unity_win: 5 };
+// 05.11.2026: XP за просмотр роликов YouTube выключены — правила YouTube API (developers.google.com/youtube/terms/developer-policies,
+// III.F.3.c) запрещают награды за просмотр встроенного плеера; нарушение — Google может отозвать ключ API (ленты и страницы роликов,
+// на которых держится сайт). Задание недели «Посмотри 5 роликов» убрано (games.js WEEKLY_QUESTS = games-more.sql); строки «Смотреть
+// видео» в «Как получить XP» и ачивок «Зритель» / «Киноман» (achievements.js) не видно. Вернуть — true.
+const XP_WATCH = false;
 const XP_RULES = [
-  ['👁', 'Смотреть видео на сайте', `+${XP_NUM.watch} за ролик (от 1 мин, Shorts — от 15 с), до ${XP_NUM.watch * XP_NUM.watch_day} в день`],
+  ...(XP_WATCH ? [['👁', 'Смотреть видео на сайте', `+${XP_NUM.watch} за ролик (от 1 мин, Shorts — от 15 с), до ${XP_NUM.watch * XP_NUM.watch_day} в день`]] : []),
   ['📅', 'Заходить каждый день', `+${XP_NUM.visit} в день; стрик 7 дней — +${XP_NUM.streak7}, 30 дней — +${XP_NUM.streak30}`],
   ['🎯', 'Задание дня', `+${XP_NUM.daily} (в разделе «Игры», новое каждый день)`],
   ['💬', 'Писать в чат', `+${XP_NUM.chat} за сообщение, до ${XP_NUM.chat * XP_NUM.chat_day} в день`],
@@ -190,8 +195,9 @@ async function renderProfileXp(uid, isOwn){
 // iframe должен быть с enablejsapi=1&origin=<сайт>. minSec — сколько секунд реального
 // воспроизведения нужно для награды.
 const xpTracked = new Map(); // contentWindow → { id, minSec, acc, last, done }
+// 05.11.2026: выключено — XP_WATCH в начале файла (правила YouTube API III.F.3.c)
 function xpTrackIframe(iframe, videoId, minSec){
-  if (!iframe || !videoId) return;
+  if (!XP_WATCH || !iframe || !videoId) return;
   const start = () => {
     const w = iframe.contentWindow;
     if (!w) return;

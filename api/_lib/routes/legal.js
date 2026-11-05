@@ -1,6 +1,6 @@
 // /terms, /refund, /contacts → api/pages.js?page=… — пользовательское соглашение (оферта), политика возврата,
 // реквизиты и контакты. Их требуют платёжные системы (TipTop Pay, Freedom Pay) для подключения сайта.
-// Реквизиты — api/_lib/seller.js (пока заглушки — на странице «уточняется»). Цены — api/_lib/premium.js.
+// Реквизиты — api/_lib/seller.js (пока заглушки — строк-заглушек на странице нет). Цены — api/_lib/premium.js.
 // ШАБЛОН: тексты простые и честные, но перед приёмом платежей их стоит показать юристу (docs/PAYMENTS_SETUP.md).
 import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
@@ -9,7 +9,12 @@ import { GEMS, PACKS, ITEMS, LIMITS, gemWord, money } from '../premium.js';
 
 const S = SELLER;
 const mail = () => `<a href="mailto:${esc(S.email)}">${esc(S.email)}</a>`;
-const draft = () => sellerReady() ? '' : '<p class="lg-draft">Документ готовится: реквизиты продавца появятся здесь после регистрации ИП.</p>';
+// 05.11.2026: плашки «Документ готовится» нет (для проверки AdSense — «сайт не готов»). Пока реквизитов нет (sellerReady), оферта и
+// возврат — noindex и не в карте сайта (DRAFT_NOINDEX ниже): покупок ещё нет, документ не окончательный; страницы открываются по
+// ссылкам магазина как раньше. Реквизиты вписаны (seller.js) — сами станут обычными страницами. Вернуть плашку — DRAFT_NOTE = true.
+const DRAFT_NOTE = false;
+export const DRAFT_NOINDEX = ['terms', 'refund'];
+const draft = () => sellerReady() || !DRAFT_NOTE ? '' : '<p class="lg-draft">Документ готовится: реквизиты продавца появятся здесь после регистрации ИП.</p>';
 
 function terms() {
   const vip = ITEMS.filter(i => i.kind === 'vip').map(i => `${i.title.replace('VIP на ', '')} — ${i.price} ${GEMS.icon}`).join(', ');
@@ -37,7 +42,7 @@ function terms() {
 <ul><li>Донат через DonationAlerts — добровольная поддержка стримов, а не покупка: VIP и кристаллы за донат не начисляются. Условия самого доната — правила DonationAlerts.</li>
 <li>В благодарность Сайт отмечает донатера статусом «💛 Донатер» на 30 дней — с бонусами на Сайте, как у VIP (что даёт — на странице <a href="/vip">«VIP и Донатер»</a>). Бонусы не влияют на итоги игр и рейтинги. Статус — не товар: его нельзя купить, передать или обменять.</li>
 <li>Донат засчитывается аккаунту, если в поле «Ваше имя» указан логин для доната этого аккаунта и донат сделан после регистрации и после того, как логин задан; спорные случаи решает администратор. Анонимные донаты ни к кому не привязываются.</li>
-<li><i>[Текст для юриста: считается ли статус с бонусами за донат встречным предоставлением — уточняется.]</i></li></ul>
+<!-- для юриста: считается ли статус с бонусами за донат встречным предоставлением — уточняется --></ul>
 <h2>5. Несовершеннолетние</h2>
 <ul><li>Покупать за деньги могут совершеннолетние; с 14 до 18 лет — только с разрешения родителей (законных представителей) и с меньшими лимитами; до 14 лет покупки на Сайте недоступны. Для покупки нужно указать год рождения (его видит только сам пользователь). Каждая оплата подтверждается отметкой о разрешении взрослого и согласием на обработку данных.</li>
 <li>Для защиты от случайных трат действуют лимиты: до ${LIMITS.dayRub.toLocaleString('ru-RU')} ₽ в сутки и ${LIMITS.monthRub.toLocaleString('ru-RU')} ₽ за 30 дней на аккаунт (в тенге — по цене пакетов).</li>
@@ -81,10 +86,12 @@ function refund() {
 }
 
 function contacts() {
+  // 05.11.2026: строки-заглушки («уточняется») не показываем — только то, что правда есть (страна, почта); реквизиты появятся сами,
+  // когда владелец впишет их в api/_lib/seller.js
   const rows = [
-    ['Продавец', sv(S.name)], ['ИИН / БИН', sv(S.iin)], ['Адрес', sv(S.address)], ['Страна', S.country],
-    ['Почта', S.email], ['Телефон', sv(S.phone)], ...(sv(S.bank, '') ? [['Банковские реквизиты', S.bank]] : []),
-  ];
+    ['Продавец', sv(S.name, '')], ['ИИН / БИН', sv(S.iin, '')], ['Адрес', sv(S.address, '')], ['Страна', S.country],
+    ['Почта', S.email], ['Телефон', sv(S.phone, '')], ['Банковские реквизиты', sv(S.bank, '')],
+  ].filter(([, v]) => v);
   return {
     title: 'Реквизиты и контакты — dan4ik37',
     description: 'Реквизиты продавца, контакты и условия покупки кристаллов 💎 на сайте dan4ik37.',
@@ -120,7 +127,8 @@ export default function handler(req, res) {
 </main>`;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
-  res.status(200).send(page({ title: p.title, description: p.description, url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true }));
+  res.status(200).send(page({ title: p.title, description: p.description, url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true,
+    noindex: !sellerReady() && DRAFT_NOINDEX.includes(key) }));
 }
 
 export const CSS = `

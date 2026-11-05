@@ -5,7 +5,7 @@
 // поисковик находит и связывает их, человек может пролистать архив, старые видео не теряются.
 // На канале ~6000 роликов — страницы по PER штук: /videos, /videos?p=2 …; годы ведут на страницу, где год начинается.
 import { SITE, ALL_UPLOADS, getUploads, isGambling, esc } from '../yt.js';
-import { page, YT_CHANNEL } from '../page.js';
+import { page, YT_CHANNEL, VIDEO_LIST_ADS } from '../page.js';
 import { TOPICS } from '../topics.js';
 import { videoAge, ageBadge, ageAttr } from '../age.js';
 
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
   vids.forEach((v, i) => { const y = year(v); if (!yearInfo.has(y)) yearInfo.set(y, { count: 0, page: Math.floor(i / PER) + 1 }); yearInfo.get(y).count++; });
   const slice = vids.slice((p - 1) * PER, p * PER);
   // На странице есть ролики про кейсы/промокоды на депозит — рекламы Google на ней не будет (ни места, ни скрипта)
-  const noAds = slice.some(v => isGambling(v.title));
+  const noAds = !VIDEO_LIST_ADS || slice.some(v => isGambling(v.title));   // список роликов — без рекламы (page.js VIDEO_LIST_ADS)
   const byYear = new Map();
   for (const v of slice) { const y = year(v); if (!byYear.has(y)) byYear.set(y, []); byYear.get(y).push(v); }
   const years = [...byYear.keys()];

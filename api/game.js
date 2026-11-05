@@ -5,6 +5,9 @@
 // «играть в города онлайн», «шашки с другом». Кнопка «Играть» ведёт в SPA (/play/<id>; js/ui/router.js).
 // Тексты — api/_lib/games-seo.js.
 import { SITE, esc } from './_lib/yt.js';
+import { tmNote, TM_CSS } from './_lib/trademarks.js';   // «X» — товарный знак владельца (игры «как X»)
+// весь видимый текст страницы игры (названия чужих игр бывают и в правилах, советах, вопросах — «Это Block Blast?»)
+const gameTexts = g => [g.name, g.title, g.h1, g.description, g.lead, ...[g.features, g.rules, g.tips, g.faq].flat(2)];
 import { page } from './_lib/page.js';
 import { GAME_PAGES, HUB, scoreLabel } from './_lib/games-seo.js';
 import { GAME_AGE, ageBadge } from './_lib/age.js';
@@ -100,7 +103,7 @@ function hubPage() {
   </section>
   ${joinBlock()}
 </main>`;
-  return page({ title: HUB.title, description: HUB.description, url, image: cardImage('games'), ld, body, css: GAME_CSS });
+  return page({ title: HUB.title, description: HUB.description, url, image: cardImage('games'), ld, body: body.replace(/<\/main>\s*$/, () => `  ${tmNote('игры', HUB.title, HUB.h1, HUB.lead, HUB.description, ...GAME_PAGES.map(x => x.description), ...MORE.map(m => m[3]))}\n</main>`), css: GAME_CSS });
 }
 
 function gamePage(g, ch) {
@@ -162,6 +165,7 @@ function gamePage(g, ch) {
   <section class="more"><h2>Другие игры</h2><div class="ggrid">${others.map(card).join('')}</div>
     <p class="all"><a href="/games">Все игры →</a></p></section>
   ${joinBlock()}
+  ${tmNote('игра', ...gameTexts(g))}
 </main>`;
   // canonical — всегда чистый /games/<id>, чтобы вызовы не плодили дубли в поиске
   const verb = g.id === 'words' ? 'угадал слово' : 'набрал';
@@ -190,7 +194,7 @@ const SHARE_JS = `
   });
 })();`;
 
-const GAME_CSS = `
+const GAME_CSS = TM_CSS + `
 .challenge{margin-bottom:1.2rem;padding:.9rem 1.1rem;border-radius:14px;background:linear-gradient(90deg,rgba(255,45,85,.22),rgba(255,107,53,.12));border:1px solid rgba(255,45,85,.45);font-size:.95rem}
 .challenge span{color:var(--gold-t);font-weight:800}
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}

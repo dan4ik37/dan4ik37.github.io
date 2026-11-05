@@ -180,7 +180,9 @@ export function getVideoStats(ids) {
 
 // Ролики про открытие кейсов / промокоды на депозит (GGDROP, CaseBattle…): у AdSense это «азартные игры» —
 // рекламу Google рядом показывать нельзя, иначе могут отклонить сайт или отключить показы.
-const GAMBLING_RE = /ggdrop|ггдроп|case\s*battle|casebattle|кейс\s*батл|кейсбатл|казино|casino|промокод на деп|\bдеп\b|депозит|рулетк|ставк[аиу]/i;
+// «деп» отдельным словом: \b в JS — только для латиницы (у «деп» он не срабатывал никогда) — границы по кириллице руками, без
+// (?<!…): старый Safari такие выражения не понимает. То же выражение — в js/core/ad-places.js и js/core/age.js (тест сверяет).
+const GAMBLING_RE = /ggdrop|ггдроп|case\s*battle|casebattle|кейс\s*батл|кейсбатл|казино|casino|промокод на деп|(?:^|[^а-яёa-z0-9_])деп(?![а-яёa-z0-9_])|депозит|рулетк|ставк[аиу]/i;
 export const isGambling = (...texts) => texts.some(t => GAMBLING_RE.test(String(t || '')));
 
 // 28.10.2026: AdSense отклонил сайт — «Обнаружены нарушения правил». У 555 из 5978 роликов в описании промокоды на депозит
@@ -200,4 +202,51 @@ function gamblingIds() {
   for (const id in D.v) if (dg[D.v[id][4]]) gIds.add(id);
   return gIds;
 }
-export const hiddenVideo = (id, ...texts) => HIDE_GAMBLING && (isGambling(...texts) || gamblingIds().has(id));
+// 05.11.2026: с мая 2025 по начало января 2026 на стримах висел баннер GGDROP с промокодом — он виден на превью и в самих роликах
+// (/v/14n46v57Biw, «СИРЕНОГОЛОВЫЙ?» и др.), а текстом (название, описание) его не поймать. Ролики этого времени (записи эфиров,
+// клипы и шортсы со стримов) сайт не показывает, как и ролики про кейсы. Даты — по роликам с промокодом в описании (первый —
+// 2025-05-03, последний — 2026-01-05); владелец уточняет, когда баннер правда был. Вернуть как было — false.
+export const HIDE_GG_WINDOW = true;
+export const GG_WINDOW = ['2025-05-01', '2026-01-10'];   // [с, до) — дата публикации ролика (UTC, как в снимке)
+let ggIds = null;
+function ggWindowIds() {
+  if (!ggIds) ggIds = new Set(snapshotList().filter(v => v.publishedAt >= GG_WINDOW[0] && v.publishedAt < GG_WINDOW[1]).map(v => v.id));
+  return ggIds;
+}
+export const hiddenVideo = (id, ...texts) => HIDE_GAMBLING && (isGambling(...texts) || gamblingIds().has(id) || (HIDE_GG_WINDOW && ggWindowIds().has(id)));
+
+// Шортс: по длительности (с 15.10.2024 YouTube разрешил до 3 минут, раньше — до минуты); длительности нет — по #shorts в названии.
+// (В названии многих многочасовых записей стримов тоже есть #shorts — по нему одному не судим.)
+const isoSecs = iso => { const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso || ''); return m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0) : -1; };
+export function isShortVideo(title, publishedAt, duration) {
+  const s = isoSecs(duration);
+  if (s < 0) return /#shorts?\b/i.test(title || '');
+  return s > 0 && s <= (Date.parse(publishedAt) >= Date.parse('2024-10-15') ? 180 : 60);
+}
+
+// Описание ролика для страницы /v/<id> (05.11.2026, правила AdSense о скопированном и «пустом» содержимом): повторы строк убраны
+// (три «Made with Restream» подряд), строки-реклама Restream и «обязательно можешь глянуть теги …» (набор ключевых слов — спам
+// для поиска) — тоже. Ролики на YouTube не трогаем.
+const DESC_DROP = /^\s*(?:made with restream|livestream on \d+\+? platforms|обязательно можешь глянуть теги)/i;
+export function cleanDesc(desc) {
+  const seen = new Set(), out = [];
+  for (const raw of String(desc || '').split('\n')) {
+    const l = raw.replace(/\s+$/, '');
+    if (DESC_DROP.test(l) || /restream\.io/i.test(l)) continue;
+    const k = l.trim().toLowerCase();
+    if (k && seen.has(k)) continue;
+    if (k) seen.add(k);
+    if (!k && (!out.length || !out[out.length - 1].trim())) continue;   // пустые строки — не больше одной подряд
+    out.push(l);
+  }
+  return out.join('\n').trim();
+}
+// Своего текста в описании (слов): без ссылок, хэштегов, «подпишись / донаты / соцсети / теги» — то, что автор правда написал
+// об этом ролике. Реклама на /v/<id> — только если его ≥ VIDEO_OWN_WORDS (страница ролика, где кроме данных YouTube ничего нет,
+// — «бесполезный контент» для AdSense и нарушение правил YouTube API III.G.1.d).
+export const VIDEO_OWN_WORDS = 150;
+const BOILER = /https?:\/\/|restream|поддерж|подпис|мемкоин|телеграм|telegram|tiktok|тикток|донат|donat|дискорд|discord|steam|стим(?![а-яё])|capcut|лайк|заранее спасибо|плейлист|глянуть теги|^\s*#|vk\.com|memealerts/i;
+export function ownWords(desc) {
+  return String(desc || '').split('\n').filter(l => l.trim() && !BOILER.test(l)).join(' ')
+    .replace(/#\S+/g, ' ').replace(/[^\p{L}\p{N}\s'-]+/gu, ' ').split(/\s+/).filter(w => w.length > 1).length;
+}

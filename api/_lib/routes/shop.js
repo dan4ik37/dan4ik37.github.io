@@ -7,7 +7,8 @@
 import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
 import { GEMS, PACKS, ITEMS, LIMITS, gemWord, money } from '../premium.js';
-import { SELLER, sv } from '../seller.js';
+import { SELLER, sv, isPlaceholder } from '../seller.js';
+import { payConfig } from '../pay.js';
 
 export default function handler(req, res) {
   const url = `${SITE}/shop`;
@@ -28,6 +29,9 @@ export default function handler(req, res) {
     }));
   }
 
+  // 05.11.2026: оплата не подключена (payConfig().any = false, /api/pay?a=config → methods: []) — честная плашка сверху и noindex:
+  // страница остаётся для платёжных систем (цены, возврат, реквизиты), но в поиск «магазин без оплаты» не идёт
+  const live = payConfig().any;
   const vip = ITEMS.filter(i => i.kind === 'vip');
   const coins = ITEMS.filter(i => i.kind === 'coins');
   const faq = [
@@ -41,6 +45,7 @@ export default function handler(req, res) {
   const body = `
 <main class="wrap">
   <nav class="crumbs"><a href="/">Главная</a> › <span>Магазин</span></nav>
+  ${live ? '' : '<p class="sp-off">🛠️ Покупка кристаллов пока не работает: оплату ещё подключаем. Ниже — какими будут цены и правила.</p>'}
   <div class="sp-hero">
     <span class="sp-gem">${GEMS.icon}</span>
     <div>
@@ -78,13 +83,13 @@ export default function handler(req, res) {
   </ul></section>
 
   <section class="box faq"><h2>Частые вопросы</h2>${faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
-  <p class="muted small sp-legal">Продавец: ${esc(sv(SELLER.name, 'уточняется'))} · <a href="/terms">Пользовательское соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a></p>
+  <p class="muted small sp-legal">${isPlaceholder(SELLER.name) ? '' : `Продавец: ${esc(sv(SELLER.name))} · `}<a href="/terms">Пользовательское соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a></p>
 </main>`;
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
   res.status(200).send(page({
     title: 'Магазин кристаллов 💎 — dan4ik37',
     description: 'Кристаллы — валюта сайта dan4ik37: VIP, подарки друзьям, монеты и вещи для персонажа. Цены пакетов (окончательные), оплата через Kaspi.',
-    url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true, spa: '#/shop',   // вкладка с сайтом-приложением — сразу в магазин (раздел)
+    url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true, noindex: !live, spa: '#/shop',   // вкладка с сайтом-приложением — сразу в магазин (раздел)
     ld: { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
   }));
 }
@@ -108,6 +113,7 @@ const CSS = `
 .sp-pack i{position:absolute;top:-9px;right:8px;padding:.1rem .45rem;border-radius:999px;background:#16a34a;color:#fff;font-style:normal;font-size:.68rem;font-weight:800}
 .sp-list{padding-left:1.2rem;display:flex;flex-direction:column;gap:.45rem;font-size:.9rem}
 .sp-legal{margin-top:1.4rem;text-align:center}
+.sp-off{margin:0 0 1rem;padding:.65rem .9rem;border-radius:12px;background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.3);color:var(--gold-hi,#ffd166);font-size:.86rem;font-weight:600}
 .faq details{border-top:1px solid var(--line);padding:.75rem 0}
 .faq details:first-of-type{border-top:0;padding-top:0}
 .faq summary{cursor:pointer;font-weight:700;font-size:.92rem}

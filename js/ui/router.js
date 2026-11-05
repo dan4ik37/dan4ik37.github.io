@@ -305,6 +305,7 @@ function showPage(route){
     return el && el.style.display !== 'none';
   });
   const doSwap = () => {
+    document.getElementById('d37Boot')?.remove();   // первый кадр (index.html <head>): дальше разделы показывает только роутер
     ALL_PAGE_IDS.forEach(id=>{
       const el=document.getElementById(id);
       if(el) el.style.display = activeIds.includes(id) ? '' : 'none';

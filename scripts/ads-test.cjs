@@ -246,7 +246,16 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
 // ═══ 1. Диспетчер ═══
 {
   fresh();
-  ok(M.why('loading') === '' && M.net('loading') === 'g', 'Google: у загрузки нет своего блока — берёт game_over', M.why('loading'));
+  // 05.11.2026 (RULES.gStrict): Google — только на экранах со своим содержимым; загрузка, перерыв, столбик, плеер в чате — без Google
+  ok(M.RULES.gStrict === true, 'gStrict включён по умолчанию');
+  ok(M.why('loading') === 'id' && M.net('loading') === '', 'Google: на экране загрузки блока Google нет (gStrict)', M.why('loading'));
+  ok(['loading', 'break', 'rail', 'chat_player'].every(k => M.ids(k).g === ''), 'Google: loading / break / rail / chat_player — без блока Google', ['loading', 'break', 'rail', 'chat_player'].map(k => M.ids(k).g));
+  window.ADS_IDS.google.loading = '1111'; window.ADS_IDS.google.chat_player = '2222';
+  ok(M.ids('loading').g === '' && M.ids('chat_player').g === '', 'и свой номер Google там не берётся');
+  window.ADS_IDS.google = JSON.parse(JSON.stringify(IDS.google));
+  ok(M.ids('feed_games').g === IDS.google.games_hub && M.ids('game_over').g === IDS.google.game_over, 'лента и под игрой — Google как раньше');
+  M.RULES.gStrict = false;   // как было до 05.11 (откат одной строкой)
+  ok(M.why('loading') === '' && M.net('loading') === 'g', 'gStrict=false: у загрузки нет своего блока — берёт game_over', M.why('loading'));
   window.ADS_IDS.google = {};
   ok(M.why('loading') === 'id', 'нет номера блока — нельзя (id)');
   window.ADS_IDS.yandex.loading = 'R-A-1-1';
@@ -255,6 +264,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   // запасные номера
   ok(M.ids('loading').g === IDS.google.game_over, 'Google: loading берёт блок game_over');
   ok(M.ids('feed_games').g === IDS.google.games_hub && M.ids('rail').g === IDS.google.game_over, 'Google: feed → games_hub, rail → game_over');
+  M.RULES.gStrict = true;
   window.ADS_IDS.yandex.game_over = 'R-A-1-9';
   ok(M.ids('break').ya === 'R-A-1-9', 'Яндекс: перерыв без своего блока — блок game_over');
   window.ADS_IDS.yandex.feed = 'R-A-1-5';
@@ -287,7 +297,10 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(M.why('break') === 'desk', 'перерыв — только компьютер');
   ENV.coarse = false;
   // под плеером в чате (chatplayer.js): тот же блок, что под игрой; только компьютер; раз в 2 минуты, до 8; кейсы — нельзя
-  ok(M.why('chat_player') === '', 'место под плеером чата — можно (запасной блок game_over)', M.why('chat_player'));
+  window.ADS_IDS.yandex.game_over = '';
+  ok(M.why('chat_player') === 'id', 'под плеером чата Google нет (gStrict) — без РСЯ места нет', M.why('chat_player'));
+  window.ADS_IDS.yandex.game_over = 'R-A-1-9';
+  ok(M.why('chat_player') === '' && M.net('chat_player') === 'ya', 'место под плеером чата — только РСЯ (блок game_over)', M.why('chat_player'));
   M.mark('chat_player'); advance(60e3);
   ok(M.why('chat_player') === 'gap', 'под плеером — не чаще раза в 2 минуты');
   advance(61e3);
@@ -395,7 +408,11 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(ins && ins.getAttribute('data-ad-slot') === IDS.google.games_hub && ins.getAttribute('data-tag-for-age-treatment') === '1', 'Google: data-tag-for-age-treatment="1"', ins && ins.attrs);
   ok(ins.getAttribute('data-ad-format') === 'auto' && ins.getAttribute('data-full-width-responsive') === 'true', 'Google: обычное место — auto, на всю ширину');
   const gr = new El('div'); body.appendChild(gr);
+  M.RULES.gStrict = false;
   ok(M.show(gr, 'rail', { checked: true }) && gr.querySelector('ins')?.getAttribute('data-ad-format') === 'vertical' && !gr.querySelector('ins').hasAttribute('data-full-width-responsive'), 'Google: столбик — вертикальный формат, не растягивать');
+  M.RULES.gStrict = true;
+  gr.innerHTML = '';
+  ok(M.show(gr, 'rail', { checked: true }) === false && !gr.querySelector('ins'), 'gStrict: столбик Google не ставит');
   gr.remove();
   // VIP — даже прямой вызов render не показывает
   currentUser = { id: 'v' }; currentProfile = { id: 'v', is_vip: true };
@@ -479,6 +496,10 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   // компилятор: карточка в углу, если окно не тесное
   advance(100e3);
   const view = new El('div'); view._rect = { left: 0, top: 0, width: 900, height: 600 }; body.appendChild(view);
+  const c0 = M.loading({ host: view, card: '⚙️ Сборка C++', tip: 'compile' }); advance(1600);
+  ok(!view.querySelector('.d37-adcard'), 'gStrict: карточки с рекламой поверх Студии 3D нет');
+  c0.done(); advance(100e3);
+  M.RULES.gStrict = false;
   const c1 = M.loading({ host: view, card: '⚙️ Сборка C++', tip: 'compile' });
   c1.step('загрузка компилятора 12%'); advance(1600);
   const card = view.querySelector('.d37-adcard');
@@ -493,6 +514,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   const c2 = M.loading({ host: view, card: '⚙️', tip: 'compile' }); advance(2000);
   ok(!view.querySelector('.d37-adcard'), 'тесное окно (телефон) — без карточки');
   c2.done();
+  M.RULES.gStrict = true;
   advance(100e3); currentUser = { id: 'v' }; currentProfile = { id: 'v', is_vip: true };
   const g6 = M.loading({ anchor: box.firstChild, game: 'horde' }); advance(2000);
   ok(!box.querySelector('.d37-adload'), 'VIP — экран загрузки без рекламы');
@@ -542,10 +564,28 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(res[2] === 'game_over' && !box.querySelector('.d37-break'), 'телефон: перерывов нет (там полноэкранная от игры)', res);
   // Google: без обновлений и без перерыва в том же месте
   fresh({ hash: '#/games/snake' }); window.ADS_IDS.yandex = {};
-  box.innerHTML = ''; delete box.dataset.net;
+  box.innerHTML = ''; delete box.dataset.net; delete box.dataset.gDone;
   ok(M.afterRound(stage) === 'game_over' && box.dataset.net === 'g', 'Google: место под игрой');
   advance(200e3);
   ok(M.afterRound(stage) === false && M.afterRound(stage) === false, 'Google: то же объявление, обновлять нельзя (только по просьбе человека)');
+  for (let i = 0; i < 6; i++) { advance(91e3); ok(M.afterRound(stage) !== 'break', 'Google: «☕ Перерыв» Google не ставит (gStrict)'); }
+  // снова играет — блок Google убран совсем (не спрятан); в этой игре — больше нет; в другой — снова один
+  advance(1000); sb.dispatch('pointerdown');
+  ok(box.innerHTML === '' && box.hidden && !box.dataset.net, 'Google: снова играет — блок убран (рядом с идущей игрой Google нет)');
+  advance(200e3);
+  ok(M.afterRound(stage) === false && box.innerHTML === '', 'Google: в той же игре новый блок не ставим (не обновление)');
+  setHash('#/games/td'); advance(200e3);
+  ok(M.afterRound(stage) === 'game_over' && box.dataset.net === 'g', 'Google: другая игра — снова один блок');
+  dispatchEvent({ type: 'd37:fullscreen', detail: { on: true } });
+  ok(box.innerHTML === '' && !box.dataset.net, 'игра во весь экран — блок под игрой убран (не display:none)');
+  // партия кончилась, а игра всё ещё во весь экран (html.gs-full прячет #gamesAd) — в спрятанное место ничего не ставим
+  setHash('#/games/chess'); advance(200e3); html.classList.add('gs-full');
+  ok(M.afterRound(stage) === false && box.innerHTML === '' && !box.dataset.net, 'конец партии во весь экран — рекламу в спрятанный #gamesAd не ставим');
+  html.classList.remove('gs-full'); doc.fullscreenElement = stage;
+  ok(M.afterRound(stage) === false && box.innerHTML === '', 'и при document.fullscreenElement');
+  doc.fullscreenElement = null;
+  ok(M.afterRound(stage) === 'game_over' && box.dataset.net === 'g', 'вышел из полноэкранного — после партии блок снова есть');
+  setHash('#/games/snake');
   // лимит визита кончился — показанное не стираем
   fresh({ hash: '#/games/snake' }); window.ADS_IDS.google = {}; window.ADS_IDS.yandex.game_over = 'R-A-4-1';
   box.innerHTML = ''; delete box.dataset.net;
@@ -554,6 +594,95 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   advance(100e3);
   ok(M.afterRound(stage) === false && !!box.querySelector('[id^="yandex_rtb"]'), 'лимит визита — новое не показываем, показанное не стираем');
   stage.remove();
+}
+
+// ═══ 4б. Серверные страницы: место встаёт, только когда подъезжает снизу (05.11.2026, CLS) ═══
+// и пустой блок Google (сеть ничего не отдала / блокировщик) — без сдвига: ниже экрана убрать, на экране — своя подсказка той же высоты
+{
+  Object.defineProperty(globalThis, 'innerHeight', { get: () => 915, configurable: true });
+  El.prototype.getClientRects = function(){ let n = this; while (n && n.nodeType === 1) { if (n.hidden) return []; n = n.parentNode; } return [this.getBoundingClientRect()]; };
+  fresh(); window.ADS_IDS.yandex = {};
+  const slot = (top, h) => { const d = new El('div'); d.dataset.ad = 'seo_game'; d.hidden = true; d._rect = { left: 0, top, width: 412, height: h || 0 }; body.appendChild(d); return d; };
+  const d = slot(1400);
+  const n = new El('div'); n.dataset.ad = 'video_page'; n.setAttribute('data-ad-now', ''); n.hidden = true; body.appendChild(n);
+  const top1 = slot(300);   // на первом экране
+  window.adsbygoogle = [];
+  M.fillAll();
+  ok(!d.hidden && !d.querySelector('ins') && IO.list.has(d), 'data-ad: сначала только наблюдаем (пустой div виден наблюдателю), блока ещё нет');
+  ok(!!n.querySelector('ins'), 'data-ad-now — сразу');
+  showIO(d);
+  const ins = d.querySelector('ins');
+  ok(ins && ins.getAttribute('data-ad-slot') === IDS.google.seo_game && d.classList.contains('d37-ad') && ins.dataset.guard === '1', 'подъехал снизу (ещё ниже экрана) — блок Google с подписью и под присмотром guard', d.innerHTML);
+  showIO(top1);
+  ok(!top1.querySelector('ins') && IO.list.has(top1), 'место уже на первом экране — блок не ставим (сдвинул бы текст), ждём, пока подъедет снизу');
+  top1._rect.top = 1300; showIO(top1);
+  ok(!!top1.querySelector('ins'), 'пролистал вверх, место снова ниже экрана — подъехало снизу, блок есть');
+  // ответ сети: unfilled, место ниже экрана — убрать
+  window.adsbygoogle = { loaded: true, push(){} };
+  ins.setAttribute('data-adsbygoogle-status', 'done'); ins.setAttribute('data-ad-status', 'unfilled'); advance(4100);
+  ok(d.hidden && d.innerHTML === '', 'unfilled ниже экрана — место убрано (на экране ничего не сдвинулось)', d.outerHTML);
+  // unfilled на экране — своя подсказка ровно той же высоты, без пометки «Реклама»
+  const v = slot(1300); M.fillAll(); showIO(v); v._rect = { left: 0, top: 320, width: 412, height: 336 };
+  const vi = v.querySelector('ins'); vi.setAttribute('data-adsbygoogle-status', 'done'); vi.setAttribute('data-ad-status', 'unfilled'); advance(4100);
+  ok(v.classList.contains('d37-house') && v.classList.contains('d37-solo') && !v.classList.contains('d37-ad') && v.style.height === '336px' && v.style.boxSizing === 'border-box' && v.querySelectorAll('a').length === 3 && !/Реклама/.test(v.textContent) && !v.querySelector('ins'),
+    'unfilled на экране — 3 свои подсказки в том же месте (высота 336 px), без «Реклама» и без <ins>', v.outerHTML.slice(0, 300));
+  // пришла реклама — ничего не трогаем
+  const f = slot(1300); M.fillAll(); showIO(f); f._rect.top = 200;
+  const fi = f.querySelector('ins'); fi.setAttribute('data-adsbygoogle-status', 'done'); fi.setAttribute('data-ad-status', 'filled'); advance(30e3);
+  ok(f.classList.contains('d37-ad') && !!f.querySelector('ins') && !f.style.height, 'реклама пришла — блок остаётся как есть');
+  // сеть взяла блок, ответа ещё нет — ждём (не выдумываем «пусто»)
+  const w = slot(1300); M.fillAll(); showIO(w); w._rect.top = 200;
+  w.querySelector('ins').setAttribute('data-adsbygoogle-status', 'done'); advance(60e3);
+  ok(w.classList.contains('d37-ad') && !!w.querySelector('ins'), 'блок взят сетью (data-adsbygoogle-status), ответа ещё нет — место ждёт');
+  // блокировщик: скрипт не загрузился (у adsbygoogle нет loaded), страница уже загружена
+  window.adsbygoogle = [];
+  const bl = slot(1300); M.fillAll(); showIO(bl); bl._rect = { left: 0, top: 100, width: 412, height: 330 }; advance(4100);
+  ok(bl.classList.contains('d37-house') && bl.style.height === '330px' && !/Реклама/.test(bl.textContent), 'блокировщик (скрипт не пришёл) — на экране своя подсказка, пустой рамки «Реклама» нет', bl.outerHTML.slice(0, 200));
+  const bl2 = slot(1300); M.fillAll(); showIO(bl2); advance(4100);
+  ok(bl2.hidden && bl2.innerHTML === '', 'блокировщик, место ниже экрана — убрано');
+  // пустышка блокировщика: loaded есть, но блок никто не взял (нет data-adsbygoogle-status) — после трёх проверок «пусто»
+  window.adsbygoogle = { loaded: true, push(){} };
+  const st0 = slot(1300); M.fillAll(); showIO(st0); advance(4100 + 3000);
+  ok(!!st0.querySelector('ins'), 'пустышка: сразу не решаем');
+  advance(7000);
+  ok(st0.hidden, 'пустышка блокировщика (loaded, но блок не взят) — через ~13 с убрано', st0.outerHTML.slice(0, 200));
+  // запросы на паузе (ждём возраст) — не «пусто»
+  window.adsbygoogle = { loaded: true, push(){}, pauseAdRequests: 1 };
+  const pz = slot(1300); M.fillAll(); showIO(pz); advance(40e3);
+  ok(!!pz.querySelector('ins') && !pz.hidden, 'пауза запросов — место ждёт');
+  window.adsbygoogle.pauseAdRequests = 0; pz.querySelector('ins').setAttribute('data-ad-status', 'unfilled'); advance(3100);
+  ok(pz.hidden, 'пауза снята, пусто — убрано');
+  // страница ещё грузится (async-скрипт не пришёл) — блокировщиком не считаем
+  doc.readyState = 'interactive'; window.adsbygoogle = [];
+  const ld = slot(1300); M.fillAll(); showIO(ld); advance(20e3);
+  ok(!!ld.querySelector('ins'), 'страница ещё грузится — не решаем');
+  doc.readyState = 'complete'; advance(3100);
+  ok(ld.hidden, 'загрузилась, скрипта рекламы нет — убрано');
+  // SPA: обёртка #ad-mid (js/features/ads.js) — на экране своя подсказка внутри, подпись ::before уходит вместе с <ins>, высота та же
+  const wrap = new El('div'); wrap.id = 'ad-mid'; wrap.className = 'wrap-sm'; wrap.innerHTML = '<ins class="adsbygoogle" data-slot-key="home_mid"></ins>'; body.appendChild(wrap);
+  wrap._rect = { left: 0, top: 500, width: 412, height: 331 };
+  ok(M.settle(wrap) === 'own' && !wrap.querySelector('ins') && wrap.querySelector('.d37-house.d37-solo') && wrap.style.height === '331px' && !wrap.classList.contains('ad-empty'), '#ad-mid на экране — своя подсказка внутри обёртки, высота 331 px', wrap.outerHTML.slice(0, 200));
+  // схлопывание отступов (как в браузере): верх обёртки = база + max(нижний отступ соседа выше 10 px, свой margin-top, отступ подписи
+  // ::before 16 px — пока есть <ins> и нет overflow:hidden); верх после замены — ровно тот же, высота та же
+  const wc = new El('div'); wc.id = 'ad-mid'; wc.innerHTML = '<ins class="adsbygoogle"></ins>'; body.appendChild(wc);
+  wc.getBoundingClientRect = function(){
+    const label = !!this.querySelector('ins.adsbygoogle') && this.style.overflow !== 'hidden' ? 16 : 0;
+    const top = 400 + Math.max(10, parseFloat(this.style.marginTop) || 0, label), height = this.style.height ? parseFloat(this.style.height) : 317;
+    return { left: 0, top, width: 412, height, right: 412, bottom: top + height, x: 0, y: top };
+  };
+  const t0c = wc.getBoundingClientRect().top;
+  ok(M.settle(wc) === 'own' && Math.abs(wc.getBoundingClientRect().top - t0c) <= 0.5 && wc.getBoundingClientRect().height === 317, 'схлопнутый отступ подписи и соседа: верх и высота обёртки — те же (без сдвига)', [t0c, wc.getBoundingClientRect().top, wc.style.marginTop]);
+  wc.remove();
+  const wrap2 = new El('div'); wrap2.id = 'ad-top'; wrap2.innerHTML = '<ins class="adsbygoogle"></ins>'; body.appendChild(wrap2); wrap2._rect = { left: 0, top: 2000, width: 412, height: 331 };
+  ok(M.settle(wrap2) === 'gone' && wrap2.classList.contains('ad-empty') && !wrap2.querySelector('ins'), '#ad-top ниже экрана — убран (ad-empty, <ins> удалён — скрытой рекламы нет)');
+  const wrap3 = new El('div'); wrap3.id = 'ad-bottom'; wrap3.innerHTML = '<ins class="adsbygoogle"></ins>'; body.appendChild(wrap3); wrap3._rect = { left: 0, top: 300, width: 412, height: 30 };
+  ok(M.settle(wrap3) === 'own' && !wrap3.querySelector('ins') && !wrap3.querySelector('a') && wrap3.style.height === '30px', 'от блока осталась одна подпись (фильтр спрятал <ins>) — пустой промежуток той же высоты, без подсказки');
+  M.RULES.settle = false;
+  const old = new El('div'); old.className = 'd37-ad'; old.innerHTML = '<ins class="adsbygoogle"></ins>'; body.appendChild(old); old._rect = { left: 0, top: 100, width: 412, height: 330 };
+  ok(M.settle(old) === 'gone' && old.hidden, 'RULES.settle = false — как раньше: пустое убрать сразу');
+  M.RULES.settle = true;
+  [d, n, top1, v, f, w, bl, bl2, st0, pz, ld, wrap, wrap2, wrap3, old].forEach(e => e.remove()); window.adsbygoogle = [];
+  delete El.prototype.getClientRects; delete globalThis.innerHeight;
 }
 
 // ═══ 5. Карточки «Реклама» в списках ═══
@@ -577,8 +706,18 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(M.feed(grid, { place: 'feed_games', every: 10 }) === 0, 'короткий список — без рекламы');
   fill(40, i => i === 33 ? 'Открываю кейсы GGDROP' : 'Ролик ' + i);
   ok(M.feed(grid, { place: 'feed_videos', every: 12, start: 16, titles: grid.children.map(c => c.textContent) }) === 0, 'в списке есть ролик про кейсы — в нём рекламы нет совсем');
+  // 05.11.2026 (RULES.videoFeed = false): лента роликов на главной — одни данные YouTube; рекламы сетей и прямой нет, свои подсказки
+  ok(M.RULES.videoFeed === false, 'videoFeed выключен по умолчанию (лента роликов без рекламы)');
+  window.ADS_IDS.google = JSON.parse(JSON.stringify(IDS.google));
+  fill(40); yaCalls.length = 0; const n0 = T.st().n;
+  ok(M.feed(grid, { place: 'feed_videos', every: 12, start: 16, max: 3 }) === 2, 'лента роликов: 2 места (после 16-й и 28-й)');
+  const own = grid.children.filter(k => k.classList.contains('d37-feed'));
+  ok(own.length === 2 && own.every(c => c.classList.contains('d37-house') && !c.classList.contains('d37-ad') && c.querySelector('a') && !c.querySelector('ins') && !/Реклама/.test(c.textContent)) && !yaCalls.length && T.st().n === n0,
+    'лента роликов: сразу свои подсказки (игры сайта) — без Google/РСЯ, без «Реклама», не в счёт показов', own.map(c => c.outerHTML.slice(0, 120)));
+  window.ADS_IDS.google = {};
+  M.RULES.videoFeed = true;   // как было до 05.11 (откат одной строкой) — дальше проверки сети в ленте роликов
   fill(40);
-  ok(M.feed(grid, { place: 'feed_videos', every: 12, start: 16, max: 3 }) === 2 && grid.children[16].classList.contains('d37-feed'), 'видео: после 16-й и 28-й', grid.children.map(k => k.className).join(','));
+  ok(M.feed(grid, { place: 'feed_videos', every: 12, start: 16, max: 3 }) === 2 && grid.children[16].classList.contains('d37-feed') && !grid.children[16].classList.contains('d37-house'), 'videoFeed=true: видео — места под рекламу после 16-й и 28-й', grid.children.map(k => k.className).join(','));
   // нет рекламы у сети — своя подсказка (место не пустует и не прыгает)
   showIO(grid.children[16]); flushYa(); yaCalls.pop().alt();
   const hc = grid.children[16];
@@ -591,6 +730,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(a1.classList.contains('d37-house'), 'блокировщик: через 8 с пустая карточка «Реклама» → своя подсказка');
   YA.fill = true; showIO(a2); flushYa(); advance(8100); YA.fill = false;
   ok(a2.classList.contains('d37-ad') && !a2.classList.contains('d37-house') && a2.querySelector('iframe'), 'реклама пришла — карточка остаётся рекламой');
+  M.RULES.videoFeed = false;
   // строка на всю ширину (мелкие карточки «Студии игр»)
   fill(30);
   M.feed(grid, { place: 'feed_ugc', every: 8, row: true, max: 2 });
@@ -695,7 +835,8 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ENV.coarse = true; M.railTick();
   ok(!T.RAIL.el, 'сенсорный экран (планшет) — нет: липкие только на компьютере');
   ENV.coarse = false;
-  // Google: от края игры не ближе 150 px
+  // Google: от края игры не ближе 150 px (как было до gStrict)
+  M.RULES.gStrict = false;
   window.ADS_IDS.yandex.rail = ''; window.ADS_IDS.google = { game_over: 'G-1' };
   advance(61e3); layout(1920); M.railTick();
   const gl = parseFloat(T.RAIL.el?.style.left) + 360;
@@ -725,6 +866,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(r2 && !r2.isConnected, 'реклама не пришла (блокировщик) — через 8 с пустой столбик убран');
   page.remove(); window.adsbygoogle = [];
   timers.push(...savedIntervals);
+  M.RULES.gStrict = true;
 }
 
 // ═══ 8. Спонсор щитов и щиты «Мира Денчика» ═══
@@ -808,9 +950,8 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
 {
   const os = require('os'), { pathToFileURL } = require('url');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'd37-ads-'));
-  fs.mkdirSync(path.join(tmp, 'api/_lib/routes'), { recursive: true });
+  fs.cpSync(path.join(SITE, 'api'), path.join(tmp, 'api'), { recursive: true });
   fs.writeFileSync(path.join(tmp, 'package.json'), '{"type":"module"}');
-  for (const f of ['yt.js', 'page.js', 'errlog.js', 'topics.js', 'age.js', 'uploads-snapshot.js', 'video-details.js', 'routes/videos.js']) fs.copyFileSync(path.join(SITE, 'api/_lib', f), path.join(tmp, 'api/_lib', f));
   globalThis.fetch = async () => { throw new Error('нет сети'); };   // свежих роликов нет — только снимок
   try {
     const { page } = await import(pathToFileURL(path.join(tmp, 'api/_lib/page.js')).href);
@@ -819,21 +960,119 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
     ok(/ads-core\.js"><\/script>\s*<script src="\/js\/core\/ad-places\.js"><\/script>/.test(html1), 'серверные страницы: ad-places.js сразу после ads-core.js');
     const html2 = page({ title: 't', body: '<main></main>', noAds: true });
     ok(!/adsbygoogle\.js/.test(html2) && /ctx\("gambling",true\)/.test(html2), 'страница с роликом про кейсы: без AdSense, и полоска РСЯ тоже нельзя (gambling)');
-    const { default: videos } = await import(pathToFileURL(path.join(tmp, 'api/_lib/routes/videos.js')).href);
-    const run = async p => { const res = { h: {}, setHeader(k, v){ this.h[k] = v; }, status(c){ this.code = c; return this; }, send(x){ this.html = x; } }; await videos({ query: { p: String(p) } }, res); return res; };
+    const imp = f => import(pathToFileURL(path.join(tmp, f)).href);
+    const mkRes = () => ({ h: {}, setHeader(k, v){ this.h[k] = v; }, status(c){ this.code = c; return this; }, send(x){ this.html = x; } });
+    const call = async (h, query) => { const res = mkRes(); await h({ query }, res); return res; };
+    const adsOn = h => /adsbygoogle\.js/.test(h) || /data-ad="/.test(h);
+    // 05.11.2026: noindex — без рекламы (404, «временно недоступно»)
+    ok(!/adsbygoogle\.js/.test(page({ title: 't', body: '<main></main>', noindex: true })), 'page({ noindex }) — без AdSense (экраны ошибок и служебные)');
+    // ссылки-вызовы друзей (noindex, но своё содержимое целиком) — реклама можно (page.js SHARE_ADS); чужой текст из ссылки — нет
+    ok(/adsbygoogle\.js/.test(page({ title: 't', body: '<main></main>', noindex: true, share: true })) && /<meta name="robots" content="noindex">/.test(page({ title: 't', body: '', noindex: true, share: true })), 'page({ noindex, share }) — не в поиск, но с AdSense');
+    {
+      const { default: cps } = await imp('api/_lib/routes/cps.js'), { default: typing } = await imp('api/_lib/routes/typing.js');
+      const { default: quiz } = await imp('api/_lib/routes/quiz.js'), { default: wheel } = await imp('api/_lib/routes/wheel.js');
+      const { QUIZZES } = await imp('api/_lib/quizzes.js');
+      const off = h => !/adsbygoogle\.js/.test(h) && /ctx\("gambling",true\)/.test(h);   // noAds: ни скрипта, ни мест (диспетчер закрыт)
+      const c1 = await call(cps, { s: '8.4' }), c2 = await call(cps, { s: '8.4', n: 'Кто-то' });
+      ok(/noindex/.test(c1.html) && /adsbygoogle.js/.test(c1.html) && /data-ad="seo_game"/.test(c1.html), '/tools/cps?s= (вызов друга, «Друг») — noindex, реклама есть (своё содержимое)');
+      ok(/noindex/.test(c2.html) && off(c2.html), '/tools/cps?s=&n= — ник из ссылки (чужой текст без проверки) — без рекламы');
+      const t1 = await call(typing, { s: '250' });
+      ok(/noindex/.test(t1.html) && /adsbygoogle.js/.test(t1.html), '/tools/typing?s= — noindex, реклама есть');
+      const Q0 = QUIZZES[0], q1 = await call(quiz, { slug: Q0.slug, r: Q0.results[0].id });
+      ok(q1.code === 200 && /noindex/.test(q1.html) && /adsbygoogle.js/.test(q1.html), '/quiz/<тест>?r= (результат друга) — noindex, реклама есть', q1.code);
+      const w1 = await call(wheel, { o: 'Вася|Петя|Маша' });
+      ok(/noindex/.test(w1.html) && off(w1.html), '/tools/wheel?o= (варианты из ссылки — чужой текст) — без рекламы');
+    }
+    const Y = await imp('api/_lib/yt.js'), PG = await imp('api/_lib/page.js');
+    const { videoFromSnapshot } = await imp('api/_lib/video-snap.js');
+    const { videoAge } = await imp('api/_lib/age.js');
+    const { default: video } = await imp('api/video.js');
+    // /v/<id>: свой текст, кейсы, 16+, шортсы, баннер GGDROP (окно дат)
+    ok(Y.ownWords('🤗Поддержите подпиской - https://youtube.com/x\n😼Телеграмм канал - https://t.me/x\n#roblox #shorts\nобязательно можешь глянуть теги roblox роблокс') === 0, 'ownWords: подписка, соцсети, хэштеги, «глянуть теги» — не свой текст');
+    ok(Y.ownWords('Сегодня проходим вторую главу и ищем все секреты на уровне') === 9, 'ownWords: свой текст считается (слова от 2 букв)');
+    ok(!/Made with Restream/.test(Y.cleanDesc('Made with Restream. Livestream on 30+ platforms at once via https://restream.io\nМой текст\nМой текст')) && Y.cleanDesc('a\nb\na') === 'a\nb', 'cleanDesc: без Restream и повторов строк');
+    ok(Y.isShortVideo('x #shorts', '2025-06-01', 'PT1H2M') === false && Y.isShortVideo('x', '2025-06-01', 'PT40S') && Y.isShortVideo('x', '2024-01-01', 'PT2M') === false && Y.isShortVideo('a #shorts', '', ''), 'isShortVideo: по длительности (3 мин с 15.10.2024), без неё — по #shorts');
+    const { SNAPSHOT } = await imp('api/_lib/uploads-snapshot.js');
+    const rows = SNAPSHOT.split('\n').map(l => l.split('\t')).map(([id, at, title]) => ({ id, at, title, dur: videoFromSnapshot(id)?.contentDetails?.duration || '' }));
+    const shown = rows.filter(r => !Y.hiddenVideo(r.id, r.title));
+    if (Y.HIDE_GG_WINDOW) {
+      const inWin = rows.filter(r => r.at >= Y.GG_WINDOW[0] && r.at < Y.GG_WINDOW[1]);
+      ok(inWin.length > 1000 && inWin.every(r => Y.hiddenVideo(r.id, r.title)), 'баннер GGDROP на стримах (окно дат): все ролики этого времени скрыты', inWin.length);
+      const r14 = await call(video, { id: '14n46v57Biw' });
+      ok(r14.code === 404 && !/adsbygoogle\.js/.test(r14.html) && /noindex/.test(r14.html), '/v/14n46v57Biw (баннер GGDROP на превью): 404, noindex, без AdSense');
+    }
+    const longOne = shown.find(r => !Y.isShortVideo(r.title, r.at, r.dur) && videoAge(r.title).age < 16);
+    const rl = await call(video, { id: longOne.id });
+    ok(rl.code === 200 && !adsOn(rl.html) && !/<ul class="tags">/.test(rl.html) && /max-image-preview/.test(rl.html), '/v/<длинный, без своего текста>: 200, в поиске, без рекламы и без списка тегов', longOne);
+    ok(!/Made with Restream/.test(rl.html.split('<main')[1] || ''), '/v/<id>: строки Restream в описании не печатаются');
+    const shortOne = shown.find(r => Y.isShortVideo(r.title, r.at, r.dur));
+    const rs = await call(video, { id: shortOne.id });
+    ok(rs.code === 200 && /<meta name="robots" content="noindex">/.test(rs.html) && !adsOn(rs.html), '/v/<шортс>: страница есть, noindex, без рекламы', shortOne);
+    const nf = await call(video, { id: 'AAAAAAAAAAA' });
+    ok([404, 503].includes(nf.code) && !/adsbygoogle\.js/.test(nf.html), '/v/<нет в снимке, YouTube API недоступен>: 503 без AdSense', nf.code);
+    const ads200 = shown.slice(0, 400).filter(r => r.id).length;
+    let withAds = 0;
+    for (const r of shown.slice(0, 400)) { const x = await call(video, { id: r.id }); if (adsOn(x.html)) withAds++; }
+    ok(withAds === 0, `/v/<id>: 400 первых роликов — с рекламой ${withAds} (своего текста ≥ ${Y.VIDEO_OWN_WORDS} слов нет ни у одного)`, { withAds, ads200 });
+    // списки роликов: только данные YouTube — без рекламы (page.js VIDEO_LIST_ADS)
+    const { default: videos } = await imp('api/_lib/routes/videos.js');
+    const run = async p => call(videos, { p: String(p) });
     const r1 = await run(1);
     const n1 = (r1.html.match(/data-ad="feed_videos"/g) || []).length;
+    if (!PG.VIDEO_LIST_ADS) {
+      ok(r1.code === 200 && !adsOn(r1.html), '/videos: список роликов — без рекламы и без скрипта AdSense (VIDEO_LIST_ADS)');
+      for (const [f, q, name] of [['api/_lib/routes/top.js', {}, '/top'], ['api/_lib/routes/topic.js', {}, '/topics'], ['api/_lib/routes/topic.js', { slug: 'roblox' }, '/topic/roblox'], ['api/_lib/routes/history.js', {}, '/history']]) {
+        const { default: h } = await imp(f); const x = await call(h, q);
+        ok(x.code === 200 && !adsOn(x.html), `${name}: без рекламы (только данные YouTube)`);
+      }
+    } else {
     ok(r1.code === 200 && n1 === 7 && /class="d37-feed" data-ad="feed_videos" data-ad-lazy hidden/.test(r1.html), '/videos: 240 роликов — 7 карточек «Реклама» (каждая 30-я, не последней), грузятся у экрана', n1);
     let gp = 0;
     for (let p = 2; p <= 12 && !gp; p++) { const r = await run(p); if (!/adsbygoogle\.js/.test(r.html)) { gp = p; ok(!/data-ad=/.test(r.html), `/videos?p=${p} (есть ролики про кейсы) — ни одного места рекламы`); } }
     const { HIDE_GAMBLING } = await import(pathToFileURL(path.join(tmp, 'api/_lib/yt.js')).href);
     if (HIDE_GAMBLING) ok(!gp, 'роликов про кейсы на сайте нет (28.10.2026) — все страницы архива с рекламой');
     else ok(gp > 0, 'нашлась страница архива с роликами про кейсы');
+    }
+    // чужие товарные знаки («игра как Майнкрафт», «кто ты из FNAF»): одна строка «не связана и не официальная» (api/_lib/trademarks.js)
+    const TM = await imp('api/_lib/trademarks.js');
+    ok(TM.trademarksIn('Кубомир — игра как Майнкрафт').join() === 'Minecraft' && TM.trademarksIn('Шашки онлайн').length === 0, 'trademarksIn: Майнкрафт — да, шашки — нет');
+    const { default: game } = await imp('api/game.js');
+    const { GAME_PAGES } = await imp('api/_lib/games-seo.js');
+    const kub = GAME_PAGES.find(g => /майнкрафт/i.test(g.title));
+    const gk = mkRes(); game({ query: { id: kub.id } }, gk);
+    ok(/class="tm-note">«Minecraft»[^<]*товарный знак его владельца; игра не связана с ним и не является официальной/.test(gk.html), `/games/${kub.id}: строка про товарный знак Minecraft`);
+    // 05.11.2026: по настоящему списку игр — Windows (Сапёр, Косынка, Паук, Свободная ячейка), Block Blast и 1010!, Ludo King, UNO,
+    // Wordle, GTA, Марио, Unity; весь видимый текст страницы (правила, советы, вопросы), границы слов
+    const tmOf = id => { const r = mkRes(); game({ query: { id } }, r); return (/<p class="tm-note">([^<]*)<\/p>/.exec(r.html) || [])[1] || ''; };
+    for (const [id, names] of [['miner', ['Windows']], ['kosynka', ['Windows']], ['pauk', ['Windows']], ['freecell', ['Windows']], ['blocks', ['Block Blast', '1010!']], ['ludo', ['Ludo King']], ['uno', ['UNO']], ['words', ['Wordle']], ['unity', ['Unity']], ['emoji', ['Grand Theft Auto', 'Super Mario', 'Tetris']]])
+      if (GAME_PAGES.some(g => g.id === id)) { const t = tmOf(id); ok(names.every(n => t.includes(`«${n}»`)), `/games/${id}: строка про товарный знак ${names.join(', ')}`, t); }
+    ok(['community', 'рисунок', 'уночи', 'Юнона', 'Маринованный'].every(w => !TM.trademarksIn(w).length) && TM.trademarksIn('как Уно онлайн').join() === 'UNO' && TM.trademarksIn('ГТА 5').join() === 'Grand Theft Auto' && TM.trademarksIn('Robux').join() === 'Roblox',
+      'trademarksIn: границы слов (community, рисунок — нет; Уно, ГТА, Robux — да)');
+    const plain = GAME_PAGES.find(g => !TM.trademarksIn(g.name, g.title, g.h1, g.description, g.lead, ...[g.features, g.rules, g.tips, g.faq].flat(2)).length);
+    const gp0 = mkRes(); game({ query: { id: plain.id } }, gp0);
+    ok(!/class="tm-note"/.test(gp0.html), `/games/${plain.id}: без чужих названий — без строки`);
+    const { default: quiz } = await imp('api/_lib/routes/quiz.js');
+    const qf = mkRes(); quiz({ query: { slug: 'fnaf' } }, qf);
+    ok(qf.code === 200 && /class="tm-note">[^<]*«Five Nights at Freddy’s»[^<]*тест не связан/.test(qf.html), '/quiz/fnaf: строка про товарный знак FNAF');
+    const qh = mkRes(); quiz({ query: {} }, qh);
+    ok(/class="tm-note">[^<]*«Minecraft»[^<]*тесты сайта не связаны/.test(qh.html), '/quiz: строка про товарные знаки');
+    // карта сайта: без шортсов и без разделов-приложений (одна и та же главная по пяти адресам)
+    const { default: sm } = await imp('api/sitemap.js');
+    const sv = await call(sm, { part: 'videos' }), sp = await call(sm, { part: 'pages' });
+    const locs = (sv.html.match(/<loc>[^<]+<\/loc>/g) || []).map(x => x.slice(5 + Y.SITE.length + 3, -6));
+    const byId = new Map(rows.map(r => [r.id, r]));
+    ok(locs.length > 500 && locs.every(id => { const r = byId.get(id); return r && !Y.isShortVideo(r.title, r.at, r.dur); }), `sitemap-videos: ${locs.length} роликов, шортсов нет`);
+    ok(!/\/(lfg|soundboard|poll|clicker|donate)</.test(sp.html) && /\/games</.test(sp.html), 'sitemap-pages: /lfg, /soundboard, /poll, /clicker, /donate — не в карте');
   } catch (e) { ok(false, 'серверные страницы', String(e && e.stack || e)); }
   fs.rmSync(tmp, { recursive: true, force: true });
   // крючки: что и где подключено (если кто-то случайно удалит строку при слиянии)
   const has = (f, re, name) => ok(re.test(read(f)), name);
   has('index.html', /ads-core\.js"><\/script>\s*<script src="js\/core\/ad-places\.js"><\/script>/, 'index.html: ad-places.js сразу после ads-core.js');
+  // 05.11.2026: /privacy (privacy.html, ссылка в подвале каждой страницы) — Метрика, сторонние поставщики рекламы, дети; без заметок для юриста
+  has('privacy.html', /Яндекс Метрик[аи][\s\S]*Вебвизор\) выключена/, 'privacy.html: Яндекс Метрика (cookies, Вебвизор выключен)');
+  has('privacy.html', /Сторонние поставщики, в том числе Google, используют cookies[\s\S]*aboutads\.info/, 'privacy.html: сторонние поставщики (Google) и отказ — aboutads.info');
+  has('privacy.html', /id="kids"[\s\S]*Родителям/, 'privacy.html: раздел «Дети» (что хранится, защита, как удалить)');
+  ok(!/\[Текст для юриста|сейчас — через Kaspi/.test(read('privacy.html')), 'privacy.html: без «[Текст для юриста…]» и «сейчас — через Kaspi»');
   has('index.html', /pauseAdRequests=1}catch\(e\){}<\/script>\s*<script async src="https:\/\/pagead2/, 'index.html: пауза AdSense для VIP — до скрипта AdSense');
   has('js/features/games.js', /D37AdPlaces\?\.loading\(\{ anchor: box\.firstChild, game: id/, 'games.js: экран загрузки игры');
   has('js/features/games.js', /finally \{ adL\?\.done\(\); \}/, 'games.js: загрузка кончилась — реклама убирается');
@@ -851,6 +1090,22 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   has('js/games/studio.js', /eq\('status', 'public'\)[\s\S]{0,900}feed\(box\.firstChild, \{ place: 'feed_ugc'/, 'studio.js: реклама только в каталоге проверенных игр');
   has('js/games/unity-host.js', /eq\('status', 'public'\)[\s\S]{0,900}feed\(box\.firstChild, \{ place: 'feed_ugc'/, 'unity-host.js: реклама только в каталоге проверенных игр');
   has('js/features/youtube.js', /feed\(grid, \{ place: 'feed_videos'[^\n]*titles: vids\.map/, 'youtube.js: карточки в ленте видео (с проверкой «азартных»)');
+  // XP за просмотр роликов выключены (xp.js XP_WATCH = false, правила YouTube API III.F.3.c): ни строки «Смотреть видео» в «Как
+  // получить XP», ни ачивок «Зритель» / «Киноман» (сервер их ещё считает — economy.sql, решает владелец)
+  {
+    ok(/const XP_WATCH = false;[\s\S]*const XP_RULES = \[\s*\.\.\.\(XP_WATCH \?/.test(read('js/features/xp.js')), 'xp.js: XP_WATCH = false до XP_RULES; строка «Смотреть видео» — только при XP_WATCH');
+    const cx = vm.createContext({});
+    vm.runInContext(read('js/features/achievements.js') + '\n;this.r = achVisibleDefs(new Set(["watcher_10", "chatty_10"]));', cx);
+    ok(!cx.r.regular.some(d => /^watcher_/.test(d.code)) && cx.r.regular.some(d => d.code === 'chatty_10'), 'achievements.js: ачивок за просмотр роликов в списке нет');
+    vm.runInContext('var XP_WATCH = true; this.r2 = achVisibleDefs(new Set());', cx);
+    ok(cx.r2.regular.some(d => d.code === 'watcher_10'), 'XP_WATCH = true — ачивки снова видны (откат одной строкой)');
+    has('js/features/profile.js', /earned\.has\(d\.code\) && \(typeof achShown !== 'function' \|\| achShown\(d\.code\)\)/, 'profile.js: витрина ачивок — без ачивок за просмотр');
+  }
+  // 05.11.2026 (CLS): пустой блок Google на главной — под присмотром guard; CSS держит место и не прячет его сам, пока guard решает
+  has('js/features/ads.js', /M\.guard\(ins, \(\) => M\.settle\(box\)\)/, 'ads.js: блоки главной под присмотром guard (пусто — без сдвига)');
+  has('css/premium.css', /#ad-mid>ins\.adsbygoogle,#ad-top>ins\.adsbygoogle\{min-height:280px\}/, 'premium.css: место под блок на главной держится заранее');
+  has('css/premium.css', /#ad-mid:has\(>ins\.adsbygoogle\[data-ad-status="unfilled"\]:not\(\[data-guard\]\)\)/, 'premium.css: CSS прячет пустой блок, только если guard не работает');
+  ok(!/#ad-mid:has\(>ins\.adsbygoogle\[data-ad-status="unfilled"\]\),/.test(read('css/premium.css')), 'premium.css: пустой блок на экране не схлопывается сам (раньше — сдвиг на 330 px)');
   has('js/games/horde.js', /coinOffer\?\.\('horde_shop'\)/, 'horde.js: монеты за рекламу в магазине');
   has('js/games/horde.js', /'d37:coinad'/, 'horde.js: после награды магазин перерисовывается');
   // каждая кнопка «за рекламу» в играх — только когда есть блок (rewardReady) и говорит, что дадут

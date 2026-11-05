@@ -8,7 +8,10 @@
 //  из ленты сайта — несовершеннолетним тоже нет (вдруг кейсы); кейсы/депозит (isGambling) — без рекламы вокруг (ctx 'gambling').
 //  Twitch — с 13 лет: детям полоски «в эфире» и плеера эфира нет.
 //  Реклама сайта — одно место ПОД плеером (D37AdPlaces 'chat_player': только компьютер, не раньше чем через минуту после включения —
-//  чтобы не наложиться на рекламу самого плеера; обновлять — не чаще раза в 2 минуты), никогда поверх плеера.
+//  чтобы не наложиться на рекламу самого плеера; обновлять — не чаще раза в 2 минуты), никогда поверх плеера. 05.11.2026 (правила
+//  AdSense: нет рекламы там, где главное — переписка, и под чужими роликами): Google здесь нет вовсе (ad-places.js gStrict), а
+//  остальная — только под своим (эфир Денчика или ролик из ленты сайта) и только в каналах официального сообщества сайта
+//  (не в чужих и закрытых сообществах, не на экранах настроек, жалоб, участников, обзора).
 //  «В эфире»: статус — кэш live-badge.js (D37Live.check, decapi, 2 минуты), полоска сверху #общий и «📢 новости».
 // ═══════════════════════════════════════
 (() => {
@@ -16,7 +19,7 @@
   const TW = typeof TWITCH !== 'undefined' ? TWITCH : 'dan4ik37';
   const e = s => (typeof esc === 'function' ? esc(s) : String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
   const LH = 'd37_player_h', AD_DELAY = 60e3;
-  let S = null, el = null, adT = 0, gamb = false, pending = null;
+  let S = null, el = null, adT = 0, gamb = false, pending = null, adPlace = false;
   const narrow = () => { try { return matchMedia('(max-width: 860px)').matches; } catch (er) { return false; } };
   const host = () => (typeof HOST !== 'undefined' && HOST) || location.hostname || 'localhost';
   const videoOf = id => (typeof allVids !== 'undefined' && Array.isArray(allVids) ? allVids.find(v => v.id === id) : null) || null;
@@ -25,7 +28,7 @@
   PL.videoOk = id => {
     const v = videoOf(id), A = window.D37Age;
     if (!/^[A-Za-z0-9_-]{11}$/.test(String(id || ''))) return { ok: false };
-    if (!A) return { ok: true, age: 0, gamb: false };
+    if (!A) return { ok: true, age: 0, gamb: false, unknown: !v };
     if (!v) return { ok: !A.minor?.(), age: 0, gamb: false, unknown: true };
     const r = A.video(v.title, '');
     return { ok: A.canOpen(r.age) && A.listOk(r.age), age: r.age, gamb: !!A.isGambling(v.title) };
@@ -43,7 +46,7 @@
     let vo = null;
     if (o.kind === 'yt') { vo = PL.videoOk(o.id); if (!vo.ok) { location.href = '/v/' + encodeURIComponent(o.id); return false; } }
     S = { kind: o.kind === 'tw' ? 'tw' : 'yt', id: o.kind === 'tw' ? TW : o.id, title: o.kind === 'tw' ? (o.title || 'Эфир Денчика') : (videoOf(o.id)?.title || o.title || 'Видео dan4ik37'),
-      mini: false, at: Date.now(), gamb: !!vo?.gamb };
+      mini: false, at: Date.now(), gamb: !!vo?.gamb, own: o.kind === 'tw' || !vo?.unknown };
     setGamb(S.gamb);
     if (typeof currentRoute === 'function' && currentRoute() !== 'chat') {
       pending = true;
@@ -68,6 +71,8 @@
   // Страница чата отрисовалась (community.js → DS.page): вставить плеер в .ds-main, полоска «в эфире»
   PL.mount = (root, srv, ch) => {
     if (!root) return;
+    adPlace = !!(srv && srv.official && ch && ch.kind !== 'voice');   // реклама под плеером — только в каналах официального сообщества
+    if (!adPlace) { const b = el?.querySelector('.ds-plad'); if (b && b.dataset.shown) { b.hidden = true; b.innerHTML = ''; delete b.dataset.shown; } }
     if (pending && S) { pending = null; render(root); }
     else if (S && (!el || !root.contains(el))) render(root);
     liveBar(root, srv, ch);
@@ -113,13 +118,15 @@
     if (!S) return 'closed';
     if (S.mini) return 'mini';
     if (S.gamb) return 'gambling';
+    if (!S.own) return 'foreign';      // чужой ролик (не из ленты сайта) — рекламы сайта под ним нет
+    if (!adPlace) return 'place';      // не официальное сообщество или не канал (настройки, жалобы, участники, обзор)
     if (Date.now() - S.at < AD_DELAY) return 'early';
     return window.D37AdPlaces?.why?.('chat_player') ?? 'noads';
   };
   function ad(){
     clearTimeout(adT);
     const box = el?.querySelector('.ds-plad'); if (!box) return;
-    if (S?.mini || S?.gamb) { box.hidden = true; box.innerHTML = ''; return; }
+    if (S?.mini || S?.gamb || !S?.own || !adPlace) { box.hidden = true; box.innerHTML = ''; delete box.dataset.shown; return; }
     const wait = S.at + AD_DELAY - Date.now();
     if (wait > 0) { adT = setTimeout(ad, wait + 50); return; }
     if (box.dataset.shown) return;
@@ -158,5 +165,5 @@
 
   // ушёл из чата — плеер закрывается (звук не играет за спиной)
   window.addEventListener('d37:route', () => { if (S && !pending && typeof currentRoute === 'function' && currentRoute() !== 'chat') PL.close(); });
-  PL._test = { setS: v => { S = v; }, render };
+  PL._test = { setS: v => { S = v; }, render, setPlace: v => { adPlace = !!v; } };
 })();

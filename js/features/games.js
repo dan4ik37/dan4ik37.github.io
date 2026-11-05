@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '161';   // 161 — C-002 проверка: файлы ядра D37 не в списке «Новой земли» — GameKit.core грузит их параллельно и только по флагу CORE_WASM, поток ядра стартует сразу; 160 — C-002: «Новая земля» берёт общее ядро D37 (d37core.wasm в потоке, js/engine/core-world.js; флаг CORE_WASM); 159 — T-145 последняя проверка (D1–D10: предел зрения ИИ, мир без особой погоды, «Кубомир» v4 и град, стена бури, интерфейс планеты, полёт над новой землёй); 158 — слияние: T-145 (планета и новая земля, проверки: 157) + main (34 мини-игры T-140 и «Кубомир» T-138: 156)
+const GAMES_VER = '162';   // 162 — реклама (05.11): в окне «игра поверх мира» после партии рекламы нет (mir-play.js P.ad); 161 — C-002 проверка: файлы ядра D37 не в списке «Новой земли» — GameKit.core грузит их параллельно и только по флагу CORE_WASM, поток ядра стартует сразу; 160 — C-002: «Новая земля» берёт общее ядро D37 (d37core.wasm в потоке, js/engine/core-world.js; флаг CORE_WASM); 159 — T-145 последняя проверка (D1–D10: предел зрения ИИ, мир без особой погоды, «Кубомир» v4 и град, стена бури, интерфейс планеты, полёт над новой землёй); 158 — слияние: T-145 (планета и новая земля, проверки: 157) + main (34 мини-игры T-140 и «Кубомир» T-138: 156)
 // T-145: «Планета» и «Новая земля» открыты всем (владелец 29.10). Откат одной строкой: T145_OPEN = false — снова скрытые страницы
 // (по адресу открываются, в каталоге и поиске их нет); страницы для поиска — тот же флаг в api/_lib/games-seo.js. Таблицы не
 // меняются во время работы (строки входят через ...(флаг ? T145_ROWS : [])) — разбор XSS сам видит, что значения из кода
@@ -287,7 +287,9 @@ window.D37Gems?.on(() => { if (D37Gems.isOn() && !document.getElementById('games
 let gamesAdAt = 0;
 function gamesAdAfterRound(){
   // «Игра поверх мира» (js/games/mir-play.js): партия в окне поверх мира — реклама в его полоске итога, а не под миром
-  const stage = window.MirPlay?.adStage?.() || document.getElementById('gamesStage');
+  const mp = window.MirPlay?.adStage?.();
+  if (mp === false) return;   // окно «игра поверх мира» открыто — в нём рекламы нет (mir-play.js P.ad)
+  const stage = mp || document.getElementById('gamesStage');
   if (window.D37AdPlaces) { window.D37AdPlaces.afterRound(stage); return; }
   if (!stage || stage.hidden || !window.D37Ads || Date.now() - gamesAdAt < 90000) return;
   let box = document.getElementById('gamesAd');
@@ -351,7 +353,6 @@ const WEEKLY_QUESTS = {
   w_hard1:     { slot: 5, n: 1, stat: 'hard', icon: '💪', text: 'Победи компьютер на самом сложном уровне', go: '/play' },
   w_boards4:   { slot: 5, n: 4, stat: 'boards', icon: '♟️', text: 'Выиграй 4 партии в настольные или карточные игры', go: '/play' },
   w_visit5:    { slot: 6, n: 5, stat: 'visits', icon: '📅', text: 'Заходи на сайт 5 разных дней', go: null },
-  w_watch5:    { slot: 6, n: 5, stat: 'watch', icon: '📺', text: 'Посмотри 5 роликов на сайте (от минуты)', go: '/' },
   w_puzzle5:   { slot: 6, n: 5, stat: 'puzzles', icon: '🧩', text: 'Реши 5 головоломок: судоку, пасьянсы, сапёр, маджонг, филворд', go: '/play' },
 };
 // Лестница сезона — как season_ladder(): coins — 🪙, title — 1 «участник» / 2 «легенда», item — вещь темы, frame — рамка темы

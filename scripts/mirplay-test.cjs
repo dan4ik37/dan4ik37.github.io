@@ -385,13 +385,16 @@ MP.P.back = 10;
     adCtx.length = 0; reports.length = 0;
     await MP.open('chess', 'abc123', opts());
     ok(adCtx[adCtx.length - 1] === true, 'открыли — D37AdPlaces.ctx(playing, true)');
-    ok(MP.adStage() && MP.adStage().classList.contains('mp-end-ad'), 'adStage — место в полоске итога');
+    ok(MP.P.ad === false && MP.adStage() === false, '05.11: окно открыто — рекламы после партии нет (adStage false: ни в окне, ни под миром)');
+    MP.P.ad = true;   // как было до 05.11
+    ok(MP.adStage() && MP.adStage().classList.contains('mp-end-ad'), 'P.ad: adStage — место в полоске итога');
     await CH.api.report('chess_online', true, 1, 1);
     ok(reports[0].playing === false && reports[0].adStage && reports[0].adVisible, 'к отчёту: партия не идёт, полоска уже видна — реклама ляжет в неё', reports[0]);
     dispatch(CH.st, 'pointerdown');
     ok(adCtx[adCtx.length - 1] === true && bar().hidden, 'снова играет — ctx(playing) и полоска (с рекламой) спрятана');
     MP.close('back'); flushHistory();
     ok(adCtx[adCtx.length - 1] === false && MP.adStage() === null, 'закрыли — ctx(playing) снят, adStage — null (реклама снова под игрой)');
+    MP.P.ad = false;
   }
 
   // ═══ Полный экран (fullscreen.js) и Esc ═══

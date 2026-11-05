@@ -1143,8 +1143,19 @@ body.high .tw-block.is-live .tw-dot{animation:pillPulse 2s ease-out infinite}
 body.is-authed .cm-join{display:none}
 @media(max-width:640px){.cm-join-btn{width:100%}}
 
+/* 05.11.2026: раздел-приложение занимает экран с первого кадра — подвал не мелькает вверху и не уезжает вниз, когда раздел
+   дорисуется (CLS: /chat, /play/<игра>) */
+#chat,#games-page,#profile-page,#forum-page,#ideas-page,#lfg-page,#shop-page,#invite-page,#adv-page,#phone-page{min-height:100vh}
+
 /* Рекламные блоки на главной — без лишних отступов, если AdSense ничего не отдал */
 #ad-mid,#ad-top{padding-top:0;padding-bottom:0}
+/* 05.11.2026: место под рекламу держим заранее (вёрстка не прыгает, когда блок приходит), подпись «Реклама». Сеть ничего не
+   отдала (data-ad-status="unfilled") или блокировщик — решает js/core/ad-places.js (settle, у <ins> метка data-guard): ниже экрана
+   место убирает, на экране — своя подсказка той же высоты (CLS 0). Без ad-places.js (data-guard нет) — убрать сразу, как раньше */
+#ad-mid:not(.ad-empty):has(>ins.adsbygoogle)::before,#ad-top:not(.ad-empty):has(>ins.adsbygoogle)::before{content:'Реклама';display:block;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:1rem 0 .3rem;opacity:.7;text-align:center}
+#ad-mid>ins.adsbygoogle,#ad-top>ins.adsbygoogle{min-height:280px}
+@media(max-width:768px){#ad-mid>ins.adsbygoogle,#ad-top>ins.adsbygoogle{min-height:300px}}
+#ad-mid:has(>ins.adsbygoogle[data-ad-status="unfilled"]:not([data-guard])),#ad-top:has(>ins.adsbygoogle[data-ad-status="unfilled"]:not([data-guard])){display:none!important}
 
 /* Рекламный блок без ID из AD_SLOTS (config.js) — не показываем пустое место */
 .ad-empty{display:none!important}

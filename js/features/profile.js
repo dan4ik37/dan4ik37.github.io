@@ -175,7 +175,7 @@ function pf2Ach(uid, r){
   if (r.streak != null) pf2Set('pf2Streak', pf2Num(r.streak));
   const earned = r.earned instanceof Set ? r.earned : new Set(r.earned || []);
   if (typeof ACHIEVEMENT_DEFS === 'undefined') return;
-  const got = ACHIEVEMENT_DEFS.filter(d => earned.has(d.code));
+  const got = ACHIEVEMENT_DEFS.filter(d => earned.has(d.code) && (typeof achShown !== 'function' || achShown(d.code)));   // ачивок за просмотр роликов не видно (achievements.js)
   pf2Set('pf2Ach', String(got.filter(d => !d.special).length));
   const vipTop = Math.max(0, ...got.filter(d => d.vip).map(d => d.vip));
   const best = got.filter(d => !d.vip || d.vip === vipTop).sort((a, b) => (b.special ? 1 : 0) - (a.special ? 1 : 0) || (b.xp || 0) - (a.xp || 0)).slice(0, 6);

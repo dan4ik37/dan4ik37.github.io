@@ -598,6 +598,26 @@
    ]
   },
   {
+   "f": "js/core/ad-places.js",
+   "fn": "house",
+   "k": "markup:text",
+   "c": "const",
+   "n": "значок подсказки из списка HOUSE (константа в этом же файле)",
+   "xs": [
+    "ic"
+   ]
+  },
+  {
+   "f": "js/core/ad-places.js",
+   "fn": "house",
+   "k": "markup:url",
+   "c": "const",
+   "n": "свой адрес из списка HOUSE (/play/…, /vip), через spaHref и esc",
+   "xs": [
+    "esc(spaHref(href))"
+   ]
+  },
+  {
    "f": "js/core/age.js",
    "fn": "settingsRow",
    "k": "markup:text",
