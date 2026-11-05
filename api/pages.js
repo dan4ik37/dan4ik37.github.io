@@ -13,6 +13,7 @@ import fonts from './_lib/routes/fonts.js';
 import cps from './_lib/routes/cps.js';
 import about from './_lib/routes/about.js';
 import feed from './_lib/routes/feed.js';
+import vstats from './_lib/routes/vstats.js';     // 👍 «Лайк на YouTube»: свежие цифры одного ролика /api/vstats?id= (кэш 10 мин)
 import top from './_lib/routes/top.js';
 import quiz from './_lib/routes/quiz.js';
 import wheel from './_lib/routes/wheel.js';
@@ -31,7 +32,7 @@ import forum from './_lib/routes/forum.js';          // форум /forum, /foru
 import diag from './_lib/routes/diag.js';            // мониторинг: POST /api/diag — отчёты браузеров об ошибках сайта (ops.sql, docs/OPS.md)
 import photo from './_lib/routes/photo.js';          // 🖼 «Фоторедактор онлайн» /tools/photo — для поиска; сам редактор — раздел /photo
 
-const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, top, quiz, wheel, random, typing, ugc,
+const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, vstats, top, quiz, wheel, random, typing, ugc,
   shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, photo, diag };   // raid — набеги
 
 export default function handler(req, res) {

@@ -5,7 +5,7 @@
 // Ответы кэшируются на CDN Vercel (заголовки в самих функциях), плюс здесь —
 // в памяти «тёплого» инстанса функции, чтобы соседние запросы не тратили квоту.
 
-import { SNAPSHOT } from './uploads-snapshot.js';
+import { SNAPSHOT, SNAPSHOT_AT } from './uploads-snapshot.js';
 import { DETAILS_JSON } from './video-details.js';
 
 const KEY = process.env.YT_API_KEY || 'AIzaSyA0dK2a1YG_s54zG-zapYgjycIempCvHp0';
@@ -17,6 +17,9 @@ export const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 // Весь архив (~6000 роликов на 2026). Через API это 120 запросов по 50 подряд — поэтому берётся из снимка
 // (uploads-snapshot.js, scripts/snapshot-uploads.mjs) плюс свежие ролики сверху. Страница ролика — getUploads(200).
 export const ALL_UPLOADS = 10000;
+// День снимка (uploads-snapshot.js): цифры из снимка показываем с этой датой (правила YouTube API III.E.4.f — старые данные только
+// «с указанием времени»), а сам снимок пересобираем не реже раза в 30 дней (III.E.4.b/c) — node scripts/snapshot-uploads.mjs.
+export { SNAPSHOT_AT };
 
 const mem = new Map();
 // Кладём в память сразу обещание: одновременные запросы ждут один и тот же поход в API, а не делают свой
@@ -168,13 +171,28 @@ export function getChannelStats() {
     return { ...it.statistics, publishedAt: it.snippet.publishedAt, thumb: it.snippet.thumbnails?.high?.url || '', title: it.snippet.title || 'Dan4ik37', handle: it.snippet.customUrl || '@dan4ik37yt' };
   });
 }
-// Просмотры и длительность роликов (до 50 id за запрос, 1 ед. квоты): [{ id, viewCount, likeCount, duration }]
+// Просмотры и длительность роликов (до 50 id за запрос, 1 ед. квоты): [{ id, viewCount, likeCount, duration, at }]
+// at — когда YouTube отдал эти цифры (ISO): лента главной пишет «обновлено …». Память — 1 ч (было 6 ч: на главной цифры отставали
+// на полдня; 3 запроса в час на инстанс — копейки из 10 000 в сутки).
 export function getVideoStats(ids) {
   const list = ids.slice(0, 50);
-  return cached('vstats:' + list.join(','), 6 * 3600e3, async () => {
+  return cached('vstats:' + list.join(','), 3600e3, async () => {
     if (!list.length) return [];
     const d = await api(`videos?part=statistics,contentDetails&id=${list.join(',')}`);
-    return (d.items || []).map(v => ({ id: v.id, ...v.statistics, duration: v.contentDetails?.duration || '' }));
+    const at = new Date().toISOString();
+    return (d.items || []).map(v => ({ id: v.id, ...v.statistics, duration: v.contentDetails?.duration || '', at }));
+  });
+}
+// Свежие цифры ОДНОГО ролика для кнопки «👍 Лайк на YouTube» (/api/vstats, routes/vstats.js): { id, views, likes, at } или null
+// (ролика нет). Память инстанса — 10 мин на ролик (столько же держит CDN): лайкнул и вернулся — новое число не раньше, чем через
+// 10 мин после прошлого запроса этого ролика; квота — 1 ед. на ролик за 10 мин, сколько бы людей ни нажимало.
+export const VSTATS_TTL_S = 600;
+export function getVideoLive(id) {
+  return cached('vlive:' + id, VSTATS_TTL_S * 1000, async () => {
+    const d = await api(`videos?part=statistics&id=${encodeURIComponent(id)}`);
+    const v = d.items?.[0];
+    if (!v) return null;
+    return { id: v.id, views: +v.statistics?.viewCount || 0, likes: +v.statistics?.likeCount || 0, at: new Date().toISOString() };
   });
 }
 
