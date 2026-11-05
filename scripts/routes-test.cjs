@@ -90,6 +90,26 @@ function browser(startUrl, routing){
   const B0 = browser('https://dan4ik37.vercel.app/');
   const R = B0.R, PAGES = B0.run('PAGES');
   const routes = Object.keys(PAGES);
+  // 05.11.2026: первый кадр (index.html <head>, стиль d37Boot) — та же карта разделов; прячет всё, кроме раздела адреса
+  {
+    const idxB = src('index.html'), mB = /<script>\(function\(\)\{try\{var P=(\{[^}]*\}),p=location/.exec(idxB);
+    const PB = mB ? Function('return ' + mB[1])() : null;
+    ok(PB && JSON.stringify(Object.keys(PB)) === JSON.stringify(routes) && routes.every(r => PB[r] === PAGES[r].join(',')), 'index.html: карта первого кадра = PAGES (router.js)');
+    const boot = (pathname, hash = '') => {
+      const head = { kids: [], appendChild(e){ this.kids.push(e); } };
+      const doc = { head, createElement: () => ({}), documentElement: { setAttribute(k, v){ this[k] = v; } } };
+      const code = /<script>(\(function\(\)\{try\{var P=[\s\S]*?\}\)\(\);)<\/script>/.exec(idxB)[1];
+      Function('document', 'location', code)(doc, { pathname, hash });
+      const st = head.kids[0];
+      const hidden = st ? st.textContent.replace(/\{display:none!important\}$/, '').split(',').map(x => x.slice(1)) : [];
+      return ALL => ALL.filter(id => !hidden.includes(id));
+    };
+    const ALL = Object.values(PAGES).flat();
+    const vis = (p, h) => boot(p, h)(ALL).join(',');
+    ok(vis('/') === PAGES.home.join(',') && vis('/chat/c/5') === 'chat' && vis('/play/2048') === 'games-page' && vis('/tools/3d') === 'ai3d-page'
+      && vis('/c/abc123') === 'chat' && vis('/nope') === PAGES.home.join(',') && vis('/', '#/forum/42') === 'forum-page', 'первый кадр: виден только раздел адреса (/, /chat, /play, /tools/3d, /c/…, неизвестный → главная, #/старые ссылки)');
+    ok(src('js/ui/router.js').includes("document.getElementById('d37Boot')?.remove();"), 'роутер убирает стиль первого кадра');
+  }
   for (const r of routes) {
     const p = R.toPath('#/' + r);
     const back = R.toHash(p);

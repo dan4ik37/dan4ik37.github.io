@@ -1143,6 +1143,10 @@ body.high .tw-block.is-live .tw-dot{animation:pillPulse 2s ease-out infinite}
 body.is-authed .cm-join{display:none}
 @media(max-width:640px){.cm-join-btn{width:100%}}
 
+/* 05.11.2026: раздел-приложение занимает экран с первого кадра — подвал не мелькает вверху и не уезжает вниз, когда раздел
+   дорисуется (CLS: /chat, /play/<игра>) */
+#chat,#games-page,#profile-page,#forum-page,#ideas-page,#lfg-page,#shop-page,#invite-page,#adv-page,#phone-page{min-height:100vh}
+
 /* Рекламные блоки на главной — без лишних отступов, если AdSense ничего не отдал */
 #ad-mid,#ad-top{padding-top:0;padding-bottom:0}
 /* 05.11.2026: место под рекламу держим заранее (вёрстка не прыгает, когда блок приходит), подпись «Реклама»; сеть ничего не
