@@ -6,7 +6,7 @@
 // перелинковкой, который видят и Google/Яндекс, и превью мессенджеров.
 // Плеер — «фасад»: сначала превью, iframe YouTube грузится по клику
 // (страница лёгкая, просмотр при воспроизведении засчитывается каналу).
-import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, isGambling, hiddenVideo, esc, fmtDuration, fmtCount, cleanDesc, ownWords, VIDEO_OWN_WORDS, isShortVideo } from './_lib/yt.js';
+import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, isGambling, hiddenVideo, esc, fmtDuration, fmtCount, cleanDesc, ownWords, VIDEO_OWN_WORDS, isShortVideo, SNAPSHOT_AT } from './_lib/yt.js';
 import { page, YT_CHANNEL } from './_lib/page.js';
 import { videoFromSnapshot } from './_lib/video-snap.js';
 import { topicsFor } from './_lib/topics.js';
@@ -19,10 +19,10 @@ export default async function handler(req, res) {
 
   if (!VIDEO_ID_RE.test(id)) return notFound(res);
 
-  let v, more;
+  let v, more, snap;
   try {
     // Сначала снимок (без квоты YouTube API), API — только для роликов новее снимка
-    const snap = videoFromSnapshot(id);
+    snap = videoFromSnapshot(id);
     [v, more] = await Promise.all([snap || getVideo(id), getUploads(200).catch(() => [])]);
   } catch (e) {
     // YouTube API недоступен/квота — не кэшируем надолго, отдаём ссылку на ролик
@@ -58,6 +58,10 @@ export default async function handler(req, res) {
   const noAds = isGambling(sn.title, rawDesc) || va.age >= 16 || ownWords(rawDesc) < VIDEO_OWN_WORDS;
   // Шортс — короткий клип (часто кусок того же стрима, что и длинный ролик): страница есть, в поиск — нет (yt.js isShortVideo)
   const short = isShortVideo(sn.title, sn.publishedAt, v.contentDetails?.duration);
+  // Цифры — с датой, на когда они (правила YouTube API III.E.4.f): из снимка — его день, из API — день сборки страницы (CDN держит сутки).
+  // Вернулся с YouTube после «👍 Лайк на YouTube» — свежие цифры (js/core/vlike.js → /api/vstats) и «обновлено ЧЧ:ММ».
+  const statsAt = snap ? 'данные YouTube на ' + new Date(SNAPSHOT_AT).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+    : 'данные YouTube на ' + new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Moscow' });
 
   const ld = {
     '@context': 'https://schema.org',
@@ -85,12 +89,14 @@ export default async function handler(req, res) {
     <div class="meta">
       <span>${ageBadge(va.age, { title: va.why })}</span>
       <span>📅 ${esc(dateRu)}</span>
-      ${st.viewCount ? `<span>👁 ${esc(fmtCount(st.viewCount))} просмотров</span>` : ''}
-      ${st.likeCount ? `<span>❤ ${esc(fmtCount(st.likeCount))}</span>` : ''}
+      ${st.viewCount ? `<span data-vs="views">👁 ${esc(fmtCount(st.viewCount))} просмотров</span>` : ''}
+      ${st.likeCount ? `<span data-vs="likes" title="Лайки на YouTube">👍 ${esc(fmtCount(st.likeCount))}</span>` : ''}
       ${dur ? `<span>⏱ ${esc(dur)}</span>` : ''}
+      ${st.viewCount ? `<span data-vs="at" class="vs-at">${esc(statsAt)}</span>` : ''}
     </div>
     <div class="cta">
-      <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на канал</a>
+      <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
+      <a class="btn btn-ghost" data-vlike="${esc(id)}" href="https://www.youtube.com/watch?v=${esc(id)}" target="_blank" rel="noopener" title="Откроется ролик на YouTube — лайк ставится там (нужен вход в YouTube). Сам сайт лайк не ставит.">👍 Лайк на YouTube<span class="vl-mark"></span></a>
       <a class="btn btn-ghost" href="https://www.youtube.com/watch?v=${esc(id)}" target="_blank" rel="noopener">Открыть на YouTube</a>
       <button type="button" class="btn btn-ghost" id="share">🔗 Поделиться</button>
       <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Случайное видео</button>
@@ -110,7 +116,8 @@ export default async function handler(req, res) {
   ${related.length ? `<section class="more"><h2>${rel.similar ? 'Похожие видео' : 'Ещё видео'}</h2><div class="grid">
     ${related.map(r => { const a = videoAge(r.title).age; return `<a class="card" href="/v/${esc(r.id)}"${ageAttr(a)}><img src="${esc(r.thumb)}" alt="${esc(r.title)}" loading="lazy" width="320" height="180">${ageBadge(a, { min: 16 })}<span>${esc(r.title)}</span></a>`; }).join('')}
   </div><p class="all"><a href="/videos">Все видео канала →</a> · <a href="/games">🎮 Игры на сайте</a></p></section>` : ''}
-</main>`;
+</main>
+<script src="/js/core/vlike.js"></script>`;
 
   res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');
   return res.status(200).send(page({
@@ -147,6 +154,16 @@ function playerJs(id) {
     p.innerHTML='<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0" title="YouTube" allow="autoplay;encrypted-media;picture-in-picture;fullscreen" allowfullscreen></iframe>';
   }
   p.addEventListener('click',play);
+  // «👍 Лайк на YouTube» (js/core/vlike.js): ✓ — отметка этого браузера; вернулся с YouTube — свежие цифры этого ролика
+  var L=window.D37VLike;
+  if(L){
+    L.paint(document);
+    window.addEventListener('d37:vstats',function(e){
+      var s=e.detail;if(!s||s.id!=='${id}')return;
+      function put(k,t){var el=document.querySelector('[data-vs="'+k+'"]');if(el)el.textContent=t;}
+      put('views','👁 '+L.fmt(s.views)+' просмотров');put('likes','👍 '+L.fmt(s.likes));put('at',L.when(s));
+    });
+  }
   var s=document.getElementById('share');
   if(s)s.addEventListener('click',function(){
     var u=location.origin+location.pathname,t=document.title;

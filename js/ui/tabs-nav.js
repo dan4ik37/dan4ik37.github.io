@@ -8,13 +8,14 @@ window.addEventListener('scroll',()=>document.getElementById('nav').classList.to
 // ═══════════════════════════════════════
 //  SELECT MODE
 // ═══════════════════════════════════════
-function toggleSel(){selMode=true;selectedIds.clear();document.getElementById('selBtn').style.display='none';document.getElementById('likeSelBtn').style.display='inline-flex';document.getElementById('playSelBtn').style.display='inline-flex';document.getElementById('cancelSelBtn').style.display='inline-flex';document.getElementById('selHint').style.display='flex';document.getElementById('ytOverflowMenu')?.classList.remove('open');renderVids(getVisibleVids())}
-function cancelSel(){selMode=false;selectedIds.clear();document.getElementById('selBtn').style.display='inline-flex';document.getElementById('likeSelBtn').style.display='none';document.getElementById('playSelBtn').style.display='none';document.getElementById('cancelSelBtn').style.display='none';document.getElementById('selHint').style.display='none';document.getElementById('multiPlayer').style.display='none';renderVids(getVisibleVids())}
+function toggleSel(){selMode=true;selectedIds.clear();document.getElementById('selBtn').style.display='none';document.getElementById('playSelBtn').style.display='inline-flex';document.getElementById('cancelSelBtn').style.display='inline-flex';document.getElementById('selHint').style.display='flex';document.getElementById('ytOverflowMenu')?.classList.remove('open');renderVids(getVisibleVids())}
+function cancelSel(){selMode=false;selectedIds.clear();document.getElementById('selBtn').style.display='inline-flex';document.getElementById('playSelBtn').style.display='none';document.getElementById('cancelSelBtn').style.display='none';document.getElementById('selHint').style.display='none';document.getElementById('multiPlayer').style.display='none';renderVids(getVisibleVids())}
 function toggleYtOverflow(e){e.stopPropagation();document.getElementById('ytOverflowMenu')?.classList.toggle('open')}
 document.addEventListener('click',e=>{const m=document.getElementById('ytOverflowMenu');if(m&&m.classList.contains('open')&&!e.target.closest('#ytOverflow'))m.classList.remove('open')});
 function toggleSel2(card,id){if(selectedIds.has(id)){selectedIds.delete(id);card.classList.remove('selected');card.querySelector('.sel-check').textContent=''}else{selectedIds.add(id);card.classList.add('selected');card.querySelector('.sel-check').textContent='✓'}document.getElementById('selCount').textContent=selectedIds.size}
 function selectAllVids(){getVisibleVids().forEach(v=>selectedIds.add(v.id));renderVids(getVisibleVids());document.getElementById('selCount').textContent=selectedIds.size}
-function likeSelected(){if(!selectedIds.size)return;selectedIds.forEach(id=>{if(!likedIds.has(id)){likedIds.add(id);window.open(`https://www.youtube.com/watch?v=${id}`,`_ytlike_${id}`,'width=900,height=600')}});try{localStorage.setItem('d37_liked',JSON.stringify([...likedIds]))}catch(e){}}
+// «❤ Лайкнуть выбранные» убран 05.11.2026: открывал пачку всплывающих окон (браузер пропускает одно, телефоны — ни одного),
+// а «лайкнутыми» помечал все — лайк ставится только на YouTube, по одному ролику (js/core/vlike.js)
 function playSelected(){
   const ids=[...selectedIds];if(!ids.length)return;
   const mp=document.getElementById('multiPlayer');

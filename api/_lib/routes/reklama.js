@@ -9,6 +9,10 @@ import { FORMATS, DEF } from '../ad-rules.js';   // кабинет реклам�
 const TG = 'https://t.me/+LE25p4pQojkyYjli';
 const VK = 'https://vk.com/dan4ik37';
 const MAIL = 'dan4ik37k@gmail.com';
+// 05.11.2026: «медиана просмотров 50 свежих видео» не показываем — это новая цифра, посчитанная из данных YouTube API, а правила
+// API (III.E.4.h) запрещают делать из них свои метрики. Настоящие цифры (подписчики, просмотры, число роликов) — как были.
+// Медиану бренду владелец может назвать сам из YouTube Studio. Вернуть — true (решает владелец).
+export const MEDIAN_VIEWS = false;
 const ru = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
 
 export default async function handler(req, res) {
@@ -24,7 +28,7 @@ export default async function handler(req, res) {
   // За год, а не за месяц: перерывы между сериями роликов бывают долгими, годовая цифра честнее показывает канал
   const lastYear = all.filter(v => now - Date.parse(v.publishedAt) < 365 * 864e5).length;
   const views = stats.map(s => +s.viewCount || 0).filter(n => n > 0).sort((a, b) => a - b);
-  const median = views.length ? views[Math.floor(views.length / 2)] : 0;
+  const median = MEDIAN_VIEWS && views.length ? views[Math.floor(views.length / 2)] : 0;
   const top = stats.slice().sort((a, b) => (+b.viewCount || 0) - (+a.viewCount || 0)).slice(0, 4)
     .map(s => ({ ...recent.find(v => v.id === s.id), views: +s.viewCount || 0 })).filter(v => v.id);
   const games = TOPICS.filter(t => t.slug !== 'horror').map(t => [t, recent.filter(v => t.re.test(v.title)).length])

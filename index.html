@@ -542,9 +542,14 @@ body.low .stat-val.skeleton{animation:none;background:rgba(var(--fg-rgb),.08)}
 .vcard.selectable::after{content:'';position:absolute;inset:0;border-radius:var(--r);border:2px solid transparent;transition:border-color .15s;z-index:3;pointer-events:none}
 .vcard.selectable:hover::after{border-color:rgba(255,45,85,.4)}
 .vcard.selected::after{border-color:var(--accent)!important;background:rgba(255,45,85,.06)!important}
-/* Like btn */
-.vlike{position:absolute;bottom:8px;right:8px;z-index:4;background:rgba(0,0,0,.72);border:1px solid rgba(var(--fg-rgb),.12);border-radius:50px;padding:.28rem .65rem;font-size:.68rem;font-weight:700;color:var(--muted);cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:.3rem;font-family:'Montserrat',sans-serif}
-.vlike:hover,.vlike.liked{background:rgba(255,45,85,.25);border-color:var(--accent);color:var(--accent)}
+/* «Лайк на YouTube» (js/core/vlike.js): ссылка на ролик там; ✓ — отметка этого браузера. Тёмная плашка поверх превью — текст белый в обеих темах */
+.vlike{position:absolute;bottom:8px;right:8px;z-index:4;background:rgba(0,0,0,.78);border:1px solid rgba(255,255,255,.18);border-radius:50px;padding:.28rem .65rem;font-size:.66rem;font-weight:700;color:#fff;text-decoration:none;cursor:pointer;transition:background .2s,border-color .2s;display:flex;align-items:center;gap:.3rem;font-family:'Montserrat',sans-serif}
+.vlike .vl-yt{display:inline-flex;align-items:center;justify-content:center;width:1.25em;height:.9em;border-radius:3px;background:#f00;color:#fff;font-size:.62rem;line-height:1}
+.vlike:hover,.vlike:focus-visible{background:rgba(255,0,0,.35);border-color:#f00}
+.vlike.vl-on{border-color:rgba(159,232,112,.55)}
+.vlike .vl-mark{color:#9fe870}
+.vmeta .vs-at{color:var(--muted);opacity:.85}
+.yt-data-note{margin:.9rem 0 0;font-size:.68rem;line-height:1.5;color:var(--muted);text-align:center}
 @keyframes likeAnim{0%{transform:scale(1)}30%{transform:scale(1.5)}60%{transform:scale(.9)}100%{transform:scale(1)}}
 .like-pop{animation:likeAnim .4s ease}
 /* Recommended badge */
@@ -1473,7 +1478,6 @@ body.low .donation-alert-icon{animation:none}
               <button class="act-btn" id="selBtn" onclick="toggleSel()">☑ Выбрать несколько</button>
             </div>
           </div>
-          <button class="act-btn act-like" id="likeSelBtn" style="display:none" onclick="likeSelected()">❤ Лайкнуть</button>
           <button class="act-btn act-play" id="playSelBtn" style="display:none" onclick="playSelected()">▶ Смотреть</button>
           <button class="act-btn" id="cancelSelBtn" aria-label="Отменить выбор видео" style="display:none" onclick="cancelSel()">✕</button>
         </div>
@@ -1486,7 +1490,7 @@ body.low .donation-alert-icon{animation:none}
     <div class="yt-bottom">
       <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" class="yt-ext">▶ Все видео на YouTube</a>
       <a href="https://www.youtube.com/@Dan4ik37Yt/streams" target="_blank" class="yt-ext">🔴 Стримы и записи</a>
-      <a href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" class="yt-sub">❤ Подписаться</a>
+      <a href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener" class="yt-sub">▶ Подписаться на YouTube</a>
     </div>
     <!-- Баннер подписки — появляется после просмотра видео -->
     <div class="sub-banner" id="subBanner">
@@ -1495,7 +1499,7 @@ body.low .donation-alert-icon{animation:none}
         <div class="sub-banner-desc">Подписывайся чтобы не пропускать новые выпуски и стримы!</div>
       </div>
       <div class="sub-banner-btns">
-        <a href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" class="yt-sub" style="display:inline-flex">❤ Подписаться на YouTube</a>
+        <a href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener" class="yt-sub" style="display:inline-flex">▶ Подписаться на YouTube</a>
         <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" style="display:inline-flex;align-items:center;gap:.5rem;padding:.6rem 1.2rem;border-radius:50px;background:rgba(41,182,246,.12);border:1.5px solid var(--tg);color:var(--tg);font-size:.74rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase">✈ Telegram</a>
       </div>
     </div>
@@ -2672,7 +2676,8 @@ body.low .donation-alert-icon{animation:none}
       <div class="modal-title" id="mTitle"></div>
       <div class="modal-meta" id="mMeta"></div>
       <div class="modal-actions">
-        <a class="modal-act modal-act-yt" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться</a>
+        <a class="modal-act modal-act-yt" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
+        <a class="modal-act" id="mLike" data-vlike="" href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" rel="noopener">👍 Лайк на YouTube<span class="vl-mark"></span></a>
         <button type="button" class="modal-act" id="mShare" onclick="shareCurrentVid()">🔗 Поделиться</button>
         <a class="modal-act" id="mPage" href="#" target="_blank" rel="noopener">Страница видео ↗</a>
       </div>
@@ -2709,6 +2714,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/ui/tabs-nav.js"></script>
 <script src="js/features/schedule.js"></script>
 <script src="js/core/utils.js"></script>
+<script src="js/core/vlike.js"></script>
 <script src="js/features/youtube.js"></script>
 <script src="js/ui/modal.js"></script>
 <script src="js/features/chat.js"></script>

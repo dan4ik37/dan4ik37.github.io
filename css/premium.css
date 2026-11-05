@@ -1248,9 +1248,9 @@ body[data-route="shorts"] footer,body[data-route="shorts"] #donateFab,body[data-
   position:absolute;left:0;right:0;bottom:0;z-index:2;padding:3rem 1rem 1rem;pointer-events:none;
   background:linear-gradient(180deg,transparent,rgba(0,0,0,.8));
 }
-/* Пока играет — информация не перекрывает нижние контролы YouTube */
-.sh-item.is-active .sh-info{opacity:0;transition:opacity .4s 2.5s}
-.sh-item.is-active .sh-frame:hover .sh-info{opacity:1;transition-delay:0s}
+/* Пока играет — поверх плеера YouTube ничего нет (правила YouTube «Required Minimum Functionality»: никаких наложений перед
+   встроенным плеером). До 05.11.2026 подпись гасла через 2,5 с, но оставалась над плеером, а невидимая «Подписаться» ловила нажатия */
+.sh-item.is-active .sh-info{display:none}
 .sh-title{font-size:.9rem;font-weight:800;line-height:1.35;color:#fff;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .sh-meta{margin-top:.3rem;font-size:.72rem;color:rgba(var(--fg-rgb),.7)}
 .sh-sub{
@@ -1266,6 +1266,10 @@ body[data-route="shorts"] footer,body[data-route="shorts"] #donateFab,body[data-
 .sh-btn span{font-size:1.3rem;line-height:1}
 .sh-btn small{font-size:.6rem;font-weight:700;color:rgba(var(--fg-rgb),.75)}
 .sh-btn:hover{background:rgba(var(--fg-rgb),.14);transform:scale(1.06)}
+.sh-btn.sh-like{width:64px;text-align:center}
+.sh-btn.sh-like small{line-height:1.2}
+.sh-btn .vl-mark{color:#9fe870}
+.sh-btn .vl-mark:empty{display:none}
 /* Звук выключен — кнопка звука заметная, это главное действие */
 .sh-feed.is-muted .sh-sound{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
 body.high .sh-feed.is-muted .sh-item.is-active .sh-sound{animation:pillPulse 2s ease-out infinite;color:var(--ac-55)}
@@ -1278,13 +1282,18 @@ body.high .sh-feed.is-muted .sh-item.is-active .sh-sound{animation:pillPulse 2s 
 .sh-empty[hidden]{display:none}
 .sh-empty-ic{font-size:2.6rem}
 
-/* Телефон: ролик на всю ширину, кнопки поверх справа */
+/* Телефон: ролик на всю ширину, кнопки — полосой ПОД плеером (до 05.11.2026 висели поверх плеера справа — правила YouTube
+   запрещают наложения перед встроенным плеером) */
 @media(max-width:640px){
   .sh-item{padding:0;gap:0}
   .sh-frame{width:100%;height:100%;aspect-ratio:auto;border-radius:0;border:0}
-  .sh-side{position:absolute;right:.6rem;bottom:5.5rem;z-index:3;margin:0}
-  .sh-btn{width:48px;background:rgba(0,0,0,.45);backdrop-filter:blur(6px)}
-  .sh-info{padding-right:4.5rem}
+  .sh-player{bottom:58px}
+  .sh-thumb{height:calc(100% - 58px)}
+  .sh-side{position:absolute;left:.6rem;right:.6rem;bottom:8px;z-index:3;margin:0;flex-direction:row;justify-content:flex-end;align-items:center;gap:.5rem}
+  .sh-btn,.sh-btn.sh-like{flex-direction:row;width:auto;padding:.45rem .75rem;gap:.35rem;background:rgba(var(--fg-rgb),.08)}
+  .sh-btn span{font-size:1.05rem}
+  .sh-btn small br{display:none}
+  .sh-info{bottom:58px;padding-right:1rem}
   .sh-row-track{grid-auto-columns:minmax(130px,42vw)}
 }
 

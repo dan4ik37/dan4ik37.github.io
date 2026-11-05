@@ -3,8 +3,11 @@
 // росте трафика квота кончилась бы — а она общая со страницами роликов. Теперь список собирает сервер (снимок +
 // свежие ролики, просмотры — один пакетный запрос на 50 роликов), а CDN отдаёт его всем 15 минут из кэша:
 // расход квоты не зависит от числа посетителей. Не ответил — главная по-старому идёт в YouTube API сама.
-// Формат: { channelId, daily: { id, title, views, thumb }, stats: { subs, views, vids }, vids: [{ id, title, thumb, ts, views, likes, duration }] }
-import { getChannel, getChannelStats, getUploads, getVideoStats, isGambling, ALL_UPLOADS } from '../yt.js';
+// Формат: { channelId, at, snapAt, daily: { id, title, views, thumb }, stats: { subs, views, vids },
+//          vids: [{ id, title, thumb, ts, views, likes, duration, snap? }] }
+// at — когда YouTube отдал цифры роликов (самые старые из свежих, ISO); snap: 1 — у ролика цифры из снимка на snapAt (свежих не было).
+// Правила YouTube API III.E.4.f: показывать самые свежие данные, а старые — только с указанием времени; главная пишет «обновлено …».
+import { getChannel, getChannelStats, getUploads, getVideoStats, isGambling, ALL_UPLOADS, SNAPSHOT_AT } from '../yt.js';
 import { videoFromSnapshot } from '../video-snap.js';
 
 const COUNT = 150;   // как у браузера: больше половины — Shorts, обычным роликам в сетке нужен запас
@@ -30,12 +33,15 @@ export default async function handler(req, res) {
     for (let i = 0; i < top.length; i += 50) {
       try { (await getVideoStats(top.slice(i, i + 50).map(v => v.id))).forEach(s => fresh.set(s.id, s)); } catch (e) { /* без свежих — из снимка */ }
     }
+    let at = '';
     const vids = top.map(v => {
       const s = fresh.get(v.id), snap = s ? null : videoFromSnapshot(v.id);
+      if (s?.at && (!at || s.at < at)) at = s.at;
       return {
         id: v.id, title: v.title, thumb: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`, ts: Date.parse(v.publishedAt) || 0,
         views: +(s?.viewCount ?? snap?.statistics?.viewCount ?? 0), likes: +(s?.likeCount ?? snap?.statistics?.likeCount ?? 0),
         duration: s?.duration || snap?.contentDetails?.duration || '',
+        ...(snap?.statistics?.viewCount ? { snap: 1 } : {}),
       };
     });
     res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=86400');
@@ -43,6 +49,7 @@ export default async function handler(req, res) {
     try { daily = await dailyPick(); } catch (e) { /* без видео дня */ }
     res.status(200).send(JSON.stringify({
       channelId: ch.id,
+      at: at || new Date().toISOString(), snapAt: SNAPSHOT_AT,
       daily,
       stats: { subs: +cs.subscriberCount || 0, views: +cs.viewCount || 0, vids: +cs.videoCount || 0 },
       vids,

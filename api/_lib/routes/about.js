@@ -2,7 +2,7 @@
 // отвечают по тому, что нашли в поиске). Только настоящие данные: цифры YouTube (getChannelStats), игры — по названиям
 // всех роликов (TOPICS), первое/последнее видео — из списка загрузок. Ничего не выдумывать: личных фактов (имя,
 // возраст, город) здесь нет, пока их не даст сам владелец.
-import { SITE, ALL_UPLOADS, getUploads, getChannelStats, isGambling, esc, fmtCount } from '../yt.js';
+import { SITE, ALL_UPLOADS, getUploads, getChannelStats, isGambling, esc, fmtCount, SNAPSHOT_AT } from '../yt.js';
 import { videoFromSnapshot } from '../video-snap.js';
 import { page, YT_CHANNEL } from '../page.js';
 import { TOPICS } from '../topics.js';
@@ -67,7 +67,7 @@ export default async function handler(req, res) {
     <ul class="ab-games">${games.slice(0, 12).map(x => `<li><a href="/topic/${x.t.slug}">${esc(x.t.name)}</a><span>${esc(num(x.n))} видео</span></li>`).join('')}</ul>
     <p class="muted">Все темы — <a href="/topics">«Игры канала»</a>, по годам — <a href="/history">«История канала»</a>.</p></section>` : ''}
   ${best.length ? `<section class="box"><h2>Самые популярные ролики</h2><ol class="ab-best">${best.map(x => `<li><a href="/v/${esc(x.v.id)}">${esc(x.v.title)}</a><span>👁 ${esc(fmtCount(x.views))}</span></li>`).join('')}</ol>
-    <p class="muted"><a href="/top">Весь топ видео и шортсов →</a></p></section>` : ''}
+    <p class="muted">Просмотры — данные YouTube на ${esc(ruDate(Date.parse(SNAPSHOT_AT)))}. <a href="/top">Весь топ видео и шортсов →</a></p></section>` : ''}
   ${first && last ? `<section class="box"><h2>Первое и последнее видео</h2><ul class="ab-vids">
     <li><small>Самое раннее в списке загрузок · ${esc(ruDate(first.publishedAt))}</small><a href="/v/${esc(first.id)}">${esc(first.title)}</a></li>
     <li><small>Самое новое · ${esc(ruDate(last.publishedAt))}</small><a href="/v/${esc(last.id)}">${esc(last.title)}</a></li>

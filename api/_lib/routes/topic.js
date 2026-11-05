@@ -101,7 +101,7 @@ function topicPage(t, all, counts, req){
   <p class="lead">${ageBadge(t.age, { title: t.ageWhy })} ${esc(t.about)} На канале — ${vids(n)}${first && first !== last ? `, с ${first} по ${last} год` : ''}. От новых к старым.</p>
   ${p === 1 && TOPIC_INTRO[t.slug] ? `<p class="intro">${esc(TOPIC_INTRO[t.slug])}</p>` : ''}
   <div class="cta">
-    <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на канал</a>
+    <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
     <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Удиви меня</button>
     ${quiz ? `<a class="btn btn-ghost" href="/quiz/${quiz.slug}">🧩 Тест: ${esc(quiz.title)}</a>` : '<a class="btn btn-ghost" href="/games">🎮 Поиграть на сайте</a>'}
   </div>

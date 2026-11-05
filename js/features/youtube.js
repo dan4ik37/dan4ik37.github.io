@@ -82,6 +82,8 @@ window.addEventListener('d37:videos', () => {
 });
 window.addEventListener('d37:route', () => { if ((D37Route.hash() || '#/home').startsWith('#/home')) markVideosSeen(); });
 
+// Отметка сайта в этом браузере (открывал ролик здесь), а не история просмотров YouTube — так и подписано
+const WATCHED_TITLE = 'Отметка сайта в этом браузере: ты открывал ролик здесь. Это не история просмотров YouTube.';
 let watchedIds = new Set();
 try{ watchedIds = new Set(JSON.parse(localStorage.getItem('d37_watched')||'[]')); }catch(e){}
 function markVidWatched(id){
@@ -91,7 +93,7 @@ function markVidWatched(id){
   const card=document.querySelector(`.vcard[data-id="${id}"]`);
   if(card && !card.querySelector('.vwatched')){
     const b=document.createElement('div');
-    b.className='vwatched';b.title='Просмотрено';b.textContent='✓ Просмотрено';
+    b.className='vwatched';b.title=WATCHED_TITLE;b.textContent='✓ Просмотрено';
     card.querySelector('.vthumb')?.appendChild(b);
   }
 }
@@ -226,6 +228,7 @@ async function loadYT(){
   if(cached && !cached.vids?.[0]?.ts) cached=null;
   if(cached){
     newestVids=cached.vids||[];
+    ytDataAt=cached.at||cached.ts||0; ytDataSnap=cached.snapAt||'';
     allVids=sortedVids(vidSort);
     if(cached.stats){countUp('s-subs',cached.stats.subs);countUp('s-views',cached.stats.views);countUp('s-vids',cached.stats.vids)}
     if(cached.daily){ window.__d37Daily=cached.daily; window.dispatchEvent(new Event('d37:daily')); }
@@ -251,10 +254,11 @@ async function loadYT(){
       const st=d.stats||{subs:0,views:0,vids:0};
       countUp('s-subs',st.subs);countUp('s-views',st.views);countUp('s-vids',st.vids);
       statsLoaded();
-      const rawVids=d.vids.map(v=>({id:v.id,title:v.title,thumb:v.thumb,date:new Date(v.ts).toLocaleDateString('ru-RU'),views:v.views?fmt(v.views):'',viewsN:v.views||0,ts:v.ts,likes:v.likes?fmt(v.likes):'',duration:formatYtDuration(v.duration)}));
+      const rawVids=d.vids.map(v=>({id:v.id,title:v.title,thumb:v.thumb,date:new Date(v.ts).toLocaleDateString('ru-RU'),views:v.views?fmt(v.views):'',viewsN:v.views||0,ts:v.ts,likes:v.likes?fmt(v.likes):'',duration:formatYtDuration(v.duration),...(v.snap?{snap:1}:{})}));
       newestVids=rawVids.sort((a,b)=>b.ts-a.ts);
+      ytDataAt=Date.parse(d.at)||Date.now(); ytDataSnap=rawVids.some(v=>v.snap)?String(d.snapAt||''):'';
       allVids=sortedVids(vidSort);
-      saveCache({vids:rawVids,stats:st,daily:d.daily||null});
+      saveCache({vids:rawVids,stats:st,daily:d.daily||null,at:ytDataAt,snapAt:ytDataSnap});
       renderFeatured(longVids()[0]);
       renderCurrentVids();
       if(typeof onVideosLoaded==='function') onVideosLoaded();
@@ -301,8 +305,9 @@ async function loadYT(){
 
     // Плейлист загрузок почти всегда идёт от новых к старым, но не гарантированно — сортируем явно
     newestVids = rawVids.sort((a,b)=>b.ts-a.ts);
+    ytDataAt = Date.now(); ytDataSnap = '';
     allVids = sortedVids(vidSort);
-    saveCache({vids:rawVids,stats:st});
+    saveCache({vids:rawVids,stats:st,at:ytDataAt});
     renderFeatured(longVids()[0]);
     renderCurrentVids();
     if(typeof onVideosLoaded==='function') onVideosLoaded();
@@ -355,7 +360,7 @@ function renderVids(vids){
   if(!vids.length){grid.innerHTML=`<div class="empty-state"><span class="empty-state-icon">🎬</span><div class="empty-state-title">Видео не найдены</div><div class="empty-state-text">Пока ничего не загрузилось — возможно, YouTube временно недоступен. Попробуй обновить страницу.</div></div>`;return}
   vids.forEach((v,i)=>{
     if(!v.id)return;
-    const liked=likedIds.has(v.id),sel=selectedIds.has(v.id),watched=watchedIds.has(v.id);
+    const liked=vlMarked(v.id),sel=selectedIds.has(v.id),watched=watchedIds.has(v.id);
     const va=window.D37Age?D37Age.video(v.title).age:0;   // возрастная метка: на карточке — от 16+ (иначе шумно)
     const card=document.createElement('div');
     card.className='vcard'+(selMode?' selectable':'')+(sel?' selected':'');
@@ -370,15 +375,13 @@ function renderVids(vids){
         ${va>=16?D37Age.badge(va):''}
         ${isNewVid(v)&&!watched?'<div class="vnew">NEW</div>':''}
         ${v.duration?`<div class="vduration">${v.duration}</div>`:''}
-        ${watched?'<div class="vwatched" title="Просмотрено">✓ Просмотрено</div>':''}
+        ${watched?`<div class="vwatched" title="${WATCHED_TITLE}">✓ Просмотрено</div>`:''}
         <div class="play-ov"><div class="play-circle">▶</div></div>
-        <button class="vlike${liked?' liked':''}" onclick="toggleLike(event,'${v.id}',this)" title="${liked?'Ты отметил этот ролик':'Поставить лайк на YouTube — откроется ролик'}" aria-label="Лайк на YouTube">
-          ${liked?'❤':'🤍'}${v.likes?' '+v.likes:''}
-        </button>
+        <a class="vlike${liked?' vl-on':''}" data-vlike="${v.id}" href="https://www.youtube.com/watch?v=${v.id}" target="_blank" rel="noopener" title="${liked?VL_T_ON:VL_T_OFF}"><span class="vl-yt" aria-hidden="true">▶</span>Лайк на YouTube<span class="vl-mark">${liked?' ✓':''}</span></a>
       </div>
       <div class="vinfo">
         <a class="vtitle" href="/v/${v.id}">${esc(v.title)}</a>
-        <div class="vmeta">${v.views?`<span>👁 ${v.views}</span>`:''}${v.date?`<span>📅 ${v.date}</span>`:''}</div>
+        <div class="vmeta">${v.views?`<span data-vs="views" title="Просмотры на YouTube">👁 ${v.views}</span>`:''}${v.likes?`<span data-vs="likes" title="Лайки на YouTube">👍 ${v.likes}</span>`:''}${v.date?`<span>📅 ${v.date}</span>`:''}</div>
       </div>`;
     card.addEventListener('click',e=>{
       if(e.target.closest('.vlike'))return;
@@ -394,6 +397,16 @@ function renderVids(vids){
   // «Показать ещё»: после 16-й и каждой 12-й — своя подсказка (игры сайта); рекламы между роликами нет — карточки только из данных
   // YouTube (ad-places.js RULES.videoFeed = false; true — карточка «Реклама», как до 05.11); есть ролики про кейсы/депозиты — без неё
   window.D37AdPlaces?.feed(grid, { place: 'feed_videos', every: 12, start: 16, max: 3, titles: vids.map(v => v.title) });
+  renderDataNote(grid);
+}
+// Под сеткой: откуда и на когда цифры (правила YouTube API III.E.4.f — старые данные только с указанием времени)
+function renderDataNote(grid){
+  let n=document.getElementById('ytDataNote');
+  if(!n){ n=document.createElement('p'); n.id='ytDataNote'; n.className='yt-data-note'; (grid.parentNode.querySelector('.vid-more-wrap')||grid).after(n); }
+  const at=ytDataAt?new Date(ytDataAt):null;
+  const when=at&&!isNaN(at)&&window.D37VLike?D37VLike.when({at:at.toISOString(),src:'live'}):'';
+  const snap=ytDataSnap&&window.D37VLike?D37VLike.when({at:ytDataSnap,src:'snapshot'}):'';
+  n.textContent='👁 просмотры и 👍 лайки — данные YouTube'+(when?', '+when:'')+(snap?' (у части роликов — '+snap+')':'')+'. Лайк ставится на YouTube: кнопка «Лайк на YouTube» открывает ролик там.';
 }
 
 // ═══════════════════════════════════════
@@ -415,18 +428,30 @@ const cardThumb = u => String(u || '').replace(/\/(hq|sd)default\.jpg$/, '/mqdef
 function shuffleVids(){ setVidSort('rand'); }
 
 // ═══════════════════════════════════════
-//  LIKES — открывает реальный YouTube
+//  ЛАЙК — на YouTube (js/core/vlike.js). До 05.11.2026 сердечко было только отметкой в этом браузере и открывало ролик во
+//  всплывающем окне (телефоны его блокировали), а число рядом — из ленты, оно от нажатия не менялось («лайк не работает»).
+//  Теперь: ссылка «Лайк на YouTube» → лайк ставится там; вернулся — цифры этого ролика с YouTube (/api/vstats) и «обновлено ЧЧ:ММ».
 // ═══════════════════════════════════════
-function toggleLike(e,id,btn){
-  e.stopPropagation();
-  const v=allVids.find(x=>x.id===id);
-  if(likedIds.has(id)){likedIds.delete(id);btn.classList.remove('liked');btn.innerHTML='🤍'+(v?.likes?' '+v.likes:'')}
-  else{likedIds.add(id);btn.classList.add('liked','like-pop');btn.innerHTML='❤'+(v?.likes?' '+v.likes:'');setTimeout(()=>btn.classList.remove('like-pop'),400);
-    // Открываем YouTube для реального лайка
-    window.open(`https://www.youtube.com/watch?v=${id}`,`_ytlike_${id}`,'width=900,height=600,scrollbars=yes');
+let ytDataAt = 0, ytDataSnap = '';   // когда YouTube отдал цифры ленты (мс) и день снимка, если часть цифр из него
+const VL_T_OFF = window.D37VLike?.T_OFF || 'Откроется ролик на YouTube — лайк ставится там.';
+const VL_T_ON = window.D37VLike?.T_ON || VL_T_OFF;
+const vlMarked = id => window.D37VLike ? D37VLike.marked(id) : likedIds.has(id);
+// Свежие цифры одного ролика (вернулся с YouTube) → карточка, герой, окно ролика
+window.addEventListener('d37:vstats', e => {
+  const s = e.detail; if (!s || !s.id) return;
+  for (const list of [newestVids, allVids]) for (const v of list) if (v.id === s.id) { v.viewsN = s.views; v.views = s.views ? fmt(s.views) : ''; v.likes = s.likes ? fmt(s.likes) : ''; }
+  const when = window.D37VLike ? D37VLike.when(s) : '';
+  const card = document.querySelector(`.vcard[data-id="${CSS.escape(s.id)}"]`), meta = card?.querySelector('.vmeta');
+  if (meta) {
+    const put = (k, ic, n, t) => { let el = meta.querySelector(`[data-vs="${k}"]`); if (!el) { el = document.createElement('span'); el.dataset.vs = k; el.title = t; meta.prepend(el); } el.textContent = ic + ' ' + fmt(n); };
+    put('likes', '👍', s.likes, 'Лайки на YouTube'); put('views', '👁', s.views, 'Просмотры на YouTube');
+    let at = meta.querySelector('[data-vs="at"]');
+    if (!at) { at = document.createElement('span'); at.dataset.vs = 'at'; at.className = 'vs-at'; meta.append(at); }
+    at.textContent = when;
   }
-  try{localStorage.setItem('d37_liked',JSON.stringify([...likedIds]))}catch(e){}
-}
+  if (typeof modalVidSet === 'function') modalVidSet(s, when);
+  if (card && window.D37VLike) D37VLike.paint(card);
+});
 
 // Зашли сразу в чат/форум — через пару секунд тихо подгружаем ролики (обычно из кэша),
 // чтобы на «Видео» появился счётчик новых с прошлого визита
