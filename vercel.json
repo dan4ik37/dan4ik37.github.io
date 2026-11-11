@@ -90,6 +90,33 @@
       ]
     },
     {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "<https://dan4ik37.vercel.app/>; rel=\"canonical\""
+        }
+      ]
+    },
+    {
+      "source": "/shorts",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "<https://dan4ik37.vercel.app/shorts>; rel=\"canonical\""
+        }
+      ]
+    },
+    {
+      "source": "/chat",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "<https://dan4ik37.vercel.app/chat>; rel=\"canonical\""
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
