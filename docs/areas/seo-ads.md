@@ -31,6 +31,10 @@
 - GGDROP banner on streams May 2025 - Jan 2026: every video of that window is hidden (yt.js HIDE_GG_WINDOW, GG_WINDOW).
 - Shorts: /v/<id> noindex, not in sitemap-videos (2651 long videos left). App routes /donate /lfg /soundboard /poll /clicker are
   not in sitemap-pages (the server returns the home HTML there). /play/* — X-Robots-Tag noindex; /index.html → / (308).
+- Canonical of the static SPA pages (11.11): index.html is one file for `/`, /chat, /shorts…, so it carries NO static
+  `<link rel="canonical">` (it would point /chat and /shorts at the home page until JS runs). The three SPA addresses in
+  sitemap-pages (`/`, /shorts, /chat) get it as an HTTP header `Link: <…>; rel="canonical"` (vercel.json headers, exact paths);
+  router.js still sets the tag + og:url after JS. Adding an SPA address to the sitemap → add its Link header too.
 - Round 2 (05.11): home video grid has no network/direct ads between YouTube cards, own promo cards only (ad-places.js
   ADS_RULES.videoFeed = false). Unfilled / blocked Google units never shift the page: below the screen the slot is removed, on or above
   the screen it becomes own promo of the same height (ADS_RULES.settle, guard() watches data-ad-status, adsbygoogle.loaded and the
