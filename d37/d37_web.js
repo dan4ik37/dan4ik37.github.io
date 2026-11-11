@@ -262,6 +262,66 @@ export class D37Web {
 if (Symbol.dispose) D37Web.prototype[Symbol.dispose] = D37Web.prototype.free;
 
 /**
+ * `characters` animated puppets for `ticks` ticks: "character-ticks pose_hash_xor" (the page / node times it).
+ * @param {number} characters
+ * @param {number} ticks
+ * @returns {string}
+ */
+export function anim_bench(characters, ticks) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        wasm.anim_bench(retptr, characters, ticks);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr1 = r0;
+        var len1 = r1;
+        if (r3) {
+            ptr1 = 0; len1 = 0;
+            throw takeFromExternrefTable0(r2);
+        }
+        deferred2_0 = ptr1;
+        deferred2_1 = len1;
+        return getStringFromWasm0(ptr1, len1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * The pose golden as this build computes it (compared with golden/pose_kit.golden).
+ * @returns {string}
+ */
+export function anim_golden() {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        wasm.anim_golden(retptr);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr1 = r0;
+        var len1 = r1;
+        if (r3) {
+            ptr1 = 0; len1 = 0;
+            throw takeFromExternrefTable0(r2);
+        }
+        deferred2_0 = ptr1;
+        deferred2_1 = len1;
+        return getStringFromWasm0(ptr1, len1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * The mover's golden text as this build computes it (compared with crates/d37-mover/golden/mover.golden).
  * @returns {string}
  */
@@ -305,6 +365,48 @@ export function scenario_hashes(scene_ron, scenario_ron) {
             throw e;
         }
         wasm.scenario_hashes(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr3 = r0;
+        var len3 = r1;
+        if (r3) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(r2);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
+ * "ticks pose_hash" of a scripted run (compared with `d37 play`'s pose hash).
+ * @param {string} scene_ron
+ * @param {string} scenario_ron
+ * @returns {string}
+ */
+export function scenario_pose_hash(scene_ron, scenario_ron) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(scene_ron, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(scenario_ron, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        wasm.scenario_pose_hash(retptr, ptr0, len0, ptr1, len1);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -1304,7 +1406,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_8859(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_8926(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -1483,6 +1585,9 @@ function __wbg_get_imports() {
         __wbg_set_array_stride_f64_b132c6a79afeae43: function(arg0, arg1) {
             arg0.arrayStride = arg1;
         },
+        __wbg_set_aspect_3b0dceed92671cc1: function(arg0, arg1) {
+            arg0.aspect = __wbindgen_enum_GpuTextureAspect[arg1];
+        },
         __wbg_set_aspect_8c866a3891032753: function(arg0, arg1) {
             arg0.aspect = __wbindgen_enum_GpuTextureAspect[arg1];
         },
@@ -1521,6 +1626,9 @@ function __wbg_get_imports() {
         },
         __wbg_set_buffers_47665c552e27672c: function(arg0, arg1, arg2) {
             arg0.buffers = getArrayJsValueViewFromWasm0(arg1, arg2);
+        },
+        __wbg_set_bytes_per_row_75441352f606ebc8: function(arg0, arg1) {
+            arg0.bytesPerRow = arg1 >>> 0;
         },
         __wbg_set_clear_value_gpu_color_dict_303e0009591e5d26: function(arg0, arg1) {
             arg0.clearValue = arg1;
@@ -1726,6 +1834,9 @@ function __wbg_get_imports() {
         __wbg_set_mip_level_count_cd650972803ed9eb: function(arg0, arg1) {
             arg0.mipLevelCount = arg1 >>> 0;
         },
+        __wbg_set_mip_level_f0c5ed95eedda453: function(arg0, arg1) {
+            arg0.mipLevel = arg1 >>> 0;
+        },
         __wbg_set_mode_51d2c5a5ac0f7ac9: function(arg0, arg1) {
             arg0.mode = __wbindgen_enum_GpuCanvasToneMappingMode[arg1];
         },
@@ -1741,6 +1852,9 @@ function __wbg_get_imports() {
         __wbg_set_multisampled_ae3f9f01a324f57c: function(arg0, arg1) {
             arg0.multisampled = arg1 !== 0;
         },
+        __wbg_set_offset_f64_15176b737de7dde0: function(arg0, arg1) {
+            arg0.offset = arg1;
+        },
         __wbg_set_offset_f64_52f728fc5c98a52c: function(arg0, arg1) {
             arg0.offset = arg1;
         },
@@ -1749,6 +1863,9 @@ function __wbg_get_imports() {
         },
         __wbg_set_operation_e103287df7ac9cf6: function(arg0, arg1) {
             arg0.operation = __wbindgen_enum_GpuBlendOperation[arg1];
+        },
+        __wbg_set_origin_gpu_origin_3d_dict_26016670147a706c: function(arg0, arg1) {
+            arg0.origin = arg1;
         },
         __wbg_set_pass_op_4d08c3105f64a17a: function(arg0, arg1) {
             arg0.passOp = __wbindgen_enum_GpuStencilOperation[arg1];
@@ -1782,6 +1899,9 @@ function __wbg_get_imports() {
         },
         __wbg_set_resource_gpu_texture_view_9153a2356b958667: function(arg0, arg1) {
             arg0.resource = arg1;
+        },
+        __wbg_set_rows_per_image_11e9552fb5c5c5ab: function(arg0, arg1) {
+            arg0.rowsPerImage = arg1 >>> 0;
         },
         __wbg_set_sample_count_8262aacc91878e4d: function(arg0, arg1) {
             arg0.sampleCount = arg1 >>> 0;
@@ -1845,6 +1965,9 @@ function __wbg_get_imports() {
         },
         __wbg_set_targets_07e15f3cca640faf: function(arg0, arg1, arg2) {
             arg0.targets = getArrayJsValueViewFromWasm0(arg1, arg2);
+        },
+        __wbg_set_texture_7b9ace323bfe7938: function(arg0, arg1) {
+            arg0.texture = arg1;
         },
         __wbg_set_texture_84a5f84f0f451291: function(arg0, arg1) {
             arg0.texture = arg1;
@@ -1917,6 +2040,15 @@ function __wbg_get_imports() {
         },
         __wbg_set_write_mask_39ce121635fd4296: function(arg0, arg1) {
             arg0.writeMask = arg1 >>> 0;
+        },
+        __wbg_set_x_b078c58009aa57bd: function(arg0, arg1) {
+            arg0.x = arg1 >>> 0;
+        },
+        __wbg_set_y_3df92c4bcff23616: function(arg0, arg1) {
+            arg0.y = arg1 >>> 0;
+        },
+        __wbg_set_z_3633c53887a9ff5e: function(arg0, arg1) {
+            arg0.z = arg1 >>> 0;
         },
         __wbg_shaderSource_519d0f56b613b2f9: function(arg0, arg1, arg2, arg3) {
             arg0.shaderSource(arg1, getStringFromWasm0(arg2, arg3));
@@ -2200,24 +2332,27 @@ function __wbg_get_imports() {
         __wbg_writeBuffer_d7640e64ceb69371: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
             arg0.writeBuffer(arg1, arg2, getArrayU8FromWasm0(arg3, arg4), arg5, arg6);
         }, arguments); },
+        __wbg_writeTexture_dba1e801af087dfd: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5) {
+            arg0.writeTexture(arg1, getArrayU8FromWasm0(arg2, arg3), arg4, arg5);
+        }, arguments); },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 2476, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_8854);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 2485, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_8921);
             return ret;
         },
         __wbindgen_generic_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUDevice")], shim_idx: 533, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2023);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUDevice")], shim_idx: 540, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2076);
             return ret;
         },
         __wbindgen_generic_0000000000000003: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("any")], shim_idx: 533, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2023_20);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("any")], shim_idx: 540, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2076_23);
             return ret;
         },
         __wbindgen_generic_0000000000000004: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("undefined")], shim_idx: 533, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2023_21);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("undefined")], shim_idx: 540, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_2076_24);
             return ret;
         },
         __wbindgen_generic_0000000000000005: function(arg0) {
@@ -2280,14 +2415,14 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_8859(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_8859(arg0, arg1, arg2, arg3);
+function __wasm_bindgen_func_elem_8926(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_8926(arg0, arg1, arg2, arg3);
 }
 
-function __wasm_bindgen_func_elem_8854(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_8921(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_8854(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_8921(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -2298,10 +2433,10 @@ function __wasm_bindgen_func_elem_8854(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_2023(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_2076(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_2023(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_2076(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -2312,10 +2447,10 @@ function __wasm_bindgen_func_elem_2023(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_2023_20(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_2076_23(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_2023_20(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_2076_23(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -2326,10 +2461,10 @@ function __wasm_bindgen_func_elem_2023_20(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_2023_21(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_2076_24(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_2023_21(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_2076_24(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
