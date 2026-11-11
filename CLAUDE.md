@@ -1,3 +1,7 @@
+> OWNER 11.11 (binding, read first): everything new is Rust only, in ONE engine — cargo workspace E:\d37-engine on d37-core / d37-terrain, native + browser (wasm) from one code path, built agent-first (one headless CLI `d37`, text sources, PNG shots + diff, replay). Unity is frozen (crash / save loss only). Own character model + animation (d37-anim). Charter and order E0–E5: E:\d37-core\spec\ENGINE_ONE.md. On this site: no new JS simulation and no new three.js render features — JS is page glue and UI; existing games keep running.
+
+> 10.11 owner-requested follow-up: E:\d37-core\spec\MASTER_PLAN.md §10 (anchor codex-review-20261110): unported player fixes, shared skeleton + AI3D import validation, Max-profile acceptance, object/particle budgets, social journeys and public Googlebot audit. §9.5 retains the existing core resume task. Keep current boards and PLAN.md rule 9 (new modules: Rust + thin bindings).
+
 > Codex (owner-approved, 31.10–03.11) worked only in separate copies; all its documents are read and mapped in E:\d37-core\spec\ENGINE_PLAN_2026-11_ADDENDUM.md (Appendix A) and the action plan E:\d37-core\spec\MASTER_PLAN.md. Its notices: E:\d37-core\spec\source\codex-notices\. Never copy a Codex copy over the originals.
 
 > NORTH STAR (owner 04.11): the overall goal and checklist are in E:\d37-core\spec\GOAL.md — read it first when resuming.
@@ -53,9 +57,9 @@ Russian). Read only the area file(s) your task needs — never all of them.
   clutter. ONE pose button → a radial (crouch, sit, lie down, emotes…); the inventory → a radial quick-select (like a weapon
   wheel) instead of a big bar; one contextual action button; debug panels hidden by default. Spec: docs/HUD_V2.md. Hazards
   (quake, tsunami, tornado) come WITHOUT phone warnings.
-- ONE engine with Backrooms (owner 29.10): simulation logic (physics, AI, weather, biomes, magic) goes into the shared core
-  E:\d37-core first (Rust + golden; site via wasm, Backrooms via DLL); engine-side code = rendering, UI, camera, input, sound only.
-  A JS-only prototype must sit behind a flag and name its core port on the board (E:\d37-core\spec\PLAN.md «Core first»).
+- ONE engine, Rust only (owner 29.10 + 11.11): simulation goes into the shared core E:\d37-core (Rust + golden); rendering, animation,
+  assets, client and tools go into E:\d37-engine (Rust; native exe + wasm for the site). No new JS-only prototypes of engine features,
+  no C# ports, no Unity work except crash / save-loss fixes (E:\d37-core\spec\ENGINE_ONE.md; PLAN.md decisions 9–10).
 - Never brand our tech as RTX/DLSS (NVIDIA trademarks); NIS is genuine NVIDIA (MIT).
 - Reuse permissive open source (MIT, Apache-2.0, BSD, ISC — not GPL/AGPL/non-commercial: the site has ads): license notice
   in the file, load from jsDelivr with an exact version. Committing third-party code/assets needs the owner's permission.
