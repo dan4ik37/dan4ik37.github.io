@@ -31,7 +31,7 @@ function fitCanvas() {
 
 async function main() {
   await init({ module_or_path: new URL('./d37_web_bg.wasm', import.meta.url) });
-  const sceneUrl = q.get('scene') || './scenes/meadow.ron';
+  const sceneUrl = q.get('scene') || new URL('./scenes/meadow.ron', import.meta.url).href;   // next to this file, whatever the page address is
   const res = await fetch(sceneUrl);
   if (!res.ok) throw new Error('сцена ' + sceneUrl + ': HTTP ' + res.status);
   const sceneText = await res.text();
