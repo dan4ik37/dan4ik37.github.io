@@ -1,0 +1,27 @@
+// E1 scene 1 — "meadow": the site's «Новая земля» world (seed 1337, generator v2), a gentle slope above the bay,
+// late morning. Things from the core def table stand on the grass (plain shapes until mesh packs exist).
+(
+    version: 0,
+    name: "meadow",
+    seed: 1337,
+    terrain: (gen: 2, radius: 10, sea_level: 0.3),
+    sun: (azimuth_deg: 150, elevation_deg: 38),
+    cameras: {
+        "main": (pos: (-87.5, 1.7, 23), look_at: (-78, 0.5, 30.5)),
+        "wide": (pos: (-104, 9, 4), look_at: (-76, 0.5, 30), fov_y_deg: 70),
+    },
+    objects: [
+        (def: Name("PH_barrel_stove"), at: (-80, 27), yaw_deg: 20),
+        (def: Name("PH_sofa_03"), at: (-77, 31), yaw_deg: -35),
+        (def: Name("PH_round_wooden_table_01"), at: (-79.5, 33.5)),
+        (def: Name("PH_boombox"), at: (-75.5, 28), yaw_deg: 60),
+        (def: Name("PH_throw_pillows_01"), at: (-81.5, 30.5)),
+        (def: Name("PH_metal_stool_01"), at: (-76, 34.5), yaw_deg: 15),
+        (def: Name("PH_wine_bottles_01"), at: (-82, 33)),
+        (def: Name("PH_wooden_crate_02"), at: (-83, 27.5), yaw_deg: 70),
+        (def: Name("PH_wooden_military_crate"), at: (-74, 32.5), yaw_deg: 25),
+        (def: Name("human"), at: (-78.5, 29)),
+        (def: Name("tree_log"), at: (-72, 36), yaw_deg: 40),
+        (def: Name("lamp_portable"), at: (-81, 35.5)),
+    ],
+)

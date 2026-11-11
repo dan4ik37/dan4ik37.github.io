@@ -1,0 +1,24 @@
+// E1 scene 2 — "shore": the same world (seed 1337) at the bay by the origin, low evening sun over the water.
+(
+    version: 0,
+    name: "shore",
+    seed: 1337,
+    terrain: (gen: 2, radius: 10, sea_level: 0.3),
+    sun: (azimuth_deg: 78, elevation_deg: 13, color: (1.0, 0.74, 0.48), intensity: 3.6),
+    cameras: {
+        "main": (pos: (-14.5, 1.7, -5), look_at: (-5.5, 0.5, 7)),
+        "sea": (pos: (-30, 6, 20), look_at: (40, -2, 10), fov_y_deg: 55),
+    },
+    objects: [
+        (def: Name("PH_wooden_crate_01"), at: (-7, 4), yaw_deg: 30),
+        (def: Name("PH_wooden_crate_02"), at: (-5, 6.5), yaw_deg: -10),
+        (def: Name("PH_metal_jerrycan"), at: (-8.5, 7), yaw_deg: 45),
+        (def: Name("PH_old_tyre"), at: (-3.5, 3.5)),
+        (def: Name("PH_life_jacket"), at: (-9.5, 3), yaw_deg: 80),
+        (def: Name("human"), at: (-6.5, 9)),
+        (def: Name("PH_metal_trash_can"), at: (-10.5, 8.5), yaw_deg: 10),
+        (def: Name("tree_stump"), at: (-11.5, 12), yaw_deg: 10),
+        (def: Name("PH_plastic_crate_02"), at: (-4, 10.5), yaw_deg: 55),
+        (def: Name("PH_sofa_03"), at: (-8.5, 12.5), yaw_deg: 115),
+    ],
+)

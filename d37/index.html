@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<title>D37 — мир в браузере</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0f14; color: #e8eef5; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #jump { position: fixed; right: 22px; bottom: 28px; width: 68px; height: 68px; border-radius: 50%; display: none; align-items: center; justify-content: center; background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .35); font-size: 26px; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #hud { position: fixed; left: 8px; top: 8px; padding: 6px 9px; background: rgba(0, 0, 0, .55); border-radius: 6px; white-space: pre; font: 12px/1.35 ui-monospace, Consolas, monospace; pointer-events: none; }
+  #hint { position: fixed; left: 50%; bottom: 22px; max-width: 86vw; transform: translateX(-50%); padding: 7px 12px; background: rgba(0, 0, 0, .6); border-radius: 6px; pointer-events: none; }
+  #error { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; background: #0b0f14; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="hud">загрузка…</div>
+<div id="hint">Нажми на картинку, чтобы осмотреться · WASD — ходить · Shift — бег · Пробел — прыжок · Ctrl / C — присесть · V — вид · F — полёт</div>
+<div id="jump">⤒</div>
+<div id="error"></div>
+<script type="module" src="./d37-page.js"></script>
+</body>
+</html>

@@ -48,7 +48,7 @@ function route(req){
   if (u.origin === self.location.origin) {
     const p = u.pathname;
     // /api/* (и /api/geo), /go/* — переходы по рекламе кабинета, /_vercel — статистика: только сеть
-    if (/^\/(api|go)(\/|$)/.test(p) || /^\/(_vercel|studio|sdk|\.well-known)\//.test(p) || p === '/sw.js') return 'pass';
+    if (/^\/(api|go)(\/|$)/.test(p) || /^\/(_vercel|studio|sdk|d37|\.well-known)\//.test(p) || p === '/sw.js') return 'pass';
     if (/^\/(ads\.txt|robots\.txt|llms\.txt|sitemap[\w-]*\.xml|[0-9a-f]{32}\.txt|yandex_[0-9a-f]+\.html)$/.test(p)) return 'pass';
     if (req.mode === 'navigate') return p === '/' || p === '/index.html' || SPA_PATH.test(p) ? 'shell' : 'page';
     if (u.searchParams.has('v')) return 'swr';

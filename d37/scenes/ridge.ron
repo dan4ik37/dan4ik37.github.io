@@ -1,0 +1,24 @@
+// E1 scene 3 — "ridge": another world (seed 2026), a dry basin between ridges at noon, wide view.
+(
+    version: 0,
+    name: "ridge",
+    seed: 2026,
+    terrain: (gen: 2, radius: 12),
+    sun: (azimuth_deg: 205, elevation_deg: 58, intensity: 3.4),
+    cameras: {
+        "main": (pos: (-197, 1.8, 81), look_at: (-186, 0.6, 95), fov_y_deg: 65),
+        "valley": (pos: (-432, 14, 100), look_at: (-300, -30, 20), fov_y_deg: 50),
+    },
+    objects: [
+        (def: Name("Desk"), at: (-187, 94), yaw_deg: 25),
+        (def: Name("FileCabinet"), at: (-184.5, 96.5), yaw_deg: -15),
+        (def: Name("PH_drawer_cabinet"), at: (-189, 91), yaw_deg: 70),
+        (def: Name("human_player"), at: (-186, 91.5)),
+        (def: Name("creature_hound"), at: (-181.5, 92.5), yaw_deg: 35),
+        (def: Name("rad_barrel"), at: (-183, 89.5)),
+        (def: Name("PH_cardboard_box_01"), at: (-188.5, 96.5), yaw_deg: 20),
+        (def: Name("PH_television_02"), at: (-185.5, 98.5), yaw_deg: -40),
+        (def: Name("tree_trunk"), at: (-179, 96)),
+        (def: Name("PH_medical_box"), at: (-190.5, 94), yaw_deg: 5),
+    ],
+)
