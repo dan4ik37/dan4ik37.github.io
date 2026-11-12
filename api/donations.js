@@ -73,17 +73,22 @@ function maskDonors(data, hidden) {
     donations: (data.donations || []).map(mask),
     leaderboard: (data.leaderboard || []).map(mask),
     ...(data.leaderboard_month ? { leaderboard_month: data.leaderboard_month.map(mask) } : {}),
+    ...(data.leaderboard_year ? { leaderboard_year: data.leaderboard_year.map(mask) } : {}),
   };
 }
 
 // Топ за последние 30 дней — из постоянного журнала vip_donation_log (его пополняет
 // api/vip-sync.js), а не из последних страниц DonationAlerts: там за раз видно лишь
 // часть истории, и «топ» получался за год-полтора. null — журнал недоступен.
+// Владелец 12.11.2026: «за всё время» в топе не показываем — только месяц и год (тот же журнал, 365 дней).
 const MONTH_MS = 30 * 86400000;
-async function monthLeaderboard() {
+const YEAR_MS = 365 * 86400000;
+const monthLeaderboard = () => periodLeaderboard(MONTH_MS);
+const yearLeaderboard = () => periodLeaderboard(YEAR_MS);
+async function periodLeaderboard(ms) {
   if (!storeConfigured()) return null;
   try {
-    const since = new Date(Date.now() - MONTH_MS).toISOString();
+    const since = new Date(Date.now() - ms).toISOString();
     const rows = await sbSelect('vip_donation_log',
       `select=donor_username,amount,currency,donated_at,processed_at` +
       `&donated_at=gte.${since}&limit=5000`);
@@ -107,14 +112,15 @@ function aggregateTop(list) {
 // 💛 Уровень «Донатер» у аккаунтов из топа (premium.sql donor_names_levels; скрывшие донаты — без значка). Нет функции — без значков
 async function withLevels(data) {
   if (!storeConfigured()) return data;
-  const lists = [data.leaderboard, data.leaderboard_month].filter(Array.isArray);
+  const lists = [data.leaderboard, data.leaderboard_month, data.leaderboard_year].filter(Array.isArray);
   const names = [...new Set(lists.flat().filter(d => d && !d.anon && d.username).map(d => String(d.username).trim()))].slice(0, 60);
   if (!names.length) return data;
   let lv = null;
   try { lv = await sbRpc('donor_names_levels', { p_names: names }); } catch (e) { return data; }
   if (!lv || typeof lv !== 'object') return data;
   const add = arr => Array.isArray(arr) ? arr.map(d => (!d.anon && lv[String(d.username).trim().toLowerCase()] ? { ...d, lv: lv[String(d.username).trim().toLowerCase()] } : d)) : arr;
-  return { ...data, leaderboard: add(data.leaderboard), ...(data.leaderboard_month ? { leaderboard_month: add(data.leaderboard_month) } : {}) };
+  return { ...data, leaderboard: add(data.leaderboard), ...(data.leaderboard_month ? { leaderboard_month: add(data.leaderboard_month) } : {}),
+    ...(data.leaderboard_year ? { leaderboard_year: add(data.leaderboard_year) } : {}) };
 }
 
 async function sendSnapshot(res, snap) {
@@ -123,9 +129,11 @@ async function sendSnapshot(res, snap) {
   // Снимок (donations/leaderboard) обновляется раз в несколько минут, а цель
   // считаем прямо сейчас отдельным запросом — она "легче" (один select с
   // фильтром) и не обязана ждать следующего прогона синхронизации.
-  const [goal, hidden, month] = await Promise.all([goalData(), hiddenDonors(), monthLeaderboard()]);
-  const data = await withLevels({ ...snap.data, leaderboard_month: month || aggregateTop((snap.data.donations || [])
-    .filter(d => Date.parse(String(d.created || '').replace(' ', 'T') + 'Z') > Date.now() - MONTH_MS)) });
+  const [goal, hidden, month, year] = await Promise.all([goalData(), hiddenDonors(), monthLeaderboard(), yearLeaderboard()]);
+  const newer = ms => d => Date.parse(String(d.created || '').replace(' ', 'T') + 'Z') > Date.now() - ms;
+  const data = await withLevels({ ...snap.data,
+    leaderboard_month: month || aggregateTop((snap.data.donations || []).filter(newer(MONTH_MS))),
+    leaderboard_year: year || aggregateTop((snap.data.donations || []).filter(newer(YEAR_MS))) });
   return res.status(200).json({ ...maskDonors(data, hidden), source: 'server', updated_at: snap.at, stale: ageMin > 30, ...(goal ? { goal } : {}) });
 }
 
@@ -242,11 +250,12 @@ export default async function handler(req, res) {
     // журнала), а не пересчётом по этой единственной странице выдачи DA —
     // иначе у владельца (у него как раз есть cookie, он идёт этой веткой)
     // цель считалась бы иначе, чем у всех прочих, и число бы "прыгало".
-    const [goal, month] = await Promise.all([goalData(), monthLeaderboard()]);
-    const leaderboard_month = month || aggregateTop(donations.filter(d =>
-      Date.parse(String(d.created || '').replace(' ', 'T') + 'Z') > Date.now() - MONTH_MS));
-    const top = await withLevels({ leaderboard, leaderboard_month });
-    res.status(200).json({ donations: donations.slice(0, 20), leaderboard: top.leaderboard, leaderboard_month: top.leaderboard_month, ...(goal ? { goal } : {}) });
+    const [goal, month, year] = await Promise.all([goalData(), monthLeaderboard(), yearLeaderboard()]);
+    const newer = ms => d => Date.parse(String(d.created || '').replace(' ', 'T') + 'Z') > Date.now() - ms;
+    const leaderboard_month = month || aggregateTop(donations.filter(newer(MONTH_MS)));
+    const leaderboard_year = year || aggregateTop(donations.filter(newer(YEAR_MS)));
+    const top = await withLevels({ leaderboard, leaderboard_month, leaderboard_year });
+    res.status(200).json({ donations: donations.slice(0, 20), leaderboard: top.leaderboard, leaderboard_month: top.leaderboard_month, leaderboard_year: top.leaderboard_year, ...(goal ? { goal } : {}) });
   } catch(e) {
     // DonationAlerts недоступен — лучше показать последний снимок, чем ошибку
     const snap = await readSnapshot();
