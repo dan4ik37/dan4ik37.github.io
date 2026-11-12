@@ -1,0 +1,57 @@
+// Water and shore looks (fix-water, 12.11): the views the owner reported (a beach in third person, a low flight over
+// shallow water and sand), three more beaches, noon / sunset / night, and top-down ground views for the tiling meter
+// (`d37 looks tiling`). The same planet as scenes/planet.ron (seed 37); 1 degree is about 1.9 km here.
+(
+    version: 0,
+    name: "planet_water",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "home",
+        at: (29.03, 80.193),
+        altitude: 1.0,
+        yaw_deg: 330,
+        pitch_deg: -28,
+        time: 1930,
+        views: {
+            // the owner's two reports: a beach seen from behind the character, a low flight over the coast
+            "beach_third": (lat: 29.054, lon: 80.176, altitude: 3.5, yaw_deg: 300, pitch_deg: -22, time: 1930, fov_y_deg: 60),
+            "flight_low": (lat: 29.05, lon: 80.185, altitude: 30, yaw_deg: 280, pitch_deg: -25, time: 1930, fov_y_deg: 60),
+            // three more beaches of the same coast
+            "beach_b": (lat: 28.967, lon: 80.08, altitude: 3, yaw_deg: 290, pitch_deg: -14, time: 1930, fov_y_deg: 60),
+            "beach_c": (lat: 29.217, lon: 80.325, altitude: 3, yaw_deg: 300, pitch_deg: -14, time: 1930, fov_y_deg: 60),
+            "beach_d": (lat: 29.04, lon: 80.15, altitude: 4, yaw_deg: 200, pitch_deg: -18, time: 1930, fov_y_deg: 60),
+            // the first beach at sunset and at night, and the sea to the horizon
+            "beach_sunset": (lat: 29.054, lon: 80.176, altitude: 2.5, yaw_deg: 250, pitch_deg: -8, time: 2356, fov_y_deg: 60),
+            "beach_night": (lat: 29.054, lon: 80.176, altitude: 2.5, yaw_deg: 250, pitch_deg: -8, time: 3100, fov_y_deg: 60),
+            "sea_horizon": (lat: 29.05, lon: 80.165, altitude: 12, yaw_deg: 262, pitch_deg: -2, time: 1930, fov_y_deg: 60),
+            // top-down over land (grass and sand) for the tiling meter, and over the coast
+            "top_100": (lat: 29.0, lon: 80.6, altitude: 100, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "top_300": (lat: 29.0, lon: 80.6, altitude: 300, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "top_1000": (lat: 29.0, lon: 80.6, altitude: 1000, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "top_3000": (lat: 29.0, lon: 80.6, altitude: 3000, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "beach_top_30": (lat: 29.054, lon: 80.18, altitude: 30, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "shallows_100": (lat: 29.075, lon: 80.14, altitude: 100, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "shallows_300": (lat: 29.035, lon: 80.18, altitude: 300, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            // top-down shore views for the shore meter (`d37 looks shore`: no straight piece along the mesh)
+            "shore_60": (lat: 29.057, lon: 80.169, altitude: 60, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "shore_b_60": (lat: 28.967, lon: 80.075, altitude: 60, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "shore_c_60": (lat: 29.217, lon: 80.32, altitude: 60, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "shore_d_60": (lat: 29.04, lon: 80.148, altitude: 60, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            // the coast seen from the air (the checker's views, 12.11): far triangles are hundreds of metres, the
+            // waterline must not follow their edges from 3 to 20 km either
+            "coast_20k_a": (lat: 0, lon: 90, altitude: 20000, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "coast_20k_b": (lat: 0, lon: 0, altitude: 20000, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "coast_5k": (lat: -0.6, lon: 88.6, altitude: 5000, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "coast_3k": (lat: -12, lon: 153, altitude: 3000, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            // the coast from 5 and 15 km, top-down and oblique (the owner flies there), and the sea at sunset from 12 m
+            "coast_15k": (lat: 0, lon: 90, altitude: 15000, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "coast_5k_obl": (lat: -0.6, lon: 88.6, altitude: 5000, yaw_deg: 0, pitch_deg: -35, time: 1930, fov_y_deg: 60),
+            "coast_15k_obl": (lat: -0.3, lon: 89.6, altitude: 15000, yaw_deg: 0, pitch_deg: -40, time: 1930, fov_y_deg: 60),
+            "sea_sunset": (lat: 29.05, lon: 80.165, altitude: 12, yaw_deg: 250, pitch_deg: -4, time: 2356, fov_y_deg: 60),
+            "coast_oblique": (lat: -1.5, lon: 88.6, altitude: 1500, yaw_deg: 0, pitch_deg: -20, time: 1930, fov_y_deg: 60),
+        },
+    ),
+)

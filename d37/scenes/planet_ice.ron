@@ -1,0 +1,22 @@
+// Diving «закладка»: the "home" planet's southern sea about 30 m north of the sea ice edge (lat -66.57, lon 45; the
+// ice starts near lat -66.60 over water about 100 m deep), in daylight. scenarios/planet_dive_ice.ron swims south under
+// the water to the ice and looks at it from below. The player starts on the sea bed.
+(
+    version: 0,
+    name: "planet_ice",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "home",
+        at: (-66.57, 45.0),
+        altitude: 0.0,
+        yaw_deg: 0,
+        pitch_deg: -14,
+        time: 2100,
+        views: {
+            "ice_edge_above": (lat: -66.55, lon: 45, altitude: 30, yaw_deg: 0, pitch_deg: -12, time: 2100),
+        },
+    ),
+)
