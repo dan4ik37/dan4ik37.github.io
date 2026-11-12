@@ -41,7 +41,7 @@
   «Денчик-бот» — сообщения в канал «📢 новости» (#news, mods_only, position −1; по умолчанию сайт открывает #общий) пишет ТОЛЬКО сервер:
   api/push-check.js → bot_post(channel, text, key) с ключом service_role (повод — один раз: bot_posts), роль 'bot' (браузер её не
   подделает — vip-balance.sql ставит свою), в ленте 🤖 БОТ, своя карточка; «🔴 Денчик в эфире: … → /#/chat/twitch» (карточка «▶ Смотреть»,
-  детям — [ссылка]) и «🎬 Новое видео: … → /v/<id>». Без VAPID крон всё равно пишет бота. Праздничные поздравления ботом — не сделаны.
+  детям — [ссылка]) и «🎬 Новое видео: … → /v/<id>». Без VAPID крон всё равно пишет бота. Праздничные поздравления ботом — T-141: push-check holidayPost (site_config 'holidays', см. ниже).
   События 📅 (comm_events, comm_event_rsvp): строка «📅 События» над каналами (DS.x.chanTop), #/chat[/c/<id>]/events[/new|/edit/<id>],
   страница #/chat/ev/<id> (в телефоне comm/ev/<id>); ссылка #/chat/ev/<id> в тексте → карточка (msgview MV.evCardHtml, «✅ Пойду» прямо
   в ней; детям — можно, если метка по возрасту). Создают: сервер сайта — admin/moderator (карточка — их сообщением в «📢 новости»),
@@ -95,9 +95,34 @@
   «📢 новости» (D37Live.check — кэш live-badge.js; название — decapi, sessionStorage 2 мин). Детям Twitch (13+) нет. Кейсы в плеере →
   D37AdPlaces.ctx('gambling'). Реклама — место chat_player под плеером (ad-places.js: компьютер ≥ 900 px, первые 30 с визита нет,
   раз в 2 мин, до 8; плеер сам ждёт минуту после включения — не поверх рекламы плеера; свёрнут — нет). Проверка в Chrome:
-  E:\claude-tmp\community2\player-e2e.cjs (18; нужен serve.py на :5577). «📺 Смотреть вместе» (синхронно) — не сделано.
+  E:\claude-tmp\community2\player-e2e.cjs (18; нужен serve.py на :5577). «📺 Смотреть вместе» — T-141, см. ниже.
 - Голосовые: говорит (кольцо), микрофон/звук, рация (клавиша — ⚙️ «📱 Телефон»), переподключение пиров — уже были (calls.js).
 
 - Полировка 16.10 (ds.css — блок «Полировка», community.js paintTip, msgview.js, chat.js): компьютер — заголовок #/chat меньше (поле ввода
   без прокрутки), шапка 1181–1599 px плотнее; телефон — описание канала под названием, нажатие на название = ☰, кнопки ≥ 40 px; подсказка
   новичку (d37_ds_tip), «↓ к последним» и при листании истории; у .ds-hb [hidden] теперь прячет; 📢 новости гостю — «только чтение». Снимки — E:\claude-tmp\ui\shots.
+
+## T-141 (12.11.2026, branch t141-discord) — what was added (English, short)
+- Calls: «🕶 Скрыть мой адрес» (⚙️ → 📱 Телефон; P.set.hide auto/on/off, auto = on unless reliably 18+) → relay-only through our TURN
+  (`iceTransportPolicy: 'relay'`, non-relay candidates dropped). Honest notes in the call screen (hidden / visible / TURN unavailable).
+  ⚙️ in the call opens the same settings tab. Flag `HIDE_IP` (calls.js). Guest one-time links: NOT built — call rooms have no
+  per-person tokens that would make a pseudonymous guest safe for the kids realm (owner decision, R-SITESO-009 (3)).
+- «📍 Позвать»: phone-apps.js `P.invite(uid, nick)` — «ко мне» (my current room / world server), «в игру…», «на сервер…» (/c/<code>
+  or #/chat). From a call (📍 В игру), DM header (🎮) and D37Mini (📍 Позвать, friends only). Flags `INVITE_V2`, `INV_ON`, `MINI_T141`.
+- One player card: «Мир Денчика» 3D (mir.js) and 2D (world.js) open D37Mini with world actions (`extra`); self / guests keep the old
+  card. Flag `WORLD_MINI`. D37Mini moves into the fullscreen element when a game uses the Fullscreen API.
+- D37Mini: friend count (friend_count, hidden profile → no number), season level badge (xp.js `season_levels`, games-more.sql);
+  chat nick badges get the season level too (`XP_SEASON_BADGE`). Profile title list shows all owned season titles (`ACH_SEASON_TITLES`).
+- «📺 Смотреть вместе» (chatplayer.js, `WT_ON`): host in a text channel, viewers get a bar; broadcast 'd37wt:<srv>:<ch>' (no DB, no
+  presence), host state on change + every 4 s, late joiner «hi», drift > 1 s → seek (YouTube postMessage API, enablejsapi). Twitch —
+  open the stream for all. Age checked per viewer. Test: scripts/wt-sim-test.cjs (max drift 0.66 s / 5 min, 3 viewers).
+- Bot holidays: api/push-check.js holidayPost — site_config 'holidays' = JSON [{"d":"MM-DD","t":"text"}] or 'off'; default list in code;
+  once per day (bot_posts key holiday:<year>-<MM-DD>:<n>), from 09:00 Almaty.
+- Game settings in the account: settings.js `SYNC_ON` — sound, controls, camera, interface (not graphics) → privacy.sql user_prefs
+  (prefs_get / prefs_set, 16 KB); newer wins; localStorage stays the fallback.
+- 📎 Files (files.js, `FILES_ON`; community.sql part 9; site_config 'chat_files'): device-to-device over WebRTC data channels signed like
+  calls; the row keeps only `att` {v, enc, kid, name, size, mime, chash, phash, thumb, w, h, dur}; msg_attach enforces types, sizes,
+  day caps, <9, block-list; file_report / file_reports_list / file_block_set («🛡 Модерация» → 📎 Файлы); file_expire drops old thumbs.
+  Local store: IndexedDB «d37-files» (phone 200 MB / PC 600 MB, LRU, undelivered pinned). Server copy of files: not built (flag in cfg).
+- Measurements: scripts/t141-e2e.cjs (nav, leak, video, soak, files, prof). Not checked in a real browser with an account: communities
+  phone sheets, 🔔 modes, moderation log (needs the owner's login — agents do not log in).
