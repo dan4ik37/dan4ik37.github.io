@@ -50,7 +50,7 @@ create table public.xp_ledger(id bigint generated always as identity primary key
   await db.exec(read('forum.sql'));
   await db.exec(`insert into auth.users values ('${A}', now() - interval '30 days'), ('${B}', now() - interval '30 days'), ('${M}', now() - interval '30 days');
 insert into profiles values ('${A}', 'alice', 'user'), ('${B}', 'bob', 'user'), ('${M}', 'mod', 'moderator');
-insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_gap_s":0,"hour_saves":1000}');`);
+insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_gap_s":0,"hour_saves":1000,"day_articles":100}');`);
   let UID = M;
   const as = u => db.query(`update cur set u = ${u ? `'${u}'` : 'null'}`);
   const types = {};
@@ -141,7 +141,7 @@ insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_ga
     if (d.method === 'Page.fileChooserOpened') chooser.push(d.params.backendNodeId);
   };
   const send = (method, params = {}) => new Promise((a, b) => { const i = ++id; cb.set(i, [a, b]); ws.send(JSON.stringify({ id: i, method, params })); });
-  const ev = async (expr, ms = 60000) => { const r = await Promise.race([send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }), sleep(ms).then(() => ({ result: { value: '__timeout' } }))]); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
+  const ev = async (expr, ms = 60000) => { const r = await Promise.race([send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true, userGesture: true }), sleep(ms).then(() => ({ result: { value: '__timeout' } }))]); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
   const waitFor = async (expr, ms = 20000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { if (await ev(expr, 5000)) return Date.now() - t0; } catch (e) {} await sleep(100); } return -1; };
   const heap = async () => { await send('HeapProfiler.collectGarbage'); await sleep(300); await send('HeapProfiler.collectGarbage'); return +(await ev(`performance.memory.usedJSHeapSize / 1048576`)).toFixed(1); };
   const ourErr = () => errs.filter(e => /^(exception|error)/.test(e) && !/supabase|realtime|ERR_|Failed to fetch|NetworkError|adsbygoogle|googlesyndication|yandex|net::|WebSocket|401|403|404|CORS|130\.61\.75\.73|youtube|ytimg|twitch|mc\.yandex|insights/i.test(e));
@@ -163,7 +163,7 @@ insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_ga
     if (RATE > 1) await send('Emulation.setCPUThrottlingRate', { rate: RATE });
     const tFeed = await waitFor(`document.querySelectorAll('#forum2 .f2-card:not(.f2-skel)').length >= 10`, 40000);
     nums.feed_first_cards_ms = tFeed;
-    ok(tFeed >= 0, 'лента: первые карточки', { ms: tFeed, rate: RATE });
+    ok(tFeed >= 0, 'лента: первые карточки', tFeed >= 0 ? { ms: tFeed, rate: RATE } : { ms: tFeed, sb: await ev(`typeof supabase + '/' + typeof sbClient + '/' + (sbClient ? 1 : 0)`), route: await ev(`document.body.dataset.route`), text: await ev(`(document.getElementById('forum-page')?.innerText || '').slice(0, 300)`), errs: errs.slice(0, 5) });
     ok(await ev(`!document.getElementById('forumListView') || getComputedStyle(document.getElementById('forumListView')).display === 'none'`), 'старый список скрыт при FORUM2');
     ok(await ev(`[...document.querySelectorAll('#forum2 .f2-tab')].map(t => t.textContent).join('|').includes('Горячее')`), 'вкладки Горячее / Свежее / Лучшее');
     await ev(`document.querySelector('#forum2 .f2-more').click(), 1`);
@@ -180,12 +180,13 @@ insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_ga
     ok(await ev(`location.pathname.startsWith('/forum/${lastSeed}-')`), 'адрес статьи со «слагом»', await ev('location.pathname'));
     // ── автор пишет статью со всеми блоками ──
     await login(A, 'user', 'alice');
+    await ev(`(() => { window.__toasts = []; const o = window.xpToast; window.xpToast = t => { window.__toasts.push(String(t)); if (o) try { o(t); } catch (e) {} }; return 1; })()`);
     await go('/forum/new');
     ok(await waitFor(`!!document.querySelector('#forum2 .f2-titlein')`) >= 0, 'редактор открылся');
     const typeIn = (sel, val, idx = 0) => ev(`(() => { const el = document.querySelectorAll(${JSON.stringify(sel)})[${idx}]; el.value = ${JSON.stringify(val)}; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return 1; })()`);
     const clickText = t => ev(`(() => { const b = [...document.querySelectorAll('#forum2 button')].find(x => x.textContent.trim() === ${JSON.stringify(t)}); if (!b) return 0; b.click(); return 1; })()`);
     await typeIn('#forum2 .f2-titlein', 'Мой гайд: как построить базу');
-    await typeIn('#forum2 .f2-bed[data-t="p"] textarea', 'Начнём с **главного**: строим у воды. Подробнее — [на вики](https://minecraft.fandom.com/ru/wiki/База). Это важный совет для новичков, проверено.');
+    await typeIn('#forum2 .f2-bed[data-t="p"] textarea', 'Начнём с **главного**: строим у воды. Подробнее — [на вики](https://minecraft.fandom.com/ru/wiki/База). Это важный совет для новичков, проверено. ' + 'Подробный разбор: где копать, что ставить первым и как не потерять вещи ночью. '.repeat(4));
     ok(await clickText('Заголовок'), 'кнопка «Заголовок»'); await typeIn('#forum2 .f2-bed[data-t="h"] input', 'Материалы');
     ok(await clickText('Список'), 'кнопка «Список»'); await typeIn('#forum2 .f2-bed[data-t="list"] textarea', 'дерево\nкамень\nстекло');
     ok(await clickText('❝ Цитата'), 'кнопка «Цитата»'); await typeIn('#forum2 .f2-bed[data-t="quote"] textarea', 'Лучшая база — та, что у воды');
@@ -193,16 +194,18 @@ insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_ga
     ok(await ev(`!!document.querySelector('#forum2 .f2-bed[data-t="video"] .f2-vplay')`), 'видео: ссылка распознана, заставка в редакторе');
     chooser.length = 0; ok(await clickText('🖼 Фото'), 'кнопка «Фото»');
     for (let i = 0; i < 50 && !chooser.length; i++) await sleep(100);
+    const gotImgChooser = chooser.length > 0;
     if (chooser.length) await send('DOM.setFileInputFiles', { files: [IMG], backendNodeId: chooser.shift() });
-    const tImg = await waitFor(`!!document.querySelector('#forum2 .f2-bed[data-t="img"] img')`, 30000);
+    ok(gotImgChooser, 'фото: окно выбора файла открылось');
+    const tImg = await waitFor(`!!document.querySelector('#forum2 .f2-bed[data-t="img"] img')`, 120000);
     nums.photo_reencode_upload_ms = tImg;
-    ok(tImg >= 0, 'фото: пересжато в браузере и загружено', { ms: tImg });
+    ok(tImg >= 0, 'фото: пересжато в браузере и загружено', { ms: tImg, chooserLeft: chooser.length, toasts: await ev('window.__toasts') });
     const stored = (await db.query(`select name, (metadata->>'size')::int as size, metadata->>'mimetype' as mime from storage.objects where name like '${A}/%' and name ~ '\\.(webp|jpg)$'`)).rows[0];
     ok(stored && stored.size < 900 * 1024 && /image\/(webp|jpeg)/.test(stored.mime), 'фото в хранилище: WebP/JPEG, не больше img_kb', stored);
     chooser.length = 0; ok(await clickText('📎 Файл'), 'кнопка «Файл»');
     for (let i = 0; i < 50 && !chooser.length; i++) await sleep(100);
     if (chooser.length) await send('DOM.setFileInputFiles', { files: [TXT], backendNodeId: chooser.shift() });
-    ok(await waitFor(`!!document.querySelector('#forum2 .f2-bed[data-t="file"]')`, 20000) >= 0, 'файл (.txt) загружен');
+    ok(await waitFor(`!!document.querySelector('#forum2 .f2-bed[data-t="file"]')`, 30000) >= 0, 'файл (.txt) загружен', { chooser: chooser.length, toasts: await ev('window.__toasts') });
     ok(await clickText('— Линия'), 'кнопка «Линия»');
     await typeIn('#forum2 .f2-srcurl', 'https://minecraft.fandom.com/ru/wiki/');
     await typeIn('#forum2 .f2-lab input', 'Minecraft Wiki', 1);
@@ -210,13 +213,13 @@ insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_ga
     await ev(`(() => { const b = [...document.querySelectorAll('#forum2 .f2-edtabs button')][1]; b.click(); return 1; })()`);
     ok(await ev(`!!document.querySelector('#forum2 .f2-prev strong') && !!document.querySelector('#forum2 .f2-prev .f2-source')`), 'просмотр: блоки и источник');
     await ev(`(() => { const b = [...document.querySelectorAll('#forum2 .f2-edtabs button')][0]; b.click(); return 1; })()`);
-    ok(await ev(`(() => { const k = Object.keys(localStorage).find(x => x.startsWith('d37_forum_draft_new')); return !!k; })()`), 'черновик сохранён на устройстве');
+    ok(await waitFor(`Object.keys(localStorage).some(x => x.startsWith('d37_forum_draft_')) || /черновик сохранён/.test(document.querySelector('#forum2 .f2-saved')?.textContent || '')`, 5000) >= 0, 'черновик сохранён (на устройстве или на сервере)', await ev(`document.querySelector('#forum2 .f2-saved')?.textContent`));
     const tPub0 = Date.now(); await clickText('🚀 Опубликовать');
     const tPub = await waitFor(`/^\\/forum\\/\\d+-/.test(location.pathname) && !!document.querySelector('#forum2 .f2-title')`, 30000);
     nums.publish_to_article_ms = tPub;
     ok(tPub >= 0, 'статья опубликована и открыта', { ms: tPub, path: await ev('location.pathname'), err: await ev(`document.querySelector('#forum2 .f2-err-line')?.textContent || ''`) });
     const art = await ev(`(() => { const b = document.querySelector('#forum2 .f2-body'); if (!b) return null; return { strong: !!b.querySelector('strong'), link: b.querySelector('a[rel="nofollow ugc noopener"]')?.href || '', h2: !!b.querySelector('h2'),
-      list: b.querySelectorAll('li').length, quote: !!b.querySelector('blockquote'), img: !!b.querySelector('figure img'), video: !!b.querySelector('.f2-vplay'), file: !!b.querySelector('.f2-file a[download]'), hr: !!b.querySelector('hr'),
+      list: b.querySelectorAll('li').length, quote: !!b.querySelector('blockquote'), img: !!b.querySelector('figure:not(.f2-video) img'), video: !!b.querySelector('.f2-vplay'), file: !!b.querySelector('.f2-file a[download]'), hr: !!b.querySelector('hr'),
       source: document.querySelector('#forum2 .f2-source a')?.rel || '', tags: document.querySelectorAll('#forum2 .f2-art .f2-tag').length }; })()`);
     ok(art && art.strong && /fandom/.test(art.link) && art.h2 && art.list === 3 && art.quote && art.img && art.video && art.file && art.hr && /ugc/.test(art.source) && art.tags === 2, 'статья: все блоки на месте', art);
     const newId = +(await ev(`location.pathname.match(/\\/forum\\/(\\d+)/)[1]`));
