@@ -34,11 +34,12 @@
   const CSZ = 65536;
 
   // ═══ Настройки (сервер: file_cfg; заглушки — до решения владельца) ═══
-  let cfg = { on: true, file_mb: 10, auto_mb: 10, direct_mb: 25, seed_mb_day: 300, day_n: 40, day_mb: 100 }, cfgAt = 0;
+  // on: false, пока сервер не ответил file_cfg: до запуска community.sql ч. 9 файлов нет вовсе (ни кнопки, ни опроса ЛС)
+  let cfg = { on: false, file_mb: 10, auto_mb: 10, direct_mb: 25, seed_mb_day: 300, day_n: 40, day_mb: 100 }, cfgAt = 0;
   async function loadCfg(){
     if (Date.now() - cfgAt < 600e3 || !sb()) return cfg;
     cfgAt = Date.now();
-    try { const { data, error } = await sb().rpc('file_cfg'); if (!error && data) cfg = Object.assign(cfg, data); } catch (er) {}
+    try { const { data, error } = await sb().rpc('file_cfg'); if (!error && data) { cfg = Object.assign(cfg, { on: true }, data); document.querySelectorAll('.mv-fbtn').forEach(b => { b.hidden = !(b.dataset.fk && F.canSend()); }); } } catch (er) {}
     return cfg;
   }
   F.cfg = () => cfg;

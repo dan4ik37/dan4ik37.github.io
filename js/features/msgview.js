@@ -475,7 +475,7 @@
       input.placeholder = A.placeholder || `Написать в ${A.title || 'чат'}`;
       input.maxLength = A.maxLen || 500;
       q('.mv-stk').hidden = !A.caps.stickers;
-      q('.mv-fbtn').hidden = !(A.fileKind && window.D37Files?.canSend?.());   // T-141: 📎 файлы (js/features/files.js)
+      q('.mv-fbtn').dataset.fk = A.fileKind || ''; q('.mv-fbtn').hidden = !(A.fileKind && window.D37Files?.canSend?.());   // T-141: 📎 файлы (js/features/files.js)
       list.innerHTML = '<div class="mv-load"><i></i>Загружаем сообщения…</div>';
       gate();
       const lastRead = MV.lastRead(A.key);
