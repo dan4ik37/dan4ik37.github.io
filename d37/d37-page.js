@@ -2,16 +2,19 @@
 // It owns the canvas size, the keys, the mouse (pointer lock, or dragging where the browser refuses the lock),
 // touch controls, the frame callback and the Workers (terrain columns of flat scenes, chunks of the planet).
 // The default scene is the planet. URL parameters (tests and old scenes): ?scene=<url> another scene,
-// ?gl=1 forces WebGL2, ?auto=1 walks forward by itself, ?workers=0 builds on the main thread, ?hud=1 shows numbers.
+// ?gl=1 forces WebGL2, ?auto=1 walks forward by itself, ?workers=0 builds on the main thread, ?hud=1 shows numbers,
+// ?q=max|mid|low the graphics tier (mid by default). Ground materials are made by code in the Workers at load.
 // Touch screens: the left half is a move stick (run when pushed to the edge), the right half looks around,
 // buttons: jump, «орбита ↔ земля», full screen. The same action state as the keys.
-import init, { D37Web } from './d37_web.js';
+import init, { D37Web, ground_layer } from './d37_web.js';
 
 const q = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);
 const canvas = $('view'), hud = $('hud'), hint = $('hint');
 const TOUCH = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
-const state = { ready: false, loaded: false, error: null, backend: '', firstFrameMs: null, loadedMs: null, frames: 0, fps: 0, stats: null, planet: null, workers: 0, isPlanet: false };
+const state = { ready: false, loaded: false, error: null, backend: '', firstFrameMs: null, loadedMs: null, frames: 0, fps: 0, stats: null, planet: null, workers: 0, isPlanet: false, quality: '', groundMs: 0, groundLayerMs: [], rejections: 0 };
+// promise rejections nobody handled (tests count them: the page must not leave any)
+addEventListener('unhandledrejection', (e) => { state.rejections++; console.warn('d37: unhandled rejection', e.reason); e.preventDefault(); });
 window.__d37 = state;
 
 function fail(e) {
@@ -38,6 +41,8 @@ async function main() {
   fitCanvas();
   const app = await D37Web.create(canvas, q.get('gl') === '1');
   state.backend = app.backend();
+  if (q.get('q')) { try { app.set_quality(q.get('q')); } catch (e) { fail(e); return; } }
+  state.quality = app.quality();
 
   // Workers: each has its own copy of the wasm and one builder (terrain columns, or planet chunks)
   const pool = [];
@@ -57,6 +62,11 @@ async function main() {
           if (m.type === 'chunk') {
             slot.busy = false;
             try { app.push_chunk(new Uint8Array(m.bytes), m.ms); } catch (e) { fail(e); }
+          }
+          if (m.type === 'ground') {
+            slot.busy = false; slot.ground = false;
+            state.groundLayerMs.push(m.ms);
+            try { app.push_ground(new Uint8Array(m.bytes)); state.groundMs = app.ground_ms(); } catch (e) { fail(e); }
           }
           if (m.type === 'error') fail(m.error);
         };
@@ -162,7 +172,21 @@ async function main() {
     if (state.error) return;
     if (fitCanvas()) app.resize(canvas.width, canvas.height);
     // hand queued jobs to idle workers
-    const idle = pool.filter((s) => s.ready && !s.busy && !s.dead);
+    let idle = pool.filter((s) => s.ready && !s.busy && !s.dead);
+    if (planet) {
+      // ground material layers first (they make the near ground); with no Workers: one layer per frame here
+      // after the first view has settled (the orbit needs no near-ground textures), one Worker at a time, so the
+      // chunk builds never wait for them (the landing must not find holes)
+      const busyGround = pool.some((s) => s.busy && s.ground);
+      const g = state.loaded && !busyGround && (idle.length > 0 || !pool.length) ? app.ground_jobs(1) : [];
+      if (g.length > 1) {
+        for (let i = 1; i < g.length; i++) {
+          if (pool.length) { idle[i - 1].busy = true; idle[i - 1].ground = true; idle[i - 1].w.postMessage({ type: 'ground', index: g[i], size: g[0] }); }
+          else { const t0 = performance.now(); app.push_ground(ground_layer(g[i], g[0])); state.groundLayerMs.push(performance.now() - t0); state.groundMs = app.ground_ms(); }
+        }
+        idle = idle.slice(g.length - 1);
+      }
+    }
     if (idle.length && planet) {
       const jobs = app.take_chunk_jobs(idle.length);
       for (let i = 0; i * 2 < jobs.length; i++) { idle[i].busy = true; idle[i].w.postMessage({ type: 'chunk', lo: jobs[i * 2], hi: jobs[i * 2 + 1] }); }

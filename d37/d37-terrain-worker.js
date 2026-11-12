@@ -2,14 +2,21 @@
 // builder — a terrain column mesher (flat scenes) or a planet chunk builder (the planet).
 // Messages: {type:'init', scene, planet} -> {type:'ready'};
 //   {type:'job', cx, cz, lo, hi} -> {type:'done', cx, cz, lo, hi, bytes, ms};
-//   {type:'chunk', lo, hi} -> {type:'chunk', bytes, ms}   (bytes is transferred, not copied).
-import init, { ColumnWorker, PlanetWorker } from './d37_web.js';
+//   {type:'chunk', lo, hi} -> {type:'chunk', bytes, ms}   (bytes is transferred, not copied);
+//   {type:'ground', index, size} -> {type:'ground', bytes, ms}   (one ground material layer, made by code).
+import init, { ColumnWorker, PlanetWorker, ground_layer } from './d37_web.js';
 
 let mesher = null, builder = null;
 const pending = [];
 
 function run(m) {
   const t0 = performance.now();
+  if (m.type === 'ground') {
+    const b = ground_layer(m.index, m.size);
+    const gb = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+    postMessage({ type: 'ground', bytes: gb, ms: performance.now() - t0 }, [gb]);
+    return;
+  }
   const bytes = m.type === 'chunk' ? builder.build(m.lo, m.hi) : mesher.mesh(m.cx, m.cz);
   const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   const ms = performance.now() - t0;
@@ -25,7 +32,7 @@ onmessage = async (ev) => {
       if (m.planet) builder = new PlanetWorker(m.scene); else mesher = new ColumnWorker(m.scene);
       postMessage({ type: 'ready' });
       while (pending.length) run(pending.shift());
-    } else if (m.type === 'job' || m.type === 'chunk') {
+    } else if (m.type === 'job' || m.type === 'chunk' || m.type === 'ground') {
       if (mesher || builder) run(m); else pending.push(m);
     }
   } catch (e) {
