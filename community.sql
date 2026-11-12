@@ -3072,26 +3072,39 @@ create table if not exists public.file_reports (         -- «🚩 пожало�
 alter table public.file_reports enable row level security;
 revoke all on public.file_reports from anon, authenticated;
 
--- Настройки (владелец). Числа по умолчанию — заглушки до решения владельца
+-- Настройки (владелец). Числа по умолчанию — заглушки до решения владельца.
+-- T-160 (владелец 13.11: «для меня же ограничения»): ответ — ЛИЧНЫЕ пределы того, кто спрашивает (auth.uid() из входа, параметров
+-- нет — назваться владельцем нельзя). Владелец сайта = profiles.role 'admin' (то же правило, что is_admin_user / chat_staff_role;
+-- роль меняет только сервер): owner true, без лимита в день (шт. и МБ) и раздачи, размер файла — до max_mb (технический предел
+-- передачи от устройства к устройству: файл целиком в памяти получателя). Типы — те же для всех.
+-- relay_kbs — скорость отдачи через наш TURN, КБ/с (= max-bps в server/coturn/turnserver.conf / 1024; меняются вместе).
 create or replace function public.file_cfg() returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare d jsonb := '{"on":true,"file_mb":10,"day_mb":100,"day_n":40,"direct_mb":25,"auto_mb":10,"keep_days":30,"seed_mb_day":300,"store":false,"store_kb":300}'::jsonb;
-  v text;
+declare d jsonb := '{"on":true,"file_mb":10,"day_mb":100,"day_n":40,"direct_mb":25,"auto_mb":10,"keep_days":30,"seed_mb_day":300,"store":false,"store_kb":300,"max_mb":100,"relay_kbs":1200}'::jsonb;
+  v text; mx numeric;
 begin
   if to_regclass('public.site_config') is not null then
     select value into v from public.site_config where key = 'chat_files';
     if v is not null then begin d := d || v::jsonb; exception when others then null; end; end if;
   end if;
+  if auth.uid() is not null and coalesce(public.chat_staff_role(auth.uid()), '') = 'admin' then
+    mx := greatest(coalesce((d->>'max_mb')::numeric, 100), coalesce((d->>'file_mb')::numeric, 10));
+    d := d || jsonb_build_object('owner', true, 'file_mb', mx, 'direct_mb', greatest(coalesce((d->>'direct_mb')::numeric, 25), mx),
+      'day_n', 1000000, 'day_mb', 100000000, 'seed_mb_day', 100000000);
+  else
+    d := d || '{"owner":false}'::jsonb;
+  end if;
   return d;
 end $$;
 grant execute on function public.file_cfg() to anon, authenticated;
 
--- Разрешённые типы: картинки (без SVG), видео, звук, pdf, txt, zip. Расширение имени должно подходить к типу
+-- Разрешённые типы: картинки (без SVG; + HEIC с iPhone), видео (+ MOV), звук, pdf, txt, zip. Расширение имени должно подходить к типу
 create or replace function public.file_type_ok(p_mime text, p_name text) returns boolean
 language sql immutable as $$
   select case p_mime
     when 'image/jpeg' then p_name ~* '\.(jpe?g)$' when 'image/png' then p_name ~* '\.png$' when 'image/gif' then p_name ~* '\.gif$'
     when 'image/webp' then p_name ~* '\.webp$' when 'video/mp4' then p_name ~* '\.(mp4|m4v)$' when 'video/webm' then p_name ~* '\.webm$'
+    when 'image/heic' then p_name ~* '\.hei[cf]$' when 'video/quicktime' then p_name ~* '\.mov$'
     when 'audio/mpeg' then p_name ~* '\.mp3$' when 'audio/ogg' then p_name ~* '\.(ogg|oga|opus)$' when 'audio/wav' then p_name ~* '\.wav$'
     when 'audio/mp4' then p_name ~* '\.m4a$' when 'application/pdf' then p_name ~* '\.pdf$' when 'text/plain' then p_name ~* '\.txt$'
     when 'application/zip' then p_name ~* '\.zip$' else false end
@@ -3166,7 +3179,8 @@ begin
   if at < now() - interval '2 minutes' then return jsonb_build_object('ok', false, 'reason', 'late'); end if;
   sz := (p_att->>'size')::bigint;
   select * into fd from public.file_day where user_id = uid and day = d for update;
-  if found and (fd.n + 1 > (cfg->>'day_n')::int or fd.bytes + sz > (cfg->>'day_mb')::numeric * 1048576) then return jsonb_build_object('ok', false, 'reason', 'day'); end if;
+  if found and not coalesce((cfg->>'owner')::boolean, false)
+      and (fd.n + 1 > (cfg->>'day_n')::int or fd.bytes + sz > (cfg->>'day_mb')::numeric * 1048576) then return jsonb_build_object('ok', false, 'reason', 'day'); end if;
   insert into public.file_day (user_id, day, n, bytes) values (uid, d, 1, sz)
     on conflict (user_id, day) do update set n = public.file_day.n + 1, bytes = public.file_day.bytes + excluded.bytes;
   delete from public.file_day where day < d - 3;
