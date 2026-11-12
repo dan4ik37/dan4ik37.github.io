@@ -28,6 +28,11 @@
   let cfg = null, cfgAt = 0, v2 = null;   // v2: null — не знаем, true — forum.sql 2.0 на сервере, false — старый форум
   let root = null, gen = 0;               // gen — номер отрисовки: устаревшие ответы сервера не рисуем
   const timers = new Set();
+  // Детские правила (как чат: js/features/msgview.js MV.rich, сообщества: kidAbout): читателю до 13 — телефоны, почта, соцсети,
+  // @ники, «дай номер» → «[скрыто]», адреса сайтов → «[ссылка]», чужие ссылки не нажимаются. Решает js/core/age.js (D37Age.kid)
+  const kid = () => { try { return !!(window.D37Age && window.D37Age.kid && window.D37Age.kid()); } catch (e) { return false; } };
+  const URL_RE = /(?:https?:\/\/|www\.)[^\s<>"]+/gi;
+  const kt = s => { s = String(s == null ? '' : s); return kid() && window.D37Age.kidText ? window.D37Age.kidText(s).replace(URL_RE, '[ссылка]') : s; };
 
   // ═══ Маленький DOM-помощник: строки — только textContent ═══
   function h(tag, a, ...kids){
@@ -197,8 +202,8 @@
     const el = h('article', { class: 'f2-card' });
     const link = h('a', { class: 'f2-card-a', href });
     if (pic) link.append(h('div', { class: 'f2-cover' + (a.video && !a.cover ? ' f2-vid' : '') }, h('img', { src: pic, alt: '', loading: 'lazy', decoding: 'async' })));
-    link.append(h('h3', { class: 'f2-card-t' }, a.pinned ? '📌 ' : '', a.locked ? '🔒 ' : '', a.title || 'Без названия'));
-    if (a.excerpt) link.append(h('p', { class: 'f2-card-x', text: a.excerpt }));
+    link.append(h('h3', { class: 'f2-card-t' }, a.pinned ? '📌 ' : '', a.locked ? '🔒 ' : '', kt(a.title || 'Без названия')));
+    if (a.excerpt) link.append(h('p', { class: 'f2-card-x', text: kt(a.excerpt) }));
     el.append(link);
     const st = STATUS[a.status];
     const meta_ = h('div', { class: 'f2-meta' },
@@ -238,12 +243,12 @@
       return;
     }
     const canon = location.origin + artPath(a);
-    meta({ title: a.title + ' — форум dan4ik37', description: (a.excerpt || '').slice(0, 160), canonical: canon, noindex: a.status !== 'published' || a.age > 12 });
+    meta({ title: kt(a.title) + ' — форум dan4ik37', description: kt(a.excerpt || '').slice(0, 160), canonical: canon, noindex: a.status !== 'published' || a.age > 12 });
     if (location.pathname !== artPath(a) && /^\/forum\/\d/.test(location.pathname)) window.D37Route?.setUrl?.(artPath(a));   // старый адрес /forum/5 → /forum/5-slug
     const st = STATUS[a.status];
     if (st) box.append(h('div', { class: 'f2-banner f2-st-' + a.status }, st.join(' '), a.status === 'pending' ? ' — её видишь только ты и модераторы. Обычно проверка недолгая.' : '',
       a.mod_note ? h('div', { class: 'f2-note', text: 'Модератор: ' + a.mod_note }) : null));
-    box.append(h('h1', { class: 'f2-title' }, a.pinned ? '📌 ' : '', a.locked ? '🔒 ' : '', a.title || 'Без названия'));
+    box.append(h('h1', { class: 'f2-title' }, a.pinned ? '📌 ' : '', a.locked ? '🔒 ' : '', kt(a.title || 'Без названия')));
     box.append(h('div', { class: 'f2-meta' }, nickEl(a), h('time', { datetime: a.at, text: day(a.at) }), a.edited_at ? h('span', { class: 'f2-muted', text: 'изменено ' + ago(a.edited_at) }) : null,
       a.age >= 16 ? h('span', { class: 'f2-age', text: AGE_LABEL[a.age] }) : null));
     box.append(renderBlocks(a.blocks));
@@ -261,6 +266,7 @@
   }
   function sourceEl(url, title){
     let host = ''; try { host = new URL(url).hostname.replace(/^www\./, ''); } catch (e) {}
+    if (kid()) return h('div', { class: 'f2-source' }, '📰 Источник: ', h('span', { text: kt(title || host || 'сайт') }));   // ребёнку — без перехода
     return h('div', { class: 'f2-source' }, '📰 Источник: ', h('a', { href: url, rel: 'nofollow ugc noopener', target: '_blank', text: title || host || url }), title && host ? h('span', { class: 'f2-muted', text: ' · ' + host }) : null);
   }
   // Блоки → DOM (тот же порядок, что toHtml на сервере). Только textContent; ссылки — https и rel="nofollow ugc noopener"
@@ -272,25 +278,25 @@
         const p = h('p');
         (b.r || []).forEach(r => {
           if (!r || typeof r.x !== 'string') return;
-          let n = document.createTextNode(r.x);
+          let n = document.createTextNode(kt(r.x));
           if (r.b) n = h('strong', null, n);
           if (r.i) n = h('em', null, n);
-          if (r.h && B_.https(r.h)) n = h('a', { href: r.h, rel: 'nofollow ugc noopener', target: '_blank' }, n);
+          if (r.h && B_.https(r.h) && !kid()) n = h('a', { href: r.h, rel: 'nofollow ugc noopener', target: '_blank' }, n);
           p.append(n);
         });
         body.append(p);
-      } else if (b.t === 'h') body.append(h(b.l === 3 ? 'h3' : 'h2', { text: b.x || '' }));
-      else if (b.t === 'list') body.append(h(b.o ? 'ol' : 'ul', null, (b.items || []).map(x => h('li', { text: String(x) }))));
-      else if (b.t === 'quote') body.append(h('blockquote', null, h('p', { text: b.x || '' }), b.by ? h('footer', { text: '— ' + b.by }) : null));
+      } else if (b.t === 'h') body.append(h(b.l === 3 ? 'h3' : 'h2', { text: kt(b.x || '') }));
+      else if (b.t === 'list') body.append(h(b.o ? 'ol' : 'ul', null, (b.items || []).map(x => h('li', { text: kt(x) }))));
+      else if (b.t === 'quote') body.append(h('blockquote', null, h('p', { text: kt(b.x || '') }), b.by ? h('footer', { text: '— ' + kt(b.by) }) : null));
       else if (b.t === 'img') {
         const u = b.blob || mediaUrl(b.src); if (!u) return;
-        const img = h('img', { src: u, alt: b.cap || '', loading: 'lazy', decoding: 'async' });
+        const img = h('img', { src: u, alt: kt(b.cap || ''), loading: 'lazy', decoding: 'async' });
         if (b.w && b.h) { img.width = b.w; img.height = b.h; }
-        body.append(h('figure', null, img, b.cap ? h('figcaption', { text: b.cap }) : null));
+        body.append(h('figure', null, img, b.cap ? h('figcaption', { text: kt(b.cap) }) : null));
       } else if (b.t === 'video') body.append(videoEl(b));
       else if (b.t === 'file') {
         const u = mediaUrl(b.key);
-        body.append(h('p', { class: 'f2-file' }, '📎 ', u ? h('a', { href: u + '?download=' + encodeURIComponent(b.name || 'file'), rel: 'nofollow noopener', download: b.name || '', 'data-server': '', text: b.name || 'файл' }) : h('span', { text: b.name || 'файл' }),
+        body.append(h('p', { class: 'f2-file' }, '📎 ', u ? h('a', { href: u + '?download=' + encodeURIComponent(b.name || 'file'), rel: 'nofollow noopener', download: b.name || '', 'data-server': '', text: kt(b.name || 'файл') }) : h('span', { text: kt(b.name || 'файл') }),
           b.size ? h('span', { class: 'f2-muted', text: ' · ' + B_.fmtSize(b.size) }) : null, h('span', { class: 'f2-muted', text: ' · только скачать, не открываем на сайте' })));
       } else if (b.t === 'hr') body.append(h('hr'));
     });
@@ -312,7 +318,7 @@
       btn.replaceWith(h('div', { class: 'f2-vframe' }, fr));
     });
     fig.append(btn);
-    fig.append(h('figcaption', null, b.cap ? b.cap + ' · ' : '', h('a', { href: B_.watchUrl(b), rel: 'nofollow noopener', target: '_blank', text: 'открыть на ' + B_.providerName(b.p) })));
+    fig.append(h('figcaption', null, b.cap ? kt(b.cap) + ' · ' : '', h('a', { href: B_.watchUrl(b), rel: 'nofollow noopener', target: '_blank', text: 'открыть на ' + B_.providerName(b.p) })));
     return fig;
   }
   function actions(a){
@@ -417,7 +423,7 @@
   function commentEl(a, c, reload, depth){
     const el = h('div', { class: 'f2-c' + (depth ? ' f2-c-sub' : ''), id: 'c' + c.id });
     const head = h('div', { class: 'f2-c-head' }, nickEl(c), h('span', { class: 'f2-muted', text: ago(c.at) + (c.edited_at ? ' · изменено' : '') }));
-    const body = h('div', { class: 'f2-c-body', text: c.deleted ? 'комментарий удалён' : c.body });
+    const body = h('div', { class: 'f2-c-body', text: c.deleted ? 'комментарий удалён' : kt(c.body) });
     if (c.deleted) body.classList.add('f2-muted');
     const tools = h('div', { class: 'f2-c-tools' });
     const u = me();
