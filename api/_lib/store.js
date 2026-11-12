@@ -60,6 +60,9 @@ export async function sbSelect(table, query) {
   if (!r.ok) throw new Error(`select ${table}: HTTP ${r.status} ${txt.slice(0, 200)}`);
   return txt ? JSON.parse(txt) : [];
 }
+// Ошибка sbSelect = «на базе нет такой колонки» (SQL ещё не запущен: 400 + 42703 / PGRST204). Только тогда можно откатиться на
+// старый запрос; таймаут или 500 — нельзя (форум 2.0: старый запрос без фильтра статуса раскрыл бы скрытое, T-157)
+export const oldDb = e => { const m = String(e && e.message || ''); return /HTTP 400/.test(m) && /42703|PGRST204|does not exist/i.test(m); };
 
 export async function sbUpsert(table, row, onConflict) {
   const r = await timedFetch(`${baseUrl()}/rest/v1/${table}?on_conflict=${onConflict}`, {

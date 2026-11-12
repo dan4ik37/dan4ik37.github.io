@@ -10,7 +10,10 @@
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 const SITE = path.join(__dirname, '..');
-const [PROF = 'phone', ROUNDS = '20'] = process.argv.slice(2);
+const [PROF = 'phone', ROUNDS = '20', MODE = ''] = process.argv.slice(2);
+// MODE 'legacy': FORUM2 = false — старый форум (js/features/forum.js) на базе с forum.sql 2.0: прямые чтения / записи таблиц под RLS
+// (роль authenticated / anon, как PostgREST), скрытое и черновики не видны, новая тема и ответ проходят охрану forum.sql
+const LEGACY = MODE === 'legacy';
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp/t157/e2e' : path.join(os.tmpdir(), 't157-e2e'));
 fs.mkdirSync(TMP, { recursive: true });
@@ -71,6 +74,15 @@ insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_ga
     if (!r || !r.ok) { console.log('seed fail', r); process.exit(1); }
   }
   const lastSeed = (await db.query(`select max(id)::int r from forum_threads`)).rows[0].r;
+  let hiddenId = 0;
+  if (LEGACY) {   // права ролей как у Supabase + скрытая модератором статья и черновик — старый клиент не должен их показать
+    await db.exec(`grant usage on schema public, auth to anon, authenticated; grant select on cur, profiles to anon, authenticated;
+grant select, insert, update, delete on forum_threads, forum_posts to anon, authenticated; grant usage on all sequences in schema public to anon, authenticated;`);
+    UID = B;
+    hiddenId = (await rpc('forum_save', { p_id: null, p_publish: true, p_doc: { title: 'Скрытая модератором статья', blocks: [{ t: 'p', r: [{ x: 'Текст, который скрыли модераторы за нарушение правил.' }] }] } }))[1].id;
+    await rpc('forum_save', { p_id: null, p_publish: false, p_doc: { title: 'Черновик Боба', blocks: [{ t: 'p', r: [{ x: 'не готово' }] }] } });
+    UID = M; await rpc('forum_mod', { p_action: 'hide', p_id: hiddenId, p_note: 'правила' });
+  }
 
   // ═══ сервер: сайт + «Supabase» на /sb ═══
   const PORTBOX = {};
@@ -97,6 +109,28 @@ insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_ga
         if (!r) { res.writeHead(404, H); return res.end('{}'); }
         res.writeHead(200, { 'Content-Type': r.metadata.mimetype, 'Access-Control-Allow-Origin': '*' }); return res.end(Buffer.from(r.data));
       }
+      if (LEGACY && (m = p.match(/^\/sb\/rest\/v1\/(forum_threads|forum_posts)$/))) {   // мини-PostgREST для старого клиента: под RLS, как на сервере
+        const tbl = m[1], single = /vnd\.pgrst\.object/.test(req.headers.accept || '');
+        let sql;
+        try {
+          if (req.method === 'GET') {
+            const w = [];
+            for (const k of ['id', 'thread_id']) { const v = u.searchParams.get(k); if (v) { const mm = v.match(/^eq\.(\d{1,12})$/); if (!mm) throw new Error('bad filter'); w.push(`${k} = ${mm[1]}`); } }
+            const ord = (u.searchParams.get('order') || '').split(',').filter(Boolean).map(o => { const [c, d] = o.split('.'); if (!/^(pinned|created_at|id)$/.test(c)) throw new Error('bad order'); return `${c} ${d === 'desc' ? 'desc' : 'asc'}`; });
+            const cnt = /forum_posts\(count\)/.test(u.searchParams.get('select') || '');
+            sql = `select coalesce(json_agg(x), '[]') r from (select t.*${cnt ? `, (select json_build_array(json_build_object('count', count(*))) from forum_posts p where p.thread_id = t.id) as forum_posts` : ''} from ${tbl} t`
+              + `${w.length ? ' where ' + w.join(' and ') : ''}${ord.length ? ' order by ' + ord.join(', ') : ''} limit ${Math.min(+u.searchParams.get('limit') || 1000, 1000)}) x`;
+          } else if (req.method === 'POST') {
+            const rows = JSON.parse(body.toString() || '[]'), cols = tbl === 'forum_threads' ? 'title, author_id' : 'thread_id, author_id, body';
+            const js = JSON.stringify(Array.isArray(rows) ? rows : [rows]).replace(/'/g, "''");
+            sql = `with ins as (insert into ${tbl} (${cols}) select ${cols} from json_populate_recordset(null::${tbl}, '${js}'::json) returning *) select coalesce(json_agg(ins), '[]') r from ins`;
+          } else throw new Error('method');
+          const out = await db.exec(`begin; update cur set u = ${UID ? `'${UID}'` : 'null'}; set local role ${UID ? 'authenticated' : 'anon'}; ${sql}; commit;`);
+          const rows = out[3].rows[0].r;
+          if (single && !rows.length) { res.writeHead(406, H); return res.end(JSON.stringify({ code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' })); }
+          res.writeHead(req.method === 'POST' ? 201 : 200, H); return res.end(JSON.stringify(single ? rows[0] : rows));
+        } catch (e) { try { await db.exec('rollback'); } catch (x) {} res.writeHead(400, H); return res.end(JSON.stringify({ code: e.code || 'P0001', message: e.message })); }
+      }
       if (p.startsWith('/sb/rest/v1/')) { res.writeHead(200, H); return res.end('[]'); }   // остальные таблицы сайта — пусто
       res.writeHead(200, H); return res.end('{}');
     }
@@ -104,6 +138,8 @@ insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_ga
     if (p === '/' || !path.extname(p)) p = '/index.html';   // разделы SPA (/forum, /forum/new…) — та же index.html
     const f = path.join(SITE, p);
     if (!f.startsWith(SITE) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end('404'); }
+    if (LEGACY && p === '/js/core/config.js') { res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-cache' });   // откат одной строкой — как его сделает владелец
+      return res.end(fs.readFileSync(f, 'utf8').replace(/const FORUM2 = true;/, 'const FORUM2 = false;')); }
     if (p === '/js/features/chat.js') { res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-cache' });
       return res.end(fs.readFileSync(f, 'utf8').replace(/const SB_URL = '[^']+';/, `const SB_URL = location.origin + '/sb';`)); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
@@ -159,6 +195,36 @@ insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_ga
     if (phone) { await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; 23078PND5G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l' }); await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }); }
     const ls = { d37_perf: 'high', d37_age: JSON.stringify({ y: 1995 }), d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q }), d37_gfx: Q, d37_forum_sort: 'new' };
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}}catch(e){}` });
+    if (LEGACY) {
+    // ═══ FORUM2 = false: старый форум на базе 2.0 ═══
+    UID = null;
+    await send('Page.navigate', { url: BASE + '/forum' });
+    if (RATE > 1) await send('Emulation.setCPUThrottlingRate', { rate: RATE });
+    const tList = await waitFor(`document.querySelectorAll('#forumThreadsList a').length >= 10`, 40000);
+    ok(tList >= 0, 'старый форум: список тем (FORUM2 = false)', tList >= 0 ? { ms: tList } : { status: await ev(`document.getElementById('forumThreadsStatus')?.textContent`), errs: errs.slice(0, 5) });
+    ok(await ev(`!document.querySelector('#forum2') || getComputedStyle(document.querySelector('#forum2')).display === 'none'`), 'раздел 2.0 не показан');
+    const listText = await ev(`document.getElementById('forumThreadsList').innerText`);
+    ok(!/Скрытая модератором|Черновик Боба/.test(listText), 'скрытая модератором статья и чужой черновик не видны (RLS)');
+    ok(/Статья номер 25 про игры/.test(listText) && /💬/.test(listText), 'статьи 2.0 видны как темы');
+    await go('/forum/' + lastSeed);
+    ok(await waitFor(`document.querySelectorAll('#forumPostsList [data-post-id]').length >= 1`) >= 0, 'статья 2.0 открылась как тема');
+    ok(/Это текст статьи номер 25/.test(await ev(`document.getElementById('forumPostsList').innerText`)), 'текст статьи — первым постом');
+    await go('/forum/' + hiddenId);
+    ok(await waitFor(`/Не удалось загрузить тему/.test(document.getElementById('forumThreadHeader').innerText)`) >= 0 && !/скрыли модераторы/.test(await ev(`document.getElementById('forumPostsList').innerText`)), 'скрытая статья по прямой ссылке — не открывается');
+    // новая тема и ответ старым клиентом (прямые записи → охрана forum.sql)
+    await login(A, 'user', 'alice');
+    await go('/forum'); await waitFor(`document.querySelectorAll('#forumThreadsList a').length >= 10`);
+    await ev(`(() => { openForumCreate(); document.getElementById('forumNewTitle').value = 'Тема старым клиентом'; document.getElementById('forumNewBody').value = 'Текст новой темы из старого форума'; submitForumThread(); return 1; })()`);
+    const tNew = await waitFor(`/Текст новой темы из старого форума/.test(document.getElementById('forumPostsList')?.innerText || '')`, 20000);
+    ok(tNew >= 0, 'старый клиент: новая тема создана и открыта', tNew >= 0 ? undefined : { err: await ev(`document.getElementById('forumCreateError')?.textContent`), hash: await ev('location.href') });
+    const nt = (await db.query(`select id, status, blocks->0->'r'->0->>'x' as x, trusted from forum_threads where title = 'Тема старым клиентом'`)).rows[0];
+    ok(nt && nt.status === 'published' && nt.x === 'Текст новой темы из старого форума', 'тема старого клиента стала статьёй (статус решил сервер, тело — текстовым блоком)', nt);
+    await ev(`(() => { document.getElementById('forumReplyInput').value = 'Ответ старым клиентом'; submitForumReply(); return 1; })()`);
+    ok(await waitFor(`document.querySelectorAll('#forumPostsList [data-post-id]').length >= 2`) >= 0, 'старый клиент: ответ появился');
+    ok(nt && (await db.query(`select comments r from forum_threads where id = ${nt.id}`)).rows[0].r === 1, 'ответ посчитан комментарием статьи');
+    const E0 = ourErr();
+    ok(E0.length === 0, 'ошибок в консоли нет (старый форум)', E0.slice(0, 5));
+    } else {
     await send('Page.navigate', { url: BASE + '/forum' });
     if (RATE > 1) await send('Emulation.setCPUThrottlingRate', { rate: RATE });
     const tFeed = await waitFor(`document.querySelectorAll('#forum2 .f2-card:not(.f2-skel)').length >= 10`, 40000);
@@ -265,6 +331,7 @@ insert into site_config values ('forum', '{"premod_n":0,"media":true,"comment_ga
     ok(await ev(`document.querySelectorAll('#f2Css').length === 1 && document.querySelectorAll('#forum2').length === 1`), 'стили и корень раздела — по одному');
     const E = ourErr();
     ok(E.length === 0, 'ошибок в консоли нет', E.slice(0, 5));
+    }   // конец «FORUM2 = true»
   } catch (e) { fail++; console.log('FAIL', e.stack || e); }
   console.log('NUMBERS', JSON.stringify({ prof: PROF, rate: RATE, q: Q, ...nums }));
   try { ws.close(); } catch (e) {}

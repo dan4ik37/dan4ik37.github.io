@@ -11,7 +11,7 @@
 // ник ребёнка до 13 — «Игрок» (age.sql: age_public_kids — сервер узнаёт только «прятать или нет», без возраста).
 import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
-import { sbSelect, sbRpc, sbPatch, storeConfigured } from '../store.js';
+import { sbSelect, sbRpc, sbPatch, storeConfigured, oldDb } from '../store.js';
 import { makeForumBlocks } from '../forum-blocks.js';   // T-157: блоки статей — тот же код, что в браузере
 import { indexNow } from '../indexnow.js';
 import { publicKids as kidsOf, publicNick } from '../age.js';   // ники детей до 13 — «Игрок» (страницы индексирует поиск)
@@ -82,6 +82,21 @@ const plain = (raw, max) => publicText(raw, max).text;
 const short = (raw, n = 160) => { const t = plain(raw, 1000).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : t; };
 
 async function safe(fn){ if (!storeConfigured()) return null; try { return await fn(); } catch (e) { return null; } }
+// Старая база (forum.sql 2.0 не запущен) — ТОЛЬКО когда PostgREST ответил «нет такой колонки» (oldDb в store.js). Любой другой сбой
+// (таймаут, 500) — не откатываться на старый запрос без фильтра статуса: иначе скрытое и «на проверке» попало бы на страницу и в кэш.
+// → { rows, v2 } или { err: true } (сбой — показать «временно недоступно», ничего не раскрывая)
+async function threads(q2, qOld){
+  if (!storeConfigured()) return { rows: null, v2: false };
+  try { return { rows: await sbSelect('forum_threads', q2), v2: true }; }
+  catch (e) { if (!oldDb(e)) return { err: true }; }
+  return { rows: qOld ? await safe(() => sbSelect('forum_threads', qOld)) : null, v2: false };
+}
+function busy(res){
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(503).send(page({ title: 'Форум временно недоступен — dan4ik37', description: 'Попробуй обновить страницу через минуту.', noindex: true, noAds: true, css: CSS,
+    body: `<main class="wrap fr"><h1>Форум временно недоступен</h1><p class="muted">Попробуй обновить страницу через минуту.</p>
+      <div class="cta"><a class="btn btn-acc" href="/#/forum">📋 Открыть форум на сайте</a> <a class="btn btn-ghost" href="/">🏠 На главную</a></div></main>` }));
+}
 async function nicks(ids){
   const list = [...new Set(ids.filter(x => /^[0-9a-f-]{36}$/i.test(String(x || ''))))];
   if (!list.length) return {};
@@ -139,14 +154,12 @@ const AD = '<div data-ad="forum_article" hidden></div>';
 
 async function forumPage(res, tag){
   const url = tag ? `${SITE}/forum/t/${encodeURIComponent(tag)}` : `${SITE}/forum`;
-  let v2 = true;
-  let rows = await safe(() => sbSelect('forum_threads', 'status=eq.published&age_min=lte.12&realm=eq.kids'
+  const got = await threads('status=eq.published&age_min=lte.12&realm=eq.kids'
     + (tag ? '&tags=cs.' + encodeURIComponent('{"' + tag + '"}') : '')
-    + '&select=id,title,author_id,pinned,locked,created_at,published_at,excerpt,cover,tags,rating,comments&order=pinned.desc,published_at.desc&limit=60'));
-  if (!rows) {   // старая база
-    v2 = false;
-    rows = tag ? [] : await safe(() => sbSelect('forum_threads', 'select=id,title,author_id,pinned,locked,created_at,forum_posts(count)&order=pinned.desc,created_at.desc&limit=60')) || [];
-  }
+    + '&select=id,title,author_id,pinned,locked,created_at,published_at,excerpt,cover,tags,rating,comments&order=pinned.desc,published_at.desc&limit=60',
+    tag ? '' : 'select=id,title,author_id,pinned,locked,created_at,forum_posts(count)&order=pinned.desc,created_at.desc&limit=60');   // старая база — как раньше
+  if (got.err) return busy(res);
+  const v2 = got.v2, rows = got.rows || [];
   const who_ = await nicks(rows.map(t => t.author_id));
   const items = rows.map(t => ({ id: t.id, title: plain(t.title, 140) || 'Без названия', pinned: t.pinned, locked: t.locked, at: t.published_at || t.created_at,
     n: v2 ? t.comments || 0 : Math.max(0, (t.forum_posts?.[0]?.count ?? 1) - 1), a: who_[t.author_id], x: v2 ? short(t.excerpt || '', 200) : '',
@@ -185,13 +198,10 @@ async function forumPage(res, tag){
 }
 
 async function threadPage(res, id, raw){
-  let v2 = true;
-  let t = (await safe(() => sbSelect('forum_threads', `id=eq.${id}&select=id,title,author_id,pinned,locked,created_at,published_at,edited_at,status,blocks,cover,tags,source_url,source_title,excerpt,age_min,realm,rating,votes_up,comments,trusted,reports_open`)))?.[0];
-  if (t && !('status' in t)) { v2 = false; }   // старая база отдала строку без новых полей
-  else if (t === undefined) {   // нет строки или старая база
-    const legacy = (await safe(() => sbSelect('forum_threads', `id=eq.${id}&select=id,title,author_id,pinned,locked,created_at`)))?.[0];
-    if (legacy && !('status' in legacy)) { v2 = false; t = legacy; }
-  }
+  const got = await threads(`id=eq.${id}&select=id,title,author_id,pinned,locked,created_at,published_at,edited_at,status,blocks,cover,tags,source_url,source_title,excerpt,age_min,realm,rating,votes_up,comments,trusted,reports_open`,
+    `id=eq.${id}&select=id,title,author_id,pinned,locked,created_at`);   // старая база (нет колонки status) — как раньше
+  if (got.err) return busy(res);
+  const t = (got.rows || [])[0], v2 = got.v2 && !(t && !('status' in t));   // строка без status — старая база (так отвечают и подменные базы тестов)
   if (!t || (v2 && (t.status !== 'published' || t.realm === 'adult' || t.age_min >= 18))) return notFound(res, 'Статья', ['/forum', '📋 Все статьи']);
   // старый адрес /forum/5 или опечатка в «слаге» → один адрес /forum/5-slug (301)
   if (v2 && raw !== artPath(t).slice('/forum/'.length)) { res.setHeader('Cache-Control', 'public, s-maxage=3600'); res.setHeader('Location', artPath(t)); return res.status(301).send(''); }

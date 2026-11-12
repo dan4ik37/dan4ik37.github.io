@@ -321,5 +321,35 @@ let linkErr = ''; try { await db.query(`update forum_posts set body = 'захо�
 await db.exec(`reset role`);
 t(nc && /Ссылки/.test(linkErr), 'new account cannot add a link by direct update', linkErr);
 
+// ── взлом, финальная проверка (12.11, ночь): тело статьи прямой правкой, таблицы оценок / жалоб напрямую, закрепление модератором ──
+const NB = '77777777-7777-7777-7777-777777777777';
+await as(NB); await db.exec(`set role authenticated`);
+await db.query(`insert into forum_threads(author_id, title) values ('${NB}', 'Тема новичка напрямую')`);
+const nbT = (await db.query(`select id from forum_threads where title = 'Тема новичка напрямую'`)).rows[0].id;
+await db.query(`insert into forum_posts(thread_id, author_id, body) values (${nbT}, '${NB}', 'тело без ссылок')`);
+let bodyLinkErr = ''; try { await db.query(`update forum_posts set body = 'теперь со ссылкой https://evil.example.com' where thread_id = ${nbT} and is_body`); } catch (e) { bodyLinkErr = e.message; }
+await db.exec(`reset role`);
+t(/Ссылки/.test(bodyLinkErr), 'new account cannot add a link to the article body by direct update of the body post', bodyLinkErr);
+await as(M); await rpc('forum_mod', ['hide', atk, 'правила']);
+await as(A); await db.exec(`set role authenticated`);
+let hidErr = ''; try { await db.query(`update forum_posts set body = 'переписал скрытую' where thread_id = ${atk} and is_body`); } catch (e) { hidErr = e.message; }
+await db.exec(`reset role`);
+t(/скрыл/.test(hidErr), 'author cannot rewrite a hidden article through the body post', hidErr);
+await as(M); await rpc('forum_mod', ['restore', atk, '']);
+for (const [what, sql] of [['read reports', `select * from forum_reports`], ['read mod log', `select * from forum_mod_log`], ['read rate table', `select * from forum_rate`],
+  ['insert a vote directly', `insert into forum_votes(thread_id, user_id, v) values (${atk}, '${B}', 1)`], ['insert a report directly', `insert into forum_reports(reporter, kind, target, thread_id) values ('${B}', 'article', ${atk}, ${atk})`]]) {
+  t(await denied('authenticated', B, sql), `user cannot ${what} (table closed, only RPC)`);
+  t(await denied('anon', null, sql), `guest cannot ${what}`);
+}
+await as(A); await db.exec(`set role authenticated`);
+await db.query(`update forum_threads set pinned = true, locked = true where id = ${atk}`).catch(() => {});
+await db.exec(`reset role`);
+t((await q(`select (pinned or locked) r from forum_threads where id = ${atk}`)) === false, 'author cannot pin / lock own article directly');
+await as(M);
+t((await rpc('forum_mod', ['pin', atk, ''])).ok && (await q(`select pinned r from forum_threads where id = ${atk}`)) === true, 'moderator (not admin) can pin through forum_mod');
+t((await rpc('forum_mod', ['lock', atk, ''])).ok && (await q(`select locked r from forum_threads where id = ${atk}`)) === true, 'moderator (not admin) can lock through forum_mod');
+await as(B);
+t((await rpc('forum_comment', [atk, null, 'в закрытую'])).reason === 'locked', 'locked article: no new comments');
+
 console.log(bad ? `forum SQL: ${bad}/${n} FAIL`: `forum SQL OK (${n} checks, file applied twice)`);
 process.exit(bad ? 1 : 0);

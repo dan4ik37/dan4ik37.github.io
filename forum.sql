@@ -94,7 +94,8 @@ declare
 begin
   if (new.pinned is distinct from old.pinned) or (new.locked is distinct from old.locked) then
     select role into acting_role from public.profiles where id = auth.uid();
-    if acting_role is distinct from 'admin' then
+    -- форум 2.0: модератор / помощник закрепляет и закрывает через forum_mod (он сам проверяет права и ставит метку d37.forum_mod)
+    if acting_role is distinct from 'admin' and current_setting('d37.forum_mod', true) is distinct from '1' then
       new.pinned := old.pinned;
       new.locked := old.locked;
     end if;
@@ -613,7 +614,11 @@ begin
     if new.body is distinct from old.body then
       if char_length(coalesce(new.body, '')) > 4000 then raise exception 'Слишком длинный ответ'; end if;
       if public.forum_bad(new.body) then raise exception 'В ответе есть грубые слова'; end if;
-      if not old.is_body then perform public.forum_legacy_edit(new.body); end if;
+      -- и тело статьи (старый клиент правит первый пост): новичку — без ссылок, скрытую модератором — не менять (как forum_save)
+      perform public.forum_legacy_edit(new.body);
+      if old.is_body and exists (select 1 from public.forum_threads t where t.id = old.thread_id and t.status = 'hidden') then
+        raise exception 'Статью скрыл модератор — изменить её нельзя';
+      end if;
       new.edited_at := now();
     end if;
   end if;
@@ -1047,9 +1052,13 @@ begin
     update public.forum_threads set status = 'hidden', mod_note = n, updated_at = now() where id = p_id and status <> 'draft' returning author_id into a;
     update public.forum_reports set status = 'done', by_mod = uid, closed_at = now() where kind = 'article' and target = p_id and status = 'new';
   elsif p_action in ('lock', 'unlock') then
+    perform set_config('d37.forum_mod', '1', true);   -- старый триггер protect_thread_moderation_fields пускает только админа — модератора пускает эта метка
     update public.forum_threads set locked = (p_action = 'lock') where id = p_id returning author_id into a;
+    perform set_config('d37.forum_mod', '', true);
   elsif p_action in ('pin', 'unpin') then
+    perform set_config('d37.forum_mod', '1', true);
     update public.forum_threads set pinned = (p_action = 'pin') where id = p_id returning author_id into a;
+    perform set_config('d37.forum_mod', '', true);
   elsif p_action = 'dismiss' then
     update public.forum_reports set status = 'dismissed', by_mod = uid, closed_at = now() where id = p_id and status = 'new';
     update public.forum_reports r set status = 'dismissed', by_mod = uid, closed_at = now()

@@ -11,7 +11,7 @@ import { videoFromSnapshot } from './_lib/video-snap.js';
 import { GAME_PAGES } from './_lib/games-seo.js';
 import { TOPICS } from './_lib/topics.js';
 import { QUIZZES } from './_lib/quizzes.js';
-import { sbSelect, storeConfigured } from './_lib/store.js';
+import { sbSelect, storeConfigured, oldDb } from './_lib/store.js';
 import { makeForumBlocks } from './_lib/forum-blocks.js';
 const FB = makeForumBlocks();   // адрес статьи форума — FB.slug, как в forum.sql
 import { payConfig } from './_lib/pay.js';
@@ -47,7 +47,10 @@ export default async function handler(req, res) {
     // старая база (forum.sql 2.0 не запущен) — как раньше
     try { threads = (await sbSelect('forum_threads', 'status=eq.published&age_min=lte.12&realm=eq.kids&select=id,title,created_at,published_at,edited_at,tags&order=published_at.desc&limit=2000'))
       .map(t => ({ ...t, path: '/forum/' + t.id + (FB.slug(t.title) ? '-' + FB.slug(t.title) : ''), created_at: t.edited_at || t.published_at || t.created_at })); }
-    catch (e) { try { threads = await sbSelect('forum_threads', 'select=id,created_at&order=created_at.desc&limit=2000'); } catch (e2) { threads = []; } }
+    catch (e) {   // старая база — только при «нет такой колонки»; любой другой сбой — без статей (не раскрыть скрытые и «на проверке»)
+      threads = [];
+      if (oldDb(e)) { try { threads = await sbSelect('forum_threads', 'select=id,created_at&order=created_at.desc&limit=2000'); } catch (e2) { threads = []; } }
+    }
     try { ideas = await sbSelect('ideas', 'status=neq.rejected&select=id,created_at,status_changed_at&order=created_at.desc&limit=2000'); } catch (e) { ideas = []; }
   }
   const day = d => esc(String(d || '').slice(0, 10));

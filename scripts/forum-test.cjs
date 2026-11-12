@@ -200,6 +200,35 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
       ok(JSON.parse(r.body).sent === true && idx.length >= 1 && idx[0].includes('https://dan4ik37.vercel.app/forum/7-gaid-po-baze'), 'IndexNow ping on publish', idx);
       r = await call(pages, { page: 'forumping' }, 'POST', { id: 7 }); ok(JSON.parse(r.body).sent === false, 'second ping does nothing (pinged_at)');
       r = await call(pages, { page: 'forumping' }, 'POST', { id: '1;drop' }); ok(JSON.parse(r.body).ok === false, 'ping: bad id refused');
+      // ссылка автора на кусок текста с адресом сайта — без ссылки внутри ссылки (валидный HTML)
+      art = { ...ART, blocks: [{ t: 'p', r: [{ x: 'смотри dan4ik37.vercel.app/games тут', h: 'https://news.example/a' }] }] };
+      r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' });
+      ok(r.code === 200 && !/<a [^>]*>[^<]*(?:<(?!\/a>)[^<]*)*<a /.test((r.body.match(/<div class="fa-body">[\s\S]*?<\/div>/) || [''])[0]), 'linked run with a site address: no nested <a>', (r.body.match(/<div class="fa-body">[\s\S]*?<\/div>/) || [''])[0]);
+      // сбой базы (500 / таймаут) на запросе 2.0 — НЕ откатываться на старый запрос без фильтра статуса (скрытое не утекает)
+      const HID = { id: 7, title: 'Скрытая статья', author_id: U, pinned: false, locked: false, created_at: now };
+      globalThis.fetch = async (url) => { const u = String(url);
+        if (u.includes('/rest/v1/forum_threads?') && /status|age_min/.test(u)) return new Response('{"message":"upstream timeout"}', { status: 500 });
+        if (u.includes('/rest/v1/forum_threads?')) return J([HID]);
+        if (u.includes('/rest/v1/forum_posts?')) return J([{ id: 1, author_id: U, body: 'текст скрытой статьи', created_at: now }]);
+        if (u.includes('/rest/v1/profiles?id=in.')) return J([{ id: U, nick: 'alice', role: 'user' }]);
+        return J([]); };
+      r = await call(pages, { page: 'forum', id: '7' });
+      ok(r.code === 503 && !/Скрытая|текст скрытой/.test(r.body) && r.headers['Cache-Control'] === 'no-store', 'v2 query fails (500) → 503 no-store, hidden row not shown', { code: r.code, cc: r.headers['Cache-Control'] });
+      r = await call(pages, { page: 'forum' });
+      ok(r.code === 503 && !/Скрытая/.test(r.body), 'feed: v2 query fails → 503, no unfiltered legacy list', r.code);
+      r = await call(sitemap, { part: 'pages' });
+      ok(!/\/forum\/7</.test(r.body) && r.body.includes('<loc>https://dan4ik37.vercel.app/forum</loc>'), 'sitemap: v2 query fails → no thread URLs from the unfiltered legacy query');
+      // настоящая старая база (нет колонки status: 400 + 42703) — старые страницы как раньше
+      globalThis.fetch = async (url) => { const u = String(url);
+        if (u.includes('/rest/v1/forum_threads?') && /status|age_min/.test(u)) return new Response('{"code":"42703","message":"column forum_threads.status does not exist"}', { status: 400 });
+        if (u.includes('/rest/v1/forum_threads?')) return J([{ ...HID, title: 'Старая тема' }]);
+        if (u.includes('/rest/v1/forum_posts?')) return J([{ id: 1, author_id: U, body: 'текст старой темы', created_at: now }]);
+        if (u.includes('/rest/v1/profiles?id=in.')) return J([{ id: U, nick: 'alice', role: 'user' }]);
+        return J([]); };
+      r = await call(pages, { page: 'forum', id: '7' });
+      ok(r.code === 200 && /текст старой темы/.test(r.body), 'old database (42703) → old thread page as before', r.code);
+      r = await call(sitemap, { part: 'pages' });
+      ok(r.body.includes('<loc>https://dan4ik37.vercel.app/forum/7</loc>'), 'old database → sitemap lists old threads as before');
     } finally { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} }
   }
 

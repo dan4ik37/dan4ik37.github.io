@@ -217,7 +217,7 @@ export function makeForumBlocks(){
         let s = tx(r.x).replace(/\n/g, '<br>');
         if (r.b) s = '<strong>' + s + '</strong>';
         if (r.i) s = '<em>' + s + '</em>';
-        return r.h && https(r.h) ? a(r.h, s) : s;
+        return r.h && https(r.h) ? a(r.h, s.replace(/<\/?a\b[^>]*>/g, '')) : s;   // ссылка внутри ссылки — недопустимый HTML: свои ссылки текста убираем
       }).join('') + '</p>';
       if (b.t === 'h') return (b.l === 3 ? '<h3>' : '<h2>') + tx(b.x || '') + (b.l === 3 ? '</h3>' : '</h2>');
       if (b.t === 'list') { const tg = b.o ? 'ol' : 'ul'; return '<' + tg + '>' + (b.items || []).map(x => '<li>' + tx(String(x)) + '</li>').join('') + '</' + tg + '>'; }

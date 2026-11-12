@@ -252,7 +252,7 @@
     box.append(h('div', { class: 'f2-meta' }, nickEl(a), h('time', { datetime: a.at, text: day(a.at) }), a.edited_at ? h('span', { class: 'f2-muted', text: 'изменено ' + ago(a.edited_at) }) : null,
       a.age >= 16 ? h('span', { class: 'f2-age', text: AGE_LABEL[a.age] }) : null));
     box.append(renderBlocks(a.blocks));
-    if (a.source_url) box.append(sourceEl(a.source_url, a.source_title));
+    if (a.source_url && B().https(a.source_url)) box.append(sourceEl(a.source_url, a.source_title));
     if (a.tags && a.tags.length) box.append(tagsEl(a.tags));
     box.append(actions(a));
     if (a.ads && a.status === 'published') {   // одно место рекламы в статье — только опубликованная, проверенная, без жалоб, до 12+
