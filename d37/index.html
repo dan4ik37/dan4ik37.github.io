@@ -5,21 +5,26 @@
 <base href="/d37/">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="robots" content="noindex, nofollow">
-<title>D37 — мир в браузере</title>
+<title>D37</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #0b0f14; color: #e8eef5; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+  html, body { margin: 0; height: 100%; background: #05070b; color: #e8eef5; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
   #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  #jump { position: fixed; right: 22px; bottom: 28px; width: 68px; height: 68px; border-radius: 50%; display: none; align-items: center; justify-content: center; background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .35); font-size: 26px; touch-action: none; user-select: none; -webkit-user-select: none; }
-  #hud { position: fixed; left: 8px; top: 8px; padding: 6px 9px; background: rgba(0, 0, 0, .55); border-radius: 6px; white-space: pre; font: 12px/1.35 ui-monospace, Consolas, monospace; pointer-events: none; }
-  #hint { position: fixed; left: 50%; bottom: 22px; max-width: 86vw; transform: translateX(-50%); padding: 7px 12px; background: rgba(0, 0, 0, .6); border-radius: 6px; pointer-events: none; }
-  #error { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; background: #0b0f14; }
+  .btn { position: fixed; width: 60px; height: 60px; border-radius: 50%; display: none; align-items: center; justify-content: center; background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .3); font-size: 26px; user-select: none; -webkit-user-select: none; touch-action: none; cursor: pointer; }
+  #jump { right: 18px; bottom: 64px; }
+  #orbit { right: 18px; bottom: 136px; }
+  #full { right: 10px; top: 10px; width: 40px; height: 40px; font-size: 18px; display: flex; border-radius: 8px; }
+  #hud { position: fixed; left: 8px; top: 8px; padding: 6px 9px; background: rgba(0, 0, 0, .55); border-radius: 6px; white-space: pre; font: 12px/1.35 ui-monospace, Consolas, monospace; pointer-events: none; display: none; }
+  #hint { position: fixed; left: 50%; bottom: 10px; width: max-content; max-width: 94vw; box-sizing: border-box; transform: translateX(-50%); padding: 5px 10px; background: rgba(0, 0, 0, .5); border-radius: 6px; pointer-events: none; font-size: 12px; line-height: 1.3; text-align: center; }
+  #error { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; background: #05070b; }
 </style>
 </head>
 <body>
 <canvas id="view"></canvas>
 <div id="hud">загрузка…</div>
-<div id="hint">Осмотреться: нажми на картинку или зажми кнопку мыши и веди · WASD — ходить · Shift — бег · Пробел — прыжок · Ctrl / C — присесть · V — вид · F — полёт</div>
-<div id="jump">⤒</div>
+<div id="hint">Осмотреться: нажми на картинку или зажми кнопку мыши и веди</div>
+<div id="orbit" class="btn" title="орбита ↔ земля">🌍</div>
+<div id="jump" class="btn" title="прыжок">⤒</div>
+<div id="full" class="btn" title="на весь экран">⛶</div>
 <div id="error"></div>
 <script type="module" src="./d37-page.js"></script>
 </body>

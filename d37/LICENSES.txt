@@ -1,2 +1,2 @@
 D37 engine web build. Third-party Rust crates compiled into d37_web_bg.wasm are under permissive licences
-(MIT / Apache-2.0 / BSD / Zlib / Unicode); the full table per package is receipts/E3a/licenses.csv of the engine repo.
+(MIT / Apache-2.0 / BSD / Zlib / Unicode); the full table per package is receipts/EP/licenses.csv of the engine repo.
