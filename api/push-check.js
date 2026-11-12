@@ -61,6 +61,7 @@ export default async function handler(req, res) {
   catch (e) { out.words = { error: String(e?.message || e) }; console.error('[push words]', e); }   // push-words.sql не выполнен — ошибка только здесь
   out.events = await eventReminders();
   out.holiday = await holidayPost();
+  out.files = await fileExpire();
   return res.status(200).json(out);
 }
 
@@ -187,6 +188,12 @@ export const HOLIDAYS_DEF = [
 // Что поздравить в этот день: до 2 записей с датой ММ-ДД и текстом (чистая функция — проверка в scripts/community-test.cjs)
 export function holidaysFor(list, md) {
   return (Array.isArray(list) ? list : []).filter(x => x && typeof x.d === 'string' && x.d === md && typeof x.t === 'string' && x.t.trim()).slice(0, 2);
+}
+// T-141 📎: старые превью файлов из строк сообщений — убрать (community.sql → file_expire). Раз в сутки: в 3-м часу по Алматы
+async function fileExpire() {
+  if (new Date(Date.now() + 5 * HOUR).getUTCHours() !== 3) return { status: 'later' };
+  try { return { cleared: await sbRpc('file_expire', {}) }; }
+  catch (e) { return /PGRST202|Could not find/i.test(String(e?.message)) ? { status: 'no_sql' } : { error: String(e?.message || e).slice(0, 120) }; }
 }
 async function holidayPost() {
   if (!HOLIDAYS_ON) return { status: 'off' };

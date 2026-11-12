@@ -92,5 +92,7 @@ t((await q(`select public.file_blocked(array['${h}','${'b'.repeat(64)}']) r`)).l
 await as(A); await db.exec(`insert into messages(user_id, text) values ('${A}', 'm6')`); await db.exec(`delete from file_day`);
 t((await q(`select public.msg_attach('chat', 6, ${att({})}) r`)).reason === 'blocked', 'blocked hash cannot be re-attached');
 t((await q(`select public.file_cfg() r`)).file_mb === 10, 'cfg defaults merged');
+await db.exec(`update messages set created_at = now() - interval '40 days' where id = 1`);
+t((await q(`select public.file_expire() r`)) >= 1 && !(await db.query(`select att from messages where id = 1`)).rows[0].att.thumb && (await db.query(`select att from messages where id = 1`)).rows[0].att.chash === h, 'old thumbs expire, reference stays');
 console.log(bad ? `files SQL: ${bad}/${n} FAIL` : `files SQL OK (${n} checks, file applied twice)`);
 process.exit(bad ? 1 : 0);

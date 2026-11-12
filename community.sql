@@ -3237,3 +3237,24 @@ revoke execute on function public.file_reports_list() from public, anon;
 grant execute on function public.file_reports_list() to authenticated;
 revoke execute on function public.file_block_set(text, boolean, text) from public, anon;
 grant execute on function public.file_block_set(text, boolean, text) to authenticated;
+
+-- Превью в строках не копятся: старше keep_days дней — превью убираем (ссылка и хеши остаются — файл можно получить у тех, у кого он есть).
+-- Зовёт крон api/push-check.js (ключ сервера), не чаще раза в сутки; за раз — до 2000 строк в каждой таблице
+create or replace function public.file_expire() returns int
+language plpgsql security definer set search_path = public as $$
+declare d int := greatest(coalesce((public.file_cfg()->>'keep_days')::int, 30), 1); n int := 0; k int;
+begin
+  perform set_config('d37.att', '1', true);
+  update public.messages set att = att - 'thumb' where id in (select id from public.messages where att ? 'thumb' and created_at < now() - make_interval(days => d) limit 2000);
+  get diagnostics k = row_count; n := n + k;
+  update public.community_messages set att = att - 'thumb' where id in (select id from public.community_messages where att ? 'thumb' and created_at < now() - make_interval(days => d) limit 2000);
+  get diagnostics k = row_count; n := n + k;
+  if to_regclass('public.direct_messages') is not null then
+    execute format('update public.direct_messages set att = att - %L where id in (select id from public.direct_messages where att ? %L and created_at < now() - make_interval(days => %s) limit 2000)', 'thumb', 'thumb', d);
+    get diagnostics k = row_count; n := n + k;
+  end if;
+  perform set_config('d37.att', '', true);
+  return n;
+end $$;
+revoke all on function public.file_expire() from public, anon, authenticated;
+grant execute on function public.file_expire() to service_role;
