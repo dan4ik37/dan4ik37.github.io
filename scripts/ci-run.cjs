@@ -72,6 +72,7 @@ const TESTS = [
   { f: 'anim-test.cjs', args: ['{THREE}'], needs: 'three', t: 180 },   // T-131: общий скелет и действия (skel.js), модели со скелетом (model.js), экспорт AI3D со скелетом
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
+  { f: 'forum-e2e.cjs', args: ['phone', '20'], needs: 'pglite', e2e: true, t: 600 }, { f: 'forum-e2e.cjs', args: ['phone', '5', 'legacy'], needs: 'pglite', e2e: true, t: 400 },   // T-157: форум 2.0 и старый форум (FORUM2 = false)
   { f: 'war-hud-e2e.cjs', e2e: true, t: 600 },   // боевая зона: панель оружия отвечает (телефон, планшет, ПК)
   { f: 'trees-e2e.cjs', args: ['studio', 'ci'], e2e: true, t: 600 },   // T-022b: деревья пород в «Студии 3D» — все породы ставятся (замеры, снимки, 10 мин игры — режимы вручную)
   { f: 'waves-e2e.cjs', args: ['look'], e2e: true, t: 600 },   // волны (T-022c): видеокарта = JS, шейдеры собрались, катер качается
