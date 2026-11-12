@@ -143,3 +143,6 @@ vip-claims.sql применён 09.10.2026 (проверено: claim_donation �
 secrets.sql, games.sql, progression.sql применены (03.10.2026, проверено с сервера).
 05.11.2026: games-more.sql применён (новая версия без w_watch5 «Посмотри 5 роликов» — награды за просмотр YouTube запрещены):
 проверено с сервера — weekly_quest_pool гостем → 16 заданий, w_watch5 нет. game_win_xp tiles → 4, lights_duel → 5, raid_league(100) → 1.
+12.11.2026: games-more.sql, privacy.sql, community.sql применены (T-141; владелец: «скл я делал»). Проверено с сервера гостем:
+season_levels {"p_ids":[]} → 200 []; prefs_get {} → 401 / 42501 (закрыто гостю, так задумано); file_cfg {} → 200 {"on": true, "store": false,
+"file_mb": 10, "day_mb": 100, "day_n": 40, "direct_mb": 25, "keep_days": 30, "auto_mb": 10, "store_kb": 300, "seed_mb_day": 300}.
