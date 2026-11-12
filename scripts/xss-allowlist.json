@@ -7549,6 +7549,28 @@
    "xs": [
     "t.workerUrl"
    ]
+  },
+  {
+   "f": "api/_lib/forum-blocks.js",
+   "fn": "toHtml",
+   "k": "markup:attr",
+   "c": "html-arg",
+   "n": "toHtml: alt() = tx(подпись) без тегов — tx экранирует (esc или publicText().html), кавычки → &quot;; провайдер — esc",
+   "xs": [
+    "alt(b.cap)",
+    "b.cap ? alt(b.cap) : esc(providerName(b.p))"
+   ]
+  },
+  {
+   "f": "js/features/forum-blocks.js",
+   "fn": "toHtml",
+   "k": "markup:attr",
+   "c": "html-arg",
+   "n": "toHtml: alt() = tx(подпись) без тегов — tx экранирует (esc или publicText().html), кавычки → &quot;; провайдер — esc",
+   "xs": [
+    "alt(b.cap)",
+    "b.cap ? alt(b.cap) : esc(providerName(b.p))"
+   ]
   }
  ]
 }
