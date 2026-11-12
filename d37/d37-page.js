@@ -7,7 +7,11 @@
 // probe of the tests (a small second frame without the sky, read back: below-horizon pixels nothing was drawn on).
 // Ground materials are made by code in the Workers at load.
 // Touch screens: the left half is a move stick (run when pushed to the edge), the right half looks around,
-// buttons: jump, «орбита ↔ земля», full screen. The same action state as the keys.
+// buttons: jump, «орбита ↔ земля», full screen, ⚙ the admin menu. The same action state as the keys.
+// The character (the wasm draws it): G girl → boy → mannequin, P / 1-8 colour presets, M (held) opens the mouth —
+// the test input of the mouth channel, N the slow test sine on / off; «🎤» in the admin menu feeds a microphone
+// level instead (WebAudio, asked only on that click). Views: F6 / F7 / F8 or X — 3D, from the side, from above (2D views of the same world).
+// The admin / test menu: ` or F10 (or ⚙), ?admin=1 shows it at load; its buttons run `app.admin(<command>)`.
 import init, { D37Web, ground_layer } from './d37_web.js';
 
 const q = new URLSearchParams(location.search);
@@ -86,6 +90,7 @@ async function main() {
   }
   state.workers = pool.length;
   app.load_scene(sceneText, pool.length > 0);
+  state.app = app;   // tests read the character's state through stats() and drive admin()
   const planet = app.is_planet();
   state.isPlanet = planet;
   for (const s of pool) s.w.postMessage({ type: 'init', scene: sceneText, planet });
@@ -113,16 +118,90 @@ async function main() {
     if (planet && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
     app.set_move(sx, sf, b);
   }
-  state.press = (code, ms) => { keys.add(code); publish(); setTimeout(() => { keys.delete(code); publish(); }, ms || 120); };   // tests
+  state.press = (code, ms) => { keys.add(code); publish(); onKey(code); setTimeout(() => { keys.delete(code); publish(); if (code === 'KeyM') app.set_mouth_test(0); }, ms || 120); };   // tests
+  // the character, the views and the admin menu (one command language with the native client: app.admin)
+  let body = 'girl', palette = 0, view = 0, sine = false;
+  const NEXT_BODY = { girl: 'boy', boy: 'mannequin', mannequin: 'girl' };
+  const VIEWS = ['persp', 'side', 'top'];
+  const run = (cmd) => { try { const r = app.admin(cmd); state.lastAdmin = r; if (r.startsWith('shot:')) state.shotNext = r.slice(5); return r; } catch (e) { state.lastAdmin = 'отказ: ' + e; return state.lastAdmin; } };
+  function onKey(code) {
+    if (code === 'KeyG') { body = NEXT_BODY[body] || 'girl'; run('character ' + body); }
+    if (code === 'KeyN') { sine = !sine; run(sine ? 'mouth sine' : 'mouth 0'); }
+    if (code === 'KeyP') { palette = (palette + 1) % 8; run('palette ' + palette); }
+    if (/^Digit[1-8]$/.test(code)) { palette = Number(code.slice(5)) - 1; run('palette ' + palette); }
+    if (code === 'KeyM') app.set_mouth_test(1);
+    if (code === 'F6' || code === 'F7' || code === 'F8') { view = { F6: 0, F7: 1, F8: 2 }[code]; run('view ' + VIEWS[view]); }
+    if (code === 'KeyX') { view = (view + 1) % 3; run('view ' + VIEWS[view]); }
+    if (code === 'Backquote' || code === 'F10') toggleAdmin();
+  }
+  // the admin menu: buttons from app.admin_items(), grouped; touch and mouse alike
+  const admin = $('admin');
+  let micStarted = false;
+  function buildAdmin() {
+    admin.textContent = '';
+    const title = document.createElement('div'); title.className = 'atitle'; title.textContent = 'Меню админа (` или F10 — скрыть)'; admin.appendChild(title);
+    let group = '', box = null;
+    for (const it of JSON.parse(app.admin_items())) {
+      if (it.group !== group) {
+        group = it.group;
+        const h = document.createElement('div'); h.className = 'agroup'; h.textContent = group; admin.appendChild(h);
+        box = document.createElement('div'); box.className = 'arow'; admin.appendChild(box);
+      }
+      const b = document.createElement('button'); b.textContent = it.label; b.dataset.cmd = it.cmd;
+      b.addEventListener('click', (e) => { e.stopPropagation(); status.textContent = run(it.cmd); });
+      box.appendChild(b);
+    }
+    // the page's own: the mouth by the microphone (the voice server feeds the same input later)
+    const mic = document.createElement('button'); mic.textContent = '🎤 Рот по голосу'; mic.id = 'amic';
+    mic.addEventListener('click', (e) => { e.stopPropagation(); startMic().then((m) => { status.textContent = m; }); });
+    box.appendChild(mic);
+    const status = document.createElement('div'); status.className = 'astatus'; admin.appendChild(status);
+  }
+  function toggleAdmin(on) {
+    const show = on === undefined ? admin.style.display !== 'block' : on;
+    if (show && !admin.childElementCount) buildAdmin();
+    admin.style.display = show ? 'block' : 'none';
+    state.adminShown = show;
+    if (show && document.pointerLockElement) document.exitPointerLock();
+  }
+  state.toggleAdmin = toggleAdmin;
+  // the microphone is a toggle: the second click stops the tracks, closes the audio context and the level timer
+  let micSrc = null;
+  async function startMic() {
+    if (micSrc) {
+      clearInterval(micSrc.timer); micSrc.stream.getTracks().forEach((t) => t.stop());
+      try { await micSrc.ctx.close(); } catch (e) { /* already closed */ }
+      micSrc = null; micStarted = false; state.micLevel = 0; app.set_mouth_level(0);
+      return 'микрофон выключен';
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return 'микрофон недоступен в этом браузере';
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // the context was made after an awaited permission prompt: stricter browsers start it suspended
+      if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) { /* the level stays 0 */ } }
+      const an = ctx.createAnalyser(); an.fftSize = 512;
+      ctx.createMediaStreamSource(stream).connect(an);
+      const buf = new Float32Array(an.fftSize);
+      micStarted = true;
+      state.micLevel = 0;
+      // the level (RMS, scaled) a few dozen times a second; the engine smooths it into the mouth channel
+      const timer = setInterval(() => { an.getFloatTimeDomainData(buf); let e = 0; for (const v of buf) e += v * v; const l = Math.min(1, Math.sqrt(e / buf.length) * 6); state.micLevel = l; app.set_mouth_level(l); }, 33);
+      micSrc = { stream, ctx, timer };
+      return 'микрофон слушается: рот открывается по голосу (ещё раз — выключить)';
+    } catch (err) { return 'микрофон не дали: ' + err; }
+  }
   state.setFly = (on) => { fly = !!on; publish(); };   // tests: free flight held on (as after F)
   addEventListener('keydown', (e) => {
     if (e.code === 'KeyV' && !e.repeat) { third = !third; app.set_third_person(third); }
     if (e.code === 'KeyF' && !e.repeat) fly = !fly;
+    if (['F6', 'F7', 'F8', 'F10', 'Backquote'].includes(e.code)) e.preventDefault();
+    if (!e.repeat) onKey(e.code);
     if (e.code === 'F3' && !e.repeat) { e.preventDefault(); hud.style.display = hud.style.display === 'block' ? 'none' : 'block'; }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
     keys.add(e.code); publish();
   });
-  addEventListener('keyup', (e) => { keys.delete(e.code); publish(); });
+  addEventListener('keyup', (e) => { keys.delete(e.code); publish(); if (e.code === 'KeyM') app.set_mouth_test(0); });
   addEventListener('blur', () => { keys.clear(); publish(); });
   // the mouse: pointer lock where the browser gives it; embedded browsers refuse it — then holding the button and
   // dragging looks around (both paths call the same add_look)
@@ -140,6 +219,8 @@ async function main() {
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, on(false));
   };
   if (planet) { $('orbit').style.display = 'flex'; hold($('orbit'), (v) => { orbitHeld = v; }); }
+  $('gear').addEventListener('click', (e) => { e.stopPropagation(); toggleAdmin(); });
+  if (q.get('admin') === '1') toggleAdmin(true);
   $('full').addEventListener('click', () => {
     const el = document.documentElement;
     if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
@@ -211,6 +292,13 @@ async function main() {
     try {
       app.frame(now);
       state.frames++;
+      // a screenshot asked by the admin menu: read the canvas in the same task as the frame (WebGPU clears it after)
+      if (state.shotNext) {
+        const name = state.shotNext; state.shotNext = null;
+        const receipt = JSON.stringify({ kind: 'd37-web-shot', name, made: new Date().toISOString(), backend: state.backend, stats: JSON.parse(app.stats()), planet: planet ? JSON.parse(app.planet_stats()) : null, fps: state.fps }, null, 1);
+        const save = (blob, file) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+        canvas.toBlob((b) => { if (b) save(b, 'd37_' + name + '.png'); save(new Blob([receipt], { type: 'application/json' }), 'd37_' + name + '.json'); });
+      }
       if (state.firstFrameMs === null) { state.firstFrameMs = performance.now(); state.ready = true; }
       if (!state.loaded && app.loaded()) { state.loaded = true; state.loadedMs = performance.now(); }
     } catch (e) {
@@ -222,6 +310,9 @@ async function main() {
       state.fps = n * 1000 / Math.max(acc, 1); acc = 0; n = 0; lastHud = now;
       const s = JSON.parse(app.stats());
       state.stats = s;
+      // the menu's «бюджеты» switch shows the HUD with the budget line
+      if (state.lastAdmin && /budgets on/.test(state.lastAdmin)) { state.budgets = true; hud.style.display = 'block'; }
+      if (state.lastAdmin && /budgets off/.test(state.lastAdmin)) { state.budgets = false; }
       let text = state.backend + '\n' + state.fps.toFixed(0) + ' кадров/с · тик ' + s.tick + ' · пропущено ' + s.dropped_ticks + '\n';
       if (planet) {
         const p = JSON.parse(app.planet_stats());
@@ -232,6 +323,11 @@ async function main() {
       } else {
         text += 'место ' + s.pos.map((v) => v.toFixed(1)).join(' ') + '\n'
           + 'земля: ' + s.terrain_blocks + ' блоков, очередь ' + s.queue + ' + ' + s.ready + ' · ' + (s.triangles / 1000).toFixed(0) + ' тыс. треугольников';
+      }
+      text += '\nперсонаж: ' + s.body + ' (' + s.body_triangles + ' треуг.) · цвета ' + s.palette + ' · вид ' + s.view + ' · рот ' + s.mouth.toFixed(2);
+      if (state.budgets) {
+        const mem = performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(0) + ' МБ JS' : 'память: нет данных';
+        text += '\nбюджеты: ' + state.fps.toFixed(0) + ' кадров/с (' + (1000 / Math.max(state.fps, 1)).toFixed(1) + ' мс; 16.7) · треуг. ' + (s.triangles / 1000).toFixed(0) + ' тыс. · draws ' + s.draws + ' · ' + mem;
       }
       hud.textContent = text + '\nпотоков: ' + pool.length;
     }

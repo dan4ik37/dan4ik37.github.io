@@ -16,6 +16,14 @@
   #hud { position: fixed; left: 8px; top: 8px; padding: 6px 9px; background: rgba(0, 0, 0, .55); border-radius: 6px; white-space: pre; font: 12px/1.35 ui-monospace, Consolas, monospace; pointer-events: none; display: none; }
   #hint { position: fixed; left: 50%; bottom: 10px; width: max-content; max-width: 94vw; box-sizing: border-box; transform: translateX(-50%); padding: 5px 10px; background: rgba(0, 0, 0, .5); border-radius: 6px; pointer-events: none; font-size: 12px; line-height: 1.3; text-align: center; }
   #error { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; background: #05070b; }
+  #gear { right: 58px; top: 10px; width: 40px; height: 40px; font-size: 18px; display: flex; border-radius: 8px; }
+  #admin { position: fixed; left: 8px; top: 8px; bottom: 8px; width: min(420px, 92vw); overflow-y: auto; display: none; padding: 8px 10px; background: rgba(8, 10, 14, .88); border: 1px solid rgba(255, 255, 255, .18); border-radius: 8px; z-index: 5; }
+  #admin .atitle { font-weight: 600; margin-bottom: 4px; color: #ffd36b; }
+  #admin .agroup { margin: 8px 0 3px; font-size: 12px; text-transform: uppercase; opacity: .75; }
+  #admin .arow { display: flex; flex-wrap: wrap; gap: 5px; }
+  #admin button { font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .1); color: inherit; cursor: pointer; touch-action: manipulation; }
+  #admin button:active { background: rgba(255, 160, 60, .5); }
+  #admin .astatus { margin-top: 8px; font-size: 12px; color: #9f9; white-space: pre-wrap; }
 </style>
 </head>
 <body>
@@ -25,6 +33,8 @@
 <div id="orbit" class="btn" title="орбита ↔ земля">🌍</div>
 <div id="jump" class="btn" title="прыжок">⤒</div>
 <div id="full" class="btn" title="на весь экран">⛶</div>
+<div id="gear" class="btn" title="меню админа">⚙</div>
+<div id="admin"></div>
 <div id="error"></div>
 <script type="module" src="./d37-page.js"></script>
 </body>
