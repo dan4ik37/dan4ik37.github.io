@@ -92,6 +92,37 @@ t((await q(`select public.file_blocked(array['${h}','${'b'.repeat(64)}']) r`)).l
 await as(A); await db.exec(`insert into messages(user_id, text) values ('${A}', 'm6')`); await db.exec(`delete from file_day`);
 t((await q(`select public.msg_attach('chat', 6, ${att({})}) r`)).reason === 'blocked', 'blocked hash cannot be re-attached');
 t((await q(`select public.file_cfg() r`)).file_mb === 10, 'cfg defaults merged');
+// T-160: владелец сайта (profiles.role 'admin') — без лимитов; решает сервер по входу, устройство назваться владельцем не может
+const O = '55555555-5555-5555-5555-555555555555';
+await db.exec(`insert into auth.users values ('${O}'); insert into profiles values ('${O}', 'admin'); delete from site_config; delete from file_day;`);
+await as(A);
+let c = await q(`select public.file_cfg() r`);
+t(c.owner === false && c.file_mb === 10 && c.day_n === 40, 'ordinary user: caps as before', c);
+await db.exec(`insert into messages(user_id, text) values ('${A}', 'u-big')`); let mid = (await db.query(`select max(id) m from messages`)).rows[0].m;
+t((await q(`select public.msg_attach('chat', ${mid}, ${att({ size: 11 * 1048576, chash: 'c'.repeat(64), phash: 'c'.repeat(64) })}) r`)).reason === 'big', 'ordinary user: 11 MB refused');
+t((await q(`select public.msg_attach('chat', ${mid}, ${att({ size: 11 * 1048576, chash: 'c'.repeat(64), phash: 'c'.repeat(64), owner: true })}) r`)).ok !== true, 'client cannot claim owner inside att');
+let threw = false; try { await db.query(`select public.file_cfg('{"owner":true}'::jsonb)`); } catch (e) { threw = true; } t(threw, 'file_cfg takes no client parameters');
+await db.exec(`insert into site_config values ('chat_files', '{"day_n":2,"owner":true,"file_mb":10}')`);
+c = await q(`select public.file_cfg() r`); t(c.owner === false && c.file_mb === 10, 'site_config cannot make everyone owner', c);
+await as(M); c = await q(`select public.file_cfg() r`); t(c.owner === false && c.file_mb === 10, 'moderator keeps normal caps');
+await as(null); c = await q(`select public.file_cfg() r`); t(c.owner === false, 'guest: not owner');
+await as(O); c = await q(`select public.file_cfg() r`);
+t(c.owner === true && c.file_mb === 100 && c.direct_mb >= 100 && c.day_n >= 1000000, 'owner: no daily caps, file up to max_mb', c);
+for (let i = 0; i < 3; i++) {
+  await db.exec(`insert into messages(user_id, text) values ('${O}', 'o${i}')`); mid = (await db.query(`select max(id) m from messages`)).rows[0].m;
+  const r = await q(`select public.msg_attach('chat', ${mid}, ${att({ size: 60 * 1048576, chash: String(i).repeat(64), phash: String(i).repeat(64) })}) r`);
+  t(r.ok === true, `owner: 60 MB file #${i + 1} attached past day_n=2 / day_mb`, r);
+}
+await db.exec(`insert into messages(user_id, text) values ('${O}', 'o-exe')`); mid = (await db.query(`select max(id) m from messages`)).rows[0].m;
+t((await q(`select public.msg_attach('chat', ${mid}, ${att({ name: 'x.exe', mime: 'application/x-msdownload' })}) r`)).reason === 'type', 'owner: unsafe types still refused');
+t((await q(`select public.msg_attach('chat', ${mid}, ${att({ size: 101 * 1048576 })}) r`)).reason === 'big', 'owner: above technical max_mb refused');
+t((await q(`select public.msg_attach('chat', ${mid}, ${att({ name: 'IMG_1.HEIC', mime: 'image/heic', chash: 'd'.repeat(64), phash: 'd'.repeat(64) })}) r`)).ok === true, 'iPhone HEIC allowed');
+await as(A); await db.exec(`delete from file_day`);
+for (let i = 0; i < 3; i++) { await db.exec(`insert into messages(user_id, text) values ('${A}', 'a${i}')`); }
+const ids = (await db.query(`select id from messages where user_id = '${A}' order by id desc limit 3`)).rows.map(r => r.id).reverse();
+const rs = []; for (const [i, id] of ids.entries()) rs.push((await q(`select public.msg_attach('chat', ${id}, ${att({ name: 'v.mov', mime: 'video/quicktime', chash: String(i + 5).repeat(64), phash: String(i + 5).repeat(64) })}) r`)).reason || 'ok');
+t(rs.join() === 'ok,ok,day', 'ordinary user: daily count cap still applies (day_n=2), MOV allowed', rs);
+await db.exec(`delete from site_config`);
 await db.exec(`update messages set created_at = now() - interval '40 days' where id = 1`);
 t((await q(`select public.file_expire() r`)) >= 1 && !(await db.query(`select att from messages where id = 1`)).rows[0].att.thumb && (await db.query(`select att from messages where id = 1`)).rows[0].att.chash === h, 'old thumbs expire, reference stays');
 console.log(bad ? `files SQL: ${bad}/${n} FAIL` : `files SQL OK (${n} checks, file applied twice)`);

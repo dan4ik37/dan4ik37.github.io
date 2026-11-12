@@ -576,13 +576,13 @@
     // 📎 файл: выбрать → D37Files.send (текст «📎 имя» обычным путём + ссылка msg_attach); сам файл идёт от устройства к устройству
     function pickFile(){
       const A = V.A; if (!A?.fileKind || !V.canWrite || !window.D37Files) return;
-      const inp = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,audio/*,.pdf,.txt,.zip' });
+      const inp = Object.assign(document.createElement('input'), { type: 'file', accept: window.D37Files.ACCEPT || 'image/*,video/*,audio/*,.pdf,.txt,.zip' });
       inp.onchange = async () => {
         const f = inp.files?.[0]; if (!f) return;
         note('📎 Готовим файл…');
         const r = await window.D37Files.send(A, f);
         if (V.A !== A) return;
-        if (!r.ok) { note('⚠️ Файл не отправлен: ' + (r.err || 'ошибка')); return; }
+        if (!r.ok) { note('⚠️ Файл не отправлен: ' + (r.err || 'ошибка'), true, 9000); return; }
         q('.mv-note').hidden = true;
         if (r.m && V.msgs.has(r.m.id)) { Object.assign(V.msgs.get(r.m.id), { att: r.m.att }); rerender(r.m.id); } else if (r.m) onEvent({ t: 'ins', m: r.m });
         toBottom();
