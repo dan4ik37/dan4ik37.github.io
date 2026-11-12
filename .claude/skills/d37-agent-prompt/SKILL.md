@@ -25,6 +25,9 @@ touching the same files run one after another.
 - Numbers on the phone profile (CPU ×4 "mid", skill d37-chrome-e2e) before / after; 0 per-frame garbage; 20× open/close leaks;
   10–15 min run without errors; fallback path; flags with one-line rollback; mobile + dark/light themes.
 - Heavy jobs under E:\claude-tmp\HEAVY.lock (skill d37-heavy-lock in E:\d37-core\.claude\skills). Temp: E:\claude-tmp\<task>\.
+- Navigation by the code graph first (owner 12.11, Graphify): `PYTHONUTF8=1 D:\UnityProjects\_tools\uv\bin\graphify.exe query "<question>" --graph <repo>\graphify-out\graph.json`
+  (`explain "<name>"`, `path "A" "B"`); graphs exist for the site repo, E:\d37-engine and E:\d37-core (git-ignored locally). Navigation, not truth —
+  facts are read from the code. The coordinator refreshes them with `graphify update <repo>` (under HEAVY.lock) after each accepted step.
 - Downloads only with the owner's permission (permissive licenses, exact versions, listed in the report).
 - Report (≤ 15 lines, English): Done / Not done / Gaps / Tests (numbers, where measured) / Owner actions (SQL + REST checks) /
   Branch / Rung.
