@@ -12,6 +12,8 @@ import { GAME_PAGES } from './_lib/games-seo.js';
 import { TOPICS } from './_lib/topics.js';
 import { QUIZZES } from './_lib/quizzes.js';
 import { sbSelect, storeConfigured } from './_lib/store.js';
+import { makeForumBlocks } from './_lib/forum-blocks.js';
+const FB = makeForumBlocks();   // адрес статьи форума — FB.slug, как в forum.sql
 import { payConfig } from './_lib/pay.js';
 import { sellerReady } from './_lib/seller.js';
 
@@ -41,7 +43,11 @@ export default async function handler(req, res) {
   // темы форума и идеи для видео (без отклонённых) — свежие сверху
   let threads = [], ideas = [];
   if (part === 'pages' && storeConfigured()) {
-    try { threads = await sbSelect('forum_threads', 'select=id,created_at&order=created_at.desc&limit=2000'); } catch (e) { threads = []; }
+    // форум 2.0 (T-157): только опубликованные статьи для всех (до 12+), адрес /forum/<id>-<slug>, дата — правка или публикация;
+    // старая база (forum.sql 2.0 не запущен) — как раньше
+    try { threads = (await sbSelect('forum_threads', 'status=eq.published&age_min=lte.12&realm=eq.kids&select=id,title,created_at,published_at,edited_at,tags&order=published_at.desc&limit=2000'))
+      .map(t => ({ ...t, path: '/forum/' + t.id + (FB.slug(t.title) ? '-' + FB.slug(t.title) : ''), created_at: t.edited_at || t.published_at || t.created_at })); }
+    catch (e) { try { threads = await sbSelect('forum_threads', 'select=id,created_at&order=created_at.desc&limit=2000'); } catch (e2) { threads = []; } }
     try { ideas = await sbSelect('ideas', 'status=neq.rejected&select=id,created_at,status_changed_at&order=created_at.desc&limit=2000'); } catch (e) { ideas = []; }
   }
   const day = d => esc(String(d || '').slice(0, 10));
@@ -57,7 +63,9 @@ export default async function handler(req, res) {
       url(`${SITE}/shorts`, 'daily', '0.7'),
       url(`${SITE}/chat`, 'weekly', '0.6'),
       url(`${SITE}/forum`, 'daily', '0.7'),
-      ...threads.map(t => url(`${SITE}/forum/${esc(t.id)}`, 'weekly', '0.5', day(t.created_at))),
+      ...threads.map(t => url(`${SITE}${esc(t.path || '/forum/' + t.id)}`, 'weekly', '0.6', day(t.created_at))),
+      ...[...new Set(threads.flatMap(t => Array.isArray(t.tags) ? t.tags : []).filter(x => /^[a-zа-яё0-9-]{2,24}$/.test(x)))].slice(0, 300)
+        .map(x => url(`${SITE}/forum/t/${esc(encodeURIComponent(x))}`, 'weekly', '0.4')),
       url(`${SITE}/ideas`, 'daily', '0.6'),
       ...ideas.map(i => url(`${SITE}/ideas/${esc(i.id)}`, 'monthly', '0.4', day(i.status_changed_at || i.created_at))),
       // 05.11.2026: /donate, /lfg, /soundboard, /poll, /clicker — разделы-приложения: сервер отдаёт по этим адресам ту же главную

@@ -322,6 +322,42 @@
       "destination": "/api/pages?page=forum"
     },
     {
+      "source": "/forum/new",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/forum/my",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/forum/saved",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/forum/follow",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/forum/mod",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/forum/edit/:id",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/forum/u/:id",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/forum/t/:tag",
+      "destination": "/api/pages?page=forum&tag=:tag"
+    },
+    {
+      "source": "/api/forum-ping",
+      "destination": "/api/pages?page=forumping"
+    },
+    {
       "source": "/forum/:id",
       "destination": "/api/pages?page=forum&id=:id"
     },

@@ -70,6 +70,17 @@ export async function sbUpsert(table, row, onConflict) {
   if (!r.ok) throw new Error(`upsert ${table}: HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
 }
 
+// Обновить строки по фильтру (без фильтра не зовём): sbPatch('forum_threads', 'id=eq.5&pinged_at=is.null', { pinged_at: … })
+export async function sbPatch(table, query, row) {
+  if (!query) throw new Error('sbPatch без фильтра');
+  const r = await timedFetch(`${baseUrl()}/rest/v1/${table}?${query}`, {
+    method: 'PATCH', headers: headers({ Prefer: 'return=representation' }), body: JSON.stringify(row),
+  });
+  const txt = await r.text();
+  if (!r.ok) throw new Error(`patch ${table}: HTTP ${r.status} ${txt.slice(0, 200)}`);
+  return txt ? JSON.parse(txt) : [];
+}
+
 // query — фильтр PostgREST, например endpoint=in.("a","b"). Без фильтра не зовём.
 export async function sbDelete(table, query) {
   if (!query) throw new Error('sbDelete без фильтра');
