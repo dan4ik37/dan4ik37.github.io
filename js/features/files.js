@@ -35,19 +35,45 @@
 
   // ═══ Настройки (сервер: file_cfg; заглушки — до решения владельца) ═══
   // on: false, пока сервер не ответил file_cfg: до запуска community.sql ч. 9 файлов нет вовсе (ни кнопки, ни опроса ЛС)
-  let cfg = { on: false, file_mb: 10, auto_mb: 10, direct_mb: 25, seed_mb_day: 300, day_n: 40, day_mb: 100 }, cfgAt = 0;
-  async function loadCfg(){
-    if (Date.now() - cfgAt < 600e3 || !sb()) return cfg;
+  // T-160: file_cfg отвечает ЛИЧНЫЕ пределы того, кто спрашивает (владелец сайта — без лимитов: owner true, file_mb = max_mb;
+  // решает сервер по profiles.role, устройство только читает). max_mb — технический предел передачи (память получателя),
+  // relay_kbs — скорость через наш TURN (= max-bps в server/coturn/turnserver.conf, КБ/с)
+  const CFG0 = { on: false, owner: false, file_mb: 10, auto_mb: 10, direct_mb: 25, max_mb: 100, relay_kbs: 1200, seed_mb_day: 300, day_n: 40, day_mb: 100 };
+  let cfg = Object.assign({}, CFG0), cfgAt = 0;
+  async function loadCfg(maxAge = 600e3){
+    if (Date.now() - cfgAt < maxAge || !sb()) return cfg;
     cfgAt = Date.now();
-    try { const { data, error } = await sb().rpc('file_cfg'); if (!error && data) { cfg = Object.assign(cfg, { on: true }, data); document.querySelectorAll('.mv-fbtn').forEach(b => { b.hidden = !(b.dataset.fk && F.canSend()); }); } } catch (er) {}
+    try { const { data, error } = await sb().rpc('file_cfg'); if (!error && data) { cfg = Object.assign({}, CFG0, { on: true }, data); document.querySelectorAll('.mv-fbtn').forEach(b => { b.hidden = !(b.dataset.fk && F.canSend()); }); } } catch (er) {}
     return cfg;
   }
   F.cfg = () => cfg;
+  if (FILES_ON) addEventListener('d37:auth', () => { cfgAt = 0; loadCfg(); });   // вошёл / вышел — пределы другие (владелец)
+  const MiB = 1048576;
+  const recvCap = () => Math.max(+cfg.direct_mb || 0, +cfg.max_mb || 0) * MiB;   // размер уже проверил сервер при msg_attach
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // Причины — простыми словами: что случилось и что делать (строка состояния карточки и ошибки)
+  const WHY = {
+    nosrc: '📡 отправителя сейчас нет на сайте (и никого с этим файлом) — файл придёт сам, как только он зайдёт; держи эту страницу открытой',
+    conn: 'соединяемся…', connr: 'соединяемся через сервер-посредник…',
+    retry: 'связь оборвалась — пробуем ещё раз…',
+    relaydown: 'сервер-посредник не отвечает, а у тебя включено «🕶 Скрыть мой адрес» — попробуй через пару минут или выключи эту настройку в ⚙️ → 📱 Телефон',
+    srcrelay: 'у отправителя не работает сервер-посредник (у него включено «🕶 Скрыть мой адрес») — попробуй через пару минут',
+    noroute: 'устройства не смогли соединиться (строгая сеть, например мобильный интернет) и сервер-посредник не помог — попробуй через Wi-Fi или позже',
+    noanswer: 'отправитель в сети, но не отвечает (страница у него свёрнута?) — попроси открыть сайт и нажми «Повторить»',
+    signal: 'нет связи с сервером сайта — проверь интернет и нажми «Повторить»',
+    srcno: 'у отправителя файла больше нет или он сейчас не может раздавать (экономия трафика, мало заряда)',
+    big: 'файл слишком большой для передачи', bad: 'файл пришёл испорченным',
+  };
+  const fail = (code, msg) => Object.assign(new Error(msg || WHY[code] || code), { code });
+  F.WHY = WHY;
 
   // ═══ Типы: список + первые байты ═══
-  const TYPES = { 'image/jpeg': /\.jpe?g$/i, 'image/png': /\.png$/i, 'image/gif': /\.gif$/i, 'image/webp': /\.webp$/i, 'video/mp4': /\.(mp4|m4v)$/i, 'video/webm': /\.webm$/i,
+  // T-160: + фото и видео с iPhone (HEIC, MOV) — с телефона это самые частые «нельзя»
+  const TYPES = { 'image/jpeg': /\.jpe?g$/i, 'image/png': /\.png$/i, 'image/gif': /\.gif$/i, 'image/webp': /\.webp$/i, 'image/heic': /\.hei[cf]$/i, 'video/mp4': /\.(mp4|m4v)$/i, 'video/webm': /\.webm$/i, 'video/quicktime': /\.mov$/i,
     'audio/mpeg': /\.mp3$/i, 'audio/ogg': /\.(ogg|oga|opus)$/i, 'audio/wav': /\.wav$/i, 'audio/mp4': /\.m4a$/i, 'application/pdf': /\.pdf$/i, 'text/plain': /\.txt$/i, 'application/zip': /\.zip$/i };
-  const EXT_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', pdf: 'application/pdf', txt: 'text/plain', zip: 'application/zip' };
+  const EXT_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', heif: 'image/heic', mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', pdf: 'application/pdf', txt: 'text/plain', zip: 'application/zip' };
+  const MIME_ALIAS = { 'image/heif': 'image/heic' };
+  F.ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif,video/mp4,video/webm,video/quicktime,.mov,.mp3,.m4a,.ogg,.oga,.opus,.wav,.pdf,.txt,.zip';
   const at = (b, i, s) => s.split('').every((c, k) => b[i + k] === c.charCodeAt(0));
   function sniff(b, mime){   // b — Uint8Array первых байтов
     switch (mime) {
@@ -55,7 +81,7 @@
       case 'image/png': return b[0] === 0x89 && at(b, 1, 'PNG');
       case 'image/gif': return at(b, 0, 'GIF8');
       case 'image/webp': return at(b, 0, 'RIFF') && at(b, 8, 'WEBP');
-      case 'video/mp4': case 'audio/mp4': return at(b, 4, 'ftyp');
+      case 'video/mp4': case 'audio/mp4': case 'video/quicktime': case 'image/heic': return at(b, 4, 'ftyp') || (mime === 'video/quicktime' && (at(b, 4, 'moov') || at(b, 4, 'wide') || at(b, 4, 'mdat')));
       case 'video/webm': return b[0] === 0x1A && b[1] === 0x45 && b[2] === 0xDF && b[3] === 0xA3;
       case 'audio/mpeg': return at(b, 0, 'ID3') || (b[0] === 0xFF && (b[1] & 0xE0) === 0xE0);
       case 'audio/ogg': return at(b, 0, 'OggS');
@@ -68,7 +94,7 @@
   }
   const mimeOf = name => EXT_MIME[String(name || '').split('.').pop().toLowerCase()] || '';
   F.typeOk = (name, mime) => !!TYPES[mime] && TYPES[mime].test(name || '');
-  const kind = mime => mime.split('/')[0] === 'image' ? 'image' : mime.split('/')[0] === 'video' ? 'video' : mime.split('/')[0] === 'audio' ? 'audio' : 'file';
+  const kind = mime => mime === 'image/heic' ? 'file' : mime.split('/')[0] === 'image' ? 'image' : mime.split('/')[0] === 'video' ? 'video' : mime.split('/')[0] === 'audio' ? 'audio' : 'file';
   const ICON = { image: '🖼', video: '🎬', audio: '🎵', file: '📄' };
   F.size = n => n >= 1048576 ? (n / 1048576).toFixed(n >= 10485760 ? 0 : 1).replace('.', ',') + ' МБ' : Math.max(1, Math.round(n / 1024)) + ' КБ';
   const hex = buf => Array.from(new Uint8Array(buf), x => x.toString(16).padStart(2, '0')).join('');
@@ -124,11 +150,11 @@
   // ═══ Отправка: проверить, посчитать хеш, превью, положить к себе (закреплён — ждёт получателя), ссылка в сообщение ═══
   F.canSend = () => FILES_ON && cfg.on !== false && !!me() && !window.D37Age?.u9?.();
   F.prepare = async file => {
-    await loadCfg();
-    const name = F.cleanName(file.name), mime = TYPES[file.type] && TYPES[file.type].test(name) ? file.type : mimeOf(name);
-    if (!mime || !F.typeOk(name, mime)) throw new Error('Такой тип файла нельзя: картинки, видео, звук, PDF, TXT и ZIP');
+    await loadCfg(60e3);   // свежие личные пределы (владелец — без лимитов)
+    const name = F.cleanName(file.name), ft = MIME_ALIAS[file.type] || file.type, mime = TYPES[ft] && TYPES[ft].test(name) ? ft : mimeOf(name);
+    if (!mime || !F.typeOk(name, mime)) throw new Error('Такой тип файла нельзя. Можно: фото (JPG, PNG, GIF, WEBP, HEIC), видео (MP4, WEBM, MOV), звук (MP3, M4A, OGG, WAV), PDF, TXT и ZIP — другое запакуй в ZIP');
     if (file.size < 1) throw new Error('Файл пустой');
-    if (file.size > cfg.file_mb * 1048576) throw new Error(`Файл больше ${cfg.file_mb} МБ`);
+    if (file.size > cfg.file_mb * MiB) throw new Error(cfg.owner ? `Файл больше ${cfg.file_mb} МБ — столько за раз устройство получателя не примет` : `Файл больше ${cfg.file_mb} МБ — столько можно за один раз. Сожми видео или раздели архив на части`);
     const head = new Uint8Array(await file.slice(0, 600).arrayBuffer());
     if (!sniff(head, mime)) throw new Error('Содержимое файла не похоже на его тип — не отправляем');
     const chash = await sha(await file.arrayBuffer());
@@ -148,7 +174,7 @@
     const { data, error } = await sb().rpc('msg_attach', { p_kind: A.fileKind, p_mid: r.m.id, p_att: att });
     if (error || !data?.ok) {
       try { await A.del?.(r.m); } catch (er) {}
-      const R = { type: 'такой тип файла нельзя', big: `файл больше ${cfg.file_mb} МБ`, day: 'на сегодня лимит файлов исчерпан', u9: 'файлы — с 9 лет', blocked: 'файл запрещён модераторами', off: 'файлы пока выключены', late: 'не успели прикрепить — попробуй ещё раз' };
+      const R = { type: 'такой тип файла нельзя', big: `файл больше ${cfg.file_mb} МБ`, day: `на сегодня лимит файлов исчерпан (${cfg.day_n} шт. или ${cfg.day_mb} МБ в день) — завтра снова можно`, u9: 'файлы — с 9 лет', blocked: 'файл запрещён модераторами', off: 'файлы пока выключены', late: 'не успели прикрепить — попробуй ещё раз', auth: 'войди, чтобы отправлять файлы' };
       return { ok: false, err: error ? (/msg_attach|PGRST202/.test(error.message + error.code) ? 'файлы появятся, когда сайт обновится' : error.message) : R[data?.reason] || data?.reason || 'не получилось' };
     }
     seed(att.chash);
@@ -165,20 +191,23 @@
 
   // ═══ Рой: подписанные сообщения в теме Realtime ═══
   const SW = new Map();   // chash → { ch, seed, want: { att, chunks, ... }, peers: Map(key → peer), pubs: Map }
-  const MAX_SW = 12, MAX_PEERS = 3;
+  const MAX_SW = 12, MAX_PEERS = 3, MAX_FAILS = 4;
   const realm = () => (window.D37Age?.group?.() === 'adult' ? 'a' : 'k');
   let keys = null, myKey = '';
-  async function sig(){ await P()?.need?.('calls'); const S = window.D37Calls?.sig; if (!S) throw new Error('calls'); if (!keys) { keys = await S.myKeys(); myKey = (me() || 'g').slice(0, 8) + '~' + Math.random().toString(36).slice(2, 8); } return S; }
+  async function sig(){ await P()?.need?.('calls'); const S = window.D37Calls?.sig; if (!S) throw fail('signal'); if (!keys) { keys = await S.myKeys(); myKey = (me() || 'g').slice(0, 8) + '~' + Math.random().toString(36).slice(2, 8); } return S; }
   async function swarm(h){
-    let s = SW.get(h); if (s) return s;
-    if (SW.size >= MAX_SW) { const old = [...SW.entries()].find(([, x]) => !x.want && !x.pinned); if (old) leave(old[0]); }
-    const S = await sig(), c = sb(); if (!c) throw new Error('offline');
-    s = { h, ch: null, seed: false, want: null, peers: new Map(), pubs: new Map(), last: 0 };
+    let s = SW.get(h); if (s && s.ok) return s;
+    if (s && s.ready) leave(h); else if (s) { await s.ready0; if (s.ok) return s; leave(h); }
+    if (SW.size >= MAX_SW) { const old = [...SW.entries()].find(([, x]) => !x.want && !x.seed); if (old) leave(old[0]); }
+    const S = await sig(), c = sb(); if (!c) throw fail('signal');
+    s = { h, ch: null, seed: false, want: null, peers: new Map(), pubs: new Map(), last: 0, ok: false, ready: false };
     SW.set(h, s);
     s.send = async d => { d.ts = Date.now(); d.from = myKey; const m = JSON.stringify(d); try { await s.ch.send({ type: 'broadcast', event: 'f', payload: { k: myKey, m, s: await S.sign(keys.kp.privateKey, m), p: keys.pub } }); } catch (er) {} };
     s.ch = c.channel(`d37f:${realm()}:${h.slice(0, 40)}`, { config: { broadcast: { self: false } } });
     s.ch.on('broadcast', { event: 'f' }, ({ payload }) => onMsg(s, payload));
-    await new Promise(res => { s.ch.subscribe(st => { if (st === 'SUBSCRIBED' || st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') res(); }); setTimeout(res, 8000); });
+    // статус канала помним всё время: связь с сервером сайта пропала — следующая попытка подпишется заново (раньше — молчание)
+    s.ready0 = new Promise(res => { s.ch.subscribe(st => { s.ok = st === 'SUBSCRIBED'; if (st !== 'SUBSCRIBED' && st !== 'CLOSED') s.ok = false; if (['SUBSCRIBED', 'CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(st)) res(); }); setTimeout(res, 10000); });
+    await s.ready0; s.ready = true;
     return s;
   }
   function leave(h){ const s = SW.get(h); if (!s) return; SW.delete(h); for (const p of s.peers.values()) closePeer(p); try { sb()?.removeChannel(s.ch); } catch (er) {} }
@@ -193,12 +222,14 @@
     let d; try { d = JSON.parse(pl.m); } catch (er) { return; }
     if (!d || d.from !== pl.k || Math.abs(Date.now() - (+d.ts || 0)) > 120e3) return;
     if (d.to && d.to !== myKey) return;
+    const peerOf = () => { const p = s.peers.get(d.from); return p && p.sid === d.sid ? p : null; };
     if (d.t === 'want' && s.seed) { if (await seedOk(s.h)) s.send({ t: 'have', to: d.from }); }
-    else if (d.t === 'have' && s.want) pickSource(s, d.from);
+    else if (d.t === 'have' && s.want) { s.want.lastHave = Date.now(); pickSource(s, d.from); }
     else if (d.t === 'offer' && s.seed && typeof d.sdp === 'string' && d.sdp.length < 20000) answerPeer(s, d);
-    else if (d.t === 'answer' && typeof d.sdp === 'string' && d.sdp.length < 20000) { const p = s.peers.get(d.from); if (p && p.sid === d.sid) p.pc.setRemoteDescription({ type: 'answer', sdp: d.sdp }).catch(() => {}); }
-    else if (d.t === 'ice' && Array.isArray(d.c) && d.c.length <= 40) { const p = s.peers.get(d.from); if (p && p.sid === d.sid) for (const c of d.c) if (c && typeof c.candidate === 'string' && c.candidate.length < 600) p.pc.addIceCandidate(c).catch(() => {}); }
-    else if (d.t === 'got') { const m = await F.meta(s.h); if (m && m.sent) { m.got = (m.got || 0) + 1; m.pinned = false; await putMeta(m).catch(() => {}); paintAll(s.h); } }
+    else if (d.t === 'answer' && typeof d.sdp === 'string' && d.sdp.length < 20000) { const p = peerOf(); if (p) { p.answered = true; p.pc.setRemoteDescription({ type: 'answer', sdp: d.sdp }).catch(() => {}); } }
+    else if (d.t === 'ice' && Array.isArray(d.c) && d.c.length <= 40) { const p = peerOf(); if (p) for (const c of d.c) if (c && typeof c.candidate === 'string' && c.candidate.length < 600) { p.rem.add((/ typ (\w+)/.exec(c.candidate) || [])[1] || '?'); p.pc.addIceCandidate(c).catch(() => {}); } }
+    else if (d.t === 'err' && typeof d.why === 'string') { const p = peerOf(); if (p) { p.why = { srcrelay: 'srcrelay', srcno: 'srcno', busy: 'busy' }[d.why] || 'srcno'; p.fail?.(); } }
+    else if (d.t === 'got') { const m = await F.meta(s.h); if (m && m.sent) { m.got = (m.got || 0) + 1; m.pinned = false; await putMeta(m).catch(() => {}); const ss = SEND.get(s.h); if (ss) ss.got = true; paintAll(s.h); } }
   }
   // Раздавать ли: файл есть, не в чёрном списке, батарея / экономия трафика, лимит раздачи в день
   let seededToday = { d: '', b: 0 };
@@ -208,35 +239,68 @@
     if (navigator.connection?.saveData) return false;
     try { const b = await navigator.getBattery?.(); if (b && !b.charging && b.level < .15) return false; } catch (er) {}
     const d = new Date().toDateString(); if (seededToday.d !== d) seededToday = { d, b: 0 };
-    return seededToday.b + m.size <= cfg.seed_mb_day * 1048576;
+    return seededToday.b + m.size <= cfg.seed_mb_day * MiB;
   }
-  async function seed(h){ if (!FILES_ON) return; try { const s = await swarm(h); s.seed = true; } catch (er) {} }
+  async function seed(h){ if (!FILES_ON) return; try { const s = await swarm(h); s.seed = true; if (!s.ok) leave(h); } catch (er) {} }
 
   // ═══ WebRTC: канал данных (те же ICE, что звонки: «скрыть мой адрес» — только через наш TURN) ═══
-  function closePeer(p){ p.closed = true; clearTimeout(p.iceT); try { p.dc?.close(); } catch (er) {} try { p.pc?.close(); } catch (er) {} }
+  // T-160: TURN владельца теперь и запасной путь без «скрыть адрес» (нет прямой связи: мобильный интернет ↔ домашний ПК);
+  // пароли TURN — с /turn (rt.js), ждём их до 3 с. «Скрыть адрес» включён, а TURN не отвечает — честная причина, адрес не отдаём.
+  function closePeer(p){ p.closed = true; clearTimeout(p.iceT); clearTimeout(p.tm); try { p.dc?.close(); } catch (er) {} try { p.pc?.close(); } catch (er) {} }
+  const hasTurn = () => (Array.isArray(window.D37_TURN) ? window.D37_TURN : []).some(x => [].concat(x?.urls || []).some(u => /^turns?:/i.test(String(u))));
+  async function iceFor(){
+    if (!hasTurn()) { try { window.D37RT?.prefetchTurn?.(); } catch (er) {} for (let i = 0; i < 15 && !hasTurn(); i++) await sleep(200); }
+    const c = await window.D37Calls.iceConfig();
+    if (c.relay && !c.ok) throw fail('relaydown');
+    return c;
+  }
+  // путь соединения: «host/host» (одна сеть), «srflx/…» (напрямую через интернет), «…relay…» (через наш TURN)
+  async function pathOf(pc){
+    try {
+      const st = await pc.getStats(); let pair = null;
+      st.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = st.get(r.selectedCandidatePairId); });
+      if (!pair) st.forEach(r => { if (r.type === 'candidate-pair' && r.nominated && r.state === 'succeeded') pair = r; });
+      if (!pair) return '';
+      return (st.get(pair.localCandidateId)?.candidateType || '?') + '/' + (st.get(pair.remoteCandidateId)?.candidateType || '?');
+    } catch (er) { return ''; }
+  }
   async function newPc(s, key, sid){
-    const cfgI = await window.D37Calls.iceConfig();
+    const cfgI = await iceFor();
     const pc = new RTCPeerConnection(cfgI.relay ? { iceServers: cfgI.iceServers, iceTransportPolicy: 'relay' } : { iceServers: cfgI.iceServers });
-    const p = { key, sid, pc, dc: null, ice: [], iceT: 0, closed: false, relay: cfgI.relay };
+    const p = { key, sid, pc, dc: null, ice: [], iceT: 0, tm: 0, closed: false, relay: cfgI.relay, loc: new Set(), rem: new Set(), answered: false, opened: false, via: '', why: '', t0: Date.now() };
     pc.onicecandidate = ev => {
-      if (!ev.candidate || p.closed) return;
-      if (cfgI.relay && !/ typ relay/.test(ev.candidate.candidate || '')) return;
+      if (!ev.candidate || !ev.candidate.candidate || p.closed) return;
+      const ty = (/ typ (\w+)/.exec(ev.candidate.candidate) || [])[1] || '';
+      if (cfgI.relay && ty !== 'relay') return;
+      p.loc.add(ty);
       p.ice.push(ev.candidate.toJSON());
       if (!p.iceT) p.iceT = setTimeout(() => { p.iceT = 0; const c = p.ice.splice(0, 40); if (c.length) s.send({ t: 'ice', to: key, sid, c }); }, 250);
     };
-    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) { closePeer(p); s.peers.delete(key); p.onEnd?.(); } };
+    // «скрыть адрес»: сбор кандидатов закончен, а от TURN — ни одного → посредник недоступен (не ждём 20 с впустую)
+    pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete' && p.relay && !p.loc.has('relay') && !p.closed) { p.why = 'relaydown'; p.fail?.(); } };
+    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState) && !p.closed) { closePeer(p); if (s.peers.get(key) === p) s.peers.delete(key); p.onEnd?.(); } };
+    const old = s.peers.get(key); if (old && old !== p) closePeer(old);
     s.peers.set(key, p);
     return p;
   }
-  // Источник: ответить и раздавать по запросу «get»
+  // Источник: ответить и раздавать по запросу «get». Та же вкладка получателя пришла снова (новая попытка) — старое соединение
+  // закрываем и отвечаем заново (раньше новая попытка молча пропускалась: «соединяемся…» навсегда); зависшие — через 40 с прочь
   async function answerPeer(s, d){
-    if (s.peers.size >= MAX_PEERS || s.peers.has(d.from)) return;
-    const p = await newPc(s, d.from, String(d.sid || '').slice(0, 16));
+    const sid = String(d.sid || '').slice(0, 16);
+    const old = s.peers.get(d.from);
+    if (old) { if (old.sid === sid) return; closePeer(old); s.peers.delete(d.from); }
+    for (const [k, x] of s.peers) if (x.dc?.readyState !== 'open' && Date.now() - x.t0 > 40000) { closePeer(x); s.peers.delete(k); }
+    if (s.peers.size >= MAX_PEERS) { s.send({ t: 'err', to: d.from, sid, why: 'busy' }); return; }
+    let p; try { p = await newPc(s, d.from, sid); } catch (er) { s.send({ t: 'err', to: d.from, sid, why: er.code === 'relaydown' ? 'srcrelay' : 'srcno' }); return; }
     p.pc.ondatachannel = ev => { p.dc = ev.channel; serve(s, p); };
+    p.tm = setTimeout(() => { if (!p.closed && p.dc?.readyState !== 'open') { closePeer(p); if (s.peers.get(d.from) === p) s.peers.delete(d.from); } }, 40000);
     try { await p.pc.setRemoteDescription({ type: 'offer', sdp: d.sdp }); const a = await p.pc.createAnswer(); await p.pc.setLocalDescription(a); s.send({ t: 'answer', to: d.from, sid: p.sid, sdp: a.sdp }); } catch (er) { closePeer(p); s.peers.delete(d.from); }
   }
-  // Скорость раздачи: в звонке — 256 КБ/с (звонку хватает), иначе 2 МБ/с
-  const rate = () => (window.D37Calls?.inCall?.() ? 262144 : 2097152);
+  // Скорость раздачи: в звонке — 256 КБ/с (звонку хватает); через наш TURN — relay_kbs (не выше предела TURN: лишнее он
+  // выбрасывает, и канал данных сам сбавляет скорость вдвое — так и было 48 КБ/с при пределе 94); напрямую — 6 МБ/с
+  const rateFor = p => (window.D37Calls?.inCall?.() ? 262144 : /relay/.test(p.via) ? Math.max(32, +cfg.relay_kbs || 1200) * 1024 : 6 * MiB);
+  const SEND = new Map();   // chash → { pct, done, got, via } — у отправителя: «передаём N %» / «доставлено»
+  F.sendState = h => SEND.get(h) || null;
   function serve(s, p){
     const dc = p.dc; dc.binaryType = 'arraybuffer'; dc.bufferedAmountLowThreshold = 262144;
     dc.onmessage = async ev => {
@@ -244,7 +308,7 @@
       if (q.t === 'stop') { p.stop = true; return; }
       if (q.t !== 'get' || q.h !== s.h) return;
       const m = await F.meta(s.h), blob = await F.blob(s.h);
-      if (!m || !blob || m.size > cfg.direct_mb * 1048576 || !await seedOk(s.h)) { dc.send(JSON.stringify({ t: 'no' })); return; }
+      if (!m || !blob || m.size > recvCap() || !await seedOk(s.h)) { dc.send(JSON.stringify({ t: 'no' })); return; }
       const n = Math.ceil(m.size / CSZ);
       if (!m.hs || m.hs.length !== n) {   // хеши кусков — один раз, потом из списка
         m.hs = []; for (let i = 0; i < n; i++) m.hs.push(await sha(await blob.slice(i * CSZ, (i + 1) * CSZ).arrayBuffer()));
@@ -252,88 +316,143 @@
       }
       dc.send(JSON.stringify({ t: 'meta', size: m.size, csz: CSZ, n, hs: m.hs, mime: m.mime }));
       m.used = Date.now(); putMeta(m).catch(() => {});
-      let t0 = now(), sentB = 0; p.stop = false;
-      for (let i = Math.max(0, Math.min(n, +q.from || 0)); i < n && !p.stop && dc.readyState === 'open'; i++) {
+      p.via = await pathOf(p.pc);
+      const ss = SEND.get(s.h) || { got: false }; SEND.set(s.h, Object.assign(ss, { pct: 0, done: false, via: p.via })); paintAll(s.h);
+      let t0 = now(), sentB = 0, paintT = 0; p.stop = false;
+      const from = Math.max(0, Math.min(n, +q.from || 0)), R = rateFor(p);
+      let i = from;
+      for (; i < n && !p.stop && dc.readyState === 'open'; i++) {
         if (dc.bufferedAmount > 1048576) await new Promise(r => { dc.onbufferedamountlow = r; setTimeout(r, 2000); });
         const body = new Uint8Array(await blob.slice(i * CSZ, (i + 1) * CSZ).arrayBuffer());
         const fr = new Uint8Array(8 + body.length), dv = new DataView(fr.buffer); dv.setUint32(0, i); dv.setUint32(4, body.length); fr.set(body, 8);
         try { dc.send(fr.buffer); } catch (er) { break; }
         sentB += fr.length; seededToday.b += fr.length;
-        const ahead = sentB / rate() * 1000 - (now() - t0); if (ahead > 30) await new Promise(r => setTimeout(r, ahead));
+        if (now() - paintT > 500) { paintT = now(); ss.pct = Math.floor((i + 1) / n * 100); paintAll(s.h); }
+        const ahead = sentB / R * 1000 - (now() - t0); if (ahead > 30) await new Promise(r => setTimeout(r, ahead));
       }
+      if (i >= n) { ss.pct = 100; ss.done = true; } paintAll(s.h);
     };
   }
 
   // ═══ Получение ═══
-  // ctx: { auto } — само (без нажатия). Возвращает Promise<Blob>
+  // ctx: { auto } — само (без нажатия). Возвращает Promise<Blob>. Состояние: wait → conn/connr → load N % → готово | retry → … |
+  // nosrc (отправителя нет — ждём, пока открыта страница) | отказ с причиной (err.code: relaydown, noroute, noanswer, signal …)
   const GET = new Map();
+  const ERR = new Map();   // chash → текст последней неудачи (карточка показывает и даёт «🔁 Повторить»)
   F.fetch = (att, ctx = {}) => {
     if (GET.has(att.chash)) return GET.get(att.chash).p;
-    const st = { att, chunks: null, n: 0, got: 0, hs: null, busy: null, tried: new Set(), done: false, stop: false, pct: 0, note: '', wantT: 0, t0: Date.now() };
+    const st = { att, chunks: null, n: 0, got: 0, hs: null, busy: null, tried: new Set(), done: false, stop: false, pct: 0, note: 'wait', wantT: 0, t0: Date.now(), fails: 0, nextAt: 0, lastHave: 0, via: '', tL: 0, gotL: 0 };
+    ERR.delete(att.chash);
     st.p = (async () => {
       const have = await F.blob(att.chash); if (have) return have;
-      if (!F.typeOk(att.name, att.mime)) throw new Error('тип файла не разрешён');
-      if (window.D37Age?.u9?.()) throw new Error('файлы — с 9 лет');
-      if ((await blockedList([att.phash])).has(att.phash)) throw new Error('файл запрещён модераторами');
+      if (!F.typeOk(att.name, att.mime)) throw fail('type', 'тип файла не разрешён');
+      if (window.D37Age?.u9?.()) throw fail('u9', 'файлы — с 9 лет');
+      if ((await blockedList([att.phash])).has(att.phash)) throw fail('blocked', 'файл запрещён модераторами');
       await loadCfg();
-      if (att.size > cfg.direct_mb * 1048576) throw new Error('файл слишком большой для передачи');
+      if (att.size > recvCap()) throw fail('big');
       const s = await swarm(att.chash);
+      if (!s.ok) { leave(att.chash); throw fail('signal'); }
       s.want = st;
       return new Promise((res, rej) => {
         st.res = res; st.rej = rej;
-        const ask = () => { if (st.done || st.stop) return; if (!st.busy) { s.send({ t: 'want' }); if (Date.now() - st.t0 > 20000) setNote(st, 'nosrc'); } st.wantT = setTimeout(ask, 8000); };
+        const ask = () => {
+          if (st.done || st.stop) return;
+          if (!st.busy) { s.send({ t: 'want' }); if (Date.now() - Math.max(st.t0, st.lastHave) > 20000) setNote(st, 'nosrc'); }
+          st.wantT = setTimeout(ask, 8000);
+        };
         ask();
       });
     })();
-    st.p.catch(() => {}).finally(() => { clearTimeout(st.wantT); GET.delete(att.chash); const s = SW.get(att.chash); if (s) s.want = null; });
+    st.p.catch(er => { if (er?.code !== 'stop') { ERR.set(att.chash, '⚠️ не удалось: ' + (er?.message || 'ошибка')); } }).finally(() => {
+      clearTimeout(st.wantT); clearTimeout(st.stallT); if (st.busy) closePeer(st.busy);
+      GET.delete(att.chash); const s = SW.get(att.chash); if (s && s.want === st) s.want = null; paintAll(att.chash);
+    });
     GET.set(att.chash, st);
     return st.p;
   };
-  F.cancel = h => { const st = GET.get(h); if (!st) return; st.stop = true; try { st.busy?.dc?.send(JSON.stringify({ t: 'stop' })); } catch (er) {} if (st.busy) closePeer(st.busy); st.rej?.(new Error('отменено')); };
-  F.state = h => { const st = GET.get(h); return st ? { pct: st.pct, note: st.note } : null; };
+  F.cancel = h => { const st = GET.get(h); if (!st) return; st.stop = true; try { st.busy?.dc?.send(JSON.stringify({ t: 'stop' })); } catch (er) {} if (st.busy) closePeer(st.busy); st.rej?.(fail('stop', 'отменено')); };
+  F.state = h => { const st = GET.get(h); if (!st) return null; const dt = (Date.now() - st.tL) / 1000, kbs = st.tL && dt > .5 ? (st.got - st.gotL) * CSZ / 1024 / dt : 0;
+    return { pct: st.pct, note: st.note, via: st.via, fails: st.fails, kbs: Math.round(kbs), eta: kbs > 0 ? Math.round((st.n - st.got) * CSZ / 1024 / kbs) : 0 }; };
+  const spd = k => (k >= 1024 ? (k / 1024).toFixed(1).replace('.', ',') + ' МБ/с' : Math.round(k) + ' КБ/с');
+  F.noteText = g => {
+    if (!g) return '';
+    if (g.note === 'load') {
+      let t = `получаем… ${g.pct}%`;
+      if (g.kbs > 0) { t += ' · ' + spd(g.kbs); if (g.eta > 3) t += ' · ещё ~' + (g.eta >= 90 ? Math.round(g.eta / 60) + ' мин' : g.eta + ' с'); }
+      return t + (/relay/.test(g.via || '') ? ' · через посредник' : '');
+    }
+    if (g.note === 'retry') return WHY.retry + ` (попытка ${Math.min(MAX_FAILS, (g.fails || 0) + 1)} из ${MAX_FAILS})`;
+    return WHY[g.note] || (g.note === 'wait' ? 'ищем отправителя…' : String(g.note || ''));
+  };
   function setNote(st, n){ if (st.note === n) return; st.note = n; paintAll(st.att.chash); }
+  // Неудачная попытка: ещё раз чуть позже (1,5 → 3 → 6 с), после MAX_FAILS подряд без прогресса — отказ с причиной
+  function attemptFailed(st, w){
+    if (st.done || st.stop) return;
+    st.fails++;
+    if (w === 'relaydown' || st.fails >= MAX_FAILS) { st.rej?.(fail({ drop: 'noroute', bad: 'noroute', busy: 'noanswer' }[w] || w)); return; }
+    st.nextAt = Date.now() + 1500 * 2 ** (st.fails - 1); setNote(st, 'retry');
+  }
   async function pickSource(s, key){
-    const st = s.want; if (!st || st.busy || st.done || st.stop || st.tried.has(key)) return;
+    const st = s.want; if (!st || st.busy || st.done || st.stop || st.tried.has(key) || Date.now() < st.nextAt) return;
     st.tried.add(key);
     const sid = Math.random().toString(36).slice(2, 10);
-    const p = await newPc(s, key, sid); st.busy = p; setNote(st, 'conn');
+    let p; try { p = await newPc(s, key, sid); } catch (er) { st.tried.delete(key); attemptFailed(st, er.code || 'noroute'); return; }
+    if (st.done || st.stop || st.busy) { closePeer(p); if (s.peers.get(key) === p) s.peers.delete(key); st.tried.delete(key); return; }
+    st.busy = p; setNote(st, p.relay ? 'connr' : 'conn');
     const dc = p.dc = p.pc.createDataChannel('f', { ordered: true }); dc.binaryType = 'arraybuffer';
-    const fail = () => { if (st.busy !== p) return; st.busy = null; closePeer(p); s.peers.delete(key); if (!st.done && !st.stop) { st.tried.delete(key); setNote(st, 'retry'); } };
-    p.onEnd = fail; dc.onclose = fail;
-    const conT = setTimeout(() => { if (st.busy === p && dc.readyState !== 'open') fail(); }, 20000);
-    dc.onopen = () => { clearTimeout(conT); const from = st.chunks ? st.chunks.findIndex(x => !x) : 0; dc.send(JSON.stringify({ t: 'get', h: st.att.chash, from: from < 0 ? 0 : from })); setNote(st, 'load'); };
+    const got0 = st.got;
+    const why = () => p.why || (!p.answered ? 'noanswer' : p.relay && !p.loc.has('relay') ? 'relaydown' : !p.opened ? 'noroute' : 'drop');
+    const bad = () => {
+      if (st.busy !== p) return;
+      st.busy = null; clearTimeout(st.stallT); const w = why(); closePeer(p); if (s.peers.get(key) === p) s.peers.delete(key); st.tried.delete(key);
+      if (st.done || st.stop) return;
+      if (st.got > got0) st.fails = 0;   // что-то пришло — счёт неудач заново, продолжим с первого недостающего куска
+      attemptFailed(st, w);
+    };
+    p.onEnd = bad; p.fail = bad; dc.onclose = bad;
+    const conT = setTimeout(() => { if (st.busy === p && dc.readyState !== 'open') bad(); }, 20000);
+    const stall = () => { clearTimeout(st.stallT); st.stallT = setTimeout(() => { if (st.busy === p && !st.done) { p.why = 'drop'; bad(); } }, 20000); };
+    dc.onopen = () => {
+      clearTimeout(conT); p.opened = true; const from = st.chunks ? st.chunks.findIndex(x => !x) : 0;
+      dc.send(JSON.stringify({ t: 'get', h: st.att.chash, from: from < 0 ? 0 : from }));
+      st.tL = Date.now(); st.gotL = st.got; setNote(st, 'load'); stall();
+      pathOf(p.pc).then(v => { st.via = p.via = v; F._test.last = { via: v }; paintAll(st.att.chash); });
+    };
     let chain = Promise.resolve();
     dc.onmessage = ev => {
       if (typeof ev.data === 'string') {
         let q; try { q = JSON.parse(ev.data); } catch (er) { return; }
-        if (q.t === 'no') { fail(); return; }
+        if (q.t === 'no') { p.why = 'srcno'; bad(); return; }
         if (q.t === 'meta') {
-          if (+q.size !== st.att.size || +q.csz !== CSZ || !Array.isArray(q.hs) || q.hs.length !== Math.ceil(st.att.size / CSZ) || !q.hs.every(x => /^[0-9a-f]{64}$/.test(x))) { fail(); return; }
+          if (+q.size !== st.att.size || +q.csz !== CSZ || !Array.isArray(q.hs) || q.hs.length !== Math.ceil(st.att.size / CSZ) || !q.hs.every(x => /^[0-9a-f]{64}$/.test(x))) { p.why = 'bad'; bad(); return; }
           if (!st.chunks) { st.n = q.hs.length; st.chunks = new Array(st.n).fill(null); st.hs = q.hs; }
-          else if (st.hs.join() !== q.hs.join()) { fail(); return; }   // другой источник прислал другой список — не смешиваем
+          else if (st.hs.join() !== q.hs.join()) { p.why = 'bad'; bad(); return; }   // другой источник прислал другой список — не смешиваем
         }
         return;
       }
       const buf = ev.data; if (!st.chunks || !(buf instanceof ArrayBuffer) || buf.byteLength < 8) return;
+      stall();
       chain = chain.then(async () => {
+        if (!st.chunks) return;
         const dv = new DataView(buf), i = dv.getUint32(0), len = dv.getUint32(4);
         if (i >= st.n || len !== buf.byteLength - 8 || st.chunks[i]) return;
         const body = buf.slice(8);
-        if (await sha(body) !== st.hs[i]) { fail(); return; }   // кусок испорчен — к другому источнику
+        if (await sha(body) !== st.hs[i]) { p.why = 'bad'; bad(); return; }   // кусок испорчен — к другому источнику
         st.chunks[i] = body; st.got++;
         const pct = Math.floor(st.got / st.n * 100); if (pct !== st.pct) { st.pct = pct; paintAll(st.att.chash); }
         if (st.got === st.n) await finish(s, st, p);
       });
     };
-    try { const o = await p.pc.createOffer(); await p.pc.setLocalDescription(o); s.send({ t: 'offer', to: key, sid, sdp: o.sdp }); } catch (er) { fail(); }
+    try { const o = await p.pc.createOffer(); await p.pc.setLocalDescription(o); s.send({ t: 'offer', to: key, sid, sdp: o.sdp }); } catch (er) { bad(); }
   }
   async function finish(s, st, p){
+    clearTimeout(st.stallT);
     const blob = new Blob(st.chunks, { type: st.att.mime });
     st.chunks = null;
     const h = await sha(await blob.arrayBuffer());
-    if (h !== st.att.chash) { st.got = 0; st.tried.clear(); st.busy = null; closePeer(p); setNote(st, 'retry'); return; }
+    if (h !== st.att.chash) { st.got = 0; st.tried.clear(); if (st.busy === p) st.busy = null; closePeer(p); attemptFailed(st, 'bad'); return; }
     const head = new Uint8Array(await blob.slice(0, 600).arrayBuffer());
-    if (!sniff(head, st.att.mime)) { st.done = true; closePeer(p); st.rej(new Error('содержимое не похоже на свой тип — не сохраняем')); return; }
+    if (!sniff(head, st.att.mime)) { st.done = true; closePeer(p); st.rej(fail('bad', 'содержимое не похоже на свой тип — не сохраняем')); return; }
     st.done = true; closePeer(p); s.peers.delete(p.key);
     try { await store({ chash: h, name: st.att.name, mime: st.att.mime, size: st.att.size, pinned: false, used: Date.now(), at: Date.now() }, blob); } catch (er) {}
     s.send({ t: 'got' }); s.seed = true;   // теперь и я — источник
@@ -356,17 +475,19 @@
     if (window.D37Age?.u9?.()) { st.textContent = 'файлы — с 9 лет'; bt.innerHTML = ''; return; }
     const m = await F.meta(h), g = GET.get(h);
     if (m && await F.blob(h)) {
-      st.textContent = m.sent ? (m.got ? '✅ доставлено' : '⏳ ждёт получателя — отправится само') : '✅ на устройстве';
+      const ss = m.sent ? SEND.get(h) : null;
+      st.textContent = !m.sent ? '✅ на устройстве' : m.got || ss?.got ? '✅ доставлено' : ss && !ss.done ? `📤 передаём… ${ss.pct}%${/relay/.test(ss.via || '') ? ' · через посредник' : ''}` : ss?.done ? '📤 отправлено, ждём подтверждения…' : '⏳ ждёт получателя — уйдёт само, пока у тебя открыт сайт';
       bt.innerHTML = `<button type="button" data-f="open">${kind(a.mime) === 'file' ? '💾 Сохранить' : '▶ Открыть'}</button><button type="button" data-f="rep" title="Пожаловаться">🚩</button>`;
       return;
     }
-    if (g) { st.textContent = g.note === 'nosrc' ? '📡 сейчас никого с этим файлом нет в сети — получим сами, когда кто-нибудь зайдёт' : g.note === 'conn' ? 'соединяемся…' : g.note === 'retry' ? 'ищем другой источник…' : `получаем… ${g.pct}%`; bt.innerHTML = '<button type="button" data-f="stop">✕</button>'; return; }
-    st.textContent = el._err || 'передаётся от человека к человеку';
-    bt.innerHTML = `<button type="button" data-f="get">⬇ Получить</button><button type="button" data-f="rep" title="Пожаловаться">🚩</button>`;
+    if (g) { st.textContent = F.noteText(F.state(h)); bt.innerHTML = '<button type="button" data-f="stop" title="Остановить">✕</button>'; return; }
+    const er = ERR.get(h);
+    st.textContent = er || 'передаётся от человека к человеку';
+    bt.innerHTML = `<button type="button" data-f="get">${er ? '🔁 Повторить' : '⬇ Получить'}</button><button type="button" data-f="rep" title="Пожаловаться">🚩</button>`;
   }
   async function act(el, k){
     const a = el._att; if (!a) return;
-    if (k === 'get') { el._err = ''; F.fetch(a).then(() => paint(el), er => { el._err = '⚠️ ' + (er.message || 'не получилось'); paint(el); }); paint(el); }
+    if (k === 'get') { F.fetch(a).then(() => paint(el), () => paint(el)); paint(el); }
     else if (k === 'stop') F.cancel(a.chash);
     else if (k === 'rep') {
       if (!confirm('Пожаловаться на этот файл? Модераторы посмотрят, и если он плохой — его больше нельзя будет отправить.')) return;
@@ -404,16 +525,20 @@
     const scan = () => { list.querySelectorAll('.mv-file').forEach(hook); for (const [h, set] of CARDS) { for (const el of set) if (!el.isConnected) { set.delete(el); const u = URLS.get(el); if (u) URL.revokeObjectURL(u); } if (!set.size) CARDS.delete(h); } };
     let t = 0; const mo = new MutationObserver(() => { if (!t) t = requestAnimationFrame(() => { t = 0; scan(); }); });
     mo.observe(list, { childList: true, subtree: true });
+    // T-160: кнопки карточки (⬇ Получить / 🔁 Повторить / ▶ Открыть / 💾 Сохранить / ✕ / 🚩) — раньше их никто не слушал: нажатие
+    // ничего не делало, файл приходил только сам (ЛС до auto_mb и картинки в канале), а открыть / сохранить пришедший было нельзя
+    const onClick = ev => { const b = ev.target.closest?.('.mv-file [data-f]'); if (!b || !list.contains(b)) return; const el = b.closest('.mv-file'); if (!el._att) hook(el); ev.preventDefault(); act(el, b.dataset.f); };
+    list.addEventListener('click', onClick);
     scan();
-    return () => { mo.disconnect(); io?.disconnect(); cancelAnimationFrame(t); for (const set of CARDS.values()) for (const el of set) if (list.contains(el)) { set.delete(el); const u = URLS.get(el); if (u) URL.revokeObjectURL(u); } };
+    return () => { mo.disconnect(); io?.disconnect(); list.removeEventListener('click', onClick); cancelAnimationFrame(t); for (const set of CARDS.values()) for (const el of set) if (list.contains(el)) { set.delete(el); const u = URLS.get(el); if (u) URL.revokeObjectURL(u); } };
   };
   async function auto(el){
     const a = el._att; if (!a || window.D37Age?.u9?.() || navigator.connection?.saveData) return;
     await loadCfg();
     const dm = el.dataset.fk === 'dm';
-    if (a.size > cfg.auto_mb * 1048576 || (!dm && kind(a.mime) !== 'image')) return;
+    if (a.size > cfg.auto_mb * MiB || (!dm && kind(a.mime) !== 'image')) return;
     if (await F.blob(a.chash)) return;
-    F.fetch(a, { auto: true }).then(() => paint(el), () => {});
+    F.fetch(a, { auto: true }).then(() => paint(el), () => paint(el));
     paint(el);
   }
 
@@ -427,10 +552,11 @@
     try {
       const { data, error } = await sb().from('direct_messages').select('id,att,sender_id,created_at').eq('recipient_id', me()).not('att', 'is', null).gt('created_at', new Date(Date.now() - 7 * 864e5).toISOString()).order('id', { ascending: false }).limit(8);
       if (error) return;
-      for (const r of data || []) { const a = r.att; if (a && a.size <= cfg.auto_mb * 1048576 && !(await F.blob(a.chash))) F.fetch(a, { auto: true }).catch(() => {}); }
+      for (const r of data || []) { const a = r.att; if (a && a.size <= cfg.auto_mb * MiB && !(await F.blob(a.chash))) F.fetch(a, { auto: true }).catch(() => {}); }
     } catch (er) {}
   }
   if (FILES_ON) { addEventListener('d37:auth', () => setTimeout(background, 3000)); setTimeout(background, 8000); }
 
-  F._test = { sniff, mimeOf, TYPES, CSZ, kind, seed, SW, GET };
+  F._test = { sniff, mimeOf, TYPES, CSZ, kind, seed, SW, GET, SEND, ERR, recvCap, attemptFailed, last: null,
+    setCfg: o => { cfg = Object.assign({}, CFG0, { on: true }, o); cfgAt = Date.now(); } };
 })();
