@@ -1614,6 +1614,8 @@ body.high .lv-frame-30::after{animation:lvFrameSpin 6s linear infinite}
   color:var(--gold-t);background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.3);white-space:nowrap;vertical-align:middle}
 .nick-title[hidden]{display:none}
 .nick-title-lg{font-size:.7rem;margin-left:0}
+/* T-141: уровень сезона рядом с ником (xp.js xpSeasonHtml) и в мини-карточке; цвет текста — от темы (--fg-rgb) */
+.ss-badge{display:inline-flex;align-items:center;gap:.15rem;margin-left:.3rem;padding:.05rem .38rem;border-radius:6px;vertical-align:middle;font-size:.6rem;font-weight:800;line-height:1.35;color:rgb(var(--fg-rgb));background:rgba(167,139,250,.14);border:1px solid rgba(167,139,250,.38);white-space:nowrap}
 
 .ach-summary{font-size:.66rem;font-weight:700;color:var(--muted);letter-spacing:0;text-transform:none}
 .ach-badge .ach-xp{font-size:.52rem;font-weight:800;color:var(--gold-t);opacity:.85}

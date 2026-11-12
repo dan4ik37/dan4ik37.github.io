@@ -61,6 +61,12 @@ let xpAvailable = null; // null — ещё не проверяли
 const xpLevelCache = new Map();
 const xpTitleCache = new Map();   // uid → код ачивки-титула (progression.sql → nick_extras) или null
 let xpExtrasOk = null;            // есть ли nick_extras (progression.sql выполнен)
+// T-141: уровень текущего сезона у других — значок рядом с Lv (games-more.sql → season_levels). Откат — XP_SEASON_BADGE = false
+const XP_SEASON_BADGE = true;
+const xpSeasonCache = new Map();  // uid → уровень сезона (0 — не показываем)
+let xpSeasonOk = null;
+function xpSeasonIcon(){ try { const m = new Date().getMonth() + 1; return (typeof SEASON_THEMES !== 'undefined' && SEASON_THEMES.find(t => t.m === m)?.icon) || '⭐'; } catch (e) { return '⭐'; } }
+function xpSeasonHtml(lv){ const n = Math.max(0, Math.floor(+lv || 0)); return n > 0 ? `<span class="ss-badge" title="Уровень сезона: ${esc(n)}">${esc(xpSeasonIcon())} ${esc(n)}</span>` : ''; }
 
 function xpTierClass(level){
   const t = XP_TIERS.find(n => level >= n);
@@ -103,6 +109,8 @@ async function xpFillBadges(){
     el.title = 'Уровень ' + lv;
     const d = typeof achTitleDef === 'function' && achTitleDef(xpTitleCache.get(uid));   // ачивка или титул сезона
     if (d) el.insertAdjacentHTML('afterend', `<span class="nick-title" title="Титул">${d.icon} ${esc(d.title)}</span>`);
+    const ss = XP_SEASON_BADGE ? xpSeasonCache.get(uid) : 0;
+    if (ss > 0) el.insertAdjacentHTML('afterend', xpSeasonHtml(ss));
   });
 }
 
@@ -117,12 +125,17 @@ async function xpLoadExtras(uids){
     }
     if (!rows) rows = (await sbClient.rpc('xp_levels', { uids: part })).data;
     (rows || []).forEach(r => { xpLevelCache.set(r.user_id, r.level); xpTitleCache.set(r.user_id, r.title || null); });
+    if (XP_SEASON_BADGE && xpSeasonOk !== false && part.length) {
+      const { data, error } = await sbClient.rpc('season_levels', { p_ids: part });
+      if (error) xpSeasonOk = false;
+      else { xpSeasonOk = true; part.forEach(u => xpSeasonCache.set(u, 0)); (data || []).forEach(r => xpSeasonCache.set(r.user_id, +r.lv || 0)); }
+    }
   }
 }
 async function xpGetExtras(uid){
   if (!uid || !(await xpCheck())) return null;
   if (!xpLevelCache.has(uid) || !xpTitleCache.has(uid)) await xpLoadExtras([uid]);
-  return { level: xpLevelCache.get(uid) || 1, title: xpTitleCache.get(uid) || null };
+  return { level: xpLevelCache.get(uid) || 1, title: xpTitleCache.get(uid) || null, season: xpSeasonCache.get(uid) || 0 };
 }
 
 // Рамка аватара по уровню (лесенка): 5 неон, 15 золото, 30 радуга, 50 пламя, 100 бриллиант.

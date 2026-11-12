@@ -16,6 +16,20 @@
   const STUN = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
   // TURN — когда появится (см. отчёт: Cloudflare Realtime TURN или свой coturn): window.D37_TURN = [{ urls, username, credential }]
   const ICE = () => [...STUN, ...(Array.isArray(window.D37_TURN) ? window.D37_TURN : [])];
+  // T-141 «🕶 Скрыть мой адрес»: звук только через наш TURN (iceTransportPolicy 'relay') — собеседник видит адрес сервера, не мой.
+  // P.set.hide: 'auto' (по умолчанию: включено в детском мире — всем, кроме надёжно подтверждённых 18+) | 'on' | 'off'. Откат — HIDE_IP = false.
+  const HIDE_IP = true;
+  const kidsRealm = () => { const A = window.D37Age; return !A?.group || A.group() !== 'adult'; };
+  C.hideIp = () => HIDE_IP && (P.set.hide === 'on' || ((P.set.hide || 'auto') === 'auto' && kidsRealm()));
+  const turnList = () => (Array.isArray(window.D37_TURN) ? window.D37_TURN : []).filter(s => [].concat(s?.urls || []).some(u => /^turns?:/i.test(String(u))));
+  C.relayOk = () => turnList().length > 0;
+  // перед входом в комнату: адрес скрываем, а пароли TURN ещё не пришли — попросить и подождать до 4 с
+  async function ensureRelay(){
+    if (!C.hideIp() || C.relayOk()) return;
+    try { window.D37RT?.prefetchTurn?.(); window.D37RT?.ice?.(); } catch (er) {}
+    for (let i = 0; i < 20 && !C.relayOk(); i++) await new Promise(r => setTimeout(r, 200));
+  }
+  const RELAY_NOTE = '🕶 Адрес скрыт, но сервер-посредник сейчас недоступен — звук не соединится. Попробуй через минуту или выключи «Скрыть мой адрес» в ⚙️ → 📱 Телефон (тогда собеседник сможет узнать твой адрес в сети).';
   const MAX = 6, RING_MS = 40000, DIAL_MS = 35000, CONNECT_MS = 30000;
   const e = s => esc(s);
   // Безопасность детей (community.sql ч. 5, js/core/age.js): до 9 — звонков нет; ребёнку до 13 — не со взрослыми и не с «без возраста»
@@ -100,6 +114,7 @@
   // ═══ Комната голоса: присутствие + знакомство + сетка WebRTC ═══
   // opt: { topic, max, me: { uid, nick }, verify(meta) → Promise<{ uid, nick } | null>, stream, onChange(), onFull(), onEmpty(), onError(text), onDecline() }
   async function openRoom(opt){
+    if (!opt.observe) await ensureRelay();
     const keys = await myKeys();
     const myKey = (opt.me.uid || 'g') + '~' + rid(6);
     const R = { opt, myKey, keys, members: new Map(), verified: new Map(), pubs: new Map(), peers: new Map(), early: new Map(), stream: opt.stream,
@@ -190,11 +205,13 @@
   }
   function makePc(R, p){
     try { p.pc?.close(); } catch (er) {}
-    const pc = new RTCPeerConnection({ iceServers: ICE() });
-    p.pc = pc;
+    const hide = C.hideIp();
+    const pc = new RTCPeerConnection(hide ? { iceServers: turnList(), iceTransportPolicy: 'relay' } : { iceServers: ICE() });
+    p.pc = pc; p.relay = hide;
     if (R.stream) R.stream.getTracks().forEach(t => pc.addTrack(t, R.stream));
     pc.onicecandidate = ev => {
       if (!ev.candidate || pc !== p.pc) return;
+      if (hide && !/ typ relay/.test(ev.candidate.candidate || '')) return;   // на всякий случай: свой адрес не отдаём никогда
       p.ice.push(ev.candidate.toJSON());
       if (!p.iceT) p.iceT = setTimeout(() => { p.iceT = 0; const c = p.ice.splice(0, 40); if (c.length) R.send({ t: 'ice', to: p.key, sid: p.sid, c }); }, 250);   // пачкой: меньше сообщений
     };
@@ -597,7 +614,7 @@
       if (!el.isConnected) { window.removeEventListener('d37:voice', draw); return; }
       const here = S && S.kind === 'voice' && S.spec.kind === spec.kind && String(S.spec.channel) === String(spec.channel) && S.state !== 'ended';
       if (!here) {
-        el.innerHTML = `<div class="vc"><div class="vc-head"><b>🔊 ${e(spec.name)}</b><small>до 6 человек · звук напрямую между браузерами</small></div>
+        el.innerHTML = `<div class="vc"><div class="vc-head"><b>🔊 ${e(spec.name)}</b><small>до 6 человек · ${C.hideIp() ? '🕶 адрес скрыт' : 'звук напрямую между браузерами'}</small></div>
           <div class="vc-note">🎧 Зайди — и говори голосом. Микрофон спросит браузер. Не называй в голосовом адрес, телефон и школу.</div>
           ${spec.kind === 'community' && !spec.member ? '<div class="vc-note">Сначала вступи в сообщество.</div>' : `<div class="vc-ctrl"><button type="button" class="go" data-v="join">🔊 Зайти в голосовой</button></div>`}
           <div class="vc-err"></div></div>`;
@@ -645,20 +662,26 @@
 
   // ═══ Экран разговора (телефон: incall) ═══
   const REASONS = { noanswer: 'Не отвечает', declined: 'Отклонил(а) вызов', declined_me: 'Вызов отклонён', missed: 'Пропущенный вызов', hangup: 'Звонок завершён', me: 'Звонок завершён', over: 'Звонок уже закончился', mic: '', dm: '', net: 'Нет связи' };
-  const TURN_NOTE = '📡 Не получилось соединиться напрямую. Так бывает в мобильном интернете и за строгим роутером: для таких сетей нужен сервер-посредник (TURN), а на сайте его пока нет. Попробуйте оба через Wi-Fi или другой интернет.';
+  const TURN_NOTE0 = '📡 Не получилось соединиться. Так бывает в мобильном интернете и за строгим роутером, когда сервер-посредник (TURN) недоступен. Попробуйте оба через Wi-Fi или другой интернет.';
+  const TURN_NOTE_FN = () => C.hideIp() && !C.relayOk() ? RELAY_NOTE : TURN_NOTE0;
+  // строка «🕶 адрес скрыт / виден» — честно, как соединяемся сейчас
+  const privHtml = () => !HIDE_IP ? '' : C.hideIp() ? (C.relayOk() ? '<div class="vc-note vc-priv">🕶 Твой адрес скрыт — звук идёт через сервер-посредник.</div>' : `<div class="vc-note bad">${RELAY_NOTE}</div>`)
+    : '<div class="vc-note vc-priv dim">🌐 Звук напрямую — собеседник может узнать твой адрес в сети. Скрыть — ⚙️ → 📱 Телефон.</div>';
   function sessionHtml(){
     const ps = people(), R = S.room;
     const bad = S.netWarn || ps.some(p => p.state === 'fail');
     return `<div class="vc"><div class="vc-head"><b>${e(S.title)}</b><small>${S.t0 ? clock() + ' · ' : ''}${ps.length} из ${MAX}</small></div>
       ${S.full ? '<div class="vc-note bad">Канал полон (6 человек) — подожди, пока кто-нибудь выйдет.</div>' : ''}
       ${S.kidBlocked ? `<div class="vc-note bad">${e(kidMsg(S.kidBlocked === 'u9' ? 'u9' : 'agecall'))}</div>` : ''}
-      ${bad ? `<div class="vc-note bad">${TURN_NOTE}</div>` : ''}
+      ${bad ? `<div class="vc-note bad">${TURN_NOTE_FN()}</div>` : privHtml()}
       <div class="vc-grid">${ps.map(p => `<div class="vc-tile${p.speaking ? ' spk' : ''}${p.state === 'fail' ? ' bad' : ''}">${P.avatar(P.prof(p.uid) || null, p.nick, 64)}<b>${e(p.nick)}${p.me ? ' (ты)' : ''}</b><small>${p.state === 'fail' ? '⚠️ нет связи' : p.state === 'connecting' ? 'соединяем…' : p.speaking ? 'говорит' : ' '}</small><span class="vc-ic">${p.deaf ? '🔈' : p.mute ? '🔇' : ''}</span></div>`).join('')}</div>
       <div class="vc-ctrl">
         <button type="button" data-v="mute" class="${R?.mute ? 'on' : ''}">${R?.mute ? '🔇 Микрофон выкл' : '🎙 Микрофон'}</button>
         <button type="button" data-v="deaf" class="${R?.deaf ? 'on' : ''}">${R?.deaf ? '🔈 Звук выкл' : '🎧 Звук'}</button>
         ${P.set.ptt ? '<button type="button" class="vc-ptt" data-v="ptt">📻 Держи, чтобы говорить</button>' : ''}
         ${S.kind !== 'voice' ? '<button type="button" data-v="invite">➕ Позвать</button>' : ''}
+        ${INV_ON && P.gameInvite ? '<button type="button" data-v="ginv" title="Позвать в игру или на сервер">📍 В игру</button>' : ''}
+        <button type="button" data-v="set" title="Настройки звонка" aria-label="Настройки звонка">⚙️</button>
         <button type="button" class="end" data-v="leave">📞 Выйти</button>
       </div></div>`;
   }
@@ -674,6 +697,8 @@
       b.addEventListener('click', () => {
         if (k === 'mute') C.voiceMute(); else if (k === 'deaf') C.voiceDeaf(); else if (k === 'leave') C.leave();
         else if (k === 'invite') inviteSheet();
+        else if (k === 'set') C.settings();
+        else if (k === 'ginv') ginvSheet();
       });
     });
   }
@@ -686,6 +711,17 @@
     P.sheet(`<b>➕ Позвать в разговор</b><div class="ph-list">${list.length ? list.map(id => { const p = P.prof(id) || {}; return `<button type="button" class="ph-item" data-s="${e(id)}">${P.avatar(p, p.nick, 34)}<span><b>${e(p.nick || 'друг')}</b><small>${st.has(id) ? e(P.actText(st.get(id).a)) : 'не в сети'}</small></span>➕</button>`; }).join('') : '<div class="ph-dim">Друзей нет — найди их в чате или в мире</div>'}</div>`,
       (k) => { const p = P.prof(k); P.closeSheet(); C.invite(k, p?.nick || 'друг'); });
   }
+  // T-141: «📍 Позвать в игру / на сервер» прямо из разговора (откат — INV_ON = false). Один собеседник — сразу ему, несколько — выбрать
+  const INV_ON = true;
+  async function ginvSheet(){
+    const others = people().filter(p => !p.me && p.uid);
+    if (!others.length) { P.toast('Позвать некого — в разговоре только ты', false); return; }
+    const go = uid => { const p = others.find(x => x.uid === uid); P.invite ? P.invite(uid, p?.nick) : P.gameInvite(uid); };
+    if (others.length === 1) { go(others[0].uid); return; }
+    P.sheet(`<b>📍 Кого позвать?</b><div class="ph-list">${others.map(p => `<button type="button" class="ph-item" data-s="${e(p.uid)}">${P.avatar(P.prof(p.uid) || null, p.nick, 34)}<span><b>${e(p.nick)}</b></span>📍</button>`).join('')}</div>`, uid => { P.closeSheet(); go(uid); });
+  }
+  // Настройки звонка — одно место: ⚙️ → «📱 Телефон» (микрофон, шумоподавление, рация и клавиша, «скрыть мой адрес», кто звонит)
+  C.settings = () => { try { window.D37Settings?.open?.({ tab: 'phone', ctx: 'site' }); } catch (er) { P.openSettings?.(); } };
   let incallEl = null;
   function render(){
     pill();
@@ -702,7 +738,7 @@
           : `<button type="button" class="ph-cb${S.room?.mute ? ' on' : ''}" data-c="mute"><i>${S.room?.mute ? '🔇' : '🎙'}</i>Микрофон</button><button type="button" class="ph-cb end" data-c="leave"><i>✕</i>${S.state === 'out' ? 'Отменить' : 'Положить'}</button>`}</div></div>`;
     } else if (S.state === 'ended') {
       el.innerHTML = `<div class="ph-call">${P.avatar(pr, S.peer?.nick || S.title, 96)}<h3>${e(S.peer?.nick || S.title)}</h3><div class="ph-cst">${e(REASONS[S.reason] ?? 'Звонок завершён')}${S.t0 ? ' · ' + clock() : ''}</div>
-        <div class="ph-cnote"${S.err || S.reason === 'net' ? '' : ' hidden'}>${e(S.err || TURN_NOTE)}</div>
+        <div class="ph-cnote"${S.err || S.reason === 'net' ? '' : ' hidden'}>${e(S.err || TURN_NOTE_FN())}</div>
         <div class="ph-cbtns">${S.peer && S.kind === 'call' ? '<button type="button" class="ph-cb ok" data-c="again"><i>📞</i>Перезвонить</button>' : ''}<button type="button" class="ph-cb" data-c="close"><i>✓</i>Закрыть</button></div></div>`;
     } else {
       el.innerHTML = P.head(e(S.kind === 'voice' ? '🔊 ' + S.title : S.kind === 'call' ? '📞 ' + (S.peer?.nick || 'Звонок') : S.title)) + `<div class="ph-body">${sessionHtml()}</div>`;

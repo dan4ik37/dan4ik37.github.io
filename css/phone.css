@@ -150,6 +150,7 @@ html.ph-open:has(.ph:not(.docked)) .chat-toast{display:none}
 .ph-item{display:flex;align-items:center;gap:11px;padding:10px 6px;border:0;border-bottom:1px solid rgba(255,255,255,.06);background:none;color:var(--text);text-align:left;font-family:inherit;width:100%;cursor:pointer;text-decoration:none}
 .ph-item:hover{background:rgba(255,255,255,.035)}
 .ph-item>span:not(.ph-ava){flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ph-item>span.ph-ico{flex:0 0 34px;font-size:22px;align-items:center;justify-content:center}   /* T-141 «📍 Позвать» */
 .ph-item b{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ph-item small{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ph-item time{font-size:11.5px;color:var(--muted);flex:none;align-self:flex-start;margin-top:3px}
