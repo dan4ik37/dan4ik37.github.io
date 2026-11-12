@@ -97,7 +97,12 @@ async function main() {
   addEventListener('blur', () => { keys.clear(); publish(); });
   canvas.addEventListener('click', () => { if (!TOUCH && document.pointerLockElement !== canvas && canvas.requestPointerLock) canvas.requestPointerLock(); });
   document.addEventListener('pointerlockchange', () => { hint.style.display = document.pointerLockElement === canvas ? 'none' : 'block'; });
-  addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) app.add_look(e.movementX, e.movementY); });
+  // some browsers (embedded panes) refuse pointer lock: holding a mouse button and dragging looks around too
+  let drag = false;
+  canvas.addEventListener('mousedown', () => { if (!TOUCH) drag = true; });
+  addEventListener('mouseup', () => { drag = false; });
+  addEventListener('blur', () => { drag = false; });
+  addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas || drag) app.add_look(e.movementX, e.movementY); });
   if (TOUCH) {
     const R = 56;   // stick radius in CSS px
     hint.textContent = 'Левая половина экрана — идти (до упора — бег) · правая — смотреть';
