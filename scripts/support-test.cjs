@@ -418,7 +418,7 @@ sec('v1 pin: hash of support values and groups (36,000 steps, 30 / 60 / 144 fps)
 async function chromeHash(){
   const os = require('os'), { spawn } = cp, sleep = ms => new Promise(r => setTimeout(r, ms));
   const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-  const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+  const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
   fs.mkdirSync(path.join(TMP, 'support-hash'), { recursive: true });
   const prof = fs.mkdtempSync(path.join(TMP, 'support-hash', 'chrome-')), port = 9700 + Math.floor(Math.random() * 200);
   const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${prof}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' });

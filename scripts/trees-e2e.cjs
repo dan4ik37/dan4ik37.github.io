@@ -16,13 +16,13 @@
 //   pz-shots   — «Подземье», новый мир: деревья пород сбоку (лес, снега, джунгли) — снимки; срубил низ — падает всё дерево
 //   pz-perf    — «Подземье» в профиле телефона (ЦП ×4): лес — ЦП кадра, FPS
 //   SITE_DIR=папка — снимать другую копию сайта («до»: выгрузка прошлого коммита). TR_PHONE=1 — профиль телефона и для снимков.
-// Снимки — <D37_TMP или E:\claude-tmp>\t022b\shots\<метка>-<режим>-*.jpg; числа — в конце вывода (JSON)
+// Снимки — <D37_TMP или M:\d37\claude-tmp>\t022b\shots\<метка>-<режим>-*.jpg; числа — в конце вывода (JSON)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [MODE = 'kb-shots', label = 'now'] = process.argv.slice(2);
 const PHONE = /perf/.test(MODE) || !!process.env.TR_PHONE;
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const OUT = path.join(TMP, 't022b'), SHOTS = path.join(OUT, 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',

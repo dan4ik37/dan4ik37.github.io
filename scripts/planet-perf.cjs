@@ -20,7 +20,7 @@ const SITE = process.env.SITE_DIR ? path.resolve(process.env.SITE_DIR) : path.jo
 const [MODE = 'perf', ARG = ''] = process.argv.slice(2);
 const PC = !!process.env.PC, RATE = PC ? 1 : +(process.env.RATE || 4), Q = process.env.Q || (PC ? 'high' : 'mid');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const OUT = path.join(TMP, process.env.D37_OUT || 't075');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',

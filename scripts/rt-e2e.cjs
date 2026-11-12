@@ -12,7 +12,7 @@ const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const K = require('./rt-kit.cjs');
 const D = K.deps();
 if (!D) { console.log('rt-e2e: нет пакета ws (DEPS_DIR) — пропуск'); process.exit(process.env.CI_STRICT ? 1 : 0); }
-const TMP = process.env.D37_TMP || 'E:/claude-tmp/t045';
+const TMP = process.env.D37_TMP || 'M:/d37/claude-tmp/t045';
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const PY = process.env.PYTHON || 'python';
 const { sleep } = K;

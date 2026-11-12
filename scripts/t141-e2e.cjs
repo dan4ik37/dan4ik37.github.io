@@ -5,11 +5,11 @@
 //         video — плеер в чате играет ролик 2 минуты: кадры > 50 мс в минуту (длинные задачи страницы)
 //         soak  — 10 минут в чате (переходы по каналам, прокрутка): ошибки в консоли = 0
 // Данные — настоящий Supabase, только чтение, без входа (ничего не пишем). Сайт — scripts/serve.py на свободном порту или BASE=…
-// Запуск (тяжёлое — под замком): node E:\d37-core\scripts\heavy-lock.mjs run --session site --job t141 --min 15 -- node scripts/t141-e2e.cjs nav
+// Запуск (тяжёлое — под замком): node M:\d37\d37-core\scripts\heavy-lock.mjs run --session site --job t141 --min 15 -- node scripts/t141-e2e.cjs nav
 const fs = require('fs'), os = require('os'), path = require('path'), net = require('net'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp/t141' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp/t141' : os.tmpdir());
 const MODE = process.argv[2] || 'nav';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const med = a => { const s = [...a].filter(Number.isFinite).sort((x, y) => x - y); return s.length ? s[s.length >> 1] : NaN; };

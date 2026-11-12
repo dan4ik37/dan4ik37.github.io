@@ -1,4 +1,4 @@
-// AI LOD P1 (T-127) checks of js/engine/npc.js and js/engine/shash.js in node (render stubbed), spec E:\d37-core\spec\AI_LOD.md §11:
+// AI LOD P1 (T-127) checks of js/engine/npc.js and js/engine/shash.js in node (render stubbed), spec M:\d37\d37-core\spec\AI_LOD.md §11:
 // — the same positions digest at 30 / 60 / 144 FPS (fixed 60 Hz step through the engine loop's accumulator) and in two runs;
 // — no Math.random in wake / step (it throws during the run); phases least-loaded (64 NPCs → 8 per phase);
 // — sleep: idle bodies sleep after 0.5 s, a push wakes them, a removed floor under a sleeper wakes it (it falls);

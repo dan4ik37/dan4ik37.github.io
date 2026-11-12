@@ -2,14 +2,14 @@
 // BaseBody_Male proportions and writes:
 //   <out>/clips.csv            — Layer-1 metadata, one row per clip (action id, loop, root speed, foot plant/lift, blend…)
 //   <tmp>/clips.json           — bones (T-pose heads), per-clip local rotations + Hips with ROOT MOTION baked (for Blender)
-// then runs headless Blender (factory startup) on E:\d37-core\anim\tools\build_fbx.py → <out>/D37_Clips.fbx and
+// then runs headless Blender (factory startup) on M:\d37\d37-core\anim\tools\build_fbx.py → <out>/D37_Clips.fbx and
 // check_fbx.py (re-import: bone names, clip lengths, foot slide re-measured) → <tmp>/check.json.
-// Usage: node scripts/anim-pack.cjs [out=E:/d37-core/anim] [--no-blender]
-// Env: BLENDER (default D:/Tools/Blender/blender.exe), D37_TMP (default E:/claude-tmp) → <D37_TMP>/t138/pack.
+// Usage: node scripts/anim-pack.cjs [out=M:/d37/d37-core/anim] [--no-blender]
+// Env: BLENDER (default D:/Tools/Blender/blender.exe), D37_TMP (default M:/d37/claude-tmp) → <D37_TMP>/t138/pack.
 const fs = require('fs'), path = require('path'), { spawnSync } = require('child_process');
 const S = require('../js/engine/skel.js');
-const args = process.argv.slice(2), OUT = path.resolve(args.find(a => !a.startsWith('--')) || 'E:/d37-core/anim');
-const TMP = path.join(process.env.D37_TMP || 'E:/claude-tmp', 't138', 'pack');
+const args = process.argv.slice(2), OUT = path.resolve(args.find(a => !a.startsWith('--')) || 'M:/d37/d37-core/anim');
+const TMP = path.join(process.env.D37_TMP || 'M:/d37/claude-tmp', 't138', 'pack');
 const BLENDER = process.env.BLENDER || 'D:/Tools/Blender/blender.exe';
 fs.mkdirSync(OUT, { recursive: true }); fs.mkdirSync(TMP, { recursive: true });
 

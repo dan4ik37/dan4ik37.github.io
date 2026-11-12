@@ -2,7 +2,7 @@
 //  ДВИЖОК ДЕНЧИКА — рубка дерева как в жизни (D37E.fell): подруб со стороны падения, запил с другой, недопил держит
 // ═══════════════════════════════════════
 // T-138 (owner 29.10: «дерево не распадается, а просто падает вниз, и его надо дорубить; огромным деревьям нужен большой угол»).
-// Spec: E:\d37-core\spec\STRUCTURE_HAZARDS.md §2.4 S1.C (voxel form: 4 horizontal sides instead of 16 sectors — a voxel trunk is
+// Spec: M:\d37\d37-core\spec\STRUCTURE_HAZARDS.md §2.4 S1.C (voxel form: 4 horizontal sides instead of 16 sectors — a voxel trunk is
 // 1×1, 2×2 or 3×3 cells). Pure integers, no three.js / DOM. The fall itself is D37E.topple (same slots as tipping structures).
 //
 //   s = FL.state(D)            — Int32Array(8): [cut +x, cut −x, cut +z, cut −z (eighths of a cell from that face of the section,

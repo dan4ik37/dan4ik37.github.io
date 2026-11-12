@@ -2,7 +2,7 @@
 //  ДВИЖОК ДЕНЧИКА — крен и опрокидывание (D37E.topple): что не держит свой вес, сначала кренится, потом падает целым
 // ═══════════════════════════════════════
 // T-138 (owner 29.10: «как в Teardown… перевес — оно падает», «физика должна быть с наклоном, чтобы не державшее вес не стояло»).
-// Spec: E:\d37-core\spec\STRUCTURE_HAZARDS.md §0.9 (LEAN BEFORE FALL), §2.2 S1.T, §2.4 (fall of a felled tree), §5.x (one ceiling).
+// Spec: M:\d37\d37-core\spec\STRUCTURE_HAZARDS.md §0.9 (LEAN BEFORE FALL), §2.2 S1.T, §2.4 (fall of a felled tree), §5.x (one ceiling).
 // No three.js, no DOM: window, worker, node. Every decision is integer (bit-exact in JS / Rust / C#): lengths in EIGHTHS of a
 // cell relative to a body origin (F1 cuts are eighths, so half-cells would lose them), masses in kg, angles in binary units
 // (65,536 per turn; the integrator keeps 8 more fraction bits = 2^24 per turn), world tick 20 Hz with 4 substeps.

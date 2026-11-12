@@ -10,13 +10,13 @@
 // интерфейс не перестраивается каждый кадр (пересчёты стилей и раскладки в секунду); ошибок в консоли нет.
 // GAME=podzem — «Подземье» (снимок и доля), GAME=world — «Мир Денчика» (снимок и доля).
 // Запуск из корня сайта: node scripts/touch-hud-e2e.cjs [метка]   (SITE_DIR — другая копия сайта, например «до»; SCREENS='[[844,390]]')
-// Снимки — <D37_TMP или E:\claude-tmp>\t074\shots\<метка>-<игра>-<Ш>x<В>.jpg
+// Снимки — <D37_TMP или M:\d37\claude-tmp>\t074\shots\<метка>-<игра>-<Ш>x<В>.jpg
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [label = 'now'] = process.argv.slice(2);
 const MODE = process.env.TH_MODE || 'measure', GAME = process.env.GAME || 'kubomir';
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const OUT = path.join(TMP, 't074'), SHOTS = path.join(OUT, 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
 const SCREENS = process.env.SCREENS ? JSON.parse(process.env.SCREENS) : [[844, 390], [390, 844], [915, 412], [360, 780]];
 const sleep = ms => new Promise(r => setTimeout(r, ms));

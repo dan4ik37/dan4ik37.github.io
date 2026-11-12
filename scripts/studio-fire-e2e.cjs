@@ -1,12 +1,12 @@
 // «Студия 3D» — огонь (T-022d) в НАСТОЯЩЕМ Chrome (headless, DevTools Protocol, без npm): хижина из досок и брёвен, костёр
 // (вечный огонь), стена «загорится при ▶»; ▶ Играть — пламя движка (fx.js FX.flames) собралось и рисуется, огонь идёт по стенам,
 // сгоревшее исчезает; ЦП кадра до и в пожаре; снимок; ошибок в консоли нет.
-// Запуск из корня сайта: node scripts/studio-fire-e2e.cjs [d3d11|swiftshader]   (снимки — <D37_TMP или E:\claude-tmp\t022d>\shots)
+// Запуск из корня сайта: node scripts/studio-fire-e2e.cjs [d3d11|swiftshader]   (снимки — <D37_TMP или M:\d37\claude-tmp\t022d>\shots)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [angle = 'd3d11'] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp/t022d' : path.join(os.tmpdir(), 't022d'));
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp/t022d' : path.join(os.tmpdir(), 't022d'));
 const OUT = path.join(TMP, 'shots'); fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain', '.wasm': 'application/wasm' };

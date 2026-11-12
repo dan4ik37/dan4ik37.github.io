@@ -7,7 +7,7 @@ const { spawn } = require('child_process');
 const fs = require('fs'), path = require('path');
 const BASE = (process.argv[2] || 'http://localhost:5571').replace(/\/+$/, '');
 const GAMES = process.argv[3] ? [process.argv[3]] : ['kletochki', 'chervyachki'];
-const TMP = 'E:/claude-tmp/iogames', OUT = path.join(TMP, 'shots');
+const TMP = 'M:/d37/claude-tmp/iogames', OUT = path.join(TMP, 'shots');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 

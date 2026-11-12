@@ -3,12 +3,12 @@
 // бури), сколько стоит кадр (весь кадр ЦП — R.stats.cpuFrame, и отдельно картинка бури wx-fx и W.at — по замеру внутри), вызовы
 // отрисовки, 0 ошибок; «soak» — долгий прогон со сменой бурь. Загрузки запрещены (Page/Browser.setDownloadBehavior deny).
 // Запуск из корня сайта: node scripts/wx-e2e.cjs [phone|pc] [all|mir|kubomir|soak] [секунд soak = 600]
-//   phone — 412×915, «средняя», ЦП ×4 (RATE=…); снимки и профиль Chrome — D37_TMP (по умолчанию E:\claude-tmp\t145)
+//   phone — 412×915, «средняя», ЦП ×4 (RATE=…); снимки и профиль Chrome — D37_TMP (по умолчанию M:\d37\claude-tmp\t145)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const [PROF = 'phone', WHAT = 'all', SOAK_ = '600'] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp/t145' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp/t145' : os.tmpdir());
 const SHOTS = path.join(TMP, 'wx-shots'); fs.mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.wasm': 'application/wasm',

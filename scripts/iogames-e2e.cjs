@@ -2,13 +2,13 @@
 // консоли, замер «телефона» — CPU ×4 медленнее, 412×915, полная комната (16 участников, вся еда) и хозяин шлёт снимки 9 гостям:
 // время кадра (шаги + рисунок), кадров в секунду, размер снимков, память до/после.
 // Запуск: python scripts/serve.py 5571   (в другом окне), потом   node scripts/iogames-e2e.cjs http://localhost:5571 [kletochki|chervyachki] [сек]
-// Снимки — E:\claude-tmp\iogames\shots (диск C у владельца почти полный — профиль Chrome тоже на E).
+// Снимки — M:\d37\claude-tmp\iogames\shots (диск C у владельца почти полный — профиль Chrome тоже на E).
 const { spawn } = require('child_process');
 const fs = require('fs'), path = require('path');
 const BASE = (process.argv[2] || 'http://localhost:5571').replace(/\/+$/, '');
 const ONLY = process.argv[3] && process.argv[3] !== 'all' ? [process.argv[3]] : ['kletochki', 'chervyachki'];
 const SECS = +process.argv[4] || 12;
-const TMP = 'E:/claude-tmp/iogames', OUT = path.join(TMP, 'shots');
+const TMP = 'M:/d37/claude-tmp/iogames', OUT = path.join(TMP, 'shots');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 fs.mkdirSync(OUT, { recursive: true });

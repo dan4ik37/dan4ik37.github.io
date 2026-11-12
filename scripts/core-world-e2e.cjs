@@ -15,7 +15,7 @@
 // NOTE: Chrome's CPU throttling does not slow workers down, and CDP cannot throttle a worker target ("Operation is only supported
 // for pages, not workers", checked 05.11) — the core worker's own times (boot.workMs) are desktop numbers; the load mode adds
 // (RATE − 1) × workMs as the phone estimate.
-// Heavy job: node E:\d37-core\scripts\heavy-lock.mjs run --session site/<agent> --job "core-world e2e <mode>" --min 15 -- node scripts/core-world-e2e.cjs <mode>
+// Heavy job: node M:\d37\d37-core\scripts\heavy-lock.mjs run --session site/<agent> --job "core-world e2e <mode>" --min 15 -- node scripts/core-world-e2e.cjs <mode>
 'use strict';
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), zlib = require('zlib'), { spawn } = require('child_process');
 const SITE = process.env.SITE_DIR ? path.resolve(process.env.SITE_DIR) : path.join(__dirname, '..');
@@ -23,7 +23,7 @@ const MAIN_DIR = process.env.MAIN_DIR ? path.resolve(process.env.MAIN_DIR) : '';
 const [MODE = 'load', ARG = ''] = process.argv.slice(2);
 const PC = !!process.env.PC, RATE = PC ? 1 : +(process.env.RATE || 4), Q = process.env.Q || (PC ? 'high' : 'mid');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const OUT = path.join(TMP, process.env.D37_OUT || 'eng/c002');
 const DL = path.join(os.homedir(), 'Downloads');
 const sleep = ms => new Promise(r => setTimeout(r, ms));

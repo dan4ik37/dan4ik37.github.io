@@ -10,12 +10,12 @@
 // дымкой атмосферы) собрались без предупреждений, страж ничего не выключил — ни навсегда, ни на сессию, самопроверка кадра прошла.
 // T-075 на паузе: новое включается флагом (localStorage d37_planet_v2 = '1') — проверка ставит его сама; PLANET_V2=0 — без флага
 // (как до T-075: один диапазон глубины, без теней на земле и дымки; общие проверки — те же)
-// (Chrome — переменная CHROME или стандартный путь Windows; временная папка — D37_TMP, иначе E:\claude-tmp, иначе системная)
+// (Chrome — переменная CHROME или стандартный путь Windows; временная папка — D37_TMP, иначе M:\d37\claude-tmp, иначе системная)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const [angle = 'swiftshader', preset = 'high', DSF = '1', PACK = 'auto', LOSE = ''] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
   '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain', '.ico': 'image/x-icon' };

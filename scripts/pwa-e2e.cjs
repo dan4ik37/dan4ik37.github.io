@@ -36,7 +36,7 @@ const server = http.createServer((req, res) => {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const BASE = 'http://localhost:' + server.address().port;
   const port = 9600 + Math.floor(Math.random() * 300);
-  const profile = fs.mkdtempSync(path.join(process.env.D37_TMP || os.tmpdir(), 'd37-e2e-'));   // диск C полный — D37_TMP=E:\\claude-tmp\\…
+  const profile = fs.mkdtempSync(path.join(process.env.D37_TMP || os.tmpdir(), 'd37-e2e-'));   // диск C полный — D37_TMP=M:\\d37\\claude-tmp\\…
   const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio', 'about:blank'], { stdio: 'ignore' });
   let page = null;
   for (let i = 0; i < 60 && !page; i++) { try { page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch (e) {} if (!page) await sleep(250); }

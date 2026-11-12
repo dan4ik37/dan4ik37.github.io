@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════
 //  D37 BIOMES (T-116) — logical biomes and the climate at a position, one API for the new land (T1 generator v2, terra-core.js)
-//  and Kubomir (voxel-gen.js v4); the weather-by-biome track (T-135, E:\d37-core\spec\BIOME_WEATHER.md §1.2) reads its region
-//  records from here. Rules: E:\d37-core\spec\WORLD_RULES.md (§1 logical climate, §2 strange-world presets). No DOM, no three.js
+//  and Kubomir (voxel-gen.js v4); the weather-by-biome track (T-135, M:\d37\d37-core\spec\BIOME_WEATHER.md §1.2) reads its region
+//  records from here. Rules: M:\d37\d37-core\spec\WORLD_RULES.md (§1 logical climate, §2 strange-world presets). No DOM, no three.js
 //  (window, workers, node). Pure functions of the world seed: every peer gets the same answer without messages.
 // ═══════════════════════════════════════
 // const B = D37E.biomes
@@ -57,7 +57,7 @@
     { id: 'swamp', cls: C.swamp, smask: S.marsh | S.water }, { id: 'river', cls: C.temperate, smask: S.water | S.sand },
   ];
 
-  // strange worlds (WORLD_RULES §2): the terrain part is the T1 core's rules (terra-core.js / E:\d37-terrain ABI 2);
+  // strange worlds (WORLD_RULES §2): the terrain part is the T1 core's rules (terra-core.js / M:\d37\d37-terrain ABI 2);
   // the rest are presentation / physics laws the host game applies (sky colour, rain direction, time rate, gravity zones)
   B.PRESETS = {
     earth: { gen: 2, rules: 0, name: 'Земля', note: 'logical climate (WORLD_RULES §1)' },

@@ -16,7 +16,7 @@ const SITE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL', name, extra === undefined ? '' : JSON.stringify(extra).slice(0, 600)); } };
 async function findPglite() {
-  const cands = [process.env.PGLITE_PATH, path.join(os.tmpdir(), 'd37-pglite'), 'E:/claude-tmp/d37raid/pg', SITE].filter(Boolean);
+  const cands = [process.env.PGLITE_PATH, path.join(os.tmpdir(), 'd37-pglite'), 'M:/d37/claude-tmp/d37raid/pg', SITE].filter(Boolean);
   const pick = x => (typeof x === 'string' ? x : x && (pick(x.import) || pick(x.default) || pick(x.module)));
   for (const c of cands) for (const dir of [c, path.join(c, '@electric-sql/pglite'), path.join(c, 'node_modules/@electric-sql/pglite')]) {
     try {

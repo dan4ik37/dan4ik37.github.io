@@ -1,4 +1,4 @@
-// AI LOD bench (T-127, spec E:\d37-core\spec\AI_LOD.md §11 "Benchmarks", npcb.cjs pattern): cost per fixed step in node, render
+// AI LOD bench (T-127, spec M:\d37\d37-core\spec\AI_LOD.md §11 "Benchmarks", npcb.cjs pattern): cost per fixed step in node, render
 // stubbed. Scenes: npc.js residents (wander, Mir-like) and zombies (follow + bite, Studio 3D survival) at N = 16 / 64 / 260 / 1 000;
 // Horde enemies held at N = 170 / 260 / 1 000 (crowd around a hero with no weapons = worst case for separation) and a real late
 // run at the cap (weapons on). Reports p50 / p95 / max ms per step, µs per agent and GC events inside the measured window

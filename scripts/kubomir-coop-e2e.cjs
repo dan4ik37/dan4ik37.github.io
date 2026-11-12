@@ -13,11 +13,11 @@
 //   perfv — без других браузеров: три человечка других игроков в странице хозяина (сколько стоят их картинка и логика);
 //           KC_VARIANTS=1 — ещё и без их теней
 //   KC_TIMELINE=1 — ход входа гостя по секундам (ответ хозяина, ждёт чанков, мир готов)
-// Снимки и отчёт — E:\claude-tmp\coop\shots
+// Снимки и отчёт — M:\d37\claude-tmp\coop\shots
 const http = require('http'), fs = require('fs'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const MODE = process.argv[2] || 'basic';
-const TMP = process.env.D37_TMP ? path.join(process.env.D37_TMP, 'coop') : 'E:/claude-tmp/coop', SHOTS = path.join(TMP, 'shots');   // D37_TMP — своя временная папка задачи
+const TMP = process.env.D37_TMP ? path.join(process.env.D37_TMP, 'coop') : 'M:/d37/claude-tmp/coop', SHOTS = path.join(TMP, 'shots');   // D37_TMP — своя временная папка задачи
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 fs.mkdirSync(SHOTS, { recursive: true });

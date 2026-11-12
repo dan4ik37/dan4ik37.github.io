@@ -6,13 +6,13 @@
 //   kubomir — a NEW world of generator v4 (logical biomes): G.ver 4, biomes from D37E.biomes, the weather cell record = B.region
 //   reopen  — N rounds (default 20) planet ↔ terra: heap after GC, live workers, canvases, 0 errors
 //   soak    — S seconds (default 600): planet ground → orbit → terra digging, storms on and off, heap stays flat, 0 errors
-// Downloads denied (Browser + Page.setDownloadBehavior). Temp: D37_TMP (default E:\claude-tmp\t145\all).
+// Downloads denied (Browser + Page.setDownloadBehavior). Temp: D37_TMP (default M:\d37\claude-tmp\t145\all).
 // Run from the site root: node scripts/t145-e2e.cjs [phone|pc] [all|planet|terra|kubomir|reopen|soak] [rounds|seconds]
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const [PROF = 'phone', WHAT = 'all', ARG = ''] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp/t145/all' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp/t145/all' : os.tmpdir());
 const SHOTS = path.join(TMP, 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.wasm': 'application/wasm',

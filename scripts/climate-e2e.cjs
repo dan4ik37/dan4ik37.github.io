@@ -2,12 +2,12 @@
 // дождь, осень), все программы шейдеров собрались, страж графики ничего не выключил, замер (ЦП мс на кадр и вызовы отрисовки:
 // погода выкл / вкл), салют и новогоднее задание поверх страницы. Снимки — <папка временных файлов>/climate/shots.
 // Запуск из корня сайта: node scripts/climate-e2e.cjs [d3d11|swiftshader|gl|vulkan] [high|mid|low]
-// (Chrome — переменная CHROME или стандартный путь Windows; временная папка — D37_TMP, иначе E:\claude-tmp, иначе системная)
+// (Chrome — переменная CHROME или стандартный путь Windows; временная папка — D37_TMP, иначе M:\d37\claude-tmp, иначе системная)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const [angle = 'd3d11', preset = 'high'] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const SHOTS = path.join(TMP, 'climate', 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',

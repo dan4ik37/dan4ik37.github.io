@@ -20,9 +20,9 @@
 .PARAMETER Check     Только проверить настройки и найти pg_dump (к базе НЕ подключается, ничего не пишет).
 
 .EXAMPLE
-  powershell -NoProfile -ExecutionPolicy Bypass -File E:\site\dan4ik37.github.io\scripts\backup-db.ps1
+  powershell -NoProfile -ExecutionPolicy Bypass -File M:\d37\site\dan4ik37.github.io\scripts\backup-db.ps1
 .EXAMPLE
-  powershell -NoProfile -ExecutionPolicy Bypass -File E:\site\dan4ik37.github.io\scripts\backup-db.ps1 -Check
+  powershell -NoProfile -ExecutionPolicy Bypass -File M:\d37\site\dan4ik37.github.io\scripts\backup-db.ps1 -Check
 
 Коды выхода: 0 — готово; 2 — нет/неверный файл настроек; 3 — не найден pg_dump; 4 — pg_dump не справился; 5 — копия не прошла проверку.
 #>

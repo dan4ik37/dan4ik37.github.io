@@ -2,12 +2,12 @@
 // Владелец 22.10: «почему нижняя панель ни за что не отвечает?» — на телефоне стоя очки «Каждый сам за себя» лежали поверх
 // ячеек 2–5 (ловили нажатия), а кнопки телефона заходили под панель. Проверки на экранах: телефон 412×915 и 360×780, лёжа 915×412 и
 // 780×360, планшет 768×1024 (касание), ПК 1280×800 (мышь): ячейки целиком свободны (середина и углы), не на кнопках телефона,
-// жизни — тоже; нажатие по ячейке 2, 4, 5, 3, 1 → выбрано это оружие. Снимки — в D37_TMP (иначе E:\claude-tmp, иначе системная).
+// жизни — тоже; нажатие по ячейке 2, 4, 5, 3, 1 → выбрано это оружие. Снимки — в D37_TMP (иначе M:\d37\claude-tmp, иначе системная).
 // Запуск из корня сайта: node scripts/war-hud-e2e.cjs   (SCREENS='[["phone",360,780]]' — свои экраны; CHROME — путь к Chrome)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain' };
 const server = http.createServer((req, res) => {

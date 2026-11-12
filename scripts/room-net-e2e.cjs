@@ -11,7 +11,7 @@
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || 'E:/claude-tmp/t039';
+const TMP = process.env.D37_TMP || 'M:/d37/claude-tmp/t039';
 const ONLY = (process.argv[2] || 'ABC').toUpperCase();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;

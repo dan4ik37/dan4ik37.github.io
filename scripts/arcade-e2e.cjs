@@ -14,7 +14,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || 'E:/claude-tmp/t140';
+const TMP = process.env.D37_TMP || 'M:/d37/claude-tmp/t140';
 const OUT = path.join(TMP, 'shots');
 const IDS = (process.argv[2] || 'tiles,lights').split(',');
 const SECS = +process.argv[3] || 15;

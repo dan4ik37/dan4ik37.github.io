@@ -3,7 +3,7 @@
 // дождь; все программы шейдеров собрались, страж графики ничего не выключил.
 // Запуск из корня сайта: node scripts/kubomir-e2e.cjs [метка] [ultra|high|mid] [d3d11|swiftshader]
 //   SITE_DIR=папка — снимать другую копию сайта (например, выгрузку прошлого коммита: «до»)
-// Снимки — <D37_TMP или E:\claude-tmp>\kubomir2\shots\<метка>-<пресет>-*.jpg
+// Снимки — <D37_TMP или M:\d37\claude-tmp>\kubomir2\shots\<метка>-<пресет>-*.jpg
 // KB_MODE=perf — замер в профиле телефона (412 × 915, ЦП ×4 медленнее, пресет из аргумента — «средняя» = mid): ясно, снег, дождь —
 //   ЦП мс на кадр (среднее, 95 %, худший), FPS, вызовы, память JS; «до» — SITE_DIR=выгрузка прошлого коммита
 // KB_MODE=support — обрушение (T-022a), мир «реализм»: пересчёт в доме из 1000+ блоков, срез дома, балка падает куском (время
@@ -40,7 +40,7 @@ const SUPPORT = MODE === 'support' || MODE === 'topple' || !!process.env.KB_SUPP
 const LOAD = !!process.env.KB_LOAD;   // T-124: + нагрузка (meta.load = 1)
 const FIRE = MODE === 'fire' || MODE === 'firecycle' || !!process.env.KB_FIRE;   // мир «Огонь распространяется» (T-022d; KB_FIRE=1 — и для soak / reopen)
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const SHOTS = path.join(TMP, MODE === 'water' ? 'water' : 'kubomir2', 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
