@@ -125,7 +125,7 @@ const artUrl = t => `${SITE}/forum/${t.id}${FB.slug(t.title) ? '-' + FB.slug(t.t
 const artPath = t => artUrl(t).slice(SITE.length);
 // Текст игрока на публичной странице — через publicText (мат, контакты, голые ссылки скрыты); явные ссылки статьи (https) — rel="nofollow ugc noopener"
 const keepSp = s => (/^\s/.test(s) ? ' ' : '') + publicText(s, 6000).html + (/\s$/.test(s) && s.trim() ? ' ' : '');   // пробелы между кусками абзаца
-const blocksHtml = blocks => FB.toHtml(blocks, { esc, media: MEDIA, text: keepSp });
+const blocksHtml = blocks => FB.toHtml(blocks, { media: MEDIA, text: keepSp });
 const firstVideo = blocks => (Array.isArray(blocks) ? blocks : []).find(b => b && b.t === 'video' && FB.videoOk(b.p, b.id)) || null;
 const imageOf = t => MEDIA(t.cover) || FB.poster(firstVideo(t.blocks)) || SITE + '/og-image.jpg';
 const adsOk = t => t.status === 'published' && t.trusted !== false && !(t.reports_open > 0) && (t.age_min ?? 12) <= 12;
@@ -181,7 +181,8 @@ async function forumPage(res, tag){
 async function threadPage(res, id, raw){
   let v2 = true;
   let t = (await safe(() => sbSelect('forum_threads', `id=eq.${id}&select=id,title,author_id,pinned,locked,created_at,published_at,edited_at,status,blocks,cover,tags,source_url,source_title,excerpt,age_min,realm,rating,votes_up,comments,trusted,reports_open`)))?.[0];
-  if (t === undefined) {   // нет строки или старая база
+  if (t && !('status' in t)) { v2 = false; }   // старая база отдала строку без новых полей
+  else if (t === undefined) {   // нет строки или старая база
     const legacy = (await safe(() => sbSelect('forum_threads', `id=eq.${id}&select=id,title,author_id,pinned,locked,created_at`)))?.[0];
     if (legacy && !('status' in legacy)) { v2 = false; t = legacy; }
   }

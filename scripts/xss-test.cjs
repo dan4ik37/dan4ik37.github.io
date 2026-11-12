@@ -322,6 +322,14 @@ function selfCheck(){
       const J = b => new Response(JSON.stringify(b), { status: 200, headers: { 'Content-Type': 'application/json' } });
       globalThis.fetch = async (url) => {
         const u = String(url), P = CUR, now = '2026-10-01T10:00:00Z';
+        // форум 2.0 (T-157): статья 6 — блоки, источник, метки, обложка с чужим текстом в каждом поле; список и карта сайта — новые поля
+        if (u.includes('/rest/v1/forum_threads?id=eq.6&')) return J([{ id: 6, title: P, author_id: U1, pinned: false, locked: false, created_at: now, published_at: now, edited_at: null, status: 'published',
+          blocks: [{ t: 'p', r: [{ x: P, b: 1 }, { x: P, i: 1, h: 'https://ex.com/' + encodeURIComponent(P) }, { x: P, h: P }] }, { t: 'h', x: P, l: 3 }, { t: 'list', o: 1, items: [P, P] },
+            { t: 'quote', x: P, by: P }, { t: 'img', src: U1 + '/abcdefabcdefabcdef.webp', w: 10, h: 10, cap: P }, { t: 'img', src: P }, { t: 'video', p: 'yt', id: 'dQw4w9WgXcQ', cap: P }, { t: 'video', p: 'yt', id: P },
+            { t: 'file', key: U1 + '/abcdefabcdefabcdef.pdf', name: P, size: 1000 }, { t: P, x: P }, { t: 'hr' }],
+          cover: P, tags: [P, 'гайд'], source_url: P, source_title: P, excerpt: P, age_min: 12, realm: 'kids', rating: 2, votes_up: 3, comments: 1, trusted: true, reports_open: 0 }]);
+        if (u.includes('/rest/v1/forum_posts?thread_id=eq.6')) return J([{ id: 11, author_id: U1, body: P, is_body: true, created_at: now }, { id: 12, author_id: U2, body: P, parent_id: null, created_at: now }, { id: 13, author_id: U1, body: P, parent_id: 12, created_at: now }]);
+        if (u.includes('/rest/v1/forum_threads?status=eq.published')) return J([{ id: 6, title: P, author_id: U1, pinned: true, locked: false, created_at: now, published_at: now, excerpt: P, cover: U1 + '/abcdefabcdefabcdef.webp', tags: [P, 'гайд'], rating: 1, comments: 2 }]);
         if (u.includes('/rest/v1/forum_threads?id=eq.5&')) return J([{ id: 5, title: P, author_id: U1, pinned: false, locked: false, created_at: now }]);
         if (u.includes('/rest/v1/forum_threads?id=eq.')) return J([]);
         if (u.includes('/rest/v1/forum_threads?select=id,title')) return J([{ id: 5, title: P, author_id: U1, pinned: true, locked: false, created_at: now, forum_posts: [{ count: 3 }] }]);
@@ -341,6 +349,7 @@ function selfCheck(){
         return J([]);
       };
       const imp = async f => (await import(pathToFileURL(path.join(tmp, f)).href)).default;
+      const FBS = (await import(pathToFileURL(path.join(tmp, 'api/_lib/forum-blocks.js')).href)).makeForumBlocks();   // адрес статьи — как у сервера
       const pages = await imp('api/pages.js'), game = await imp('api/game.js'), video = await imp('api/video.js'), sitemap = await imp('api/sitemap.js');
       const call = async (handler, q) => {
         const out = { code: 200, headers: {}, body: '' };
@@ -350,7 +359,7 @@ function selfCheck(){
       };
       const ldOk = body => [...body.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].every(m => { try { JSON.parse(m[1]); return true; } catch (e) { return false; } });
       const MATRIX = [   // [название, обработчик, запрос]
-        ['/forum', pages, { page: 'forum' }], ['/forum/5', pages, { page: 'forum', id: '5' }], ['/ideas', pages, { page: 'ideas' }], ['/ideas/9', pages, { page: 'ideas', id: '9' }],
+        ['/forum', pages, { page: 'forum' }], ['/forum/5', pages, { page: 'forum', id: '5' }], ['/forum/6-<slug>', pages, { page: 'forum', get id(){ const g = FBS.slug(CUR); return '6' + (g ? '-' + g : ''); } }], ['/forum/t/гайд', pages, { page: 'forum', tag: 'гайд' }], ['/ideas', pages, { page: 'ideas' }], ['/ideas/9', pages, { page: 'ideas', id: '9' }],
         ['/c/abcd1234', pages, { page: 'invite', code: 'abcd1234' }], ['/r/bcdfgh', pages, { page: 'r', code: 'bcdfgh' }], ['/g/abcd1234', pages, { page: 'ugc', id: 'abcd1234' }], ['/studio', pages, { page: 'ugc' }],
       ];
       // 5.0. контроль самого стенда: подменная база доходит до страниц (иначе проверки ниже ничего бы не проверяли) и опасное ловится
@@ -400,6 +409,17 @@ function selfCheck(){
       CUR = 'Привет';
       const fr = await call(pages, { page: 'forum', id: '5' });
       ok(hrefsOf(fr.body).every(h => !/^\/[/\\]/.test(h) && !/evil\.example/.test(h)), '/forum/5: «dan4ik37.vercel.app//чужой.сайт» в теме — не ссылка на чужой сайт', hrefsOf(fr.body).filter(h => /evil/.test(h)));
+      {   // форум 2.0: ссылки статьи — только https с rel="nofollow ugc noopener"; старый адрес /forum/6 → 301 на /forum/6-<slug>
+        CUR = 'Привет <b>мир</b>';
+        const g = FBS.slug(CUR), art = await call(pages, { page: 'forum', id: '6' + (g ? '-' + g : '') });
+        const outer = [...art.body.matchAll(/<a\b[^>]*href="(https?:[^"]*)"[^>]*>/g)].map(m => m[0]).filter(t => !/dan4ik37\.vercel\.app|youtube\.com\/@|twitch\.tv\/dan4ik37|t\.me\/|vk\.com\/dan4ik37|youtube\.com\/watch|sb\.test\/storage/.test(t));
+        ok(art.code === 200 && outer.length >= 1 && outer.every(t => /href="https:/.test(t) && /rel="nofollow ugc noopener"/.test(t)), '/forum/6-<slug>: чужие ссылки статьи — https и rel="nofollow ugc noopener"', outer.slice(0, 3));
+        const old = await call(pages, { page: 'forum', id: '6' });
+        ok(old.code === 301 && old.headers.Location === '/forum/6' + (g ? '-' + g : ''), '/forum/6 → 301 на адрес со «слагом»', old.headers.Location);
+        ok(!/<iframe/i.test(art.body), '/forum/6-<slug>: серверная страница без iframe (видео — ссылка с картинкой)');
+        const ping = await call(pages, { page: 'forumping' });
+        ok(ping.code === 405, 'POST /api/forum-ping: GET не принимает');
+      }
       // 5.5. кто отдаёт тело ответа: известные места (res.send / res.end); новое — проверить, что в нём нет чужого текста без esc
       const known = [   // файл: форма аргумента (начало)
         /^page\(/, /^JSON\.stringify\(/, /^''?$/, /^'[^'$\\]*'$/, /^html$/, /^t \? topicPage\(/, /^typeof body === 'string' \? body : JSON\.stringify\(body\)$/, /^`<\?xml version="1\.0" encoding="UTF-8"\?>/, /^$/,

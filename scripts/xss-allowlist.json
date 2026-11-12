@@ -40,6 +40,52 @@
    ]
   },
   {
+   "f": "api/_lib/forum-blocks.js",
+   "fn": "a",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "toHtml: tx — экранирование (esc по умолчанию) или publicText().html у серверной страницы; теги вокруг — константы",
+   "xs": [
+    "inner"
+   ]
+  },
+  {
+   "f": "api/_lib/forum-blocks.js",
+   "fn": "a",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "toHtml: ссылка текста — только если https() (как forum_https в SQL); файл — адрес хранилища o.media(key) по регулярке ключа",
+   "xs": [
+    "esc(href)"
+   ]
+  },
+  {
+   "f": "api/_lib/forum-blocks.js",
+   "fn": "toHtml",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "toHtml: tx — экранирование (esc по умолчанию) или publicText().html у серверной страницы; теги вокруг — константы",
+   "xs": [
+    "(b.r || []).map(r => { if (!r || typeof r.x !== 'string') return ''; l",
+    "s",
+    "tx(String(x))",
+    "tx(b.x || '').replace(/\\n/g, '<br>')",
+    "tx(b.by)",
+    "tx(b.cap)",
+    "tx(b.name || 'файл')"
+   ]
+  },
+  {
+   "f": "api/_lib/forum-blocks.js",
+   "fn": "toHtml",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "toHtml: ссылка текста — только если https() (как forum_https в SQL); файл — адрес хранилища o.media(key) по регулярке ключа",
+   "xs": [
+    "esc(u + '?download=' + encodeURIComponent(b.name || 'file'))"
+   ]
+  },
+  {
    "f": "api/_lib/page.js",
    "fn": "page",
    "k": "markup:raw",
@@ -150,6 +196,16 @@
   },
   {
    "f": "api/_lib/routes/forum.js",
+   "fn": "row",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "адрес статьи /forum/<id>-<slug>: id из базы, slug — только [a-z0-9-] (FB.slug)",
+   "xs": [
+    "esc(t.href)"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
    "fn": "threadPage",
    "k": "markup:attr",
    "c": "id-db",
@@ -161,11 +217,31 @@
   {
    "f": "api/_lib/routes/forum.js",
    "fn": "threadPage",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "bodyHtml = FB.toHtml(блоки): сама экранирует текст (её тело разбирает этот же тест)",
+   "xs": [
+    "bodyHtml || '<p class=\"muted\">(пусто)</p>'"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
+   "fn": "threadPage",
    "k": "markup:url",
    "c": "id-db",
    "n": "forum_threads/forum_posts/ideas.id — bigint identity",
    "xs": [
     "t.id"
+   ]
+  },
+  {
+   "f": "api/_lib/routes/forum.js",
+   "fn": "threadPage",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "источник статьи: FB.https() перед выводом (только https://, без логина), как forum_https в SQL",
+   "xs": [
+    "esc(t.source_url)"
    ]
   },
   {
@@ -1965,6 +2041,52 @@
    "c": "num-db",
    "xs": [
     "c.candidates"
+   ]
+  },
+  {
+   "f": "js/features/forum-blocks.js",
+   "fn": "a",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "toHtml: tx — экранирование (esc по умолчанию) или publicText().html у серверной страницы; теги вокруг — константы",
+   "xs": [
+    "inner"
+   ]
+  },
+  {
+   "f": "js/features/forum-blocks.js",
+   "fn": "a",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "toHtml: ссылка текста — только если https() (как forum_https в SQL); файл — адрес хранилища o.media(key) по регулярке ключа",
+   "xs": [
+    "esc(href)"
+   ]
+  },
+  {
+   "f": "js/features/forum-blocks.js",
+   "fn": "toHtml",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "toHtml: tx — экранирование (esc по умолчанию) или publicText().html у серверной страницы; теги вокруг — константы",
+   "xs": [
+    "(b.r || []).map(r => { if (!r || typeof r.x !== 'string') return ''; l",
+    "s",
+    "tx(String(x))",
+    "tx(b.x || '').replace(/\\n/g, '<br>')",
+    "tx(b.by)",
+    "tx(b.cap)",
+    "tx(b.name || 'файл')"
+   ]
+  },
+  {
+   "f": "js/features/forum-blocks.js",
+   "fn": "toHtml",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "toHtml: ссылка текста — только если https() (как forum_https в SQL); файл — адрес хранилища o.media(key) по регулярке ключа",
+   "xs": [
+    "esc(u + '?download=' + encodeURIComponent(b.name || 'file'))"
    ]
   },
   {

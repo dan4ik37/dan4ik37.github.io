@@ -73,7 +73,7 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
   const evil = '<img src=x onerror=XSS()>"\'><script>XSS()</script>';
   const html = B.toHtml([{ t: 'p', r: [{ x: evil, b: 1 }, { x: evil, h: 'javascript:XSS()' }, { x: 'ok', h: 'https://ex.com/a' }] }, { t: 'h', x: evil }, { t: 'list', items: [evil] },
     { t: 'quote', x: evil, by: evil }, { t: 'img', src: U + '/abcdefabcdefabcdef.webp', cap: evil }, { t: 'video', p: 'yt', id: 'dQw4w9WgXcQ', cap: evil }, { t: 'video', p: 'yt', id: '"><x' },
-    { t: 'file', key: U + '/abcdefabcdefabcdef.pdf', name: evil, size: 2048 }, { t: 'raw', html: evil }], { esc, media: k => 'https://cdn.example/' + k });
+    { t: 'file', key: U + '/abcdefabcdefabcdef.pdf', name: evil, size: 2048 }, { t: 'raw', html: evil }], { media: k => 'https://cdn.example/' + k });
   ok(!/<img src=x|<script|onerror=XSS\(\)>|href="javascript/i.test(html), 'server html: evil strings stay text', html.slice(0, 400));
   ok(/<a href="https:\/\/ex\.com\/a" rel="nofollow ugc noopener" target="_blank">ok<\/a>/.test(html), 'user links nofollow ugc noopener');
   ok(!/raw/.test(html) && !/"&gt;&lt;x/.test(html.split('youtube.com/watch?v=')[2] || ''), 'unknown blocks and bad video ids dropped');
