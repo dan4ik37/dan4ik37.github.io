@@ -2,7 +2,10 @@
 //  МИНИ-КАРТОЧКА ИГРОКА (T-086) — одна на весь сайт: чат и сообщества (msgview.js V.userCard), участники сообществ, друзья,
 //  гости профиля, тиммейты, форум и идеи, топы, «Сообщество» на главной и любая ссылка на профиль (#/profile/<id>, /profile/<id>)
 // ═══════════════════════════════════════
-// D37Mini.open(uid, { nick, anchor, actions, guest }) → Promise (всё догрузилось) · D37Mini.close() · D37Mini.isOpen()
+// D37Mini.open(uid, { nick, anchor, actions, guest, extra }) → Promise (всё догрузилось) · D37Mini.close() · D37Mini.isOpen()
+//   extra — свои кнопки места (T-141, «Мир Денчика» 3D/2D): [{ t: 'текст', run(uid, nick) }] — после кнопок дружбы, не себе.
+// T-141: «📍 Позвать» (в игру / ко мне / на сервер — phone-apps.js P.invite), число друзей (friend_count; скрытый профиль — без числа),
+//   уровень сезона (xp.js xpGetExtras().season). Откат — MINI_T141 = false.
 //   anchor — элемент, у которого открыть (компьютер: всплывает рядом и целиком в экране; телефон: лист снизу, «Назад» закрывает)
 //   actions — крючки ленты сообщений (msgview.js): report() — пожаловаться на сообщение, mods(uid, nick) → [[k, текст]],
 //   modDo(k, uid, nick) → { ok, msg }, block(uid, nick) — своё подтверждение ленты. Без них — блокировка и модерация общего чата сайта.
@@ -24,6 +27,7 @@
   const me = () => (typeof currentUser !== 'undefined' && currentUser?.id) || null;
   const P = () => window.D37Phone || null;
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const MINI_T141 = true;
 
   // ═══ Что показать: чистая функция (тест — scripts/ui-test.cjs) ═══
   // s: { uid, self, logged, guest, status: 'none'|'pending_sent'|'pending_received'|'friends'|null, accepts, why, kb, kp, join, blocked,
@@ -38,7 +42,7 @@
       const kid = k => { notes.push(KM(k)); return { k: '', t: '🔒 ' + (s.status === 'friends' ? 'Только дружба' : 'Нельзя'), dis: true }; };
       if (s.status === 'friends') {
         if (s.kb) acts.push(kid(s.kb));
-        else acts.push({ k: 'dm', t: '✉ Написать' }, { k: 'call', t: '📞 Позвонить' });
+        else { acts.push({ k: 'dm', t: '✉ Написать' }, { k: 'call', t: '📞 Позвонить' }); if (MINI_T141) acts.push({ k: 'inv', t: '📍 Позвать' }); }
       } else if (s.status === 'pending_received') acts.push(s.kp ? kid('agefriend') : { k: 'friend-acc', t: '✅ Принять в друзья', cls: 'ok' });
       else if (s.status === 'pending_sent') acts.push({ k: '', t: '⏳ Заявка отправлена', dis: true });
       else if (s.status === 'none') {
@@ -47,6 +51,7 @@
         else if (s.why) { acts.push({ k: '', t: '➕ В друзья', dis: true }); notes.push(s.why); }
         else acts.push({ k: 'friend-add', t: '➕ В друзья', cls: 'ok' });
       }
+      (s.extra || []).forEach((x, i) => { if (x && x.t) acts.push({ k: 'x' + i, t: String(x.t).slice(0, 40) }); });
       acts.push({ k: 'block', t: s.blocked ? '✅ Разблокировать' : '🚫 Заблокировать', cls: s.blocked ? '' : 'warn' });
     }
     if (s.canReport && s.logged && !s.self) acts.push({ k: 'report', t: '🚩 Пожаловаться', cls: 'warn' });
@@ -102,7 +107,7 @@
         <div class="d37m-top"><span class="d37m-avw"><span class="d37m-ava"></span><i class="d37m-on" hidden title="В сети"></i></span><span class="d37m-char" hidden></span></div>
         <div class="d37m-body">
           <div class="d37m-name"><b id="d37mNick" class="d37m-nick"></b><span class="d37m-badges"></span></div>
-          <div class="d37m-sub"><span class="d37m-lv lv-badge" hidden></span><span class="d37m-title nick-title" hidden></span><span class="d37m-role"></span></div>
+          <div class="d37m-sub"><span class="d37m-lv lv-badge" hidden></span><span class="d37m-ss ss-badge" hidden></span><span class="d37m-title nick-title" hidden></span><span class="d37m-fc" hidden></span><span class="d37m-role"></span></div>
           <div class="d37m-act" hidden></div>
           <div class="d37m-status" hidden></div>
           <p class="d37m-bio" hidden></p>
@@ -167,7 +172,10 @@
     const id = ++seq, self = !!uid && uid === me(), sheet = sheetMode();
     if (open && open.uid === uid && !root.hidden && open.anchor === o.anchor) { close(); return Promise.resolve(); }   // второе нажатие — закрыть
     stopSprite();
-    open = { id, uid, nick: String(o.nick || '').slice(0, 40), anchor: o.anchor || null, actions: o.actions || null, guest, self, sheet, ret: document.activeElement };
+    // игра развернула элемент на весь экран (Fullscreen API) — видно только его: карточку туда же (как телефон, phone.js)
+    try { const fs = document.fullscreenElement, host = fs && fs !== document.documentElement && fs !== document.body && fs.tagName !== 'IFRAME' && fs.tagName !== 'VIDEO' ? fs : document.body; if (root.parentElement !== host) host.appendChild(root); } catch (er) {}
+    open = { id, uid, nick: String(o.nick || '').slice(0, 40), anchor: o.anchor || null, actions: o.actions || null, guest, self, sheet, ret: document.activeElement,
+      extra: Array.isArray(o.extra) ? o.extra.filter(x => x && typeof x.run === 'function').slice(0, 4) : [] };
     root.classList.toggle('sheet', sheet);
     root.classList.toggle('pop', !sheet);
     const pcache = uid ? (PC.get(uid)?.p || P()?.prof?.(uid) || null) : null;
@@ -203,10 +211,13 @@
     const p = await pP; if (!live()) return;
     if (p) paintHead(p, false);
     else if (!PC.get(uid)) { q('.d37m-lock').hidden = false; q('.d37m-lock').textContent = '📡 Не удалось загрузить профиль'; }
+    // число друзей — одним запросом, только если профиль виден (скрытый — без числа)
+    const pFc = MINI_T141 && p && (!p.profile_hidden || self) && typeof sbClient !== 'undefined' && sbClient ? friendCount(uid) : null;
     await pDonor; if (!live()) return;
     if (p) paintStatus(p);
     const ex = await pEx; if (!live()) return;
     paintLevel(ex);
+    paintFc(await pFc); if (!live()) return;
     const ava = q('.d37m-ava');
     if (typeof applyLevelFrame === 'function') applyLevelFrame(ava, uid).catch?.(() => {});
     const on = await pOn; if (!live()) return;
@@ -241,7 +252,7 @@
     q('.d37m-role').textContent = open.guest ? 'Гость (без аккаунта)' : p?.role === 'admin' ? 'Администратор сайта' : p?.role === 'moderator' ? 'Модератор сайта' : p?.role === 'helper' ? 'Хелпер сайта' : '';
     const hidden = !!p?.profile_hidden && !open.self;
     const lock = q('.d37m-lock');
-    if (first) { for (const s of ['.d37m-status', '.d37m-bio', '.d37m-games', '.d37m-act']) q(s).hidden = true; lock.hidden = true; q('.d37m-lv').hidden = true; q('.d37m-title').hidden = true; q('.d37m-on').hidden = true; q('.d37m-char').hidden = true; q('.d37m-char').textContent = ''; return; }
+    if (first) { for (const s of ['.d37m-status', '.d37m-bio', '.d37m-games', '.d37m-act', '.d37m-ss', '.d37m-fc']) q(s).hidden = true; lock.hidden = true; q('.d37m-lv').hidden = true; q('.d37m-title').hidden = true; q('.d37m-on').hidden = true; q('.d37m-char').hidden = true; q('.d37m-char').textContent = ''; return; }
     lock.hidden = !hidden;
     lock.textContent = hidden ? (p.profile_visibility === 'friends' ? '🔒 Профиль видят только друзья' : '🔒 Пользователь скрыл профиль') : '';
     const status = q('.d37m-status'); status.textContent = hidden ? '' : String(p?.status_text || ''); status.hidden = !status.textContent;
@@ -267,6 +278,20 @@
     if (ex?.level) { lv.hidden = false; lv.textContent = 'Lv ' + ex.level; lv.className = 'd37m-lv lv-badge' + (typeof xpTierClass === 'function' ? xpTierClass(ex.level) : ''); }
     const d = ex?.title && typeof achTitleDef === 'function' ? achTitleDef(ex.title) : null;
     t.hidden = !d; t.textContent = d ? `${d.icon} ${d.title}` : '';
+    const ss = q('.d37m-ss'), sl = MINI_T141 ? +ex?.season || 0 : 0;
+    ss.hidden = !(sl > 0);
+    if (sl > 0) { ss.textContent = (typeof xpSeasonIcon === 'function' ? xpSeasonIcon() : '⭐') + ' ' + sl; ss.title = 'Уровень сезона: ' + sl; }
+  }
+  // Число друзей (progression.sql friend_count); кэш на 2 минуты — повторное открытие без запроса
+  const FCN = new Map();
+  async function friendCount(uid){
+    const c = FCN.get(uid); if (c && Date.now() - c.t < 120000) return c.n;
+    try { const { data, error } = await sbClient.rpc('friend_count', { uid }); if (error) return null; const n = +data || 0; FCN.set(uid, { t: Date.now(), n }); if (FCN.size > 200) FCN.delete(FCN.keys().next().value); return n; } catch (er) { return null; }
+  }
+  function paintFc(n){
+    const el = q('.d37m-fc');
+    el.hidden = !(n > 0);
+    el.textContent = n > 0 ? `👥 ${n} ${n % 10 === 1 && n % 100 !== 11 ? 'друг' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'друга' : 'друзей'}` : '';
   }
   function paintActivity(st, act){
     const el = q('.d37m-act');
@@ -280,7 +305,7 @@
     let mods = [];
     try { mods = o.actions?.mods ? o.actions.mods(o.uid, o.nick) || [] : staffMods(o.uid); } catch (er) { mods = []; }
     const d = decide({ uid: o.uid, self: o.self, logged, guest: o.guest, status: x.status ?? null, accepts: x.accepts, why: x.why, kb: x.kb, kp: x.kp,
-      join: x.join, blocked: !!o.uid && !!window.MsgView?.blocked?.has?.(o.uid), canReport: !!o.actions?.report, mods, hidden: x.hidden, vis: x.vis });
+      join: x.join, blocked: !!o.uid && !!window.MsgView?.blocked?.has?.(o.uid), canReport: !!o.actions?.report, mods, hidden: x.hidden, vis: x.vis, extra: o.extra });
     o.act = x.act || null;
     // пока не знаем дружбу — кнопки дружбы не показываем (без «прыжка» кнопок: место держит заглушка)
     const pending = logged && !o.self && o.uid && x.status == null;
@@ -354,6 +379,8 @@
     if (k === 'join') { const a = o.act; close(); P()?.goJoin?.(uid, a); return; }
     if (k === 'dm') { close(); if (P()?.open) P().open('msgs/' + uid); else if (typeof openDmWith === 'function') openDmWith(uid, nick); return; }
     if (k === 'call') { close(); await P()?.need?.('calls'); window.D37Calls?.call(uid, nick); return; }
+    if (k === 'inv') { close(); try { await P()?.need?.('apps'); } catch (er) {} if (P()?.invite) P().invite(uid, nick); return; }
+    if (/^xd$/.test(k || '')) { const x = o.extra?.[+k.slice(1)]; close(); try { x?.run(uid, nick); } catch (er) { console.error(er); } return; }
     if (k === 'report') { const f = o.actions?.report; close(); f?.(); return; }
     if (k === 'friend-add' || k === 'friend-acc') {
       t.disabled = true;

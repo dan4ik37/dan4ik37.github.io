@@ -3024,3 +3024,237 @@ revoke all on function public.call_check(text, text, text) from public;
 grant execute on function public.call_check(text, text, text) to anon, authenticated;
 revoke all on function public.dm_kidsafe() from public, anon, authenticated;
 revoke all on function public.friend_kidsafe() from public, anon, authenticated;
+
+
+-- ═══ 9. 📎 Файлы в чате, сообществах и ЛС (T-141, владелец 12.11: «отправку файлов как в лс так и в наш дс», «чтобы файл передавался
+--     сам»). Сам файл идёт ОТ УСТРОЙСТВА К УСТРОЙСТВУ (WebRTC, js/features/files.js); база хранит только ссылку в строке
+--     сообщения (колонка att): { v, enc, kid, name, size, mime, chash, phash, thumb?, w?, h?, dur? } — маленькое превью
+--     (data URL ≤ 48 000 знаков) и хеши. Ставит ссылку только msg_attach (автор, своё сообщение, в первые 2 минуты); правила —
+--     здесь, на сервере: список типов, размер, лимит в день, до 9 лет — нет, хеш из чёрного списка — нет.
+--     Числа — site_config key 'chat_files' (JSON; нет строки — значения ниже, их подтверждает владелец):
+--       {"on":true,"file_mb":10,"day_mb":100,"day_n":40,"direct_mb":25,"auto_mb":10,"keep_days":30,"seed_mb_day":300,"store":false,"store_kb":300}
+--     Откат: insert into public.site_config (key, value) values ('chat_files', '{"on":false}') on conflict (key) do update set value = excluded.value;
+alter table public.messages add column if not exists att jsonb;
+alter table public.community_messages add column if not exists att jsonb;
+alter table if exists public.direct_messages add column if not exists att jsonb;
+
+create table if not exists public.file_day (            -- сколько человек прикрепил за день (лимит в день — на сервере)
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  day date not null default (now() at time zone 'Asia/Almaty')::date,
+  n int not null default 0,
+  bytes bigint not null default 0,
+  primary key (user_id, day)
+);
+alter table public.file_day enable row level security;
+revoke all on public.file_day from anon, authenticated;
+
+create table if not exists public.file_block (           -- чёрный список: хеш содержимого (phash) — такой файл больше не прикрепить и не раздать
+  phash text primary key check (phash ~ '^[0-9a-f]{64}$'),
+  reason text not null default '',
+  by_uid uuid,
+  created_at timestamptz not null default now()
+);
+alter table public.file_block enable row level security;
+revoke all on public.file_block from anon, authenticated;
+
+create table if not exists public.file_reports (         -- «🚩 пожаловаться» на файл: ссылка берётся из самой строки сообщения (не с устройства)
+  id bigint generated always as identity primary key,
+  reporter uuid references public.profiles(id) on delete set null,
+  kind text not null check (kind in ('chat', 'cm', 'dm')),
+  mid bigint not null,
+  phash text not null,
+  att jsonb not null,
+  why text not null default '',
+  status text not null default 'new' check (status in ('new', 'blocked', 'dismissed')),
+  created_at timestamptz not null default now(),
+  unique (reporter, kind, mid)
+);
+alter table public.file_reports enable row level security;
+revoke all on public.file_reports from anon, authenticated;
+
+-- Настройки (владелец). Числа по умолчанию — заглушки до решения владельца
+create or replace function public.file_cfg() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare d jsonb := '{"on":true,"file_mb":10,"day_mb":100,"day_n":40,"direct_mb":25,"auto_mb":10,"keep_days":30,"seed_mb_day":300,"store":false,"store_kb":300}'::jsonb;
+  v text;
+begin
+  if to_regclass('public.site_config') is not null then
+    select value into v from public.site_config where key = 'chat_files';
+    if v is not null then begin d := d || v::jsonb; exception when others then null; end; end if;
+  end if;
+  return d;
+end $$;
+grant execute on function public.file_cfg() to anon, authenticated;
+
+-- Разрешённые типы: картинки (без SVG), видео, звук, pdf, txt, zip. Расширение имени должно подходить к типу
+create or replace function public.file_type_ok(p_mime text, p_name text) returns boolean
+language sql immutable as $$
+  select case p_mime
+    when 'image/jpeg' then p_name ~* '\.(jpe?g)$' when 'image/png' then p_name ~* '\.png$' when 'image/gif' then p_name ~* '\.gif$'
+    when 'image/webp' then p_name ~* '\.webp$' when 'video/mp4' then p_name ~* '\.(mp4|m4v)$' when 'video/webm' then p_name ~* '\.webm$'
+    when 'audio/mpeg' then p_name ~* '\.mp3$' when 'audio/ogg' then p_name ~* '\.(ogg|oga|opus)$' when 'audio/wav' then p_name ~* '\.wav$'
+    when 'audio/mp4' then p_name ~* '\.m4a$' when 'application/pdf' then p_name ~* '\.pdf$' when 'text/plain' then p_name ~* '\.txt$'
+    when 'application/zip' then p_name ~* '\.zip$' else false end
+$$;
+grant execute on function public.file_type_ok(text, text) to anon, authenticated;
+
+-- Проверка ссылки (форма, тип, размер, превью). '' — можно, иначе причина
+create or replace function public.file_att_check(a jsonb, p_cfg jsonb) returns text
+language plpgsql immutable as $$
+declare nm text; sz bigint;
+begin
+  if a is null or jsonb_typeof(a) <> 'object' then return 'bad'; end if;
+  if coalesce(a->>'v', '') <> '1' then return 'version'; end if;
+  if coalesce(a->>'enc', '') <> 'none' or coalesce(a->>'kid', '') <> '' then return 'enc'; end if;   -- шифрование — задача T-155
+  nm := coalesce(a->>'name', '');
+  if char_length(nm) not between 1 and 120 or nm ~ '[\\/<>:"|?*\x01-\x1f]' then return 'name'; end if;
+  if not public.file_type_ok(coalesce(a->>'mime', ''), nm) then return 'type'; end if;
+  if coalesce(a->>'size', '') !~ '^[0-9]{1,12}$' then return 'size'; end if;
+  sz := (a->>'size')::bigint;
+  if sz < 1 or sz > (p_cfg->>'file_mb')::numeric * 1048576 then return 'big'; end if;
+  if coalesce(a->>'chash', '') !~ '^[0-9a-f]{64}$' or coalesce(a->>'phash', '') !~ '^[0-9a-f]{64}$' then return 'hash'; end if;
+  if a->>'enc' = 'none' and a->>'chash' <> a->>'phash' then return 'hash'; end if;
+  if a ? 'thumb' and not (jsonb_typeof(a->'thumb') = 'string' and char_length(a->>'thumb') <= 48000
+      and a->>'thumb' ~ '^data:image/(webp|jpeg);base64,[A-Za-z0-9+/=]+$') then return 'thumb'; end if;
+  if (select count(*) from jsonb_object_keys(a) k where k not in ('v', 'enc', 'kid', 'name', 'size', 'mime', 'chash', 'phash', 'thumb', 'w', 'h', 'dur')) > 0 then return 'bad'; end if;
+  if (a ? 'w' and coalesce(a->>'w', '') !~ '^[0-9]{1,5}$') or (a ? 'h' and coalesce(a->>'h', '') !~ '^[0-9]{1,5}$') or (a ? 'dur' and coalesce(a->>'dur', '') !~ '^[0-9]{1,6}(\.[0-9]{1,3})?$') then return 'bad'; end if;
+  return '';
+end $$;
+
+-- att меняет только msg_attach (флаг транзакции d37.att) — ни вставка, ни правка сообщения ссылку не подделают
+create or replace function public.file_att_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.att is not null and coalesce(current_setting('d37.att', true), '') <> '1' then new.att := null; end if;
+  elsif new.att is distinct from old.att and coalesce(current_setting('d37.att', true), '') <> '1' then
+    new.att := old.att;
+  end if;
+  return new;
+end $$;
+drop trigger if exists messages_att_guard on public.messages;
+create trigger messages_att_guard before insert or update on public.messages for each row execute function public.file_att_guard();
+drop trigger if exists cmsg_att_guard on public.community_messages;
+create trigger cmsg_att_guard before insert or update on public.community_messages for each row execute function public.file_att_guard();
+do $$ begin
+  if to_regclass('public.direct_messages') is not null then
+    drop trigger if exists dm_att_guard on public.direct_messages;
+    create trigger dm_att_guard before insert or update on public.direct_messages for each row execute function public.file_att_guard();
+  end if;
+end $$;
+
+-- Прикрепить файл к СВОЕМУ сообщению (отправлено не раньше 2 минут назад, ссылки ещё нет). p_kind: chat | cm | dm
+create or replace function public.msg_attach(p_kind text, p_mid bigint, p_att jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); cfg jsonb := public.file_cfg(); why text; owner uuid; at timestamptz; old jsonb; rcp uuid;
+  d date := (now() at time zone 'Asia/Almaty')::date; fd public.file_day%rowtype; sz bigint;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not coalesce((cfg->>'on')::boolean, true) then return jsonb_build_object('ok', false, 'reason', 'off'); end if;
+  if to_regprocedure('public.age_u9(uuid)') is not null and public.age_u9(uid) then return jsonb_build_object('ok', false, 'reason', 'u9'); end if;
+  why := public.file_att_check(p_att, cfg);
+  if why <> '' then return jsonb_build_object('ok', false, 'reason', why); end if;
+  if exists (select 1 from public.file_block where phash = p_att->>'phash') then return jsonb_build_object('ok', false, 'reason', 'blocked'); end if;
+  if p_kind = 'chat' then select user_id, created_at, att into owner, at, old from public.messages where id = p_mid and not deleted;
+  elsif p_kind = 'cm' then select user_id, created_at, att into owner, at, old from public.community_messages where id = p_mid and not deleted;
+  elsif p_kind = 'dm' and to_regclass('public.direct_messages') is not null then
+    execute 'select sender_id, created_at, att, recipient_id from public.direct_messages where id = $1' into owner, at, old, rcp using p_mid;
+    if rcp is not null and to_regprocedure('public.age_u9(uuid)') is not null and public.age_u9(rcp) then return jsonb_build_object('ok', false, 'reason', 'u9'); end if;
+  else return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
+  if owner is null or owner <> uid then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if old is not null then return jsonb_build_object('ok', false, 'reason', 'dup'); end if;
+  if at < now() - interval '2 minutes' then return jsonb_build_object('ok', false, 'reason', 'late'); end if;
+  sz := (p_att->>'size')::bigint;
+  select * into fd from public.file_day where user_id = uid and day = d for update;
+  if found and (fd.n + 1 > (cfg->>'day_n')::int or fd.bytes + sz > (cfg->>'day_mb')::numeric * 1048576) then return jsonb_build_object('ok', false, 'reason', 'day'); end if;
+  insert into public.file_day (user_id, day, n, bytes) values (uid, d, 1, sz)
+    on conflict (user_id, day) do update set n = public.file_day.n + 1, bytes = public.file_day.bytes + excluded.bytes;
+  delete from public.file_day where day < d - 3;
+  perform set_config('d37.att', '1', true);
+  if p_kind = 'chat' then update public.messages set att = p_att where id = p_mid;
+  elsif p_kind = 'cm' then update public.community_messages set att = p_att where id = p_mid;
+  else execute 'update public.direct_messages set att = $1 where id = $2' using p_att, p_mid; end if;
+  perform set_config('d37.att', '', true);
+  return jsonb_build_object('ok', true);
+end $$;
+revoke execute on function public.msg_attach(text, bigint, jsonb) from public, anon;
+grant execute on function public.msg_attach(text, bigint, jsonb) to authenticated;
+
+-- Устройство перед приёмом и раздачей спрашивает: не в чёрном ли списке (до 50 хешей за раз; отвечает только совпавшими)
+create or replace function public.file_blocked(p_hashes text[]) returns text[]
+language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(b.phash), '{}') from public.file_block b where b.phash = any(p_hashes[1:50])
+$$;
+grant execute on function public.file_blocked(text[]) to anon, authenticated;
+
+-- 🚩 Пожаловаться на файл: ссылка и хеш — из строки сообщения (не с устройства); жаловаться может тот, кто это сообщение видит
+create or replace function public.file_report(p_kind text, p_mid bigint, p_why text default '') returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); a jsonb; cid bigint; s uuid; r uuid;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_kind = 'chat' then select att into a from public.messages where id = p_mid and not deleted;
+  elsif p_kind = 'cm' then
+    select att, community_id into a, cid from public.community_messages where id = p_mid and not deleted;
+    if not exists (select 1 from public.community_members where community_id = cid and user_id = uid) and public.chat_staff_role(uid) is null then a := null; end if;
+  elsif p_kind = 'dm' and to_regclass('public.direct_messages') is not null then
+    execute 'select att, sender_id, recipient_id from public.direct_messages where id = $1' into a, s, r using p_mid;
+    if uid is distinct from s and uid is distinct from r then a := null; end if;
+  end if;
+  if a is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if (select count(*) from public.file_reports where reporter = uid and created_at > now() - interval '1 hour') >= 20 then return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  insert into public.file_reports (reporter, kind, mid, phash, att, why) values (uid, p_kind, p_mid, a->>'phash', a - 'thumb', left(coalesce(p_why, ''), 200))
+    on conflict (reporter, kind, mid) do nothing;
+  return jsonb_build_object('ok', true);
+end $$;
+revoke execute on function public.file_report(text, bigint, text) from public, anon;
+grant execute on function public.file_report(text, bigint, text) to authenticated;
+
+-- Команда сайта: жалобы на файлы и «⛔ в чёрный список» (хеш больше не прикрепить; устройства перестают его принимать и раздавать)
+create or replace function public.file_reports_list() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if public.chat_staff_role(auth.uid()) is null then return '[]'::jsonb; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'kind', r.kind, 'mid', r.mid, 'phash', r.phash, 'att', r.att, 'why', r.why, 'n',
+      (select count(*) from public.file_reports x where x.phash = r.phash), 'at', r.created_at) order by r.id desc)
+    from (select * from public.file_reports where status = 'new' order by id desc limit 100) r), '[]'::jsonb);
+end $$;
+create or replace function public.file_block_set(p_phash text, p_block boolean, p_reason text default '') returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if coalesce(public.chat_staff_role(auth.uid()), '') not in ('admin', 'moderator') then return jsonb_build_object('ok', false, 'reason', 'perm'); end if;
+  if coalesce(p_phash, '') !~ '^[0-9a-f]{64}$' then return jsonb_build_object('ok', false, 'reason', 'hash'); end if;
+  if p_block then
+    insert into public.file_block (phash, reason, by_uid) values (p_phash, left(coalesce(p_reason, ''), 200), auth.uid()) on conflict (phash) do nothing;
+    update public.file_reports set status = 'blocked' where phash = p_phash and status = 'new';
+  else
+    delete from public.file_block where phash = p_phash;
+    update public.file_reports set status = 'dismissed' where phash = p_phash and status = 'new';
+  end if;
+  return jsonb_build_object('ok', true);
+end $$;
+revoke execute on function public.file_reports_list() from public, anon;
+grant execute on function public.file_reports_list() to authenticated;
+revoke execute on function public.file_block_set(text, boolean, text) from public, anon;
+grant execute on function public.file_block_set(text, boolean, text) to authenticated;
+
+-- Превью в строках не копятся: старше keep_days дней — превью убираем (ссылка и хеши остаются — файл можно получить у тех, у кого он есть).
+-- Зовёт крон api/push-check.js (ключ сервера), не чаще раза в сутки; за раз — до 2000 строк в каждой таблице
+create or replace function public.file_expire() returns int
+language plpgsql security definer set search_path = public as $$
+declare d int := greatest(coalesce((public.file_cfg()->>'keep_days')::int, 30), 1); n int := 0; k int;
+begin
+  perform set_config('d37.att', '1', true);
+  update public.messages set att = att - 'thumb' where id in (select id from public.messages where att ? 'thumb' and created_at < now() - make_interval(days => d) limit 2000);
+  get diagnostics k = row_count; n := n + k;
+  update public.community_messages set att = att - 'thumb' where id in (select id from public.community_messages where att ? 'thumb' and created_at < now() - make_interval(days => d) limit 2000);
+  get diagnostics k = row_count; n := n + k;
+  if to_regclass('public.direct_messages') is not null then
+    execute format('update public.direct_messages set att = att - %L where id in (select id from public.direct_messages where att ? %L and created_at < now() - make_interval(days => %s) limit 2000)', 'thumb', 'thumb', d);
+    get diagnostics k = row_count; n := n + k;
+  end if;
+  perform set_config('d37.att', '', true);
+  return n;
+end $$;
+revoke all on function public.file_expire() from public, anon, authenticated;
+grant execute on function public.file_expire() to service_role;

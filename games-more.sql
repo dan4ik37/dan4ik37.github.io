@@ -684,6 +684,16 @@ language sql stable security definer set search_path = public as $$
 $$;
 grant execute on function public.season_frames(uuid[]) to anon, authenticated;
 
+-- T-141: уровень ТЕКУЩЕГО сезона пачкой — значок рядом с ником у других (чат, мини-карточка; js/features/xp.js xpLoadExtras), до 200 за
+-- раз; уровень 0 (меньше s_lv ⭐) не отдаём. Уровень — как в season_state_at: least(pts / s_lv, s_levels). Видно всем, как Lv (nick_extras)
+create or replace function public.season_levels(p_ids uuid[]) returns table(user_id uuid, lv int)
+language sql stable security definer set search_path = public as $$
+  select s.user_id, least(s.pts / greatest(public.quest_rule('s_lv'), 1), public.quest_rule('s_levels'))::int
+    from public.season_progress s
+   where s.user_id = any(p_ids[1:200]) and s.season = public.season_no() and s.pts >= greatest(public.quest_rule('s_lv'), 1)
+$$;
+grant execute on function public.season_levels(uuid[]) to anon, authenticated;
+
 -- Всё для витрины «Игр» и профиля — одним запросом
 create or replace function public.quest_hub() returns jsonb
 language plpgsql stable security definer set search_path = public as $$

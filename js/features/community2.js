@@ -768,15 +768,30 @@
     title: '🛡 Модерация',
     async render(el, mode, srv, rest){
       const site = typeof currentRole !== 'undefined' && ['admin', 'moderator'].includes(currentRole);
-      const tab = ['log', 'automod', 'all'].includes(rest?.[0]) && (rest[0] !== 'all' || (srv.official && site)) ? rest[0] : 'rep';
-      const tabs = [['rep', '🚩 Жалобы'], ['log', '📜 Журнал'], ['automod', '🤖 Автомод']].concat(srv.official && site ? [['all', '🏰 Сообщества']] : []);
+      const tab = ['log', 'automod', 'all', 'files'].includes(rest?.[0]) && (!['all', 'files'].includes(rest[0]) || (srv.official && site)) ? rest[0] : 'rep';
+      const tabs = [['rep', '🚩 Жалобы'], ['log', '📜 Журнал'], ['automod', '🤖 Автомод']].concat(srv.official && site ? [['all', '🏰 Сообщества'], ['files', '📎 Файлы']] : []);
       el.innerHTML = `<div class="ds-pane"><div class="ds4-tabs">${tabs.map(([k, t]) => `<a class="${k === tab ? 'on' : ''}" href="${DS.link(mode, srv.id, 'reports' + (k === 'rep' ? '' : '/' + k))}">${t}</a>`).join('')}</div><div class="ds4-tab"><div class="ds-dim">Загружаем…</div></div></div>`;
       const box = el.querySelector('.ds4-tab');
       if (tab === 'log') return logTab(box, srv);
       if (tab === 'automod') return amTab(box, srv);
+      if (tab === 'files') return filesTab(box);
       return repTab(box, srv, tab === 'all', mode);
     },
   };
+  // T-141 📎 жалобы на файлы (community.sql ч. 9): «⛔ Запретить» — хеш в чёрный список (файл больше не прикрепить, устройства его
+  // не принимают и не раздают), «✅ Оставить». Сам файл у сервера нет — видно имя, тип, размер, превью из ссылки
+  async function filesTab(box){
+    const r = await P.rpc('file_reports_list');
+    if (r.error) { box.innerHTML = `<div class="ds-dim">${r.missing ? 'Появится, когда сайт обновится' : e(P.err(r.error))}</div>`; return; }
+    const L = r.data || [];
+    box.innerHTML = L.length ? L.map(x => `<div class="ds-rep" data-ph="${e(x.phash)}"><b>📎 ${e(x.att?.name || 'файл')}</b> <span class="ds-dim">${e(x.att?.mime || '')} · ${e(window.D37Files?.size ? window.D37Files.size(+x.att?.size || 0) : (x.att?.size || 0) + ' Б')} · жалоб: ${+x.n || 1}</span>${x.why ? `<p>«${e(P.clean(x.why))}»</p>` : ''}<div class="ds-row"><button type="button" class="ds-btn ghost ds-sm" data-fr="keep">✅ Оставить</button><button type="button" class="ds-btn bad ds-sm" data-fr="block">⛔ Запретить файл</button></div></div>`).join('') : '<div class="ds-dim">Жалоб на файлы нет 🎉</div>';
+    box.onclick = async ev => {
+      const b = ev.target.closest('[data-fr]'); if (!b) return;
+      const row = b.closest('[data-ph]'); b.disabled = true;
+      const x = await P.rpc('file_block_set', { p_phash: row.dataset.ph, p_block: b.dataset.fr === 'block', p_reason: 'жалоба' });
+      if (x.data?.ok) row.remove(); else { b.disabled = false; alert('Не получилось: ' + (x.data?.reason || P.err(x.error))); }
+    };
+  }
   async function repTab(box, srv, all, mode){
     const official = srv.official && !all;
     const list = official ? await window.D37Chat.reports() : (await P.rpc('cm_reports', { p_community: all ? null : srv.id })).data;

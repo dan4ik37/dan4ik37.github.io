@@ -686,6 +686,7 @@
     if (p.uid && S.friends.has(p.uid)) out.push('<span class="wld-b" style="color:#4ade80">💚 друг</span>');
     return out.join('');
   }
+  const WORLD_MINI = true;
   async function openCard(p){
     const box = S.q('.wld-card');
     S.q('.wld-panel').hidden = true;
@@ -695,6 +696,17 @@
     if (p === S.me) {
       box.innerHTML = head + `<div class="wld-acts"><button type="button" data-act="look">🎭 Сменить персонажа</button>${S.me.uid ? `<button type="button" data-act="profile:${S.me.uid}">👤 Мой профиль</button>` : '<button type="button" data-act="login">🔑 Войти</button>'}</div>`;
       box.hidden = false;
+      return;
+    }
+    // T-141: одна карточка игрока на весь сайт — D37Mini (js/features/minicard.js) со своими кнопками мира; себе и гостю — старая.
+    // Откат — WORLD_MINI = false
+    if (WORLD_MINI && p.uid && p !== S.me && window.D37Mini?.open) {
+      S.q('.wld-card').hidden = true;
+      const key = p.key, run = a => () => { if (!S) return; S.cardFor = key; onAct(a, null); };
+      const extra = [{ t: '🎮 Позвать в игру', run: run('invite') }];
+      extra.push({ t: S.muted.has(p.key) ? '🔊 Показывать сообщения' : '🔇 Скрыть сообщения', run: run('mutelocal') });
+      if (['admin', 'moderator'].includes(S.myRole)) extra.push({ t: '🚫 Заглушить для всех', run: run('mute') });
+      window.D37Mini.open(p.uid, { nick: p.nick, extra });
       return;
     }
     const acts = [];

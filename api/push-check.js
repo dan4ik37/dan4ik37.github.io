@@ -13,6 +13,7 @@
 // Мёртвые подписки (404/410 от push-сервиса) удаляются.
 // «Денчик-бот» (community.sql): тот же эфир / новый ролик — ещё и сообщением в канал «📢 новости» сервера «Денчик37»
 // (bot_post — только с ключом сервера; нет функции — молча). События сообществ: напоминание 🔔 за 15 минут (bot_event_remind).
+// T-141: праздники — поздравление бота в «📢 новости» один раз в день праздника (с 9:00 по Алматы; список — site_config 'holidays').
 //
 // Переменные окружения: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET,
 // VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (см. api/_lib/webpush.js).
@@ -59,6 +60,8 @@ export default async function handler(req, res) {
   try { out.words = await checkWords(state.words, deadline); }
   catch (e) { out.words = { error: String(e?.message || e) }; console.error('[push words]', e); }   // push-words.sql не выполнен — ошибка только здесь
   out.events = await eventReminders();
+  out.holiday = await holidayPost();
+  out.files = await fileExpire();
   return res.status(200).json(out);
 }
 
@@ -169,6 +172,45 @@ async function botPost(text, key) {
 async function eventReminders() {
   try { const n = await sbRpc('bot_event_remind', {}); return { reminded: n || 0 }; }
   catch (e) { return /PGRST202|Could not find/i.test(String(e?.message)) ? { status: 'no_sql' } : { error: String(e?.message || e).slice(0, 120) }; }
+}
+// ── T-141: «Денчик-бот» поздравляет с праздниками в «📢 новости» (один раз: повод holiday:<год>-<ММ-ДД>:<n> в bot_posts) ──
+// Даты и тексты — данные: владелец меняет строку site_config key='holidays' (JSON-массив [{"d":"ММ-ДД","t":"текст"}], до 2 на день)
+// или выключает: value = 'off'. Нет строки — список ниже. День и час — по Алматы (UTC+5), не раньше 9:00. Откат — HOLIDAYS_ON = false.
+const HOLIDAYS_ON = true;
+export const HOLIDAYS_DEF = [
+  { d: '01-01', t: '🎄 С Новым годом! Пусть в этом году будет много побед, друзей и хороших стримов. Денчик37 и весь сайт поздравляют вас!' },
+  { d: '03-08', t: '🌷 С 8 Марта! Поздравляем всех девушек нашего сообщества — счастья, улыбок и побед в играх!' },
+  { d: '03-22', t: '🌸 С праздником Наурыз! Мира, добра и тепла каждому дому. Наурыз құтты болсын!' },
+  { d: '06-01', t: '🎈 С Днём защиты детей! Отличного лета, больше игр с друзьями и солнца!' },
+  { d: '09-01', t: '📚 С Днём знаний! Удачи в новом учебном году — и не забывайте отдыхать в играх 😉' },
+  { d: '12-31', t: '🎆 Последний день года! Спасибо, что были с нами. Встречаем Новый год вместе!' },
+];
+// Что поздравить в этот день: до 2 записей с датой ММ-ДД и текстом (чистая функция — проверка в scripts/community-test.cjs)
+export function holidaysFor(list, md) {
+  return (Array.isArray(list) ? list : []).filter(x => x && typeof x.d === 'string' && x.d === md && typeof x.t === 'string' && x.t.trim()).slice(0, 2);
+}
+// T-141 📎: старые превью файлов из строк сообщений — убрать (community.sql → file_expire). Раз в сутки: в 3-м часу по Алматы
+async function fileExpire() {
+  if (new Date(Date.now() + 5 * HOUR).getUTCHours() !== 3) return { status: 'later' };
+  try { return { cleared: await sbRpc('file_expire', {}) }; }
+  catch (e) { return /PGRST202|Could not find/i.test(String(e?.message)) ? { status: 'no_sql' } : { error: String(e?.message || e).slice(0, 120) }; }
+}
+async function holidayPost() {
+  if (!HOLIDAYS_ON) return { status: 'off' };
+  const local = new Date(Date.now() + 5 * HOUR), md = local.toISOString().slice(5, 10), y = local.getUTCFullYear();
+  if (local.getUTCHours() < 9) return { status: 'early' };
+  let list = HOLIDAYS_DEF;
+  try {
+    const rows = await sbSelect('site_config', 'key=eq.holidays&select=value');
+    const v = rows?.[0]?.value;
+    if (v === 'off') return { status: 'off' };
+    if (v) { const j = typeof v === 'string' ? JSON.parse(v) : v; if (Array.isArray(j)) list = j; }
+  } catch (e) {}
+  const hit = holidaysFor(list, md);
+  if (!hit.length) return { status: 'none' };
+  const out = [];
+  for (let i = 0; i < hit.length; i++) out.push(await botPost(String(hit[i].t).trim(), `holiday:${y}-${md}:${i}`));
+  return { status: 'checked', posts: out };
 }
 const oneLine = t => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 200);
 

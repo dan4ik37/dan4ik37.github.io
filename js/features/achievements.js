@@ -202,25 +202,31 @@ async function renderAchievements(targetId, isOwn){
 async function renderTitlePicker(earned){
   const box = document.getElementById('profileTitlePicker');
   if (!box || !currentUser) return;
-  const [lvRes, curRes] = await Promise.all([
+  // T-141: ВСЕ свои титулы сезонов — тоже в списке (season_state → owned; games-more.sql). Откат — ACH_SEASON_TITLES = false
+  const ACH_SEASON_TITLES = true;
+  const [lvRes, curRes, ssRes] = await Promise.all([
     sbClient.rpc('user_level', { uid: currentUser.id }),
     sbClient.from('user_titles').select('code').eq('user_id', currentUser.id).maybeSingle(),
+    ACH_SEASON_TITLES && typeof seasonTitleDef === 'function' ? sbClient.rpc('season_state').then(r => r, () => ({ error: 1 })) : Promise.resolve({ error: 1 }),
   ]);
   if (lvRes.error) { box.hidden = true; return; }   // progression.sql ещё не выполнен
   box.hidden = false;
   const lv = lvRes.data || 1;
-  if (lv < TITLE_MIN_LEVEL) {
+  const ssOwn = (!ssRes?.error && Array.isArray(ssRes?.data?.owned) ? ssRes.data.owned : []).filter(o => o.kind === 'title' && achTitleDef(o.code));
+  if (lv < TITLE_MIN_LEVEL && !ssOwn.length) {
     box.innerHTML = `<span class="tp-lock">🔒 Титул рядом с ником — с ${TITLE_MIN_LEVEL} уровня (сейчас ${lv})</span>`;
     return;
   }
   const cur = curRes.data?.code || '';
-  const opts = ACHIEVEMENT_DEFS.filter(d => earned.has(d.code) && achShown(d.code));   // ачивки за просмотр роликов — не титул (XP_WATCH)
-  // надет титул сезона — тоже в списке (выбрать другой сезонный — «Игры» → сезон → «Мои награды сезонов»)
+  const opts = lv < TITLE_MIN_LEVEL ? [] : ACHIEVEMENT_DEFS.filter(d => earned.has(d.code) && achShown(d.code));   // ачивки за просмотр роликов — не титул (XP_WATCH); до 10 уровня — только сезонные
+  // надет титул сезона — тоже в списке, и все остальные свои сезонные (титул сезона уровня не требует — season_title_set)
   const ss = /^ss:/.test(cur) && achTitleDef(cur);
+  const ssOpts = ssOwn.filter(o => o.code !== cur).map(o => ({ code: o.code, d: achTitleDef(o.code) }));
   box.innerHTML = `<label class="tp-row"><span>🏷 Титул рядом с ником</span>
       <select id="titleSelect" onchange="saveTitle(this.value)">
         <option value="">— без титула —</option>
         ${ss ? `<option value="${esc(cur)}" selected>${ss.icon} ${esc(ss.title)}</option>` : ''}
+        ${ssOpts.map(o => `<option value="${esc(o.code)}">${esc(o.d.icon)} ${esc(o.d.title)}</option>`).join('')}
         ${opts.map(d => `<option value="${d.code}"${d.code === cur ? ' selected' : ''}>${d.icon} ${esc(d.title)}</option>`).join('')}
       </select></label><span id="titleStatus" class="tp-status"></span>`;
 }

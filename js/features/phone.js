@@ -26,9 +26,9 @@
 //   состояние) — всем (плоский мир рисует 📱 над игроком). Чистая функция: D37Phone.handFor(открыт, путь, звонок).
 // Приложение: D37Phone.define(id, { render(el, arg, ctx) → функция уборки (необязательно), title }).
 (() => {
-  const VER = '15';   // 15 — карточка человека в ленте — общая мини-карточка сайта (js/features/minicard.js, T-086), community.js; 14 — worldchat.js: «🌍 Весь мир» не держит закрытый мир в памяти (T-085); 13 — «🏦 Банк» (денки «Живого города», js/games/mir-econ.js); 12 — msgview: ссылка «сайт//чужой.сайт» больше не считается своей (T-011); 11 — безопасность детей (ЛС, звонки с пропуском, «только читать» до 9): msgview, community, calls, phone-apps; 10 — настоящие адреса
+  const VER = '17';   // 17 — T-141: 📎 файлы от устройства к устройству (files.js); 16 — T-141: «📺 Смотреть вместе» (chatplayer.js), «🕶 Скрыть мой адрес» и ⚙️ в звонке (calls.js), «📍 Позвать» ко мне / в игру / на сервер (phone-apps.js P.invite); 15 — карточка человека в ленте — общая мини-карточка сайта (js/features/minicard.js, T-086), community.js; 14 — worldchat.js: «🌍 Весь мир» не держит закрытый мир в памяти (T-085); 13 — «🏦 Банк» (денки «Живого города», js/games/mir-econ.js); 12 — msgview: ссылка «сайт//чужой.сайт» больше не считается своей (T-011); 11 — безопасность детей (ЛС, звонки с пропуском, «только читать» до 9): msgview, community, calls, phone-apps; 10 — настоящие адреса
   // файлы приложений (грузятся при первом открытии); лента сообщений msgview.js — общая для чата, сообществ и ЛС
-  const MODS = { mv: ['js/features/msgview.js'], apps: ['js/features/msgview.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/msgview.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/chatplayer.js'], wchat: ['js/features/worldchat.js'], econ: ['js/games/mir-econ.js'] };
+  const MODS = { mv: ['js/features/files.js', 'js/features/msgview.js'], apps: ['js/features/files.js', 'js/features/msgview.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/files.js', 'js/features/msgview.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/chatplayer.js'], wchat: ['js/features/worldchat.js'], econ: ['js/games/mir-econ.js'] };
   const APPS = [
     { id: 'msgs', ic: '💬', t: 'Сообщения', bg: '#22c55e,#15803d', mod: 'apps', b: 'msgs' },
     { id: 'calls', ic: '📞', t: 'Звонки', bg: '#34d399,#059669', mod: 'calls', b: 'calls' },
@@ -80,7 +80,8 @@
 
   // ── Настройки (браузер, d37_phone; меняются во вкладке «📱 Телефон» окна ⚙️ — внизу файла) ──
   // vol — громкость мелодии и звуков телефона (0…1); calls — кто может звонить; ns — шумоподавление; ptt — рация
-  const SET0 = { vol: .8, ring: 'classic', ptt: false, pttKey: 'Backquote', ns: true, sounds: true, calls: 'friends' };
+  // hide — «🕶 Скрыть мой адрес» в звонках (calls.js C.hideIp): 'auto' — включено в детском мире, 'on' / 'off' — выбор человека
+  const SET0 = { vol: .8, ring: 'classic', ptt: false, pttKey: 'Backquote', ns: true, sounds: true, calls: 'friends', hide: 'auto' };
   P.set = Object.assign({}, SET0);
   try { Object.assign(P.set, JSON.parse(localStorage.getItem('d37_phone') || '{}')); } catch (e) {}
   P.saveSet = () => {
@@ -767,6 +768,13 @@
     const row = (label, ctl, hint) => `<div class="gs-row"><div class="gs-lbl"><b>${label}</b>${hint ? `<small>${hint}</small>` : ''}</div><div class="gs-ctl">${ctl}</div></div>`;
     const seg = (k, opts) => `<div class="gs-seg" role="radiogroup">${opts.map(([v, t]) => { const on = (P.set[k] || opts[0][0]) === v; return `<button type="button" role="radio" aria-checked="${on}" class="${on ? 'on' : ''}" data-phs="${k}" data-v="${v}">${t}</button>`; }).join('')}</div>`;
     const sw = k => `<label class="gs-sw"><input type="checkbox" data-phw="${k}"${P.set[k] ? ' checked' : ''}><i aria-hidden="true"></i></label>`;
+    // «Авто» = скрывать всем, кроме подтверждённых 18+ (детский мир); честно — что сейчас и есть ли сервер-посредник
+    const hideHint = () => {
+      const C = window.D37Calls, on = C?.hideIp ? C.hideIp() : (P.set.hide === 'on' || ((P.set.hide || 'auto') === 'auto' && window.D37Age?.group?.() !== 'adult'));
+      const relay = Array.isArray(window.D37_TURN) && window.D37_TURN.length;
+      return (on ? 'Сейчас скрыт: собеседник видит только адрес нашего сервера-посредника.' : 'Сейчас не скрыт: звук идёт напрямую, собеседник может узнать твой адрес в сети.')
+        + (on && !relay ? ' Сервер-посредник ещё не ответил — звонок подождёт его.' : '') + ' «Авто» — скрывать, пока возраст 18+ не подтверждён.';
+    };
     const localBlocks = () => { try { return JSON.parse(localStorage.getItem('d37_blocks_local') || '[]') || []; } catch (e) { return []; } };
     SS.addTab({ id: 'phone', icon: '📱', title: 'Телефон', order: 60, ctx: ['engine', 'game', 'site'], render(body){
       const box = document.createElement('div'); body.appendChild(box);
@@ -782,6 +790,7 @@
           + row('Шумоподавление', sw('ns'), 'Выключи, если голос звучит «как под водой».')
           + row('Рация', sw('ptt'), 'Говоришь, пока держишь клавишу (на телефоне — кнопку «📻»).')
           + row('Клавиша рации', `<button type="button" class="gs-key${capturing ? ' cap' : ''}" data-pht="key">${capturing ? 'Нажми клавишу…' : esc(P.keyName(s.pttKey || 'Backquote'))}</button>`, capturing ? 'Нажми нужную клавишу.' : '')
+          + row('🕶 Скрыть мой адрес', seg('hide', [['auto', '🤖 Авто'], ['on', '🕶 Скрывать'], ['off', 'Нет']]), hideHint())
           + '<p class="gs-note">Громкость собеседников — во вкладке «🔊 Звук» → «Голос».</p>'
           + '<div class="gs-sec">Заблокированные</div><div data-phb><p class="gs-note">Загружаем…</p></div>'
           + '<p class="gs-note">Кто видит профиль и чем ты занят, невидимка — во вкладке «🌐 Сайт» → «Профиль и приватность».</p>';

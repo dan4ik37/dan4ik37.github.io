@@ -50,7 +50,13 @@ const ok = (c, name, x) => { if (c) pass++; else { fail++; console.log('FAIL', n
   r = D({ status: 'none', kp: 'agefriend', join: { label: '📍 К нему' } });
   ok(ks(r) === 'profile,!,block' && r.notes.includes('KID:agefriend') && !has(r, 'join'), 'ребёнок и взрослый: дружбы нет, «К нему» нет, пометка D37Age', [ks(r), r.notes]);
   r = D({ status: 'friends' });
-  ok(ks(r) === 'profile,dm,call,block', 'друзья: «Написать» и «Позвонить»', ks(r));
+  ok(ks(r) === 'profile,dm,call,inv,block', 'друзья: «Написать», «Позвонить» и «📍 Позвать» (T-141)', ks(r));
+  r = D({ status: 'friends', extra: [{ t: '🪑 Позвать за мой стол' }] });
+  ok(ks(r) === 'profile,dm,call,inv,x0,block', 'свои кнопки места (мир) — после дружбы, до блокировки', ks(r));
+  r = D({ self: true, status: null, extra: [{ t: '🪑' }] });
+  ok(!has(r, 'x0'), 'свои кнопки места — не себе');
+  r = D({ status: 'friends', kb: 'u9', extra: [{ t: '🪑' }] });
+  ok(!has(r, 'inv'), 'личные каналы закрыты (дети) — «Позвать» нет', ks(r));
   r = D({ status: 'friends', kb: 'u9' });
   ok(ks(r) === 'profile,!,block' && r.acts[1].t.includes('Только дружба') && r.notes.includes('KID:u9') && !has(r, 'dm') && !has(r, 'call'), 'друзья, личные каналы закрыты (до 9 / ребёнок со взрослым) — ни ЛС, ни звонка', [ks(r), r.notes]);
   r = D({ status: 'pending_received' });

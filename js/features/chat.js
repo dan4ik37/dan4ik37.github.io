@@ -283,7 +283,7 @@ async function chatLastIds(){
 function offMsg(r){
   return { id: r.id, uid: r.user_id || null, nick: r.nick || 'гость', text: r.text || '', at: r.created_at || new Date().toISOString(),
     reply: r.reply_to || null, edited: r.edited_at || null, deleted: !!r.deleted, sticker: !!r.is_sticker, role: r.role, vip: r.vip_tier || null,
-    color: r.color, pinned: !!(r.pinned_until && Date.parse(r.pinned_until) > Date.now()), pinnedUntil: r.pinned_until || null, pinnedBy: r.user_id, ch: r.channel || 'general' };
+    color: r.color, pinned: !!(r.pinned_until && Date.parse(r.pinned_until) > Date.now()), pinnedUntil: r.pinned_until || null, pinnedBy: r.user_id, ch: r.channel || 'general', att: r.att || null };
 }
 function rememberAuthor(m){
   if (!m.uid || m.role === 'guest') return;
@@ -306,7 +306,7 @@ function chatAdapter(chId){
   const id = ch.id, staffRole = () => OFF.info?.staff || (isChatStaff() ? currentRole : null);
   const mine = m => m.uid ? m.uid === currentUser?.id : (!currentUser && m.nick === chatNick);
   const A = {
-    key: 'o:' + id, title: '#' + ch.name, maxLen: MAX_MSG_LEN, official: true, ch,
+    key: 'o:' + id, title: '#' + ch.name, maxLen: MAX_MSG_LEN, official: true, ch, fileKind: 'chat',   // 📎 files.js
     placeholder: `Написать в #${ch.name}`,
     startText: id === 'general' ? 'Это начало общего чата сайта dan4ik37 👋' : `Это начало канала #${ch.name}. ${ch.about || ''}`,
     emptyText: ch.mods_only ? (id === 'news' ? 'Новостей пока нет — здесь появятся эфиры, новые видео и события 📢' : 'Пока пусто — здесь пишут только админ и модераторы 📢') : 'Пока тихо — напиши первым! 👋',

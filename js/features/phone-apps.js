@@ -12,7 +12,7 @@
   const rid = n => { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; for (const x of crypto.getRandomValues(new Uint8Array(n))) s += a[x % a.length]; return s; };
 
   // ═══ Сообщения ═══
-  const dmMsg = r => ({ id: r.id, uid: r.sender_id, nick: P.prof(r.sender_id)?.nick || (r.sender_id === P.me() ? P.myNick() : 'друг'), text: r.text || '', at: r.created_at, read: r.read_at, mine: r.sender_id === P.me() });
+  const dmMsg = r => ({ id: r.id, uid: r.sender_id, nick: P.prof(r.sender_id)?.nick || (r.sender_id === P.me() ? P.myNick() : 'друг'), text: r.text || '', at: r.created_at, read: r.read_at, mine: r.sender_id === P.me(), att: r.att || null });
   async function markRead(uid){
     const me = P.me(); if (!me) return;
     await sbClient.from('direct_messages').update({ read_at: new Date().toISOString() }).eq('sender_id', uid).eq('recipient_id', me).is('read_at', null);
@@ -26,7 +26,7 @@
   function dmAdapter(uid, nick, block){
     const me = P.me();
     return {
-      key: 'dm:' + uid, title: nick, maxLen: 1000, placeholder: `Написать ${nick}…`,
+      key: 'dm:' + uid, title: nick, maxLen: 1000, fileKind: 'dm', placeholder: `Написать ${nick}…`,
       startText: `Это начало переписки с ${nick}. Писать можно только друзьям. Не отправляй адрес, телефон и пароли — даже друзьям.`,
       emptyText: 'Напиши первым! 👋',
       caps: { reply: false, edit: false, del: false, react: false, pin: false, report: false, typing: false, search: true, stickers: false },
@@ -100,7 +100,7 @@
       view.setAdapter(dmAdapter(uid, pp?.nick || 'друг', b));
     });
     el.querySelector('[data-k="call"]').onclick = async () => { if (block) { P.toast(kidMsg(block), false); return; } await P.need('calls'); window.D37Calls.call(uid, P.prof(uid)?.nick || 'друг'); };
-    el.querySelector('[data-k="game"]').onclick = () => { if (block) { P.toast(kidMsg(block), false); return; } gameInvite(uid); };
+    el.querySelector('[data-k="game"]').onclick = () => { if (block) { P.toast(kidMsg(block), false); return; } invite(uid, P.prof(uid)?.nick); };
     return () => view.destroy();
   }
 
@@ -141,6 +141,53 @@
   }
   P.pickFriend = pickFriend;
   P.gameInvite = gameInvite;
+
+  // ═══ T-141 «📍 Позвать» одним нажатием (звонок, ЛС, карточка игрока): ко мне — туда, где я сейчас (комната игры / сервер мира),
+  //     в игру (список выше) или на сервер-сообщество (ссылка /c/<код> → у друга карточка «Вступить»). Откат — INVITE_V2 = false ═══
+  const INVITE_V2 = true;
+  async function sendDm(uid, text){
+    const { error } = await sbClient.from('direct_messages').insert([{ sender_id: P.me(), recipient_id: uid, text }]);
+    if (error) { P.toast(dmErr(error, 'noinv'), false); return false; }
+    P.toast('📨 Позвал(а)!', true); return true;
+  }
+  async function invite(uid, nick){
+    if (!INVITE_V2) return gameInvite(uid);
+    if (!P.me()) { P.toast('Войди в аккаунт, чтобы звать друзей', false); return; }
+    const b = await kidBlock(uid);
+    if (b) { P.toast(kidMsg(b), false); return; }
+    if (!P.isOpen()) { P.open('msgs/' + uid); await new Promise(r => setTimeout(r, 300)); }   // лист — внутри телефона: открыть переписку с ним
+    const a = P.activity(), here = P.actJoin(a);
+    const who = e(nick || P.prof(uid)?.nick || 'друга');
+    const rows = [];
+    if (here) rows.push(`<button type="button" class="ph-item" data-s="here"><span class="ph-ico">📍</span><span><b>Ко мне</b><small>${e(P.actText(a))}</small></span></button>`);
+    rows.push('<button type="button" class="ph-item" data-s="game"><span class="ph-ico">🎮</span><span><b>В игру…</b><small>Выбрать игру — у друга будет кнопка «Войти»</small></span></button>');
+    rows.push('<button type="button" class="ph-item" data-s="comm"><span class="ph-ico">🏠</span><span><b>На сервер…</b><small>Твоё сообщество — у друга будет «Вступить»</small></span></button>');
+    P.sheet(`<b>📍 Позвать ${who}</b><div class="ph-list">${rows.join('')}</div>`, async k => {
+      P.closeSheet();
+      if (k === 'game') return gameInvite(uid);
+      if (k === 'comm') return commInvite(uid);
+      if (k === 'here') {
+        const t = P.actJoin(P.activity()); if (!t) { P.toast('Ты уже вышел(шла) оттуда', false); return; }
+        const text = t.world ? `🌍 Заходи ко мне в «Мир Денчика», я на сервере ${t.world}! ${SITE}/#/games/world` : `🎮 Заходи ко мне! ${SITE}/${t.hash}`;
+        sendDm(uid, text);
+      }
+    });
+  }
+  async function commInvite(uid){
+    const r = await P.rpc('cm_my');
+    if (r.error) { P.toast(r.missing ? 'Сообщества появятся, когда сайт обновится' : P.err(r.error), false); return; }
+    const list = (r.data || []).slice(0, 30);
+    const off = '<button type="button" class="ph-item" data-s="0"><span class="ph-ico">💬</span><span><b>Денчик37</b><small>Сервер сайта — общий чат</small></span></button>';
+    P.sheet(`<b>🏠 На какой сервер?</b><div class="ph-list">${off}${list.map(c => `<button type="button" class="ph-item" data-s="${+c.id}"><span class="ph-ico">${e(c.icon || '🏠')}</span><span><b>${e(c.name)}</b><small>${+c.members || 1} ${P.plural(+c.members || 1, 'участник', 'участника', 'участников')}</small></span></button>`).join('')}</div>${list.length ? '' : '<small class="ph-dim">Своих сообществ пока нет — создай в «Сообществах».</small>'}`, async id => {
+      P.closeSheet();
+      if (id === '0') { sendDm(uid, `💬 Заходи в чат «Денчик37»! ${SITE}/#/chat`); return; }
+      const o = await P.rpc('cm_open', { p_id: +id });
+      const code = o.data?.c?.code, name = o.data?.c?.name || '';
+      if (!code) { P.toast('Не получилось взять ссылку-приглашение', false); return; }
+      sendDm(uid, `🏠 Зову в сообщество «${String(name).slice(0, 40)}»! ${SITE}/c/${code}`);
+    });
+  }
+  P.invite = invite;
 
   // ═══ Друзья: кто где (из «кто онлайн» сайта и — с community.sql — friends_online), «📍 К другу», заявки, поиск по нику ═══
   P.define('friends', {
