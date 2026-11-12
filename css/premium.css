@@ -3999,3 +3999,8 @@ html.gs-set-open,html.gs-set-open body{overflow:hidden}
 .dc-admin .dc-msg{display:block;font-size:.72rem;color:var(--muted);font-style:italic;word-break:break-word}
 .shp-adm-period{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.4rem 0 .6rem}
 @media(max-width:480px){#profileVipPromo .vp-row{flex-direction:column;gap:.1rem}#profileVipPromo .vp-row>span:first-child{flex:none}}
+
+/* T-141 (хвост T-091): быстрее переходы — карточки игр и нижние разделы главной не раскладываются и не рисуются, пока не видны
+   (content-visibility; размер-заглушка держит прокрутку). Откат — удалить эти 2 строки */
+.gm-card{content-visibility:auto;contain-intrinsic-size:auto 170px}
+#community{content-visibility:auto;contain-intrinsic-size:auto 900px}
