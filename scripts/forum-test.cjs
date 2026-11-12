@@ -117,6 +117,72 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
   const fr = btn.replaced && btn.replaced.children[0];
   ok(fr && fr.tagName === 'iframe' && fr.attrs.sandbox && /^https:\/\/www\.youtube-nocookie\.com\/embed\//.test(fr.attrs.src), 'click → sandboxed iframe of the allow-listed provider', fr && fr.attrs);
 
+  // ── серверные страницы форума 2.0 (api/_lib/routes/forum.js, api/sitemap.js) с подменной базой ──
+  {
+    const os = require('os');
+    const tmp = fs.mkdtempSync(path.join(process.env.D37_TMP || os.tmpdir(), 'd37-forum-api-'));
+    try {
+      fs.cpSync(path.join(SITE, 'api'), path.join(tmp, 'api'), { recursive: true });
+      fs.writeFileSync(path.join(tmp, 'package.json'), '{"type":"module"}');
+      process.env.SUPABASE_URL = 'https://sb.test'; process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+      const now = '2026-11-01T10:00:00Z', cover = U + '/abcdefabcdefabcdef.webp';
+      const ART = { id: 7, title: 'Гайд по базе', author_id: U, pinned: false, locked: false, created_at: now, published_at: now, edited_at: null, status: 'published',
+        blocks: [{ t: 'p', r: [{ x: 'Текст статьи. Звони +7 999 123 45 67' }] }, { t: 'video', p: 'yt', id: 'dQw4w9WgXcQ' }], cover, tags: ['гайд'], source_url: 'https://news.example/a', source_title: 'Новости',
+        excerpt: 'Текст статьи', age_min: 12, realm: 'kids', rating: 5, votes_up: 6, comments: 1, trusted: true, reports_open: 0 };
+      let art = ART, pinged = 0; const idx = [];
+      const J = (b, st = 200) => new Response(JSON.stringify(b), { status: st, headers: { 'Content-Type': 'application/json' } });
+      globalThis.fetch = async (url, o = {}) => {
+        const u = String(url);
+        if (/indexnow|yandex\.com/.test(u)) { idx.push(JSON.parse(o.body).urlList); return new Response('', { status: 202 }); }
+        if (u.includes('/rest/v1/forum_threads?id=eq.7&') && o.method === 'PATCH') { pinged++; return J(pinged === 1 ? [art] : []); }
+        if (u.includes('/rest/v1/forum_threads?id=eq.7&')) return J([art]);
+        if (u.includes('/rest/v1/forum_threads?id=eq.')) return J([]);
+        if (u.includes('/rest/v1/forum_threads?status=eq.published')) return J([art]);
+        if (u.includes('/rest/v1/forum_posts?thread_id=eq.7')) return J([{ id: 1, author_id: U, body: 'тело', is_body: true, created_at: now }, { id: 2, author_id: U, body: 'коммент', parent_id: null, created_at: now }]);
+        if (u.includes('/rest/v1/profiles?id=in.')) return J([{ id: U, nick: 'alice', role: 'user' }]);
+        if (/googleapis|youtube/.test(u)) return new Response('{}', { status: 500 });
+        return J([]);
+      };
+      const imp = async f => (await import(pathToFileURL(path.join(tmp, f)).href)).default;
+      const pages = await imp('api/pages.js'), sitemap = await imp('api/sitemap.js');
+      const call = async (h, q, method = 'GET', body) => { const out = { code: 200, headers: {}, body: '' };
+        const res = { status(c){ out.code = c; return res; }, setHeader(k, v){ out.headers[k] = String(v); return res; }, send(b){ out.body = String(b ?? ''); return res; }, end(b){ out.body = String(b ?? ''); return res; } };
+        await h({ query: q, headers: {}, method, body, url: '/' }, res); return out; };
+      const ld = b => [...b.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap(m => JSON.parse(m[1]));
+      let r = await call(pages, { page: 'forum', id: '7' });
+      ok(r.code === 301 && r.headers.Location === '/forum/7-gaid-po-baze', 'old /forum/7 → 301 /forum/7-gaid-po-baze', r.headers);
+      r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' });
+      const post = ld(r.body).find(x => x['@type'] === 'DiscussionForumPosting');
+      ok(r.code === 200 && post && post.image.includes('/forum-media/' + cover) && post.video && post.video.thumbnailUrl && post.citation === 'https://news.example/a' && post.keywords === 'гайд', 'article: JSON-LD (image, video, citation, keywords)', post);
+      ok(/<link rel="canonical" href="https:\/\/dan4ik37\.vercel\.app\/forum\/7-gaid-po-baze">/.test(r.body) && /og:image" content="https:\/\/sb\.test\/storage\/v1\/object\/public\/forum-media\//.test(r.body), 'article: canonical + og:image = cover');
+      ok(/data-ad="forum_article"/.test(r.body) && /adsbygoogle\.js/.test(r.body) && /\[скрыто\]/.test(r.body) && /rel="nofollow ugc noopener"/.test(r.body), 'article: one ad place (trusted), contacts hidden, source nofollow ugc');
+      art = { ...ART, trusted: false }; r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' });
+      ok(!/data-ad=/.test(r.body) && !/adsbygoogle\.js/.test(r.body), 'not-yet-trusted author → no ads');
+      art = { ...ART, reports_open: 2 }; r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' });
+      ok(!/adsbygoogle\.js/.test(r.body), 'open reports → no ads');
+      art = { ...ART, age_min: 16 }; r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' });
+      ok(r.code === 200 && /name="robots" content="noindex"/.test(r.body) && /data-age-page="16"/.test(r.body) && !/adsbygoogle\.js/.test(r.body), '16+ → noindex, age cover 16, no ads');
+      for (const st of ['pending', 'hidden', 'draft']) { art = { ...ART, status: st }; r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' }); ok(r.code === 404, st + ' → 404 (not served)'); }
+      art = { ...ART, realm: 'adult' }; r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' }); ok(r.code === 404, 'adult realm → 404 (18+ off)');
+      art = ART;
+      r = await call(pages, { page: 'forum' });
+      ok(r.code === 200 && r.body.includes('href="/forum/7-gaid-po-baze"') && r.body.includes('href="/forum/new"') && /fr-cover/.test(r.body), 'feed: slug links, write → /forum/new, cover');
+      r = await call(pages, { page: 'forum', tag: encodeURIComponent('гайд') });
+      ok(r.code === 200 && /<h1>#гайд/.test(r.body) && /forum\/t\/%D0%B3%D0%B0%D0%B9%D0%B4/.test(r.body), 'tag page /forum/t/гайд');
+      r = await call(pages, { page: 'forum', tag: '<x>' }); ok(r.code === 404, 'bad tag → 404');
+      for (const [q, to] of [[{ id: 'new' }, '/#/forum/new'], [{ id: 'my' }, '/#/forum/my'], [{ id: 'mod' }, '/#/forum/mod'], [{ id: '7', spa: 'edit' }, '/#/forum/edit/7'], [{ id: U, spa: 'u' }, '/#/forum/u/' + U]]) {
+        r = await call(pages, { page: 'forum', ...q }); ok(r.code === 302 && r.headers.Location === to, 'SPA path → ' + to, r.headers);
+      }
+      r = await call(pages, { page: 'forum', id: 'x', spa: 'edit' }); ok(r.code === 404, 'bad edit id → 404');
+      r = await call(sitemap, { part: 'pages' });
+      ok(r.body.includes('<loc>https://dan4ik37.vercel.app/forum/7-gaid-po-baze</loc>') && r.body.includes('/forum/t/%D0%B3%D0%B0%D0%B9%D0%B4'), 'sitemap: article slug + tag page');
+      r = await call(pages, { page: 'forumping' }, 'POST', { id: 7 });
+      ok(JSON.parse(r.body).sent === true && idx.length >= 1 && idx[0].includes('https://dan4ik37.vercel.app/forum/7-gaid-po-baze'), 'IndexNow ping on publish', idx);
+      r = await call(pages, { page: 'forumping' }, 'POST', { id: 7 }); ok(JSON.parse(r.body).sent === false, 'second ping does nothing (pinged_at)');
+      r = await call(pages, { page: 'forumping' }, 'POST', { id: '1;drop' }); ok(JSON.parse(r.body).ok === false, 'ping: bad id refused');
+    } finally { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} }
+  }
+
   console.log(fail ? `forum test: ${fail} FAIL / ${pass + fail}` : `forum test OK (${pass} checks)`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.log('FAIL', e && e.stack || e); process.exit(1); });

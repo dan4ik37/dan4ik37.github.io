@@ -106,6 +106,12 @@ export default async function handler(req, res){
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   const isIdeas = kind === 'ideas';
   const raw = String(req.query.id || '');
+  // разделы SPA форума 2.0 без своей серверной страницы (редактор, мои, закладки, подписки, модерация, статьи автора) — сразу в приложение
+  // (/#/forum/… → роутер вернёт настоящий адрес); noindex и без кэша у поисковика
+  const spa = String(req.query.spa || '');
+  const spaTo = !isIdeas && (/^(new|my|saved|follow|mod)$/.test(raw) && !spa ? raw : spa === 'edit' && /^\d{1,12}$/.test(raw) ? 'edit/' + raw : spa === 'u' && /^[0-9a-f-]{36}$/i.test(raw) ? 'u/' + raw.toLowerCase() : '');
+  if (spaTo) { res.setHeader('Cache-Control', 'public, s-maxage=3600'); res.setHeader('X-Robots-Tag', 'noindex'); res.setHeader('Location', '/#/forum/' + spaTo); return res.status(302).send(''); }
+  if (spa) return notFound(res, 'Страница', ['/forum', '📋 Все статьи']);
   const id = (raw.match(/^(\d{1,12})(?:-[a-z0-9-]{0,80})?$/) || [])[1] || '';
   if (raw && !id) return notFound(res, isIdeas ? 'Идея' : 'Статья', isIdeas ? ['/ideas', '💡 Все идеи'] : ['/forum', '📋 Все статьи']);
   if (isIdeas) return id ? ideaPage(res, id) : ideasPage(res);
@@ -160,7 +166,7 @@ async function forumPage(res, tag){
   <nav class="crumbs"><a href="/">Главная</a> › ${tag ? `<a href="/forum">Форум</a> › <span>#${esc(tag)}</span>` : '<span>Форум</span>'}</nav>
   <h1>${h1}</h1>
   <p class="lead">${tag ? `Статьи с меткой #${esc(tag)}: гайды, новости и истории игроков.` : 'Гайды, новости игр, истории и мнения зрителей канала. Читать может любой, а написать свою статью с фото, видео и источником — после входа на сайт.'}</p>
-  <div class="cta"><a class="btn btn-acc" href="/forum/new">✍️ Написать статью</a>${tag ? '<a class="btn btn-ghost" href="/forum">📋 Все статьи</a>' : '<a class="btn btn-ghost" href="/ideas">💡 Идеи для видео</a>'}<a class="btn btn-ghost" href="/chat">💬 Чат</a></div>
+  <div class="cta"><a class="btn btn-acc" href="${v2 ? '/forum/new' : '/#/forum'}">✍️ ${v2 ? 'Написать статью' : 'Создать тему'}</a>${tag ? '<a class="btn btn-ghost" href="/forum">📋 Все статьи</a>' : '<a class="btn btn-ghost" href="/ideas">💡 Идеи для видео</a>'}<a class="btn btn-ghost" href="/chat">💬 Чат</a></div>
   <h2 class="fr-h2">${tag ? 'Статьи' : 'Свежие статьи'}${items.length ? ` <span class="muted">· ${num(items.length)}</span>` : ''}</h2>
   ${list}
   <p class="muted fr-note">Правила: без оскорблений, рекламы и личных данных (телефонов, адресов) — модераторы скрывают такое. Ссылки авторов помечены как пользовательские.</p>
@@ -236,8 +242,9 @@ async function threadPage(res, id, raw){
   const ld = { '@context': 'https://schema.org', '@type': 'DiscussionForumPosting', '@id': url, url, mainEntityOfPage: url, headline: title,
     text: bodyText || title, datePublished: iso(t.published_at || t.created_at), dateModified: iso(t.edited_at || last?.edited_at || last?.created_at || t.created_at), inLanguage: 'ru',
     author: person(who_[t.author_id]), isPartOf: { '@type': 'CollectionPage', '@id': `${SITE}/forum`, url: `${SITE}/forum`, name: 'Форум dan4ik37' },
-    interactionStatistic: [{ '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: replies.length },
-      { '@type': 'InteractionCounter', interactionType: 'https://schema.org/LikeAction', userInteractionCount: v2 ? t.votes_up || 0 : 0 }],
+    interactionStatistic: v2 ? [{ '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: replies.length },
+      { '@type': 'InteractionCounter', interactionType: 'https://schema.org/LikeAction', userInteractionCount: t.votes_up || 0 }]
+      : { '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: replies.length },
     comment: replies.slice(0, 100).map(p => ({ '@type': 'Comment', '@id': `${url}#c${p.id}`, text: plain(p.body, 2000) || '…', datePublished: iso(p.created_at), author: person(who_[p.author_id]) })) };
   if (v2) {
     ld.image = imageOf(t);
