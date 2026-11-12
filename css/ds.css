@@ -543,3 +543,10 @@ body.high .ds-ccic.anim{animation:dsBoost 2.6s ease-in-out infinite}
 .ds4-set{padding:12px;border-radius:10px;background:rgba(0,0,0,.22);display:flex;flex-direction:column;gap:8px;margin:0 0 6px}
 .ds4-links,.ds4-acts{flex-wrap:wrap}
 .ds4-acts .ds-btn,.ds4-links .ds-btn{min-height:40px}
+
+/* ═══ T-141 «📺 Смотреть вместе» (chatplayer.js WT) ═══ */
+.ds-plbtns .ds-plwt{width:auto;padding:0 9px;font-size:12px;white-space:nowrap;max-width:46vw;overflow:hidden;text-overflow:ellipsis}
+.ds-plbtns .ds-plwt.on{background:rgba(167,139,250,.38)}
+.ds-plbtns .ds-plwt[hidden]{display:none}
+.ds-wtbar{background:linear-gradient(90deg,rgba(124,58,237,.22),rgba(56,189,248,.16))}
+.ds-wtbar>i{background:#a78bfa;box-shadow:0 0 0 3px rgba(167,139,250,.25)}

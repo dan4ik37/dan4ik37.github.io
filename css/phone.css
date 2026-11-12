@@ -237,6 +237,8 @@ html.ph-open:has(.ph:not(.docked)) .chat-toast{display:none}
 .vc-ptt.held{background:#16a34a!important;color:#fff!important}
 .vc-note{margin:10px 0;padding:10px 12px;border-radius:12px;background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.2);font-size:12.5px;line-height:1.5}
 .vc-note.bad{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#fecaca}
+.vc-priv{font-size:12px;background:rgba(74,222,128,.08);border-color:rgba(74,222,128,.25)}
+.vc-priv.dim{background:rgba(var(--fg-rgb),.04);border-color:rgba(var(--fg-rgb),.12)}   /* T-141: «🕶 адрес скрыт / виден» */
 
 /* телефон в руке персонажа (как в ГТА): в 3D-игре экран выезжает снизу, когда телефон уже в руке (phone.js → .ph-rise) */
 .ph.ph-rise{transform:translateY(54px) scale(.95);transition:opacity .16s ease,transform .26s cubic-bezier(.2,.9,.28,1.08)}
