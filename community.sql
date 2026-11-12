@@ -3080,7 +3080,7 @@ revoke all on public.file_reports from anon, authenticated;
 -- relay_kbs — скорость отдачи через наш TURN, КБ/с (= max-bps в server/coturn/turnserver.conf / 1024; меняются вместе).
 create or replace function public.file_cfg() returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare d jsonb := '{"on":true,"file_mb":10,"day_mb":100,"day_n":40,"direct_mb":25,"auto_mb":10,"keep_days":30,"seed_mb_day":300,"store":false,"store_kb":300,"max_mb":100,"relay_kbs":1200}'::jsonb;
+declare d jsonb := '{"on":true,"file_mb":10,"day_mb":100,"day_n":40,"direct_mb":25,"auto_mb":10,"keep_days":30,"seed_mb_day":300,"store":false,"store_kb":300,"max_mb":100,"relay_kbs":1100}'::jsonb;
   v text; mx numeric;
 begin
   if to_regclass('public.site_config') is not null then

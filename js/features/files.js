@@ -38,7 +38,7 @@
   // T-160: file_cfg отвечает ЛИЧНЫЕ пределы того, кто спрашивает (владелец сайта — без лимитов: owner true, file_mb = max_mb;
   // решает сервер по profiles.role, устройство только читает). max_mb — технический предел передачи (память получателя),
   // relay_kbs — скорость через наш TURN (= max-bps в server/coturn/turnserver.conf, КБ/с)
-  const CFG0 = { on: false, owner: false, file_mb: 10, auto_mb: 10, direct_mb: 25, max_mb: 100, relay_kbs: 1200, seed_mb_day: 300, day_n: 40, day_mb: 100 };
+  const CFG0 = { on: false, owner: false, file_mb: 10, auto_mb: 10, direct_mb: 25, max_mb: 100, relay_kbs: 1100, seed_mb_day: 300, day_n: 40, day_mb: 100 };
   let cfg = Object.assign({}, CFG0), cfgAt = 0;
   async function loadCfg(maxAge = 600e3){
     if (Date.now() - cfgAt < maxAge || !sb()) return cfg;
@@ -297,8 +297,8 @@
     try { await p.pc.setRemoteDescription({ type: 'offer', sdp: d.sdp }); const a = await p.pc.createAnswer(); await p.pc.setLocalDescription(a); s.send({ t: 'answer', to: d.from, sid: p.sid, sdp: a.sdp }); } catch (er) { closePeer(p); s.peers.delete(d.from); }
   }
   // Скорость раздачи: в звонке — 256 КБ/с (звонку хватает); через наш TURN — relay_kbs (не выше предела TURN: лишнее он
-  // выбрасывает, и канал данных сам сбавляет скорость вдвое — так и было 48 КБ/с при пределе 94); напрямую — 6 МБ/с
-  const rateFor = p => (window.D37Calls?.inCall?.() ? 262144 : /relay/.test(p.via) ? Math.max(32, +cfg.relay_kbs || 1200) * 1024 : 6 * MiB);
+  // выбрасывает, и канал данных сбавляет скорость; при старом max-bps 96000 было ≈ 50 КБ/с, сейчас 2,5 МБ/с ≈ 1,1 МБ/с файла); напрямую — 6 МБ/с
+  const rateFor = p => (window.D37Calls?.inCall?.() ? 262144 : /relay/.test(p.via) ? Math.max(32, +cfg.relay_kbs || 1100) * 1024 : 6 * MiB);
   const SEND = new Map();   // chash → { pct, done, got, via } — у отправителя: «передаём N %» / «доставлено»
   F.sendState = h => SEND.get(h) || null;
   function serve(s, p){
