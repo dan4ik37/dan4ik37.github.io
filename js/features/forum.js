@@ -21,6 +21,8 @@ function formatForumBody(escapedText, allowFormatting){
 let forumCurrentThreadId = null;
 
 async function renderForumPage(threadId){
+  // Форум 2.0 (T-157, флаг FORUM2 в js/core/config.js): статьи — js/features/forum2.js; нет forum.sql 2.0 на сервере — дальше старый форум
+  if (typeof FORUM2 !== 'undefined' && FORUM2 && window.D37Forum2?.available()) { if (await window.D37Forum2.render(threadId)) return; }
   document.getElementById('forumLoggedOutHint').style.display = currentUser ? 'none' : 'block';
   document.getElementById('forumCreateBtn').style.display = currentUser ? 'inline-flex' : 'none';
 
