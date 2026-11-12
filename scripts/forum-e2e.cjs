@@ -6,13 +6,13 @@
 // линия, источник, метки) и публикует, читатель ставит +, пишет комментарий и ответ, жалуется, модератор видит жалобу;
 // 20 раз открыть / закрыть статью — память после сборки мусора не растёт, узлы раздела не копятся; ошибок в консоли нет.
 // Запуск из корня сайта: node scripts/forum-e2e.cjs [phone|pc] [раз]   (DEPS_DIR / PGLITE_PATH — где лежит @electric-sql/pglite)
-// Тяжёлое (CPU ×4) — через общую очередь: node E:/d37-core/scripts/heavy-lock.mjs run --session site/t157 --job "forum-e2e" --min 10 --wait 30 -- node scripts/forum-e2e.cjs
+// Тяжёлое (CPU ×4) — через общую очередь: node M:/d37/d37-core/scripts/heavy-lock.mjs run --session site/t157 --job "forum-e2e" --min 10 --wait 30 -- node scripts/forum-e2e.cjs
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 const SITE = path.join(__dirname, '..');
 const [PROF = 'phone', ROUNDS = '20'] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp/t157/e2e' : path.join(os.tmpdir(), 't157-e2e'));
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp/t157/e2e' : path.join(os.tmpdir(), 't157-e2e'));
 fs.mkdirSync(TMP, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.wasm': 'application/wasm',
