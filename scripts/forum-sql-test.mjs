@@ -272,5 +272,54 @@ t((await rpc('forum_check', [JSON.stringify({ title: 'Файл exe', blocks: [{ 
 t((await q(`select public.forum_cfg() r`)).premod_n === 2, 'cfg defaults merged');
 t((await q(`select public.forum_slug('Привет, Мир! Щука и ёж') r`)) === 'privet-mir-schuka-i-ezh', 'slug transliteration');
 
-console.log(bad ? `forum SQL: ${bad}/${n} FAIL` : `forum SQL OK (${n} checks, file applied twice)`);
+// ── взлом (проверка 12.11): возраст чужого не узнать, прямые записи старого клиента не обходят правила ──
+await db.exec(`update site_config set value = '{"comment_gap_s":0}' where key = 'forum'`);
+await as(A);
+const atk = (await rpc('forum_save', [null, doc({ title: 'Статья для проверки взлома' }), true])).id;
+await as(B);
+const bc = (await rpc('forum_comment', [atk, null, 'обычный комментарий'])).id;
+t(atk && bc, 'attack setup: article and comment', { atk, bc });
+const denied = async (role, uid, sql) => { await as(uid); await db.exec(`set role ${role}`); let e = ''; try { await db.query(sql); } catch (x) { e = x.message; } await db.exec(`reset role`); return /permission denied/i.test(e); };
+for (const [fn, sql] of [['forum_cap', `select public.forum_cap('${C}')`], ['forum_u9', `select public.forum_u9('${K}')`], ['forum_muted', `select public.forum_muted('${B}')`],
+  ['forum_check', `select public.forum_check('{"title":"x","age":16}'::jsonb, '${C}', false)`]]) {
+  t(await denied('anon', null, sql), `guest cannot call ${fn} (would leak someone's age band / mute)`);
+  t(await denied('authenticated', B, sql), `user cannot call ${fn} for someone else`);
+}
+// forum_can_see открыт (нужен политике RLS), но чужой uid не учитывает: гость про ребёнка узнаёт то же, что про себя
+await as(null); await db.exec(`set role anon`);
+const seeKid = (await db.query(`select public.forum_can_see('published', null, 16, 'kids', '${C}') r`)).rows[0].r;
+await db.exec(`reset role`);
+t(seeKid === true, 'forum_can_see ignores a foreign p_uid (no age oracle for guests)', seeKid);
+// прямые правки комментария: не перенести в другую тему, не обойти длину, не подделать время, не вернуть текст удалённого
+await as(B); await db.exec(`set role authenticated`);
+await db.query(`update forum_posts set thread_id = ${older}, created_at = now() - interval '3 days' where id = ${bc}`).catch(() => {});
+let longErr = ''; try { await db.query(`update forum_posts set body = repeat('a', 5000) where id = ${bc}`); } catch (e) { longErr = e.message; }
+let titleErr = ''; try { await db.query(`insert into forum_threads(author_id, title) values ('${B}', repeat('я', 5000))`); } catch (e) { titleErr = e.message; }
+await db.query(`insert into forum_posts(thread_id, author_id, body, created_at) values (${atk}, '${B}', 'из прошлого', now() - interval '5 days')`).catch(() => {});
+await db.query(`update forum_threads set author_id = '${A}', created_at = now() - interval '9 days' where id = ${direct.id}`).catch(() => {});
+await db.exec(`reset role`);
+const dRow = await q(`select row_to_json(t) r from forum_threads t where id = ${direct.id}`);
+t(dRow.author_id === B, 'direct update cannot hand an own thread to another author (impersonation)', dRow.author_id);
+const bcRow = await q(`select row_to_json(p) r from forum_posts p where id = ${bc}`);
+t(bcRow.thread_id === atk, 'direct update cannot move a comment to another article', bcRow.thread_id);
+t(Date.now() - new Date(bcRow.created_at).getTime() < 3600e3, 'direct update cannot forge created_at', bcRow.created_at);
+t(/длинн/i.test(longErr), 'direct update cannot exceed 4000 chars', longErr);
+t(/длинн/i.test(titleErr), 'direct insert cannot store a 5000-char title', titleErr);
+const past = await q(`select created_at r from forum_posts where body = 'из прошлого'`);
+t(past && Date.now() - new Date(past).getTime() < 3600e3, 'direct insert cannot forge created_at', past);
+await as(M); await rpc('forum_mod', ['delete_comment', bc, '']);
+await as(B); await db.exec(`set role authenticated`);
+await db.query(`update forum_posts set body = 'вернул текст' where id = ${bc}`).catch(() => {});
+await db.exec(`reset role`);
+t((await q(`select body r from forum_posts where id = ${bc}`)) === '', 'deleted comment text cannot be refilled directly', await q(`select body r from forum_posts where id = ${bc}`));
+// новичок не протащит ссылку прямой правкой комментария (как forum_comment: link_new)
+await db.exec(`insert into auth.users values ('77777777-7777-7777-7777-777777777777', now()); insert into profiles values ('77777777-7777-7777-7777-777777777777', 'newbie', 'user')`);
+await as('77777777-7777-7777-7777-777777777777');
+const nc = (await rpc('forum_comment', [atk, null, 'привет без ссылок'])).id;
+await db.exec(`set role authenticated`);
+let linkErr = ''; try { await db.query(`update forum_posts set body = 'заходи https://evil.example.com' where id = ${nc}`); } catch (e) { linkErr = e.message; }
+await db.exec(`reset role`);
+t(nc && /Ссылки/.test(linkErr), 'new account cannot add a link by direct update', linkErr);
+
+console.log(bad ? `forum SQL: ${bad}/${n} FAIL`: `forum SQL OK (${n} checks, file applied twice)`);
 process.exit(bad ? 1 : 0);

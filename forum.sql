@@ -315,11 +315,12 @@ begin
   execute 'select public.comm_has_link($1)' into r using p;
   return coalesce(r, false);
 end $$;
--- Видит ли p_uid статью
+-- Видит ли статью ТОТ, КТО СПРАШИВАЕТ. p_uid оставлен ради подписи (политика RLS и функции ниже передают auth.uid()), но не
+-- учитывается: функция открыта гостю (нужна политике), и чужой uid превратил бы её в «оракул» возраста (age_group_of закрыт в age.sql)
 create or replace function public.forum_can_see(p_status text, p_author uuid, p_age int, p_realm text, p_uid uuid) returns boolean
 language sql stable security definer set search_path = public as $$
-  select (p_uid is not null and p_author = p_uid) or public.forum_is_mod(p_uid)
-    or (p_status = 'published' and p_age <= public.forum_cap(p_uid) and (p_realm = 'kids' or public.forum_adult_ok(p_uid)))
+  select coalesce((auth.uid() is not null and p_author = auth.uid()) or public.forum_is_mod(auth.uid())
+    or (p_status = 'published' and p_age <= public.forum_cap(auth.uid()) and (p_realm = 'kids' or public.forum_adult_ok(auth.uid()))), false)
 $$;
 grant execute on function public.forum_can_see(text, uuid, int, text, uuid) to anon, authenticated;
 -- Новичок: меньше premod_n опубликованных проверенных статей или аккаунту меньше new_hours часов
@@ -521,7 +522,7 @@ begin
     'excerpt', left(regexp_replace(btrim(txt), '\s+', ' ', 'g'), 300), 'tags', to_jsonb(tags), 'cover', cover,
     'src', src, 'src_title', nullif(srct, ''), 'age', age, 'videos', vids);
 end $$;
-grant execute on function public.forum_check(jsonb, uuid, boolean) to authenticated;   -- подсказки редактору; пишет только forum_save
+-- клиенту не дана (revoke в конце файла): p_uid чужого раскрыл бы его возрастную группу; подсказки редактору — api/_lib/forum-blocks.js
 
 -- ═══ 5. Охрана прямых записей (старый клиент) и счётчики ═══
 -- Прямая вставка темы (FORUM2 = false): статья — «как раньше», но статус решает сервер (новичок — на проверку), новые поля —
@@ -551,6 +552,16 @@ begin
   if not public.forum_rl(uid, 'comment', false, coalesce((public.forum_cfg()->>'day_comments')::int, 80)) then raise exception 'На сегодня хватит ответов — завтра снова можно'; end if;
   return false;
 end $$;
+-- Правка своего ответа напрямую: ссылки новичку — нельзя (как forum_comment_edit)
+create or replace function public.forum_legacy_edit(p_body text) returns boolean language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null then raise exception 'Войди, чтобы писать на форуме'; end if;
+  if public.forum_muted(uid) then raise exception 'Тебя заглушили в чате — на форуме пока тоже нельзя'; end if;
+  if public.forum_link_in(p_body) and public.forum_is_new(uid) then raise exception 'Ссылки в ответах — после первых проверенных статей'; end if;
+  return true;
+end $$;
+grant execute on function public.forum_legacy_edit(text) to authenticated;
 grant execute on function public.forum_legacy_thread() to authenticated;
 grant execute on function public.forum_legacy_post(bigint, text) to authenticated;
 
@@ -558,7 +569,9 @@ create or replace function public.forum2_threads_guard() returns trigger languag
 begin
   if current_user not in ('authenticated', 'anon') then return new; end if;
   if tg_op = 'INSERT' then
+    if char_length(coalesce(new.title, '')) > 200 then raise exception 'Слишком длинный заголовок'; end if;
     if public.forum_bad(new.title) then raise exception 'В заголовке есть грубые слова'; end if;
+    new.created_at := now();
     new.status := public.forum_legacy_thread();
     new.published_at := case when new.status = 'published' then now() end;
     new.trusted := new.status = 'published';
@@ -571,7 +584,9 @@ begin
     new.votes_up := old.votes_up; new.votes_down := old.votes_down; new.comments := old.comments; new.reports_open := old.reports_open;
     new.published_at := old.published_at; new.mod_note := old.mod_note; new.trusted := old.trusted; new.pinged_at := old.pinged_at;
     new.excerpt := old.excerpt; new.chars := old.chars;
+    new.author_id := old.author_id; new.created_at := old.created_at;   -- политика «Править тему» пропускает with check (true)
     if new.title is distinct from old.title then
+      if char_length(coalesce(new.title, '')) > 200 then raise exception 'Слишком длинный заголовок'; end if;
       if public.forum_bad(new.title) then raise exception 'В заголовке есть грубые слова'; end if;
       new.edited_at := now();
     else new.edited_at := old.edited_at; end if;
@@ -589,11 +604,18 @@ begin
   if tg_op = 'INSERT' then
     if char_length(coalesce(new.body, '')) > 4000 then raise exception 'Слишком длинный ответ'; end if;
     if public.forum_bad(new.body) then raise exception 'В ответе есть грубые слова'; end if;
-    new.parent_id := null; new.depth := 0; new.deleted := false; new.edited_at := null;
+    new.parent_id := null; new.depth := 0; new.deleted := false; new.edited_at := null; new.created_at := now();
     new.is_body := public.forum_legacy_post(new.thread_id, new.body);
   else
     new.parent_id := old.parent_id; new.is_body := old.is_body; new.deleted := old.deleted; new.depth := old.depth;
-    if new.body is distinct from old.body and public.forum_bad(new.body) then raise exception 'В ответе есть грубые слова'; end if;
+    new.thread_id := old.thread_id; new.author_id := old.author_id; new.created_at := old.created_at;   -- не перенести в чужую / закрытую тему
+    if old.deleted then new.body := old.body; end if;   -- удалённый (в т. ч. модератором) текст не вернуть
+    if new.body is distinct from old.body then
+      if char_length(coalesce(new.body, '')) > 4000 then raise exception 'Слишком длинный ответ'; end if;
+      if public.forum_bad(new.body) then raise exception 'В ответе есть грубые слова'; end if;
+      if not old.is_body then perform public.forum_legacy_edit(new.body); end if;
+      new.edited_at := now();
+    end if;
   end if;
   return new;
 end $$;
@@ -1050,6 +1072,12 @@ revoke execute on function public.forum_rl(uuid, text, boolean, int) from public
 revoke execute on function public.forum_media_ok(text, uuid, text, jsonb) from public, anon, authenticated;
 revoke execute on function public.forum_is_new(uuid) from public, anon, authenticated;
 revoke execute on function public.forum_card(public.forum_threads, uuid) from public, anon, authenticated;
+-- возраст, «до 9», мут и проверка с чужим uid — только изнутри функций выше (age.sql так же закрывает age_group_of / age_u9)
+revoke execute on function public.forum_cap(uuid) from public, anon, authenticated;
+revoke execute on function public.forum_u9(uuid) from public, anon, authenticated;
+revoke execute on function public.forum_muted(uuid) from public, anon, authenticated;
+revoke execute on function public.forum_adult_ok(uuid) from public, anon, authenticated;
+revoke execute on function public.forum_check(jsonb, uuid, boolean) from public, anon, authenticated;
 
 -- ═══ 13. Хранилище картинок и файлов 'forum-media' (выключено, пока site_config forum.media не true) ═══
 -- Публичное чтение (картинки статей видят все, как обложки); загрузить — только в свою папку <id>/<случайное>.<расширение>,

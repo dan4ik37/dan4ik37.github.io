@@ -202,6 +202,7 @@
   function toHtml(blocks, o){
     o = o || {};
     const tx = o.text || esc, md = o.media || (() => '');
+    const alt = x => tx(String(x || '')).replace(/<[^>]*>/g, '');   // подпись в alt — тот же фильтр текста (контакты, мат), без разметки; уже экранирована
     const a = (href, inner) => '<a href="' + esc(href) + '" rel="nofollow ugc noopener" target="_blank">' + inner + '</a>';
     return (Array.isArray(blocks) ? blocks : []).map(b => {
       if (!b) return '';
@@ -216,9 +217,9 @@
       if (b.t === 'list') { const tg = b.o ? 'ol' : 'ul'; return '<' + tg + '>' + (b.items || []).map(x => '<li>' + tx(String(x)) + '</li>').join('') + '</' + tg + '>'; }
       if (b.t === 'quote') return '<blockquote><p>' + tx(b.x || '').replace(/\n/g, '<br>') + '</p>' + (b.by ? '<footer>— ' + tx(b.by) + '</footer>' : '') + '</blockquote>';
       if (b.t === 'img') { const u = md(b.src); if (!u) return ''; const wh = b.w && b.h ? ' width="' + (+b.w) + '" height="' + (+b.h) + '"' : '';
-        return '<figure><img src="' + esc(u) + '" alt="' + esc(b.cap || '') + '" loading="lazy" decoding="async"' + wh + '>' + (b.cap ? '<figcaption>' + tx(b.cap) + '</figcaption>' : '') + '</figure>'; }
+        return '<figure><img src="' + esc(u) + '" alt="' + alt(b.cap) + '" loading="lazy" decoding="async"' + wh + '>' + (b.cap ? '<figcaption>' + tx(b.cap) + '</figcaption>' : '') + '</figure>'; }
       if (b.t === 'video') { const w = watchUrl(b), p = poster(b); if (!w) return '';
-        return '<figure class="fa-video"><a href="' + esc(w) + '" rel="nofollow noopener" target="_blank">' + (p ? '<img src="' + esc(p) + '" alt="' + esc(b.cap || providerName(b.p)) + '" loading="lazy" width="480" height="360">' : '')
+        return '<figure class="fa-video"><a href="' + esc(w) + '" rel="nofollow noopener" target="_blank">' + (p ? '<img src="' + esc(p) + '" alt="' + (b.cap ? alt(b.cap) : esc(providerName(b.p))) + '" loading="lazy" width="480" height="360">' : '')
           + '<span>▶ Смотреть на ' + esc(providerName(b.p)) + '</span></a>' + (b.cap ? '<figcaption>' + tx(b.cap) + '</figcaption>' : '') + '</figure>'; }
       if (b.t === 'file') { const u = md(b.key); if (!u) return '';
         return '<p class="fa-file">📎 <a href="' + esc(u + '?download=' + encodeURIComponent(b.name || 'file')) + '" rel="nofollow noopener" download>' + tx(b.name || 'файл') + '</a>' + (b.size ? ' <span>' + esc(fmtSize(b.size)) + '</span>' : '') + '</p>'; }

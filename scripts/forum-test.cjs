@@ -77,6 +77,10 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
   ok(!/<img src=x|<script|onerror=XSS\(\)>|href="javascript/i.test(html), 'server html: evil strings stay text', html.slice(0, 400));
   ok(/<a href="https:\/\/ex\.com\/a" rel="nofollow ugc noopener" target="_blank">ok<\/a>/.test(html), 'user links nofollow ugc noopener');
   ok(!/raw/.test(html) && !/"&gt;&lt;x/.test(html.split('youtube.com/watch?v=')[2] || ''), 'unknown blocks and bad video ids dropped');
+  // подпись картинки в alt — через тот же фильтр текста, что и видимый текст (контакты не утекают в атрибут); без разметки, кавычки экранированы
+  const altHtml = B.toHtml([{ t: 'img', src: U + '/abcdefabcdefabcdef.webp', cap: 'звони +7 777 123 45 67 "x' }, { t: 'video', p: 'yt', id: 'dQw4w9WgXcQ', cap: 'пиши +7 777 123 45 67' }],
+    { media: k => 'https://cdn.example/' + k, text: s => esc(String(s).replace(/\+?\d(?:[\s\-().]{0,2}\d){6,}/g, '[скрыто]')) + '<br>' });
+  ok(!/777/.test(altHtml) && /alt="звони \[скрыто\] &quot;x"/.test(altHtml) && !/alt="[^"]*<br>/.test(altHtml), 'server html: image / video alt uses the text filter', altHtml);
   ok(B.toText([{ t: 'p', r: [{ x: 'a' }, { x: 'b' }] }, { t: 'h', x: 'c' }]) === 'ab\nc', 'plain text');
   ok(B.slug('Привет, Мир! Щука и ёж') === 'privet-mir-schuka-i-ezh', 'slug like forum_slug in SQL');
   const tr = B.tree([{ id: 1 }, { id: 2, parent: 1 }, { id: 3, parent: 2 }, { id: 4, parent: 99 }]);
@@ -116,6 +120,12 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
   btn.listeners.click[0]();
   const fr = btn.replaced && btn.replaced.children[0];
   ok(fr && fr.tagName === 'iframe' && fr.attrs.sandbox && /^https:\/\/www\.youtube-nocookie\.com\/embed\//.test(fr.attrs.src), 'click → sandboxed iframe of the allow-listed provider', fr && fr.attrs);
+
+  // ── детские правила (как чат, D37Age.kid): контакты скрыты, ссылки не нажимаются ──
+  win.D37Age = { kid: () => true, kidText: s => String(s).replace(/\+?\d(?:[\s\-().]{0,2}\d){6,}/g, '[скрыто]').replace(/@[\p{L}\p{N}_.]{3,}/gu, '[скрыто]') };
+  const kidOut = ser(F2._render([{ t: 'p', r: [{ x: 'звони +7 999 123 45 67, пиши @vasya и заходи www.evil.example ' }, { x: 'тут', h: 'https://ex.com/a' }] }, { t: 'quote', x: 'тел 89991234567', by: '@vasya' }]));
+  ok(!/999|vasya|evil\.example|<a /.test(kidOut) && /\[скрыто\]/.test(kidOut) && /\[ссылка\]/.test(kidOut), 'kid reader: contacts hidden, links not clickable', kidOut);
+  delete win.D37Age;
 
   // ── серверные страницы форума 2.0 (api/_lib/routes/forum.js, api/sitemap.js) с подменной базой ──
   {
@@ -164,6 +174,16 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
       ok(r.code === 200 && /name="robots" content="noindex"/.test(r.body) && /data-age-page="16"/.test(r.body) && !/adsbygoogle\.js/.test(r.body), '16+ → noindex, age cover 16, no ads');
       for (const st of ['pending', 'hidden', 'draft']) { art = { ...ART, status: st }; r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' }); ok(r.code === 404, st + ' → 404 (not served)'); }
       art = { ...ART, realm: 'adult' }; r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' }); ok(r.code === 404, 'adult realm → 404 (18+ off)');
+      // злые строки во всех полях статьи → серверная страница: только текст, JSON-LD разбирается, ссылки только https
+      const EV = '</script><script>XSS()</script><img src=x onerror=XSS()>"\'';
+      art = { ...ART, title: EV, excerpt: EV, source_title: EV, source_url: 'javascript:XSS()', tags: [EV, 'гайд'],
+        blocks: [{ t: 'p', r: [{ x: EV, h: 'javascript:XSS()' }] }, { t: 'h', x: EV }, { t: 'list', items: [EV] }, { t: 'quote', x: EV, by: EV },
+          { t: 'img', src: cover, cap: EV }, { t: 'video', p: 'yt', id: 'dQw4w9WgXcQ', cap: EV }, { t: 'video', p: 'evil', id: EV }, { t: 'file', key: U + '/abcdefabcdefabcdef.pdf', name: EV, size: 10 }] };
+      r = await call(pages, { page: 'forum', id: '7' });
+      const evPath = r.headers.Location || '';
+      r = await call(pages, { page: 'forum', id: evPath.replace('/forum/', '') });
+      let ldOk = true; try { ld(r.body); } catch (e) { ldOk = false; }
+      ok(r.code === 200 && ldOk && !/<script>XSS|<img src=x|href="javascript/i.test(r.body), 'evil article: server page has no markup from user strings, JSON-LD parses', { code: r.code, loc: evPath, bad: (r.body.match(/.{40}(?:<script>XSS|<img src=x|href="javascript).{40}/i) || [])[0] });
       art = ART;
       r = await call(pages, { page: 'forum' });
       ok(r.code === 200 && r.body.includes('href="/forum/7-gaid-po-baze"') && r.body.includes('href="/forum/new"') && /fr-cover/.test(r.body), 'feed: slug links, write → /forum/new, cover');
