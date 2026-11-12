@@ -924,4 +924,48 @@
       tabKeys: id => tabKeys(TABS.find(t => t.id === id)), norm, matchText, mainFor: c => { const o = cx; cx = c; const r = MAIN.filter(m => (!m.ctx || m.ctx.includes(c)) && (!m.when || m.when(c))).sort((a, b) => a.order - b.order).map(m => m.id); cx = o; return r; },
       menus: () => MENUS.length, nav: () => ({ raf: !!NAV.raf }) },
   };
+  // ═══ T-141: настройки игр — в аккаунте (privacy.sql → prefs_get / prefs_set), копия в браузере остаётся запасной ═══
+  // Едут: звук, управление, камера, интерфейс. Графика (gfx, fsr, shadows, fps, world2d, пресеты) и экран телефона — у каждого
+  // устройства свои, не едут. Кто новее — того и берём (время последней своей правки — d37_settings_at). Без SQL / без входа —
+  // как раньше, только браузер. Откат — SYNC_ON = false.
+  const SYNC_ON = true;
+  const SYNC_KEYS = ['mute', 'vol', 'volFx', 'volAmb', 'volVoice', 'keys', 'sens', 'invertY', 'lefty', 'view', 'zoomFirst', 'fov', 'motion', 'shake', 'uiScale', 'tags', 'bubbles', 'hudFade', 'hudTray', 'hudDebug'];
+  const LS_AT = 'd37_settings_at';
+  const sync = { off: false, busy: false, t: 0, applying: false, uid: '' };
+  const sbC = () => (typeof sbClient !== 'undefined' && sbClient) || null;
+  const meId = () => { try { return (typeof currentUser !== 'undefined' && currentUser?.id) || ''; } catch (e) { return ''; } };
+  const localAt = () => +lsGet(LS_AT) || 0;
+  const pack = () => { const o = {}; for (const k of SYNC_KEYS) if (SCHEMA[k]) o[k] = get(k); return o; };
+  async function pull(){
+    const c = sbC(), uid = meId();
+    if (!SYNC_ON || sync.off || !c || !uid || sync.busy) return;
+    sync.busy = true; sync.uid = uid;
+    try {
+      const { data: d, error } = await c.rpc('prefs_get');
+      if (error) { if (error.code === 'PGRST202' || /Could not find the function/i.test(error.message || '')) sync.off = true; return; }
+      if (d && d.prefs && typeof d.prefs === 'object' && +d.at > localAt()) {
+        sync.applying = true;
+        try { for (const k of SYNC_KEYS) if (k in d.prefs && SCHEMA[k]) set(k, d.prefs[k]); } finally { sync.applying = false; }
+        lsSet(LS_AT, String(+d.at));
+      } else if (localAt() && (!d || localAt() > +d.at)) push(0);
+    } catch (e) {} finally { sync.busy = false; }
+  }
+  function push(delay){
+    if (!SYNC_ON || sync.off || !meId()) return;
+    clearTimeout(sync.t);
+    sync.t = setTimeout(async () => {
+      const c = sbC(); if (!c || !meId()) return;
+      try { const { data: r, error } = await c.rpc('prefs_set', { p_prefs: pack() }); if (error) { if (error.code === 'PGRST202') sync.off = true; return; } if (r?.ok && r.at) lsSet(LS_AT, String(Math.max(localAt(), +r.at))); } catch (e) {}
+    }, delay == null ? 3000 : delay);
+  }
+  if (SYNC_ON && doc) {
+    API.on(ev => {
+      if (sync.applying || !ev) return;
+      if (ev.key !== '*' && !SYNC_KEYS.includes(ev.key)) return;
+      lsSet(LS_AT, String(Date.now())); push();
+    });
+    root.addEventListener?.('d37:auth', () => { if (meId() && meId() !== sync.uid) setTimeout(pull, 800); });
+    setTimeout(pull, 5000);
+  }
+  API._sync = { pull, push, pack, KEYS: SYNC_KEYS };
 })();

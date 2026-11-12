@@ -143,3 +143,36 @@ drop policy if exists "Отправить заявку можно только �
 create policy "Отправить заявку можно только от себя"
   on public.friendships for insert
   with check (auth.uid() = requester_id and public.accepts_friend_requests(addressee_id));
+
+-- ════ T-141: настройки игр в аккаунте (js/core/settings.js — синхронизация; копия в браузере остаётся запасной) ════
+-- Одна строка на человека: prefs — JSON настроек (звук, управление, камера, интерфейс; графика — своя у каждого устройства и сюда
+-- не попадает), до 16 КБ. Читать и писать — только себе, только через RPC (таблица закрыта).
+create table if not exists public.user_prefs (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  prefs jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.user_prefs enable row level security;
+revoke all on public.user_prefs from anon, authenticated;
+
+create or replace function public.prefs_get() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case when auth.uid() is null then null else
+    (select jsonb_build_object('prefs', p.prefs, 'at', extract(epoch from p.updated_at) * 1000) from public.user_prefs p where p.user_id = auth.uid()) end
+$$;
+revoke execute on function public.prefs_get() from public, anon;
+grant execute on function public.prefs_get() to authenticated;
+
+create or replace function public.prefs_set(p_prefs jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_prefs is null or jsonb_typeof(p_prefs) <> 'object' then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if octet_length(p_prefs::text) > 16384 then return jsonb_build_object('ok', false, 'reason', 'big'); end if;
+  insert into public.user_prefs (user_id, prefs, updated_at) values (uid, p_prefs, now())
+    on conflict (user_id) do update set prefs = excluded.prefs, updated_at = now();
+  return jsonb_build_object('ok', true, 'at', extract(epoch from now()) * 1000);
+end $$;
+revoke execute on function public.prefs_set(jsonb) from public, anon;
+grant execute on function public.prefs_set(jsonb) to authenticated;
