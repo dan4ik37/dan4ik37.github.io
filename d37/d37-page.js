@@ -3,7 +3,9 @@
 // touch controls, the frame callback and the Workers (terrain columns of flat scenes, chunks of the planet).
 // The default scene is the planet. URL parameters (tests and old scenes): ?scene=<url> another scene,
 // ?gl=1 forces WebGL2, ?auto=1 walks forward by itself, ?workers=0 builds on the main thread, ?hud=1 shows numbers,
-// ?q=max|mid|low the graphics tier (mid by default). Ground materials are made by code in the Workers at load.
+// ?q=max|mid|low the graphics tier (mid by default), ?invert_y=1 moving the pointer up looks down, ?holes=1 the hole
+// probe of the tests (a small second frame without the sky, read back: below-horizon pixels nothing was drawn on).
+// Ground materials are made by code in the Workers at load.
 // Touch screens: the left half is a move stick (run when pushed to the edge), the right half looks around,
 // buttons: jump, «орбита ↔ земля», full screen. The same action state as the keys.
 import init, { D37Web, ground_layer } from './d37_web.js';
@@ -43,6 +45,13 @@ async function main() {
   state.backend = app.backend();
   if (q.get('q')) { try { app.set_quality(q.get('q')); } catch (e) { fail(e); return; } }
   state.quality = app.quality();
+  // the player's setting: moving the mouse / finger up looks down (off by default): ?invert_y=1 (or 0), remembered
+  // in this browser
+  let invY = q.get('invert_y');
+  try { if (invY === null) invY = localStorage.getItem('d37.invert_y'); else localStorage.setItem('d37.invert_y', invY); } catch (e) { /* storage blocked */ }
+  app.set_invert_y(invY === '1');
+  // tests: look() -> [yaw, pitch] in degrees; look(dx, dy) turns as a mouse move would, then returns the angles
+  state.look = (dx, dy) => { if (dx !== undefined) app.add_look(dx, dy || 0); return Array.from(app.look_deg()); };
 
   // Workers: each has its own copy of the wasm and one builder (terrain columns, or planet chunks)
   const pool = [];
@@ -105,6 +114,7 @@ async function main() {
     app.set_move(sx, sf, b);
   }
   state.press = (code, ms) => { keys.add(code); publish(); setTimeout(() => { keys.delete(code); publish(); }, ms || 120); };   // tests
+  state.setFly = (on) => { fly = !!on; publish(); };   // tests: free flight held on (as after F)
   addEventListener('keydown', (e) => {
     if (e.code === 'KeyV' && !e.repeat) { third = !third; app.set_third_person(third); }
     if (e.code === 'KeyF' && !e.repeat) fly = !fly;
@@ -165,6 +175,7 @@ async function main() {
     for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, end);
   }
   if (q.get('hud') === '1') hud.style.display = 'block';
+  if (q.get('holes') === '1') { const pw = 480; app.enable_hole_probe(pw, Math.max(16, Math.round(pw * canvas.height / Math.max(1, canvas.width)))); }
   publish();
 
   let last = performance.now(), acc = 0, n = 0, lastHud = 0;
@@ -215,6 +226,7 @@ async function main() {
       if (planet) {
         const p = JSON.parse(app.planet_stats());
         state.planet = p;
+        if (q.get('holes') === '1') state.holes = JSON.parse(app.hole_stats());
         text += 'высота ' + (p.alt > 1000 ? (p.alt / 1000).toFixed(1) + ' км' : p.alt.toFixed(1) + ' м') + ' · кусков ' + p.shown + ' (в памяти ' + p.cached + ', очередь ' + p.queued + ')\n'
           + (s.triangles / 1000).toFixed(0) + ' тыс. треугольников · сборка куска ' + p.build_ms_mean.toFixed(1) + ' мс';
       } else {

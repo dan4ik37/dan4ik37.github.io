@@ -5,13 +5,13 @@
 //   perf  — видеокарта: вода (время отрисовки водных сеток, таймер EXT_disjoint_timer_query_webgl2) и кадр целиком, ЦП кадра;
 //           профиль: pc (1280×720, «высокая») или phone (412×915, ЦП ×4, «средняя»): node scripts/waves-e2e.cjs perf phone
 //   soak  — 10 минут: катер в шторм (газ, повороты, переворот), пловец, смена погоды; ошибки, память, слушатели
-// «До»: D37_OVERRIDE=<папка со старыми файлами> (как world-perf.cjs). Снимки — SHOTS (по умолчанию E:\claude-tmp\t022c\shots).
+// «До»: D37_OVERRIDE=<папка со старыми файлами> (как world-perf.cjs). Снимки — SHOTS (по умолчанию M:\d37\claude-tmp\t022c\shots).
 // Запуск из корня сайта: node scripts/waves-e2e.cjs [look|perf|soak] [pc|phone] [минут для soak]
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const [MODE = 'look', PROF = 'pc', MIN = '10'] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const SHOTS = process.env.SHOTS || path.join(TMP, 't022c', 'shots');
 const TAG = process.env.TAG || (process.env.D37_OVERRIDE ? 'before' : 'after');
 const sleep = ms => new Promise(r => setTimeout(r, ms));

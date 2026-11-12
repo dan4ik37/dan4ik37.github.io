@@ -6,11 +6,11 @@
 //     версией, браузером, системой, устройством, разделом; запроса и токенов в пачке нет; ответ { stop } запоминается;
 //  3) затраты: разбор + запуск этапа 1 (на профиле телефона, CPU ×4) и первая загрузка главной «с блоком» и «без блока» — медианы.
 // Запуск из корня сайта: node scripts/errlog-e2e.cjs   (Chrome — переменная CHROME; профиль и временное — D37_TMP, по умолчанию
-// E:\claude-tmp\ops). Внешние адреса (Supabase, YouTube, реклама, Метрика) заблокированы — проверяем только свой код.
+// M:\d37\claude-tmp\ops). Внешние адреса (Supabase, YouTube, реклама, Метрика) заблокированы — проверяем только свой код.
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp/ops' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp/ops' : os.tmpdir());
 const PORT = 5593;
 const ORIGIN = 'https://dan4ik37.vercel.app';
 const sleep = ms => new Promise(r => setTimeout(r, ms));

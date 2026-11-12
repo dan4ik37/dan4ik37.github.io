@@ -2,7 +2,7 @@
 //  D37 TERRAIN (T-111, W1) — streaming of the T1 terrain core around the player: blocks 32³ in rings, built in workers
 //  (wasm, JS fallback), dig/fill edits with re-mesh of the affected blocks, ground and rays for physics. No three.js here:
 //  meshes — js/engine/terra-mesh.js. World coordinates: METERS, f64, Y up (the core's units); the game converts with E.UNIT and
-//  its floating anchor. Plan: E:\d37-core\spec\PLAN.md (T1 / W1).
+//  its floating anchor. Plan: M:\d37\d37-core\spec\PLAN.md (T1 / W1).
 // ═══════════════════════════════════════
 // TS = D37E.terra.create({ seed, gen: 1, rules: 0, param: 0, radius: 5, caveRadius: 2, workers, cap, wasm: true, wasmUrl, workerUrl })
 //   gen 2 — logical biomes (T-116, generator v2: climate by latitude, height, sea and wind); rules (WORLD_RULES §2, need gen 2):

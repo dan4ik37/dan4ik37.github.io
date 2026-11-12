@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════
-//  D37E.wx — weather by biome: sand and dust storms, буран, hail, fog banks… (T-135; spec E:\d37-core\spec\BIOME_WEATHER.md v2,
+//  D37E.wx — weather by biome: sand and dust storms, буран, hail, fog banks… (T-135; spec M:\d37\d37-core\spec\BIOME_WEATHER.md v2,
 //  steps WX0 data + WX1 core). Shared engine code, English comments. No DOM, no three.js: runs in node, Chrome and workers.
 // ═══════════════════════════════════════
 // Loads after climate.js and before precip.js. One ribbon per world (climate.js slotEvent, untouched: old worlds keep their rain)

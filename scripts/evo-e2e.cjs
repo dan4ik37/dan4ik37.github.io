@@ -8,7 +8,7 @@
 // Запуск из корня сайта: node scripts/evo-e2e.cjs [smoke|perf|leak|soak|all] [сек замера]
 //   сайт раздаёт сам (из этой папки); BASE=http://localhost:5591 — чужая раздача (python scripts/serve.py 5591);
 //   BASE2=http://localhost:5592 — старая копия сайта для «до» в perf; SOAK_MIN — минут прогона soak (10).
-// Временное — D37_TMP или E:\claude-tmp\t056 (профиль Chrome, снимки).
+// Временное — D37_TMP или M:\d37\claude-tmp\t056 (профиль Chrome, снимки).
 const { spawn } = require('child_process');
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
 const SITE = path.join(__dirname, '..');
@@ -16,7 +16,7 @@ const MODE = process.argv[2] || 'smoke';
 const SECS = +process.argv[3] || 12;
 let BASE = (process.env.BASE || '').replace(/\/+$/, '');
 const BASE2 = (process.env.BASE2 || '').replace(/\/+$/, '');
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp/t056' : path.join(os.tmpdir(), 'd37-t056')), OUT = path.join(TMP, 'shots');
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp/t056' : path.join(os.tmpdir(), 'd37-t056')), OUT = path.join(TMP, 'shots');
 // своя раздача: файлы сайта, /play/… и / → index.html
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 function serve(){

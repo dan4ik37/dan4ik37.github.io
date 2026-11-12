@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════
-//  D37 TERRAIN CORE T1 — JS port of the Rust crate d37terrain (E:\d37-terrain, src/lib.rs) + loader of its wasm build.
+//  D37 TERRAIN CORE T1 — JS port of the Rust crate d37terrain (M:\d37\d37-terrain, src/lib.rs) + loader of its wasm build.
 //  Density field (height, biomes, rivers, caves), Surface Nets on 32³ blocks, dig/fill edits. The world contract is the owner's
 //  native_core (same formulas, seeds, edit format); generation is f64 with IEEE basic operations only, in the SAME order as the
 //  Rust code, so this file, js/engine/terra.wasm and the Windows DLL give bit-identical results (scripts/terra-test.cjs checks
@@ -102,7 +102,7 @@
   }
   const biome = (s, x, z) => classify(temperature01(s, x, z), moisture01(s, x, z), height(s, x, z));
 
-  // ─── generator v2 (T-116): logical climate, E:\d37-core\spec\WORLD_RULES.md §1. Heights, caves and edits are the v1 field;
+  // ─── generator v2 (T-116): logical climate, M:\d37\d37-core\spec\WORLD_RULES.md §1. Heights, caves and edits are the v1 field;
   //     only the biome (the surface colour) changes. Smooth fields on a 16 m node grid, bilinear between nodes:
   //     tb — sea-level temperature 0…1 = latitude (a triangle wave along a warped z: equator → pole 4096 m, the origin sits at
   //          mid-latitude) + low noise (±0.05) + sea moderation; ts = tb − 0.006·hs (smoothed height), tp = tb − 0.006·h (the snow

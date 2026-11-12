@@ -3,7 +3,7 @@
 // файлы не принимаются; правило версий (resolve); запись на подменном сервере (как ugc.sql: место → файл → готово, конфликт версий,
 // старый файл удаляется, файл не дошёл — версия не меняется); размер и время упаковки мира на 400 чанков; подпись мира (отправлять,
 // только если поменялся); свой сервер вместо Supabase (setBackend); сколько весит мир после 1 и 5 часов игры (настоящий генератор).
-// SQL — отдельно, на PGlite: E:\claude-tmp\coop\test-cloud.mjs.
+// SQL — отдельно, на PGlite: M:\d37\claude-tmp\coop\test-cloud.mjs.
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = path.join(__dirname, '..');
 let pass = 0, fail = 0;

@@ -1,5 +1,5 @@
 // scripts/d37core-golden/harness.cjs — the golden replay of the shared core d37-core, COPIED VERBATIM from the core's own test
-// (E:\d37-core js/test.mjs at tag drop/c1b = 2c22de5: lines 15-48 = hashLines, lines 165-501 = the C-001 contact / world replay,
+// (M:\d37\d37-core js/test.mjs at tag drop/c1b = 2c22de5: lines 15-48 = hashLines, lines 165-501 = the C-001 contact / world replay,
 // CmdGen, soak, fpsRun, replay). Do not edit here: a new drop brings a new copy (scripts/core-world-test.cjs checks the drop).
 // Used by scripts/core-world-test.cjs (C-002): the same replay runs through the site API js/engine/core-world.js on wasm and on
 // the JS fallback, and every line must equal scripts/d37core-golden/{hash,contact,world}.txt.

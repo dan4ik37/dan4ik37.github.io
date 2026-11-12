@@ -7,12 +7,12 @@
 //  leak  — 20 раз (leak 40 — 40) открыть/закрыть раздел (/photo ↔ /): память после сборки мусора не растёт;
 //  ui    — настоящими касаниями на профиле телефона: кисть, щипок, надпись, обрезка 9:16, слои, «↶»;
 //  shot  — снимки телефона и компьютера (D37_TMP/shots).
-// Chrome — переменная CHROME; профиль и временное — D37_TMP (по умолчанию E:\claude-tmp\photo, диск C у владельца полный).
+// Chrome — переменная CHROME; профиль и временное — D37_TMP (по умолчанию M:\d37\claude-tmp\photo, диск C у владельца полный).
 // Внешние адреса, кроме jsDelivr (основа fabric.js) и шрифтов Google, заблокированы — проверяем свой код.
 const http = require('http'), net = require('net'), fs = require('fs'), path = require('path'), { spawn, execFileSync } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || 'E:/claude-tmp/photo';
+const TMP = process.env.D37_TMP || 'M:/d37/claude-tmp/photo';
 const MODE = process.argv[2] || 'smoke';
 const MIN = +process.argv[3] || 10;
 const sleep = ms => new Promise(r => setTimeout(r, ms));

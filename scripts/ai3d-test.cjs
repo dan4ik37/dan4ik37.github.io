@@ -7,12 +7,12 @@
 //     small, linear colours ('#a8754a' → 0.392 ± 0.001, COLOR_0 = linear of the editor's colours), full-detail geometry while the editor
 //     shows LOD copies / culls far objects, no outline hulls, the editor's geometries untouched, animations kept;
 //  4) the r149 GLTFLoader reads every GLB back (meshes, animations, colours); D37E.models.compile accepts all six (js/engine/model.js).
-// GLBs are written to D37_TMP/t112/glb (Blender check: E:\claude-tmp\t112\blender\check.py).
+// GLBs are written to D37_TMP/t112/glb (Blender check: M:\d37\claude-tmp\t112\blender\check.py).
 // Run from the site root: node scripts/ai3d-test.cjs <path to node_modules/three r149>   (or THREE_PATH / DEPS_DIR)
 const fs = require('fs'), os = require('os'), path = require('path'), vm = require('vm'), { spawnSync } = require('child_process');
 const { pathToFileURL } = require('url');
 const SITE = path.join(__dirname, '..');
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const OUT = path.join(TMP, 't112', 'glb');
 let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL', name, extra === undefined ? '' : (typeof extra === 'string' ? extra : JSON.stringify(extra))); } };

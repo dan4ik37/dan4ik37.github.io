@@ -1,4 +1,4 @@
-// Logical biomes (T-116, T-145 track L): Kubomir generator v4 and the T1 generator v2 (JS port; the Rust crate E:\d37-terrain has
+// Logical biomes (T-116, T-145 track L): Kubomir generator v4 and the T1 generator v2 (JS port; the Rust crate M:\d37\d37-terrain has
 // the same checks plus golden bits), the shared D37E.biomes API (js/engine/biomes.js) and the strange-world presets.
 //   • Kubomir v1 / v2 / v3 — blocks, biomes and weather zones exactly as before (old saved worlds unchanged); v4 is deterministic
 //     and independent of the chunk order (climate node cache)

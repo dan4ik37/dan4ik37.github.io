@@ -3,12 +3,12 @@
 // пожара, во время (худший кадр, p95) и после; снимки; мир с пожаром закрыть и открыть 20 раз — память; N минут случайной игры с
 // огнём — без ошибок в консоли.
 // Запуск из корня сайта: node scripts/podzem-fire-e2e.cjs [perf|reopen|soak] [d3d11|swiftshader]   (SOAK_MIN — минут, по умолчанию 10;
-// снимки — <D37_TMP или E:\claude-tmp>\t022d\shots; SITE_DIR — другая копия сайта, например «до»)
+// снимки — <D37_TMP или M:\d37\claude-tmp>\t022d\shots; SITE_DIR — другая копия сайта, например «до»)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [MODE = 'perf', angle = 'd3d11'] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp/t022d' : path.join(os.tmpdir(), 't022d'));
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp/t022d' : path.join(os.tmpdir(), 't022d'));
 const OUT = path.join(TMP, 'shots'); fs.mkdirSync(OUT, { recursive: true });
 const SOAK_MIN = +(process.env.SOAK_MIN || 10);
 const sleep = ms => new Promise(r => setTimeout(r, ms));

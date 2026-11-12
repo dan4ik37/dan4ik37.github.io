@@ -9,7 +9,7 @@
 //   KB_LOOK=perf — профиль телефона (412 × 915, ЦП ×4, «средняя»): ЦП на кадр и вызовы — от 1-го лица в лесу, в пещере с факелами
 //   KB_LOOK=gpu — компьютер (1280 × 720, «высокая»/«ультра»): цена рельефа блоков на видеокарте (таймер запросов) — с ним и без
 //   KB_LOOK=leak — 20 раз открыть/закрыть вещи (и сундук, лист помощника), 8 раз закрыть/открыть мир — память JS и узлы не растут
-//   SITE_DIR=папка — снимать другую копию сайта («до»). Снимки — <D37_TMP или E:\claude-tmp>\t096a\shots\<метка>-<пресет>-*.jpg
+//   SITE_DIR=папка — снимать другую копию сайта («до»). Снимки — <D37_TMP или M:\d37\claude-tmp>\t096a\shots\<метка>-<пресет>-*.jpg
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [label = 'now', preset0 = '', angle = 'd3d11'] = process.argv.slice(2);
@@ -17,7 +17,7 @@ const LOOK = process.env.KB_LOOK || 'shots';
 const PHONE = LOOK === 'perf' || !!process.env.KB_PHONE;
 const preset = preset0 || (PHONE ? 'mid' : LOOK === 'gpu' ? 'ultra' : 'high');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const SHOTS = path.join(TMP, 't096a', 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',

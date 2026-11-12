@@ -3,7 +3,7 @@
 // закрыта целиком (Network.setBlockedURLs) — живую базу и живой мир проверка не трогает.
 // Проверяет: работа с сервера (номер задания, сдача не раньше времени, зарплата), после перезагрузки — тот же кошелёк, навык и работа,
 // общая стройка у двух игроков (две вкладки), 📱 «🏦 Банк», окно «🏙️ Экономика города», без city.sql — пробный режим и подсказка,
-// ни одной ошибки в консоли. Снимки — E:\claude-tmp\city\shots. Режим perf — замер кадра в городах (профиль телефона).
+// ни одной ошибки в консоли. Снимки — M:\d37\claude-tmp\city\shots. Режим perf — замер кадра в городах (профиль телефона).
 // Запуск из корня сайта: node scripts/city-e2e.cjs            (нужны Chrome и PGlite: PGLITE_PATH=<папка>, как у city-sql-test.mjs)
 //                         node scripts/city-e2e.cjs perf [замедление ЦП 4] [качество mid]   (D37_OVERRIDE=папка — старые файлы для «до»)
 //                         node scripts/city-e2e.cjs soak [минут 10]   — долгий прогон: окна ×20, работы по кругу, ошибки, память, RPC в минуту
@@ -11,13 +11,13 @@ const http = require('http'), fs = require('fs'), os = require('os'), path = req
 const SITE = path.join(__dirname, '..');
 const [MODE = '', RATE = '4', Q = 'mid'] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const SHOTS = path.join(TMP, 'city', 'shots');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL', name, extra === undefined ? '' : JSON.stringify(extra).slice(0, 500)); } };
 async function findPglite(){
-  const cands = [process.env.PGLITE_PATH, path.join(os.tmpdir(), 'd37-pglite'), 'E:/claude-tmp/d37raid/pg'].filter(Boolean);
+  const cands = [process.env.PGLITE_PATH, path.join(os.tmpdir(), 'd37-pglite'), 'M:/d37/claude-tmp/d37raid/pg'].filter(Boolean);
   const pick = x => (typeof x === 'string' ? x : x && (pick(x.import) || pick(x.default) || pick(x.module)));
   for (const c of cands) for (const dir of [c, path.join(c, '@electric-sql/pglite'), path.join(c, 'node_modules/@electric-sql/pglite')]) {
     try { const pj = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')); if (pj.name !== '@electric-sql/pglite') continue; const m = await import(pathToFileURL(path.join(dir, pick(pj.exports && pj.exports['.']) || pj.module || pj.main || 'dist/index.js')).href); if (m.PGlite) return m.PGlite; } catch (e) {}

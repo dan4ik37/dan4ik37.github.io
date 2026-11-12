@@ -1,5 +1,5 @@
 // scripts/d37core-golden/grid-golden.cjs — M1 / M2 (grid visibility, flow fields) golden lines through the site API
-// js/engine/core-world.js (wasm backend). A JS port, line by line, of the core's test-grid generator (E:\d37-core src/testgrid.rs
+// js/engine/core-world.js (wasm backend). A JS port, line by line, of the core's test-grid generator (M:\d37\d37-core src/testgrid.rs
 // gen + preset + the fixed scenarios, mirrored in C# by D37TestGrids.cs) and of src/golden.rs grid_flow_lines + abi3_lines +
 // ff_lines + m4_lines + m4_tie_lines (the C# port D37CoreGoldenChecks.cs, native run: link flags and mover revisions from shadow
 // copies, as the wasm API has no read for them): every line of grid.txt and flow.txt. Every rng call order is part of the golden

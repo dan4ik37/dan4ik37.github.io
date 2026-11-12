@@ -4,11 +4,11 @@
 //  скорость и утечки: 100 переходов — время, слушатели, память; первая загрузка на профиле телефона (CPU ×4).
 //  D37_BEFORE=<папка со старым сайтом> — та же первая загрузка у старого сайта (#/…) для сравнения «до/после».
 // Запуск из корня сайта: node scripts/routes-e2e.cjs   (Chrome — переменная CHROME; профиль и временное — D37_TMP, по умолчанию
-// E:\claude-tmp\routes). Внешние адреса (Supabase, YouTube, реклама, Метрика) заблокированы — проверяем только свой код.
+// M:\d37\claude-tmp\routes). Внешние адреса (Supabase, YouTube, реклама, Метрика) заблокированы — проверяем только свой код.
 const http = require('http'), fs = require('fs'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || 'E:/claude-tmp/routes';
+const TMP = process.env.D37_TMP || 'M:/d37/claude-tmp/routes';
 const BEFORE = process.env.D37_BEFORE || '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;

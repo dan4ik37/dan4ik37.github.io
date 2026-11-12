@@ -240,7 +240,7 @@ body.high .gk-go.pulse{animation:gkTurn 1.4s ease-in-out infinite}
     catch (e) { return false; }
   }
 
-  // ── Ядро D37 (C-002; общий движок сайта и Backrooms, E:\d37-core) ──
+  // ── Ядро D37 (C-002; общий движок сайта и Backrooms, M:\d37\d37-core) ──
   // Игра зовёт в mount. Флаг CORE_WASM (js/core/config.js) выключен — null и ни одного запроса ядра (откат одной строкой — старая
   // игра). Иначе поток ядра (Worker) стартует сразу, а файлы ядра на странице (js/engine/d37core.js + core-world.js) грузятся
   // параллельно и запуск игры не держат (в списке scripts игры их нет); не загрузились — игра идёт без ядра (строка «ядро D37: нет

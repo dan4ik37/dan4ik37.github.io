@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════
-//  D37E engine — shared spatial hash (AI LOD P1, T-127; spec E:\d37-core\spec\AI_LOD.md §10.2 "js/engine/shash.js").
+//  D37E engine — shared spatial hash (AI LOD P1, T-127; spec M:\d37\d37-core\spec\AI_LOD.md §10.2 "js/engine/shash.js").
 //  One uniform grid over a plane (x, y) — a 2D game passes (x, y), a 3D ground game passes (x, z). Typed arrays only: after the
 //  first steps (capacity grows by doubling, the only allocation) building and querying make no garbage. Rebuilt every step:
 //  H.clear(); H.add(x, y, ref, tag) per item; then queries. Item index i = order of add (0 … H.n − 1); H.x[i], H.y[i] — positions

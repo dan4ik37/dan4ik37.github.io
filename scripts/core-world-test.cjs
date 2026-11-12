@@ -1,6 +1,6 @@
-// node scripts/core-world-test.cjs — C-002: the site really uses the shared core d37-core (E:\d37-core\spec\contracts\C-002-site-uses-core.md).
+// node scripts/core-world-test.cjs — C-002: the site really uses the shared core d37-core (M:\d37\d37-core\spec\contracts\C-002-site-uses-core.md).
 // Everything goes through the site API js/engine/core-world.js, on the wasm backend AND the JS fallback:
-//   1 the copied drop: js/engine/d37core.wasm / d37core.js and scripts/d37core-golden/*.txt == E:\d37-core-release\c1b (SHA256 pinned)
+//   1 the copied drop: js/engine/d37core.wasm / d37core.js and scripts/d37core-golden/*.txt == M:\d37\d37-core-release\c1b (SHA256 pinned)
 //   2 golden: hash.txt (M0), contact.txt + world.txt (C-001) — wasm == JS fallback == golden, every line; M1 / M2 (grid, flow): every
 //     line of grid.txt / flow.txt through the wasm API (the JS fallback has no grid / flow port: E_UNSUPPORTED, checked)
 //   3 JS == wasm on random command streams (results, events, hashes after every batch) and query == apply

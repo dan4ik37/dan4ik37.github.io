@@ -10,7 +10,7 @@ const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [MODE = 'all', ARG = '20'] = process.argv.slice(2);
 const PC = !!process.env.PC, RATE = PC ? 1 : +(process.env.RATE || 4);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = path.join(process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir()), 't138');
+const TMP = path.join(process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir()), 't138');
 const OUT = path.join(TMP, 'shots'); fs.mkdirSync(OUT, { recursive: true });
 const GLB = path.join(TMP, 'hm.glb');
 if (!fs.existsSync(GLB)) { console.log('no ' + GLB + ' — run node scripts/anim-test.cjs first'); process.exit(1); }

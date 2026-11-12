@@ -87,7 +87,7 @@ const csv = S.csv(A), rows = csv.trim().split('\n').map(l => { const out = []; l
 ok(rows[0].join(',') === S.CSV_COLUMNS.join(','), 'csv header = CSV_COLUMNS');
 ok(rows.length === A.length + 1 && rows.slice(1).every(r => r.length === S.CSV_COLUMNS.length), 'csv: one row per clip, every row full', rows.length);
 const col = n => S.CSV_COLUMNS.indexOf(n);
-const specCsv = 'E:/d37-core/spec/data/actions.csv';
+const specCsv = 'M:/d37/d37-core/spec/data/actions.csv';
 const actionIds = fs.existsSync(specCsv) ? new Set(fs.readFileSync(specCsv, 'utf8').split(/\r?\n/).slice(1).map(l => l.split(',')[0]).filter(Boolean)) : null;
 const R1 = rows.slice(1), bad = [];
 for (const r of R1) {
@@ -107,8 +107,8 @@ ok(new Set(R1.map(r => r[0])).size === R1.length, 'csv: clip names unique');
 const rowOf = nm => R1.find(r => r[0] === nm), num = (nm, c) => +rowOf(nm)[col(c)];
 ok(num('loco.walk.left', 'dir_right') === -1 && num('loco.walk.right', 'dir_right') === 1 && num('loco.walk.fwd', 'dir_fwd') === 1 && num('loco.walk.back', 'dir_fwd') === -1
   && num('loco.turn.l90', 'turn_left_deg') === 90 && num('loco.turn.r90', 'turn_left_deg') === -90 && !S.CSV_COLUMNS.some(c => /^dir_[xyz]$|^heading/.test(c)), 'csv: dir_right / dir_fwd / turn_left_deg by the character sides (left strafe → dir_right −1)');
-const packed = 'E:/d37-core/anim/clips.csv';
-if (fs.existsSync(packed)) ok(fs.readFileSync(packed, 'utf8').replace(/\r/g, '') === csv, 'E:/d37-core/anim/clips.csv is current (rebuild: node scripts/anim-pack.cjs)');
+const packed = 'M:/d37/d37-core/anim/clips.csv';
+if (fs.existsSync(packed)) ok(fs.readFileSync(packed, 'utf8').replace(/\r/g, '') === csv, 'M:/d37/d37-core/anim/clips.csv is current (rebuild: node scripts/anim-pack.cjs)');
 
 // ═══ 3. model.js: a skinned glTF by hand ═══
 // three joints (root → mid → tip) under an "Armature" node scaled 0.01 and turned 90° about X (an FBX-born file);
@@ -364,7 +364,7 @@ async function ai3dChain(T, R, cam){
   const nodeNames = new Set(json.nodes.map(x => x.name));
   ok(['Hips', 'LeftUpperArm', 'RightFoot', 'LeftToes', 'Head'].every(x => nodeNames.has(x)), 'bones named with Mecanim humanoid names');
   console.warn = warn;
-  const tmpRoot = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : null);   // for scripts/anim-e2e.cjs (not on CI)
+  const tmpRoot = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : null);   // for scripts/anim-e2e.cjs (not on CI)
   if (tmpRoot) try { const out = path.join(tmpRoot, 't138'); fs.mkdirSync(out, { recursive: true }); fs.writeFileSync(path.join(out, 'hm.glb'), Buffer.from(buf)); } catch (e) {}
   const m = await M.compile([{ name: 'hm.glb', data: buf }]);
   ok(m.skin && m.skin.n >= 28 && M.actions(m).humanoid, 'compiled: skeleton, humanoid', m.skin && m.skin.n);

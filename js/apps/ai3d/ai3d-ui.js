@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════
 //  AI3D shell on the site: /tools/3d (hidden: noindex, not in search, menus, footer or sitemap). AI3D author: the site owner
-//  (dan4ik37); ported into the site 2026-10-29 (T-112, A1 of «AI3D = our Blender», E:\d37-core\spec\PLAN.md).
+//  (dan4ik37); ported into the site 2026-10-29 (T-112, A1 of «AI3D = our Blender», M:\d37\d37-core\spec\PLAN.md).
 // ═══════════════════════════════════════
 // js/apps/apps.js loads three r149 (the same build as the games and D37E), ai3d-gltf.js, ai3d-core.js and this file when the route
 // "ai3d" opens, and calls D37AI3DUI.mount(host, { param }); leaving the route → unmount() (renderers, GPU memory, listeners, the MCP socket).

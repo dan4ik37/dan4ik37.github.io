@@ -29,7 +29,7 @@ const N = Math.max(2, +N_ || 20);
 // REOPEN_WX=sandstorm (или buran, duststorm…) — в каждом круге вместо дождя особая погода по биому (T-135: пулы wx-fx.js тоже уходят)
 const WXF = /^[a-z_]+$/.test(process.env.REOPEN_WX || '') ? process.env.REOPEN_WX : 'rain';
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const OUT = path.join(TMP, 't085');
 const WAIT = +process.env.WAIT_MS || 12000;
 const sleep = ms => new Promise(r => setTimeout(r, ms));

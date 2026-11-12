@@ -369,7 +369,7 @@ async function slowReader(){
 
 // ═══ 4в. Журнал для античита (audit.js; T-073 будет его читать): выключен по умолчанию; файл и HTTP; без личных данных ═══
 async function auditFeed(){
-  const dir = path.join(process.env.D37_TMP || 'E:/claude-tmp/t045', 'audit-' + crypto.randomBytes(4).toString('hex'));
+  const dir = path.join(process.env.D37_TMP || 'M:/d37/claude-tmp/t045', 'audit-' + crypto.randomBytes(4).toString('hex'));
   const S = await K.startServer(D, { ADMIN_TOKEN: ADMIN, AUDIT: 'file', AUDIT_DIR: dir, AUDIT_SALT: 'test-salt', AUDIT_EVENTS: 'aud-*:in', AUDIT_ROOM_PER_SEC: '40', AUDIT_PER_SEC: '5000', AUDIT_STAT_MS: '700', ROOM_GC_MS: '0', MSG_BURST: '5000', MSG_PER_SEC: '5000' });
   cleanup.push(() => S.kill());
   const a = K.rawClient(D, S.ws, { xff: '198.51.100.77' }), b = K.rawClient(D, S.ws, { xff: '198.51.100.78' });

@@ -3,7 +3,7 @@
 // и ПК 1280×720 — по сценам: доля окна игры под интерфейсом (COVER: объединение прямоугольников «с краской», сетка 2 px — как
 // scripts/touch-hud-e2e.cjs), доля экрана под окном игры, сколько кнопок видно всегда (§2.1, ≤ 5; по обстановке — отдельно),
 // что стоит в середине экрана (x 30–70 %, y 22–70 % — §2.3, лицо персонажа), попадание пальцем (середина и ±(44/2 − 2) px — та же
-// кнопка), пересчёты стилей и раскладки в покое (за 5 с), ошибки в консоли. Снимок — <D37_TMP или E:\claude-tmp>\t123\after\
+// кнопка), пересчёты стилей и раскладки в покое (за 5 с), ошибки в консоли. Снимок — <D37_TMP или M:\d37\claude-tmp>\t123\after\
 // <игра>-<профиль>-<сцена>.jpg. Выход 1 — нарушен предел (§2.2).
 // Запуск из корня сайта: node scripts/hud2-e2e.cjs [игры через запятую: world,studio,terra,shell] [профили: P,L,PC]
 // Дело игры: module.exports = { url, ready: 'выражение', root, extra?, skip?, caps?: { P, L, PC }, sceneCaps?: { сцена: { P, L, PC } }, prep?: async T => {}, scenes: { имя: async T => {} } }
@@ -12,7 +12,7 @@
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const OUT = path.join(TMP, 't123', 'after'); fs.mkdirSync(OUT, { recursive: true });
 const GAMES = (process.argv[2] || 'world,studio,terra,shell').split(',');
 const PROFS = (process.argv[3] || 'P,L,PC').split(',');

@@ -3,12 +3,12 @@
 // 20 раз (узлы и слушатели не растут), 10 минут игры (ошибок нет, память на полке).
 // Запуск из корня сайта: node scripts/kubomir-qol-e2e.cjs [shots|perf|leak|soak|all]   (по умолчанию — shots)
 //   SITE_DIR=папка — другая копия сайта («до»: выгрузка прошлого коммита); QOL_MIN — минут игры в soak (10)
-//   Снимки — <D37_TMP или E:\claude-tmp>\kbqol\shots\<метка>-*.jpg (QOL_TAG — метка, по умолчанию now)
+//   Снимки — <D37_TMP или M:\d37\claude-tmp>\kbqol\shots\<метка>-*.jpg (QOL_TAG — метка, по умолчанию now)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const MODE = process.argv[2] || 'shots', TAG = process.env.QOL_TAG || 'now';
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const SHOTS = path.join(TMP, 'kbqol', 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',

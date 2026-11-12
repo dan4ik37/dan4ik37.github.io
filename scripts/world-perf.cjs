@@ -4,12 +4,12 @@
 // Отчёт: FPS, ЦП мс на кадр (среднее и худший), кадры дольше 50 мс (рывки), вызовы отрисовки, треугольники, узлы рельефа,
 // деревья, жители и машины рядом, интерьеры, видимые зоны, память JS и видеокарты. Бюджеты — docs/WORLD_MAP.md §7.
 // Запуск из корня сайта: node scripts/world-perf.cjs [замедление ЦП, 4] [качество, mid] [плотность пикселей, 2]
-// (Chrome — переменная CHROME или стандартный путь Windows; временная папка — D37_TMP, иначе E:\claude-tmp, иначе системная)
+// (Chrome — переменная CHROME или стандартный путь Windows; временная папка — D37_TMP, иначе M:\d37\claude-tmp, иначе системная)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const [RATE = '4', Q = 'mid', DSF = '2', MODE = ''] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
   '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain', '.ico': 'image/x-icon' };
@@ -121,7 +121,7 @@ const server = http.createServer((req, res) => {
       console.log('надписи', JSON.stringify(r));
       throw new Error('замер надписей готов');
     }
-    if (MODE === 'shot') {   // снимки вывесок зон (проверка надписей и показа зон): E:\claude-tmp\world\shots\zone-*.jpg
+    if (MODE === 'shot') {   // снимки вывесок зон (проверка надписей и показа зон): M:\d37\claude-tmp\world\shots\zone-*.jpg
       await send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 700, deviceScaleFactor: 1, mobile: false });
       await send('Page.navigate', { url: BASE + '/#/games/world' });
       let ok5 = false; for (let i = 0; i < 240 && !ok5; i++) { await sleep(500); try { ok5 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }

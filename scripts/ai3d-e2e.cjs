@@ -16,13 +16,13 @@
 //         CMDS='[…]' VIEW='th,ph,dist' node scripts/ai3d-e2e.cjs look <name> — a close-up screenshot of any commands
 // The smoke mode also runs scripts/ai3d/ops-extra.json — with the self-test rows and demos every one of the 63 ops runs in Chrome.
 // Profiles: phone (default) — 412 × 915 × 2, touch, CPU ×4 (RATE); PC=1 — 1280 × 720, no throttle. Chrome profile and output:
-// D37_TMP/t112 (E:\claude-tmp\t112). Needs internet to jsDelivr (three r149, GLTFExporter); the site's own noise (Supabase, ads) is blocked.
+// D37_TMP/t112 (M:\d37\claude-tmp\t112). Needs internet to jsDelivr (three r149, GLTFExporter); the site's own noise (Supabase, ads) is blocked.
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = process.env.SITE_DIR ? path.resolve(process.env.SITE_DIR) : path.join(__dirname, '..');
 const [MODE = 'smoke', ARG = ''] = process.argv.slice(2);
 const PC = !!process.env.PC, RATE = PC ? 1 : +(process.env.RATE || 4);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const OUT = path.join(TMP, 't112');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;

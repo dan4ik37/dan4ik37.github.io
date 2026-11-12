@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════
 //  D37 ENGINE — shared skeleton + procedural action clips (T-131, AI3D A2 "our Blender": skeleton and animations).
-//  Layer-1 contract: E:\d37-core\spec\BODY.md, spec/data/skeleton.json (bone ids = Unity HumanBodyBones, left/right = the
+//  Layer-1 contract: M:\d37\d37-core\spec\BODY.md, spec/data/skeleton.json (bone ids = Unity HumanBodyBones, left/right = the
 //  character's own side), spec/data/actions.csv (every clip name starts with an action id). The same clips go to the site
-//  (D37E.models skinned playback, AI3D export) and to Backrooms (FBX pack E:\d37-core\anim, imported as Humanoid).
+//  (D37E.models skinned playback, AI3D export) and to Backrooms (FBX pack M:\d37\d37-core\anim, imported as Humanoid).
 // ═══════════════════════════════════════
 // Frame: right-handed, Y up, the character faces +Z, +X is the character's LEFT (glTF). Units: meters (any skeleton works:
 // gait sizes scale with leg length, times with its square root — dynamic similarity).
@@ -89,7 +89,7 @@
   function qArc(u, v){ u = vN(u); v = vN(v); const d = vDot(u, v); if (d > .999999) return qId(); if (d < -.999999) { const ax = Math.abs(u[0]) < .9 ? vN(vCross(u, [1, 0, 0])) : vN(vCross(u, [0, 1, 0])); return [ax[0], ax[1], ax[2], 0]; } const c = vCross(u, v); return qNorm([c[0], c[1], c[2], 1 + d]); }
 
   // ═══ Skeletons ═══
-  // BaseBody_Male.fbx (Backrooms, 1.80 m, Mixamo T-pose), symmetrised; measured headless in Blender 5.2 (E:\claude-tmp\t138).
+  // BaseBody_Male.fbx (Backrooms, 1.80 m, Mixamo T-pose), symmetrised; measured headless in Blender 5.2 (M:\d37\claude-tmp\t138).
   const REF_M = { Hips: [0, .946, -.03], Spine: [0, 1.037, -.025], Chest: [0, 1.15, -.015], UpperChest: [0, 1.283, -.01], Neck: [0, 1.48, -.005], Head: [0, 1.586, .015],
     LeftShoulder: [.036, 1.438, .02], LeftUpperArm: [.172, 1.431, -.046], LeftLowerArm: [.45, 1.403, -.046], LeftHand: [.666, 1.402, -.047],
     LeftIndexProximal: [.803, 1.402, -.01], LeftMiddleProximal: [.803, 1.404, -.033], LeftLittleProximal: [.79, 1.393, -.077],

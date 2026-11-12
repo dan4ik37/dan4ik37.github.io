@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════
-//  D37 CORE on the site — js/engine/core-world.js (contract C-002, E:\d37-core\spec\contracts\C-002-site-uses-core.md)
+//  D37 CORE on the site — js/engine/core-world.js (contract C-002, M:\d37\d37-core\spec\contracts\C-002-site-uses-core.md)
 // ═══════════════════════════════════════
 // The site's one door to the shared engine core d37-core (the same core Backrooms runs as d37core.dll): the world command /
 // event core d37_world_* + the contact law d37_ix_contact (C-001, ABI 5) and the M1 / M2 calls (grid visibility, flow fields).
-// The core files are copied from a drop, never edited here: js/engine/d37core.wasm + js/engine/d37core.js = E:\d37-core-release\c1b
+// The core files are copied from a drop, never edited here: js/engine/d37core.wasm + js/engine/d37core.js = M:\d37\d37-core-release\c1b
 // (scripts/core-world-test.cjs checks the SHA256). Bugs go back to the core as a fix + a new drop.
 // Classic script (window.D37CoreWorld / self.D37CoreWorld) or CommonJS (node tests). Needs d37core.js (window.D37Core) before the
 // first call, not before this file runs (the two load in parallel). Games do not list the core files: GameKit.core (js/games/

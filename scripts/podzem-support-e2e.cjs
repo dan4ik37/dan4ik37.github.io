@@ -2,13 +2,13 @@
 // ЦП ×4 медленнее): мир «реализм», стена из 1000 плиток — пересчёт при ломании по плитке; мост ~80 плиток падает куском — время
 // кадра; 12 кругов «построил — подрубил — упало — убрал» — память; мир закрыть и открыть 20 раз — память; снимок падающего;
 // ошибок в консоли нет.
-// Запуск из корня сайта: node scripts/podzem-support-e2e.cjs [d3d11|swiftshader]   (снимки — <D37_TMP или E:\claude-tmp>\podzem-support)
+// Запуск из корня сайта: node scripts/podzem-support-e2e.cjs [d3d11|swiftshader]   (снимки — <D37_TMP или M:\d37\claude-tmp>\podzem-support)
 // PZ_LOAD=1 — мир с нагрузкой (T-124, W.load = 1): пересчёт — заданием по кусочкам в такте мира (худший такт при ЦП ×4)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [angle = 'd3d11'] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const OUT = path.join(TMP, 'podzem-support'); fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const LOAD = !!process.env.PZ_LOAD;

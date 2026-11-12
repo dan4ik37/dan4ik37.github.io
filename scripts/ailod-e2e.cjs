@@ -9,7 +9,7 @@ const http = require('http'), fs = require('fs'), os = require('os'), path = req
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [SCENES = 'mir,horde,studio', PROF = 'phone'] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
+const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp' : os.tmpdir());
 const phone = PROF === 'phone', RATE = +(process.env.RATE || (phone ? 4 : 1)), Q = phone ? 'mid' : 'high';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',

@@ -2,7 +2,7 @@
 //  LEADERBOARD — DonationAlerts API
 // ═══════════════════════════════════════
 let lbTab = 'top';
-let lbPeriod = null;      // топ донатов: 'month' — последние 30 дней, 'all' — всё время; null — сам выбор по данным
+let lbPeriod = null;      // топ донатов: 'month' — последние 30 дней, 'year' — последние 365 дней; null — сам выбор по данным
 let lbLastData = null;
 const DA_AUTH_URL = `/api/donations`; // Vercel serverless
 
@@ -137,14 +137,16 @@ function renderLbHtml(data, tab) {
   const colors = ['#ff2d55','#9147ff','#29b6f6','#22c55e','#f59e0b','#ec4899','#ff6b35'];
   if (tab === 'top') {
     const hasMonth = Array.isArray(data.leaderboard_month);
-    // Пока человек сам не выбрал: за 30 дней, а если там пусто — за всё время
-    const period = !hasMonth ? 'all' : (lbPeriod || (data.leaderboard_month.length ? 'month' : 'all'));
-    const list = period === 'month' ? data.leaderboard_month : data.leaderboard;
+    // Владелец 12.11.2026: «за всё время» не показываем — только месяц и год.
+    // Пока человек сам не выбрал: за месяц, а если там пусто — за год. Старый ответ из кэша без leaderboard_year — прежний общий список.
+    const yearList = Array.isArray(data.leaderboard_year) ? data.leaderboard_year : data.leaderboard;
+    const period = !hasMonth ? 'year' : (lbPeriod === 'month' || lbPeriod === 'year' ? lbPeriod : (data.leaderboard_month.length ? 'month' : 'year'));
+    const list = period === 'month' ? data.leaderboard_month : yearList;
     const toggle = hasMonth ? `<div class="lb-period">
-        <button class="${period === 'month' ? 'active' : ''}" onclick="setLbPeriod('month')">За 30 дней</button>
-        <button class="${period === 'all' ? 'active' : ''}" onclick="setLbPeriod('all')">За всё время</button>
+        <button class="${period === 'month' ? 'active' : ''}" onclick="setLbPeriod('month')">За месяц</button>
+        <button class="${period === 'year' ? 'active' : ''}" onclick="setLbPeriod('year')">За год</button>
       </div>` : '';
-    if (!list?.length) return toggle + `<div class="empty-state"><span class="empty-state-icon">🏆</span><div class="empty-state-title">${period === 'month' ? 'За 30 дней донатов не было' : 'Донатов пока нет'}</div><div class="empty-state-text">Будь первым в списке — самый щедрый попадёт на самый верх 💝</div></div>`;
+    if (!list?.length) return toggle + `<div class="empty-state"><span class="empty-state-icon">🏆</span><div class="empty-state-title">${period === 'month' ? 'За месяц донатов не было' : 'За год донатов не было'}</div><div class="empty-state-text">Будь первым в списке — самый щедрый попадёт на самый верх 💝</div></div>`;
     return toggle + `<div class="lb-list">${list.map((d,i)=>{
       const ini=esc((d.username||'?').slice(0,2).toUpperCase());
       const col=colors[i%colors.length];

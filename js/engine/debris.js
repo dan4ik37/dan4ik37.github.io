@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════
 //  ДВИЖОК ДЕНЧИКА — обломки как твёрдые тела (D37E.debris): летят по весу, катятся по склону и со скалы, засыпают
 // ═══════════════════════════════════════
-// T-138 step 2 (F4 = SH-R, E:\d37-core\spec\STRUCTURE_HAZARDS.md §0.9; one ceiling §5.x). Owner 29.10: «блоки и предметы могут
+// T-138 step 2 (F4 = SH-R, M:\d37\d37-core\spec\STRUCTURE_HAZARDS.md §0.9; one ceiling §5.x). Owner 29.10: «блоки и предметы могут
 // улетать в зависимости от веса и катиться со скалы». No three.js, no DOM: window, worker, node. Every decision is integer
 // (bit-exact JS / Rust / C#): positions in Q16 cells (1/65,536 of a cell, kept as exact integers in Float64Array), velocities
 // in Q16 cells per substep, world tick 20 Hz × 4 substeps (80 Hz), gravity G = 100 Q16/substep² (9.8 m/s², 1 cell = 1 m).
