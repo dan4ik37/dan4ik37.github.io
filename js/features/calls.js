@@ -88,6 +88,10 @@
   const importPub = pub => crypto.subtle.importKey('raw', unb64(pub), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
   const sign = async (priv, str) => b64(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, priv, enc(str)));
   const verifySig = (pub, sig, str) => crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pub, unb64(sig), enc(str)).catch(() => false);
+  // T-141: те же подписи и настройки ICE — для передачи файлов (js/features/files.js): один код подписи на звонки и файлы
+  C.sig = { myKeys, importPub, sign, verifySig };
+  C.iceConfig = async () => { await ensureRelay(); return C.hideIp() ? { iceServers: turnList(), iceTransportPolicy: 'relay', relay: true, ok: C.relayOk() } : { iceServers: ICE(), relay: false, ok: true }; };
+  C.inCall = C.inCall || (() => false);
 
   // ═══ Микрофон ═══
   let fakeFreq = 0;

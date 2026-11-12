@@ -91,6 +91,35 @@ const NAV = h => `(async () => {
       const self = new Map(), dtm = profile.timeDeltas || [], byId = new Map(profile.nodes.map(n => [n.id, n]));
       profile.samples.forEach((id, i) => { const n = byId.get(id), f = n.callFrame, k = (f.functionName || '(anon)') + ' ' + (f.url || '').split('/').slice(-1)[0] + ':' + (f.lineNumber + 1); self.set(k, (self.get(k) || 0) + (dtm[i] || 0) / 1000); });
       console.log(JSON.stringify(r)); console.log([...self].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => r1(v) + 'ms ' + k).join(String.fromCharCode(10)));
+    } else if (MODE === 'files') {
+      // 📎 файл от устройства к устройству: источник (эта вкладка) + N получателей (отдельные Chrome, ЦП ×4). Без входа, база не пишется:
+      // только broadcast роя. HIDE=on — только через наш TURN (иначе — напрямую). MB — размер (по умолчанию 20)
+      const MB = +(process.env.MB || 20), N = +(process.env.N || 1), hide = process.env.HIDE === 'on' ? 'on' : 'off';
+      const prep = `(async () => { const s = JSON.parse(localStorage.getItem('d37_phone') || '{}'); s.hide = ${JSON.stringify(hide)}; localStorage.setItem('d37_phone', JSON.stringify(s)); if (window.D37Phone) D37Phone.set.hide = ${JSON.stringify(hide)}; await D37Phone.need('mv'); await D37Phone.need('calls'); return !!window.D37Files; })()`;
+      ok(await C.ev(prep), 'files.js и calls.js загрузились (источник)');
+      const att = await C.ev(`(async () => {
+        const n = ${MB} * 1048576, u = new Uint8Array(n); for (let i = 0; i < n; i += 65536) crypto.getRandomValues(u.subarray(i, Math.min(n, i + 65536)));
+        u.set([0x50, 0x4B, 3, 4], 0);
+        const b = new Blob([u], { type: 'application/zip' }), h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await b.arrayBuffer())), x => x.toString(16).padStart(2, '0')).join('');
+        await D37Files._store.store({ chash: h, name: 'test.zip', mime: 'application/zip', size: n, pinned: true, sent: true, got: 0, used: Date.now(), at: Date.now() }, b);
+        await D37Files._test.seed(h);
+        return { v: 1, enc: 'none', kid: '', name: 'test.zip', size: n, mime: 'application/zip', chash: h, phash: h };
+      })()`);
+      ok(/^[0-9a-f]{64}$/.test(att.chash), `источник раздаёт ${MB} МБ`);
+      const recv = [];
+      for (let i = 0; i < N; i++) { const R = await chrome(+(process.env.CPU || 4)); await R.send('Page.navigate', { url: site.base + '/' }); recv.push(R); }
+      for (const R of recv) { await R.until(READY, 60000); await sleep(3000); await R.ev(prep); }
+      const res = await Promise.all(recv.map(async (R, i) => {
+        await R.ev(`window.__peak = 0; window.__pt = setInterval(() => { try { const m = performance.memory; if (m) window.__peak = Math.max(window.__peak, m.usedJSHeapSize); } catch (e) {} }, 200); 0`);
+        const n0 = await R.ev('window.__lt.length');
+        const r = await R.ev(`(async () => { const t0 = performance.now(); try { const b = await Promise.race([D37Files.fetch(${JSON.stringify(att)}), new Promise((_, j) => setTimeout(() => j(new Error('timeout 240 s')), 240000))]); return { ok: b.size === ${MB * 1048576}, ms: performance.now() - t0 }; } catch (er) { return { ok: false, err: String(er.message || er), st: D37Files.state(${JSON.stringify(att.chash)}) }; } })()`);
+        const lt = await R.ev(`window.__lt.slice(${n0}).map(x => x[1])`), peak = await R.ev('window.__peak');
+        const heap = (await R.send('Runtime.getHeapUsage')).usedSize;
+        return Object.assign(r, { i, over50: lt.filter(d => d > 50).length, maxLt: Math.round(Math.max(0, ...lt)), peakMB: Math.round(peak / 1048576), heapAfterMB: Math.round(heap / 1048576), errs: R.errs.slice(0, 2) });
+      }));
+      console.log(JSON.stringify({ MB, N, hide, res }));
+      for (const r of res) ok(r.ok, `получатель ${r.i + 1}: ${MB} МБ за ${r1((r.ms || 0) / 1000)} с, пик кучи ${r.peakMB} МБ, кадров > 50 мс: ${r.over50}`, r.err || '');
+      for (const R of recv) await R.close();
     } else if (MODE === 'leak') {
       const probe = async () => ({ heap: await C.heap(), lw: await C.ev(`Object.values(getEventListeners(window)).reduce((s,a)=>s+a.length,0)`, true), ld: await C.ev(`Object.values(getEventListeners(document)).reduce((s,a)=>s+a.length,0)`, true), ch: await C.ev(`sbClient.getChannels?.().length||0`), nodes: await C.ev('document.getElementsByTagName("*").length') });
       await C.ev(NAV('/chat')); await sleep(3000); await C.ev(NAV('/')); await sleep(1500);

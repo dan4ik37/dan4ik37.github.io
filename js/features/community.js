@@ -67,7 +67,7 @@
   const canMod = (myRole, targetRole, staff) => !!staff || myRole === 'owner' ? targetRole !== 'owner' || !!staff : myRole === 'mod' && targetRole === 'member';
   // Сообщение сообщества → сообщение ленты
   const cmMsg = r => ({ id: r.id, uid: r.user_id || null, nick: r.nick || 'игрок', text: r.text || '', at: r.created_at, reply: r.reply_to || null,
-    edited: r.edited_at || null, deleted: !!r.deleted, hidden: !!r.hidden, reactions: r.reactions || {}, pinned: !!r.pinned_at, ch: r.channel_id });
+    edited: r.edited_at || null, deleted: !!r.deleted, hidden: !!r.hidden, reactions: r.reactions || {}, pinned: !!r.pinned_at, ch: r.channel_id, att: r.att || null });
 
   // ═══ Адаптер канала сообщества для MsgView ═══
   function commAdapter(C, ch){
@@ -101,7 +101,7 @@
     };
     let typ = null;
     return {
-      key: 'c:' + chId, title: '#' + ch.name, maxLen: 1000, placeholder: `Написать в #${ch.name}`, community: cid,
+      key: 'c:' + chId, title: '#' + ch.name, maxLen: 1000, fileKind: 'cm', placeholder: `Написать в #${ch.name}`, community: cid,
       startText: `Это начало канала #${ch.name} сообщества «${C.c.name}»`,
       caps: { reply: true, edit: !!me, del: !!me, react: 'count', pin: true, report: !!me, typing: !!C.rt, search: true, stickers: false },
       reactSet: ['👍', '❤️', '😂', '🔥', '😮', '😢', '🎉', '👀', '💯', '🤝', '😎', '🙏'],

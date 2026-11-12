@@ -291,6 +291,7 @@
         <div class="mv-row">
           <button type="button" class="mv-cb" data-c="emoji" title="Эмодзи" aria-label="Эмодзи">😀</button>
           <button type="button" class="mv-cb mv-stk" data-c="sticker" title="Стикеры (VIP)" aria-label="Стикеры" hidden>🎉</button>
+          <button type="button" class="mv-cb mv-fbtn" data-c="file" title="Отправить файл" aria-label="Отправить файл" hidden>📎</button>
           <textarea class="mv-in" rows="1" aria-label="Сообщение"></textarea>
           <button type="button" class="mv-send" data-c="send" aria-label="Отправить">➤</button>
         </div>
@@ -327,7 +328,7 @@
       const body = blocked
         ? `<div class="mv-text mv-blk">🚫 Сообщение от заблокированного <button type="button" data-a="showblk">показать</button></div>`
         : m.sticker ? `<div class="mv-text mv-sticker">${e(m.text)}</div>`
-        : `<div class="mv-text${r.big ? ' mv-big' : ''}">${r.html}${m.edited ? ` <span class="mv-ed" title="${e(P.when(m.edited))}">(изменено)</span>` : ''}</div>${r.cards.length ? `<div class="mv-cards">${r.cards.map(MV.cardHtml).join('')}</div>` : ''}`;
+        : `<div class="mv-text${r.big ? ' mv-big' : ''}">${r.html}${m.edited ? ` <span class="mv-ed" title="${e(P.when(m.edited))}">(изменено)</span>` : ''}</div>${r.cards.length ? `<div class="mv-cards">${r.cards.map(MV.cardHtml).join('')}</div>` : ''}${m.att && window.D37Files ? window.D37Files.cardHtml(m.att, m, V.A?.fileKind) : ''}`;
       return `<div class="mv-m${first ? ' mv-first' : ''}${mine ? ' mv-mine' : ''}${hl ? ' mv-hl' : ''}${m.hidden ? ' mv-hid' : ''}" data-id="${e(m.id)}" data-nick="${e(m.nick)}"${m.uid ? ` data-uid="${e(m.uid)}"` : ''}>
         ${rq}${first ? ava : `<time class="mv-t2" title="${e(P.when(m.at))}">${P.hm(m.at)}</time>`}
         <div class="mv-b">${first ? `<div class="mv-h"><button type="button" class="mv-nick" data-a="user" style="${color}">${e(m.nick)}</button>${badgeHtml(m, st, crole)}<time title="${e(new Date(m.at).toLocaleString('ru-RU'))}">${P.when(m.at)}</time>${m.pinned ? '<i class="mv-pin" title="Закреплено">📌</i>' : ''}${m.hidden ? '<i class="mv-flag" title="Скрыто жалобами — видят только модераторы">🚩</i>' : ''}</div>` : ''}${body}${reacts}</div>
@@ -474,6 +475,7 @@
       input.placeholder = A.placeholder || `Написать в ${A.title || 'чат'}`;
       input.maxLength = A.maxLen || 500;
       q('.mv-stk').hidden = !A.caps.stickers;
+      q('.mv-fbtn').hidden = !(A.fileKind && window.D37Files?.canSend?.());   // T-141: 📎 файлы (js/features/files.js)
       list.innerHTML = '<div class="mv-load"><i></i>Загружаем сообщения…</div>';
       gate();
       const lastRead = MV.lastRead(A.key);
@@ -571,6 +573,22 @@
       clearTimeout(V.noteT); V.noteT = setTimeout(gate, ms);
     }
     V.note = note;
+    // 📎 файл: выбрать → D37Files.send (текст «📎 имя» обычным путём + ссылка msg_attach); сам файл идёт от устройства к устройству
+    function pickFile(){
+      const A = V.A; if (!A?.fileKind || !V.canWrite || !window.D37Files) return;
+      const inp = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,audio/*,.pdf,.txt,.zip' });
+      inp.onchange = async () => {
+        const f = inp.files?.[0]; if (!f) return;
+        note('📎 Готовим файл…');
+        const r = await window.D37Files.send(A, f);
+        if (V.A !== A) return;
+        if (!r.ok) { note('⚠️ Файл не отправлен: ' + (r.err || 'ошибка')); return; }
+        q('.mv-note').hidden = true;
+        if (r.m && V.msgs.has(r.m.id)) { Object.assign(V.msgs.get(r.m.id), { att: r.m.att }); rerender(r.m.id); } else if (r.m) onEvent({ t: 'ins', m: r.m });
+        toBottom();
+      };
+      inp.click();
+    }
     async function send(){
       const A = V.A; if (!A || !V.canWrite) return;
       const text = input.value.trim();
@@ -814,6 +832,7 @@
       if (c && root.contains(c)) {
         const k = c.dataset.c;
         if (k === 'send') send();
+        else if (k === 'file') pickFile();
         else if (k === 'emoji' || k === 'sticker') openPanel(k);
         else if (k === 'noreply') setReply(null);
         else if (k === 'noedit') { setEdit(null); input.value = ''; autosize(); }
@@ -867,7 +886,8 @@
     V.refreshAll = () => renderAll();
     // чёрный список поменялся — перерисовать; закрыли ленту — слушатель снять (раньше оставался на каждое открытие чата и держал ленту в памяти)
     const onBlocks = () => { if (!V.destroyed && V.A) renderAll(); };
-    V.destroy = () => { V.destroyed = true; V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('d37:blocks', onBlocks); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
+    const filesOff = window.D37Files?.watch ? window.D37Files.watch(list, id => V.msgs.get(isNaN(+id) ? id : +id) || V.msgs.get(id)) : null;
+    V.destroy = () => { V.destroyed = true; filesOff?.(); V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('d37:blocks', onBlocks); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
     window.addEventListener('d37:blocks', onBlocks);
     if (opt.adapter) V.setAdapter(opt.adapter);
     return V;

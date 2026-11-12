@@ -12,7 +12,7 @@
   const rid = n => { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; for (const x of crypto.getRandomValues(new Uint8Array(n))) s += a[x % a.length]; return s; };
 
   // ═══ Сообщения ═══
-  const dmMsg = r => ({ id: r.id, uid: r.sender_id, nick: P.prof(r.sender_id)?.nick || (r.sender_id === P.me() ? P.myNick() : 'друг'), text: r.text || '', at: r.created_at, read: r.read_at, mine: r.sender_id === P.me() });
+  const dmMsg = r => ({ id: r.id, uid: r.sender_id, nick: P.prof(r.sender_id)?.nick || (r.sender_id === P.me() ? P.myNick() : 'друг'), text: r.text || '', at: r.created_at, read: r.read_at, mine: r.sender_id === P.me(), att: r.att || null });
   async function markRead(uid){
     const me = P.me(); if (!me) return;
     await sbClient.from('direct_messages').update({ read_at: new Date().toISOString() }).eq('sender_id', uid).eq('recipient_id', me).is('read_at', null);
@@ -26,7 +26,7 @@
   function dmAdapter(uid, nick, block){
     const me = P.me();
     return {
-      key: 'dm:' + uid, title: nick, maxLen: 1000, placeholder: `Написать ${nick}…`,
+      key: 'dm:' + uid, title: nick, maxLen: 1000, fileKind: 'dm', placeholder: `Написать ${nick}…`,
       startText: `Это начало переписки с ${nick}. Писать можно только друзьям. Не отправляй адрес, телефон и пароли — даже друзьям.`,
       emptyText: 'Напиши первым! 👋',
       caps: { reply: false, edit: false, del: false, react: false, pin: false, report: false, typing: false, search: true, stickers: false },
