@@ -51,7 +51,7 @@
 .hub-t-save{--hub-g:linear-gradient(135deg,#65a30d,#14532d)}
 .hub-btn3{background:rgba(var(--fg-rgb),.08);color:var(--text);border:1px solid var(--line-hi)}
 /* листы поверх меню: «Как играть», «Сохранение» */
-.hub-sheet-bg{position:fixed;inset:0;z-index:70;background:var(--scrim);display:flex;align-items:flex-end;justify-content:center;padding:12px}
+.hub-sheet-bg{position:fixed;inset:0;z-index:9100;background:var(--scrim);display:flex;align-items:flex-end;justify-content:center;padding:12px}
 .hub-sheet{position:relative;width:min(560px,100%);max-height:86vh;overflow-y:auto;padding:20px 18px calc(18px + env(safe-area-inset-bottom));border-radius:22px;
   background:var(--panel);color:var(--text);border:1px solid var(--line-hi);box-shadow:var(--sh-2);display:flex;flex-direction:column;gap:10px}
 .hub-sheet-x{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:50%;border:1px solid var(--line-hi);background:rgba(var(--fg-rgb),.06);color:var(--text);cursor:pointer;font-size:15px}
@@ -72,7 +72,7 @@
 .hub-pcard .hub-btn3{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.25)}
 .hub-note{margin:18px 0 0;padding:14px 16px;border-radius:16px;background:rgba(var(--fg-rgb),.04);border:1px dashed var(--line-hi);color:var(--muted);font-size:13.5px;line-height:1.5}
 .hub-note b{color:var(--text)}
-.hub-toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;padding:10px 16px;border-radius:12px;
+.hub-toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9100;padding:10px 16px;border-radius:12px;
   background:var(--panel);color:var(--text);border:1px solid var(--line-hi);box-shadow:var(--sh-2);font-size:14px;max-width:92vw}
 @media (min-width:760px){
   .hub-grid{grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:minmax(170px,auto)}

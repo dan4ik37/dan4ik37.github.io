@@ -82,7 +82,7 @@
   const GAME = 'engine', WORLD = 'planet';
 
   // ═══ Состояние ═══
-  const st = { active: false, mode: '', h: null, starting: false, t0: 0, playBase: 0, cloudVer: null, lastCloud: 0, saves: 0, cloudSaves: 0, look: null,
+  const st = { gen: 0, active: false, mode: '', h: null, starting: false, t0: 0, playBase: 0, cloudVer: null, lastCloud: 0, saves: 0, cloudSaves: 0, look: null,
     lastLook: '', status: '', events: [], errors: [], build: null, lookT: 0, saveBusy: false, gl: false };
 
   function lookNow(){
@@ -411,6 +411,7 @@
   async function open(mode){
     if (st.active && st.mode === mode) return;
     if (st.active) await close('switch');
+    const gen = ++st.gen;   // этот запуск; быстро вышли и зашли снова — старый запуск сам сдаётся (два движка сразу не бывает)
     st.active = true; st.mode = mode; st.starting = true; st.events = []; st.errors = []; st.resumed = null;
     document.body.classList.add('hub-on', 'game-on', 'e2-calm');
     ui = buildUi(mode);
@@ -418,14 +419,14 @@
     if (!await canRun3d()) { showError('nogpu'); st.starting = false; return; }
     const info = await buildInfo();
     const save = mode === 'play' ? await pickSave() : null;
-    if (!st.active || st.mode !== mode || !ui) return;   // ушли со страницы, пока ждали
+    if (gen !== st.gen || !st.active || !ui) { if (gen === st.gen) st.starting = false; return; }   // ушли со страницы, пока ждали
     st.playBase = save && +save.gt || 0;
     let host;
     try {
       const v = info && /^[0-9a-f]{6,16}$/.test(String(info.id || '')) ? '?v=' + info.id : '';
       host = await import(BASE() + 'engine-host.js' + v);
     } catch (e) { report('import', e && e.message); showError('import', e); st.starting = false; return; }
-    if (!st.active || st.mode !== mode || !ui) return;
+    if (gen !== st.gen || !st.active || !ui) return;
     try {
       const look = lookNow(), g = gfxNow().id;
       st.look = look;
@@ -434,7 +435,7 @@
         quality: g === 'max' || g === 'mid' || g === 'low' ? g : touchDev() ? 'low' : '', session: sessionMsg(), look, save: save && save.bytes, wardrobe: mode === 'wardrobe',
         onProgress: progress, onMessage: onMsg,
       });
-      if (!st.active || st.mode !== mode || !ui) { h.dispose(); return; }
+      if (gen !== st.gen || !st.active || !ui) { h.dispose(); return; }
       st.h = h; st.t0 = performance.now();
     } catch (e) {
       const msg = String(e && e.message || e);
@@ -464,7 +465,7 @@
     // последний образ — сразу, не ждать 1,5 с
     if (st.lookT) { clearTimeout(st.lookT); st.lookT = 0; const [b, t] = st.lastLook.split('|'); if (b) keepLook(b, t || ''); }
     try { h && h.dispose(); } catch (e) {}
-    st.h = null; st.active = false; st.mode = ''; st.t0 = 0;
+    st.h = null; st.active = false; st.mode = ''; st.t0 = 0; st.gen++;
     if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
     if (ui) { ui.box.remove(); ui = null; }
     document.body.classList.remove('hub-on', 'e2-calm');
