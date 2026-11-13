@@ -101,7 +101,19 @@ async function main() {
   let fly = false, third = true;
   const stick = { id: -1, x0: 0, y0: 0, sx: 0, sy: 0 }, look = { id: -1, x: 0, y: 0 };
   let touchJump = false, orbitHeld = false;
-  const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16 };
+  const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64 };
+  // EP7 the game layer (a scene with a `game` block): the HUD is drawn and hit tested by the engine; the page forwards
+  // keys / pointers and keeps the world's save in this browser (local storage; the site's host may use save() instead)
+  const game = app.game_on();
+  state.game = game;
+  const mouse = { act: false, use: false };
+  const saveKey = 'd37.game.' + (sceneText.match(/name:\s*"([^"]+)"/) || [0, 'world'])[1];
+  if (game) {
+    app.game_set_touch(TOUCH);
+    try { const t = localStorage.getItem(saveKey); if (t) app.game_load(t); } catch (e) { /* storage blocked: a fresh world */ }
+    state.gameSaves = 0;
+  }
+  const toCanvas = (e) => [e.clientX * canvas.width / Math.max(1, canvas.clientWidth), e.clientY * canvas.height / Math.max(1, canvas.clientHeight)];
   function publish() {
     const k = (c) => keys.has(c);
     let forward = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0);
@@ -117,6 +129,8 @@ async function main() {
     if (k('ControlLeft') || k('ControlRight') || k('KeyC')) b |= BTN.crouch;
     if (fly) b |= BTN.fly;
     if (planet && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
+    if (game && (mouse.act || k('KeyE'))) b |= BTN.act;
+    if (game && mouse.use) b |= BTN.use;
     app.set_move(sx, sf, b);
   }
   state.press = (code, ms) => { keys.add(code); publish(); onKey(code); setTimeout(() => { keys.delete(code); publish(); if (code === 'KeyM') app.set_mouth_test(0); }, ms || 120); };   // tests
@@ -131,6 +145,7 @@ async function main() {
     if (code === 'KeyG') { body = NEXT_BODY[body] || 'girl'; run('character ' + body); }
     if (code === 'KeyN') { sine = !sine; run(sine ? 'mouth sine' : 'mouth 0'); }
     if (code === 'KeyP') { palette = (palette + 1) % 8; run('palette ' + palette); }
+    if (game && app.game_key(code)) { if (app.game_menu_open() && document.pointerLockElement === canvas) document.exitPointerLock(); return; }
     if (/^Digit[1-8]$/.test(code)) { palette = Number(code.slice(5)) - 1; run('palette ' + palette); }
     if (code === 'KeyM') app.set_mouth_test(1);
     if (code === 'F6' || code === 'F7' || code === 'F8') { view = { F6: 0, F7: 1, F8: 2 }[code]; run('view ' + VIEWS[view]); }
@@ -212,15 +227,62 @@ async function main() {
         box = document.createElement('div'); box.className = 'arow'; admin.appendChild(box);
       }
       const b = document.createElement('button'); b.textContent = it.label; b.dataset.cmd = it.cmd;
-      b.addEventListener('click', (e) => { e.stopPropagation(); status.textContent = run(it.cmd); syncWardrobe(); });
+      b.addEventListener('click', (e) => {
+        e.stopPropagation(); status.textContent = run(it.cmd); syncWardrobe();
+        if (it.cmd.startsWith('tune page')) toggleTune();
+      });
       box.appendChild(b);
     }
+    // EP7: the page «Настройка вида» — one slider per look tuning number (app.tune_json(); the same table as the native
+    // menu and tuning/look.ron); every change is an admin command `tune <key> <value>`, kept in this browser
+    const tune = document.createElement('div'); tune.id = 'atune'; tune.style.display = 'none'; admin.appendChild(tune);
+    state.tuneBox = tune;
     // the page's own: the mouth by the microphone (the voice server feeds the same input later)
     const mic = document.createElement('button'); mic.textContent = '🎤 Рот по голосу'; mic.id = 'amic';
     mic.addEventListener('click', (e) => { e.stopPropagation(); startMic().then((m) => { status.textContent = m; }); });
     box.appendChild(mic);
     const status = document.createElement('div'); status.className = 'astatus'; admin.appendChild(status);
   }
+  function tuneSave() {
+    try { const m = {}; for (const r of JSON.parse(app.tune_json())) m[r.key] = r.value; localStorage.setItem('d37.tune', JSON.stringify(m)); } catch (e) { /* storage blocked */ }
+  }
+  function buildTune() {
+    const box = state.tuneBox; if (!box) return;
+    box.textContent = '';
+    const h = document.createElement('div'); h.className = 'agroup'; h.textContent = 'Настройка вида (свет, небо, персонаж)'; box.appendChild(h);
+    let group = '';
+    for (const r of JSON.parse(app.tune_json())) {
+      if (r.group !== group) { group = r.group; const g = document.createElement('div'); g.className = 'agroup'; g.textContent = group; box.appendChild(g); }
+      const row = document.createElement('label'); row.style.cssText = 'display:block;font-size:12px;margin:3px 0';
+      const name = document.createElement('div'); row.appendChild(name);
+      const show = (v) => { name.textContent = r.label + ': ' + (Math.round(v * 1000) / 1000); };
+      show(r.value);
+      const inp = document.createElement('input'); inp.type = 'range'; inp.min = r.min; inp.max = r.max; inp.step = (r.max - r.min) / 200; inp.value = r.value;
+      inp.style.cssText = 'width:100%;touch-action:none';
+      inp.addEventListener('input', (e) => { e.stopPropagation(); run('tune ' + r.key + ' ' + inp.value); show(Number(inp.value)); tuneSave(); });
+      row.appendChild(inp); box.appendChild(row);
+    }
+    const rowb = document.createElement('div'); rowb.className = 'arow'; box.appendChild(rowb);
+    const text = document.createElement('textarea'); text.readOnly = true; text.style.cssText = 'display:none;width:100%;height:160px;font:11px monospace;margin-top:6px';
+    const bt = document.createElement('button'); bt.textContent = 'Текст для файла tuning/look.ron';
+    bt.addEventListener('click', (e) => { e.stopPropagation(); text.value = app.tune_text(); text.style.display = 'block'; text.select(); });
+    const br = document.createElement('button'); br.textContent = 'Сброс';
+    br.addEventListener('click', (e) => { e.stopPropagation(); run('tune reset'); try { localStorage.removeItem('d37.tune'); } catch (x) { /* storage blocked */ } buildTune(); });
+    rowb.appendChild(bt); rowb.appendChild(br); box.appendChild(text);
+  }
+  function toggleTune(on) {
+    const box = state.tuneBox; if (!box) return;
+    const show = on === undefined ? box.style.display !== 'block' : on;
+    if (show) buildTune();
+    box.style.display = show ? 'block' : 'none';
+    if (show) box.scrollIntoView({ block: 'start' });
+  }
+  state.toggleTune = toggleTune;
+  // the look tuning of an earlier visit (this browser only)
+  try {
+    const t = JSON.parse(localStorage.getItem('d37.tune') || 'null');
+    if (t) for (const k of Object.keys(t)) if (/^[a-z_]+$/.test(k) && Number.isFinite(Number(t[k]))) run('tune ' + k + ' ' + Number(t[k]));
+  } catch (e) { /* storage blocked or old text */ }
   function toggleAdmin(on) {
     const show = on === undefined ? admin.style.display !== 'block' : on;
     if (show && !admin.childElementCount) buildAdmin();
@@ -270,13 +332,26 @@ async function main() {
   // the mouse: pointer lock where the browser gives it; embedded browsers refuse it — then holding the button and
   // dragging looks around (both paths call the same add_look)
   let drag = false;
-  canvas.addEventListener('click', () => { if (!TOUCH && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging still works */ } } });
-  canvas.addEventListener('mousedown', () => { if (!TOUCH) drag = true; });
-  addEventListener('mouseup', () => { drag = false; });
+  canvas.addEventListener('click', () => { if (!TOUCH && !(game && app.game_menu_open()) && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging still works */ } } });
+  canvas.addEventListener('contextmenu', (e) => { if (game) e.preventDefault(); });
+  canvas.addEventListener('mousedown', (e) => {
+    if (TOUCH) return;
+    if (game) {
+      const [x, y] = toCanvas(e);
+      // a menu or the tray takes the click; with the pointer locked: left = the action, right = place / eat
+      if (document.pointerLockElement !== canvas && app.game_pointer(x, y, 0, 1)) { app.game_pointer(x, y, 2, 1); return; }
+      if (document.pointerLockElement === canvas) { if (e.button === 0) mouse.act = true; if (e.button === 2) mouse.use = true; publish(); return; }
+    }
+    drag = true;
+  });
+  addEventListener('mouseup', (e) => { drag = false; if (game) { if (e.button === 0) mouse.act = false; if (e.button === 2) mouse.use = false; publish(); } });
   addEventListener('blur', () => { drag = false; });
   // the third-person zoom: the mouse wheel (as the site's «Мир Денчика»)
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
-  addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas || drag) app.add_look(e.movementX, e.movementY); });
+  addEventListener('mousemove', (e) => {
+    if (game && app.game_menu_open()) { const [x, y] = toCanvas(e); app.game_pointer(x, y, 1, 1); return; }
+    if (document.pointerLockElement === canvas || drag) app.add_look(e.movementX, e.movementY);
+  });
 
   // buttons (mouse and touch alike): «орбита ↔ земля» is held while pressed (the engine takes the press), full screen
   const hold = (el, set) => {
@@ -291,7 +366,9 @@ async function main() {
     const el = document.documentElement;
     if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
   });
-  hint.textContent = TOUCH
+  hint.textContent = game
+    ? (TOUCH ? 'Слева — идти · справа — смотреть · кнопки: ДЕЙСТВИЕ, СУМКА, РЕМЕСЛО' : 'ЛКМ — рубить / брать / ставить · ПКМ — поставить / съесть · 1-8 — в руку · Q — сумка · T — ремесло · R — повернуть · E — действие')
+    : TOUCH
     ? (planet ? 'Слева — лететь / идти · справа — смотреть · 🌍 — орбита ↔ земля' : 'Слева — идти (до упора — бег) · справа — смотреть')
     : 'Осмотреться: нажми на картинку или зажми кнопку мыши и веди · W A S D — ' + (planet ? 'лететь / идти · O — орбита ↔ земля · Shift — быстро' : 'ходить · Shift — бег · Пробел — прыжок · F — полёт');
   if (TOUCH) {
@@ -299,13 +376,16 @@ async function main() {
     const jump = $('jump');
     jump.style.display = 'flex';
     hold(jump, (v) => { touchJump = v; });
+    const hudTouch = new Set();
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse') return;
       e.preventDefault();
+      if (game) { const [x, y] = toCanvas(e); if (app.game_pointer(x, y, 0, e.pointerId)) { hudTouch.add(e.pointerId); publish(); return; } }
       if (e.clientX < innerWidth / 2 && stick.id === -1) { stick.id = e.pointerId; stick.x0 = e.clientX; stick.y0 = e.clientY; stick.sx = 0; stick.sy = 0; }
       else if (look.id === -1) { look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; }
     });
     canvas.addEventListener('pointermove', (e) => {
+      if (hudTouch.has(e.pointerId)) { const [x, y] = toCanvas(e); app.game_pointer(x, y, 1, e.pointerId); return; }
       if (e.pointerId === stick.id) {
         stick.sx = Math.max(-1, Math.min(1, (e.clientX - stick.x0) / R));
         stick.sy = Math.max(-1, Math.min(1, (stick.y0 - e.clientY) / R));
@@ -316,11 +396,14 @@ async function main() {
       }
     });
     const end = (e) => {
+      if (hudTouch.has(e.pointerId)) { hudTouch.delete(e.pointerId); const [x, y] = toCanvas(e); app.game_pointer(x, y, 2, e.pointerId); publish(); return; }
       if (e.pointerId === stick.id) { stick.id = -1; stick.sx = 0; stick.sy = 0; publish(); }
       if (e.pointerId === look.id) look.id = -1;
     };
     for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, end);
   }
+  // the game draws its own hints and tray at the bottom: the page's help line goes to the top for a few seconds
+  if (game) { hint.style.bottom = 'auto'; hint.style.top = '52px'; setTimeout(() => { hint.style.display = 'none'; }, 9000); }
   if (q.get('hud') === '1') hud.style.display = 'block';
   if (q.get('holes') === '1') { const pw = 480; app.enable_hole_probe(pw, Math.max(16, Math.round(pw * canvas.height / Math.max(1, canvas.width)))); }
   publish();
@@ -371,6 +454,8 @@ async function main() {
       // a surface that had to be configured again is not an error; anything else stops the page
       if (!String(e).includes('reconfigured')) { fail(e); return; }
     }
+    // the game's autosave: keep the newest text in this browser
+    if (game) { const t = app.game_save(); if (t) { try { localStorage.setItem(saveKey, t); state.gameSaves++; } catch (e) { /* storage full / blocked */ } } }
     acc += now - last; last = now; n++;
     if (now - lastHud > 500) {
       state.fps = n * 1000 / Math.max(acc, 1); acc = 0; n = 0; lastHud = now;

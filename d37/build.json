@@ -1,13 +1,13 @@
 {
- "id": "6bde0d4157",
+ "id": "66838baed0",
  "bridge": 1,
- "wasm_raw": 9081361,
- "made": "2026-11-13T07:59:17.262Z",
+ "wasm_raw": 9672319,
+ "made": "2026-11-13T10:10:26.708Z",
  "files": {
-  "d37-page.js": 27650,
+  "d37-page.js": 34187,
   "d37-terrain-worker.js": 2135,
-  "d37_web.js": 165745,
-  "d37_web_bg.wasm": 9081361,
+  "d37_web.js": 171128,
+  "d37_web_bg.wasm": 9672319,
   "index.html": 4597,
   "LICENSES.txt": 224,
   "scenes/crowd.ron": 540,
@@ -21,7 +21,8 @@
   "scenes/planet_water.ron": 4841,
   "scenes/ridge.ron": 1114,
   "scenes/shore.ron": 1146,
+  "scenes/valley.ron": 1171,
   "scenes/yard.ron": 896,
-  "engine-host.js": 25351
+  "engine-host.js": 28382
  }
 }

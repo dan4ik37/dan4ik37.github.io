@@ -74,7 +74,7 @@ async function compileWasm(url, rawSize, onBytes) {
 }
 
 // Start the engine inside o.root (an element the page sized; it gets position:relative children).
-// o: { root, scene: 'planet' | 'planet_ground', rawSize, gl, quality, session, look: {body, text}, save: Uint8Array,
+// o: { root, scene: 'planet' | 'planet_ground' | 'valley' (EP7: the game), rawSize, gl, quality, session, look: {body, text}, save: Uint8Array,
 //      wardrobe: bool, workers: number, onMessage(msg), onProgress({phase, done, total}) }
 export async function start(o) {
   const root = o.root;
@@ -97,7 +97,7 @@ export async function start(o) {
   const module = await compileWasm(HERE('d37_web_bg.wasm'), o.rawSize || 0, (d, t) => progress('wasm', d, t));
   await init({ module_or_path: module });
   if (bridge_version() !== BRIDGE) throw new Error('bridge version ' + bridge_version() + ', the page speaks ' + BRIDGE);
-  const sceneName = o.scene === 'planet_ground' ? 'planet_ground' : 'planet';
+  const sceneName = o.scene === 'planet_ground' || o.scene === 'valley' ? o.scene : 'planet';
   const res = await fetch(HERE('scenes/' + sceneName + '.ron'));
   if (!res.ok) throw new Error('scene: HTTP ' + res.status);
   const sceneText = await res.text();
@@ -142,6 +142,14 @@ export async function start(o) {
   }
   app.load_scene(sceneText, st.pool.length > 0);
   const planet = app.is_planet();
+  // EP7 the game layer (a scene with a `game` block): the HUD is drawn and hit tested by the engine; this glue only
+  // forwards keys / pointers (the same rules as the engine's page d37-page.js). Its save rides in save() (GAME section).
+  const game = app.game_on();
+  st.game = game;
+  if (game) app.game_set_touch(touch);
+  const mouse = { act: false, use: false };
+  const toCanvas = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * canvas.width / Math.max(1, r.width), (e.clientY - r.top) * canvas.height / Math.max(1, r.height)]; };
+  const menuOpen = () => { try { return game && st.app.game_menu_open(); } catch (e) { return false; } };
   for (const s of st.pool) s.w.postMessage({ type: 'init', scene: sceneText, planet, module });
   const send = (m) => {
     if (!st.app) return false;
@@ -152,7 +160,7 @@ export async function start(o) {
   if (o.wardrobe) send({ t: 'wardrobe', on: true });
 
   // ── input: the held keys -> one action state (the same as the engine's test page d37-page.js) ──
-  const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16 };
+  const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64 };
   let fly = false, third = true, body = (o.look && o.look.body) || 'girl', touchJump = false, orbitHeld = false;
   const stick = { id: -1, x0: 0, y0: 0, sx: 0, sy: 0 }, look = { id: -1, x: 0, y: 0 };
   const NEXT_BODY = { girl: 'boy', boy: 'mannequin', mannequin: 'girl' };
@@ -170,7 +178,9 @@ export async function start(o) {
     if (k('ShiftLeft') || k('ShiftRight')) b |= BTN.run;
     if (k('ControlLeft') || k('ControlRight') || k('KeyC')) b |= BTN.crouch;
     if (fly) b |= BTN.fly;
-    if (planet && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
+    if (planet && !game && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
+    if (game && (mouse.act || k('KeyE'))) b |= BTN.act;
+    if (game && mouse.use) b |= BTN.use;
     st.app.set_move(sx, fw, b);
   }
   const run = (cmd) => { try { const r = st.app.admin(cmd); const m = /^character (\w+)$/.exec(cmd); if (m) body = m[1]; return r; } catch (e) { return 'отказ: ' + e; } };
@@ -185,17 +195,33 @@ export async function start(o) {
       if (e.code === 'KeyF') fly = !fly;
       if (e.code === 'KeyG') run('character ' + (NEXT_BODY[body] || 'girl'));
       if (e.code === 'KeyB') send({ t: 'wardrobe', on: !wardrobeShown });
+      // the game takes digits, R, Q / I, T, Esc in a menu (a menu frees the mouse)
+      if (game) { try { if (st.app.game_key(e.code)) { if (menuOpen() && document.pointerLockElement === canvas) document.exitPointerLock(); e.preventDefault(); } } catch (er) { /* not a game key */ } }
     }
     keys.add(e.code); publish();
   }, true);
   on(window, 'keyup', (e) => { if (keys.delete(e.code)) publish(); }, true);
   on(window, 'blur', () => { keys.clear(); drag = false; publish(); });
   let drag = false;
-  on(canvas, 'click', () => { canvas.focus({ preventScroll: true }); if (!touch && !wardrobeShown && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging works */ } } });
-  on(canvas, 'mousedown', () => { if (!touch) drag = true; });
-  on(window, 'mouseup', () => { drag = false; });
+  on(canvas, 'click', () => { canvas.focus({ preventScroll: true }); if (!touch && !wardrobeShown && !menuOpen() && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging works */ } } });
+  on(canvas, 'contextmenu', (e) => { if (game) e.preventDefault(); });
+  on(canvas, 'mousedown', (e) => {
+    if (touch) return;
+    if (game && live()) {
+      const [x, y] = toCanvas(e);
+      // a menu or the tray takes the click; with the pointer locked: left = the action, right = place / eat
+      if (document.pointerLockElement !== canvas && st.app.game_pointer(x, y, 0, 1)) { st.app.game_pointer(x, y, 2, 1); return; }
+      if (document.pointerLockElement === canvas) { if (e.button === 0) mouse.act = true; if (e.button === 2) mouse.use = true; publish(); return; }
+    }
+    drag = true;
+  });
+  on(window, 'mouseup', (e) => { drag = false; if (game) { if (e.button === 0) mouse.act = false; if (e.button === 2) mouse.use = false; publish(); } });
   on(canvas, 'wheel', (e) => { e.preventDefault(); st.app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
-  on(window, 'mousemove', (e) => { if (live() && (document.pointerLockElement === canvas || drag)) st.app.add_look(e.movementX, e.movementY); });
+  on(window, 'mousemove', (e) => {
+    if (!live()) return;
+    if (menuOpen()) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 1, 1); return; }
+    if (document.pointerLockElement === canvas || drag) st.app.add_look(e.movementX, e.movementY);
+  });
 
   // buttons over the canvas (touch first; the mouse can use them too): jump, orbit <-> ground, wardrobe
   const button = (cls, text, title) => { const b = add(el('button', 'd37h-btn ' + cls, text)); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); return b; };
@@ -206,27 +232,33 @@ export async function start(o) {
   };
   const bWard = button('d37h-ward', '👕', 'Гардероб (B)');
   bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
-  if (planet) hold(button('d37h-orbit', '🌍', 'Орбита ↔ земля (O)'), (v) => { orbitHeld = v; });
+  if (planet && !game) hold(button('d37h-orbit', '🌍', 'Орбита ↔ земля (O)'), (v) => { orbitHeld = v; });
   if (touch) {
     hold(button('d37h-jump', '⤒', 'Прыжок'), (v) => { touchJump = v; });
     const R = 56;
+    const hudTouch = new Set();
     on(canvas, 'pointerdown', (e) => {
       if (e.pointerType === 'mouse') return;
       e.preventDefault();
+      if (game) { const [x, y] = toCanvas(e); if (st.app.game_pointer(x, y, 0, e.pointerId)) { hudTouch.add(e.pointerId); publish(); return; } }
       const r = canvas.getBoundingClientRect();
       if (e.clientX - r.left < r.width / 2 && stick.id === -1) { stick.id = e.pointerId; stick.x0 = e.clientX; stick.y0 = e.clientY; stick.sx = 0; stick.sy = 0; }
       else if (look.id === -1) { look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; }
     });
     on(canvas, 'pointermove', (e) => {
+      if (hudTouch.has(e.pointerId)) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 1, e.pointerId); return; }
       if (e.pointerId === stick.id) { stick.sx = Math.max(-1, Math.min(1, (e.clientX - stick.x0) / R)); stick.sy = Math.max(-1, Math.min(1, (stick.y0 - e.clientY) / R)); publish(); }
       else if (e.pointerId === look.id) { st.app.add_look((e.clientX - look.x) * 2.5, (e.clientY - look.y) * 2.5); look.x = e.clientX; look.y = e.clientY; }
     });
-    const end = (e) => { if (e.pointerId === stick.id) { stick.id = -1; stick.sx = 0; stick.sy = 0; publish(); } if (e.pointerId === look.id) look.id = -1; };
+    const end = (e) => { if (hudTouch.has(e.pointerId)) { hudTouch.delete(e.pointerId); const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 2, e.pointerId); publish(); return; } if (e.pointerId === stick.id) { stick.id = -1; stick.sx = 0; stick.sy = 0; publish(); } if (e.pointerId === look.id) look.id = -1; };
     on(canvas, 'pointerup', end); on(canvas, 'pointercancel', end);
   }
-  const hint = add(el('div', 'd37h-hint', touch
+  const hint = add(el('div', 'd37h-hint', game
+    ? (touch ? 'Слева — идти · справа — смотреть · кнопки: ДЕЙСТВИЕ, СУМКА, РЕМЕСЛО' : 'Нажми на картинку · ЛКМ / E — рубить, брать, ставить · ПКМ — поставить / съесть · 1-8 — в руку · Q — сумка · T — ремесло · R — повернуть')
+    : touch
     ? (planet ? 'Слева — идти / лететь · справа — смотреть · 🌍 — на землю и обратно · 👕 — гардероб' : 'Слева — идти · справа — смотреть')
     : 'Нажми на картинку — мышь смотрит · W A S D — идти · Пробел — прыжок · O — на землю и обратно · B — гардероб · V — вид'));
+  if (game) { hint.style.bottom = 'auto'; hint.style.top = '56px'; }
   setTimeout(() => { hint.style.opacity = '0'; }, 9000);
 
   // ── the wardrobe panel: drawn from app.wardrobe_json(); every choice is one engine command (character / tint) ──
@@ -350,6 +382,8 @@ export async function start(o) {
     // the player's game as bytes (bridge::SaveV1); empty when the engine is gone
     save() { try { return st.app && !st.dead ? st.app.save() : new Uint8Array(0); } catch (e) { return new Uint8Array(0); } },
     stats() { try { return st.app ? JSON.parse(st.app.stats()) : null; } catch (e) { return null; } },
+    // EP7: the game's numbers (items, parts, saves...; null without a game layer)
+    gameStats() { try { return st.app && game ? JSON.parse(st.app.game_stats()) : null; } catch (e) { return null; } },
     // a DOM sheet over the world (chat, menu): the keys stop reaching the game
     input(enabled) { st.inputOn = !!enabled; if (!enabled) { keys.clear(); if (document.pointerLockElement === canvas) document.exitPointerLock(); } publish(); },
     pause() { if (st.paused || st.dead) return; st.paused = true; keys.clear(); publish(); cancelAnimationFrame(st.raf); st.raf = 0; if (document.pointerLockElement === canvas) document.exitPointerLock(); },
