@@ -395,7 +395,9 @@ export async function start(o) {
   function spawnOnce() {
     if (spawned || !game) return;
     spawned = true;
-    const cmds = o.newWorld ? ['game progress new'] : o.skipTribe ? ['game progress skip tribe'] : o.spawn === 'orbit' ? ['travel orbit'] : o.spawn === 'home' ? ['game place goto home_valley'] : [];
+    // EP8 fix (play check): «Играть» with no world yet starts the path from the cell, like «Новый мир»
+    const fresh = o.scene === 'valley' && !(o.save && o.save.length) && !o.skipTribe && o.spawn !== 'orbit';
+    const cmds = o.newWorld || fresh ? ['game progress new'] : o.skipTribe ? ['game progress skip tribe'] : o.spawn === 'orbit' ? ['travel orbit'] : o.spawn === 'home' ? ['game place goto home_valley'] : [];
     for (const c of cmds) { const r = run(c); if (typeof r === 'string' && /^отказ|error|no such/i.test(r)) emit({ t: 'error', code: 'spawn', msg: (c + ': ' + r).slice(0, 200) }); }
   }
   publish();
