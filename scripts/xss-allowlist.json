@@ -7631,6 +7631,88 @@
    "xs": [
     "href('#/games/studio')"
    ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "flush",
+   "k": "sink:src [img]",
+   "c": "url-checked",
+   "n": "T-164: img.src только после IMG_RE /^data:image/(png|webp|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$/ (MEDIA кладётся после проверки); сервер (cf_media_add) проверяет то же",
+   "xs": [
+    "m.data"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "playTogether",
+   "k": "markup:text",
+   "c": "const",
+   "n": "значок игры из таблицы GAMES",
+   "xs": [
+    "g.icon"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "chanTop",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "цепочка DS.x.chanTop из community2.js (строка «📅 События» — уже экранирована там)",
+   "xs": [
+    "top0 ? top0(mode, srv, selCh) : ''"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "ccard",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "части готовой карточки X.ccard из community2.js (экранирована там); метки — e()",
+   "xs": [
+    "h.slice(0, i)",
+    "h.slice(i)"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "voiceDraw",
+   "k": "markup:url",
+   "c": "regex",
+   "n": "go из рассылки проверен onBc: /^(hub|#/games/[a-z0-9]+/(coop/)?[a-z0-9]{4,12})$/, и ещё e()",
+   "xs": [
+    "x.go === 'hub' ? '/hub/play' : e(x.go)"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "tabLevels",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "X.annivBadge: числа и дата через e()",
+   "xs": [
+    "X.annivBadge(me.since)",
+    "X.annivBadge(x.since)"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "fillCards",
+   "k": "sink:outerHTML",
+   "c": "html-helper",
+   "n": "MV.cardHtml экранирует всё; обёртка ds-fun.js добавляет только постоянную карточку «Долина D37»",
+   "xs": [
+    "MV.cardHtml({ t: 'invite', code })"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "html",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "MV.cardHtml экранирует всё; обёртка ds-fun.js добавляет только постоянную карточку «Долина D37»",
+   "xs": [
+    "r.cards.map(MV.cardHtml).join('')"
+   ]
   }
  ]
 }
