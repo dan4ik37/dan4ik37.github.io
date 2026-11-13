@@ -7571,6 +7571,36 @@
     "alt(b.cap)",
     "b.cap ? alt(b.cap) : esc(providerName(b.p))"
    ]
+  },
+  {
+   "f": "js/features/hub-catalog.js",
+   "fn": "card",
+   "k": "sink:href [a]",
+   "c": "url-checked",
+   "n": "T-163: витрина — константы SHOW (свои пути /hub/…, /play/…); игры игроков — свой путь D37Route.toPath(\"#/games/studio|studio3d|unity/play/\" + encodeURIComponent(id))",
+   "xs": [
+    "g.href"
+   ]
+  },
+  {
+   "f": "js/features/hub-catalog.js",
+   "fn": "card",
+   "k": "sink:src [im]",
+   "c": "const",
+   "n": "T-163: картинка только у витрины Денчика — константы SHOW (img/games/<id>.png); у игр игроков картинки нет",
+   "xs": [
+    "g.img"
+   ]
+  },
+  {
+   "f": "js/features/hub-catalog.js",
+   "fn": "makeCard",
+   "k": "sink:href [g]",
+   "c": "const",
+   "n": "T-163: «Создать свою» — свой путь Студии игр",
+   "xs": [
+    "href('#/games/studio')"
+   ]
   }
  ]
 }

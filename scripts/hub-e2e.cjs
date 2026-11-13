@@ -2,6 +2,9 @@
 //   guest   — меню (телефон и ПК, тёмная и светлая), «Играть» → экран загрузки → игра движка внутри сайта; гардероб: «Мальчик» + цвет
 //             → образ в настройках браузера; выход — мир в IndexedDB; перезагрузка → /hub/wardrobe: тот же образ в движке; /hub/play —
 //             продолжение с сохранения
+//             T-163: плашка «кто ты в игре», строка «Игры игроков» и страница «Все» (/hub/games); лёгкий гардероб (/hub/wardrobe —
+//             только персонаж, без планеты: is_planet = false, время до персонажа); «Творческий режим» — свой мир (/hub/creative,
+//             своё сохранение 'creative', главный мир не трогает)
 //   phone   — телефон с касаниями: кнопки ⤒ 🌍 👕 на экране, графика «быстро», зажал 🌍 — полёт с орбиты вниз до посадки («приземлился»)
 //   account — поддельный вход (currentUser в странице; ответы Supabase подменяет сам тест через Fetch — в базу ничего не пишется):
 //             образ уходит в аккаунт (prefs_set), мир — в облако (cloud_begin → файл → cloud_commit); браузер очищен → вход → образ
@@ -156,13 +159,25 @@ async function playUntilLoaded(C, label){
           await C.send('Page.navigate', { url: site.base + '/hub' });
           ok(await C.until(READY + ` && document.querySelectorAll('#hub-page .hub-tile').length >= 6`, 60000), 'меню /hub: 6 плиток');
           ok(await C.ev(`document.querySelector('.bt-item[data-route="hub"]') && !document.querySelector('.bt-item[data-route="hub"]').hidden && getComputedStyle(document.getElementById('hub-page')).display !== 'none'`), 'нижнее меню телефона: «Играть» видно, раздел открыт');
-          ok(await C.ev(`[...document.querySelectorAll('#hub-page .hub-tile')].map(t => t.dataset.tile).join(',') === 'play,wardrobe,planet,world,studio,mini,invite,howto,gfx,save'`), 'плитки: Играть, Гардероб, Полёт над планетой, Мир Денчика, Студия, Мини-игры, Позвать друга, Как играть, Графика, Сохранение');
+          ok(await C.ev(`[...document.querySelectorAll('#hub-page .hub-tile')].map(t => t.dataset.tile).join(',') === 'play,wardrobe,creative,world,studio,mini,invite,howto,gfx,save'`), 'плитки: Играть, Гардероб, Творческий режим, Мир Денчика, Студия, Мини-игры, Позвать друга, Как играть, Графика, Сохранение');
+          // T-163: «кто ты в игре» и строка «Игры игроков» (игроки ещё ничего не выложили — витрина Денчика и «Сделай первую игру»)
+          ok(await C.ev(`!!document.querySelector('.hc-me .hc-who') && !!document.querySelector('.hc-me [data-act="invite"]') && !!document.querySelector('.hc-me a[href="/hub/wardrobe"]')`), 'плашка «Ты играешь как…»: персонаж, гардероб, «Позвать друга»');
+          ok(await C.until(`/в игре|ещё не начат/.test(document.querySelector('.hc-worlds')?.textContent || '') && !!document.querySelector('.hc-fr b')`, 5000), 'плашка: твой мир, творческий мир, друзья онлайн', await C.ev(`document.querySelector('.hc-me-tx')?.textContent`));
+          ok(await C.until(`document.querySelectorAll('[data-row="people"] .hc-card').length >= 3`, 15000), 'строка «Игры игроков» показана', await C.ev(`({ n: document.querySelectorAll('[data-row="people"] .hc-card').length, players: document.querySelector('[data-row="people"]')?.dataset.count })`));
+          ok(await C.ev(`(() => { const r = document.querySelector('[data-row="people"]'); if (+r.dataset.count > 0) return !!r.querySelector('a.hc-card .hc-by'); return !!r.querySelector('.hc-make a[href="/play/studio3d"]') && /Сделай первую игру/.test(r.textContent) && [...r.querySelectorAll('a.hc-card .hc-by')].every(b => /от Денчика/.test(b.textContent)); })()`), 'нет игр игроков — «Сделай первую игру» и честно подписанные игры Денчика (не выдаём за игры игроков)');
+          ok(await C.ev(`getComputedStyle(document.querySelector('.hc-strip')).overflowX === 'auto' && document.querySelector('.hc-strip').scrollWidth > document.querySelector('.hc-strip').clientWidth`), 'строка листается вбок (телефон)');
+          await C.ev(GO('/hub/games'));
+          ok(await C.until(`location.pathname === '/hub/games' && document.querySelectorAll('.hc-filt .hc-chip').length >= 6 && document.querySelectorAll('.hc-grid .hc-card').length >= 1`, 15000), '«Все» (/hub/games): фильтры «Популярные / Новые» и жанры, карточки');
+          ok(await C.ev(`(() => { const b = [...document.querySelectorAll('.hc-chip')].find(x => x.dataset.genre === 'place'); b.click(); return document.querySelector('.hc-chip[data-genre="place"]').classList.contains('on'); })()`), 'фильтр жанра «3D-миры» включается');
+          await sleep(400); await C.shot('games_all_phone.png');
+          await C.ev(GO('/hub')); await C.until(`document.querySelectorAll('#hub-page .hub-tile').length >= 6`, 10000);
           ok(await C.ev(`(document.querySelector('[data-tile="howto"]').click(), !!document.querySelector('.hub-sheet .hub-sheet-row'))`), '«Как играть» открывает лист с кнопками');
           await sleep(300); await C.shot('howto_phone.png');
           await C.ev(`(document.querySelector('.hub-sheet-x').click(), true)`);
           ok(await C.ev(`(() => { const t = document.querySelector('[data-tile="gfx"]'); t.click(); const a = localStorage.getItem('d37_hub_gfx'); t.click(); t.click(); t.click(); t.click(); return a === 'max' && !localStorage.getItem('d37_hub_gfx'); })()`), '«Графика»: Авто → Красиво → … → снова Авто');
           ok(await C.ev(`document.querySelector('#hub-page a[href="/play"]') && document.querySelector('#hub-page a[href="/play/world"]') && document.querySelector('#hub-page a[href="/play/studio3d"]') ? true : false`), 'ссылки на Мини-игры, Мир Денчика, Студию');
           await sleep(600); await C.shot('hub_phone_dark.png');
+          await C.ev(`(document.querySelector('[data-row="people"]').scrollIntoView(), true)`); await sleep(500); await C.shot('hub_phone_row.png'); await C.ev(`(scrollTo(0, 0), true)`);
           await C.view(1366, 800, false); await sleep(500); await C.shot('hub_pc_dark.png');
           await C.ev(`localStorage.setItem('d37_theme','light'), true`); await C.send('Page.reload'); await C.until(READY + ` && document.querySelectorAll('#hub-page .hub-tile').length >= 6`, 60000);
           ok(await C.ev(`document.documentElement.getAttribute('data-theme') === 'light'`), 'светлая тема включилась');
@@ -210,10 +225,12 @@ async function playUntilLoaded(C, label){
             const rec = await C.ev(`D37Hub._idb.get('planet').then(r => r ? { n: r.bytes.length, magic: String.fromCharCode(...r.bytes.slice(0, 4)), gt: r.gt } : null)`);
             ok(rec && rec.magic === 'D37S' && rec.n > 40, 'мир сохранён в браузере (IndexedDB, D37S)', rec);
             ok(await C.until(`/в игре/.test(document.querySelector('[data-tile="save"] .hub-ts')?.textContent || '') && /Продолжить/.test(document.querySelector('.hub-cont')?.textContent || '')`, 5000), 'меню: «▶ Продолжить» и плитка «Сохранение» знают про мир');
-            // перезагрузка → сразу в гардероб: образ тот же
+            // перезагрузка → сразу в гардероб (T-163: лёгкий — только персонаж, без планеты): образ тот же
             await C.send('Page.navigate', { url: site.base + '/hub/wardrobe' });
             await C.until(READY, 60000);
+            const tw = Date.now();
             if (await playUntilLoaded(C, 'гардероб после перезагрузки')) {
+              ok(await C.ev(`D37Hub._st.h.state.app.is_planet() === false && D37Hub._st.mode === 'wardrobe' && !document.querySelector('.d37h-orbit') && !document.querySelector('.d37h-jump')`), 'лёгкий гардероб: без планеты, без кнопок полёта и прыжка', { ms: Date.now() - tw, pos: await C.ev(`D37Hub._st.h.stats().pos`) });
               await C.until(`(() => { const l = ${ENGINE_LOOK}; return l && l.body === 'boy'; })()`, 10000);
               const got = await C.ev(ENGINE_LOOK);
               ok(got && got.body === want.body && got.text === want.text, 'после перезагрузки образ тот же', { want, got });
@@ -227,6 +244,20 @@ async function playUntilLoaded(C, label){
               ok(await C.ev(`!!D37Hub._st.resumed && D37Hub._st.resumed.scene === 'valley'`), 'игра продолжилась с сохранения', await C.ev(`D37Hub._st.resumed`));
               ok(await C.until(`(() => { const g = D37Hub._st.h.gameStats(); return g && g.parts === 1; })()`, 8000), 'долина та же: верстак на месте, вещи те же', { want: gBuilt, got: await C.ev(`D37Hub._st.h.gameStats()`) });
               await sleep(2000); await C.shot('game_in_site_phone.png');
+            }
+            // T-163: «Творческий режим» — свой мир: своё сохранение, главный мир (долина) не трогает
+            await C.ev(GO('/hub'));
+            await C.until(`!D37Hub.active && document.querySelectorAll('#hub-page .hub-tile').length >= 6`, 15000);
+            const main0 = await C.ev(`D37Hub._idb.get('planet').then(r => r ? r.at : 0)`);
+            await C.view(1366, 800, false);
+            await C.ev(`document.querySelector('#hub-page a[data-tile="creative"]').click(), true`);
+            if (await playUntilLoaded(C, 'творческий режим')) {
+              ok(await C.ev(`location.pathname === '/hub/creative' && D37Hub._st.mode === 'creative' && D37Hub._st.h.state.app.is_planet() === true && D37Hub._st.h.gameStats() === null && !!document.querySelector('.d37h-orbit')`), 'творческий режим: планета, полёт (🌍), без игрового слоя (без выживания)');
+              await sleep(1500); await C.shot('creative_pc.png');
+              await C.ev(`document.querySelector('.hub-back').click(), true`);
+              ok(await C.until(`!D37Hub.active && location.pathname === '/hub'`, 15000), 'из творческого режима — в меню');
+              const cr = await C.ev(`Promise.all([D37Hub._idb.get('creative'), D37Hub._idb.get('planet')]).then(([c, p]) => ({ c: c ? String.fromCharCode(...c.bytes.slice(0, 4)) : null, main: p ? p.at : 0 }))`);
+              ok(cr.c === 'D37S' && cr.main === main0, 'творческий мир сохранён отдельно (слот creative), главный мир не тронут', cr);
             }
             await C.ev(GO('/hub'));
             await C.until(`!D37Hub.active`, 15000);
