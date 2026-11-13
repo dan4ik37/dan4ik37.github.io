@@ -4619,3 +4619,628 @@ revoke all on function public.dsm_forum_set(bigint, text, boolean, text[]) from 
 grant execute on function public.dsm_forum_set(bigint, text, boolean, text[]) to authenticated;
 revoke all on function public.dsm_post_meta(text, bigint, text, text[]) from public, anon;
 grant execute on function public.dsm_post_meta(text, bigint, text, text[]) to authenticated;
+
+
+-- ═══ часть 13 (ds-people) ═══
+-- ═══ 13. 👤 Люди «как в Дискорде» (T-164, владелец 13.11: «наш ДС до уровня ДС не дотягивает и ему не хватает интересных фишек»):
+--     статус (в сети / не на месте / не беспокоить / невидимка), свой статус (эмодзи + текст + срок), карточка человека (цвет
+--     полосы, «о себе», роли, на сайте с…, общие серверы и друзья, «был в сети» — по его настройке), ник на сервере, значок роли,
+--     друзья (в сети / все / заявки / заблокированные / игнор), группы ЛС до 10 человек (только друзья), игнор (сообщения скрыты).
+--     Безопасность детей: всё личное — через kid_pair_ok / kid_why (age.sql): ребёнок до 13 и взрослый / «без возраста» не видят
+--     друг у друга статус, занятие и «был в сети», не попадают в одну группу; до 9 лет — групп нет. Невидимку не видно никому.
+--     Пишется только функциями ниже (таблицы закрыты), всё проверяет сервер. Без этой части сайт работает как раньше.
+--     Откат одной строкой: в js/features/ds-people.js PEOPLE_ON = false (SQL можно оставить — без интерфейса им никто не пользуется).
+--     Проверка (гостем): /rpc/ds_card {"p_uid":"00000000-0000-0000-0000-000000000000","p_scope":null} → {"ok":false,"reason":"not_found"};
+--     /rpc/ds_friends {} → 401 (42501, только вошедшим); /rest/v1/gdm_messages?select=id&limit=1 → 200 []
+
+create table if not exists public.ds_people (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  status text not null default 'online' check (status in ('online', 'idle', 'dnd', 'invisible')),
+  ctext text not null default '' check (char_length(ctext) <= 80),
+  cemoji text not null default '' check (char_length(cemoji) <= 16),
+  cuntil timestamptz,
+  color text check (color is null or color ~ '^#[0-9a-f]{6}$'),
+  about text not null default '' check (char_length(about) <= 190),
+  seen_vis text not null default 'friends' check (seen_vis in ('all', 'friends', 'nobody')),
+  updated_at timestamptz not null default now()
+);
+alter table public.ds_people enable row level security;   -- читать — только функциями (политик нет)
+
+create table if not exists public.ds_nicks (
+  scope text not null check (scope ~ '^(d37|c[0-9]{1,18})$'),   -- d37 — сервер сайта, c<id> — сообщество
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  nick text not null check (char_length(nick) between 2 and 32),
+  set_by uuid,
+  updated_at timestamptz not null default now(),
+  primary key (scope, user_id)
+);
+alter table public.ds_nicks enable row level security;
+
+create table if not exists public.user_ignores (
+  blocker_id uuid not null references public.profiles(id) on delete cascade,
+  ignored_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, ignored_id),
+  constraint no_self_ignore check (blocker_id <> ignored_id)
+);
+alter table public.user_ignores enable row level security;
+drop policy if exists uignore_read on public.user_ignores;
+create policy uignore_read on public.user_ignores for select using (blocker_id = auth.uid());
+
+alter table public.comm_roles add column if not exists icon text not null default '';
+do $$ begin
+  alter table public.comm_roles add constraint comm_roles_icon_len check (char_length(icon) <= 8);
+exception when duplicate_object then null; end $$;
+
+-- Группы ЛС (до 10 человек, только друзья)
+create table if not exists public.gdm_groups (
+  id bigint generated always as identity primary key,
+  owner_id uuid references public.profiles(id) on delete set null,
+  name text not null default '' check (char_length(name) <= 40),
+  icon text not null default '👥' check (char_length(icon) between 1 and 8),
+  created_at timestamptz not null default now(),
+  last_at timestamptz not null default now(),
+  last_id bigint not null default 0
+);
+create table if not exists public.gdm_members (
+  group_id bigint not null references public.gdm_groups(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  added_by uuid,
+  joined_at timestamptz not null default now(),
+  primary key (group_id, user_id)
+);
+create index if not exists idx_gdm_mem_user on public.gdm_members (user_id);
+create table if not exists public.gdm_messages (
+  id bigint generated always as identity primary key,
+  group_id bigint not null references public.gdm_groups(id) on delete cascade,
+  user_id uuid references public.profiles(id) on delete set null,
+  nick text not null default '',
+  text text not null check (char_length(text) between 1 and 1000),
+  reply_to bigint,
+  deleted boolean not null default false,
+  edited_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_gdm_msg on public.gdm_messages (group_id, id desc);
+create index if not exists idx_gdm_msg_user on public.gdm_messages (user_id, created_at desc);
+alter table public.gdm_groups enable row level security;
+alter table public.gdm_members enable row level security;
+alter table public.gdm_messages enable row level security;
+
+create or replace function public.gdm_is_member(p_gid bigint, p_uid uuid default auth.uid())
+returns boolean language sql stable security definer set search_path = public as $$
+  select p_uid is not null and exists (select 1 from public.gdm_members where group_id = p_gid and user_id = p_uid);
+$$;
+drop policy if exists gdm_g_read on public.gdm_groups;
+create policy gdm_g_read on public.gdm_groups for select using (public.gdm_is_member(id));
+drop policy if exists gdm_m_read on public.gdm_members;
+create policy gdm_m_read on public.gdm_members for select using (public.gdm_is_member(group_id));
+drop policy if exists gdm_msg_read on public.gdm_messages;
+create policy gdm_msg_read on public.gdm_messages for select using (public.gdm_is_member(group_id));
+-- писать — только функциями gdm_* (политик на insert / update / delete нет)
+do $$ begin
+  alter publication supabase_realtime add table public.gdm_messages;
+exception when others then null; end $$;
+
+-- ═══ Помощники ═══
+-- Можно ли p_viewer видеть личное p_uid (статус, занятие, «был в сети»): безопасность детей (гость — как «без возраста»)
+create or replace function public.ds_pair_ok(p_viewer uuid, p_uid uuid)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+begin
+  if p_uid is null then return false; end if;
+  if p_viewer is null then return not public.kidsafe_on() or public.age_group_of(p_uid) <> 'child'; end if;
+  return public.kid_pair_ok(p_viewer, p_uid);
+end $$;
+-- Профиль виден (privacy_profile: all / friends / nobody)
+create or replace function public.ds_vis(p_viewer uuid, p_uid uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(p_viewer = p_uid, false) or coalesce((select case p.privacy_profile when 'all' then true when 'friends' then public.comm_friends(p_viewer, p_uid) else false end
+    from public.profiles p where p.id = p_uid), false);
+$$;
+-- Статус, который видит p_viewer: online / idle / dnd / offline (невидимка и «не на сайте 3 мин» — offline; себе — свой, и invisible)
+create or replace function public.ds_status_of(p_viewer uuid, p_uid uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select case
+    when p_viewer = p_uid then coalesce((select status from public.ds_people where user_id = p_uid), 'online')
+    when coalesce((select privacy_invisible from public.profiles where id = p_uid), false) then 'offline'
+    when coalesce((select status from public.ds_people where user_id = p_uid), 'online') = 'invisible' then 'offline'
+    when not public.ds_pair_ok(p_viewer, p_uid) or public.comm_blocked(p_viewer, p_uid) then 'offline'
+    when not exists (select 1 from public.comm_online where user_id = p_uid and seen_at > now() - interval '3 minutes') then 'offline'
+    else coalesce((select status from public.ds_people where user_id = p_uid), 'online') end;
+$$;
+-- Свой статус (текст + эмодзи), если виден и не истёк
+create or replace function public.ds_custom_of(p_viewer uuid, p_uid uuid)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when d.user_id is null or (d.ctext = '' and d.cemoji = '') or (d.cuntil is not null and d.cuntil <= now()) then null
+    when p_viewer is distinct from p_uid and (d.status = 'invisible' or not public.ds_vis(p_viewer, p_uid) or not public.ds_pair_ok(p_viewer, p_uid)
+      or public.comm_blocked(p_viewer, p_uid)) then null
+    else jsonb_build_object('t', d.ctext, 'e', d.cemoji, 'until', d.cuntil) end
+  from (select 1) x left join public.ds_people d on d.user_id = p_uid;
+$$;
+-- «Был в сети» по настройке человека (все / друзья / никто); невидимка, скрытый профиль, дети ↔ взрослые — нет
+create or replace function public.ds_seen_of(p_viewer uuid, p_uid uuid)
+returns timestamptz language sql stable security definer set search_path = public as $$
+  select case when p_viewer = p_uid then o.seen_at
+    when coalesce(p.privacy_invisible, false) or coalesce(d.status, 'online') = 'invisible' or coalesce(p.privacy_profile, 'all') = 'nobody' then null
+    when not public.ds_pair_ok(p_viewer, p_uid) or public.comm_blocked(p_viewer, p_uid) then null
+    when coalesce(d.seen_vis, 'friends') = 'all' then date_trunc('minute', o.seen_at)
+    when coalesce(d.seen_vis, 'friends') = 'friends' and public.comm_friends(p_viewer, p_uid) then date_trunc('minute', o.seen_at)
+    else null end
+  from public.profiles p left join public.comm_online o on o.user_id = p.id left join public.ds_people d on d.user_id = p.id
+  where p.id = p_uid;
+$$;
+-- Занятие («сейчас играет»): только у тех, кто в сети и не невидимка; профиль виден; ребёнок до 13 — только друзьям
+create or replace function public.ds_act_of(p_viewer uuid, p_uid uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select case when public.ds_status_of(p_viewer, p_uid) in ('offline', 'invisible') then null
+    when p_viewer is distinct from p_uid and not public.ds_vis(p_viewer, p_uid) then null
+    when p_viewer is distinct from p_uid and public.kidsafe_on() and public.age_group_of(p_uid) = 'child' and not public.comm_friends(p_viewer, p_uid) then null
+    else (select nullif(place, '') from public.comm_online where user_id = p_uid) end;
+$$;
+-- Текст: без мата, без ссылок, без разметки
+create or replace function public.ds_text_bad(p text)
+returns text language sql immutable as $$
+  select case when public.comm_bad(p) then 'bad' when public.comm_has_link(p) then 'link' when coalesce(p, '') ~ '[<>]' then 'bad' else null end;
+$$;
+-- Эмодзи: до 16 знаков, без букв и цифр латиницы / кириллицы и пробелов
+create or replace function public.ds_emoji_ok(p text)
+returns boolean language sql immutable as $$
+  select coalesce(p, '') = '' or (char_length(p) <= 16 and p !~ '[A-Za-zА-Яа-яЁё0-9<>&"''[:space:]]');
+$$;
+-- Область сервера: 'd37' / 'c<id>' → id сообщества (null — сайт); неверная — -1
+create or replace function public.ds_scope_cid(p_scope text)
+returns bigint language plpgsql immutable as $$
+begin
+  if p_scope = 'd37' then return null; end if;
+  if coalesce(p_scope, '') ~ '^c[0-9]{1,18}$' then return substr(p_scope, 2)::bigint; end if;
+  return -1;
+end $$;
+
+-- ═══ Свой статус и настройки ═══
+create or replace function public.ds_me()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when auth.uid() is null then jsonb_build_object('ok', false, 'reason', 'auth') else jsonb_build_object('ok', true,
+    'status', coalesce(d.status, 'online'), 'ctext', case when d.cuntil is null or d.cuntil > now() then coalesce(d.ctext, '') else '' end,
+    'cemoji', case when d.cuntil is null or d.cuntil > now() then coalesce(d.cemoji, '') else '' end, 'cuntil', case when d.cuntil > now() then d.cuntil end,
+    'color', d.color, 'about', coalesce(d.about, ''), 'seen_vis', coalesce(d.seen_vis, 'friends'),
+    'incoming', (select count(*) from public.friendships where addressee_id = auth.uid() and status = 'pending')) end
+  from (select 1) x left join public.ds_people d on d.user_id = auth.uid();
+$$;
+
+-- p: { status?, ctext?, cemoji?, minutes? (0 — навсегда; 30 / 60 / 240 / 1440 / 10080), color? ('' — убрать), about?, seen_vis? }
+create or replace function public.ds_status_set(p jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); r public.ds_people%rowtype; v text; m int; w text;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if jsonb_typeof(p) is distinct from 'object' then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  insert into public.ds_people (user_id) values (me) on conflict do nothing;
+  select * into r from public.ds_people where user_id = me for update;
+  if p ? 'status' then
+    v := p->>'status';
+    if v not in ('online', 'idle', 'dnd', 'invisible') then return jsonb_build_object('ok', false, 'reason', 'status'); end if;
+    r.status := v;
+  end if;
+  if p ? 'ctext' or p ? 'cemoji' then
+    v := btrim(coalesce(p->>'ctext', r.ctext));
+    if char_length(v) > 80 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+    w := public.ds_text_bad(v); if w is not null then return jsonb_build_object('ok', false, 'reason', w); end if;
+    r.ctext := v;
+    v := btrim(coalesce(p->>'cemoji', r.cemoji));
+    if not public.ds_emoji_ok(v) then return jsonb_build_object('ok', false, 'reason', 'emoji'); end if;
+    r.cemoji := v;
+    m := coalesce(nullif(p->>'minutes', '')::int, 0);
+    if m not in (0, 30, 60, 240, 1440, 10080) then return jsonb_build_object('ok', false, 'reason', 'minutes'); end if;
+    r.cuntil := case when m = 0 or (r.ctext = '' and r.cemoji = '') then null else now() + make_interval(mins => m) end;
+  end if;
+  if p ? 'color' then
+    v := lower(btrim(coalesce(p->>'color', '')));
+    if v <> '' and v !~ '^#[0-9a-f]{6}$' then return jsonb_build_object('ok', false, 'reason', 'color'); end if;
+    r.color := nullif(v, '');
+  end if;
+  if p ? 'about' then
+    v := btrim(coalesce(p->>'about', ''));
+    if char_length(v) > 190 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+    w := public.ds_text_bad(v); if w is not null then return jsonb_build_object('ok', false, 'reason', w); end if;
+    r.about := v;
+  end if;
+  if p ? 'seen_vis' then
+    v := p->>'seen_vis';
+    if v not in ('all', 'friends', 'nobody') then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+    r.seen_vis := v;
+  end if;
+  update public.ds_people set status = r.status, ctext = r.ctext, cemoji = r.cemoji, cuntil = r.cuntil, color = r.color, about = r.about,
+    seen_vis = r.seen_vis, updated_at = clock_timestamp() where user_id = me;
+  return public.ds_me();
+end $$;
+
+-- ═══ Карточка человека ═══
+-- p_scope: 'd37' / 'c<id>' — открыта на этом сервере (ник на сервере, роли, «на сервере с…»); null — без сервера
+create or replace function public.ds_card(p_uid uuid, p_scope text default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me uuid := auth.uid(); p public.profiles%rowtype; self boolean; fr boolean; vis boolean; blk boolean; cid bigint; st text; d public.ds_people%rowtype;
+  v_srv jsonb; v_mut jsonb; v_mf jsonb; v_mfn int := 0; v_fs text := 'none'; v_why text; staff boolean := public.comm_is_staff(auth.uid());
+begin
+  select * into p from public.profiles where id = p_uid;
+  if p.id is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  self := me is not null and me = p_uid;
+  fr := not self and public.comm_friends(me, p_uid);
+  vis := public.ds_vis(me, p_uid);
+  blk := not self and public.comm_blocked(me, p_uid);
+  select * into d from public.ds_people where user_id = p_uid;
+  st := public.ds_status_of(me, p_uid);
+  cid := public.ds_scope_cid(p_scope);
+  -- сервер: ник, роли, «на сервере с» — только если я там (или команда сайта) и он там
+  if p_scope = 'd37' then
+    v_srv := jsonb_build_object('scope', 'd37', 'nick', (select nick from public.ds_nicks where scope = 'd37' and user_id = p_uid));
+  elsif cid is not null and cid > 0 and (public.comm_role(cid, me) is not null or staff) and public.comm_role(cid, p_uid) is not null then
+    v_srv := jsonb_build_object('scope', p_scope, 'nick', (select nick from public.ds_nicks where scope = p_scope and user_id = p_uid),
+      'crole', public.comm_role(cid, p_uid), 'joined', (select joined_at from public.community_members where community_id = cid and user_id = p_uid),
+      'roles', coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'name', r.name, 'color', r.color, 'icon', r.icon) order by r.position desc, r.id)
+        from public.comm_member_roles mr join public.comm_roles r on r.id = mr.role_id where mr.community_id = cid and mr.user_id = p_uid), '[]'::jsonb));
+  end if;
+  if me is not null and not self and not blk then
+    -- общие серверы (до 8) и общие друзья (до 6 + число; только если профиль виден)
+    select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'icon', c.icon) order by c.members desc), '[]'::jsonb) into v_mut
+      from (select c.id, c.name, c.icon, c.members from public.communities c
+        join public.community_members a on a.community_id = c.id and a.user_id = me
+        join public.community_members b on b.community_id = c.id and b.user_id = p_uid
+        where c.status = 'active' order by c.members desc limit 8) c;
+    if vis then
+      with mine as (select case when requester_id = me then addressee_id else requester_id end as u from public.friendships
+          where status = 'accepted' and (requester_id = me or addressee_id = me)),
+        his as (select case when requester_id = p_uid then addressee_id else requester_id end as u from public.friendships
+          where status = 'accepted' and (requester_id = p_uid or addressee_id = p_uid)),
+        both_ as (select mine.u from mine join his using (u))
+      select (select count(*) from both_),
+        (select coalesce(jsonb_agg(jsonb_build_object('id', pr.id, 'nick', pr.nick)), '[]'::jsonb) from (select pr.id, pr.nick from both_ join public.profiles pr on pr.id = both_.u order by lower(pr.nick) limit 6) pr)
+        into v_mfn, v_mf;
+    end if;
+    select case when f.status = 'accepted' then 'friends' when f.requester_id = me then 'out' else 'in' end into v_fs
+      from public.friendships f where (f.requester_id = me and f.addressee_id = p_uid) or (f.requester_id = p_uid and f.addressee_id = me) limit 1;
+    v_fs := coalesce(v_fs, 'none');
+    v_why := public.kid_why(me, p_uid, false);
+  end if;
+  return jsonb_build_object('ok', true, 'id', p.id, 'nick', p.nick, 'role', coalesce(p.role, 'user'),
+    'status', case when blk and not self then 'offline' else st end,
+    'custom', public.ds_custom_of(me, p_uid),
+    'act', case when blk then null else public.ds_act_of(me, p_uid) end,
+    'seen', case when st = 'offline' then public.ds_seen_of(me, p_uid) end,
+    'color', case when vis then d.color end,
+    'about', case when vis then nullif(coalesce(d.about, ''), '') end,
+    'since', case when vis or staff then p.created_at end,
+    'hidden', not vis,
+    'srv', v_srv, 'mutual', coalesce(v_mut, '[]'::jsonb), 'mfriends', coalesce(v_mf, '[]'::jsonb), 'mfriends_n', v_mfn,
+    'self', self, 'friend', case when self then 'self' else v_fs end, 'blocked', blk and exists (select 1 from public.user_blocks where blocker_id = me and blocked_id = p_uid),
+    'ignored', me is not null and exists (select 1 from public.user_ignores where blocker_id = me and ignored_id = p_uid),
+    'can_dm', fr and not blk and public.kid_why(me, p_uid, true) is null,
+    'can_friend', me is not null and not self and not blk and v_fs = 'none' and v_why is null and public.accepts_friend_requests(p_uid),
+    'why', v_why);
+end $$;
+
+-- Для списка участников: статус, ник на сервере, свой статус (до 300 человек), значки ролей сообщества
+create or replace function public.ds_people_meta(p_scope text, p_ids uuid[])
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me uuid := auth.uid(); cid bigint := public.ds_scope_cid(p_scope); v_list jsonb; v_icons jsonb := '{}'::jsonb;
+begin
+  if cid = -1 then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if cid is not null and public.comm_role(cid, me) is null and not public.comm_is_staff(me) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+  select coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object('id', x.u,
+      's', nullif(public.ds_status_of(me, x.u), 'offline'),
+      'n', (select nick from public.ds_nicks n where n.scope = p_scope and n.user_id = x.u),
+      'c', public.ds_custom_of(me, x.u)))), '[]'::jsonb) into v_list
+    from (select distinct u from unnest(coalesce(p_ids, '{}'::uuid[])) u where u is not null limit 300) x
+    where cid is null or public.comm_role(cid, x.u) is not null;
+  if cid is not null then
+    select coalesce(jsonb_object_agg(r.id::text, r.icon), '{}'::jsonb) into v_icons from public.comm_roles r where r.community_id = cid and r.icon <> '';
+  end if;
+  return jsonb_build_object('ok', true, 'list', v_list, 'icons', v_icons);
+end $$;
+
+-- Ник на сервере: себе (если ты там) или модератор (сообщество — право «модерация» и выше по ролям; сайт — admin / moderator)
+create or replace function public.ds_nick_set(p_scope text, p_uid uuid, p_nick text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); cid bigint := public.ds_scope_cid(p_scope); v text := btrim(regexp_replace(coalesce(p_nick, ''), '[[:space:]]+', ' ', 'g'));
+  tgt uuid := coalesce(p_uid, auth.uid()); w text; staff boolean; old timestamptz;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if cid = -1 then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if not exists (select 1 from public.profiles where id = tgt) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  staff := case when cid is null then coalesce((select role in ('admin', 'moderator') from public.profiles where id = me), false)
+    else public.comm_is_staff(me) or (public.comm_perm(cid, me, 2) and (tgt = me or public.comm_can_mod(cid, me, tgt))) end;
+  if cid is not null and public.comm_role(cid, tgt) is null then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+  if tgt <> me and not staff then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if tgt = me and cid is not null and public.comm_banned(cid, me) then return jsonb_build_object('ok', false, 'reason', 'banned'); end if;
+  select updated_at into old from public.ds_nicks where scope = p_scope and user_id = tgt;
+  if tgt = me and old > now() - interval '10 seconds' then return jsonb_build_object('ok', false, 'reason', 'too_fast'); end if;
+  if v = '' then
+    delete from public.ds_nicks where scope = p_scope and user_id = tgt;
+  else
+    if char_length(v) < 2 or char_length(v) > 32 then return jsonb_build_object('ok', false, 'reason', 'name'); end if;
+    w := public.ds_text_bad(v); if w is not null then return jsonb_build_object('ok', false, 'reason', w); end if;
+    -- нельзя выдавать себя за команду сайта или стримера
+    if not staff and public.comm_norm(v) ~ '(денчик|данчик|dan4ik|denchik|админ|admin|модер|moder|бот|bot)' then
+      return jsonb_build_object('ok', false, 'reason', 'name'); end if;
+    insert into public.ds_nicks (scope, user_id, nick, set_by, updated_at) values (p_scope, tgt, v, me, now())
+      on conflict (scope, user_id) do update set nick = excluded.nick, set_by = excluded.set_by, updated_at = now();
+  end if;
+  if tgt <> me then perform public.comm_log(cid, me, tgt, '', 'nick', '', coalesce(nullif(v, ''), 'ник сброшен'), ''); end if;
+  return jsonb_build_object('ok', true, 'nick', nullif(v, ''));
+end $$;
+
+-- Значок роли (эмодзи) — как и сама роль: владелец сообщества или команда сайта
+create or replace function public.ds_role_icon(p_role bigint, p_icon text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v text := btrim(coalesce(p_icon, '')); cid bigint;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select community_id into cid from public.comm_roles where id = p_role;
+  if cid is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if coalesce(public.comm_role(cid), '') <> 'owner' and not public.comm_is_staff() then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if char_length(v) > 8 or not public.ds_emoji_ok(v) then return jsonb_build_object('ok', false, 'reason', 'emoji'); end if;
+  update public.comm_roles set icon = v where id = p_role;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ═══ Друзья ═══
+create or replace function public.ds_friends()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me uuid := auth.uid();
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  return jsonb_build_object('ok', true,
+    'friends', coalesce((select jsonb_agg(jsonb_strip_nulls(jsonb_build_object('id', x.u, 'nick', pr.nick,
+        's', public.ds_status_of(me, x.u), 'c', public.ds_custom_of(me, x.u), 'a', public.ds_act_of(me, x.u), 'seen', public.ds_seen_of(me, x.u))) order by lower(pr.nick))
+      from (select case when requester_id = me then addressee_id else requester_id end as u from public.friendships
+        where status = 'accepted' and (requester_id = me or addressee_id = me) limit 500) x join public.profiles pr on pr.id = x.u), '[]'::jsonb),
+    'incoming', coalesce((select jsonb_agg(jsonb_build_object('id', f.requester_id, 'nick', pr.nick, 'at', f.created_at) order by f.created_at desc)
+      from public.friendships f join public.profiles pr on pr.id = f.requester_id where f.addressee_id = me and f.status = 'pending'), '[]'::jsonb),
+    'outgoing', coalesce((select jsonb_agg(jsonb_build_object('id', f.addressee_id, 'nick', pr.nick, 'at', f.created_at) order by f.created_at desc)
+      from public.friendships f join public.profiles pr on pr.id = f.addressee_id where f.requester_id = me and f.status = 'pending'), '[]'::jsonb),
+    'blocked', coalesce((select jsonb_agg(jsonb_build_object('id', b.blocked_id, 'nick', pr.nick) order by b.created_at desc)
+      from public.user_blocks b join public.profiles pr on pr.id = b.blocked_id where b.blocker_id = me), '[]'::jsonb),
+    'ignored', coalesce((select jsonb_agg(jsonb_build_object('id', i.ignored_id, 'nick', pr.nick) order by i.created_at desc)
+      from public.user_ignores i join public.profiles pr on pr.id = i.ignored_id where i.blocker_id = me), '[]'::jsonb));
+end $$;
+
+-- p_act: add (встречная заявка — сразу дружба) / accept / decline / cancel / remove
+create or replace function public.ds_friend(p_uid uuid, p_act text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); f public.friendships%rowtype; w text;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_uid is null or p_uid = me or not exists (select 1 from public.profiles where id = p_uid) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  select * into f from public.friendships where (requester_id = me and addressee_id = p_uid) or (requester_id = p_uid and addressee_id = me) limit 1;
+  if p_act = 'add' then
+    if f.id is not null and f.status = 'accepted' then return jsonb_build_object('ok', true, 'state', 'friends'); end if;
+    if f.id is not null and f.requester_id = me then return jsonb_build_object('ok', true, 'state', 'out'); end if;
+    if public.comm_blocked(me, p_uid) then return jsonb_build_object('ok', false, 'reason', 'blocked'); end if;
+    w := public.kid_why(me, p_uid, false); if w is not null then return jsonb_build_object('ok', false, 'reason', w); end if;
+    if f.id is not null then   -- он уже звал меня — принимаем
+      update public.friendships set status = 'accepted' where id = f.id;
+      return jsonb_build_object('ok', true, 'state', 'friends');
+    end if;
+    if not public.accepts_friend_requests(p_uid) then return jsonb_build_object('ok', false, 'reason', 'closed'); end if;
+    if (select count(*) from public.friendships where requester_id = me and status = 'pending') >= 100 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
+    if (select count(*) from public.friendships where requester_id = me and created_at > now() - interval '1 hour') >= 30 then return jsonb_build_object('ok', false, 'reason', 'too_fast'); end if;
+    insert into public.friendships (requester_id, addressee_id, status) values (me, p_uid, 'pending');
+    perform public.comm_notify(p_uid, 'friend', me, '👋 Заявка в друзья', coalesce((select nick from public.profiles where id = me), 'Игрок') || ' хочет дружить', '#/chat/friends/pending', 'fr:' || me || ':' || p_uid);
+    return jsonb_build_object('ok', true, 'state', 'out');
+  elsif p_act = 'accept' then
+    if f.id is null or f.addressee_id <> me or f.status <> 'pending' then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    w := public.kid_why(me, p_uid, false); if w is not null then return jsonb_build_object('ok', false, 'reason', w); end if;
+    update public.friendships set status = 'accepted' where id = f.id;
+    return jsonb_build_object('ok', true, 'state', 'friends');
+  elsif p_act in ('decline', 'cancel', 'remove') then
+    if f.id is not null then delete from public.friendships where id = f.id; end if;
+    return jsonb_build_object('ok', true, 'state', 'none');
+  end if;
+  return jsonb_build_object('ok', false, 'reason', 'bad');
+end $$;
+
+-- Игнор: его сообщения скрыты у меня (без блокировки — он может писать, просто я не вижу)
+create or replace function public.ds_ignore(p_uid uuid, p_on boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid();
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_uid is null or p_uid = me or not exists (select 1 from public.profiles where id = p_uid) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if coalesce(p_on, true) then
+    if (select count(*) from public.user_ignores where blocker_id = me) >= 500 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
+    insert into public.user_ignores (blocker_id, ignored_id) values (me, p_uid) on conflict do nothing;
+  else
+    delete from public.user_ignores where blocker_id = me and ignored_id = p_uid;
+  end if;
+  return jsonb_build_object('ok', true, 'on', coalesce(p_on, true));
+end $$;
+
+-- «Кто из друзей онлайн» (ч. 1) + невидимка по статусу и сам статус (s)
+create or replace function public.friends_online()
+returns jsonb language sql stable security definer set search_path = public as $$
+  with fr as (
+    select f.addressee_id as uid from public.friendships f where f.requester_id = auth.uid() and f.status = 'accepted'
+    union
+    select f.requester_id from public.friendships f where f.addressee_id = auth.uid() and f.status = 'accepted')
+  select coalesce(jsonb_agg(jsonb_build_object('id', o.user_id, 'seen', o.seen_at, 'place', o.place, 's', coalesce(d.status, 'online'))), '[]'::jsonb)
+  from fr join public.comm_online o on o.user_id = fr.uid join public.profiles p on p.id = o.user_id left join public.ds_people d on d.user_id = o.user_id
+  where o.seen_at > now() - interval '3 minutes' and not coalesce(p.privacy_invisible, false) and coalesce(p.privacy_profile, 'all') <> 'nobody'
+    and coalesce(d.status, 'online') <> 'invisible'
+    and not public.comm_blocked(auth.uid(), o.user_id) and public.kid_pair_ok(auth.uid(), o.user_id);
+$$;
+
+-- ═══ Группы ЛС ═══
+-- Можно ли p_new быть в группе с этими людьми: друг того, кто зовёт; не до 9 лет; ни с кем не в блоке; дети ↔ взрослые — нет
+create or replace function public.gdm_can_join(p_adder uuid, p_new uuid, p_members uuid[])
+returns text language plpgsql stable security definer set search_path = public as $$
+declare x uuid;
+begin
+  if p_new is null or not exists (select 1 from public.profiles where id = p_new) then return 'not_found'; end if;
+  if not public.comm_friends(p_adder, p_new) then return 'friends'; end if;
+  if public.kidsafe_on() and public.age_u9(p_new) then return 'no'; end if;
+  foreach x in array coalesce(p_members, '{}'::uuid[]) loop
+    if x <> p_new then
+      if public.comm_blocked(x, p_new) then return 'blocked'; end if;
+      if not public.kid_pair_ok(x, p_new) then return 'age'; end if;
+    end if;
+  end loop;
+  return null;
+end $$;
+
+create or replace function public.gdm_json(p_gid bigint)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', g.id, 'name', g.name, 'icon', g.icon, 'owner', g.owner_id, 'last_at', g.last_at, 'last_id', g.last_id,
+    'members', coalesce((select jsonb_agg(jsonb_build_object('id', m.user_id, 'nick', p.nick) order by m.joined_at) from public.gdm_members m
+      join public.profiles p on p.id = m.user_id where m.group_id = g.id), '[]'::jsonb))
+  from public.gdm_groups g where g.id = p_gid;
+$$;
+
+create or replace function public.gdm_create(p_ids uuid[], p_name text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); ids uuid[]; x uuid; w text; v_name text := btrim(coalesce(p_name, '')); gid bigint; cur uuid[];
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if public.kidsafe_on() and public.age_u9(me) then return jsonb_build_object('ok', false, 'reason', 'u9'); end if;
+  select array_agg(distinct u) into ids from unnest(coalesce(p_ids, '{}'::uuid[])) u where u is not null and u <> me;
+  if coalesce(array_length(ids, 1), 0) < 1 then return jsonb_build_object('ok', false, 'reason', 'empty'); end if;
+  if array_length(ids, 1) > 9 then return jsonb_build_object('ok', false, 'reason', 'full'); end if;
+  if char_length(v_name) > 40 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+  w := public.ds_text_bad(v_name); if w is not null then return jsonb_build_object('ok', false, 'reason', w); end if;
+  if (select count(*) from public.gdm_groups where owner_id = me and created_at > now() - interval '1 hour') >= 5 then return jsonb_build_object('ok', false, 'reason', 'too_fast'); end if;
+  if (select count(*) from public.gdm_members where user_id = me) >= 50 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
+  cur := array[me];
+  foreach x in array ids loop
+    w := public.gdm_can_join(me, x, cur);
+    if w is not null then return jsonb_build_object('ok', false, 'reason', w, 'who', x); end if;
+    cur := cur || x;
+  end loop;
+  insert into public.gdm_groups (owner_id, name) values (me, v_name) returning id into gid;
+  insert into public.gdm_members (group_id, user_id, added_by) select gid, u, me from unnest(cur) u;
+  return jsonb_build_object('ok', true, 'g', public.gdm_json(gid));
+end $$;
+
+create or replace function public.gdm_add(p_group bigint, p_uid uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); cur uuid[]; w text;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.gdm_is_member(p_group, me) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+  if public.gdm_is_member(p_group, p_uid) then return jsonb_build_object('ok', true, 'g', public.gdm_json(p_group)); end if;
+  select array_agg(user_id) into cur from public.gdm_members where group_id = p_group;
+  if array_length(cur, 1) >= 10 then return jsonb_build_object('ok', false, 'reason', 'full'); end if;
+  w := public.gdm_can_join(me, p_uid, cur); if w is not null then return jsonb_build_object('ok', false, 'reason', w); end if;
+  insert into public.gdm_members (group_id, user_id, added_by) values (p_group, p_uid, me);
+  return jsonb_build_object('ok', true, 'g', public.gdm_json(p_group));
+end $$;
+
+-- Выйти самому или убрать (только создатель группы); создатель вышел — группа переходит самому давнему; пусто — удаляется
+create or replace function public.gdm_leave(p_group bigint, p_uid uuid default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); tgt uuid := coalesce(p_uid, auth.uid()); own uuid;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select owner_id into own from public.gdm_groups where id = p_group;
+  if not public.gdm_is_member(p_group, me) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+  if tgt <> me and own is distinct from me then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  delete from public.gdm_members where group_id = p_group and user_id = tgt;
+  if not exists (select 1 from public.gdm_members where group_id = p_group) then
+    delete from public.gdm_groups where id = p_group;
+  elsif own is not distinct from tgt then
+    update public.gdm_groups set owner_id = (select user_id from public.gdm_members where group_id = p_group order by joined_at limit 1) where id = p_group;
+  end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.gdm_rename(p_group bigint, p_name text, p_icon text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v text := btrim(coalesce(p_name, '')); ic text := btrim(coalesce(p_icon, '')); w text;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.gdm_is_member(p_group) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+  if char_length(v) > 40 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+  w := public.ds_text_bad(v); if w is not null then return jsonb_build_object('ok', false, 'reason', w); end if;
+  if ic <> '' and (char_length(ic) > 8 or not public.ds_emoji_ok(ic)) then return jsonb_build_object('ok', false, 'reason', 'emoji'); end if;
+  update public.gdm_groups set name = v, icon = coalesce(nullif(ic, ''), icon) where id = p_group;
+  return jsonb_build_object('ok', true, 'g', public.gdm_json(p_group));
+end $$;
+
+create or replace function public.gdm_list()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when auth.uid() is null then jsonb_build_object('ok', false, 'reason', 'auth') else jsonb_build_object('ok', true,
+    'list', coalesce((select jsonb_agg(public.gdm_json(g.id) order by g.last_at desc) from public.gdm_groups g
+      join public.gdm_members m on m.group_id = g.id and m.user_id = auth.uid()), '[]'::jsonb)) end;
+$$;
+
+create or replace function public.gdm_send(p_group bigint, p_text text, p_reply bigint default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); v text := btrim(coalesce(p_text, '')); r public.gdm_messages%rowtype; x uuid;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.gdm_is_member(p_group, me) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+  if public.kidsafe_on() and public.age_u9(me) then return jsonb_build_object('ok', false, 'reason', 'u9'); end if;
+  if char_length(v) < 1 then return jsonb_build_object('ok', false, 'reason', 'empty'); end if;
+  if char_length(v) > 1000 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+  -- возраст мог поменяться после входа в группу — проверяем пары заново
+  for x in select user_id from public.gdm_members where group_id = p_group and user_id <> me loop
+    if not public.kid_pair_ok(me, x) then return jsonb_build_object('ok', false, 'reason', 'age'); end if;
+  end loop;
+  if (select count(*) from public.gdm_messages where user_id = me and created_at > now() - interval '5 seconds') >= 5 then return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  if exists (select 1 from public.gdm_messages where user_id = me and group_id = p_group and text = v and created_at > now() - interval '30 seconds') then
+    return jsonb_build_object('ok', false, 'reason', 'repeat'); end if;
+  if p_reply is not null and not exists (select 1 from public.gdm_messages where id = p_reply and group_id = p_group) then p_reply := null; end if;
+  insert into public.gdm_messages (group_id, user_id, nick, text, reply_to) values (p_group, me, coalesce((select nick from public.profiles where id = me), 'Игрок'), v, p_reply)
+    returning * into r;
+  update public.gdm_groups set last_at = now(), last_id = r.id where id = p_group;
+  return jsonb_build_object('ok', true, 'm', to_jsonb(r));
+end $$;
+
+create or replace function public.gdm_edit(p_id bigint, p_text text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v text := btrim(coalesce(p_text, '')); r public.gdm_messages%rowtype;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select * into r from public.gdm_messages where id = p_id;
+  if r.id is null or r.user_id is distinct from auth.uid() or r.deleted then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if r.created_at < now() - interval '48 hours' then return jsonb_build_object('ok', false, 'reason', 'old'); end if;
+  if char_length(v) < 1 or char_length(v) > 1000 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+  update public.gdm_messages set text = v, edited_at = now() where id = p_id returning * into r;
+  return jsonb_build_object('ok', true, 'm', to_jsonb(r));
+end $$;
+
+-- Удалить: автор или создатель группы (текст стирается, строка остаётся «удалено»)
+create or replace function public.gdm_delete(p_id bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare r public.gdm_messages%rowtype;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select * into r from public.gdm_messages where id = p_id;
+  if r.id is null or not (r.user_id is not distinct from auth.uid() or exists (select 1 from public.gdm_groups where id = r.group_id and owner_id = auth.uid())) then
+    return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  update public.gdm_messages set deleted = true, text = '—' where id = p_id;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ═══ Права ═══
+do $$
+declare f text;
+begin
+  foreach f in array array['ds_me()', 'ds_status_set(jsonb)', 'ds_nick_set(text,uuid,text)', 'ds_role_icon(bigint,text)', 'ds_friends()',
+    'ds_friend(uuid,text)', 'ds_ignore(uuid,boolean)', 'gdm_create(uuid[],text)', 'gdm_add(bigint,uuid)', 'gdm_leave(bigint,uuid)',
+    'gdm_rename(bigint,text,text)', 'gdm_list()', 'gdm_send(bigint,text,bigint)', 'gdm_edit(bigint,text)', 'gdm_delete(bigint)'] loop
+    execute format('revoke all on function public.%s from public, anon', f);
+    execute format('grant execute on function public.%s to authenticated', f);
+  end loop;
+  foreach f in array array['ds_card(uuid,text)', 'ds_people_meta(text,uuid[])'] loop
+    execute format('revoke all on function public.%s from public', f);
+    execute format('grant execute on function public.%s to anon, authenticated', f);
+  end loop;
+  -- помощники: только изнутри функций (политики RLS зовут gdm_is_member от имени читающего — ему можно)
+  foreach f in array array['ds_pair_ok(uuid,uuid)', 'ds_vis(uuid,uuid)', 'ds_status_of(uuid,uuid)', 'ds_custom_of(uuid,uuid)', 'ds_seen_of(uuid,uuid)',
+    'ds_act_of(uuid,uuid)', 'gdm_can_join(uuid,uuid,uuid[])', 'gdm_json(bigint)'] loop
+    execute format('revoke all on function public.%s from public, anon, authenticated', f);
+  end loop;
+  execute 'revoke all on function public.gdm_is_member(bigint,uuid) from public, anon';
+  execute 'grant execute on function public.gdm_is_member(bigint,uuid) to authenticated';
+  execute 'revoke all on function public.friends_online() from public, anon';
+  execute 'grant execute on function public.friends_online() to authenticated';
+end $$;
+grant select on public.gdm_groups, public.gdm_members, public.gdm_messages, public.user_ignores to authenticated;
