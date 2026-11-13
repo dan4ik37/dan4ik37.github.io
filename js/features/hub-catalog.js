@@ -184,6 +184,10 @@
     const tx = el('div', 'hc-me-tx');
     const who = el('div', 'hc-who');
     who.append('Ты играешь как ', el('b', '', String(u ? (p && p.nick || 'игрок') : 'Гость').slice(0, 40)), ' · ' + (BODY[look.body] || BODY.girl)[1]);
+    // телефон: плашка в одну строку, подробности (миры, друзья, кнопки) — по нажатию (на ПК видно всё, кнопки нет)
+    const more = el('button', 'hc-more', 'Подробнее ▾'); more.type = 'button'; more.setAttribute('aria-expanded', 'false');
+    more.addEventListener('click', () => { const on = !box.classList.contains('open'); box.classList.toggle('open', on); more.setAttribute('aria-expanded', String(on)); more.textContent = on ? 'Свернуть ▴' : 'Подробнее ▾'; });
+    who.appendChild(more);
     tx.appendChild(who);
     const wl = el('div', 'hc-worlds'); tx.appendChild(wl);
     const fr = el('div', 'hc-fr'); tx.appendChild(fr);

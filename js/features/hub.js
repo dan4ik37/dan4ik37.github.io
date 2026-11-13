@@ -198,7 +198,7 @@
   async function renderMenu(){
     const page = $('hub-page'); if (!page) return;
     page.textContent = '';
-    const wrap = el('div', 'hub wrap');
+    const wrap = el('div', 'hub wrap hub-menu');   // hub-menu: на телефоне порядок другой (css/hub.css — «Играть» на первом экране)
     const head = el('div', 'hub-head');
     head.appendChild(el('div', 'hub-kick', 'Новый движок D37 · первая версия'));
     head.appendChild(el('h1', 'hub-h1', 'Во что играем?'));

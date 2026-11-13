@@ -168,3 +168,28 @@ body.hub-on .bottom-tabbar,body.hub-on #donateFab,body.hub-on #scrollTop{display
 @media (prefers-reduced-motion:reduce){.hc-card{transition:none}.hc-card:hover{transform:none}}
 .hc-make .hc-tt{white-space:normal}
 .hc-sec[data-row="people"]{margin:0 0 18px}
+.hc-more{display:none;font:700 12.5px/1 system-ui,sans-serif;color:var(--accent-t);background:none;border:0;padding:4px 0 4px 8px;cursor:pointer}
+/* телефон (T-163, координатор): «Играть» — на первом экране сразу под заголовком, потом плашка в одну строку, потом строка игр,
+   потом остальные плитки; ПК — как было */
+@media (max-width:759px){
+  .hub-menu{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+  .hub-menu>*{grid-column:1/-1;margin:0}
+  .hub-menu>.hub-grid{display:contents}
+  .hub-menu .hub-head{order:0;margin:0}
+  .hub-menu .hub-big{order:1;min-height:190px}
+  .hub-menu .hc-me{order:2}
+  .hub-menu .hc-sec[data-row="people"]{order:3;margin:4px 0 0}
+  .hub-menu .hub-tile:not(.hub-big){order:4}
+  .hub-menu .hub-note{order:5}
+  .hub-menu .hub-lead{display:none}
+  .hub-menu .hub-h1{margin:8px 0 0;font-size:30px}
+  .hc-me{padding:8px 12px;gap:10px;align-items:center}
+  .hc-me .hc-av{width:40px;height:40px;border-radius:12px}
+  .hc-me .hc-av-b{font-size:24px}
+  .hc-me .hc-sw i{width:8px;height:8px;border-width:1px}
+  .hc-me .hc-sw{bottom:-5px}
+  .hc-me .hc-me-tx{flex:1 1 0}
+  .hc-more{display:inline}
+  .hc-me:not(.open) .hc-worlds,.hc-me:not(.open) .hc-fr,.hc-me:not(.open) .hc-acts{display:none}
+  .hc-me.open{align-items:flex-start}
+}
