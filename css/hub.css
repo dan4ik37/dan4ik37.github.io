@@ -82,6 +82,30 @@
   .hub-big .hub-tt{font-size:38px}
 }
 @media (prefers-reduced-motion:reduce){.hub-tile{transition:none}.hub-tile:hover{transform:none}}
+/* W8: главная карточка «Играть» (свой мир): ссылка на мир, «где появиться», панель «Путь» — карточка-картинка, цвета свои в обеих темах */
+.hub-playcard{justify-content:space-between;cursor:default;gap:12px}
+.hub-playcard:hover{transform:none}
+.hub-play-main{display:flex;flex-direction:column;gap:8px;color:inherit;text-decoration:none;border-radius:16px;outline-offset:4px}
+.hub-play-main:focus-visible{outline:3px solid #fde68a}
+.hub-play-main:hover .hub-tt{text-decoration:underline;text-underline-offset:4px}
+.hub-spawn{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.hub-spawn:empty{display:none}
+.hub-spawn-h{font:800 12px/1 'Montserrat',system-ui,sans-serif;opacity:.85;margin-right:2px;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+.hub-chip{font:700 13px/1 'Montserrat',system-ui,sans-serif;color:#fff;text-decoration:none;padding:9px 12px;border-radius:999px;cursor:pointer;
+  background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.28);min-height:36px;display:inline-flex;align-items:center}
+.hub-chip:hover{background:rgba(0,0,0,.42)}
+.hub-chip:focus-visible{outline:3px solid #fde68a;outline-offset:2px}
+.hub-chip.on{background:rgba(253,230,138,.95);color:#1f2937;border-color:transparent}
+.hub-chip-x{background:transparent;border-style:dashed;font-weight:600}
+.hub-path{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:16px;background:rgba(0,0,0,.26);border:1px solid rgba(255,255,255,.16)}
+.hub-path-h{font:800 12px/1 'Montserrat',system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase;opacity:.9}
+.hub-path-row{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.hub-path-s{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;background:rgba(255,255,255,.08);opacity:.6;min-width:0}
+.hub-path-s.done{opacity:.85;background:rgba(34,197,94,.28)}
+.hub-path-s.on{opacity:1;background:rgba(253,230,138,.95);color:#1f2937;box-shadow:0 0 0 2px rgba(253,230,138,.45)}
+.hub-path-ic{font-size:18px;line-height:1}
+.hub-path-n{font:700 10.5px/1.1 'Montserrat',system-ui,sans-serif;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:420px){.hub-path-n{font-size:9px}.hub-path-ic{font-size:16px}.hub-chip{font-size:12px;padding:8px 10px}}
 
 /* ── игра поверх сайта: всегда тёмная, на весь экран, шапка «← На сайт · название · ⛶» ── */
 body.hub-on{overflow:hidden}
