@@ -29,6 +29,8 @@
     { "src": "/img/app/shot-narrow-kosynka.webp", "sizes": "1080x1920", "type": "image/webp", "form_factor": "narrow", "label": "Пасьянсы, судоку, 2048 — даже без интернета" }
   ],
   "shortcuts": [
+    { "name": "Играть — Планета D37", "short_name": "Играть", "description": "Новый 3D-движок: планета, гардероб, игры", "url": "/hub",
+      "icons": [{ "src": "/img/app/sc-world.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-world-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] },
     { "name": "Мир Денчика", "short_name": "Мир", "description": "Онлайн-мир в 3D", "url": "/play/world",
       "icons": [{ "src": "/img/app/sc-world.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-world-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] },
     { "name": "Чат", "short_name": "Чат", "description": "Чат сайта, сообщества и Twitch", "url": "/chat",

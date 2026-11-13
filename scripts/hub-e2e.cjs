@@ -186,6 +186,8 @@ async function playUntilLoaded(C, label){
             await C.shot('wardrobe_open_pc.png');
             const want = await C.ev(ENGINE_LOOK);
             ok(want && want.body === 'boy' && want.text && want.text !== look0.text, 'движок: мальчик, цвета поменялись', { before: look0, after: want });
+            const er = await C.ev(`(() => { window.__e2eErr = []; window.d37Err = (w, e) => __e2eErr.push(w + ': ' + (e && e.message)); D37Hub._st.h.send({ t: 'nope' }); return __e2eErr; })()`);
+            ok(er.length === 1 && /^engine:host_in: .*nope/.test(er[0]), 'ошибка движка ушла в мониторинг (d37Err)', er);
             // ← На сайт: мир сохранён в браузере, движок выгружен
             await C.ev(`document.querySelector('.hub-back').click(), true`);
             ok(await C.until(`!D37Hub.active && location.pathname === '/hub' && !document.querySelector('.hub-play')`, 15000), '«← На сайт»: игра закрыта, снова меню');
