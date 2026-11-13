@@ -60,6 +60,9 @@ export async function sbSelect(table, query) {
   if (!r.ok) throw new Error(`select ${table}: HTTP ${r.status} ${txt.slice(0, 200)}`);
   return txt ? JSON.parse(txt) : [];
 }
+// Ошибка sbSelect = «на базе нет такой колонки» (SQL ещё не запущен: 400 + 42703 / PGRST204). Только тогда можно откатиться на
+// старый запрос; таймаут или 500 — нельзя (форум 2.0: старый запрос без фильтра статуса раскрыл бы скрытое, T-157)
+export const oldDb = e => { const m = String(e && e.message || ''); return /HTTP 400/.test(m) && /42703|PGRST204|does not exist/i.test(m); };
 
 export async function sbUpsert(table, row, onConflict) {
   const r = await timedFetch(`${baseUrl()}/rest/v1/${table}?on_conflict=${onConflict}`, {
@@ -68,6 +71,17 @@ export async function sbUpsert(table, row, onConflict) {
     body: JSON.stringify(row),
   });
   if (!r.ok) throw new Error(`upsert ${table}: HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
+}
+
+// Обновить строки по фильтру (без фильтра не зовём): sbPatch('forum_threads', 'id=eq.5&pinged_at=is.null', { pinged_at: … })
+export async function sbPatch(table, query, row) {
+  if (!query) throw new Error('sbPatch без фильтра');
+  const r = await timedFetch(`${baseUrl()}/rest/v1/${table}?${query}`, {
+    method: 'PATCH', headers: headers({ Prefer: 'return=representation' }), body: JSON.stringify(row),
+  });
+  const txt = await r.text();
+  if (!r.ok) throw new Error(`patch ${table}: HTTP ${r.status} ${txt.slice(0, 200)}`);
+  return txt ? JSON.parse(txt) : [];
 }
 
 // query — фильтр PostgREST, например endpoint=in.("a","b"). Без фильтра не зовём.

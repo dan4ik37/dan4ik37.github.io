@@ -1,15 +1,19 @@
-// /forum, /forum/<id> — форум; /ideas, /ideas/<id> — «Идеи для видео» (rewrites в vercel.json → api/pages.js?page=forum|ideas).
+// /forum, /forum/t/<метка>, /forum/<id>-<slug> — форум 2.0 (статьи из блоков, T-157); старый адрес /forum/<id> → 301 на /forum/<id>-<slug>;
+// POST /api/forum-ping — IndexNow о новой статье; /ideas, /ideas/<id> — «Идеи для видео» (rewrites в vercel.json → api/pages.js?page=forum|ideas|forumping).
 // Серверные страницы для поиска и превью ссылок (Telegram, ВК): заголовок, описание, canonical, JSON-LD (DiscussionForumPosting,
 // ItemList, BreadcrumbList). Писать, отвечать и голосовать — в разделе сайта (SPA): кнопки ведут на /#/forum/<id> — роутер
 // (js/ui/router.js) откроет раздел по тому же адресу /forum/<id>. Вкладка, где уже открыт сайт-приложение, сразу уходит в раздел
 // (page({ spa }) в api/_lib/page.js) — перезагрузка не выкидывает из приложения.
 // Текст игроков — только экранированный и через publicText(): чужие ссылки — «[ссылка]», телефоны, почта, @ники — «[скрыто]»,
-// мат закрыт (как в чате для детей: страницу видит кто угодно, возраст сервер не знает). Рекламы нет (текст не проверен
-// модератором заранее — правила AdSense), как у noAds-страниц. Данные — по service-ключу, только публичные поля (ник, роль);
+// мат закрыт (как в чате для детей: страницу видит кто угодно, возраст сервер не знает). Реклама (T-157) — одно место в статье и одно
+// в ленте, только у опубликованной статьи проверенного автора (прошёл предпроверку), без открытых жалоб и не старше 12+; на
+// старой базе, у «на проверке» и скрытых страниц (их сервер вообще не отдаёт) — без рекламы. Данные — по service-ключу, только публичные поля (ник, роль);
 // ник ребёнка до 13 — «Игрок» (age.sql: age_public_kids — сервер узнаёт только «прятать или нет», без возраста).
 import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
-import { sbSelect, sbRpc, storeConfigured } from '../store.js';
+import { sbSelect, sbRpc, sbPatch, storeConfigured, oldDb } from '../store.js';
+import { makeForumBlocks } from '../forum-blocks.js';   // T-157: блоки статей — тот же код, что в браузере
+import { indexNow } from '../indexnow.js';
 import { publicKids as kidsOf, publicNick } from '../age.js';   // ники детей до 13 — «Игрок» (страницы индексирует поиск)
 const publicKids = ids => kidsOf(ids, sbRpc, storeConfigured);
 
@@ -78,6 +82,21 @@ const plain = (raw, max) => publicText(raw, max).text;
 const short = (raw, n = 160) => { const t = plain(raw, 1000).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : t; };
 
 async function safe(fn){ if (!storeConfigured()) return null; try { return await fn(); } catch (e) { return null; } }
+// Старая база (forum.sql 2.0 не запущен) — ТОЛЬКО когда PostgREST ответил «нет такой колонки» (oldDb в store.js). Любой другой сбой
+// (таймаут, 500) — не откатываться на старый запрос без фильтра статуса: иначе скрытое и «на проверке» попало бы на страницу и в кэш.
+// → { rows, v2 } или { err: true } (сбой — показать «временно недоступно», ничего не раскрывая)
+async function threads(q2, qOld){
+  if (!storeConfigured()) return { rows: null, v2: false };
+  try { return { rows: await sbSelect('forum_threads', q2), v2: true }; }
+  catch (e) { if (!oldDb(e)) return { err: true }; }
+  return { rows: qOld ? await safe(() => sbSelect('forum_threads', qOld)) : null, v2: false };
+}
+function busy(res){
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(503).send(page({ title: 'Форум временно недоступен — dan4ik37', description: 'Попробуй обновить страницу через минуту.', noindex: true, noAds: true, css: CSS,
+    body: `<main class="wrap fr"><h1>Форум временно недоступен</h1><p class="muted">Попробуй обновить страницу через минуту.</p>
+      <div class="cta"><a class="btn btn-acc" href="/#/forum">📋 Открыть форум на сайте</a> <a class="btn btn-ghost" href="/">🏠 На главную</a></div></main>` }));
+}
 async function nicks(ids){
   const list = [...new Set(ids.filter(x => /^[0-9a-f-]{36}$/i.test(String(x || ''))))];
   if (!list.length) return {};
@@ -97,85 +116,178 @@ function notFound(res, what, back){
 }
 
 export default async function handler(req, res){
+  const kind = String(req.query.page || '');
+  if (kind === 'forumping') return forumPing(req, res);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  const kind = String(req.query.page || '') === 'ideas' ? 'ideas' : 'forum';
-  const id = String(req.query.id || '');
-  if (id && !/^\d{1,12}$/.test(id)) return notFound(res, kind === 'ideas' ? 'Идея' : 'Тема', kind === 'ideas' ? ['/ideas', '💡 Все идеи'] : ['/forum', '📋 Все темы']);
-  if (kind === 'ideas') return id ? ideaPage(res, id) : ideasPage(res);
-  return id ? threadPage(res, id) : forumPage(res);
+  const isIdeas = kind === 'ideas';
+  const raw = String(req.query.id || '');
+  // разделы SPA форума 2.0 без своей серверной страницы (редактор, мои, закладки, подписки, модерация, статьи автора) — сразу в приложение
+  // (/#/forum/… → роутер вернёт настоящий адрес); noindex и без кэша у поисковика
+  const spa = String(req.query.spa || '');
+  const spaTo = !isIdeas && (/^(new|my|saved|follow|mod)$/.test(raw) && !spa ? raw : spa === 'edit' && /^\d{1,12}$/.test(raw) ? 'edit/' + raw : spa === 'u' && /^[0-9a-f-]{36}$/i.test(raw) ? 'u/' + raw.toLowerCase() : '');
+  if (spaTo) { res.setHeader('Cache-Control', 'public, s-maxage=3600'); res.setHeader('X-Robots-Tag', 'noindex'); res.setHeader('Location', '/#/forum/' + spaTo); return res.status(302).send(''); }
+  if (spa) return notFound(res, 'Страница', ['/forum', '📋 Все статьи']);
+  const id = (raw.match(/^(\d{1,12})(?:-[a-z0-9-]{0,80})?$/) || [])[1] || '';
+  if (raw && !id) return notFound(res, isIdeas ? 'Идея' : 'Статья', isIdeas ? ['/ideas', '💡 Все идеи'] : ['/forum', '📋 Все статьи']);
+  if (isIdeas) return id ? ideaPage(res, id) : ideasPage(res);
+  if (!id && req.query.tag != null) {
+    let tag = ''; try { tag = decodeURIComponent(String(req.query.tag)).toLowerCase(); } catch (e) { tag = ''; }
+    if (!/^[a-zа-яё0-9][a-zа-яё0-9-]{1,23}$/.test(tag)) return notFound(res, 'Метка', ['/forum', '📋 Все статьи']);
+    return forumPage(res, tag);
+  }
+  return id ? threadPage(res, id, raw) : forumPage(res, '');
 }
 
-// ═══ Форум: список тем ═══
-async function forumPage(res){
-  const url = `${SITE}/forum`;
-  const rows = await safe(() => sbSelect('forum_threads', 'select=id,title,author_id,pinned,locked,created_at,forum_posts(count)&order=pinned.desc,created_at.desc&limit=60')) || [];
+// ═══ Форум 2.0 (T-157): статьи из блоков. Нет новых колонок (forum.sql 2.0 не запущен) — как раньше, по старым полям ═══
+const MEDIA = key => (/^[0-9a-f-]{36}\/[a-z0-9]{16,40}\.[a-z0-9]{2,5}$/.test(String(key || '')) && process.env.SUPABASE_URL
+  ? process.env.SUPABASE_URL.replace(/\/+$/, '') + '/storage/v1/object/public/forum-media/' + key : '');
+const FB = makeForumBlocks();
+const artUrl = t => `${SITE}/forum/${t.id}${FB.slug(t.title) ? '-' + FB.slug(t.title) : ''}`;
+const artPath = t => artUrl(t).slice(SITE.length);
+// Текст игрока на публичной странице — через publicText (мат, контакты, голые ссылки скрыты); явные ссылки статьи (https) — rel="nofollow ugc noopener"
+const keepSp = s => (/^\s/.test(s) ? ' ' : '') + publicText(s, 6000).html + (/\s$/.test(s) && s.trim() ? ' ' : '');   // пробелы между кусками абзаца
+const blocksHtml = blocks => FB.toHtml(blocks, { media: MEDIA, text: keepSp });
+const firstVideo = blocks => (Array.isArray(blocks) ? blocks : []).find(b => b && b.t === 'video' && FB.videoOk(b.p, b.id)) || null;
+const imageOf = t => MEDIA(t.cover) || FB.poster(firstVideo(t.blocks)) || SITE + '/og-image.jpg';
+const adsOk = t => t.status === 'published' && t.trusted !== false && !(t.reports_open > 0) && (t.age_min ?? 12) <= 12;
+const AD = '<div data-ad="forum_article" hidden></div>';
+
+async function forumPage(res, tag){
+  const url = tag ? `${SITE}/forum/t/${encodeURIComponent(tag)}` : `${SITE}/forum`;
+  const got = await threads('status=eq.published&age_min=lte.12&realm=eq.kids'
+    + (tag ? '&tags=cs.' + encodeURIComponent('{"' + tag + '"}') : '')
+    + '&select=id,title,author_id,pinned,locked,created_at,published_at,excerpt,cover,tags,rating,comments&order=pinned.desc,published_at.desc&limit=60',
+    tag ? '' : 'select=id,title,author_id,pinned,locked,created_at,forum_posts(count)&order=pinned.desc,created_at.desc&limit=60');   // старая база — как раньше
+  if (got.err) return busy(res);
+  const v2 = got.v2, rows = got.rows || [];
   const who_ = await nicks(rows.map(t => t.author_id));
-  const items = rows.map(t => ({ id: t.id, title: plain(t.title, 140) || 'Без названия', pinned: t.pinned, locked: t.locked, at: t.created_at,
-    n: Math.max(0, (t.forum_posts?.[0]?.count ?? 1) - 1), a: who_[t.author_id] }));
-  const list = items.length ? `<ol class="fr-list">${items.map(t => `<li><a class="fr-row" href="/forum/${t.id}">
+  const items = rows.map(t => ({ id: t.id, title: plain(t.title, 140) || 'Без названия', pinned: t.pinned, locked: t.locked, at: t.published_at || t.created_at,
+    n: v2 ? t.comments || 0 : Math.max(0, (t.forum_posts?.[0]?.count ?? 1) - 1), a: who_[t.author_id], x: v2 ? short(t.excerpt || '', 200) : '',
+    rating: t.rating || 0, tags: Array.isArray(t.tags) ? t.tags.filter(x => /^[a-zа-яё0-9-]{2,24}$/.test(x)) : [], cover: v2 ? MEDIA(t.cover) : '',
+    href: v2 ? artPath(t) : `/forum/${t.id}` }));
+  const row = (t, i) => `<li><a class="fr-row${t.cover ? ' fr-has-cover' : ''}" href="${esc(t.href)}">
+      ${t.cover ? `<img class="fr-cover" src="${esc(t.cover)}" alt="" loading="${i < 2 ? 'eager' : 'lazy'}" width="640" height="360">` : ''}
       <span class="fr-t">${t.pinned ? '📌 ' : ''}${t.locked ? '🔒 ' : ''}${esc(t.title)}</span>
-      <span class="fr-m">${who(t.a)} · ${esc(day(t.at))} · 💬 ${num(t.n)} ${plural(t.n, 'ответ', 'ответа', 'ответов')}</span></a></li>`).join('')}</ol>`
-    : `<p class="muted fr-empty">${storeConfigured() ? 'Пока нет ни одной темы — создай первую!' : 'Темы откроются в разделе «Форум» на сайте.'}</p>`;
+      ${t.x ? `<span class="fr-x">${esc(t.x)}</span>` : ''}
+      <span class="fr-m">${who(t.a)} · ${esc(day(t.at))} · ${t.rating > 0 ? '+' : ''}${num(t.rating)} · 💬 ${num(t.n)}</span></a>
+      ${t.tags.length ? `<span class="fr-tags">${t.tags.map(x => `<a href="/forum/t/${esc(encodeURIComponent(x))}">#${esc(x)}</a>`).join(' ')}</span>` : ''}</li>${i === 5 && items.length > 8 ? '</ol>' + AD + '<ol class="fr-list">' : ''}`;
+  const list = items.length ? `<ol class="fr-list">${items.map(row).join('')}</ol>`
+    : `<p class="muted fr-empty">${storeConfigured() ? (tag ? 'С этой меткой статей пока нет.' : 'Пока нет ни одной статьи — напиши первую!') : 'Статьи откроются в разделе «Форум» на сайте.'}</p>`;
+  const h1 = tag ? `#${esc(tag)} — статьи на форуме` : '📋 Форум dan4ik37 — статьи и обсуждения';
   const body = `
-<main class="wrap fr" data-age-page="12" data-age-title="Форум" data-age-why="Темы и ответы пишут другие игроки — что угодно.">
-  <nav class="crumbs"><a href="/">Главная</a> › <span>Форум</span></nav>
-  <h1>📋 Форум dan4ik37</h1>
-  <p class="lead">Темы про игры, стримы, видео и сам сайт. Читать может любой, а создать тему или ответить — после входа на сайт.</p>
-  <div class="cta"><a class="btn btn-acc" href="/#/forum">✏️ Создать тему</a><a class="btn btn-ghost" href="/ideas">💡 Идеи для видео</a><a class="btn btn-ghost" href="/chat">💬 Чат</a></div>
-  <h2 class="fr-h2">Темы${items.length ? ` <span class="muted">· ${num(items.length)}</span>` : ''}</h2>
+<main class="wrap fr" data-age-page="12" data-age-title="Форум" data-age-why="Статьи и комментарии пишут другие игроки.">
+  <nav class="crumbs"><a href="/">Главная</a> › ${tag ? `<a href="/forum">Форум</a> › <span>#${esc(tag)}</span>` : '<span>Форум</span>'}</nav>
+  <h1>${h1}</h1>
+  <p class="lead">${tag ? `Статьи с меткой #${esc(tag)}: гайды, новости и истории игроков.` : 'Гайды, новости игр, истории и мнения зрителей канала. Читать может любой, а написать свою статью с фото, видео и источником — после входа на сайт.'}</p>
+  <div class="cta"><a class="btn btn-acc" href="${v2 ? '/forum/new' : '/#/forum'}">✍️ ${v2 ? 'Написать статью' : 'Создать тему'}</a>${tag ? '<a class="btn btn-ghost" href="/forum">📋 Все статьи</a>' : '<a class="btn btn-ghost" href="/ideas">💡 Идеи для видео</a>'}<a class="btn btn-ghost" href="/chat">💬 Чат</a></div>
+  <h2 class="fr-h2">${tag ? 'Статьи' : 'Свежие статьи'}${items.length ? ` <span class="muted">· ${num(items.length)}</span>` : ''}</h2>
   ${list}
-  <p class="muted fr-note">Правила: без оскорблений, рекламы и личных данных (телефонов, адресов) — модераторы удаляют такое. Ссылки на другие сайты на этой странице скрыты.</p>
+  <p class="muted fr-note">Правила: без оскорблений, рекламы и личных данных (телефонов, адресов) — модераторы скрывают такое. Ссылки авторов помечены как пользовательские.</p>
 </main>`;
   res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=3600');
   res.status(200).send(page({
-    title: 'Форум dan4ik37 — обсуждения игр, стримов и сайта',
-    description: 'Форум сайта dan4ik37: темы про игры, стримы, видео и сам сайт. Читать могут все, создать тему и ответить — после входа.',
-    url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true, spa: '#/forum',
-    ld: [{ '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': url, url, name: 'Форум dan4ik37', inLanguage: 'ru',
+    title: tag ? `#${tag} — статьи на форуме dan4ik37` : 'Форум dan4ik37 — статьи, гайды и новости игр',
+    description: tag ? `Статьи с меткой #${tag} на форуме сайта dan4ik37: гайды, новости и истории игроков.` : 'Форум сайта dan4ik37: статьи игроков с фото и видео — гайды, новости игр, истории. Читать могут все, писать — после входа.',
+    url, image: items.find(i => i.cover)?.cover || SITE + '/og-image.jpg', body, css: CSS, noAds: !v2 || items.length < 3, noindex: !!tag && !items.length,
+    spa: tag ? '#/forum/t/' + encodeURIComponent(tag) : '#/forum',
+    ld: [{ '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': url, url, name: tag ? `#${tag} — форум dan4ik37` : 'Форум dan4ik37', inLanguage: 'ru',
       mainEntity: { '@type': 'ItemList', itemListOrder: 'https://schema.org/ItemListOrderDescending', numberOfItems: items.length,
-        itemListElement: items.map((t, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE}/forum/${t.id}`, name: t.title })) } },
-      crumbs([['Главная', SITE + '/'], ['Форум', url]])],
+        itemListElement: items.map((t, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE + t.href, name: t.title })) } },
+      crumbs(tag ? [['Главная', SITE + '/'], ['Форум', SITE + '/forum'], ['#' + tag, url]] : [['Главная', SITE + '/'], ['Форум', url]])],
   }));
 }
 
-// ═══ Форум: тема с ответами ═══
-async function threadPage(res, id){
-  const t = (await safe(() => sbSelect('forum_threads', `id=eq.${id}&select=id,title,author_id,pinned,locked,created_at`)))?.[0];
-  if (!t) return notFound(res, 'Тема', ['/forum', '📋 Все темы']);
-  const posts = await safe(() => sbSelect('forum_posts', `thread_id=eq.${id}&select=id,author_id,body,created_at,edited_at&order=created_at.asc&limit=300`)) || [];
+async function threadPage(res, id, raw){
+  const got = await threads(`id=eq.${id}&select=id,title,author_id,pinned,locked,created_at,published_at,edited_at,status,blocks,cover,tags,source_url,source_title,excerpt,age_min,realm,rating,votes_up,comments,trusted,reports_open`,
+    `id=eq.${id}&select=id,title,author_id,pinned,locked,created_at`);   // старая база (нет колонки status) — как раньше
+  if (got.err) return busy(res);
+  const t = (got.rows || [])[0], v2 = got.v2 && !(t && !('status' in t));   // строка без status — старая база (так отвечают и подменные базы тестов)
+  if (!t || (v2 && (t.status !== 'published' || t.realm === 'adult' || t.age_min >= 18))) return notFound(res, 'Статья', ['/forum', '📋 Все статьи']);
+  // старый адрес /forum/5 или опечатка в «слаге» → один адрес /forum/5-slug (301)
+  if (v2 && raw !== artPath(t).slice('/forum/'.length)) { res.setHeader('Cache-Control', 'public, s-maxage=3600'); res.setHeader('Location', artPath(t)); return res.status(301).send(''); }
+  const posts = await safe(() => sbSelect('forum_posts', `thread_id=eq.${id}&select=id,author_id,body,created_at,edited_at${v2 ? ',parent_id,is_body,deleted' : ''}&order=created_at.asc&limit=300`)) || [];
   const who_ = await nicks([t.author_id, ...posts.map(p => p.author_id)]);
-  const url = `${SITE}/forum/${t.id}`;
-  const title = plain(t.title, 140) || 'Тема форума';
-  const first = posts[0] || null, replies = posts.slice(1);
-  const firstText = first ? publicText(first.body) : { text: '', html: '' };
-  const last = posts.length ? posts[posts.length - 1] : null;
-  const post = (p, i) => {
+  const url = v2 ? artUrl(t) : `${SITE}/forum/${t.id}`;
+  const title = plain(t.title, 140) || 'Статья форума';
+  let bodyHtml, bodyText, replies;
+  if (v2) {
+    replies = posts.filter(p => !p.is_body && !p.deleted);
+    bodyHtml = blocksHtml(t.blocks);
+    bodyText = plain(FB.toText(t.blocks), 5000);
+  } else {
+    const first = posts[0] || null; replies = posts.slice(1);
+    const tx = first ? publicText(first.body) : { text: '', html: '' };
+    bodyHtml = tx.html ? `<p>${tx.html}</p>` : ''; bodyText = tx.text;
+  }
+  const byId = Object.fromEntries(posts.map(p => [p.id, p]));
+  const post = p => {
     const tx = publicText(p.body);
-    return `<article class="fr-post" id="p${p.id}"><header><b>${who(who_[p.author_id])}</b><time datetime="${esc(iso(p.created_at) || '')}">${esc(day(p.created_at))}</time></header>
+    const parent = p.parent_id && byId[p.parent_id] ? who_[byId[p.parent_id].author_id] : null;
+    return `<article class="fr-post${p.parent_id ? ' fr-reply' : ''}" id="c${p.id}"><header><b>${who(who_[p.author_id])}</b>${parent ? ` <span class="muted">→ ${esc(parent.nick || 'игрок')}</span>` : ''}<time datetime="${esc(iso(p.created_at) || '')}">${esc(day(p.created_at))}</time></header>
       <div class="fr-body">${tx.html || '<span class="muted">(пусто)</span>'}</div></article>`;
   };
-  const description = short(first?.body || '') || `Тема «${title}» на форуме сайта dan4ik37: ${num(replies.length)} ${plural(replies.length, 'ответ', 'ответа', 'ответов')}.`;
+  const description = short(v2 ? t.excerpt || bodyText : bodyText) || `Статья «${title}» на форуме сайта dan4ik37.`;
+  const tags = v2 && Array.isArray(t.tags) ? t.tags.filter(x => /^[a-zа-яё0-9-]{2,24}$/.test(x)) : [];
+  let srcHost = ''; try { srcHost = t.source_url ? new URL(t.source_url).hostname.replace(/^www\./, '') : ''; } catch (e) {}
+  const src = v2 && t.source_url && FB.https(t.source_url) ? `<p class="fa-src">📰 Источник: <a href="${esc(t.source_url)}" rel="nofollow ugc noopener" target="_blank">${esc(plain(t.source_title || '', 140) || srcHost)}</a>${t.source_title && srcHost ? ` <span class="muted">· ${esc(srcHost)}</span>` : ''}</p>` : '';
+  const ads = v2 && adsOk(t);
+  const age = v2 ? t.age_min ?? 12 : 12;
   const body = `
-<main class="wrap fr" data-age-page="12" data-age-title="Форум" data-age-why="Темы и ответы пишут другие игроки — что угодно.">
+<main class="wrap fr" data-age-page="${age >= 16 ? 16 : 12}" data-age-title="Форум" data-age-why="Статьи и комментарии пишут другие игроки.">
   <nav class="crumbs"><a href="/">Главная</a> › <a href="/forum">Форум</a> › <span>${esc(title)}</span></nav>
+  <article class="fa">
   <h1>${t.pinned ? '📌 ' : ''}${t.locked ? '🔒 ' : ''}${esc(title)}</h1>
-  <p class="meta"><span>👤 ${who(who_[t.author_id])}</span><span>📅 ${esc(day(t.created_at))}</span><span>💬 ${num(replies.length)} ${plural(replies.length, 'ответ', 'ответа', 'ответов')}</span>${t.locked ? '<span>🔒 тема закрыта</span>' : ''}</p>
-  ${first ? `<article class="fr-post fr-first" id="p${first.id}"><div class="fr-body">${firstText.html}</div></article>` : ''}
-  <div class="cta"><a class="btn btn-acc" href="/#/forum/${t.id}">💬 ${t.locked ? 'Открыть на сайте' : 'Ответить'}</a><a class="btn btn-ghost" href="/forum">📋 Все темы</a></div>
-  ${replies.length ? `<h2 class="fr-h2">Ответы</h2>${replies.map(post).join('')}` : '<p class="muted fr-empty">Ответов пока нет — будь первым!</p>'}
-  <p class="muted fr-note">Ссылки на другие сайты и контакты на этой странице скрыты. Нашёл нарушение — напиши модераторам в чате.</p>
+  <p class="meta"><span>👤 ${who(who_[t.author_id])}</span><span>📅 <time datetime="${esc(iso(t.published_at || t.created_at) || '')}">${esc(day(t.published_at || t.created_at))}</time></span>${v2 ? `<span>${t.rating > 0 ? '+' : ''}${num(t.rating)} ${plural(Math.abs(t.rating || 0), 'голос', 'голоса', 'голосов')}</span>` : ''}<span>💬 ${num(replies.length)}</span>${age >= 16 ? '<span>16+</span>' : ''}</p>
+  <div class="fa-body">${bodyHtml || '<p class="muted">(пусто)</p>'}</div>
+  ${src}
+  ${tags.length ? `<p class="fr-tags">${tags.map(x => `<a href="/forum/t/${esc(encodeURIComponent(x))}">#${esc(x)}</a>`).join(' ')}</p>` : ''}
+  </article>
+  ${ads ? AD : ''}
+  <div class="cta"><a class="btn btn-acc" href="/#/forum/${esc(String(t.id))}">💬 ${t.locked ? 'Открыть на сайте' : 'Обсудить'}</a><a class="btn btn-ghost" href="/forum">📋 Все статьи</a></div>
+  ${replies.length ? `<h2 class="fr-h2">Комментарии</h2>${replies.map(post).join('')}` : '<p class="muted fr-empty">Комментариев пока нет — будь первым!</p>'}
+  <p class="muted fr-note">Контакты и голые ссылки в тексте на этой странице скрыты; ссылки автора помечены как пользовательские. Нашёл нарушение — нажми «⚑ Пожаловаться» у статьи на сайте.</p>
 </main>`;
+  const last = posts.length ? posts[posts.length - 1] : null;
+  const vid = v2 ? firstVideo(t.blocks) : null;
   const ld = { '@context': 'https://schema.org', '@type': 'DiscussionForumPosting', '@id': url, url, mainEntityOfPage: url, headline: title,
-    text: firstText.text || title, datePublished: iso(t.created_at), dateModified: iso(last?.edited_at || last?.created_at || t.created_at), inLanguage: 'ru',
+    text: bodyText || title, datePublished: iso(t.published_at || t.created_at), dateModified: iso(t.edited_at || last?.edited_at || last?.created_at || t.created_at), inLanguage: 'ru',
     author: person(who_[t.author_id]), isPartOf: { '@type': 'CollectionPage', '@id': `${SITE}/forum`, url: `${SITE}/forum`, name: 'Форум dan4ik37' },
-    interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: replies.length },
-    comment: replies.slice(0, 100).map(p => ({ '@type': 'Comment', '@id': `${url}#p${p.id}`, text: plain(p.body, 2000) || '…', datePublished: iso(p.created_at), author: person(who_[p.author_id]) })) };
-  if (t.locked) ld.isAccessibleForFree = true;
+    interactionStatistic: v2 ? [{ '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: replies.length },
+      { '@type': 'InteractionCounter', interactionType: 'https://schema.org/LikeAction', userInteractionCount: t.votes_up || 0 }]
+      : { '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: replies.length },
+    comment: replies.slice(0, 100).map(p => ({ '@type': 'Comment', '@id': `${url}#c${p.id}`, text: plain(p.body, 2000) || '…', datePublished: iso(p.created_at), author: person(who_[p.author_id]) })) };
+  if (v2) {
+    ld.image = imageOf(t);
+    if (tags.length) ld.keywords = tags.join(', ');
+    if (t.source_url && FB.https(t.source_url)) ld.citation = t.source_url;
+    if (vid) ld.video = { '@type': 'VideoObject', name: title, embedUrl: FB.embedUrl(vid, 'dan4ik37.vercel.app'), contentUrl: FB.watchUrl(vid),
+      ...(FB.poster(vid) ? { thumbnailUrl: FB.poster(vid) } : {}), uploadDate: iso(t.published_at || t.created_at), description: description };
+  }
   res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=3600');
   res.status(200).send(page({
-    title: `${title} — форум dan4ik37`, description, url, image: SITE + '/og-image.jpg', ogType: 'article', body, css: CSS, noAds: true, spa: `#/forum/${t.id}`,
+    title: `${title} — форум dan4ik37`, description, url, image: v2 ? imageOf(t) : SITE + '/og-image.jpg', ogType: 'article', body, css: CSS, noAds: !ads,
+    noindex: age >= 16, spa: `#/forum/${t.id}`,
     ld: [ld, crumbs([['Главная', SITE + '/'], ['Форум', SITE + '/forum'], [title, url]])],
   }));
+}
+
+// POST /api/forum-ping {id} — опубликовали статью: сообщить Яндексу и Bing (IndexNow). Сервер сам проверяет, что статья опубликована,
+// свежая (сутки), для всех (до 12+) и о ней ещё не сообщали (pinged_at) — повторный вызов ничего не делает
+async function forumPing(req, res){
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return res.status(405).send('{"ok":false}'); }
+  let b = req.body; if (typeof b === 'string') { try { b = JSON.parse(b); } catch (e) { b = {}; } }
+  const id = String(b && b.id || '');
+  if (!/^\d{1,12}$/.test(id) || !storeConfigured()) return res.status(200).send('{"ok":false}');
+  try {
+    const rows = await sbPatch('forum_threads', `id=eq.${id}&status=eq.published&age_min=lte.12&realm=eq.kids&pinged_at=is.null&published_at=gt.${encodeURIComponent(new Date(Date.now() - 864e5).toISOString())}`,
+      { pinged_at: new Date().toISOString() });
+    const t = Array.isArray(rows) ? rows[0] : null;
+    if (!t) return res.status(200).send('{"ok":true,"sent":false}');
+    const r = await indexNow([artUrl(t), `${SITE}/forum`, ...(Array.isArray(t.tags) ? t.tags.slice(0, 5).filter(x => /^[a-zа-яё0-9-]{2,24}$/.test(x)).map(x => `${SITE}/forum/t/${encodeURIComponent(x)}`) : [])]);
+    return res.status(200).send(JSON.stringify({ ok: true, sent: true, r }));
+  } catch (e) { return res.status(200).send('{"ok":false}'); }
 }
 
 // ═══ Идеи для видео ═══
@@ -274,5 +386,25 @@ const CSS = `
 .id-votes{grid-row:1/span 3;align-self:center;min-width:3.4rem;text-align:center;padding:.4rem .5rem;border-radius:10px;background:rgba(255,209,102,.1);color:var(--gold-t);font-weight:800;font-size:.8rem}
 .id-st{display:inline-block;padding:.05rem .5rem;border-radius:999px;font-size:.7rem;font-weight:800;background:rgba(var(--fg-rgb),.06);color:var(--muted);vertical-align:middle}
 .id-planned{background:rgba(124,196,255,.14);color:var(--link)}.id-done{background:rgba(34,197,94,.16);color:var(--ok-hi)}.id-rejected{background:rgba(255,45,85,.12);color:var(--pink-t)}
+.fr-has-cover{padding-top:0;overflow:hidden}
+.fr-cover{display:block;width:calc(100% + 2.2rem);margin:0 -1.1rem .5rem;aspect-ratio:16/9;object-fit:cover;height:auto;background:rgba(var(--fg-rgb),.06)}
+.fr-tags{display:flex;flex-wrap:wrap;gap:.35rem;margin:.35rem 0 0 .2rem;font-size:.76rem}
+.fr-tags a{color:var(--link);text-decoration:none;font-weight:700}
+.fa{margin-top:.4rem}
+.fa-body{margin-top:1rem;font-size:1rem;line-height:1.7;word-break:break-word;color:rgba(var(--text-rgb),.92)}
+.fa-body p{margin:0 0 .9em}.fa-body h2{margin:1.3em 0 .5em;font-size:1.25rem}.fa-body h3{margin:1.1em 0 .4em;font-size:1.08rem}
+.fa-body ul,.fa-body ol{margin:0 0 .9em;padding-left:1.4em}
+.fa-body blockquote{margin:0 0 1em;padding:.5rem .9rem;border-left:4px solid rgba(145,71,255,.7);background:rgba(145,71,255,.07);border-radius:0 10px 10px 0}
+.fa-body blockquote p{margin:0}.fa-body blockquote footer{font-size:.8rem;color:var(--muted);margin-top:.3rem}
+.fa-body figure{margin:0 0 1em}.fa-body img{max-width:100%;height:auto;border-radius:12px;display:block}
+.fa-body figcaption{font-size:.78rem;color:var(--muted);margin-top:.35rem}
+.fa-body a{color:var(--link)}.fa-body hr{border:0;border-top:1px solid var(--line);margin:1.4em 0}
+.fa-video a{position:relative;display:block;text-decoration:none}
+.fa-video span{position:absolute;left:.7rem;bottom:.6rem;padding:.3rem .6rem;border-radius:8px;background:rgba(0,0,0,.7);color:#fff;font-weight:800;font-size:.85rem}
+.fa-file span{color:var(--muted);font-size:.8rem}
+.fa-src{margin-top:1rem;padding:.6rem .8rem;border-radius:10px;background:rgba(var(--fg-rgb),.05);font-size:.88rem;word-break:break-word}
+.fa-src a{color:var(--link);font-weight:700}
+.fr-reply{margin-left:1rem;border-left:3px solid rgba(145,71,255,.3)}
+@media(max-width:600px){.fr-cover{width:calc(100% + 1.8rem);margin:0 -.9rem .5rem}.fr-reply{margin-left:.5rem}}
 @media(max-width:600px){.fr-row{padding:.8rem .9rem}.id-row{column-gap:.6rem}.id-votes{min-width:2.8rem}}
 `;

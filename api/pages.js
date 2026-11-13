@@ -28,12 +28,12 @@ import adsterms from './_lib/routes/adterms.js';     // реклама за 💎
 import ref from './_lib/routes/ref.js';               // 👥 приглашение друга /r/<код>
 import oauth from './_lib/routes/oauth.js';          // вход через VK ID, Яндекс ID, Telegram: /auth/<p>/start|callback, /api/oauth
 import raid from './_lib/routes/raid.js';            // набеги: POST /api/raid — сервер пересчитывает бой и засчитывает итог
-import forum from './_lib/routes/forum.js';          // форум /forum, /forum/<id> и идеи /ideas, /ideas/<id> — для поиска и превью ссылок
+import forum from './_lib/routes/forum.js';          // форум /forum, /forum/t/<метка>, /forum/<id>-<slug>, IndexNow /api/forum-ping и идеи /ideas, /ideas/<id>
 import diag from './_lib/routes/diag.js';            // мониторинг: POST /api/diag — отчёты браузеров об ошибках сайта (ops.sql, docs/OPS.md)
 import photo from './_lib/routes/photo.js';          // 🖼 «Фоторедактор онлайн» /tools/photo — для поиска; сам редактор — раздел /photo
 
 const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, vstats, top, quiz, wheel, random, typing, ugc,
-  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, photo, diag };   // raid — набеги
+  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, forumping: forum, photo, diag };   // raid — набеги
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];

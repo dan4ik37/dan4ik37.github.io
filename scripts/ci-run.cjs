@@ -36,7 +36,7 @@ const TESTS = [
   { f: 'xss-test.cjs', t: 300 },   // чужой текст не становится разметкой (T-011): разбор всех js/api + злые строки; ~30 с ЦП
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
   { f: 'ads-test.cjs' }, { f: 'ad-direct-test.cjs' }, { f: 'video-test.cjs' },   // video-test — ролики и YouTube: «Лайк на YouTube», /api/vstats, даты цифр, правила YouTube API { f: 'pay-test.cjs' }, { f: 'referral-test.cjs' }, { f: 'economy-test.cjs' },
-  { f: 'community-test.cjs' }, { f: 'wt-sim-test.cjs' }, { f: 'files-test.cjs' }, { f: 'files-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'settings-test.cjs' }, { f: 'ui-test.cjs' }, { f: 'touch-layout-test.cjs' }, { f: 'radial-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },
+  { f: 'community-test.cjs' }, { f: 'wt-sim-test.cjs' }, { f: 'files-test.cjs' }, { f: 'files-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'forum-test.cjs' }, { f: 'forum-sql-test.mjs', needs: 'pglite', t: 180 }, { f: 'settings-test.cjs' }, { f: 'ui-test.cjs' }, { f: 'touch-layout-test.cjs' }, { f: 'radial-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },
   { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'wx-test.cjs', t: 240 }, { f: 'wxfx-test.cjs' }, { f: 'make-wx.mjs', args: ['--check'], t: 60 }, { f: 'planet-test.cjs' }, { f: 'planet-lod-test.cjs', args: ['--fast'], t: 240 }, { f: 'orbit-test.cjs' }, { f: 'planet-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },   // orbit, planet-sql — T-079: небесная механика, часы мира; planet-lod-test — T-075: LOD v2 (скачки, покрытие, 2 : 1)
   { f: 'physics-test.cjs', soft: 'rapier' }, { f: 'tiles-test.cjs' }, { f: 'mirplay-test.cjs' }, { f: 'kubomir-input-test.cjs' },
   { f: 'world-zones-test.cjs' }, { f: 'world-leak-test.cjs' }, { f: 'city-test.cjs' }, { f: 'city-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'city-sim.cjs', args: ['--days', '60', '--players', '20,100'], t: 180 },
@@ -72,6 +72,7 @@ const TESTS = [
   { f: 'anim-test.cjs', args: ['{THREE}'], needs: 'three', t: 180 },   // T-131: общий скелет и действия (skel.js), модели со скелетом (model.js), экспорт AI3D со скелетом
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
+  { f: 'forum-e2e.cjs', args: ['phone', '20'], needs: 'pglite', e2e: true, t: 600 }, { f: 'forum-e2e.cjs', args: ['phone', '5', 'legacy'], needs: 'pglite', e2e: true, t: 400 },   // T-157: форум 2.0 и старый форум (FORUM2 = false)
   { f: 'war-hud-e2e.cjs', e2e: true, t: 600 },   // боевая зона: панель оружия отвечает (телефон, планшет, ПК)
   { f: 'trees-e2e.cjs', args: ['studio', 'ci'], e2e: true, t: 600 },   // T-022b: деревья пород в «Студии 3D» — все породы ставятся (замеры, снимки, 10 мин игры — режимы вручную)
   { f: 'waves-e2e.cjs', args: ['look'], e2e: true, t: 600 },   // волны (T-022c): видеокарта = JS, шейдеры собрались, катер качается

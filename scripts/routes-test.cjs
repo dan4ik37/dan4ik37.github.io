@@ -313,6 +313,7 @@ function browser(startUrl, routing){
     const J = b => new Response(JSON.stringify(b), { status: 200, headers: { 'Content-Type': 'application/json' } });
     globalThis.fetch = async (url) => {
       const u = String(url); NET.calls.push(u);
+      if (u.includes('/rest/v1/forum_threads?status=eq.published')) return new Response('{"code":"42703","message":"column forum_threads.status does not exist"}', { status: 400 });   // старая база (форум 2.0 — forum-test.cjs)
       if (u.includes('/rest/v1/forum_threads?id=eq.5&')) return J([{ id: 5, title: 'Как пройти <script>alert(1)</script> уровень?', author_id: U1, pinned: false, locked: false, created_at: '2026-10-01T10:00:00Z' }]);
       if (u.includes('/rest/v1/forum_threads?id=eq.')) return J([]);
       if (u.includes('/rest/v1/forum_threads?select=id,title')) return J([{ id: 5, title: 'Тема про Майн', author_id: U1, pinned: true, locked: false, created_at: '2026-10-01T10:00:00Z', forum_posts: [{ count: 3 }] }]);

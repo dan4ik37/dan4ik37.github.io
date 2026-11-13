@@ -322,6 +322,22 @@
       "destination": "/api/pages?page=forum"
     },
     {
+      "source": "/forum/edit/:id",
+      "destination": "/api/pages?page=forum&spa=edit&id=:id"
+    },
+    {
+      "source": "/forum/u/:id",
+      "destination": "/api/pages?page=forum&spa=u&id=:id"
+    },
+    {
+      "source": "/forum/t/:tag",
+      "destination": "/api/pages?page=forum&tag=:tag"
+    },
+    {
+      "source": "/api/forum-ping",
+      "destination": "/api/pages?page=forumping"
+    },
+    {
       "source": "/forum/:id",
       "destination": "/api/pages?page=forum&id=:id"
     },

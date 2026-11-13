@@ -25,6 +25,7 @@ window.ADS_IDS = {
     rewarded:           '', // Rewarded, телефон (platform touch)
     rewarded_desktop:   '', // Rewarded, компьютер
     fullscreen:         '', // «Fullscreen» на телефоне — между партиями в играх (не чаще раза в 3 минуты)
+    forum_article:      '', // статья форума (T-157): одно место под текстом — только опубликованная, проверенная, без жалоб, до 12+
   },
   // Google H5 Games Ads (adBreak: награда и реклама между партиями) — только после одобрения отдельной заявки
   // в AdSense (developers.google.com/ad-placement). Обычные блоки AdSense за награду показывать НЕЛЬЗЯ — бан.
@@ -39,6 +40,7 @@ window.ADS_IDS = {
     games_hub:  '5924218354', // «Игры — витрина» (его же берёт feed)
     seo_game:   '8326096973', // «Страницы игр»
     video_page: '7013015305', // «Страница видео»
+    forum_article: '7013015305', // статья форума (T-157) — пока блок «Страница видео»; свой блок «Статьи форума» владелец может завести и вписать сюда
   },
 };
 
@@ -98,7 +100,7 @@ window.ADS_IDS = {
     return true;
   }
   // statId РСЯ — срез статистики по местам (один блок может стоять в нескольких местах)
-  const STAT = { loading: 11, break: 12, rail: 13, game_over: 14, feed: 20, feed_games: 21, feed_videos: 22, feed_ugc: 23 };
+  const STAT = { loading: 11, break: 12, rail: 13, game_over: 14, feed: 20, feed_games: 21, feed_videos: 22, feed_ugc: 23, feed_forum: 24, forum_article: 25 };
 
   // Полоска внизу экрана — только на телефонах (320–420 px, правило РСЯ для overlay), не чаще правил ad-places.js
   let floorShown = false;
