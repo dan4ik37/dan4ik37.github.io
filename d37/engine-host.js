@@ -75,8 +75,13 @@ async function compileWasm(url, rawSize, onBytes) {
 }
 
 // Start the engine inside o.root (an element the page sized; it gets position:relative children).
-// o: { root, scene: 'planet' | 'planet_ground' | 'valley' (EP7: the game), rawSize, gl, quality, session, look: {body, text}, save: Uint8Array,
+// o: { root, scene: 'planet' | 'planet_ground' | 'valley' (EP7: the game) | 'creative' (T-163: the free-flight world) | 'wardrobe'
+//      (T-163: the character alone on a pedestal — the light wardrobe), rawSize, gl, quality, session, look: {body, text}, save: Uint8Array,
 //      wardrobe: bool, workers: number, onMessage(msg), onProgress({phase, done, total}) }
+// The 'wardrobe' scene is a studio: the panel is open from the start, no walking (the keys and the left half of a phone
+// turn the camera round the character instead), no jump / orbit / 👕 buttons; «Готово» is sent to the page as
+// {t:'wardrobe', on:false} as always (the site goes back where it came from).
+const SCENES = ['planet', 'planet_ground', 'valley', 'creative', 'wardrobe'];
 export async function start(o) {
   const root = o.root;
   style();
@@ -98,7 +103,10 @@ export async function start(o) {
   const module = await compileWasm(HERE('d37_web_bg.wasm'), o.rawSize || 0, (d, t) => progress('wasm', d, t));
   await init({ module_or_path: module });
   if (bridge_version() !== BRIDGE) throw new Error('bridge version ' + bridge_version() + ', the page speaks ' + BRIDGE);
-  const sceneName = o.scene === 'planet_ground' || o.scene === 'valley' ? o.scene : 'planet';
+  const sceneName = SCENES.includes(o.scene) ? o.scene : 'planet';
+  const studio = sceneName === 'wardrobe';
+  // a portrait phone: the wardrobe panel takes the lower 44 % — the studio draws the character in the free part above it
+  if (studio && typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches) canvas.style.height = '56%';
   const res = await fetch(HERE('scenes/' + sceneName + '.ron'));
   if (!res.ok) throw new Error('scene: HTTP ' + res.status);
   const sceneText = await res.text();
@@ -158,7 +166,7 @@ export async function start(o) {
   };
   if (o.session) send(Object.assign({ t: 'session' }, o.session));
   if (o.look && (o.look.text || o.look.body)) send({ t: 'look', body: o.look.body || '', text: o.look.text || '' });
-  if (o.wardrobe) send({ t: 'wardrobe', on: true });
+  if (o.wardrobe || studio) send({ t: 'wardrobe', on: true });
 
   // ── input: the held keys -> one action state (the same as the engine's test page d37-page.js) ──
   const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64 };
@@ -168,7 +176,7 @@ export async function start(o) {
   const keys = st.keys;
   function publish() {
     if (!st.app) return;
-    if (!st.inputOn) { st.app.set_move(0, 0, 0); return; }
+    if (!st.inputOn || studio) { st.app.set_move(0, 0, 0); return; }
     const k = (c) => keys.has(c);
     let fw = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0);
     let sx = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
@@ -199,6 +207,7 @@ export async function start(o) {
       // the game takes digits, R, Q / I, T, Esc in a menu (a menu frees the mouse)
       if (game) { try { if (st.app.game_key(e.code)) { if (menuOpen() && document.pointerLockElement === canvas) document.exitPointerLock(); e.preventDefault(); } } catch (er) { /* not a game key */ } }
     }
+    if (studio && !e.repeat) { const t = { KeyA: [-180, 0], ArrowLeft: [-180, 0], KeyD: [180, 0], ArrowRight: [180, 0], KeyW: [0, -60], ArrowUp: [0, -60], KeyS: [0, 60], ArrowDown: [0, 60] }[e.code]; if (t) st.app.add_look(t[0], t[1]); }
     keys.add(e.code); publish();
     // the key is the game's: the page under it (site hotkeys, Esc of its panels, a focused site button) never sees it
     e.stopPropagation();
@@ -234,10 +243,11 @@ export async function start(o) {
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, h(false));
   };
   const bWard = button('d37h-ward', '👕', 'Гардероб (B)');
+  if (studio) bWard.style.display = 'none';
   bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
   if (planet && !game) hold(button('d37h-orbit', '🌍', 'Орбита ↔ земля (O)'), (v) => { orbitHeld = v; });
   if (touch) {
-    hold(button('d37h-jump', '⤒', 'Прыжок'), (v) => { touchJump = v; });
+    if (!studio) hold(button('d37h-jump', '⤒', 'Прыжок'), (v) => { touchJump = v; });
     const R = 56;
     const hudTouch = new Set();
     on(canvas, 'pointerdown', (e) => {
@@ -245,7 +255,7 @@ export async function start(o) {
       e.preventDefault();
       if (game) { const [x, y] = toCanvas(e); if (st.app.game_pointer(x, y, 0, e.pointerId)) { hudTouch.add(e.pointerId); publish(); return; } }
       const r = canvas.getBoundingClientRect();
-      if (e.clientX - r.left < r.width / 2 && stick.id === -1) { stick.id = e.pointerId; stick.x0 = e.clientX; stick.y0 = e.clientY; stick.sx = 0; stick.sy = 0; }
+      if (!studio && e.clientX - r.left < r.width / 2 && stick.id === -1) { stick.id = e.pointerId; stick.x0 = e.clientX; stick.y0 = e.clientY; stick.sx = 0; stick.sy = 0; }
       else if (look.id === -1) { look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; }
     });
     on(canvas, 'pointermove', (e) => {
@@ -256,7 +266,7 @@ export async function start(o) {
     const end = (e) => { if (hudTouch.has(e.pointerId)) { hudTouch.delete(e.pointerId); const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 2, e.pointerId); publish(); return; } if (e.pointerId === stick.id) { stick.id = -1; stick.sx = 0; stick.sy = 0; publish(); } if (e.pointerId === look.id) look.id = -1; };
     on(canvas, 'pointerup', end); on(canvas, 'pointercancel', end);
   }
-  const hint = add(el('div', 'd37h-hint', game
+  const hint = add(el('div', 'd37h-hint', studio ? (touch ? 'Проведи пальцем — повернуть камеру' : 'Тяни мышью — повернуть камеру · колесо — ближе и дальше') : game
     ? (touch ? 'Слева — идти · справа — смотреть · кнопки: ДЕЙСТВИЕ, СУМКА, РЕМЕСЛО' : 'Нажми на картинку · ЛКМ / E — рубить, брать, ставить · ПКМ — поставить / съесть · 1-8 — в руку · Q — сумка · T — ремесло · R — повернуть')
     : touch
     ? (planet ? 'Слева — идти / лететь · справа — смотреть · 🌍 — на землю и обратно · 👕 — гардероб' : 'Слева — идти · справа — смотреть')

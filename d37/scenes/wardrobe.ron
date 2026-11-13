@@ -1,0 +1,17 @@
+// T-163 «light wardrobe» (owner 13.11: «гардероб ужасный, игру сразу грузит. А должен уметь и в игре и на сайте»): the
+// character alone in a small studio — a flat patch of the yard's ground (seed 1337, 5 x 5 t1 blocks, no sea, so the haze
+// stays light), a round raised pad as the pedestal under the player (the ground there is at 9.5 m), the sun from the front
+// (the wardrobe camera looks at the face). No planet, no game layer, nothing to stream but 25 columns: the site's
+// /hub/wardrobe shows the character in a few seconds (the in-game wardrobe, B / 👕, is unchanged).
+(
+    version: 0,
+    name: "wardrobe",
+    seed: 1337,
+    terrain: (gen: 2, radius: 2, edits: [(-87.5, 10.0, 23, 1.6, 2)]),
+    sun: (azimuth_deg: 40, elevation_deg: 50, exposure: 1.15),
+    cameras: {
+        "main": (pos: (-84.5, 1.9, 26.5), look_at: (-87.5, 1.4, 23)),
+    },
+    objects: [],
+    player: (at: (-87.5, 23), yaw_deg: 40),
+)
