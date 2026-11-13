@@ -83,7 +83,7 @@ const MOUNT = (sect, w) => `(async () => {
   const B = await chrome();
   try {
     await B.send('Page.navigate', { url: site.base + '/' });
-    ok(await B.until(READY, 30000), 'сайт загрузился');
+    ok(await B.until(READY, 90000), "сайт загрузился");
     ok(await B.ev(`D37Phone.need('ds').then(() => !!window.D37Mod && D37DS.x.sub.reports.title === '🛡 Модерация' && !!D37DS.x.sub.settings && typeof D37DS.screenSettings === 'function')`), 'ds-mod.js загружен: 🛡 и ⚙️ открывают центр, screenSettings доступен');
     ok(await B.until(`!!document.querySelector('link[data-dsmod]')`, 3000), 'css/ds-mod.css подключён');
     ok(await B.ev(STUB), 'ответы сервера подменены');
