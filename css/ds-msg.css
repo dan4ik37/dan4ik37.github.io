@@ -14,6 +14,7 @@
 .dsm-sp *{visibility:hidden}
 .dsm-sp.on{background:rgba(var(--fg-rgb),.1);color:inherit;cursor:text}
 .dsm-sp.on *{visibility:visible}
+:root:not([data-theme="light"]) .dsm-sp:not(.on){background:#1e1f22}   /* T-164: тёмная тема — тёмно-серый блок, как в Дискорде, а не белая плашка */
 .dsm-sp:focus-visible{outline:2px solid var(--accent,#9147ff)}
 
 /* 🧵 ветка: счётчик под сообщением и панель */

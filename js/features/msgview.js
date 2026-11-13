@@ -18,6 +18,8 @@
 (() => {
   const P = window.D37Phone;
   const MV = window.MsgView = window.MsgView || {};
+  // 🚩 не на себя и не на создателя (role admin); ds-mod.js заменяет точной проверкой со списком админов. Сервер всё равно решает сам.
+  if (!MV.noReport) MV.noReport = m => !!m && ((m.uid && m.uid === P.me()) || m.role === 'admin');
   const GROUP_MS = 7 * 60e3, KEEP = 350;
   const touch = () => matchMedia('(pointer: coarse)').matches;
   const e = s => (typeof esc === 'function' ? esc(s) : String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
@@ -905,7 +907,7 @@
     // чёрный список поменялся — перерисовать; закрыли ленту — слушатель снять (раньше оставался на каждое открытие чата и держал ленту в памяти)
     const onBlocks = () => { if (!V.destroyed && V.A) renderAll(); };
     const filesOff = window.D37Files?.watch ? window.D37Files.watch(list, id => V.msgs.get(isNaN(+id) ? id : +id) || V.msgs.get(id)) : null;
-    V.destroy = () => { V.destroyed = true; filesOff?.(); V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('d37:blocks', onBlocks); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
+    V.destroy = () => { V.destroyed = true; clearTimeout(V.noteT); filesOff?.(); V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('d37:blocks', onBlocks); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
     window.addEventListener('d37:blocks', onBlocks);
     MV.dsm?.mount?.(V);
     if (opt.adapter) V.setAdapter(opt.adapter);

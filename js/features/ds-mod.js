@@ -69,7 +69,7 @@
   // ═══ Сам центр: меню слева (узко — полоска вверху), справа раздел ═══
   async function hub(el, mode, srv, rest, force){
     const R = rights(srv);
-    const vis = SECT.filter(s => s[3](R));
+    const vis = R.team || R.settings || R.chans || R.log ? SECT.filter(s => s[3](R)) : [];   // одни «Приглашения» — не центр модерации
     if (!vis.length) { el.innerHTML = '<div class="ds-pane"><div class="ds-dim">🛡 Модерация — для команды сервера</div></div>'; return; }
     let k = force || ALIAS[rest?.[0]] || rest?.[0] || 'overview';
     if (!vis.some(s => s[0] === k)) k = vis[0][0];
