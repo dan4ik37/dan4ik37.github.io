@@ -1,14 +1,14 @@
 {
- "id": "85d54fed94",
+ "id": "95e9c6b6fb",
  "bridge": 1,
- "wasm_raw": 9672749,
- "made": "2026-11-13T11:44:28.075Z",
+ "wasm_raw": 9703760,
+ "made": "2026-11-13T12:24:24.809Z",
  "files": {
   "d37-page.js": 34677,
   "d37-terrain-worker.js": 2177,
-  "d37_web.js": 175083,
-  "d37_web_bg.wasm": 9672749,
-  "engine-host.js": 30084,
+  "d37_web.js": 171128,
+  "d37_web_bg.wasm": 9703760,
+  "engine-host.js": 30249,
   "index.html": 4671,
   "LICENSES.txt": 226,
   "scenes/creative.ron": 1937,
@@ -24,7 +24,7 @@
   "scenes/ridge.ron": 1138,
   "scenes/shore.ron": 1170,
   "scenes/valley.ron": 1197,
-  "scenes/wardrobe.ron": 989,
+  "scenes/wardrobe.ron": 1436,
   "scenes/yard.ron": 915
  }
 }

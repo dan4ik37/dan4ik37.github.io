@@ -106,7 +106,8 @@ export async function start(o) {
   const sceneName = SCENES.includes(o.scene) ? o.scene : 'planet';
   const studio = sceneName === 'wardrobe';
   // a portrait phone: the wardrobe panel takes the lower 44 % — the studio draws the character in the free part above it
-  if (studio && typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches) canvas.style.height = '56%';
+  const place = () => { canvas.style.height = studio && typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches ? '56%' : '100%'; };
+  place();
   const res = await fetch(HERE('scenes/' + sceneName + '.ron'));
   if (!res.ok) throw new Error('scene: HTTP ' + res.status);
   const sceneText = await res.text();
@@ -214,6 +215,7 @@ export async function start(o) {
   }, true);
   on(window, 'keyup', (e) => { if (keys.delete(e.code)) publish(); if (live() && !e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation(); }, true);
   on(window, 'blur', () => { keys.clear(); drag = false; publish(); });
+  if (studio) on(window, 'resize', place);   // the phone turned / the window changed: the character stays above the panel
   let drag = false;
   on(canvas, 'click', () => { canvas.focus({ preventScroll: true }); if (!touch && !wardrobeShown && !menuOpen() && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging works */ } } });
   on(canvas, 'contextmenu', (e) => { if (game) e.preventDefault(); });
