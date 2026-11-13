@@ -12,6 +12,7 @@
 // the test input of the mouth channel, N the slow test sine on / off; «🎤» in the admin menu feeds a microphone
 // level instead (WebAudio, asked only on that click). Views: F6 / F7 / F8 or X — 3D, from the side, from above (2D views of the same world).
 // The admin / test menu: ` or F10 (or ⚙), ?admin=1 shows it at load; its buttons run `app.admin(<command>)`.
+// The wardrobe menu: B (or «Гардероб» in the admin menu) — body, colours per slot, the microphone; kept in this browser.
 import init, { D37Web, ground_layer } from './d37_web.js';
 
 const q = new URLSearchParams(location.search);
@@ -123,7 +124,9 @@ async function main() {
   let body = 'girl', palette = 0, view = 0, sine = false;
   const NEXT_BODY = { girl: 'boy', boy: 'mannequin', mannequin: 'girl' };
   const VIEWS = ['persp', 'side', 'top'];
-  const run = (cmd) => { try { const r = app.admin(cmd); state.lastAdmin = r; if (r.startsWith('shot:')) state.shotNext = r.slice(5); return r; } catch (e) { state.lastAdmin = 'отказ: ' + e; return state.lastAdmin; } };
+  // every accepted body choice (G and the menu's buttons alike) is where the next G starts from: a menu pick that was
+  // not kept sent G on from a stale body (13.11 owner: «нельзя обратно переключиться на другого перса»)
+  const run = (cmd) => { try { const r = app.admin(cmd); state.lastAdmin = r; for (const m of cmd.matchAll(/(?:^|;)\s*character\s+(\w+)/g)) if (NEXT_BODY[m[1]]) body = m[1]; state.body = body; if (r.startsWith('shot:')) state.shotNext = r.slice(5); return r; } catch (e) { state.lastAdmin = 'отказ: ' + e; return state.lastAdmin; } };
   function onKey(code) {
     if (code === 'KeyG') { body = NEXT_BODY[body] || 'girl'; run('character ' + body); }
     if (code === 'KeyN') { sine = !sine; run(sine ? 'mouth sine' : 'mouth 0'); }
@@ -133,7 +136,68 @@ async function main() {
     if (code === 'F6' || code === 'F7' || code === 'F8') { view = { F6: 0, F7: 1, F8: 2 }[code]; run('view ' + VIEWS[view]); }
     if (code === 'KeyX') { view = (view + 1) % 3; run('view ' + VIEWS[view]); }
     if (code === 'Backquote' || code === 'F10') toggleAdmin();
+    if (code === 'KeyB') { run('wardrobe toggle'); syncWardrobe(); }
   }
+  // the wardrobe menu (B, or «Гардероб» in the admin menu): the panel is drawn from app.wardrobe_json(); every
+  // choice is an admin command (`character`, `tint`) — the same language as the native client's menu. The body is
+  // ONE «set body» command (any of the three from any state). The colours and the body are kept in this browser.
+  // A garment is cut for one body: this version recolours, it does not move clothes between the girl and the boy.
+  const wardrobe = $('wardrobe');
+  let wSlot = null, wHue = 330, wSat = 0.3, wVal = 1;
+  const hex2 = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
+  const hsv = (h, sat, v) => { const c = v * sat, hp = (((h % 360) + 360) % 360) / 60, x = c * (1 - Math.abs((hp % 2) - 1)); const m = v - c; const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x]; return hex2(r + m) + hex2(g + m) + hex2(b + m); };
+  function keepWardrobe() { try { localStorage.setItem('d37.look', app.wardrobe_look()); localStorage.setItem('d37.character', body); } catch (e) { /* storage blocked */ } }
+  function wrun(cmd) {
+    const r = run(cmd);
+    const m = /^character (\w+)$/.exec(cmd);
+    if (m && !r.startsWith('отказ')) body = m[1];
+    keepWardrobe();
+    // the body changes on the next tick: draw the panel again after it
+    setTimeout(buildWardrobe, m ? 120 : 0);
+    return r;
+  }
+  function btn(text, on, click) { const b = document.createElement('button'); b.textContent = text; if (on) b.className = 'on'; b.addEventListener('click', (e) => { e.stopPropagation(); click(); }); return b; }
+  function buildWardrobe() {
+    if (wardrobe.style.display !== 'block') return;
+    const w = JSON.parse(app.wardrobe_json());
+    wardrobe.textContent = '';
+    const title = document.createElement('div'); title.className = 'atitle'; title.textContent = 'Гардероб (B — закрыть)'; wardrobe.appendChild(title);
+    const row = (label) => { const h = document.createElement('div'); h.className = 'agroup'; h.textContent = label; wardrobe.appendChild(h); const r = document.createElement('div'); r.className = 'arow'; wardrobe.appendChild(r); return r; };
+    const rb = row('Тело');
+    for (const b of w.bodies) rb.appendChild(btn(b.label, b.name === w.body, () => wrun('character ' + b.name)));
+    if (!w.slots.length) { const n = document.createElement('div'); n.className = 'astatus'; n.textContent = 'У манекена нет одежды и цветов'; wardrobe.appendChild(n); }
+    if (!w.slots.find((x) => x.slot === wSlot)) wSlot = w.slots.length ? w.slots[0].slot : null;
+    for (const sl of w.slots) {
+      const r = row(sl.label + (sl.slot === wSlot ? ' ◂' : ''));
+      r.appendChild(btn('свой', sl.color === null, () => { wSlot = sl.slot; wrun('tint ' + w.body + ' ' + sl.slot + ' own'); }));
+      for (const c of sl.swatches) {
+        const b = btn('', sl.color === c, () => { wSlot = sl.slot; wrun('tint ' + w.body + ' ' + sl.slot + ' ' + c); });
+        b.className += ' sw'; b.style.background = '#' + c; b.title = '#' + c; r.appendChild(b);
+      }
+    }
+    if (wSlot) {
+      const range = (label, min, max, step, val, set) => { const r = row(label); const i = document.createElement('input'); i.type = 'range'; i.min = min; i.max = max; i.step = step; i.value = val; i.addEventListener('input', () => { set(Number(i.value)); wrun('tint ' + w.body + ' ' + wSlot + ' ' + hsv(wHue, Math.max(wSat, 0.3), wVal)); }); r.appendChild(i); };
+      range('Оттенок', 0, 359, 1, wHue, (v) => { wHue = v; });
+      range('Яркость', 0.25, 1, 0.01, wVal, (v) => { wVal = v; });
+    }
+    const rm = row('Микрофон');
+    rm.appendChild(btn(micStarted ? '🎤 вкл (нажми — выкл)' : '🎤 выкл (нажми — вкл)', micStarted, () => { startMic().then(() => buildWardrobe()); }));
+    const re = row('');
+    if (w.slots.length) re.appendChild(btn('Свои цвета (сброс)', false, () => wrun('tint ' + w.body + ' reset')));
+    re.appendChild(btn('Готово', false, () => { run('wardrobe off'); syncWardrobe(); }));
+  }
+  function syncWardrobe() {
+    const show = app.wardrobe_shown();
+    wardrobe.style.display = show ? 'block' : 'none';
+    state.wardrobeShown = show;
+    if (show) { if (document.pointerLockElement) document.exitPointerLock(); buildWardrobe(); }
+  }
+  state.syncWardrobe = syncWardrobe;
+  // the choice of an earlier visit
+  try {
+    const look = localStorage.getItem('d37.look'); if (look) run('look ' + look);
+    const ch = localStorage.getItem('d37.character'); if (ch && NEXT_BODY[ch]) { body = ch; run('character ' + ch); }
+  } catch (e) { /* storage blocked */ }
   // the admin menu: buttons from app.admin_items(), grouped; touch and mouse alike
   const admin = $('admin');
   let micStarted = false;
@@ -148,7 +212,7 @@ async function main() {
         box = document.createElement('div'); box.className = 'arow'; admin.appendChild(box);
       }
       const b = document.createElement('button'); b.textContent = it.label; b.dataset.cmd = it.cmd;
-      b.addEventListener('click', (e) => { e.stopPropagation(); status.textContent = run(it.cmd); });
+      b.addEventListener('click', (e) => { e.stopPropagation(); status.textContent = run(it.cmd); syncWardrobe(); });
       box.appendChild(b);
     }
     // the page's own: the mouth by the microphone (the voice server feeds the same input later)
