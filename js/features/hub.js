@@ -428,6 +428,28 @@
     const full = el('button', 'hub-full', '⛶'); full.type = 'button'; full.title = 'На весь экран'; full.setAttribute('aria-label', 'На весь экран');
     full.addEventListener('click', () => toggleFull(box));
     bar.append(back, title, stat, full);
+    // В игре полосы сайта нет (владелец 13.11: «это явно лишнее, оно должно быть в паузе, а не занимать игру»): маленькая ⏸ в углу,
+    // «На сайт» и «На весь экран» — в меню паузы. Гардероб оставляет свою полосу (там «Готово»).
+    let pause = null;
+    if (mode !== 'wardrobe') {
+      box.classList.add('hub-nobar');
+      stat.classList.add('hub-stat-float');
+      const pbtn = el('button', 'hub-pausebtn', '⏸'); pbtn.type = 'button'; pbtn.title = 'Пауза'; pbtn.setAttribute('aria-label', 'Пауза');
+      pause = el('div', 'hub-pause'); pause.hidden = true; pause.setAttribute('role', 'dialog'); pause.setAttribute('aria-label', 'Пауза');
+      const card = el('div', 'hub-pcard');
+      const resume = el('button', 'hub-pbtn hub-pbtn-main', '▶ Продолжить'); resume.type = 'button';
+      const fullP = el('button', 'hub-pbtn', '⛶ На весь экран'); fullP.type = 'button';
+      fullP.addEventListener('click', () => { toggleFull(box); closePause(); });
+      back.classList.add('hub-pbtn');
+      card.append(el('b', 'hub-ptitle', title.textContent), resume, fullP, back);
+      pause.appendChild(card);
+      const openPause = () => { if (!pause.hidden) return; pause.hidden = false; try { st.h && st.h.pause(); } catch (e) {} resume.focus({ preventScroll: true }); };
+      const closePause = () => { if (pause.hidden) return; pause.hidden = true; try { st.h && st.h.resume(); } catch (e) {} };
+      pbtn.addEventListener('click', openPause);
+      resume.addEventListener('click', closePause);
+      pause.addEventListener('click', e => { if (e.target === pause) closePause(); });
+      box.append(pbtn, stat);
+    }
     const stage = el('div', 'hub-stage');
     const load = el('div', 'hub-load');
     const lt = el('div', 'hub-lt', mode === 'wardrobe' ? 'Открываем гардероб' : cre ? 'Летим в творческий мир' : st.opt === 'new' ? 'Рождается новый мир' : st.opt === 'orbit' ? 'Летим к твоему миру' : 'Идём в твой мир');
@@ -443,6 +465,7 @@
     load.append(lt, ph, barO, pct, tip, cancel);
     const err = el('div', 'hub-err'); err.hidden = true;
     box.append(bar, stage, load, err);
+    if (pause) box.appendChild(pause);
     // Щелчки и колёсико в игре — только игре: искры сайта, закрытие меню сайта и прочие обработчики на document их не видят
     // (ссылки «Мини-игры» / «← Меню» на экране ошибки идут дальше — их ведёт роутер сайта)
     for (const t of ['pointerdown', 'mousedown', 'click', 'dblclick', 'contextmenu', 'wheel', 'touchstart']) {
