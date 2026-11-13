@@ -195,6 +195,33 @@ async function main() {
       range('Оттенок', 0, 359, 1, wHue, (v) => { wHue = v; });
       range('Яркость', 0.25, 1, 0.01, wVal, (v) => { wVal = v; });
     }
+    // W9 «Эволюция»: parts on the skeleton (ears, tail, horns…) and a covering, drawn from app.evo_json(); every button
+    // is an app.evo_admin command (in a world the world pays with evolution points; here — a free try-on). Kept in
+    // this browser as d37.evo. Older engine builds have no evo_* — the section is simply not shown.
+    if (app.evo_json) {
+      const e = JSON.parse(app.evo_json());
+      if (e.cats) {
+        const erun = (cmd) => { try { app.evo_admin(cmd); localStorage.setItem('d37.evo', app.evo_look()); } catch (er) { /* refused or storage blocked */ } buildWardrobe(); };
+        const h = document.createElement('div'); h.className = 'atitle'; h.textContent = 'Эволюция' + (e.fx ? ' — ' + e.fx : ''); wardrobe.appendChild(h);
+        for (const c of e.cats) {
+          const r = row(c.icon + ' ' + c.name);
+          r.appendChild(btn('нет', c.worn === null, () => erun('off ' + c.id)));
+          for (const pt of c.parts) { const b = btn(pt.icon + ' ' + pt.name, pt.worn, () => erun('wear ' + pt.id + (c.col !== null ? ' ' + c.col : ''))); b.title = pt.fx + (e.points === null ? '' : ' · ' + pt.cost + ' очк.'); r.appendChild(b); }
+          if (c.worn !== null) {
+            const rc = row('цвет: ' + c.name);
+            for (const col of e.colors) { const b = btn('', c.col === col.i, () => erun('color ' + c.id + ' ' + col.i)); b.className += ' sw'; b.style.background = '#' + col.hex; b.title = col.name; rc.appendChild(b); }
+          }
+        }
+        const rs = row('Покров');
+        let cover = null;
+        for (const cv of e.coverings) { if (cv.worn) cover = cv; const b = btn(cv.icon + ' ' + cv.name, cv.worn, () => erun('skin ' + cv.id)); b.title = cv.fx; rs.appendChild(b); }
+        if (cover && cover.id !== 'skin') {
+          const rc = row('цвет: ' + cover.name);
+          for (const col of e.colors) { const b = btn('', e.cover_col === col.i, () => erun('color skin ' + col.i)); b.className += ' sw'; b.style.background = '#' + col.hex; b.title = col.name; rc.appendChild(b); }
+        }
+        row('').appendChild(btn('Снять всё', false, () => erun('reset')));
+      }
+    }
     const rm = row('Микрофон');
     rm.appendChild(btn(micStarted ? '🎤 вкл (нажми — выкл)' : '🎤 выкл (нажми — вкл)', micStarted, () => { startMic().then(() => buildWardrobe()); }));
     const re = row('');
@@ -211,6 +238,7 @@ async function main() {
   // the choice of an earlier visit
   try {
     const look = localStorage.getItem('d37.look'); if (look) run('look ' + look);
+    const evo = localStorage.getItem('d37.evo'); if (evo && app.evo_admin) { try { app.evo_admin('look ' + evo); } catch (e) { /* an older save */ } }
     const ch = localStorage.getItem('d37.character'); if (ch && NEXT_BODY[ch]) { body = ch; run('character ' + ch); }
   } catch (e) { /* storage blocked */ }
   // the admin menu: buttons from app.admin_items(), grouped; touch and mouse alike
