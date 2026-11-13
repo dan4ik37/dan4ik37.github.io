@@ -274,6 +274,8 @@ async function main() {
   canvas.addEventListener('mousedown', () => { if (!TOUCH) drag = true; });
   addEventListener('mouseup', () => { drag = false; });
   addEventListener('blur', () => { drag = false; });
+  // the third-person zoom: the mouse wheel (as the site's «Мир Денчика»)
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas || drag) app.add_look(e.movementX, e.movementY); });
 
   // buttons (mouse and touch alike): «орбита ↔ земля» is held while pressed (the engine takes the press), full screen
