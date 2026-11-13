@@ -69,7 +69,8 @@
   // T-162: realtime UPDATE не присылает неизменённые «большие» (TOAST) jsonb — att с превью, reactions. Нет ключа → undefined, и лента
   // (msgview onEvent 'upd') оставляет старое значение, а не стирает вложение
   const cmMsg = r => ({ id: r.id, uid: r.user_id || null, nick: r.nick || 'игрок', text: r.text || '', at: r.created_at, reply: r.reply_to || null,
-    edited: r.edited_at || null, deleted: !!r.deleted, hidden: !!r.hidden, reactions: 'reactions' in r ? r.reactions || {} : undefined, pinned: !!r.pinned_at, ch: r.channel_id, att: 'att' in r ? r.att || null : undefined });
+    edited: r.edited_at || null, deleted: !!r.deleted, hidden: !!r.hidden, reactions: 'reactions' in r ? r.reactions || {} : undefined, pinned: !!r.pinned_at, ch: r.channel_id, att: 'att' in r ? r.att || null : undefined,
+    thread: 'thread_id' in r ? r.thread_id || null : undefined, tn: 'thread_n' in r ? r.thread_n || 0 : undefined, tat: 'thread_at' in r ? r.thread_at || null : undefined });   // ds-msg: ветки (ч. 12)
 
   // ═══ Адаптер канала сообщества для MsgView ═══
   function commAdapter(C, ch){
@@ -111,6 +112,7 @@
         if (!C.role && !C.staff) return { list: [], more: false };
         let qy = sbClient.from('community_messages').select('*').eq('channel_id', chId).eq('deleted', false).order('id', { ascending: false }).limit(50);
         if (before) qy = qy.lt('id', before);
+        if (window.D37Dsm?.ready) qy = qy.is('thread_id', null);   // ds-msg: ответы в ветках — только в панели ветки
         const { data, error } = await qy;
         if (error) return { list: [], err: error, errText: P.err(error) };
         const list = await withMine((data || []).map(cmMsg).reverse());
@@ -124,8 +126,8 @@
           .subscribe();
         return () => { try { sbClient.removeChannel(chan); } catch (er) {} };
       },
-      async send(text, reply){
-        const r = await P.rpc('cm_send', { p_channel: chId, p_text: text, p_reply: typeof reply === 'number' ? reply : null });
+      async send(text, reply, thr){   // thr — ответ в ветке (ds-msg, community.sql ч. 12: dsm_thread_send — те же проверки, что cm_send)
+        const r = typeof thr === 'number' ? await P.rpc('dsm_thread_send', { p_root: thr, p_text: text }) : await P.rpc('cm_send', { p_channel: chId, p_text: text, p_reply: typeof reply === 'number' ? reply : null });
         if (r.data?.ok) return { ok: true, m: Object.assign(cmMsg(r.data.msg), { myReacts: new Set() }) };
         if (r.data?.reason === 'slow') return { ok: false, err: `🐢 медленный режим — ещё ${r.data.wait} с` };
         if (r.data?.reason === 'automod') return { ok: false, err: r.data.why || '🤖 автомодерация' };   // объяснение сервера (ч. 4)

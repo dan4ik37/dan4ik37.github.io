@@ -286,7 +286,9 @@ function offMsg(r){
     color: r.color, pinned: !!(r.pinned_until && Date.parse(r.pinned_until) > Date.now()), pinnedUntil: r.pinned_until || null, pinnedBy: r.user_id, ch: r.channel || 'general',
     // T-162: realtime UPDATE (правка, закреп, удаление) не присылает неизменённый att (jsonb с превью лежит в TOAST) — нет ключа →
     // undefined, лента оставляет старое вложение (раньше att: null стирал видео / картинку до перезагрузки)
-    att: 'att' in r ? r.att || null : undefined };
+    att: 'att' in r ? r.att || null : undefined,
+    // ds-msg (community.sql ч. 12): ответ в ветке (thread) и счётчик ответов у корня (tn); нет колонки — undefined
+    thread: 'thread_id' in r ? r.thread_id || null : undefined, tn: 'thread_n' in r ? r.thread_n || 0 : undefined, tat: 'thread_at' in r ? r.thread_at || null : undefined };
 }
 function rememberAuthor(m){
   if (!m.uid || m.role === 'guest') return;
@@ -319,6 +321,7 @@ function chatAdapter(chId){
       if (!sbClient) return { list: DEMO_MSGS.map((m, i) => ({ id: 'demo' + i, uid: null, nick: m.nick, text: m.text, role: m.role, at: new Date().toISOString() })), more: false };
       let qy = chanQuery(sbClient.from('messages').select('*').eq('deleted', false), id).order('id', { ascending: false }).limit(50);
       if (before) qy = qy.lt('id', before);
+      if (window.D37Dsm?.ready) qy = qy.is('thread_id', null);   // ds-msg: ответы в ветках — только в панели ветки
       const { data, error } = await qy;
       if (error) return { list: [], err: error, errText: humanErr(error) };
       const list = (data || []).filter(r => !bannedNicks.has(String(r.nick || '').toLowerCase())).map(offMsg).reverse();
@@ -331,7 +334,7 @@ function chatAdapter(chId){
       OFF.subs.get(id).add(fn);
       return () => OFF.subs.get(id)?.delete(fn);
     },
-    send: (text, reply) => sendOfficial(id, text, reply),
+    send: (text, reply, thr) => sendOfficial(id, text, reply, thr),   // thr — ответ в ветке (ds-msg)
     sendSticker: emoji => sendStickerOfficial(id, emoji),
     async edit(m, text){
       const err = checkSpam(text); if (err) return { ok: false, err };
@@ -443,7 +446,7 @@ function chatTyping(chId){
 }
 
 // Отправить в канал сервера «Денчик37» (анти-спам, мут, бан — как раньше) → { ok, err }
-async function sendOfficial(chId, text, reply){
+async function sendOfficial(chId, text, reply, thr){
   if (!chatNick) return { ok: false, err: 'сначала войди — гостем или в аккаунт' };
   const isStaff = isChatStaff();
   // Временный мут — за накопленные подряд нарушения (см. registerStrike). Не применяется к команде.
@@ -461,7 +464,7 @@ async function sendOfficial(chId, text, reply){
   const prevSent = lastSentText;
   lastSentText = text;
   const row = chatRow(text);
-  if (chatHasNew()) { if (chId !== 'general') row.channel = chId; if (reply && typeof reply === 'number') row.reply_to = reply; }
+  if (chatHasNew()) { if (chId !== 'general') row.channel = chId; if (reply && typeof reply === 'number') row.reply_to = reply; if (thr && typeof thr === 'number') row.thread_id = thr; }
   const res = await sendMsgToSupabase(row);
   if (res.err) { lastSentText = prevSent; return { ok: false, err: res.err }; }
   // T-160: вернуть само сообщение (номер нужен 📎 файлам — msg_attach; без него файл в общем чате «не отправлялся» никогда)
