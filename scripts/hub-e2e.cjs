@@ -2,6 +2,7 @@
 //   guest   — меню (телефон и ПК, тёмная и светлая), «Играть» → экран загрузки → игра движка внутри сайта; гардероб: «Мальчик» + цвет
 //             → образ в настройках браузера; выход — мир в IndexedDB; перезагрузка → /hub/wardrobe: тот же образ в движке; /hub/play —
 //             продолжение с сохранения
+//   phone   — телефон с касаниями: кнопки ⤒ 🌍 👕 на экране, графика «быстро», зажал 🌍 — полёт с орбиты вниз до посадки («приземлился»)
 //   account — поддельный вход (currentUser в странице; ответы Supabase подменяет сам тест через Fetch — в базу ничего не пишется):
 //             образ уходит в аккаунт (prefs_set), мир — в облако (cloud_begin → файл → cloud_commit); браузер очищен → вход → образ
 //             из аккаунта, мир из облака (продолжение)
@@ -12,7 +13,7 @@ const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('M:/d37/claude-tmp') ? 'M:/d37/claude-tmp/hub-e2e' : os.tmpdir());
 const SHOTS = process.env.SHOTS || (fs.existsSync('M:/d37/d37-play') ? 'M:/d37/d37-play/EP7-shots/site' : path.join(TMP, 'shots'));
-const MODES = (process.argv[2] || 'guest,account').split(',');
+const MODES = (process.argv[2] || 'guest,account,phone').split(',');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let fails = 0;
 const ok = (c, m, x) => { console.log((c ? '  ✓ ' : '  ✗ ') + m + (x !== undefined ? ' ' + JSON.stringify(x) : '')); if (!c) fails++; };
@@ -213,6 +214,42 @@ async function playUntilLoaded(C, label){
             }
             await C.ev(GO('/hub'));
             await C.until(`!D37Hub.active`, 15000);
+          }
+          const errs = C.errs.filter(e => !/supabase|realtime|websocket|Failed to fetch|NetworkError/i.test(e));
+          ok(errs.length === 0, 'нет ошибок JS на странице', errs.slice(0, 5));
+        } finally { await C.close(); }
+      }
+      if (MODE === 'phone') {
+        const C = await chrome();
+        try {
+          await C.view(412, 915, true);
+          await C.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+          await C.send('Page.navigate', { url: site.base + '/hub/play' });
+          ok(await C.until(READY, 60000), 'сайт загрузился (телефон)');
+          if (await playUntilLoaded(C, 'телефон')) {
+            ok(await C.ev(`!!(document.querySelector('.d37h-jump') && document.querySelector('.d37h-orbit') && document.querySelector('.d37h-ward'))`), 'кнопки на экране: прыжок, орбита ↔ земля, гардероб');
+            ok(await C.ev(`D37Hub._st.h.state.app.quality() === 'low'`), 'телефон: графика «быстро» (low)', await C.ev(`D37Hub._st.h.state.app.quality()`));
+            const alt0 = await C.ev(`JSON.parse(D37Hub._st.h.state.app.planet_stats()).alt`);
+            await C.ev(`(() => { const b = document.querySelector('.d37h-orbit'); b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' })); setTimeout(() => b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' })), 600); return true; })()`);
+            await sleep(4000);
+            const p1 = await C.ev(`JSON.parse(D37Hub._st.h.state.app.planet_stats())`);
+            ok(p1.auto || p1.alt < alt0 * 0.98, 'зажал 🌍 — полёт с орбиты вниз', { alt0, alt: p1.alt, auto: p1.auto });
+            await C.shot('descent_phone.png');
+            const landed = await C.until(`D37Hub._st.events.includes('landed')`, 120000);
+            const p2 = await C.ev(`JSON.parse(D37Hub._st.h.state.app.planet_stats())`);
+            ok(landed, 'приземлился (событие движка «landed», тост на экране)', { alt: p2.alt, events: await C.ev(`D37Hub._st.events`) });
+            await sleep(5000);
+            await C.shot('landed_phone.png');
+            // шаг вперёд левым «стиком»: касание слева внизу и сдвиг вверх
+            const pos0 = await C.ev(`D37Hub._st.h.stats().pos`);
+            await C.ev(`(() => { const c = document.querySelector('.hub-stage canvas'), r = c.getBoundingClientRect(), x = r.left + r.width * 0.25, y = r.top + r.height * 0.75;
+              const ev = (t, yy) => c.dispatchEvent(new PointerEvent(t, { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: x, clientY: yy }));
+              ev('pointerdown', y); ev('pointermove', y - 60); setTimeout(() => ev('pointerup', y - 60), 2500); return true; })()`);
+            await sleep(3200);
+            const pos1 = await C.ev(`D37Hub._st.h.stats().pos`);
+            const moved = Math.hypot(pos1[0] - pos0[0], pos1[2] - pos0[2]);
+            ok(moved > 1, 'левый «стик» на телефоне двигает персонажа', { moved: Math.round(moved * 10) / 10 });
+            await C.shot('walk_phone.png');
           }
           const errs = C.errs.filter(e => !/supabase|realtime|websocket|Failed to fetch|NetworkError/i.test(e));
           ok(errs.length === 0, 'нет ошибок JS на странице', errs.slice(0, 5));

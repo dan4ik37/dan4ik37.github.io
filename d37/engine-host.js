@@ -274,11 +274,17 @@ export async function start(o) {
     if (wardrobeShown) {
       if (document.pointerLockElement) document.exitPointerLock();
       hint.style.opacity = '0';
-      // the wardrobe turns the camera to the face; a look steeply down (the orbit's start, -75°) would still show the top of the
-      // head: lift it to just under the horizon (add_look: 0.08° per pixel, moving up looks up)
-      try { const [, pitch] = Array.from(st.app.look_deg()); if (pitch < -25) st.app.add_look(0, (pitch + 8) / 0.08); } catch (e) { /* the look stays */ }
+      // the wardrobe turns the camera to the face; a look steeply down would still show the top of the head
+      levelLook(-8);
       buildPanel();
     }
+  }
+
+  // The orbit starts looking steeply down (-75°): on the ground that look shows the top of the head and the ground only.
+  // After a landing, a start on the ground and in the wardrobe the look is lifted to just under the horizon (add_look:
+  // 0.08° per pixel, moving up looks up); a player who looks down on purpose later is not touched.
+  function levelLook(target) {
+    try { const [, pitch] = Array.from(st.app.look_deg()); if (pitch < target - 13) st.app.add_look(0, (pitch - target) / 0.08); } catch (e) { /* the look stays */ }
   }
 
   // ── the frame: jobs to idle Workers, one engine frame, the bridge's messages ──
@@ -316,7 +322,8 @@ export async function start(o) {
       const out = a.host_out();
       if (out) {
         for (const m of JSON.parse(out)) {
-          if (m.t === 'loaded') st.loaded = true;
+          if (m.t === 'loaded') { st.loaded = true; try { const p = JSON.parse(a.planet_stats()); if (planet && p.alt < 100) levelLook(-12); } catch (e) { /* numbers only */ } }
+          if (m.t === 'event' && m.code === 'landed') levelLook(-12);
           if (m.t === 'wardrobe') syncPanel(m.on);
           // the body changed (a click, G, the page's saved look): the panel shows that body's parts
           if (m.t === 'look_changed' && m.body) { body = m.body; if (wardrobeShown && m.body !== panelBody) buildPanel(); }
