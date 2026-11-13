@@ -3424,3 +3424,523 @@ revoke all on function public.cm_server_set(bigint, text, text, text) from publi
 grant execute on function public.cm_server_set(bigint, text, text, text) to authenticated;
 revoke all on function public.cm_chan_extra(bigint, text, text, int) from public, anon;
 grant execute on function public.cm_chan_extra(bigint, text, text, int) to authenticated;
+
+-- ═══ часть 12 (ds-msg) ═══
+-- ═══ 12. 💬 Сообщения «как в Дискорде» (T-164, владелец 13.11: «наш дс до уровня дс не дотягивает, не хватает интересных фишек»).
+--     🧵 ветки из сообщения (thread_id / thread_n / thread_at у messages и community_messages; ответы в ветке не видны в ленте канала,
+--     у сообщения — «N ответов»; подписка dsm_follows, 🔔 подписчикам), 🕘 история правок (dsm_edits: видят автор и модераторы),
+--     📊 опросы (dsm_polls / dsm_poll_votes: один голос на человека, итоги, срок), 🗂 каналы-форумы (dsm_forums: теги; dsm_posts:
+--     заголовок и теги поста = корень ветки), @роль в сообществах и @here — только тем, кто в сети. Дети до 13 не шлют и не получают
+--     массовых упоминаний (@everyone / @here / @роль). Всё пишется только через RPC и триггеры; ветки, правки и опросы читаются с
+--     проверкой возраста канала (ч. 10) и участия в сообществе. Проверка «применено»: dsm_info() → {"ok": true, "v": 1}.
+--     Без этой части сайт работает как раньше (клиент: js/features/ds-msg.js, флаг DSM_ON).
+
+alter table public.messages add column if not exists thread_id bigint;
+alter table public.messages add column if not exists thread_n int not null default 0;
+alter table public.messages add column if not exists thread_at timestamptz;
+alter table public.community_messages add column if not exists thread_id bigint;
+alter table public.community_messages add column if not exists thread_n int not null default 0;
+alter table public.community_messages add column if not exists thread_at timestamptz;
+create index if not exists idx_messages_thread on public.messages (thread_id, id) where thread_id is not null;
+create index if not exists idx_cmsg_thread on public.community_messages (thread_id, id) where thread_id is not null;
+alter table public.communities add column if not exists role_ping_at timestamptz;   -- последний @роль (раз в 10 минут на сообщество)
+
+create table if not exists public.dsm_follows (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null check (kind in ('o', 'c')),          -- o — сервер сайта (messages), c — сообщество (community_messages)
+  root_id bigint not null,
+  on_ boolean not null default true,                      -- false — сам отписался (ответ в ветке не подпишет заново)
+  created_at timestamptz not null default now(),
+  primary key (user_id, kind, root_id)
+);
+create index if not exists idx_dsm_follows_root on public.dsm_follows (kind, root_id) where on_;
+create table if not exists public.dsm_edits (
+  id bigint generated always as identity primary key,
+  kind text not null check (kind in ('o', 'c')),
+  msg_id bigint not null,
+  old_text text not null default '',
+  edited_at timestamptz not null default now()
+);
+create index if not exists idx_dsm_edits_msg on public.dsm_edits (kind, msg_id, id desc);
+create table if not exists public.dsm_polls (
+  id bigint generated always as identity primary key,
+  kind text not null check (kind in ('o', 'c')),
+  community_id bigint references public.communities(id) on delete cascade,
+  channel text not null,
+  author uuid references public.profiles(id) on delete set null,
+  question text not null check (char_length(question) between 1 and 200),
+  options jsonb not null,
+  multi boolean not null default false,
+  ends_at timestamptz not null,
+  closed boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_dsm_polls_author on public.dsm_polls (author, created_at desc);
+create table if not exists public.dsm_poll_votes (
+  poll_id bigint not null references public.dsm_polls(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  opt int not null,
+  created_at timestamptz not null default now(),
+  primary key (poll_id, user_id, opt)
+);
+create table if not exists public.dsm_forums (
+  kind text not null check (kind in ('o', 'c')),
+  community_id bigint references public.communities(id) on delete cascade,
+  channel text not null,
+  tags text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  primary key (kind, channel)
+);
+create table if not exists public.dsm_posts (
+  kind text not null check (kind in ('o', 'c')),
+  msg_id bigint not null,
+  community_id bigint references public.communities(id) on delete cascade,
+  channel text not null,
+  title text not null check (char_length(title) between 1 and 100),
+  tags text[] not null default '{}',
+  author uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (kind, msg_id)
+);
+create index if not exists idx_dsm_posts_ch on public.dsm_posts (kind, channel, msg_id desc);
+
+alter table public.dsm_follows enable row level security;
+alter table public.dsm_edits enable row level security;
+alter table public.dsm_polls enable row level security;
+alter table public.dsm_poll_votes enable row level security;
+alter table public.dsm_forums enable row level security;
+alter table public.dsm_posts enable row level security;
+drop policy if exists dsm_follows_read on public.dsm_follows;
+create policy dsm_follows_read on public.dsm_follows for select using (user_id = auth.uid());
+drop policy if exists dsm_forums_read on public.dsm_forums;
+create policy dsm_forums_read on public.dsm_forums for select
+  using (kind = 'o' or public.comm_is_member(community_id) or public.comm_is_staff());
+-- заголовок поста виден тому, кто видит само сообщение (подзапрос — от имени читающего: RLS ленты и возраст канала ч. 10)
+drop policy if exists dsm_posts_read on public.dsm_posts;
+create policy dsm_posts_read on public.dsm_posts for select
+  using (case when kind = 'o' then exists (select 1 from public.messages m where m.id = msg_id and not m.deleted)
+              else exists (select 1 from public.community_messages m where m.id = msg_id and not m.deleted) end);
+-- dsm_edits, dsm_polls, dsm_poll_votes — только через функции ниже (политик чтения нет)
+
+-- ── Помощники ──
+create or replace function public.dsm_child(p_uid uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select p_uid is not null and public.kidsafe_on() and coalesce(public.age_group_of(p_uid), 'unknown') = 'child';
+$$;
+-- видит ли auth.uid() канал: o — канал сервера сайта (возраст канала), c — канал сообщества (участник или персонал + возраст)
+create or replace function public.dsm_can_see(p_kind text, p_cid bigint, p_channel text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare v_ch bigint;
+begin
+  if p_kind = 'o' then
+    return coalesce(exists (select 1 from public.chat_channels where id = coalesce(p_channel, 'general'))
+      and public.chat_chan_age_ok(case when coalesce(p_channel, 'general') = 'general' then null else p_channel end), false);
+  end if;
+  begin v_ch := p_channel::bigint; exception when others then return false; end;
+  return coalesce(exists (select 1 from public.community_channels where id = v_ch and community_id = p_cid)
+    and (public.comm_is_member(p_cid) or public.comm_is_staff()) and public.cm_chan_age_ok(v_ch), false);
+end $$;
+-- может ли auth.uid() писать (опрос — как сообщение): вошёл, не до 9 лет, не заглушён, канал не «только модераторы»
+create or replace function public.dsm_can_write(p_kind text, p_cid bigint, p_channel text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); c record; v_ch bigint; v_role text; v_mute timestamptz;
+begin
+  if uid is null or not public.dsm_can_see(p_kind, p_cid, p_channel) then return false; end if;
+  if public.kidsafe_on() and public.age_u9(uid) and not public.comm_is_staff(uid) then return false; end if;
+  if p_kind = 'o' then
+    select * into c from public.chat_channels where id = coalesce(p_channel, 'general');
+    if c.kind <> 'text' or coalesce(c.archived, false) then return false; end if;
+    if public.chat_staff_role(uid) is not null then return true; end if;
+    if c.mods_only then return false; end if;
+    return not exists (select 1 from public.chat_mutes where until > now() and user_id = uid);
+  end if;
+  v_ch := p_channel::bigint;
+  select * into c from public.community_channels where id = v_ch;
+  if c.kind <> 'text' or c.archived then return false; end if;
+  select role, muted_until into v_role, v_mute from public.community_members where community_id = p_cid and user_id = uid;
+  if v_role is null then return public.comm_is_staff(uid); end if;
+  if v_mute > now() then return false; end if;
+  return not (c.mods_only and v_role = 'member');
+end $$;
+-- модератор канала для правок и опросов: сайт — команда (admin / moderator / helper); сообщество — «модерация» (бит 2)
+create or replace function public.dsm_is_mod(p_kind text, p_cid bigint)
+returns boolean language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and case when p_kind = 'o' then public.chat_staff_role(auth.uid()) is not null
+    else public.comm_perm(p_cid, auth.uid(), 2) end;
+$$;
+
+-- ── 🧵 Ветки ──
+-- Сервер сайта: строку пишет браузер (как раньше, chat_guard / chat_automod / chan_age_guard проверяют) — thread_id проверяем здесь
+create or replace function public.dsm_thread_guard_o()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare r record;
+begin
+  new.thread_n := 0; new.thread_at := null;
+  if new.thread_id is null then return new; end if;
+  select id, channel, thread_id, deleted into r from public.messages where id = new.thread_id;
+  if not found or r.deleted or r.thread_id is not null or coalesce(r.channel, 'general') is distinct from coalesce(new.channel, 'general') then
+    new.thread_id := null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists dsm_thread_guard_o on public.messages;
+create trigger dsm_thread_guard_o before insert on public.messages for each row execute function public.dsm_thread_guard_o();
+-- Сообщество: пишет только cm_send; ветка — из dsm_thread_send (set_config 'd37.thread' на эту транзакцию)
+create or replace function public.dsm_thread_guard_c()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v text := nullif(current_setting('d37.thread', true), ''); r record;
+begin
+  new.thread_id := null; new.thread_n := 0; new.thread_at := null;
+  if v is not null and v ~ '^[0-9]{1,18}$' then
+    select id, channel_id, thread_id, deleted into r from public.community_messages where id = v::bigint;
+    if found and not r.deleted and r.thread_id is null and r.channel_id = new.channel_id then new.thread_id := r.id; end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists dsm_thread_guard_c on public.community_messages;
+create trigger dsm_thread_guard_c before insert on public.community_messages for each row execute function public.dsm_thread_guard_c();
+-- Ветку, счётчик и время меняют только наши триггеры (флаг d37.dsm), браузер — нет
+create or replace function public.dsm_thread_lock()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.thread_id := old.thread_id;
+  if coalesce(current_setting('d37.dsm', true), '') <> '1' then new.thread_n := old.thread_n; new.thread_at := old.thread_at; end if;
+  return new;
+end $$;
+drop trigger if exists dsm_thread_lock on public.messages;
+create trigger dsm_thread_lock before update on public.messages for each row execute function public.dsm_thread_lock();
+drop trigger if exists dsm_thread_lock on public.community_messages;
+create trigger dsm_thread_lock before update on public.community_messages for each row execute function public.dsm_thread_lock();
+
+-- Ответ в ветке: +1 у корня, автор корня и автор ответа подписаны, 🔔 подписчикам (склейка — раз в 5 минут на ветку)
+create or replace function public.dsm_thread_after()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare k text := case when tg_table_name = 'messages' then 'o' else 'c' end; v_root_uid uuid; v_link text; v_cid bigint; v_ch text; u record;
+begin
+  if new.thread_id is null then return null; end if;
+  perform set_config('d37.dsm', '1', true);
+  if k = 'o' then
+    update public.messages set thread_n = thread_n + 1, thread_at = new.created_at where id = new.thread_id returning user_id, coalesce(channel, 'general') into v_root_uid, v_ch;
+    v_link := '#/chat/' || v_ch;
+  else
+    update public.community_messages set thread_n = thread_n + 1, thread_at = new.created_at where id = new.thread_id returning user_id, community_id, channel_id::text into v_root_uid, v_cid, v_ch;
+    v_link := '#/phone/comm/' || v_cid || '/' || v_ch;
+  end if;
+  perform set_config('d37.dsm', '', true);
+  begin
+    if v_root_uid is not null then
+      insert into public.dsm_follows (user_id, kind, root_id) values (v_root_uid, k, new.thread_id) on conflict do nothing;
+    end if;
+    if new.user_id is not null then
+      insert into public.dsm_follows (user_id, kind, root_id) values (new.user_id, k, new.thread_id) on conflict do nothing;
+    end if;
+    for u in select user_id from public.dsm_follows where kind = k and root_id = new.thread_id and on_ and user_id is distinct from new.user_id limit 50 loop
+      perform public.comm_notify(u.user_id, case when k = 'o' then 'chat_reply' else 'cm_reply' end, new.user_id, 'новое в ветке',
+        left(coalesce(new.text, ''), 140), v_link, 'dst:' || k || ':' || new.thread_id || ':' || public.comm_bucket(5));
+    end loop;
+  exception when others then null;
+  end;
+  return null;
+end $$;
+drop trigger if exists dsm_thread_after on public.messages;
+create trigger dsm_thread_after after insert on public.messages for each row execute function public.dsm_thread_after();
+drop trigger if exists dsm_thread_after on public.community_messages;
+create trigger dsm_thread_after after insert on public.community_messages for each row execute function public.dsm_thread_after();
+-- удалили ответ в ветке — счётчик −1
+create or replace function public.dsm_thread_del()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.thread_id is null or not new.deleted or old.deleted then return null; end if;
+  perform set_config('d37.dsm', '1', true);
+  if tg_table_name = 'messages' then update public.messages set thread_n = greatest(0, thread_n - 1) where id = new.thread_id;
+  else update public.community_messages set thread_n = greatest(0, thread_n - 1) where id = new.thread_id; end if;
+  perform set_config('d37.dsm', '', true);
+  return null;
+end $$;
+drop trigger if exists dsm_thread_del on public.messages;
+create trigger dsm_thread_del after update of deleted on public.messages for each row execute function public.dsm_thread_del();
+drop trigger if exists dsm_thread_del on public.community_messages;
+create trigger dsm_thread_del after update of deleted on public.community_messages for each row execute function public.dsm_thread_del();
+
+-- Ответ в ветке сообщества: все проверки cm_send (участник, мут, автомод, медленный режим, до 9 лет…) + ветка
+create or replace function public.dsm_thread_send(p_root bigint, p_text text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_ch bigint; r jsonb;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select channel_id into v_ch from public.community_messages where id = p_root and not deleted and thread_id is null;
+  if v_ch is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  perform set_config('d37.thread', p_root::text, true);
+  r := public.cm_send(v_ch, p_text, null);
+  perform set_config('d37.thread', '', true);
+  return r;
+end $$;
+-- Подписаться / отписаться от ветки (видно ли корень — проверяем)
+create or replace function public.dsm_follow(p_kind text, p_root bigint, p_on boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare r record;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_kind = 'o' then select id, null::bigint as cid, coalesce(channel, 'general') as ch, thread_id, deleted into r from public.messages where id = p_root;
+  elsif p_kind = 'c' then select id, community_id as cid, channel_id::text as ch, thread_id, deleted into r from public.community_messages where id = p_root;
+  else return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
+  if not found or r.deleted or r.thread_id is not null or not public.dsm_can_see(p_kind, r.cid, r.ch) then
+    return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  insert into public.dsm_follows (user_id, kind, root_id, on_) values (auth.uid(), p_kind, p_root, coalesce(p_on, true))
+    on conflict (user_id, kind, root_id) do update set on_ = excluded.on_;
+  return jsonb_build_object('ok', true, 'on', coalesce(p_on, true));
+end $$;
+
+-- ── 🕘 История правок ──
+create or replace function public.dsm_edit_log()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare k text := case when tg_table_name = 'messages' then 'o' else 'c' end;
+begin
+  if new.text is not distinct from old.text or new.deleted or coalesce(old.text, '') = '' then return null; end if;
+  insert into public.dsm_edits (kind, msg_id, old_text) values (k, old.id, left(old.text, 2000));
+  delete from public.dsm_edits where kind = k and msg_id = old.id and id not in (
+    select id from public.dsm_edits where kind = k and msg_id = old.id order by id desc limit 20);
+  return null;
+end $$;
+drop trigger if exists dsm_edit_log on public.messages;
+create trigger dsm_edit_log after update of text on public.messages for each row execute function public.dsm_edit_log();
+drop trigger if exists dsm_edit_log on public.community_messages;
+create trigger dsm_edit_log after update of text on public.community_messages for each row execute function public.dsm_edit_log();
+-- Прошлые версии: автору и модераторам (сайт — команда, сообщество — «модерация»)
+create or replace function public.dsm_edits_get(p_kind text, p_id bigint)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare r record;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_kind = 'o' then select id, user_id, null::bigint as cid, coalesce(channel, 'general') as ch, text, edited_at, deleted into r from public.messages where id = p_id;
+  elsif p_kind = 'c' then select id, user_id, community_id as cid, channel_id::text as ch, text, edited_at, deleted into r from public.community_messages where id = p_id;
+  else return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
+  if not found or r.deleted or not public.dsm_can_see(p_kind, r.cid, r.ch) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if r.user_id is distinct from auth.uid() and not public.dsm_is_mod(p_kind, r.cid) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  return jsonb_build_object('ok', true, 'now', r.text, 'edited', r.edited_at, 'list', coalesce((select jsonb_agg(jsonb_build_object('text', old_text, 'at', edited_at) order by id desc)
+    from public.dsm_edits where kind = p_kind and msg_id = p_id), '[]'::jsonb));
+end $$;
+
+-- ── 📊 Опросы ──
+create or replace function public.dsm_poll_json(p public.dsm_polls)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', p.id, 'kind', p.kind, 'community', p.community_id, 'channel', p.channel, 'q', p.question, 'opts', p.options,
+    'multi', p.multi, 'ends_at', p.ends_at, 'closed', p.closed or p.ends_at <= now(),
+    'counts', (select coalesce(jsonb_agg(coalesce(c.n, 0) order by i.i), '[]'::jsonb)
+      from generate_series(0, jsonb_array_length(p.options) - 1) i(i)
+      left join (select opt, count(*)::int n from public.dsm_poll_votes where poll_id = p.id group by opt) c on c.opt = i.i),
+    'voters', (select count(distinct user_id)::int from public.dsm_poll_votes where poll_id = p.id),
+    'my', (select coalesce(jsonb_agg(opt order by opt), '[]'::jsonb) from public.dsm_poll_votes where poll_id = p.id and user_id = auth.uid()),
+    'can_end', auth.uid() is not null and not p.closed and p.ends_at > now() and (p.author = auth.uid() or public.dsm_is_mod(p.kind, p.community_id)));
+$$;
+create or replace function public.dsm_poll_create(p_kind text, p_community bigint, p_channel text, p_question text, p_options jsonb, p_minutes int, p_multi boolean default false)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); v_q text := btrim(coalesce(p_question, '')); v_opts jsonb := '[]'::jsonb; o text; v_id bigint;
+  v_ch text := coalesce(nullif(btrim(coalesce(p_channel, '')), ''), 'general');
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_kind not in ('o', 'c') or (p_kind = 'c' and p_community is null) then return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
+  if p_kind = 'o' then p_community := null; end if;
+  if not public.dsm_can_write(p_kind, p_community, v_ch) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if char_length(v_q) < 1 or char_length(v_q) > 200 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+  if p_options is null or jsonb_typeof(p_options) <> 'array' then return jsonb_build_object('ok', false, 'reason', 'options'); end if;
+  for o in select btrim(x) from jsonb_array_elements_text(p_options) x loop
+    if o = '' then continue; end if;
+    if char_length(o) > 80 then return jsonb_build_object('ok', false, 'reason', 'options'); end if;
+    v_opts := v_opts || to_jsonb(o);
+  end loop;
+  if jsonb_array_length(v_opts) < 2 or jsonb_array_length(v_opts) > 10 then return jsonb_build_object('ok', false, 'reason', 'options'); end if;
+  if public.comm_bad(v_q || ' ' || (select string_agg(x, ' ') from jsonb_array_elements_text(v_opts) x)) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if public.comm_has_link(v_q || ' ' || (select string_agg(x, ' ') from jsonb_array_elements_text(v_opts) x)) then return jsonb_build_object('ok', false, 'reason', 'link'); end if;
+  if coalesce(p_minutes, 0) < 5 or p_minutes > 10080 then return jsonb_build_object('ok', false, 'reason', 'time'); end if;
+  if (select count(*) from public.dsm_polls where author = uid and created_at > now() - interval '1 hour') >= 5 then
+    return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  insert into public.dsm_polls (kind, community_id, channel, author, question, options, multi, ends_at)
+    values (p_kind, p_community, v_ch, uid, v_q, v_opts, coalesce(p_multi, false), now() + make_interval(mins => p_minutes))
+    returning id into v_id;
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+create or replace function public.dsm_poll_get(p_id bigint)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare p public.dsm_polls;
+begin
+  select * into p from public.dsm_polls where id = p_id;
+  if not found or not public.dsm_can_see(p.kind, p.community_id, p.channel) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  return jsonb_build_object('ok', true, 'poll', public.dsm_poll_json(p));
+end $$;
+-- Голос: вошёл и видит канал (до 9 лет — можно, это как реакция); один выбор (или несколько, если опрос «несколько»); можно передумать
+create or replace function public.dsm_poll_vote(p_id bigint, p_opts int[])
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); p public.dsm_polls; o int; v_n int;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select * into p from public.dsm_polls where id = p_id for update;
+  if not found or not public.dsm_can_see(p.kind, p.community_id, p.channel) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if p.closed or p.ends_at <= now() then return jsonb_build_object('ok', false, 'reason', 'closed'); end if;
+  if p.kind = 'c' and not public.comm_is_member(p.community_id) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+  v_n := jsonb_array_length(p.options);
+  p_opts := array(select distinct x from unnest(coalesce(p_opts, '{}'::int[])) x);
+  if cardinality(p_opts) > 1 and not p.multi then return jsonb_build_object('ok', false, 'reason', 'one'); end if;
+  foreach o in array p_opts loop
+    if o is null or o < 0 or o >= v_n then return jsonb_build_object('ok', false, 'reason', 'options'); end if;
+  end loop;
+  delete from public.dsm_poll_votes where poll_id = p_id and user_id = uid;
+  insert into public.dsm_poll_votes (poll_id, user_id, opt) select p_id, uid, x from unnest(p_opts) x;
+  return jsonb_build_object('ok', true, 'poll', public.dsm_poll_json(p));
+end $$;
+create or replace function public.dsm_poll_end(p_id bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare p public.dsm_polls;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select * into p from public.dsm_polls where id = p_id;
+  if not found or not public.dsm_can_see(p.kind, p.community_id, p.channel) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if p.author is distinct from auth.uid() and not public.dsm_is_mod(p.kind, p.community_id) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  update public.dsm_polls set closed = true where id = p_id returning * into p;
+  return jsonb_build_object('ok', true, 'poll', public.dsm_poll_json(p));
+end $$;
+
+-- ── 🗂 Каналы-форумы: включает тот, кто управляет каналами (сайт — admin/moderator; сообщество — право «📁 каналы») ──
+create or replace function public.dsm_forum_set(p_community bigint, p_channel text, p_on boolean, p_tags text[])
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare k text := case when p_community is null then 'o' else 'c' end; v_tags text[] := '{}'; t text; v_name text;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.chan_can_manage(p_community, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if k = 'o' then
+    if p_channel in ('general', 'news') then return jsonb_build_object('ok', false, 'reason', 'last'); end if;
+    select name into v_name from public.chat_channels where id = p_channel and kind = 'text';
+  else
+    begin select name into v_name from public.community_channels where id = p_channel::bigint and community_id = p_community and kind = 'text';
+    exception when others then v_name := null; end;
+  end if;
+  if v_name is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if not coalesce(p_on, false) then
+    delete from public.dsm_forums where kind = k and channel = p_channel;
+  else
+    foreach t in array coalesce(p_tags, '{}'::text[]) loop
+      t := btrim(t);
+      if t = '' or t = any (v_tags) then continue; end if;
+      if char_length(t) > 20 or public.comm_bad(t) or public.comm_has_link(t) then return jsonb_build_object('ok', false, 'reason', 'tag'); end if;
+      v_tags := v_tags || t;
+    end loop;
+    if cardinality(v_tags) > 12 then return jsonb_build_object('ok', false, 'reason', 'tags'); end if;
+    insert into public.dsm_forums (kind, community_id, channel, tags) values (k, p_community, p_channel, v_tags)
+      on conflict (kind, channel) do update set tags = excluded.tags;
+  end if;
+  perform public.comm_log(p_community, auth.uid(), null, '', 'chan_edit', '', '#' || v_name || case when coalesce(p_on, false) then ' · форум' else ' · обычный канал' end, p_channel);
+  return jsonb_build_object('ok', true);
+end $$;
+-- Заголовок и теги поста: автор, в первые 10 минут, только корень (не ответ в ветке), канал — форум, теги — из списка форума (до 3)
+create or replace function public.dsm_post_meta(p_kind text, p_id bigint, p_title text, p_tags text[])
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare r record; f public.dsm_forums; v_title text := btrim(coalesce(p_title, '')); v_tags text[];
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_kind = 'o' then select id, user_id, null::bigint as cid, coalesce(channel, 'general') as ch, thread_id, deleted, created_at into r from public.messages where id = p_id;
+  elsif p_kind = 'c' then select id, user_id, community_id as cid, channel_id::text as ch, thread_id, deleted, created_at into r from public.community_messages where id = p_id;
+  else return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
+  if not found or r.deleted or r.thread_id is not null or r.user_id is distinct from auth.uid() then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if r.created_at < now() - interval '10 minutes' then return jsonb_build_object('ok', false, 'reason', 'old'); end if;
+  select * into f from public.dsm_forums where kind = p_kind and channel = r.ch;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'forum'); end if;
+  if char_length(v_title) < 1 or char_length(v_title) > 100 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+  if public.comm_bad(v_title) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if public.comm_has_link(v_title) then return jsonb_build_object('ok', false, 'reason', 'link'); end if;
+  v_tags := array(select distinct x from unnest(coalesce(p_tags, '{}'::text[])) x where x = any (f.tags) limit 3);
+  insert into public.dsm_posts (kind, msg_id, community_id, channel, title, tags, author) values (p_kind, p_id, r.cid, r.ch, v_title, v_tags, auth.uid())
+    on conflict (kind, msg_id) do update set title = excluded.title, tags = excluded.tags;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ── @here / @everyone / @роль: дети до 13 не шлют и не получают массовых упоминаний; @here — только тем, кто был в сети 5 минут ──
+create or replace function public.comm_everyone_notify()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare c record; u record; v_here boolean;
+begin
+  begin
+    if new.user_id is null or coalesce(new.text, '') !~* '(^|[[:space:]])@(everyone|все|here|тут)([[:space:][:punct:]]|$)' then return null; end if;
+    if not public.comm_perm(new.community_id, new.user_id, 16) or public.dsm_child(new.user_id) then return null; end if;
+    v_here := new.text !~* '(^|[[:space:]])@(everyone|все)([[:space:][:punct:]]|$)';
+    update public.communities set everyone_at = now() where id = new.community_id and (everyone_at is null or everyone_at < now() - interval '10 minutes')
+      returning name into c;
+    if not found then return null; end if;
+    for u in select m.user_id from public.community_members m
+        where m.community_id = new.community_id and m.user_id <> new.user_id
+          and (not v_here or exists (select 1 from public.comm_online o where o.user_id = m.user_id and o.seen_at > now() - interval '5 minutes'))
+        limit 500 loop
+      if public.dsm_child(u.user_id) then continue; end if;
+      perform public.comm_notify(u.user_id, 'cm_mention', new.user_id, case when v_here then '@here' else '@everyone' end || ' в «' || left(c.name, 40) || '»', left(new.text, 140),
+        '#/phone/comm/' || new.community_id || '/' || new.channel_id, 'cme:' || new.community_id || ':' || public.comm_bucket(10));
+    end loop;
+  exception when others then null;
+  end;
+  return null;
+end $$;
+drop trigger if exists comm_everyone_notify on public.community_messages;
+create trigger comm_everyone_notify after insert on public.community_messages for each row execute function public.comm_everyone_notify();
+create or replace function public.dsm_role_ping()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare c record; r record; u record;
+begin
+  begin
+    if new.user_id is null or position('@' in coalesce(new.text, '')) = 0 then return null; end if;
+    if not public.comm_perm(new.community_id, new.user_id, 16) or public.dsm_child(new.user_id) then return null; end if;
+    select id, name, role_ping_at into c from public.communities where id = new.community_id;
+    if c.role_ping_at is not null and c.role_ping_at > now() - interval '10 minutes' then return null; end if;
+    for r in select id, name from public.comm_roles where community_id = new.community_id
+        and position(lower('@' || name) in lower(new.text)) > 0 order by char_length(name) desc limit 2 loop
+      update public.communities set role_ping_at = now() where id = new.community_id;
+      for u in select mr.user_id from public.comm_member_roles mr where mr.role_id = r.id and mr.user_id <> new.user_id limit 200 loop
+        if public.dsm_child(u.user_id) then continue; end if;
+        perform public.comm_notify(u.user_id, 'cm_mention', new.user_id, '@' || left(r.name, 30) || ' в «' || left(c.name, 40) || '»', left(new.text, 140),
+          '#/phone/comm/' || new.community_id || '/' || new.channel_id, 'cmrole:' || r.id || ':' || public.comm_bucket(10));
+      end loop;
+    end loop;
+  exception when others then null;
+  end;
+  return null;
+end $$;
+drop trigger if exists dsm_role_ping on public.community_messages;
+create trigger dsm_role_ping after insert on public.community_messages for each row execute function public.dsm_role_ping();
+
+-- Проверка «часть 12 применена»
+create or replace function public.dsm_info()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('ok', true, 'v', 1);
+$$;
+
+-- ── Права на функции ──
+revoke all on function public.dsm_child(uuid) from public, anon, authenticated;
+revoke all on function public.dsm_can_see(text, bigint, text) from public, anon, authenticated;
+revoke all on function public.dsm_can_write(text, bigint, text) from public, anon, authenticated;
+revoke all on function public.dsm_is_mod(text, bigint) from public, anon, authenticated;
+revoke all on function public.dsm_poll_json(public.dsm_polls) from public, anon, authenticated;
+revoke all on function public.dsm_thread_guard_o() from public, anon, authenticated;
+revoke all on function public.dsm_thread_guard_c() from public, anon, authenticated;
+revoke all on function public.dsm_thread_lock() from public, anon, authenticated;
+revoke all on function public.dsm_thread_after() from public, anon, authenticated;
+revoke all on function public.dsm_thread_del() from public, anon, authenticated;
+revoke all on function public.dsm_edit_log() from public, anon, authenticated;
+revoke all on function public.dsm_role_ping() from public, anon, authenticated;
+revoke all on function public.comm_everyone_notify() from public, anon, authenticated;
+revoke all on function public.dsm_info() from public;
+grant execute on function public.dsm_info() to anon, authenticated;
+revoke all on function public.dsm_poll_get(bigint) from public;
+grant execute on function public.dsm_poll_get(bigint) to anon, authenticated;
+revoke all on function public.dsm_thread_send(bigint, text) from public, anon;
+grant execute on function public.dsm_thread_send(bigint, text) to authenticated;
+revoke all on function public.dsm_follow(text, bigint, boolean) from public, anon;
+grant execute on function public.dsm_follow(text, bigint, boolean) to authenticated;
+revoke all on function public.dsm_edits_get(text, bigint) from public, anon;
+grant execute on function public.dsm_edits_get(text, bigint) to authenticated;
+revoke all on function public.dsm_poll_create(text, bigint, text, text, jsonb, int, boolean) from public, anon;
+grant execute on function public.dsm_poll_create(text, bigint, text, text, jsonb, int, boolean) to authenticated;
+revoke all on function public.dsm_poll_vote(bigint, int[]) from public, anon;
+grant execute on function public.dsm_poll_vote(bigint, int[]) to authenticated;
+revoke all on function public.dsm_poll_end(bigint) from public, anon;
+grant execute on function public.dsm_poll_end(bigint) to authenticated;
+revoke all on function public.dsm_forum_set(bigint, text, boolean, text[]) from public, anon;
+grant execute on function public.dsm_forum_set(bigint, text, boolean, text[]) to authenticated;
+revoke all on function public.dsm_post_meta(text, bigint, text, text[]) from public, anon;
+grant execute on function public.dsm_post_meta(text, bigint, text, text[]) to authenticated;
