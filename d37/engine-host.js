@@ -200,8 +200,10 @@ export async function start(o) {
       if (game) { try { if (st.app.game_key(e.code)) { if (menuOpen() && document.pointerLockElement === canvas) document.exitPointerLock(); e.preventDefault(); } } catch (er) { /* not a game key */ } }
     }
     keys.add(e.code); publish();
+    // the key is the game's: the page under it (site hotkeys, Esc of its panels, a focused site button) never sees it
+    e.stopPropagation();
   }, true);
-  on(window, 'keyup', (e) => { if (keys.delete(e.code)) publish(); }, true);
+  on(window, 'keyup', (e) => { if (keys.delete(e.code)) publish(); if (live() && !e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation(); }, true);
   on(window, 'blur', () => { keys.clear(); drag = false; publish(); });
   let drag = false;
   on(canvas, 'click', () => { canvas.focus({ preventScroll: true }); if (!touch && !wardrobeShown && !menuOpen() && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging works */ } } });

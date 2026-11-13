@@ -399,6 +399,7 @@
     }
     document.addEventListener('pointerdown', e => {
       if (!isHigh() || e.button !== 0 || e.pointerType === 'touch') return;
+      if (document.body.classList.contains('hub-on')) return;   // в игре D37 (/hub/play) щелчок — действие в игре, без искр сайта
       if (e.target instanceof Element && e.target.closest('input,textarea,select,iframe,[contenteditable]')) return;
       for (let i = 0; i < 14; i++) {
         const a = Math.random() * 6.2832, s = Math.random() * 4.2 + 1.2;

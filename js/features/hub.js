@@ -366,7 +366,14 @@
     load.append(lt, ph, barO, pct, tip, cancel);
     const err = el('div', 'hub-err'); err.hidden = true;
     box.append(bar, stage, load, err);
+    // Щелчки и колёсико в игре — только игре: искры сайта, закрытие меню сайта и прочие обработчики на document их не видят
+    // (ссылки «Мини-игры» / «← Меню» на экране ошибки идут дальше — их ведёт роутер сайта)
+    for (const t of ['pointerdown', 'mousedown', 'click', 'dblclick', 'contextmenu', 'wheel', 'touchstart']) {
+      box.addEventListener(t, e => { if (t === 'click' && e.target instanceof Element && e.target.closest('a[href]')) return; e.stopPropagation(); }, { passive: true });
+    }
     document.body.appendChild(box);
+    // кнопка сайта, по которой зашли, остаётся в фокусе — пробел / Enter в игре нажимали бы её снова
+    try { const a = document.activeElement; if (a && a !== document.body && a.blur) a.blur(); } catch (e) {}
     return { box, bar, stage, load, ph, barI, pct, err, stat, statT: 0 };
   }
   const touchDev = () => { try { return matchMedia('(pointer: coarse)').matches; } catch (e) { return false; } };
@@ -434,7 +441,7 @@
     let host;
     try {
       const v = info && /^[0-9a-f]{6,16}$/.test(String(info.id || '')) ? '?v=' + info.id : '';
-      host = await import(BASE() + 'engine-host.js' + v);
+      host = await import(BASE() + 'engine-host.js' + v + (v ? '&' : '?') + 'k=2');   // k — версия обёртки (клавиши игры не уходят сайту)
     } catch (e) { report('import', e && e.message); showError('import', e); st.starting = false; return; }
     if (gen !== st.gen || !st.active || !ui) return;
     try {
