@@ -169,13 +169,24 @@
     if (!F.canSend()) return { ok: false, err: window.D37Age?.u9?.() ? 'Файлы — с 9 лет' : 'Войди, чтобы отправлять файлы' };
     let att;
     try { att = await F.prepare(file); } catch (er) { return { ok: false, err: er.message }; }
+    return F._attach(A, att);
+  };
+  // T-160: сообщение «📎 имя · размер» → ссылка msg_attach. Любой отказ — настоящая причина простыми словами + код мелко;
+  // ссылка не встала — сообщение без файла убираем (не оставляем карточку, будто файл есть)
+  F._attach = async (A, att) => {
     const r = await A.send(`📎 ${att.name} · ${F.size(att.size)}`, null);
-    if (!r?.ok || !r.m?.id) return { ok: false, err: r?.err || 'не отправилось' };
-    const { data, error } = await sb().rpc('msg_attach', { p_kind: A.fileKind, p_mid: r.m.id, p_att: att });
+    if (!r?.ok) return { ok: false, err: (r?.err || 'сообщение не отправилось') };
+    if (!r.m?.id) return { ok: false, err: 'сообщение ушло, но сайт не узнал его номер — файл не прикрепился. Обнови страницу и попробуй ещё раз · код: no_id' };
+    let data = null, error = null;
+    try { ({ data, error } = await sb().rpc('msg_attach', { p_kind: A.fileKind, p_mid: r.m.id, p_att: att })); } catch (er) { error = er; }
     if (error || !data?.ok) {
-      try { await A.del?.(r.m); } catch (er) {}
+      let gone = false; try { gone = !!(await A.del?.(r.m))?.ok; } catch (er) {}
+      const tail = gone ? '' : ' (сообщение «📎» без файла удали вручную)';
       const R = { type: 'такой тип файла нельзя', big: `файл больше ${cfg.file_mb} МБ`, day: `на сегодня лимит файлов исчерпан (${cfg.day_n} шт. или ${cfg.day_mb} МБ в день) — завтра снова можно`, u9: 'файлы — с 9 лет', blocked: 'файл запрещён модераторами', off: 'файлы пока выключены', late: 'не успели прикрепить — попробуй ещё раз', auth: 'войди, чтобы отправлять файлы' };
-      return { ok: false, err: error ? (/msg_attach|PGRST202/.test(error.message + error.code) ? 'файлы появятся, когда сайт обновится' : error.message) : R[data?.reason] || data?.reason || 'не получилось' };
+      const code = error ? (error.code || 'rpc') : (data?.reason || 'unknown');
+      const why = error ? (/msg_attach|PGRST202/.test((error.message || '') + error.code) ? 'файлы появятся, когда сайт обновится' : /JWT|401|auth/i.test((error.message || '') + error.code) ? 'вход устарел — выйди и войди снова' : /fetch|network/i.test(error.message || '') ? 'нет связи с сервером — проверь интернет' : 'сервер не принял файл')
+        : R[data?.reason] || { kind: 'этот чат не принимает файлы', not_found: 'сообщение не нашлось (не твоё или удалено)', dup: 'к сообщению уже прикреплён файл', name: 'имя файла с запрещёнными знаками', size: 'неверный размер файла', hash: 'ошибка подсчёта отпечатка файла', thumb: 'не подошло превью', bad: 'неверные данные файла', enc: 'шифрование файлов пока не включено', version: 'старая версия сайта — обнови страницу' }[data?.reason] || 'сервер не принял файл';
+      return { ok: false, err: why + tail + ' · код: ' + code };
     }
     seed(att.chash);
     return { ok: true, m: Object.assign(r.m, { att }) };

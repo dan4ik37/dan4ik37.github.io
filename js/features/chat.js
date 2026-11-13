@@ -459,9 +459,10 @@ async function sendOfficial(chId, text, reply){
   lastSentText = text;
   const row = chatRow(text);
   if (chatHasNew()) { if (chId !== 'general') row.channel = chId; if (reply && typeof reply === 'number') row.reply_to = reply; }
-  const err = await sendMsgToSupabase(row);
-  if (err) { lastSentText = prevSent; return { ok: false, err }; }
-  return { ok: true };
+  const res = await sendMsgToSupabase(row);
+  if (res.err) { lastSentText = prevSent; return { ok: false, err: res.err }; }
+  // T-160: вернуть само сообщение (номер нужен 📎 файлам — msg_attach; без него файл в общем чате «не отправлялся» никогда)
+  return { ok: true, m: res.row ? offMsg(res.row) : null };
 }
 const CHAT_COLORS = ['#9147ff','#29b6f6','#ff6b35','#22c55e','#f59e0b','#ec4899','#5bc4ff'];
 function chatRow(text, extra){
@@ -471,13 +472,13 @@ function chatRow(text, extra){
   const vipTierKey = (typeof getVipTier === 'function' && currentProfile) ? (getVipTier(currentProfile)?.key || null) : null;
   return Object.assign({ nick: chatNick, text, color: col, role, vip_tier: vipTierKey, user_id: currentUser?.id || null }, extra || {});
 }
-// Возвращает null, если сообщение принято, иначе — текст ошибки для человека
+// → { row } (принятая строка — с номером), или { err } — текст ошибки для человека
 async function sendMsgToSupabase(row) {
-  if (!sbClient) return chatSendError(null);
+  if (!sbClient) return { err: chatSendError(null) };
   try {
-    const { error } = await sbClient.from('messages').insert([row]);
-    return error ? chatSendError(error) : null;
-  } catch(e) { return chatSendError(e); }
+    const { data, error } = await sbClient.from('messages').insert([row]).select('*');
+    return error ? { err: chatSendError(error) } : { row: (Array.isArray(data) ? data[0] : data) || null };
+  } catch(e) { return { err: chatSendError(e) }; }
 }
 // Ошибки сервера про флуд/длину/стикеры/мут уже по-русски (server-hardening.sql, vip-balance.sql, community.sql) — их показываем как есть
 function chatSendError(err){

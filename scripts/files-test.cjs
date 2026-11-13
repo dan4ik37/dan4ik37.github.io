@@ -36,4 +36,33 @@ for (const k of ['relaydown', 'noroute', 'noanswer', 'signal', 'srcrelay', 'srcn
   const st2 = { fails: 0, att: { chash: 'y' }, rej: e => { rej = e; } }; rej = null; T.attemptFailed(st2, 'relaydown'); ok(rej && rej.code === 'relaydown', 'TURN down: stop at once with reason'); }
 T.setCfg({ owner: false }); ok(T.recvCap() === 100 * 1048576, 'receiver accepts files up to max_mb (size was checked by the server)');
 T.setCfg({ owner: true, file_mb: 100, max_mb: 100, direct_mb: 100 }); ok(F.cfg().owner === true && F.cfg().file_mb === 100, 'owner caps come from file_cfg');
-console.log(bad ? `files-test: ${bad}/${n} FAIL` : `files-test: ${n} ok`); process.exit(bad ? 1 : 0);
+// T-160b (владелец 13.11: «файл не отправился не картинка не звук» в #общий): общий чат сайта (chat.js sendOfficial) не возвращал
+// номер сообщения → msg_attach не вызывался, «не отправилось». Здесь — настоящие функции из chat.js с заглушкой базы
+(async () => {
+  const NL = String.fromCharCode(10), CRLF = String.fromCharCode(13, 10);
+  const csrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'features', 'chat.js'), 'utf8').split(CRLF).join(NL);
+  const cut = (a, b) => { const i = csrc.indexOf(a), j = csrc.indexOf(b, i + 1); if (i < 0 || j < 0) throw new Error('chat.js: ' + a); return csrc.slice(i, j); };
+  const code = cut('async function sendOfficial', 'const CHAT_COLORS') + cut('async function sendMsgToSupabase', NL + '// Ошибки') + cut('function offMsg', NL + '}' + NL) + NL + '}' + NL;
+  let inserted = null;
+  const cx = { console, chatNick: 'dan4ik37', isChatStaff: () => true, muteUntil: 0, bannedNicks: new Set(), checkRateLimit: () => true, checkSpam: () => '', registerGoodMsg(){}, registerStrike(){}, lastSentText: '',
+    chatRow: t => ({ nick: 'dan4ik37', text: t, role: 'admin', user_id: 'u1' }), chatHasNew: () => true, chatSendError: e => 'ERR ' + (e && e.message), navigator: {},
+    sbClient: { from: () => ({ insert: rows => { inserted = rows[0]; const q = Promise.resolve({ data: null, error: null }); q.select = () => Promise.resolve({ data: [Object.assign({ id: 41, created_at: '2026-11-13T01:11:00Z' }, rows[0])], error: null }); return q; } }) } };
+  vm.createContext(cx); vm.runInContext(code + 'this.sendOfficial = sendOfficial;', cx);
+  const r = await cx.sendOfficial('general', '📎 a.mp4 · 1014 КБ', null);
+  ok(r.ok && r.m && r.m.id === 41 && inserted && inserted.text.startsWith('📎'), 'site chat send returns the message with its id (file attach needs it)', JSON.stringify(r));
+  // F._attach: настоящая причина и код, сообщение без файла убирается
+  const calls = []; let del = 0;
+  ctx.sbClient = { rpc: async (fn, a) => { calls.push([fn, a.p_kind, a.p_mid]); return fn === 'msg_attach' ? { data: a.p_mid === 41 ? { ok: true } : { ok: false, reason: 'late' }, error: null } : { data: null, error: null }; } };
+  vm.runInContext('var sbClient = this.sbClient;', ctx);
+  const att = { v: 1, enc: 'none', kid: '', name: 'a.mp4', size: 1038336, mime: 'video/mp4', chash: 'a'.repeat(64), phash: 'a'.repeat(64) };
+  const mk = (send) => ({ fileKind: 'chat', send, del: async () => { del++; return { ok: true }; } });
+  let x = await F._attach(mk(async () => ({ ok: true })), att);
+  ok(!x.ok && /код: no_id/.test(x.err) && !calls.length, 'no message id: real reason + code, attach not attempted', x.err);
+  x = await F._attach(mk(async () => ({ ok: true, m: { id: 42 } })), att);
+  ok(!x.ok && /не успели/.test(x.err) && /код: late/.test(x.err) && del === 1, 'server refusal: plain reason + code, orphan message removed', x.err);
+  x = await F._attach(mk(async () => ({ ok: false, err: '⏱ не так быстро' })), att);
+  ok(!x.ok && x.err === '⏱ не так быстро', 'message refused: its own reason, not «не отправилось»');
+  x = await F._attach(mk(async () => ({ ok: true, m: { id: 41 } })), att);
+  ok(x.ok && x.m.att === att && calls.some(c => c[1] === 'chat' && c[2] === 41), 'site chat: message id goes to msg_attach (kind chat)');
+  console.log(bad ? `files-test: ${bad}/${n} FAIL` : `files-test: ${n} ok`); process.exit(bad ? 1 : 0);
+})().catch(e => { console.log('FAIL', e.message); process.exit(1); });

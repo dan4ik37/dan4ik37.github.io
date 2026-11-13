@@ -122,6 +122,20 @@ for (let i = 0; i < 3; i++) { await db.exec(`insert into messages(user_id, text)
 const ids = (await db.query(`select id from messages where user_id = '${A}' order by id desc limit 3`)).rows.map(r => r.id).reverse();
 const rs = []; for (const [i, id] of ids.entries()) rs.push((await q(`select public.msg_attach('chat', ${id}, ${att({ name: 'v.mov', mime: 'video/quicktime', chash: String(i + 5).repeat(64), phash: String(i + 5).repeat(64) })}) r`)).reason || 'ok');
 t(rs.join() === 'ok,ok,day', 'ordinary user: daily count cap still applies (day_n=2), MOV allowed', rs);
+// T-160b: владелец (admin) шлёт mp4 / картинку / звук ~1 МБ в общий чат, в канал сообщества и в ЛС; обычный — в канал сообщества
+await db.exec(`delete from file_day; delete from site_config`);
+const kinds = [['chat', 'messages', 'user_id'], ['cm', 'community_messages', 'user_id'], ['dm', 'direct_messages', 'sender_id']];
+const files = [['clip.mp4', 'video/mp4'], ['pic.jpg', 'image/jpeg'], ['song.mp3', 'audio/mpeg'], ['voice.m4a', 'audio/mp4']];
+let hn = 0;
+for (const [who, uid] of [['owner', O], ['user', A]]) for (const [k, tbl, col] of kinds) for (const [nm, mt] of files) {
+  await as(uid);
+  const extra = k === 'cm' ? ', community_id' : k === 'dm' ? ', recipient_id' : '', ev = k === 'cm' ? ', 5' : k === 'dm' ? `, '${B}'` : '';
+  await db.exec(`insert into ${tbl}(${col}, text${extra}) values ('${uid}', 'f'${ev})`); const id = (await db.query(`select max(id) m from ${tbl}`)).rows[0].m;
+  const hx = (++hn).toString(16).padStart(64, 'e');
+  const r = await q(`select public.msg_attach('${k}', ${id}, ${att({ name: nm, mime: mt, size: 1038336, chash: hx, phash: hx, thumb: 'data:image/webp;base64,AAAA', w: 640, h: 360, dur: 12.5 })}) r`);
+  t(r.ok === true, `${who}: ${nm} (~1 MB) attaches in ${k}`, r);
+}
+await db.exec(`delete from file_day`);
 await db.exec(`delete from site_config`);
 await db.exec(`update messages set created_at = now() - interval '40 days' where id = 1`);
 t((await q(`select public.file_expire() r`)) >= 1 && !(await db.query(`select att from messages where id = 1`)).rows[0].att.thumb && (await db.query(`select att from messages where id = 1`)).rows[0].att.chash === h, 'old thumbs expire, reference stays');
