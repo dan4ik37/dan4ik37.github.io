@@ -566,3 +566,7 @@ body.high .ds-ccic.anim{animation:dsBoost 2.6s ease-in-out infinite}
 .mvf-bt{display:flex;gap:4px;flex:none}
 .mvf-bt button{min-height:34px;min-width:34px;padding:0 9px;border-radius:9px;border:0;background:rgba(124,58,237,.22);color:inherit;font:inherit;font-size:12.5px;cursor:pointer}
 .mvf-bt button[data-f="rep"],.mvf-bt button[data-f="stop"]{background:rgba(var(--fg-rgb),.08);padding:0 7px}
+/* T-162: правила новичку, приветствие, метка возраста канала */
+.ds-rules{white-space:pre-wrap;overflow-wrap:anywhere;max-height:46vh;overflow:auto;padding:10px 12px;border-radius:10px;background:rgba(var(--fg-rgb),.05);font-size:14px;line-height:1.45}
+.ds-wel{margin:0;font-size:15px;overflow-wrap:anywhere}
+.ds-ch .ds-age{font-size:10.5px;font-weight:700;padding:0 4px;border-radius:5px;background:rgba(var(--fg-rgb),.1)}

@@ -7571,6 +7571,36 @@
     "alt(b.cap)",
     "b.cap ? alt(b.cap) : esc(providerName(b.p))"
    ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "setHtml",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-162: X.chanExtraHtml — сама экранирует (e()) значок канала; возраст — число из списка AGES",
+   "xs": [
+    "X.chanExtraHtml ? X.chanExtraHtml(c, S) : ''"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "settingsMore",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-162: обёртка над прежним settingsMore (его тело разбирает этот же тест)",
+   "xs": [
+    "moreC ? moreC(srv, mode) : ''"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "officialMore",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-162: обёртка над прежним officialMore (ссылки сайта, константы)",
+   "xs": [
+    "moreO ? moreO(srv, mode) : ''"
+   ]
   }
  ]
 }

@@ -3371,7 +3371,7 @@ begin
   if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if not public.chan_can_manage(p_community, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
   if char_length(v_rules) > 2000 then return jsonb_build_object('ok', false, 'reason', 'rules'); end if;
-  if char_length(v_wel) > 300 then return jsonb_build_object('ok', false, 'reason', 'about'); end if;
+  if char_length(v_wel) > 300 then return jsonb_build_object('ok', false, 'reason', 'welcome'); end if;
   if public.comm_bad(v_rules) or public.comm_bad(v_wel) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
   if public.comm_has_link(v_rules) or public.comm_has_link(v_wel) then return jsonb_build_object('ok', false, 'reason', 'link'); end if;
   if p_community is null then

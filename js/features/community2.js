@@ -647,13 +647,14 @@
         return `<div class="ds4-set" data-set="${e(c.id)}">
           <label class="ds-lbl">Название<input class="ds-in" data-s="name" maxlength="32" value="${e(c.name)}"></label>
           <label class="ds-lbl">Тема — видна под названием канала<input class="ds-in" data-s="about" maxlength="200" value="${e(c.about || '')}" placeholder="О чём этот канал"></label>
+          ${X.chanExtraHtml ? X.chanExtraHtml(c, S) : ''}
           ${c.kind === 'text' ? `<label class="ds-lbl">Медленный режим<select class="ds-in" data-s="slow">${sl.map(s => `<option value="${s}"${(c.slow || 0) === s ? ' selected' : ''}>${s ? '🐢 раз в ' + (s >= 60 ? s / 60 + ' мин' : s + ' с') : 'без задержки'}</option>`).join('')}</select></label>
           <label class="ds-lbl">Кто пишет<select class="ds-in" data-s="who"><option value="all"${who === 'all' ? ' selected' : ''}>Все участники</option><option value="mods"${who === 'mods' ? ' selected' : ''}>📢 Только ${off ? 'команда сайта' : 'владелец и модераторы'}</option>${(R?.roles || []).map(x => `<option value="r${e(x.id)}"${who === 'r' + x.id ? ' selected' : ''}>📢 Модераторы и роль «${e(x.name)}»</option>`).join('')}</select></label>` : ''}
           <div class="ds-row ds4-acts"><button type="button" class="ds-btn" data-a="save">💾 Сохранить</button>${canArch ? `<button type="button" class="ds-btn ghost" data-a="arch">${c.archived ? '🗄 Вернуть из архива' : '🗄 В архив'}</button>` : ''}${canDel ? '<button type="button" class="ds-btn bad" data-a="del">🗑 Удалить</button>' : ''}</div>
           <p class="ds-dim">🗄 Архив — канал спрятан от участников, история сохраняется.</p></div>`;
       };
       const btn = (a, t, l) => `<button type="button" class="ds-hb" data-a="${a}" title="${l}" aria-label="${l}">${t}</button>`;
-      const chRow = (c, i) => `<div class="ds4-row${c.archived ? ' arch' : ''}" data-i="${i}" data-ch="${e(c.id)}" draggable="${!touch && i >= 0}">${touch ? '' : '<span class="ds4-h" aria-hidden="true">⠿</span>'}<span>${c.kind === 'voice' ? '🔊' : '#'} ${e(c.name)}${c.slow ? ' 🐢' : ''}${c.mods_only ? ' 📢' : ''}</span>
+      const chRow = (c, i) => `<div class="ds4-row${c.archived ? ' arch' : ''}" data-i="${i}" data-ch="${e(c.id)}" draggable="${!touch && i >= 0}">${touch ? '' : '<span class="ds4-h" aria-hidden="true">⠿</span>'}<span>${c.emoji ? e(c.emoji) : c.kind === 'voice' ? '🔊' : '#'} ${e(c.name)}${c.min_age ? ' ' + (+c.min_age) + '+' : ''}${c.slow ? ' 🐢' : ''}${c.mods_only ? ' 📢' : ''}</span>
         ${i >= 0 ? btn('up', '↑', 'Выше') + btn('down', '↓', 'Ниже') : ''}${btn('set', '⚙️', 'Настройки канала')}</div>${String(open) === String(c.id) ? setHtml(c) : ''}`;
       const catRow = (k, i) => `<div class="ds4-row cat" data-i="${i}" draggable="${!touch}">${touch ? '' : '<span class="ds4-h" aria-hidden="true">⠿</span>'}<span>📁 ${e(k.name)}</span>
         ${btn('up', '↑', 'Категорию выше')}${btn('down', '↓', 'Категорию ниже')}${btn('cren', '✏️', 'Переименовать')}${btn('cdel', '🗑', 'Удалить категорию')}</div>`;
@@ -713,6 +714,7 @@
             p_slow: q('slow') ? +q('slow').value : c.slow || 0, p_mods_only: who !== 'all', p_write_role: who.startsWith('r') ? +who.slice(1) : null,
             p_archived: a === 'arch' ? !c.archived : !!c.archived });
           if (!r.data?.ok) { err(why4(r)); return; }
+          if (a === 'save' && X.chanExtraSave) { const r2 = await X.chanExtraSave(box, c, S); if (!r2.ok) { err(r2.err); return; } }   // T-162: значок, возраст
           toast(a === 'arch' ? (c.archived ? '🗄 Канал вернулся из архива' : '🗄 Канал в архиве — история сохранена') : '✅ Сохранено', true);
           after(); return again(a === 'arch' ? '' : c.id);
         }
@@ -859,6 +861,91 @@
   const more0 = X.settingsMore;
   X.settingsMore = (srv, mode) => `<div class="ds-sect"><b>📁 Каналы · 🛡 Модерация</b><p class="ds-dim">Категории и порядок каналов, тема, архив, кто пишет; жалобы, 📜 журнал и 🤖 автомодерация.</p>
     <div class="ds-row ds4-links"><a class="ds-btn ghost" href="${DS.link(mode, srv.id, 'channels')}">📁 Каналы и категории →</a><a class="ds-btn ghost" href="${DS.link(mode, srv.id, 'reports')}">🛡 Модерация →</a></div></div>` + (more0 ? more0(srv, mode) : '');
+
+  // ═══ T-162 ⚙️ «как в Дискорде» (владелец 13.11: «настройки слабые»): значок и возраст канала, правила новичку, приветствие,
+  //     канал по умолчанию — community.sql ч. 10 (cm_server_get / cm_server_set / cm_chan_extra). Возраст решает сервер (RLS),
+  //     здесь — только показ. Нет ч. 10 на сервере — всё как раньше (cm_server_get → missing → null) ═══
+  const T162 = true;   // откат одной строкой: false — без значков, возраста каналов, правил и канала по умолчанию
+  Object.assign(R4, { rules: 'правила — до 2000 символов', welcome: 'приветствие — до 300 символов', channel: 'нужен текстовый канал для всех', emoji: 'значок — только эмодзи', age: 'такой возраст нельзя' });
+  const AGES = [[0, '👥 Всем'], [9, 'С 9 лет'], [13, 'С 13 лет'], [16, 'С 16 лет']];
+  const EXT = new Map();   // 'o' | id → { at, d } — ответ cm_server_get (null — ч. 10 ещё не выполнена)
+  async function extra(sid, fresh){
+    const k = skey(sid), c = EXT.get(k);
+    if (c && !fresh && Date.now() - c.at < 60e3) return c.d;
+    let d = null;
+    try { const r = await P.rpc('cm_server_get', { p_community: k === 'o' ? null : +k }); d = r.data?.ok ? r.data : null; } catch (er) {}
+    EXT.set(k, { at: Date.now(), d });
+    return d;
+  }
+  X.extra = extra;
+  // server() (community.js) → значки и возраст каналов; канал не по возрасту в списке не показываем (читать его не даст сервер)
+  X.withExtra = async (srv, fresh) => {
+    if (!T162) return srv;
+    const d = await extra(srv.official ? 'o' : srv.id, fresh); if (!d) return srv;
+    const by = new Map((d.chans || []).map(c => [String(c.id), c]));
+    srv.channels = srv.channels.filter(c => { const x = by.get(String(c.id)); if (!x) return true; c.emoji = x.emoji || ''; c.min_age = +x.min_age || 0; return x.ok !== false; });
+    return Object.assign(srv, { rules: d.rules || '', welcome: d.welcome || '', default_ch: d.default_ch ?? null, ext: true, extManage: !!d.manage });
+  };
+  // 👋 правила и приветствие — один раз на сервер (и снова, если их поменяли): d37_ds_rules { 'o' | id: хеш }
+  const hashOf = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return String(h); };
+  X.rulesGate = async srv => {
+    if (!T162 || !srv?.ext || !(srv.rules || srv.welcome) || document.querySelector('.ds4-sh')) return;
+    const seen = LS('d37_ds_rules', {}), id = skey(srv), h = hashOf(srv.rules + '|' + srv.welcome);
+    if (seen[id] === h) return;
+    seen[id] = h; LSset('d37_ds_rules', seen);
+    await sheet(`👋 ${srv.official ? 'Сервер «Денчик37»' : 'Сообщество «' + e(srv.name) + '»'}`,
+      `${srv.welcome ? `<p class="ds-wel">${e(srv.welcome)}</p>` : ''}${srv.rules ? `<b>📜 Правила</b><div class="ds-rules">${e(srv.rules)}</div>` : ''}<button type="button" class="ds4-wide ds4-go" data-v="ok">✅ Понятно</button>`);
+  };
+  // ⚙️ настройки сервера: правила, приветствие, канал по умолчанию (место — <div data-t162>, заполняется после отрисовки экрана)
+  async function fillServer(host, srv){
+    host.dataset.done = '1';
+    const d = await extra(srv.official ? 'o' : srv.id, true);
+    if (!host.isConnected) return;
+    if (!d) { host.innerHTML = `<b>📜 Правила и приветствие</b>${SOON}`; return; }
+    if (!d.manage) { host.remove(); return; }
+    const texts = (srv.channels || []).filter(c => c.kind === 'text' && !c.archived && !c.soon && !(+c.min_age));
+    host.innerHTML = `<b>📜 Правила, приветствие, канал по умолчанию</b>
+      <label class="ds-lbl">Правила — новичок увидит их один раз, когда зайдёт<textarea class="ds-in" data-t="rules" maxlength="2000" rows="5" placeholder="1. Уважай других. 2. Без мата и рекламы. 3. …">${e(d.rules || '')}</textarea></label>
+      <label class="ds-lbl">Приветствие — над правилами<input class="ds-in" data-t="welcome" maxlength="300" value="${e(d.welcome || '')}" placeholder="Привет! Рады тебе 👋"></label>
+      <label class="ds-lbl">Канал по умолчанию — открывается первым<select class="ds-in" data-t="def"><option value="">${srv.official ? '#общий' : 'первый текстовый'}</option>${texts.map(c => `<option value="${e(c.id)}"${String(d.default_ch) === String(c.id) ? ' selected' : ''}>#${e(c.name)}</option>`).join('')}</select></label>
+      <div class="ds-row"><button type="button" class="ds-btn" data-t="save">💾 Сохранить</button><span class="ds-dim" data-t="msg" role="status"></span></div>`;
+    host.querySelector('[data-t="save"]').onclick = async () => {
+      const q = k => host.querySelector(`[data-t="${k}"]`);
+      const r = await P.rpc('cm_server_set', { p_community: srv.official ? null : srv.id, p_rules: q('rules').value, p_welcome: q('welcome').value, p_default_ch: q('def').value || null });
+      q('msg').textContent = r.data?.ok ? '✅ Сохранено' : '⚠️ ' + why4(r);
+      if (r.data?.ok) EXT.delete(skey(srv));
+    };
+  }
+  const later = srv => setTimeout(() => document.querySelectorAll('[data-t162]:not([data-done])').forEach(h => fillServer(h, srv)), 0);
+  if (T162) {
+    const moreC = X.settingsMore, moreO = X.officialMore;
+    X.settingsMore = (srv, mode) => { later(srv); return '<div class="ds-sect" data-t162><div class="ds-dim">Загружаем…</div></div>' + (moreC ? moreC(srv, mode) : ''); };
+    X.officialMore = (srv, mode) => { later(srv);
+      const url = (window.D37Ref?.wrap || (u => u))(location.origin + '/chat');
+      return (moreO ? moreO(srv, mode) : '') + `<div class="ds-sect" data-t162><div class="ds-dim">Загружаем…</div></div>
+        <div class="ds-sect"><b>🔗 Приглашение</b><div class="ds-row"><input class="ds-in" readonly value="${e(url)}" aria-label="Ссылка на сервер"><button type="button" class="ds-btn ghost" data-t162copy="${e(url)}" title="Скопировать">📋</button></div></div>
+        <div class="ds-sect"><b>🎭 Роли сервера сайта</b><p class="ds-dim">👑 админ — всё; 🛡 модератор — каналы, удаление, тайм-ауты, закреп, журнал; 🔰 хелпер — тайм-аут до часа. Роли назначает владелец сайта. Свои роли с цветами и правами — в сообществах (⚙️ → 🎭 Роли).</p></div>
+        <div class="ds-sect"><b># Быстро: медленный режим и «только команда»</b></div>`; };
+    document.addEventListener('click', async ev => {
+      const b = ev.target?.closest?.('[data-t162copy]'); if (!b) return;
+      try { await navigator.clipboard.writeText(b.dataset.t162copy); b.textContent = '✅'; } catch (er) { prompt('Ссылка:', b.dataset.t162copy); }
+    });
+  }
+  // поля канала в «📁 Каналы» → ⚙️: значок и «кто видит»
+  X.chanExtraHtml = (c, srv) => {
+    if (!T162 || !srv?.ext) return '';
+    const fixed = srv.official ? ['general', 'news'].includes(String(c.id)) || String(srv.default_ch) === String(c.id) : String(srv.default_ch) === String(c.id);
+    return `<label class="ds-lbl">Значок — один эмодзи вместо #<input class="ds-in" data-s="emoji" maxlength="8" value="${e(c.emoji || '')}" placeholder="${c.kind === 'voice' ? '🔊' : '#'}"></label>
+      <label class="ds-lbl">Кто видит канал${fixed ? ' — этот канал всегда для всех' : ''}<select class="ds-in" data-s="age"${fixed ? ' disabled' : ''}>${AGES.map(([v, t]) => `<option value="${v}"${(+c.min_age || 0) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+      <p class="ds-dim">Возраст проверяет сервер: младше — канал не видят и не могут писать. Каналов 18+ на сайте нет.</p>`;
+  };
+  X.chanExtraSave = async (box, c, srv) => {
+    const em = box?.querySelector('[data-s="emoji"]'), ag = box?.querySelector('[data-s="age"]');
+    if (!em || !ag || (em.value.trim() === (c.emoji || '') && +ag.value === (+c.min_age || 0))) return { ok: true };
+    const r = await P.rpc('cm_chan_extra', { p_community: srv.official ? null : srv.id, p_id: String(c.id), p_emoji: em.value.trim(), p_min_age: +ag.value });
+    if (r.data?.ok) EXT.delete(skey(srv));
+    return r.data?.ok ? { ok: true } : { ok: false, err: why4(r) };
+  };
 
   // ═══ Кнопки data-ds4 (в шапке, списке каналов, телефоне): свернуть категорию, 🔔, ⚙ канала ═══
   document.addEventListener('click', ev => {

@@ -185,14 +185,16 @@
       const info = C?.info?.(), staff = info?.staff || (typeof currentRole !== 'undefined' && ['admin', 'moderator', 'helper'].includes(currentRole) ? currentRole : null);
       let chans = (C?.channels?.() || []).map(c => ({ ...c }));
       if (!C?.hasNew?.()) chans = [chans[0], ...PLANNED.map(([id, name, kind]) => ({ id, name, kind: kind || 'text', soon: true })), chans.find(c => c.kind === 'twitch')].filter(Boolean);
-      return { ok: true, id: OFF_ID, official: true, name: 'Денчик37', icon: '<img src="/icon-192.png" alt="">', about: 'Официальный сервер сайта: общий чат, игры, мемы и голосовой', channels: chans, cats: C?.info?.()?.cats || [], staff, role: null };
+      const o = { ok: true, id: OFF_ID, official: true, name: 'Денчик37', icon: '<img src="/icon-192.png" alt="">', about: 'Официальный сервер сайта: общий чат, игры, мемы и голосовой', channels: chans, cats: C?.info?.()?.cats || [], staff, role: null };
+      return C?.hasNew?.() && DS.x?.withExtra ? DS.x.withExtra(o, fresh) : o;   // T-162: значки, возраст каналов, правила (community2.js)
     }
     const d = await openC(id, fresh);
     if (d?.ok) DS.x?.roleData?.(id);   // свои роли — фоном (цвета ников, группы участников)
     if (!d || !d.ok) return { ok: false, id, reason: d?.reason, err: d?.err, name: d?.name, until: d?.until };
     const my = S.my.find(x => x.id === id);
-    return { ok: true, id, official: false, name: d.c.name, icon: e(d.c.icon), about: d.c.about, channels: d.channels || [], cats: d.cats || [], manage: !!d.manage, role: d.role, staff: d.staff, muted_until: d.muted_until, rt: d.rt, c: d.c, raw: d, lastMax: my?.last_id || 0,
+    const o = { ok: true, id, official: false, name: d.c.name, icon: e(d.c.icon), about: d.c.about, channels: d.channels || [], cats: d.cats || [], manage: !!d.manage, role: d.role, staff: d.staff, muted_until: d.muted_until, rt: d.rt, c: d.c, raw: d, lastMax: my?.last_id || 0,
       boost: !!my?.boost, banner: my?.boost ? my.banner || '' : '', anim: !!my?.anim };   // буст (community.sql → cm_my)
+    return DS.x?.withExtra ? DS.x.withExtra(o, fresh) : o;
   }
 
   // ═══ Куски интерфейса (одни и те же для страницы и телефона) ═══
@@ -215,11 +217,11 @@
     const mng = srv.official ? ['admin', 'moderator'].includes(srv.staff) : !!srv.manage, muted = c => !!DS.muteOf?.(srv, c);
     const unread = c => !muted(c) && !c.archived && (srv.official ? (window.D37Chat.lastId(c.id) || 0) > MV.lastRead('o:' + c.id) : (c.last_id || 0) > MV.lastRead('c:' + c.id));
     const row = c => {
-      const ic = c.kind === 'voice' ? '🔊' : c.kind === 'twitch' ? '📺' : '#';
+      const ic = c.emoji ? e(c.emoji) : c.kind === 'voice' ? '🔊' : c.kind === 'twitch' ? '📺' : '#';   // T-162: свой значок канала
       if (c.soon) return `<span class="ds-ch soon" title="Канал появится, когда сайт обновится"><i>${ic}</i><span>${e(c.name)}</span><small>скоро</small></span>`;
       const ment = srv.official ? window.D37Chat.mentions[c.id] || 0 : 0;
       const voiceIn = c.kind === 'voice' ? `<div class="ds-vppl" data-vch="${e(srv.official ? 'o' : c.id)}"></div>` : '';
-      return `<a class="ds-ch${String(selCh) === String(c.id) ? ' on' : ''}${muted(c) ? ' muted' : ''}${c.kind !== 'voice' && c.kind !== 'twitch' && unread(c) ? ' unread' : ''}" href="${link(mode, srv.id, c.id)}"><i>${ic}</i><span>${e(c.name)}</span>${c.slow ? '<small title="Медленный режим">🐢</small>' : ''}${c.mods_only ? '<small title="Пишут только модераторы">📢</small>' : ''}${muted(c) ? '<small title="Заглушён">🔕</small>' : ''}${mng && c.kind !== 'twitch' ? `<b class="ds4-chg" data-ds4="chset" data-mode="${mode}" data-srv="${srv.official ? 'o' : e(srv.id)}" data-ch="${e(c.id)}" title="Настройки канала">⚙</b>` : ''}${ment ? `<em class="ds-ment">${ment}</em>` : ''}</a>${voiceIn}`;
+      return `<a class="ds-ch${String(selCh) === String(c.id) ? ' on' : ''}${muted(c) ? ' muted' : ''}${c.kind !== 'voice' && c.kind !== 'twitch' && unread(c) ? ' unread' : ''}" href="${link(mode, srv.id, c.id)}"><i>${ic}</i><span>${e(c.name)}</span>${c.min_age ? `<small class="ds-age" title="Канал с ${+c.min_age} лет">${+c.min_age}+</small>` : ''}${c.slow ? '<small title="Медленный режим">🐢</small>' : ''}${c.mods_only ? '<small title="Пишут только модераторы">📢</small>' : ''}${muted(c) ? '<small title="Заглушён">🔕</small>' : ''}${mng && c.kind !== 'twitch' ? `<b class="ds4-chg" data-ds4="chset" data-mode="${mode}" data-srv="${srv.official ? 'o' : e(srv.id)}" data-ch="${e(c.id)}" title="Настройки канала">⚙</b>` : ''}${ment ? `<em class="ds-ment">${ment}</em>` : ''}</a>${voiceIn}`;
     };
     const text = ch.filter(c => c.kind !== 'voice'), voice = ch.filter(c => c.kind === 'voice');
     const lay = DS.x?.chanLayout?.(mode, srv, selCh, row);   // ч. 4: папки и архив (null — их нет, как раньше)
@@ -467,6 +469,7 @@
     if (!srv.official) MV.markRead('cc:' + srv.id, srv.lastMax || 0);
     mv.setAdapter(A);
     commBadge();
+    DS.x?.rulesGate?.(srv);   // T-162: правила и приветствие — новичку один раз
     return mv;
   }
   function dropView(){ if (mv) { mv.destroy(); mv = null; mvHost = null; } if (window.D37Chat) { window.D37Chat.view = null; window.D37Chat.viewing = ''; } }
@@ -548,11 +551,12 @@
       return;
     }
     // по умолчанию — #общий (канал «📢 новости» стоит выше, но в нём пишут только бот и команда)
-    ch = srv.channels.find(c => String(c.id) === sub && !c.soon) || (srv.official && srv.channels.find(c => c.id === 'general')) || srv.channels.find(c => c.kind === 'text' && !c.soon);
+    ch = srv.channels.find(c => String(c.id) === sub && !c.soon) || (srv.default_ch != null && srv.channels.find(c => String(c.id) === String(srv.default_ch) && c.kind === 'text' && !c.archived))   // T-162: канал по умолчанию
+      || (srv.official && srv.channels.find(c => c.id === 'general')) || srv.channels.find(c => c.kind === 'text' && !c.soon);
     page.ch = ch;
     paintSide(root, 'page', srv, ch?.id);
     if (!ch) { dropView(); root.querySelector('.ds-body').innerHTML = '<div class="ds-scroll"><div class="ds-pane"><div class="ds-dim">Каналов нет</div></div></div>'; return; }
-    setTop(root, `${ch.kind === 'voice' ? '🔊' : ch.kind === 'twitch' ? '📺' : '#'} ${e(ch.name)}`, e(ch.about || (srv.official ? '' : srv.about || '')), ch.kind !== 'text');
+    setTop(root, `${ch.emoji ? e(ch.emoji) : ch.kind === 'voice' ? '🔊' : ch.kind === 'twitch' ? '📺' : '#'} ${e(ch.name)}`, e(ch.about || (srv.official ? '' : srv.about || '')), ch.kind !== 'text');
     // полоска закрепа общего чата (VIP) — как раньше, над лентой
     paintPin(root, srv, ch);
     if (srv.official && ch.kind === 'text' && !srv.c) hideChatBadgeSafe();
