@@ -26,7 +26,7 @@
 
   // ═══ Плитки меню (одна таблица; названия — владельца) ═══
   const TILES = [
-    { id: 'play', big: 1, icon: '🌲', title: 'Играть', sub: 'Долина на планете: руби деревья, собирай камни и ягоды, делай топор и строй дом — всё сохраняется', href: '/hub/play', cls: 'hub-t-play' },
+    { id: 'play', big: 1, icon: '🌍', title: 'Играть', sub: 'Твой мир на планете — от клетки до космоса: руби, строй, зови людей в племя. Всё сохраняется', href: '/hub/play', cls: 'hub-t-play' },
     { id: 'wardrobe', icon: '👕', title: 'Гардероб', sub: 'Девочка, мальчик или манекен, цвета каждой части', href: '/hub/wardrobe', cls: 'hub-t-ward' },
     { id: 'creative', icon: '🪐', title: 'Творческий режим', sub: 'Отдельный мир: свободный полёт над планетой, без голода и опасностей — своё сохранение', href: '/hub/creative', cls: 'hub-t-planet' },
     { id: 'world', icon: '🌍', title: 'Мир Денчика', sub: 'Город, кафе и столики с играми — онлайн', href: '/play/world', cls: 'hub-t-world', age: '12+' },
@@ -88,6 +88,35 @@
   const SLOT = { play: WORLD, creative: 'creative', planet: 'creative' };   // у творческого мира своё сохранение (и в облаке — мир 'creative')
   const SAVES = m => !!SLOT[m];
   const slot = () => SLOT[st.mode] || WORLD;
+  const SPAWNS = { home: 1, orbit: 1, new: 1, tribe: 1 };
+  // «Путь» от клетки до космоса: шаги (как в движке, assets/game/hub/path.ron) и где игрок — из байтов сохранения (раздел progress
+  // мира: «(v:1,stage:S,era:E,…»); стадия 0 клетка, 1 существо, 2 человек; эпоха E0..E7 → шаг пути
+  const PATH = [['🦠', 'Клетка'], ['🐟', 'Существо'], ['🔥', 'Племя'], ['🏡', 'Посёлок'], ['🏰', 'Город'], ['🏭', 'Заводы'], ['🚀', 'Космос']];
+  const ERA_STEP = [2, 3, 3, 4, 5, 5, 6, 6];
+  function pathStep(rec){
+    try {
+      if (!rec || !rec.bytes || !rec.bytes.length) return -1;
+      const t = new TextDecoder('utf-8', { fatal: false }).decode(rec.bytes);
+      const m = /\(v:1,stage:(\d),era:(\d)/.exec(t);
+      if (!m) return 2;   // мир без записи о пути (старые сохранения) — человек в племени
+      const stage = +m[1], era = +m[2];
+      return stage < 2 ? stage : (ERA_STEP[era] != null ? ERA_STEP[era] : 2);
+    } catch (e) { return -1; }
+  }
+  function pathPanel(step){
+    const box = el('div', 'hub-path');
+    box.setAttribute('aria-label', 'Путь: от клетки до космоса');
+    box.appendChild(el('b', 'hub-path-h', step >= 0 ? 'Твой путь' : 'Путь: от клетки до космоса'));
+    const row = el('ol', 'hub-path-row');
+    PATH.forEach(([ic, name], k) => {
+      const li = el('li', 'hub-path-s' + (k === step ? ' on' : k < step ? ' done' : ''));
+      li.append(el('span', 'hub-path-ic', ic), el('span', 'hub-path-n', name));
+      if (k === step) li.setAttribute('aria-current', 'step');
+      row.appendChild(li);
+    });
+    box.appendChild(row);
+    return box;
+  }
 
   // ═══ Состояние ═══
   const st = { gen: 0, active: false, mode: '', h: null, starting: false, t0: 0, playBase: 0, cloudVer: null, lastCloud: 0, saves: 0, cloudSaves: 0, look: null,
@@ -209,6 +238,7 @@
     if (CAT) { CAT.me(wrap); CAT.row(wrap); } else account(wrap);   // строка игр — сразу под плашкой, её видно без прокрутки на ПК
     const grid = el('div', 'hub-grid');
     for (const t of TILES) {
+      if (t.id === 'play') { grid.appendChild(playCard(t)); continue; }
       const a = el(t.href ? 'a' : 'button', 'hub-tile ' + t.cls + (t.big ? ' hub-big' : ''));
       if (t.href) a.href = t.href; else a.type = 'button';
       a.dataset.tile = t.id;
@@ -216,7 +246,6 @@
       const tx = el('span', 'hub-tx');
       tx.appendChild(el('b', 'hub-tt', t.title));
       tx.appendChild(el('span', 'hub-ts', t.sub));
-      if (t.id === 'play') tx.appendChild(el('span', 'hub-cont', ''));
       a.appendChild(tx);
       if (t.age) a.appendChild(el('i', 'hub-age', t.age));
       if (t.act === 'invite') a.addEventListener('click', invite);
@@ -228,19 +257,58 @@
     wrap.appendChild(grid);
     const note = el('div', 'hub-note');
     note.appendChild(el('b', '', 'Что уже есть: '));
-    note.append('долина на планете: рубка деревьев, камни, ягоды, 15 рецептов (топор, кирка, верстак, костёр, факел, стены, дверь, крыша, мост), стройка с сохранением; ' +
-      'полёт с орбиты и посадка, плавание и ныряние, гардероб с цветами. Дальше — голод, животные, игра вместе с друзьями. Это ранняя версия: если что-то сломалось — напиши в чат.');
+    note.append('один мир на планете: новый мир начинается клеткой в приливной луже, дальше — существо, племя, посёлок; рубка, ремесло, стройка, ' +
+      'карта (M), дневник пути (J) и компас; можно прилететь в свой мир с орбиты. Творческий режим — свободный полёт. Это первая версия: если что-то сломалось — напиши в чат.');
     wrap.appendChild(note);
     page.appendChild(wrap);
-    // «Продолжить»: есть сохранение в браузере — сколько уже наиграно
-    try {
-      const rec = await idbGet(WORLD);
-      const c = page.querySelector('.hub-cont'), sv = page.querySelector('[data-tile="save"] .hub-ts');
-      if (rec && rec.bytes && rec.bytes.length) {
-        if (c) c.textContent = '▶ Продолжить · ' + fmtMin(rec.gt) + ' в игре';
-        if (sv) sv.textContent = fmtMin(rec.gt) + ' в игре · ' + (rec.cloud && rec.cloud.on && !rec.cloud.dirty ? 'в облаке ☁️' : 'в этом браузере');
-      }
-    } catch (e) {}
+    // «Продолжить»: есть сохранение в браузере — сколько уже наиграно, где ты на пути; нет — «Новый мир»
+    let rec = null;
+    try { rec = await idbGet(WORLD); } catch (e) {}
+    const has = !!(rec && rec.bytes && rec.bytes.length);
+    fillPlayCard(page.querySelector('[data-tile="play"]'), has ? rec : null);
+    const sv = page.querySelector('[data-tile="save"] .hub-ts');
+    if (has && sv) sv.textContent = fmtMin(rec.gt) + ' в игре · ' + (rec.cloud && rec.cloud.on && !rec.cloud.dirty ? 'в облаке ☁️' : 'в этом браузере');
+  }
+  // Главная карточка «Играть»: ссылка на свой мир, выбор места появления, панель «Путь». Сохранения нет — «Новый мир» (с клетки)
+  // и маленькая ссылка «Пропустить к племени». Карточка — div (внутри ссылки, а ссылка в ссылке нельзя)
+  function playCard(t){
+    const card = el('div', 'hub-tile hub-big hub-playcard ' + t.cls);
+    card.dataset.tile = 'play';
+    const main = el('a', 'hub-play-main');
+    main.href = '/hub/play';
+    main.appendChild(el('span', 'hub-ic', t.icon));
+    const tx = el('span', 'hub-tx');
+    tx.appendChild(el('b', 'hub-tt', t.title));
+    tx.appendChild(el('span', 'hub-ts', t.sub));
+    tx.appendChild(el('span', 'hub-cont', ''));
+    main.appendChild(tx);
+    card.appendChild(main);
+    card.appendChild(el('div', 'hub-spawn'));
+    card.appendChild(pathPanel(-1));
+    return card;
+  }
+  function chip(text, href, cls){ const a = el('a', 'hub-chip' + (cls ? ' ' + cls : ''), text); a.href = href; return a; }
+  function fillPlayCard(card, rec){
+    if (!card) return;
+    const main = card.querySelector('.hub-play-main'), c = card.querySelector('.hub-cont'), sp = card.querySelector('.hub-spawn'), tt = card.querySelector('.hub-tt');
+    sp.textContent = '';
+    if (rec) {
+      main.href = '/hub/play';
+      tt.textContent = 'Играть';
+      c.textContent = '▶ Продолжить мой мир · ' + fmtMin(rec.gt) + ' в игре';
+      sp.appendChild(el('span', 'hub-spawn-h', 'Где появиться:'));
+      sp.append(chip('📍 Где я был', '/hub/play', 'on'), chip('🏕 Домой в лагерь', '/hub/play/home'), chip('🚀 С орбиты', '/hub/play/orbit'));
+      const fresh = el('button', 'hub-chip hub-chip-x', 'Новый мир…'); fresh.type = 'button';
+      fresh.addEventListener('click', saveSheet);
+      sp.appendChild(fresh);
+    } else {
+      main.href = '/hub/play/new';
+      tt.textContent = 'Новый мир';
+      c.textContent = '▶ Начать с клетки в приливной луже';
+      sp.append(chip('🔥 Пропустить к племени', '/hub/play/tribe', 'hub-chip-x'));
+    }
+    const old = card.querySelector('.hub-path');
+    if (old) old.replaceWith(pathPanel(pathStep(rec)));
   }
   const fmtMin = s => { const m = Math.max(1, Math.round((+s || 0) / 60)); return m >= 60 ? Math.floor(m / 60) + ' ч ' + (m % 60) + ' мин' : m + ' мин'; };
   // лист поверх меню (как играть, сохранение): заголовок, строки, кнопки; закрывается кнопкой, фоном и Esc
@@ -268,6 +336,8 @@
         ['🏠 Стройка', 'возьми деталь в руку (1-8 или СУМКА) и поставь (ПКМ или ДЕЙСТВИЕ); R — повернуть; стены цепляются к стенам, крыша — на стены. Зажми ДЕЙСТВИЕ на детали — забрать обратно'],
         ['📱 Телефон', 'левая половина экрана — идти (до упора — бегом), правая — смотреть; ⤒ — прыжок, 👕 — гардероб; в творческом режиме 🌍 — с орбиты на землю и обратно'],
         ['🖥 Компьютер', 'нажми на картинку — мышь смотрит; W A S D — идти, Shift — бегом, Пробел — прыжок (в воде — вверх), C — присесть'],
+        ['🧭 Путь', 'новый мир начинается клеткой в приливной луже: расти, стань существом, проснись человеком у монолита. Племя из 5 жителей, 3 хижины, склад и поле — и можно основать посёлок'],
+        ['🗺 Карта и дневник', 'M — карта (места, племена, ты), J — дневник пути (цель, озарения); на телефоне — в меню СУМКА, сверху. Компас вверху показывает ближайшие стоянки и руины'],
         ['🪐 Творческий режим', 'отдельный мир без голода и опасностей, начинается на орбите: зажми O (или 🌍) — полетишь вниз и приземлишься; ещё раз — обратно в космос'],
         ['🌊 Вода', 'в воду можно зайти вброд, глубже — плыть; ныряй и смотри на дно'],
         ['👕 Гардероб', 'B или 👕 — девочка, мальчик или манекен, цвет волос, верха, низа, обуви и кожи; образ сохраняется сам'],
@@ -300,7 +370,7 @@
           if (!confirm('Начать заново? Долина, вещи и постройки ' + (rec.cloud && rec.cloud.on ? '(и в облаке) ' : '') + 'удалятся, вернуть их будет нельзя.')) return;
           await idbPut(WORLD, null);
           if (me() && rec.cloud && rec.cloud.on) { const C = await cloud(); try { C && C.available() && await C.del(GAME, WORLD); } catch (e) {} }
-          close(); renderMenu(); toastMenu('Готово — следующая игра начнётся с чистой долины');
+          close(); renderMenu(); toastMenu('Готово — нажми «Новый мир», он начнётся с клетки');
         });
         row.appendChild(fresh);
       }
@@ -353,14 +423,14 @@
     const bar = el('div', 'hub-bar');
     const back = el('button', 'hub-back', '← На сайт'); back.type = 'button';
     back.addEventListener('click', () => leave(mode));
-    const title = el('b', 'hub-title', mode === 'wardrobe' ? '👕 Гардероб' : cre ? '🪐 Творческий режим' : '🌲 Долина D37');
+    const title = el('b', 'hub-title', mode === 'wardrobe' ? '👕 Гардероб' : cre ? '🪐 Творческий режим' : '🌍 Мой мир D37');
     const stat = el('span', 'hub-stat', '');
     const full = el('button', 'hub-full', '⛶'); full.type = 'button'; full.title = 'На весь экран'; full.setAttribute('aria-label', 'На весь экран');
     full.addEventListener('click', () => toggleFull(box));
     bar.append(back, title, stat, full);
     const stage = el('div', 'hub-stage');
     const load = el('div', 'hub-load');
-    const lt = el('div', 'hub-lt', mode === 'wardrobe' ? 'Открываем гардероб' : cre ? 'Летим в творческий мир' : 'Идём в долину');
+    const lt = el('div', 'hub-lt', mode === 'wardrobe' ? 'Открываем гардероб' : cre ? 'Летим в творческий мир' : st.opt === 'new' ? 'Рождается новый мир' : st.opt === 'orbit' ? 'Летим к твоему миру' : 'Идём в твой мир');
     const ph = el('div', 'hub-ph', 'Загружаем движок');
     const barO = el('div', 'hub-pb'), barI = el('i', '');
     barO.appendChild(barI);
@@ -432,9 +502,16 @@
     return st.build || {};
   }
 
-  async function open(mode){
-    if (st.active && st.mode === mode) return;
+  async function open(mode, opt){
+    opt = mode === 'play' && SPAWNS[opt] ? opt : '';
+    if (st.active && st.mode === mode && st.opt === opt) return;
     if (st.active) await close('switch');
+    // новый мир поверх сохранённого — только с согласия (иначе — продолжить свой)
+    if (opt === 'new' || opt === 'tribe') {
+      const old = await idbGet(WORLD).catch(() => null);
+      if (old && old.bytes && old.bytes.length && !confirm('Начать новый мир? Твой мир (' + fmtMin(old.gt) + ' в игре) заменится новым при первом сохранении.')) opt = '';
+    }
+    st.opt = opt;
     const gen = ++st.gen;   // этот запуск; быстро вышли и зашли снова — старый запуск сам сдаётся (два движка сразу не бывает)
     st.active = true; st.mode = mode; st.starting = true; st.events = []; st.errors = []; st.resumed = null;
     document.body.classList.add('hub-on', 'game-on', 'e2-calm');
@@ -442,7 +519,8 @@
     ym('d37_open');
     if (!await canRun3d()) { showError('nogpu'); st.starting = false; return; }
     const info = await buildInfo();
-    const save = SAVES(mode) ? await pickSave() : null;
+    const fresh = opt === 'new' || opt === 'tribe';
+    const save = SAVES(mode) && !fresh ? await pickSave() : null;
     if (gen !== st.gen || !st.active || !ui) { if (gen === st.gen) st.starting = false; return; }   // ушли со страницы, пока ждали
     st.playBase = save && +save.gt || 0;
     let host;
@@ -457,6 +535,7 @@
       const h = await host.start({
         root: ui.stage, scene: MODES[mode] || 'valley', rawSize: +(info && info.wasm_raw) || 0, gl: st.gl || g === 'gl',
         quality: g === 'max' || g === 'mid' || g === 'low' ? g : touchDev() ? 'low' : '', session: sessionMsg(), look, save: save && save.bytes, wardrobe: mode === 'wardrobe',
+        newWorld: opt === 'new', skipTribe: opt === 'tribe', spawn: opt === 'home' || opt === 'orbit' ? opt : 'last',
         onProgress: progress, onMessage: onMsg,
       });
       if (gen !== st.gen || !st.active || !ui) { h.dispose(); return; }
@@ -469,12 +548,12 @@
   }
   function onMsg(m){
     if (!m || typeof m.t !== 'string') return;
-    if (m.t === 'loaded') { if (ui) ui.load.hidden = true; ym('d37_ready'); }
+    if (m.t === 'loaded') { if (ui) ui.load.hidden = true; ym('d37_ready'); if (st.opt === 'new') toast('🦠 Новый мир: ты — клетка в приливной луже'); else if (st.opt === 'tribe') toast('🔥 Племя: собирай, строй, зови людей'); }
     else if (m.t === 'look_changed') onLook(m);
     else if (m.t === 'wardrobe' && m.on === false && st.mode === 'wardrobe') leave('wardrobe');
     else if (m.t === 'save_ready') saveWorld(String(m.why || ''));
     else if (m.t === 'event') { st.events.push(String(m.code)); if (EVENTS[m.code]) toast(EVENTS[m.code]); }
-    else if (m.t === 'resumed') { st.resumed = m.summary || null; if (m.summary && SAVES(st.mode)) toast(st.mode === 'play' ? '▶ Твоя долина: всё, что построил, на месте' : '▶ Продолжаем с того места, где ты был'); }
+    else if (m.t === 'resumed') { st.resumed = m.summary || null; if (m.summary && SAVES(st.mode)) toast(st.mode === 'play' ? (st.opt === 'orbit' ? '🚀 Твой мир внизу — зажми O, чтобы приземлиться' : st.opt === 'home' ? '🏕 Ты дома, в лагере' : '▶ Твой мир: всё, что построил, на месте') : '▶ Продолжаем с того места, где ты был'); }
     else if (m.t === 'error') {
       st.errors.push(String(m.code) + ': ' + String(m.msg || ''));
       report(String(m.code).replace(/[^a-z_-]/gi, '').slice(0, 20) || 'x', m.msg);
@@ -490,7 +569,7 @@
     // последний образ — сразу, не ждать 1,5 с
     if (st.lookT) { clearTimeout(st.lookT); st.lookT = 0; const [b, t] = st.lastLook.split('|'); if (b) keepLook(b, t || ''); }
     try { h && h.dispose(); } catch (e) {}
-    st.h = null; st.active = false; st.mode = ''; st.t0 = 0; st.gen++;
+    st.h = null; st.active = false; st.mode = ''; st.opt = ''; st.t0 = 0; st.gen++;
     if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
     if (ui) { ui.box.remove(); ui = null; }
     document.body.classList.remove('hub-on', 'e2-calm');
@@ -502,7 +581,7 @@
     const to = mode === 'wardrobe' && prevPath && !/^\/hub\/(play|creative|planet|wardrobe)/.test(prevPath) ? prevPath : '/hub';
     if (root.D37Route) D37Route.go(to); else location.href = to;
   }
-  async function restart(){ const m = st.mode; await close('restart'); if (m) open(m); }
+  async function restart(){ const m = st.mode, o = st.opt; await close('restart'); if (m) open(m, o === 'new' || o === 'tribe' ? '' : o); }
 
   // Образ поменяли не здесь (вошёл с другого устройства — настройки пришли из аккаунта) — показать его в игре
   function watchSettings(){
@@ -517,8 +596,8 @@
 
   // ═══ Вход из роутера ═══
   function render(param){
-    const p = String(param || '').split('/')[0];
-    if (ON() && MODES[p]) { open(p); return; }
+    const parts = String(param || '').split('/'), p = parts[0];
+    if (ON() && MODES[p]) { open(p, parts[1] || ''); return; }
     if (ON() && p === 'games' && root.D37HubCat) { if (st.active) close('menu'); D37HubCat.page($('hub-page')); return; }
     renderMenu();
     // из игры в меню: мир сохраняется при выходе — «▶ Продолжить» и «Сохранение» перерисовать, когда запишется
@@ -547,5 +626,5 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', navOn); else navOn();
   }
   root.renderHubPage = render;
-  root.D37Hub = { TILES, open, close, render, invite, saveWorld, pickSave, lookNow, fmtMin, get active(){ return st.active; }, _st: st, _idb: { get: idbGet, put: idbPut } };
+  root.D37Hub = { TILES, PATH, open, close, render, invite, saveWorld, pickSave, lookNow, fmtMin, pathStep, get active(){ return st.active; }, _st: st, _idb: { get: idbGet, put: idbPut } };
 })();

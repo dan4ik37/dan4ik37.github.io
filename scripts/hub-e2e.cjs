@@ -188,7 +188,7 @@ async function playUntilLoaded(C, label){
           await C.ev(`localStorage.removeItem('d37_theme'), true`); await C.send('Page.reload'); await C.until(READY, 60000);
           // «Играть» — экран загрузки, потом планета внутри сайта
           await C.view(1366, 800, false);
-          await C.ev(`document.querySelector('#hub-page a[data-tile="play"]').click(), true`);
+          await C.ev(`document.querySelector('#hub-page [data-tile="play"] a.hub-play-main').click(), true`);
           ok(await C.until(`!!document.querySelector('.hub-play .hub-load') && !document.querySelector('.hub-play .hub-load').hidden`, 10000), 'экран загрузки показан');
           await C.until(`/[1-9]/.test(document.querySelector('.hub-pct')?.textContent || '')`, 15000);
           await C.shot('loading_pc.png');
