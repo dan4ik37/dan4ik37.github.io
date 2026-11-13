@@ -81,6 +81,10 @@
     hudTray: { def: 'auto', list: ['auto', 'open', 'closed'] },
     hudDebug: { def: false, bool: 1 },
     autoPortrait: { def: true, bool: 1 },
+    // 🎮 Платформа D37 (js/features/hub.js): образ из гардероба нового движка — персонаж и цвета частей («girl.hair:ffd0e0,…»);
+    // едет в аккаунт вместе с настройками игр (prefs_set), у гостя — только в браузере
+    d37body: { def: 'girl', list: ['girl', 'boy', 'mannequin'] },
+    d37look: { def: '', re: /^[a-z0-9.:,]{0,600}$/ },
   };
   // Старые ключи: как читать и как писать (null — удалить ключ: «как по умолчанию»)
   const b01 = { read: v => v === '1' ? true : v === '0' ? false : undefined, write: v => v ? '1' : null };
@@ -96,10 +100,11 @@
     theme: { k: 'd37_theme', read: v => THEMES.includes(v) ? v : undefined, write: v => v === themeDef() ? null : v },
   };
   // «↺ Сбросить всё» — про игры (графика, звук, клавиши…): тему сайта не трогает
-  const KEEP_ON_RESET = ['theme'];
+  const KEEP_ON_RESET = ['theme', 'd37body', 'd37look'];   // образ персонажа D37 — не настройка игр, «сбросить всё» его не стирает
   function clean(k, v){
     const s = SCHEMA[k];
     if (s.list) return s.list.includes(v) ? v : s.def;
+    if (s.re) return typeof v === 'string' && s.re.test(v) ? v : s.def;
     if (s.bool) return typeof v === 'boolean' ? v : v === 1 || v === '1' || v === 'true' ? true : v === 0 || v === '0' || v === 'false' ? false : s.def;
     if (s.obj) {
       const out = {};
@@ -929,7 +934,7 @@
   // устройства свои, не едут. Кто новее — того и берём (время последней своей правки — d37_settings_at). Без SQL / без входа —
   // как раньше, только браузер. Откат — SYNC_ON = false.
   const SYNC_ON = true;
-  const SYNC_KEYS = ['mute', 'vol', 'volFx', 'volAmb', 'volVoice', 'keys', 'sens', 'invertY', 'lefty', 'view', 'zoomFirst', 'fov', 'motion', 'shake', 'uiScale', 'tags', 'bubbles', 'hudFade', 'hudTray', 'hudDebug'];
+  const SYNC_KEYS = ['mute', 'vol', 'volFx', 'volAmb', 'volVoice', 'keys', 'sens', 'invertY', 'lefty', 'view', 'zoomFirst', 'fov', 'motion', 'shake', 'uiScale', 'tags', 'bubbles', 'hudFade', 'hudTray', 'hudDebug', 'd37body', 'd37look'];
   const LS_AT = 'd37_settings_at';
   const sync = { off: false, busy: false, t: 0, applying: false, uid: '' };
   const sbC = () => (typeof sbClient !== 'undefined' && sbClient) || null;

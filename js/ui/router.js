@@ -38,7 +38,8 @@ const PAGES = {
   adv:        ['adv-page'],      // 📣 кабинет рекламодателя (js/features/adcab.js грузится при входе)
   phone:      ['phone-page'],    // телефон 📱 на странице (js/features/phone.js)
   photo:      ['photo-page'],    // 🖼 фоторедактор (js/apps/apps.js грузит редактор при входе); страница для поиска — /tools/photo
-  ai3d:       ['ai3d-page']      // 🧊 3D-мастерская AI3D (T-112): адрес /tools/3d, скрытая (noindex; нет в поиске, меню, подвале, sitemap)
+  ai3d:       ['ai3d-page'],     // 🧊 3D-мастерская AI3D (T-112): адрес /tools/3d, скрытая (noindex; нет в поиске, меню, подвале, sitemap)
+  hub:        ['hub-page']       // 🎮 платформа D37 (T-159 первая версия): /hub — меню, /hub/play — планета движка, /hub/wardrobe — гардероб (js/features/hub.js)
 };
 const ALL_PAGE_IDS = Object.values(PAGES).flat();
 
@@ -211,6 +212,8 @@ const D37Route = (() => {
     photo: ['Фоторедактор онлайн — слои, обрезка, текст, фильтры | dan4ik37',
       'Бесплатный фоторедактор в браузере: слои, обрезка под шортс и превью, коррекция, фильтры, надписи, кисть и ластик. Работает на телефоне, без регистрации.'],
     ai3d: ['3D-мастерская AI3D — dan4ik37', '3D-мастерская: модели по командам от ИИ, экспорт в GLB и в «Студию 3D».'],
+    hub: ['Играть — планета D37, гардероб и игры | dan4ik37',
+      'Новый 3D-движок сайта dan4ik37: своя планета с океанами — лети с орбиты, приземляйся, плавай, наряжай персонажа. Играй в браузере на телефоне и ПК, без установки.'],
   };
   const NOINDEX = new Set(['profile', 'invite', 'adv', 'phone', 'games', 'ai3d']);   // ai3d — скрытая 3D-мастерская /tools/3d
   // Что разделу показать поисковику: { title, description, canonical, noindex }
@@ -227,6 +230,7 @@ const D37Route = (() => {
       if (route === 'shorts' && /^[A-Za-z0-9_-]{11}$/.test(param)) canon = '/v/' + param;   // тот же ролик — страница ролика
       if (route === 'forum') title = 'Тема форума — dan4ik37';
       if (route === 'ideas') title = 'Идея для видео — dan4ik37';
+      if (route === 'hub') noindex = true;   // экран игры и гардероб — не для поиска; само меню /hub — для поиска
     }
     if (route === 'ads') canon = '/reklama';
     if (route === 'photo') { canon = '/tools/photo'; if (param) noindex = true; }   // для поиска — серверная страница /tools/photo
@@ -348,6 +352,7 @@ function finishShowPage(route, activeIds){
   if (route==='phone' && typeof phoneRoute==='function') phoneRoute(route, param);      // телефон 📱 на странице
   if (route==='photo') window.D37Apps?.open('photo', param);                           // 🖼 фоторедактор (js/apps/apps.js)
   if (route==='ai3d') window.D37Apps?.open('ai3d', param);                             // 🧊 3D-мастерская AI3D (js/apps/apps.js)
+  if (route==='hub' && typeof renderHubPage==='function') renderHubPage(param);        // 🎮 платформа D37 (js/features/hub.js)
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным
   activeIds.forEach(id=>{
@@ -360,7 +365,7 @@ function finishShowPage(route, activeIds){
     a.classList.toggle('active-route', a.dataset.route===route);
   });
   // Нижний таб-бар (мобиле): подсвечиваем Видео/Чат/Донат, либо "Ещё" для остальных страниц
-  const tabRoutes = ['home','chat','shorts','games'];
+  const tabRoutes = ['home','chat','shorts','games','hub'];
   document.querySelectorAll('.bt-item[data-route]').forEach(a=>{
     a.classList.toggle('active-route', a.dataset.route===route);
   });

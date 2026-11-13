@@ -1,6 +1,6 @@
 // d37-terrain-worker.js — a build Worker of the D37 web build: its own instance of the engine's wasm and one
 // builder — a terrain column mesher (flat scenes) or a planet chunk builder (the planet).
-// Messages: {type:'init', scene, planet} -> {type:'ready'};
+// Messages: {type:'init', scene, planet, module?} -> {type:'ready'} (module: a compiled WebAssembly.Module);
 //   {type:'job', cx, cz, lo, hi} -> {type:'done', cx, cz, lo, hi, bytes, ms};
 //   {type:'chunk', lo, hi} -> {type:'chunk', bytes, ms}   (bytes is transferred, not copied);
 //   {type:'ground', index, size} -> {type:'ground', bytes, ms}   (one ground material layer, made by code).
@@ -28,7 +28,8 @@ onmessage = async (ev) => {
   const m = ev.data;
   try {
     if (m.type === 'init') {
-      await init({ module_or_path: new URL('./d37_web_bg.wasm', import.meta.url) });
+      // a host page that compiled the module already passes it (engine-host.js): no second download or compile
+      await init({ module_or_path: m.module || new URL('./d37_web_bg.wasm', import.meta.url) });
       if (m.planet) builder = new PlanetWorker(m.scene); else mesher = new ColumnWorker(m.scene);
       postMessage({ type: 'ready' });
       while (pending.length) run(pending.shift());

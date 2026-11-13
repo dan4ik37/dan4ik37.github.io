@@ -29,6 +29,8 @@ document.addEventListener('keydown', e=>{
   if(isTypingContext()||isModalOpen()) return;
   // Открыта мини-игра (#/games/<id>) — стрелки и цифры её, не переключаем страницы
   if(typeof gamesActive!=='undefined' && gamesActive) return;
+  // Открыта игра платформы D37 (/hub/play, js/features/hub.js) — клавиши её
+  if(window.D37Hub && D37Hub.active) return;
   // Открыт фоторедактор (/photo) — клавиши его (V, B, стрелки двигают слой…)
   if(window.D37Photo?.active) return;
   // Открыта 3D-мастерская AI3D (/tools/3d) — клавиатура её

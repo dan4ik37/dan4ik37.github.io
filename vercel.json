@@ -90,6 +90,15 @@
       ]
     },
     {
+      "source": "/hub/:path+",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
+    },
+    {
       "source": "/",
       "headers": [
         {
@@ -455,6 +464,14 @@
     },
     {
       "source": "/photo/:path+",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/hub",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/hub/:path+",
       "destination": "/index.html"
     },
     {
