@@ -5244,3 +5244,327 @@ begin
   execute 'grant execute on function public.friends_online() to authenticated';
 end $$;
 grant select on public.gdm_groups, public.gdm_members, public.gdm_messages, public.user_ignores to authenticated;
+
+-- ═══ часть 14 (ds-fun) ═══
+-- T-164 «интересные фишки» (владелец 13.11: «наш ДС до уровня ДС не дотягивает и ему не хватает интересных фишек»):
+--   свои эмодзи, стикеры и звуки сервера (загружают те, кто управляет каналами; у сообществ — только после проверки командой сайта:
+--   детская аудитория), звуковая панель в голосовом (перезарядка — сервер), «сцена» в голосовом (говорят выбранные, остальные
+--   слушают и поднимают руку), «с чего начать» новичку, метки сервера в обзоре 🧭, уровни активности на сервере (+1 опыт не чаще
+--   раза в минуту, ничего не продаётся), дата «на сервере с» — для значка годовщины. Ничего за деньги.
+--   Таблицы без политик RLS: читать и писать — только через функции ниже (security definer, права проверяет сервер).
+--   Откат одной строкой (опыт не копится, картинки и звуки не отдаются): drop trigger if exists cf_xp on public.messages; drop trigger if exists cf_xp on public.community_messages; update public.comm_media set status = 'pending';
+create table if not exists public.comm_media (
+  id bigint generated always as identity primary key,
+  community_id bigint references public.communities(id) on delete cascade,   -- null — сервер сайта «Денчик37»
+  kind text not null check (kind in ('emoji', 'sticker', 'sound')),
+  name text not null check (name ~ '^[a-z0-9_]{2,24}$'),
+  data text not null,                                                        -- data:image/… или data:audio/… (base64), размер — ниже
+  dur_ms int not null default 0,
+  status text not null default 'pending' check (status in ('pending', 'ok', 'rejected')),
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  reviewed_at timestamptz,
+  note text not null default ''
+);
+create unique index if not exists comm_media_name on public.comm_media (coalesce(community_id, 0), kind, name) where status <> 'rejected';
+create index if not exists idx_cmedia_srv on public.comm_media (coalesce(community_id, 0), kind) where status <> 'rejected';
+create index if not exists idx_cmedia_pending on public.comm_media (created_at) where status = 'pending';
+create index if not exists idx_cmedia_author on public.comm_media (created_by, created_at desc);
+alter table public.comm_media enable row level security;
+
+create table if not exists public.comm_fun (
+  skey text primary key,                       -- 'o' — сервер сайта, иначе id сообщества
+  start_chs text[] not null default '{}',      -- «с чего начать» новичку (до 5 текстовых каналов)
+  tags text[] not null default '{}',           -- метки в обзоре 🧭 (до 5; только сообщества)
+  levels boolean not null default true,        -- уровни активности на сервере
+  stage_chs text[] not null default '{}',      -- голосовые каналы-«сцены» (до 3)
+  updated_at timestamptz not null default now()
+);
+alter table public.comm_fun enable row level security;
+create table if not exists public.comm_stage (
+  skey text not null, ch text not null, speakers uuid[] not null default '{}', updated_at timestamptz not null default now(),
+  primary key (skey, ch)
+);
+alter table public.comm_stage enable row level security;
+create table if not exists public.comm_xp (
+  skey text not null, user_id uuid not null references public.profiles(id) on delete cascade,
+  xp int not null default 0, first_at timestamptz not null default now(), last_at timestamptz not null default now(),
+  primary key (skey, user_id)
+);
+create index if not exists idx_cxp_top on public.comm_xp (skey, xp desc);
+alter table public.comm_xp enable row level security;
+create table if not exists public.comm_sb_last (user_id uuid primary key references public.profiles(id) on delete cascade, at timestamptz not null default now());
+alter table public.comm_sb_last enable row level security;
+
+-- Видит ли человек сервер (сервер сайта — все; сообщество — открытое, участник или команда сайта)
+create or replace function public.cf_can_see(p_community bigint)
+returns boolean language sql stable security definer set search_path = public as $$
+  select p_community is null or exists (select 1 from public.communities c where c.id = p_community and (c.status = 'active' or public.comm_is_staff())
+    and (c.is_public or public.comm_is_staff() or exists (select 1 from public.community_members m where m.community_id = p_community and m.user_id = auth.uid())));
+$$;
+create or replace function public.cf_skey(p_community bigint)
+returns text language sql immutable as $$ select coalesce(p_community::text, 'o') $$;
+create or replace function public.cf_level(p_xp int)
+returns int language sql immutable as $$ select floor(sqrt(greatest(coalesce(p_xp, 0), 0) / 5.0))::int $$;
+
+-- Список эмодзи / стикеров / звуков сервера. Картинка в списке — только у эмодзи (маленькие); стикеры и звуки — cf_media_get.
+-- Тот, кто управляет, видит и ждущие проверки, и отклонённые (с причиной), за 30 дней
+create or replace function public.cf_media_list(p_community bigint)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare mng boolean := public.chan_can_manage(p_community, auth.uid()); r jsonb;
+begin
+  if not public.cf_can_see(p_community) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  select coalesce(jsonb_agg(jsonb_build_object('id', m.id, 'kind', m.kind, 'name', m.name, 'status', m.status, 'dur', m.dur_ms, 'note', case when mng then m.note else '' end,
+      'data', case when m.kind = 'emoji' and (m.status = 'ok' or mng) then m.data end) order by m.kind, m.name), '[]'::jsonb) into r
+    from public.comm_media m
+    where m.community_id is not distinct from p_community and (m.status = 'ok' or (mng and m.created_at > now() - interval '30 days'));
+  return jsonb_build_object('ok', true, 'manage', mng, 'list', r);
+end $$;
+
+-- Картинки и звуки по номерам (до 24). Только проверенные (их видели взрослые) — их можно показывать в любом сообщении
+create or replace function public.cf_media_get(p_ids bigint[])
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('id', m.id, 'kind', m.kind, 'name', m.name, 'data', m.data, 'dur', m.dur_ms)), '[]'::jsonb)
+  from public.comm_media m where m.id = any (p_ids[1:24]) and m.status = 'ok';
+$$;
+
+-- Загрузить: кто управляет каналами. Сервер сайта (его команда) — сразу; сообщество — ждёт проверки командой сайта
+create or replace function public.cf_media_add(p_community bigint, p_kind text, p_name text, p_data text, p_dur int default 0)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); v_name text := lower(btrim(coalesce(p_name, ''))); v_data text := coalesce(p_data, ''); v_cap int; v_max int; v_n int; v_id bigint; v_st text;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.chan_can_manage(p_community, uid) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if p_kind is null or p_kind not in ('emoji', 'sticker', 'sound') then return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
+  if v_name !~ '^[a-z0-9_]{2,24}$' or v_name ~ '^(stk|ce)_' then return jsonb_build_object('ok', false, 'reason', 'name'); end if;
+  if public.comm_bad(v_name) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  v_max := case p_kind when 'emoji' then 6000 when 'sticker' then 40000 else 70000 end;
+  v_cap := case p_kind when 'emoji' then 50 when 'sticker' then 30 else 24 end;
+  if char_length(v_data) > v_max then return jsonb_build_object('ok', false, 'reason', 'size'); end if;
+  if p_kind = 'sound' then
+    if v_data !~ '^data:audio/(mpeg|ogg|webm|wav|mp4|aac);base64,[A-Za-z0-9+/]+={0,2}$' then return jsonb_build_object('ok', false, 'reason', 'type'); end if;
+    if coalesce(p_dur, 0) < 200 or p_dur > 5000 then return jsonb_build_object('ok', false, 'reason', 'dur'); end if;
+  elsif v_data !~ '^data:image/(png|webp|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$' then return jsonb_build_object('ok', false, 'reason', 'type'); end if;
+  select count(*) into v_n from public.comm_media where community_id is not distinct from p_community and kind = p_kind and status <> 'rejected';
+  if v_n >= v_cap then return jsonb_build_object('ok', false, 'reason', 'full'); end if;
+  if (select count(*) from public.comm_media where created_by = uid and created_at > now() - interval '1 day') >= 20 then
+    return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  if exists (select 1 from public.comm_media where community_id is not distinct from p_community and kind = p_kind and name = v_name and status <> 'rejected') then
+    return jsonb_build_object('ok', false, 'reason', 'taken'); end if;
+  v_st := case when p_community is null or public.comm_is_staff(uid) then 'ok' else 'pending' end;
+  insert into public.comm_media (community_id, kind, name, data, dur_ms, status, created_by, reviewed_by, reviewed_at)
+    values (p_community, p_kind, v_name, v_data, case when p_kind = 'sound' then p_dur else 0 end, v_st, uid,
+            case when v_st = 'ok' then uid end, case when v_st = 'ok' then now() end)
+    returning id into v_id;
+  perform public.comm_log(p_community, uid, null, '', 'media_add', '', p_kind || ' :' || v_name || ':', '');
+  return jsonb_build_object('ok', true, 'id', v_id, 'status', v_st);
+end $$;
+
+-- Удалить: кто управляет этим сервером или команда сайта
+create or replace function public.cf_media_del(p_id bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare m record;
+begin
+  select * into m from public.comm_media where id = p_id;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if not (public.chan_can_manage(m.community_id, auth.uid()) or public.comm_is_staff()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  delete from public.comm_media where id = p_id;
+  perform public.comm_log(m.community_id, auth.uid(), null, '', 'media_del', '', m.kind || ' :' || m.name || ':', '');
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Очередь проверки — команда сайта (admin/moderator): по 20, с картинкой / звуком
+create or replace function public.cf_media_queue()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.comm_is_staff() then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(q.x order by q.at), '[]'::jsonb) from (
+    select m.created_at at, jsonb_build_object('id', m.id, 'kind', m.kind, 'name', m.name, 'data', m.data, 'dur', m.dur_ms, 'at', m.created_at,
+      'community', m.community_id, 'cname', (select c.name from public.communities c where c.id = m.community_id)) x
+    from public.comm_media m where m.status = 'pending' order by m.created_at limit 20) q));
+end $$;
+create or replace function public.cf_media_review(p_id bigint, p_ok boolean, p_note text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare m record;
+begin
+  if not public.comm_is_staff() then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  update public.comm_media set status = case when p_ok then 'ok' else 'rejected' end, reviewed_by = auth.uid(), reviewed_at = now(),
+      note = left(btrim(coalesce(p_note, '')), 200)
+    where id = p_id and status = 'pending' returning * into m;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  perform public.comm_log(m.community_id, auth.uid(), m.created_by, '', case when p_ok then 'media_ok' else 'media_no' end, m.note, m.kind || ' :' || m.name || ':', '');
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- 🔊 Звуковая панель: можно ли сыграть звук сейчас (участник сервера, звук этого сервера и проверен, не заглушён, раз в 4 с).
+-- Сам звук слышат те, кто в голосовом (рассылка браузерам; громкость — у каждого своя)
+create or replace function public.cf_sound_play(p_community bigint, p_id bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); v_last timestamptz; v_mute timestamptz;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not exists (select 1 from public.comm_media where id = p_id and kind = 'sound' and status = 'ok' and community_id is not distinct from p_community) then
+    return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if p_community is not null then
+    select muted_until into v_mute from public.community_members where community_id = p_community and user_id = uid;
+    if not found and not public.comm_is_staff(uid) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+    if v_mute > now() then return jsonb_build_object('ok', false, 'reason', 'muted'); end if;
+  end if;
+  select at into v_last from public.comm_sb_last where user_id = uid;
+  if v_last > now() - interval '4 seconds' then
+    return jsonb_build_object('ok', false, 'reason', 'wait', 'wait', ceil(extract(epoch from (v_last + interval '4 seconds' - now())))); end if;
+  insert into public.comm_sb_last (user_id, at) values (uid, now()) on conflict (user_id) do update set at = now();
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Настройки «фишек» сервера + мой уровень и дата «на сервере с»
+create or replace function public.cf_server_get(p_community bigint)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); f record; x record; v_join timestamptz; k text := public.cf_skey(p_community); v_lv int;
+begin
+  if not public.cf_can_see(p_community) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  select * into f from public.comm_fun where skey = k;
+  select * into x from public.comm_xp where skey = k and user_id = uid;
+  if p_community is not null then select joined_at into v_join from public.community_members where community_id = p_community and user_id = uid; end if;
+  v_lv := public.cf_level(x.xp);
+  return jsonb_build_object('ok', true, 'manage', public.chan_can_manage(p_community, uid),
+    'start_chs', coalesce(to_jsonb(f.start_chs), '[]'::jsonb), 'tags', coalesce(to_jsonb(f.tags), '[]'::jsonb),
+    'levels', coalesce(f.levels, true), 'stage_chs', coalesce(to_jsonb(f.stage_chs), '[]'::jsonb),
+    'me', case when uid is null then null else jsonb_build_object('xp', coalesce(x.xp, 0), 'level', v_lv, 'next', 5 * (v_lv + 1) * (v_lv + 1),
+      'since', coalesce(v_join, x.first_at)) end);
+end $$;
+
+create or replace function public.cf_server_set(p_community bigint, p_start text[], p_tags text[], p_levels boolean, p_stage text[])
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); k text := public.cf_skey(p_community); v_start text[] := '{}'; v_tags text[] := '{}'; v_stage text[] := '{}'; s text; t text;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.chan_can_manage(p_community, uid) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  foreach s in array coalesce(p_start, '{}') loop
+    if cardinality(v_start) >= 5 then exit; end if;
+    if s = any (v_start) then continue; end if;
+    if (p_community is null and exists (select 1 from public.chat_channels where id = s and kind = 'text' and not archived))
+       or (p_community is not null and s ~ '^\d{1,18}$' and exists (select 1 from public.community_channels where id = s::bigint and community_id = p_community and kind = 'text' and not archived)) then
+      v_start := v_start || s; else return jsonb_build_object('ok', false, 'reason', 'channel'); end if;
+  end loop;
+  foreach s in array coalesce(p_stage, '{}') loop
+    if cardinality(v_stage) >= 3 then exit; end if;
+    if s = any (v_stage) then continue; end if;
+    if (p_community is null and exists (select 1 from public.chat_channels where id = s and kind = 'voice'))
+       or (p_community is not null and s ~ '^\d{1,18}$' and exists (select 1 from public.community_channels where id = s::bigint and community_id = p_community and kind = 'voice')) then
+      v_stage := v_stage || s; else return jsonb_build_object('ok', false, 'reason', 'channel'); end if;
+  end loop;
+  if p_community is not null then
+    foreach s in array coalesce(p_tags, '{}') loop
+      t := lower(btrim(s));
+      if t = '' or t = any (v_tags) then continue; end if;
+      if cardinality(v_tags) >= 5 or t !~ '^[a-zа-яё0-9][a-zа-яё0-9 -]{1,15}$' or public.comm_bad(t) then return jsonb_build_object('ok', false, 'reason', 'tag'); end if;
+      v_tags := v_tags || t;
+    end loop;
+  end if;
+  insert into public.comm_fun (skey, start_chs, tags, levels, stage_chs, updated_at) values (k, v_start, v_tags, coalesce(p_levels, true), v_stage, now())
+    on conflict (skey) do update set start_chs = excluded.start_chs, tags = excluded.tags, levels = excluded.levels, stage_chs = excluded.stage_chs, updated_at = now();
+  perform public.comm_log(p_community, uid, null, '', 'server_edit', '', 'фишки: с чего начать, метки, уровни, сцена', '');
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Метки сообществ для карточек обзора 🧭 (только открытые и активные)
+create or replace function public.cf_tags(p_ids bigint[])
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'tags', f.tags)), '[]'::jsonb)
+  from public.communities c join public.comm_fun f on f.skey = c.id::text
+  where c.id = any (p_ids[1:48]) and c.status = 'active' and c.is_public and cardinality(f.tags) > 0;
+$$;
+
+-- 🎙 Сцена: кто говорит (до 6). Канал-сцену включают в настройках; говорящих выбирает тот, кто управляет
+create or replace function public.cf_stage_get(p_community bigint, p_ch text)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare k text := public.cf_skey(p_community); sp uuid[];
+begin
+  if not public.cf_can_see(p_community) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if not exists (select 1 from public.comm_fun where skey = k and p_ch = any (stage_chs)) then return jsonb_build_object('ok', true, 'stage', false); end if;
+  select speakers into sp from public.comm_stage where skey = k and ch = p_ch;
+  return jsonb_build_object('ok', true, 'stage', true, 'manage', public.chan_can_manage(p_community, auth.uid()), 'speakers', coalesce(to_jsonb(sp), '[]'::jsonb));
+end $$;
+create or replace function public.cf_stage_speaker(p_community bigint, p_ch text, p_uid uuid, p_on boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare k text := public.cf_skey(p_community); sp uuid[];
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.chan_can_manage(p_community, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if not exists (select 1 from public.comm_fun where skey = k and p_ch = any (stage_chs)) then return jsonb_build_object('ok', false, 'reason', 'not_stage'); end if;
+  select speakers into sp from public.comm_stage where skey = k and ch = p_ch;
+  sp := array_remove(coalesce(sp, '{}'::uuid[]), p_uid);
+  if p_on then
+    if cardinality(sp) >= 6 then return jsonb_build_object('ok', false, 'reason', 'full'); end if;
+    sp := sp || p_uid;
+  end if;
+  insert into public.comm_stage (skey, ch, speakers, updated_at) values (k, p_ch, sp, now())
+    on conflict (skey, ch) do update set speakers = excluded.speakers, updated_at = now();
+  return jsonb_build_object('ok', true, 'speakers', to_jsonb(sp));
+end $$;
+
+-- ⭐ Уровни: +1 опыт за сообщение, не чаще раза в минуту (сломалось — сообщение всё равно проходит)
+create or replace function public.cf_xp_hook()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare k text;
+begin
+  if new.user_id is null then return null; end if;
+  begin
+    k := case when tg_table_name = 'messages' then 'o' else (to_jsonb(new) ->> 'community_id') end;
+    if k is null or exists (select 1 from public.comm_fun where skey = k and not levels) then return null; end if;
+    insert into public.comm_xp (skey, user_id, xp) values (k, new.user_id, 1)
+      on conflict (skey, user_id) do update set xp = public.comm_xp.xp + 1, last_at = now() where public.comm_xp.last_at < now() - interval '60 seconds';
+  exception when others then null;
+  end;
+  return null;
+end $$;
+drop trigger if exists cf_xp on public.messages;
+create trigger cf_xp after insert on public.messages for each row execute function public.cf_xp_hook();
+drop trigger if exists cf_xp on public.community_messages;
+create trigger cf_xp after insert on public.community_messages for each row execute function public.cf_xp_hook();
+
+-- Таблица уровней сервера: топ-10 (ники — как в профиле)
+create or replace function public.cf_levels_top(p_community bigint)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare k text := public.cf_skey(p_community);
+begin
+  if not public.cf_can_see(p_community) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if exists (select 1 from public.comm_fun where skey = k and not levels) then return jsonb_build_object('ok', true, 'off', true, 'list', '[]'::jsonb); end if;
+  return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(jsonb_build_object('uid', q.user_id, 'nick', q.nick, 'xp', q.xp, 'level', public.cf_level(q.xp), 'since', q.since) order by q.xp desc), '[]'::jsonb) from (
+    select x.user_id, coalesce(p.nick, '') nick, x.xp,
+      coalesce((select m.joined_at from public.community_members m where p_community is not null and m.community_id = p_community and m.user_id = x.user_id), x.first_at) since
+    from public.comm_xp x left join public.profiles p on p.id = x.user_id
+    where x.skey = k and (p_community is null or exists (select 1 from public.community_members m where m.community_id = p_community and m.user_id = x.user_id))
+    order by x.xp desc limit 10) q));
+end $$;
+
+revoke all on function public.cf_can_see(bigint) from public, anon, authenticated;
+revoke all on function public.cf_xp_hook() from public, anon, authenticated;
+revoke all on function public.cf_media_list(bigint) from public;
+grant execute on function public.cf_media_list(bigint) to anon, authenticated;
+revoke all on function public.cf_media_get(bigint[]) from public;
+grant execute on function public.cf_media_get(bigint[]) to anon, authenticated;
+revoke all on function public.cf_media_add(bigint, text, text, text, int) from public, anon;
+grant execute on function public.cf_media_add(bigint, text, text, text, int) to authenticated;
+revoke all on function public.cf_media_del(bigint) from public, anon;
+grant execute on function public.cf_media_del(bigint) to authenticated;
+revoke all on function public.cf_media_queue() from public, anon;
+grant execute on function public.cf_media_queue() to authenticated;
+revoke all on function public.cf_media_review(bigint, boolean, text) from public, anon;
+grant execute on function public.cf_media_review(bigint, boolean, text) to authenticated;
+revoke all on function public.cf_sound_play(bigint, bigint) from public, anon;
+grant execute on function public.cf_sound_play(bigint, bigint) to authenticated;
+revoke all on function public.cf_server_get(bigint) from public;
+grant execute on function public.cf_server_get(bigint) to anon, authenticated;
+revoke all on function public.cf_server_set(bigint, text[], text[], boolean, text[]) from public, anon;
+grant execute on function public.cf_server_set(bigint, text[], text[], boolean, text[]) to authenticated;
+revoke all on function public.cf_tags(bigint[]) from public;
+grant execute on function public.cf_tags(bigint[]) to anon, authenticated;
+revoke all on function public.cf_stage_get(bigint, text) from public;
+grant execute on function public.cf_stage_get(bigint, text) to anon, authenticated;
+revoke all on function public.cf_stage_speaker(bigint, text, uuid, boolean) from public, anon;
+grant execute on function public.cf_stage_speaker(bigint, text, uuid, boolean) to authenticated;
+revoke all on function public.cf_levels_top(bigint) from public;
+grant execute on function public.cf_levels_top(bigint) to anon, authenticated;

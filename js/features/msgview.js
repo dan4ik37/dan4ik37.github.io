@@ -105,6 +105,7 @@
   }
   const hrefOf = path => path.startsWith('#') ? path : path;
   function emojiImg(name){
+    const hx = MV.emojiHook && MV.emojiHook(name); if (hx) return hx;   // T-164 ds-fun.js: эмодзи и стикеры сервера (:ce_<id>: / :stk_<id>:)
     const list = typeof customEmoji !== 'undefined' && Array.isArray(customEmoji) ? customEmoji : [];
     const c = list.find(x => x.name === name);
     return c ? `<img class="custom-emoji-img inline-emoji" src="${e(c.image_url)}" alt=":${e(name)}:" title=":${e(name)}:">` : null;

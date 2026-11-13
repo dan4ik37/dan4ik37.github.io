@@ -459,6 +459,7 @@
       host.innerHTML = '<div class="ds-voice"><div class="ds-dim">Загружаем голосовой…</div></div>';
       P.need('calls').then(() => window.D37Calls.voiceView(host.firstChild, srv.official ? { kind: 'official', channel: 0, title: `${ch.name} · Денчик37`, name: ch.name } : { kind: 'community', channel: ch.id, cid: srv.id, title: `${ch.name} · ${srv.name}`, name: ch.name, topic: ch.topic, member: !!(srv.role || srv.staff) }))
         .catch(() => { host.firstChild.innerHTML = '<div class="ds-dim">Не загрузилось — проверь интернет</div>'; });
+      DS.x?.voiceMore?.(host, srv, ch);   // T-164 ds-fun.js: звуковая панель, сцена, «Играть вместе»
       return;
     }
     const A0 = srv.official ? window.D37Chat.adapter(ch.id) : commAdapter(srv.raw, ch), A = DS.x?.wrapAdapter ? DS.x.wrapAdapter(A0, srv, ch) : A0;   // ч. 4: модерация с причиной
