@@ -188,11 +188,11 @@ async function playUntilLoaded(C, label){
           await C.ev(`localStorage.removeItem('d37_theme'), true`); await C.send('Page.reload'); await C.until(READY, 60000);
           // «Играть» — экран загрузки, потом планета внутри сайта
           await C.view(1366, 800, false);
-          await C.ev(`document.querySelector('#hub-page [data-tile="play"] a.hub-play-main').click(), true`);
+          await C.ev(`(document.querySelector('#hub-page [data-tile="play"] a[href="/hub/play/tribe"]') || document.querySelector('#hub-page [data-tile="play"] a.hub-play-main')).click(), true`);   // W8: без сохранения главная кнопка — «Новый мир» (клетка); рубить дерево — сразу с племени
           ok(await C.until(`!!document.querySelector('.hub-play .hub-load') && !document.querySelector('.hub-play .hub-load').hidden`, 10000), 'экран загрузки показан');
           await C.until(`/[1-9]/.test(document.querySelector('.hub-pct')?.textContent || '')`, 15000);
           await C.shot('loading_pc.png');
-          ok(await C.ev(`location.pathname === '/hub/play' && D37Hub.active === true && document.body.classList.contains('hub-on')`), 'адрес /hub/play, игра поверх сайта');
+          ok(await C.ev(`location.pathname.startsWith('/hub/play') && D37Hub.active === true && document.body.classList.contains('hub-on')`), 'адрес /hub/play, игра поверх сайта');
           if (await playUntilLoaded(C, 'гость')) {
             await sleep(2500);
             ok(await C.ev(`document.querySelector('.hub-play .hub-load').hidden === true`), 'экран загрузки убран');
@@ -320,7 +320,7 @@ async function playUntilLoaded(C, label){
           ok(await C.until(READY, 60000), 'сайт загрузился');
           await C.ev(login);
           await sleep(1500);
-          ok(await C.until(`/Тестер/.test(document.querySelector('#hub-page .hub-acc')?.textContent || '')`, 8000), 'меню: «Ты играешь как Тестер»');
+          ok(await C.until(`/Тестер/.test((document.querySelector('#hub-page .hub-acc') || document.querySelector('#hub-page .hc-me'))?.textContent || '')`, 8000), 'меню: «Ты играешь как Тестер»');
           await C.ev(GO('/hub/play'));
           if (await playUntilLoaded(C, 'вход')) {
             ok(FAKE.calls.includes('cloud_list'), 'облако спрошено при входе в игру (cloud_list)', FAKE.calls);

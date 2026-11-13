@@ -22,5 +22,6 @@
             "shore": (lat: 29, lon: 80.27, altitude: 1.7, yaw_deg: 262, pitch_deg: -5, time: 1890, fov_y_deg: 70),
         },
     ),
-    game: (hints: true, radius: 72, forest: 0.5),
+    // W8: spawn Home = the home valley (the place `home_valley`); Last = the last save; Orbit = the flight above home
+    game: (spawn: Home, hints: true, radius: 72, forest: 0.5),
 )

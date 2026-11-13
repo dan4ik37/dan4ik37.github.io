@@ -54,7 +54,7 @@ const CARD = `(() => { const c = document.querySelector('[data-tile="play"]'); i
   tt: c.querySelector('.hub-tt').textContent, cont: c.querySelector('.hub-cont').textContent, main: c.querySelector('.hub-play-main').getAttribute('href'),
   chips: [...c.querySelectorAll('a.hub-chip')].map(a => a.getAttribute('href')), steps: c.querySelectorAll('.hub-path-s').length,
   on: (c.querySelector('.hub-path-s.on .hub-path-n') || {}).textContent || '', done: c.querySelectorAll('.hub-path-s.done').length,
-  creative: (document.querySelector('[data-tile="planet"] .hub-tt') || {}).textContent || '', overflow: document.documentElement.scrollWidth > innerWidth + 1 }; })()`;
+  creative: (document.querySelector('[data-tile="creative"] .hub-tt') || {}).textContent || '', overflow: document.documentElement.scrollWidth > innerWidth + 1 }; })()`;
 // сохранение мира как у движка (байты SaveV1 с разделом игры: «"progress": "(v:1,stage:2,era:1,…»)
 const FAKE_SAVE = `D37Hub._idb.put('planet', { bytes: new TextEncoder().encode('D37S\\u0001\\u0000GAME"progress": "(v:1,stage:2,era:1,field:1,deeds:[],crafted:[plank],heritage:[],journal:[])"'), at: Date.now(), gt: 1500, cloud: { on: false, ver: null } })`;
 

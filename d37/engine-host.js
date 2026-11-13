@@ -77,7 +77,9 @@ async function compileWasm(url, rawSize, onBytes) {
 // Start the engine inside o.root (an element the page sized; it gets position:relative children).
 // o: { root, scene: 'planet' | 'planet_ground' | 'valley' (EP7: the game) | 'creative' (T-163: the free-flight world) | 'wardrobe'
 //      (T-163: the character alone on a pedestal — the light wardrobe), rawSize, gl, quality, session, look: {body, text}, save: Uint8Array,
-//      wardrobe: bool, workers: number, onMessage(msg), onProgress({phase, done, total}) }
+//      wardrobe: bool, workers: number, onMessage(msg), onProgress({phase, done, total}),
+//      W8 hub: newWorld: bool (`game progress new`: a cell at the tide pool), skipTribe: bool (`game progress skip tribe`),
+//      spawn: 'last' | 'home' | 'orbit' (where a saved world starts: as saved / `game place goto home_valley` / `travel orbit`) }
 // The 'wardrobe' scene is a studio: the panel is open from the start, no walking (the keys and the left half of a phone
 // turn the camera round the character instead), no jump / orbit / 👕 buttons; «Готово» is sent to the page as
 // {t:'wardrobe', on:false} as always (the site goes back where it came from).
@@ -369,7 +371,7 @@ export async function start(o) {
       const out = a.host_out();
       if (out) {
         for (const m of JSON.parse(out)) {
-          if (m.t === 'loaded') { st.loaded = true; try { const p = JSON.parse(a.planet_stats()); if (planet && p.alt < 100) levelLook(-12); } catch (e) { /* numbers only */ } }
+          if (m.t === 'loaded') { st.loaded = true; try { const p = JSON.parse(a.planet_stats()); if (planet && p.alt < 100) levelLook(-12); } catch (e) { /* numbers only */ } spawnOnce(); }
           if (m.t === 'event' && m.code === 'landed') levelLook(-12);
           if (m.t === 'wardrobe') syncPanel(m.on);
           // the body changed (a click, G, the page's saved look): the panel shows that body's parts
@@ -387,6 +389,14 @@ export async function start(o) {
       if (!st.loaded && planet) { try { const p = JSON.parse(a.planet_stats()); progress('world', p.shown || 0, (p.shown || 0) + (p.queued || 0) + (p.ready || 0)); } catch (e) { /* numbers only */ } }
     }
     st.raf = requestAnimationFrame(frame);
+  }
+  // W8 hub: the world is there — a new world / the shortcut / the spawn choice, once, through the admin path (§5.2)
+  let spawned = false;
+  function spawnOnce() {
+    if (spawned || !game) return;
+    spawned = true;
+    const cmds = o.newWorld ? ['game progress new'] : o.skipTribe ? ['game progress skip tribe'] : o.spawn === 'orbit' ? ['travel orbit'] : o.spawn === 'home' ? ['game place goto home_valley'] : [];
+    for (const c of cmds) { const r = run(c); if (typeof r === 'string' && /^отказ|error|no such/i.test(r)) emit({ t: 'error', code: 'spawn', msg: (c + ': ' + r).slice(0, 200) }); }
   }
   publish();
   st.raf = requestAnimationFrame(frame);
