@@ -80,7 +80,7 @@
     if (!cloudP) cloudP = new Promise(res => { const s = document.createElement('script'); s.src = '/js/core/cloud.js'; s.onload = () => res(root.D37Cloud || null); s.onerror = () => { cloudP = null; res(null); }; document.head.appendChild(s); });
     return cloudP;
   }
-  const GAME = 'engine', WORLD = 'planet';
+  const GAME = 'engine', WORLD = 'planet', SHOTS = 'shots';
   // режимы игры: play — главный мир (долина: добыча, крафт, стройка; сцена valley), creative — «Творческий режим» (T-163: отдельный мир,
   // свободный полёт с орбиты, без выживания; старый адрес /hub/planet ведёт туда же), wardrobe — лёгкий гардероб (T-163: персонаж один
   // на подставке, без планеты — сцена wardrobe; в игре гардероб по-прежнему B / 👕)
@@ -515,6 +515,8 @@
     const gen = ++st.gen;   // этот запуск; быстро вышли и зашли снова — старый запуск сам сдаётся (два движка сразу не бывает)
     st.active = true; st.mode = mode; st.starting = true; st.events = []; st.errors = []; st.resumed = null;
     document.body.classList.add('hub-on', 'game-on', 'e2-calm');
+    // окошко возраста не остаётся над игрой (до ответа мир — детский; спросим позже, не поверх игры — js/core/age.js)
+    try { if (root.D37Age && document.querySelector('.age-sheet')) D37Age.close(); } catch (e) {}
     ui = buildUi(mode);
     ym('d37_open');
     if (!await canRun3d()) { showError('nogpu'); st.starting = false; return; }
@@ -526,7 +528,7 @@
     let host;
     try {
       const v = info && /^[0-9a-f]{6,16}$/.test(String(info.id || '')) ? '?v=' + info.id : '';
-      host = await import(BASE() + 'engine-host.js' + v + (v ? '&' : '?') + 'k=2');   // k — версия обёртки (клавиши игры не уходят сайту)
+      host = await import(BASE() + 'engine-host.js' + v + (v ? '&' : '?') + 'k=3');   // k — версия обёртки (3: Esc и F1–F11 — игре, пауза, F2-снимки)
     } catch (e) { report('import', e && e.message); showError('import', e); st.starting = false; return; }
     if (gen !== st.gen || !st.active || !ui) return;
     try {
@@ -536,7 +538,7 @@
         root: ui.stage, scene: MODES[mode] || 'valley', rawSize: +(info && info.wasm_raw) || 0, gl: st.gl || g === 'gl',
         quality: g === 'max' || g === 'mid' || g === 'low' ? g : touchDev() ? 'low' : '', session: sessionMsg(), look, save: save && save.bytes, wardrobe: mode === 'wardrobe',
         newWorld: opt === 'new', skipTribe: opt === 'tribe', spawn: opt === 'home' || opt === 'orbit' ? opt : 'last',
-        onProgress: progress, onMessage: onMsg,
+        onProgress: progress, onMessage: onMsg, fullscreenEl: ui.box,   // F11 игры — на весь экран вместе с полосой сайта
       });
       if (gen !== st.gen || !st.active || !ui) { h.dispose(); return; }
       st.h = h; st.t0 = performance.now();
@@ -552,6 +554,8 @@
     else if (m.t === 'look_changed') onLook(m);
     else if (m.t === 'wardrobe' && m.on === false && st.mode === 'wardrobe') leave('wardrobe');
     else if (m.t === 'save_ready') saveWorld(String(m.why || ''));
+    else if (m.t === 'exit') leave(st.mode);   // пауза игры (Esc) → «НА САЙТ»
+    else if (m.t === 'shot') keepShot(m);      // F2 — снимок в галерею
     else if (m.t === 'event') { st.events.push(String(m.code)); if (EVENTS[m.code]) toast(EVENTS[m.code]); }
     else if (m.t === 'resumed') { st.resumed = m.summary || null; if (m.summary && SAVES(st.mode)) toast(st.mode === 'play' ? (st.opt === 'orbit' ? '🚀 Твой мир внизу — зажми O, чтобы приземлиться' : st.opt === 'home' ? '🏕 Ты дома, в лагере' : '▶ Твой мир: всё, что построил, на месте') : '▶ Продолжаем с того места, где ты был'); }
     else if (m.t === 'error') {
@@ -561,6 +565,16 @@
     }
     // ready приходит после первого кадра; экран загрузки уходит на loaded (или через 25 с — планета видна и так)
     if (m.t === 'ready' && ui) setTimeout(() => { if (ui) ui.load.hidden = true; }, 25000);
+  }
+  // F2 в игре: снимки (PNG) — в галерею на этом устройстве, последние 12 (IndexedDB, ключ 'shots'); ничего не скачивается.
+  // Первая версия: показать галерею в меню платформы — следующим шагом.
+  async function keepShot(m){
+    if (!m || !(m.blob instanceof Blob) || m.blob.size > 8e6) return;
+    try {
+      const list = (await idbGet(SHOTS).catch(() => null)) || [];
+      const next = (Array.isArray(list) ? list : []).concat([{ t: Date.now(), w: +m.w || 0, h: +m.h || 0, blob: m.blob }]).slice(-12);
+      await idbPut(SHOTS, next);
+    } catch (e) { report('shot', e && e.message); }
   }
   async function close(why){
     if (!st.active) return;
