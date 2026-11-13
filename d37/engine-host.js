@@ -4,6 +4,10 @@
 // the transport of bridge v1 (crates/d37-web/src/bridge.rs):
 //   page -> engine: send({t:'session', uid, nick, realm, band, staff}) · send({t:'look', body, text}) · send({t:'wardrobe', on})
 //   engine -> page: onMessage({t:'ready'|'loaded'|'look_changed'|'wardrobe'|'save_ready'|'event'|'error'|'progress', ...})
+//   W9 keys: onMessage({t:'exit'}) = the pause menu's «НА САЙТ»; onMessage({t:'shot', blob, w, h}) = F2 (a PNG of the
+//   game; the page puts it into its gallery, the host never downloads); o.fullscreenEl = the element F11 makes fullscreen
+//   (default: the root). Esc / F1–F11 are the game's while it is live (F12 stays the browser's); in fullscreen the
+//   Keyboard Lock API keeps Esc from the browser (holding Esc still leaves fullscreen — the browser's rule).
 //   bytes: save() -> Uint8Array (bridge::SaveV1); the page's earlier save goes in as o.save before the world loads.
 // It ships with the wasm (same folder, same version). No simulation and no rendering here, no site globals: the page
 // (site-owned js/features/hub.js) talks only to the handle start() returns. Text from the engine is codes and the look
@@ -141,6 +145,8 @@ export async function start(o) {
           else if (m.type === 'done') { slot.busy = false; st.app.push_result(m.cx, m.cz, m.lo, m.hi, new Uint8Array(m.bytes), m.ms); }
           else if (m.type === 'chunk') { slot.busy = false; st.app.push_chunk(new Uint8Array(m.bytes), m.ms); }
           else if (m.type === 'ground') { slot.busy = false; slot.ground = false; st.app.push_ground(new Uint8Array(m.bytes)); }
+          // fly-hitch: a scatter LOD tile built off the page's thread (an error is looks only: logged, not fatal)
+          else if (m.type === 'scatter') { slot.busy = false; slot.scatter = false; if (m.error) console.warn('d37 scatter worker', m.error); else st.app.push_scatter(new Uint8Array(m.bytes)); }
           else if (m.type === 'error') { slot.dead = true; emit({ t: 'error', code: 'worker', msg: String(m.error).slice(0, 200) }); }
         } catch (e) { fail('worker-result', e); }
       };
@@ -162,6 +168,10 @@ export async function start(o) {
   const mouse = { act: false, use: false };
   const toCanvas = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * canvas.width / Math.max(1, r.width), (e.clientY - r.top) * canvas.height / Math.max(1, r.height)]; };
   const menuOpen = () => { try { return game && st.app.game_menu_open(); } catch (e) { return false; } };
+  const paused = () => { try { return game && st.app.game_paused(); } catch (e) { return false; } };
+  // W9 keys: our own release of the pointer lock (a menu, the wardrobe) is not the player's Esc
+  let selfRelease = false, hadLock = false, pauseAt = -1e9;
+  const unlock = () => { if (document.pointerLockElement === canvas) { selfRelease = true; try { document.exitPointerLock(); } catch (e) { /* gone */ } } };
   for (const s of st.pool) s.w.postMessage({ type: 'init', scene: sceneText, planet, module });
   const send = (m) => {
     if (!st.app) return false;
@@ -179,7 +189,7 @@ export async function start(o) {
   const keys = st.keys;
   function publish() {
     if (!st.app) return;
-    if (!st.inputOn || studio) { st.app.set_move(0, 0, 0); return; }
+    if (!st.inputOn || studio || paused()) { st.app.set_move(0, 0, 0); return; }
     const k = (c) => keys.has(c);
     let fw = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0);
     let sx = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
@@ -199,18 +209,91 @@ export async function start(o) {
   // typing in the page (chat, search) is never game input
   const typing = () => { const a = document.activeElement; return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable); };
   const live = () => !st.paused && !st.dead && st.inputOn && !typing();
+  // W9 keys: Esc and F1–F11 are the game's while it is live (F12 stays the browser's: developer tools)
+  const GAME_FKEY = /^(Escape|F[1-9]|F1[01])$/;
+  // ── fullscreen with the keyboard lock (F11, the pause menu, the page's own fullscreen button) ──
+  const fsEl = o.fullscreenEl || root;
+  const kb = typeof navigator !== 'undefined' && navigator.keyboard && navigator.keyboard.lock ? navigator.keyboard : null;
+  const LOCK_KEYS = ['Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11'];
+  function toggleFull() {
+    const d = document;
+    try {
+      if (d.fullscreenElement || d.webkitFullscreenElement) { const x = d.exitFullscreen || d.webkitExitFullscreen; if (x) { const p = x.call(d); if (p && p.catch) p.catch(() => {}); } return; }
+      const f = fsEl.requestFullscreen || fsEl.webkitRequestFullscreen;
+      if (f) { const p = f.call(fsEl, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); }
+    } catch (e) { /* no fullscreen here */ }
+  }
+  let fsHinted = false;
+  try { fsHinted = localStorage.getItem('d37_fs_hint') === '1'; } catch (e) { /* storage off */ }
+  on(document, 'fullscreenchange', () => {
+    const f = document.fullscreenElement;
+    if (f && f.contains(canvas)) {
+      if (kb) { try { const p = kb.lock(LOCK_KEYS); if (p && p.catch) p.catch(() => {}); } catch (e) { /* not allowed here */ } }
+      if (!fsHinted) {
+        fsHinted = true;
+        try { localStorage.setItem('d37_fs_hint', '1'); } catch (e) { /* storage off */ }
+        say(kb ? 'Esc теперь у игры (пауза). Выйти из полного экрана — удерживай Esc' : 'Выйти из полного экрана — Esc');
+      }
+    } else if (kb) { try { kb.unlock(); } catch (e) { /* not locked */ } }
+  });
+  // a short line in the hint pill (the hint pill already exists below; set later)
+  let say = () => {};
+  let shotWanted = false;
+  st.shots = [];
+  function acts() {
+    if (!game) return;
+    for (let i = 0; i < 8; i++) {
+      let a = '';
+      try { a = st.app.game_act(); } catch (e) { return; }
+      if (!a) return;
+      if (a === 'camera') { third = !third; st.app.set_third_person(third); }
+      else if (a === 'fullscreen') toggleFull();
+      else if (a === 'shot') shotWanted = true;
+      else if (a === 'exit') { unlock(); emit({ t: 'exit' }); }
+    }
+  }
+  // the browser took the mouse back (Esc outside fullscreen never reaches the page): the game's pause menu opens
+  on(document, 'pointerlockchange', () => {
+    const lockedNow = document.pointerLockElement === canvas;
+    if (!lockedNow && hadLock && !selfRelease && game && live() && !menuOpen() && !wardrobeShown) {
+      try { st.app.game_pause(true); pauseAt = performance.now(); keys.clear(); publish(); hint.style.opacity = '0'; } catch (e) { /* the world is gone */ }
+    }
+    if (lockedNow) selfRelease = false;
+    hadLock = lockedNow;
+    if (!lockedNow) selfRelease = false;
+  });
   // look-fix: a turn the page means exactly (keys, the lift after a landing) skips the engine's spike filter
   const turn = (dx, dy) => { if (st.app.turn_look) st.app.turn_look(dx, dy); else st.app.add_look(dx, dy); };
   on(window, 'keydown', (e) => {
     if (!live() || e.ctrlKey || e.metaKey || e.altKey) return;
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
+    // F5 never reloads the site, F1 never opens the browser's help, F3 never its search, F11 is ours
+    if (GAME_FKEY.test(e.code)) e.preventDefault();
+    // the same Esc that released the pointer lock (and opened the pause through pointerlockchange) does not close it
+    if (e.code === 'Escape' && performance.now() - pauseAt < 400) { e.stopPropagation(); return; }
+    if (!e.repeat && !game) {
+      // scenes without the game layer: F5 = the view, F11 = our fullscreen
+      if (e.code === 'F5') { third = !third; st.app.set_third_person(third); }
+      if (e.code === 'F11') toggleFull();
+    }
     if (!e.repeat) {
-      if (e.code === 'KeyV') { third = !third; st.app.set_third_person(third); }
-      if (e.code === 'KeyF') fly = !fly;
-      if (e.code === 'KeyG' && !game) run('character ' + (NEXT_BODY[body] || 'girl')); // in a game G drops (inv-fix)
-      if (e.code === 'KeyB') send({ t: 'wardrobe', on: !wardrobeShown });
+      if (e.code === 'KeyV' && !paused()) { third = !third; st.app.set_third_person(third); }
+      if (!paused()) {
+        if (e.code === 'KeyF') fly = !fly;
+        if (e.code === 'KeyG' && !game) run('character ' + (NEXT_BODY[body] || 'girl')); // in a game G drops (inv-fix)
+        if (e.code === 'KeyB') send({ t: 'wardrobe', on: !wardrobeShown });
+      }
       // the game takes digits, R, Q / I, T, Esc in a menu (a menu frees the mouse)
-      if (game) { try { if (st.app.game_key(e.code)) { if (menuOpen() && document.pointerLockElement === canvas) document.exitPointerLock(); e.preventDefault(); } } catch (er) { /* not a game key */ } }
+      if (game) {
+        try {
+          const was = paused();
+          if (st.app.game_key(e.code)) { if (menuOpen()) unlock(); e.preventDefault(); }
+          acts();
+          if (paused()) hint.style.opacity = '0';   // the start hint never sits over the pause menu
+          // Esc / ПРОДОЛЖИТЬ from the keyboard: the mouse goes back to the game (a key press is a user gesture)
+          if (was && !menuOpen() && !touch && !wardrobeShown && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (er) { /* dragging works */ } }
+        } catch (er) { /* not a game key */ }
+      }
     }
     if (studio && !e.repeat) { const t = { KeyA: [-180, 0], ArrowLeft: [-180, 0], KeyD: [180, 0], ArrowRight: [180, 0], KeyW: [0, -60], ArrowUp: [0, -60], KeyS: [0, 60], ArrowDown: [0, 60] }[e.code]; if (t) turn(t[0], t[1]); }
     keys.add(e.code); publish();
@@ -240,7 +323,7 @@ export async function start(o) {
     drag = true;
     lookReset(false);
   });
-  on(window, 'mouseup', (e) => { drag = false; if (hudMouse) { hudMouse = false; if (game) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 2, 1); } return; } if (game) { if (e.button === 0) mouse.act = false; if (e.button === 2) mouse.use = false; publish(); } });
+  on(window, 'mouseup', (e) => { drag = false; if (hudMouse) { hudMouse = false; if (game) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 2, 1); acts(); publish(); } return; } if (game) { if (e.button === 0) mouse.act = false; if (e.button === 2) mouse.use = false; publish(); } });
   on(canvas, 'wheel', (e) => { e.preventDefault(); st.app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   on(window, 'mousemove', (e) => {
     if (!live()) return;
@@ -266,7 +349,7 @@ export async function start(o) {
     on(canvas, 'pointerdown', (e) => {
       if (e.pointerType === 'mouse') return;
       e.preventDefault();
-      if (game) { const [x, y] = toCanvas(e); if (st.app.game_pointer(x, y, 0, e.pointerId)) { hudTouch.add(e.pointerId); publish(); return; } }
+      if (game) { const [x, y] = toCanvas(e); if (st.app.game_pointer(x, y, 0, e.pointerId)) { hudTouch.add(e.pointerId); acts(); publish(); return; } }
       const r = canvas.getBoundingClientRect();
       if (!studio && e.clientX - r.left < r.width / 2 && stick.id === -1) { stick.id = e.pointerId; stick.x0 = e.clientX; stick.y0 = e.clientY; stick.sx = 0; stick.sy = 0; }
       else if (look.id === -1) { look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; lookReset(false); }
@@ -286,6 +369,8 @@ export async function start(o) {
     : 'Нажми на картинку — мышь смотрит · W A S D — идти · Пробел — прыжок · O — на землю и обратно · B — гардероб · V — вид'));
   if (game) { hint.style.bottom = 'auto'; hint.style.top = '56px'; }
   setTimeout(() => { hint.style.opacity = '0'; }, 9000);
+  let sayT = 0;
+  say = (t) => { hint.textContent = t; hint.style.opacity = '1'; clearTimeout(sayT); sayT = setTimeout(() => { hint.style.opacity = '0'; }, 5000); };
 
   // ── the wardrobe panel: drawn from app.wardrobe_json(); every choice is one engine command (character / tint) ──
   const panel = add(el('div', 'd37h-wardrobe'));
@@ -330,7 +415,7 @@ export async function start(o) {
     panel.style.display = wardrobeShown ? 'block' : 'none';
     bWard.classList.toggle('on', wardrobeShown);
     if (wardrobeShown) {
-      if (document.pointerLockElement) document.exitPointerLock();
+      if (document.pointerLockElement === canvas) unlock(); else if (document.pointerLockElement) document.exitPointerLock();
       hint.style.opacity = '0';
       // the wardrobe turns the camera to the face; a look steeply down would still show the top of the head
       levelLook(-8);
@@ -370,13 +455,25 @@ export async function start(o) {
           else a.push_ground(ground_layer(g[i], g[0]));
         }
         if (g.length > 1) idle = idle.slice(g.length - 1);
-        if (idle.length) { const jobs = a.take_chunk_jobs(idle.length); for (let i = 0; i * 2 < jobs.length; i++) { idle[i].busy = true; idle[i].w.postMessage({ type: 'chunk', lo: jobs[i * 2], hi: jobs[i * 2 + 1] }); } }
+        if (idle.length) {
+          const jobs = a.take_chunk_jobs(idle.length);
+          for (let i = 0; i * 2 < jobs.length; i++) { idle[i].busy = true; idle[i].w.postMessage({ type: 'chunk', lo: jobs[i * 2], hi: jobs[i * 2 + 1] }); }
+          // fly-hitch: Workers left idle build scatter LOD tiles (at most half of them, so chunks never wait long)
+          idle = idle.slice(jobs.length / 2);
+          const room = Math.max(1, st.pool.length >> 1) - st.pool.filter((s) => s.busy && s.scatter).length;
+          if (idle.length && room > 0) {
+            if (!st.scatterRows) st.scatterRows = Array.from(a.scatter_rows());
+            const sj = st.scatterRows.length ? a.take_scatter_jobs(Math.min(idle.length, room)) : [];
+            for (let i = 0; i * 5 < sj.length; i++) { idle[i].busy = true; idle[i].scatter = true; idle[i].w.postMessage({ type: 'scatter', w: Array.from(sj.subarray(i * 5, i * 5 + 5)), rows: st.scatterRows }); }
+          }
+        }
       } else if (idle.length) {
         const jobs = a.take_jobs(idle.length);
         for (let i = 0; i * 4 < jobs.length; i++) { idle[i].busy = true; idle[i].w.postMessage({ type: 'job', cx: jobs[i * 4], cz: jobs[i * 4 + 1], lo: jobs[i * 4 + 2] >>> 0, hi: jobs[i * 4 + 3] >>> 0 }); }
       }
       a.frame(now);
       st.frames++;
+      if (shotWanted) { shotWanted = false; takeShot(); }
       const out = a.host_out();
       if (out) {
         for (const m of JSON.parse(out)) {
@@ -395,9 +492,22 @@ export async function start(o) {
     acc += now - last; last = now; n++;
     if (now - lastT > 250) {
       st.fps = n * 1000 / Math.max(acc, 1); acc = 0; n = 0; lastT = now;
+      if (game) { try { a.game_set_fps(st.fps); } catch (e) { /* numbers only */ } }
       if (!st.loaded && planet) { try { const p = JSON.parse(a.planet_stats()); progress('world', p.shown || 0, (p.shown || 0) + (p.queued || 0) + (p.ready || 0)); } catch (e) { /* numbers only */ } }
     }
     st.raf = requestAnimationFrame(frame);
+  }
+  // W9 keys, F2: a PNG of the frame just drawn into the page's gallery (onMessage {t:'shot'}); never a download
+  function takeShot() {
+    try {
+      const w = canvas.width, h = canvas.height;
+      canvas.toBlob((b) => {
+        if (!b) { say('Снимок не получился'); return; }
+        st.shots.push(b); if (st.shots.length > 8) st.shots.shift();
+        say('📸 Снимок — в галерее');
+        emit({ t: 'shot', blob: b, w, h });
+      }, 'image/png');
+    } catch (e) { say('Снимок не получился'); }
   }
   // W8 hub: the world is there — a new world / the shortcut / the spawn choice, once, through the admin path (§5.2)
   let spawned = false;
@@ -421,15 +531,20 @@ export async function start(o) {
     // EP7: the game's numbers (items, parts, saves...; null without a game layer)
     gameStats() { try { return st.app && game ? JSON.parse(st.app.game_stats()) : null; } catch (e) { return null; } },
     // a DOM sheet over the world (chat, menu): the keys stop reaching the game
-    input(enabled) { st.inputOn = !!enabled; if (!enabled) { keys.clear(); if (document.pointerLockElement === canvas) document.exitPointerLock(); } publish(); },
-    pause() { if (st.paused || st.dead) return; st.paused = true; keys.clear(); publish(); try { st.app && st.app.audio_park(true); } catch (e) { /* no sound */ } cancelAnimationFrame(st.raf); st.raf = 0; if (document.pointerLockElement === canvas) document.exitPointerLock(); },
+    input(enabled) { st.inputOn = !!enabled; if (!enabled) { keys.clear(); unlock(); } publish(); },
+    pause() { if (st.paused || st.dead) return; st.paused = true; keys.clear(); publish(); try { st.app && st.app.audio_park(true); } catch (e) { /* no sound */ } cancelAnimationFrame(st.raf); st.raf = 0; unlock(); },
+    // W9 keys: the pictures F2 took this run (newest last, at most 8; Blob PNG)
+    shots() { return st.shots.slice(); },
+    // W9 keys: the game's pause menu (the page opens it e.g. when its own sheet closes)
+    pauseMenu(on) { if (game && st.app && !st.dead) { try { st.app.game_pause(!!on); if (on) unlock(); publish(); } catch (e) { /* gone */ } } },
     resume() { if (!st.paused || st.dead) return; st.paused = false; try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
     // everything this start made goes away: the frame loop, listeners, Workers, the GPU device (free), the DOM
     dispose() {
       if (st.disposed) return;
       st.disposed = true; st.dead = true;
       cancelAnimationFrame(st.raf); st.raf = 0;
-      if (document.pointerLockElement === canvas) { try { document.exitPointerLock(); } catch (e) { /* gone */ } }
+      unlock();
+      if (kb) { try { kb.unlock(); } catch (e) { /* not locked */ } }
       for (const [t, ev, f, opt] of st.listeners) t.removeEventListener(ev, f, opt);
       st.listeners.length = 0;
       for (const s of st.pool) { try { s.w.terminate(); } catch (e) { /* gone */ } }

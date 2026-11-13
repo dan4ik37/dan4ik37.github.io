@@ -77,6 +77,11 @@ async function main() {
             slot.busy = false;
             try { app.push_chunk(new Uint8Array(m.bytes), m.ms); } catch (e) { fail(e); }
           }
+          if (m.type === 'scatter') {
+            slot.busy = false; slot.scatter = false;
+            if (m.error) console.warn('d37 scatter worker', m.error);
+            else try { app.push_scatter(new Uint8Array(m.bytes)); } catch (e) { fail(e); }
+          }
           if (m.type === 'ground') {
             slot.busy = false; slot.ground = false;
             state.groundLayerMs.push(m.ms);
@@ -131,6 +136,7 @@ async function main() {
     if (planet && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
     if (game && (mouse.act || k('KeyE'))) b |= BTN.act;
     if (game && mouse.use) b |= BTN.use;
+    if (game && app.game_paused()) { app.set_move(0, 0, 0); return; }
     app.set_move(sx, sf, b);
   }
   state.press = (code, ms) => { keys.add(code); publish(); onKey(code); setTimeout(() => { keys.delete(code); publish(); if (code === 'KeyM') app.set_mouth_test(0); }, ms || 120); };   // tests
@@ -145,7 +151,18 @@ async function main() {
     if (code === 'KeyG') { body = NEXT_BODY[body] || 'girl'; run('character ' + body); }
     if (code === 'KeyN') { sine = !sine; run(sine ? 'mouth sine' : 'mouth 0'); }
     if (code === 'KeyP') { palette = (palette + 1) % 8; run('palette ' + palette); }
-    if (game && app.game_key(code)) { if (app.game_menu_open() && document.pointerLockElement === canvas) document.exitPointerLock(); return; }
+    if (game) {
+      const was = app.game_paused();
+      const took = app.game_key(code);
+      gameActs();
+      if (took) {
+        if (app.game_menu_open()) unlockMouse();
+        // Esc / ПРОДОЛЖИТЬ from the keyboard: the mouse goes back to the game
+        else if (was && !TOUCH && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging works */ } }
+        return;
+      }
+      if (/^(F[1235]|F11|Escape)$/.test(code)) return;   // the game's keys, nothing else here (W9 keys)
+    }
     if (/^Digit[1-8]$/.test(code)) { palette = Number(code.slice(5)) - 1; run('palette ' + palette); }
     if (code === 'KeyM') app.set_mouth_test(1);
     if (code === 'F6' || code === 'F7' || code === 'F8') { view = { F6: 0, F7: 1, F8: 2 }[code]; run('view ' + VIEWS[view]); }
@@ -346,12 +363,49 @@ async function main() {
     } catch (err) { return 'микрофон не дали: ' + err; }
   }
   state.setFly = (on) => { fly = !!on; publish(); };   // tests: free flight held on (as after F)
+  // ── W9 keys: Esc / F1–F11 are the game's (game/pause.rs); fullscreen with the keyboard lock; F2 pictures in memory ──
+  let selfRelease = false, hadLock = false, pauseAt = -1e9;
+  function unlockMouse() { if (document.pointerLockElement === canvas) { selfRelease = true; try { document.exitPointerLock(); } catch (e) { /* gone */ } } }
+  const kb = navigator.keyboard && navigator.keyboard.lock ? navigator.keyboard : null;
+  function toggleFull() {
+    const el = document.documentElement;
+    try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else if (el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}); } catch (e) { /* no fullscreen */ }
+  }
+  state.shots = [];
+  state.shotWanted = false;
+  function gameActs() {
+    for (let i = 0; i < 8; i++) {
+      const a = app.game_act();
+      if (!a) return;
+      state.lastAct = a;
+      if (a === 'camera') { third = !third; app.set_third_person(third); }
+      else if (a === 'fullscreen') toggleFull();
+      else if (a === 'shot') state.shotWanted = true;
+      else if (a === 'exit') { unlockMouse(); state.exited = true; if (q.get('stay') !== '1') location.href = '/'; }
+    }
+  }
+  document.addEventListener('fullscreenchange', () => {
+    if (!kb) return;
+    try { if (document.fullscreenElement) { const p = kb.lock(['Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11']); if (p && p.catch) p.catch(() => {}); hint.textContent = 'Esc теперь у игры (пауза). Выйти из полного экрана — удерживай Esc'; } else kb.unlock(); } catch (e) { /* not allowed */ }
+  });
+  // the browser took the mouse back with Esc (the key never reaches the page): the game's pause menu opens
+  document.addEventListener('pointerlockchange', () => {
+    const lockedNow = document.pointerLockElement === canvas;
+    if (game && !lockedNow && hadLock && !selfRelease && !app.game_menu_open()) { app.game_pause(true); pauseAt = performance.now(); keys.clear(); publish(); }
+    hadLock = lockedNow;
+    selfRelease = false;
+  });
   addEventListener('keydown', (e) => {
+    // W9 keys: F5 never reloads, F1 / F3 / F11 never reach the browser; F12 stays the browser's
+    if (/^F([1-9]|1[01])$/.test(e.code) || (game && e.code === 'Escape')) e.preventDefault();
+    if (game && e.code === 'Escape' && performance.now() - pauseAt < 400) return;   // the Esc that already opened the pause
+    if (!game && !e.repeat && e.code === 'F5') { third = !third; app.set_third_person(third); }
+    if (!game && !e.repeat && e.code === 'F11') toggleFull();
     if (e.code === 'KeyV' && !e.repeat) { third = !third; app.set_third_person(third); }
     if (e.code === 'KeyF' && !e.repeat) fly = !fly;
     if (['F6', 'F7', 'F8', 'F10', 'Backquote'].includes(e.code)) e.preventDefault();
     if (!e.repeat) onKey(e.code);
-    if (e.code === 'F3' && !e.repeat) { e.preventDefault(); hud.style.display = hud.style.display === 'block' ? 'none' : 'block'; }
+    if (e.code === 'F3' && !e.repeat && !game) { e.preventDefault(); hud.style.display = hud.style.display === 'block' ? 'none' : 'block'; }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
     keys.add(e.code); publish();
   });
@@ -367,7 +421,7 @@ async function main() {
     if (game) {
       const [x, y] = toCanvas(e);
       // a menu or the tray takes the click; with the pointer locked: left = the action, right = place / eat
-      if (document.pointerLockElement !== canvas && app.game_pointer(x, y, 0, 1)) { app.game_pointer(x, y, 2, 1); return; }
+      if (document.pointerLockElement !== canvas && app.game_pointer(x, y, 0, 1)) { app.game_pointer(x, y, 2, 1); gameActs(); publish(); return; }
       if (document.pointerLockElement === canvas) { if (e.button === 0) mouse.act = true; if (e.button === 2) mouse.use = true; publish(); return; }
     }
     drag = true;
@@ -395,8 +449,7 @@ async function main() {
   $('gear').addEventListener('click', (e) => { e.stopPropagation(); toggleAdmin(); });
   if (q.get('admin') === '1') toggleAdmin(true);
   $('full').addEventListener('click', () => {
-    const el = document.documentElement;
-    if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    toggleFull();
   });
   hint.textContent = game
     ? (TOUCH ? 'Слева — идти · справа — смотреть · кнопки: ДЕЙСТВИЕ, СУМКА, РЕМЕСЛО' : 'ЛКМ — рубить / брать / ставить · ПКМ — поставить / съесть · 1-8 — в руку · Q — сумка · T — ремесло · R — повернуть · E — действие')
@@ -440,7 +493,7 @@ async function main() {
   if (q.get('holes') === '1') { const pw = 480; app.enable_hole_probe(pw, Math.max(16, Math.round(pw * canvas.height / Math.max(1, canvas.width)))); }
   publish();
 
-  let last = performance.now(), acc = 0, n = 0, lastHud = 0;
+  let last = performance.now(), acc = 0, n = 0, lastHud = 0, scatterRows = null;
   function frame(now) {
     if (state.error) return;
     if (fitCanvas()) app.resize(canvas.width, canvas.height);
@@ -463,6 +516,14 @@ async function main() {
     if (idle.length && planet) {
       const jobs = app.take_chunk_jobs(idle.length);
       for (let i = 0; i * 2 < jobs.length; i++) { idle[i].busy = true; idle[i].w.postMessage({ type: 'chunk', lo: jobs[i * 2], hi: jobs[i * 2 + 1] }); }
+      // fly-hitch: Workers left idle build scatter LOD tiles (at most half of them, so chunks never wait long)
+      idle = idle.slice(jobs.length / 2);
+      const room = Math.max(1, pool.length >> 1) - pool.filter((s) => s.busy && s.scatter).length;
+      if (idle.length && room > 0) {
+        if (!scatterRows) scatterRows = Array.from(app.scatter_rows());
+        const sj = scatterRows.length ? app.take_scatter_jobs(Math.min(idle.length, room)) : [];
+        for (let i = 0; i * 5 < sj.length; i++) { idle[i].busy = true; idle[i].scatter = true; idle[i].w.postMessage({ type: 'scatter', w: Array.from(sj.subarray(i * 5, i * 5 + 5)), rows: scatterRows }); }
+      }
     } else if (idle.length) {
       const jobs = app.take_jobs(idle.length);
       for (let i = 0; i * 4 < jobs.length; i++) {
@@ -480,6 +541,8 @@ async function main() {
         const save = (blob, file) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
         canvas.toBlob((b) => { if (b) save(b, 'd37_' + name + '.png'); save(new Blob([receipt], { type: 'application/json' }), 'd37_' + name + '.json'); });
       }
+      if (state.shotWanted) { state.shotWanted = false; const w = canvas.width, h = canvas.height; canvas.toBlob((b) => { if (b) { state.shots.push({ w, h, size: b.size, blob: b }); if (state.shots.length > 8) state.shots.shift(); hint.textContent = '📸 Снимок сделан (F2)'; } }, 'image/png'); }
+      if (game && n === 0) { try { app.game_set_fps(state.fps); } catch (e) { /* numbers only */ } }
       if (state.firstFrameMs === null) { state.firstFrameMs = performance.now(); state.ready = true; }
       if (!state.loaded && app.loaded()) { state.loaded = true; state.loadedMs = performance.now(); }
     } catch (e) {
