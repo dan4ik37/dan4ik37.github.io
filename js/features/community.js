@@ -66,8 +66,10 @@
   // Кто кого может наказывать (как comm_can_mod в community.sql): персонал сайта — всех, владелец — всех, модератор — участников
   const canMod = (myRole, targetRole, staff) => !!staff || myRole === 'owner' ? targetRole !== 'owner' || !!staff : myRole === 'mod' && targetRole === 'member';
   // Сообщение сообщества → сообщение ленты
+  // T-162: realtime UPDATE не присылает неизменённые «большие» (TOAST) jsonb — att с превью, reactions. Нет ключа → undefined, и лента
+  // (msgview onEvent 'upd') оставляет старое значение, а не стирает вложение
   const cmMsg = r => ({ id: r.id, uid: r.user_id || null, nick: r.nick || 'игрок', text: r.text || '', at: r.created_at, reply: r.reply_to || null,
-    edited: r.edited_at || null, deleted: !!r.deleted, hidden: !!r.hidden, reactions: r.reactions || {}, pinned: !!r.pinned_at, ch: r.channel_id, att: r.att || null });
+    edited: r.edited_at || null, deleted: !!r.deleted, hidden: !!r.hidden, reactions: 'reactions' in r ? r.reactions || {} : undefined, pinned: !!r.pinned_at, ch: r.channel_id, att: 'att' in r ? r.att || null : undefined });
 
   // ═══ Адаптер канала сообщества для MsgView ═══
   function commAdapter(C, ch){

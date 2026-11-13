@@ -283,7 +283,10 @@ async function chatLastIds(){
 function offMsg(r){
   return { id: r.id, uid: r.user_id || null, nick: r.nick || 'гость', text: r.text || '', at: r.created_at || new Date().toISOString(),
     reply: r.reply_to || null, edited: r.edited_at || null, deleted: !!r.deleted, sticker: !!r.is_sticker, role: r.role, vip: r.vip_tier || null,
-    color: r.color, pinned: !!(r.pinned_until && Date.parse(r.pinned_until) > Date.now()), pinnedUntil: r.pinned_until || null, pinnedBy: r.user_id, ch: r.channel || 'general', att: r.att || null };
+    color: r.color, pinned: !!(r.pinned_until && Date.parse(r.pinned_until) > Date.now()), pinnedUntil: r.pinned_until || null, pinnedBy: r.user_id, ch: r.channel || 'general',
+    // T-162: realtime UPDATE (правка, закреп, удаление) не присылает неизменённый att (jsonb с превью лежит в TOAST) — нет ключа →
+    // undefined, лента оставляет старое вложение (раньше att: null стирал видео / картинку до перезагрузки)
+    att: 'att' in r ? r.att || null : undefined };
 }
 function rememberAuthor(m){
   if (!m.uid || m.role === 'guest') return;

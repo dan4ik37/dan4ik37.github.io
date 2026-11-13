@@ -335,7 +335,7 @@
         ${tools}</div>`;
     }
     function replyQuote(id){
-      const t = V.msgs.get(id);
+      const t = V.msgs.get(id) || V.refs?.get(id);   // T-162: цитата сообщения не с экрана (loadReplies) переживает перерисовку
       if (!t) return `<div class="mv-rq" data-jump="${e(id)}"><i>↪</i><span class="mv-dim">сообщение…</span></div>`;
       if (t.deleted) return `<div class="mv-rq"><i>↪</i><span class="mv-dim">сообщение удалено</span></div>`;
       const txt = t.sticker ? t.text : P.clean(t.text || '').slice(0, 90);
@@ -385,7 +385,13 @@
       if (!m || m.deleted) { el.remove(); return; }
       const i = V.order.indexOf(id), prevId = i > 0 ? V.order[i - 1] : null;
       const tmp = document.createElement('div'); tmp.innerHTML = html(m, prevId != null && !el.classList.contains('mv-first') ? V.msgs.get(prevId) : null).trim();
-      const ne = tmp.firstElementChild; el.replaceWith(ne); after(ne);
+      const ne = tmp.firstElementChild;
+      // T-162: открытое вложение (▶ видео / картинка / звук из файла на устройстве) не сбрасываем — переносим ту же карточку
+      for (const oc of el.querySelectorAll('.mv-file[data-fh]')) {
+        const nf = ne.querySelector(`.mv-file[data-fh="${CSS.escape(oc.dataset.fh)}"]`);
+        if (nf && oc.querySelector('.mvf-th video, .mvf-th audio, .mvf-th img[src^="blob:"]')) nf.replaceWith(oc);
+      }
+      el.replaceWith(ne); after(ne);
     }
 
     // ── Прокрутка: внизу ли, «новые», подгрузка истории ──
@@ -496,10 +502,12 @@
       if (A.typing) V.typOff = A.typing.on(onTyping);
       if (!touch() && !opt.noFocus) setTimeout(() => { if (seq === V.seq && V.canWrite) input.focus({ preventScroll: true }); }, 50);
     };
+    // T-162: поле, которого нет в событии (undefined — realtime не прислал неизменённое вложение / реакции), остаётся прежним
+    function merge(old, m){ for (const k of Object.keys(m)) if (m[k] !== undefined) old[k] = m[k]; return old; }
     function onEvent(ev){
       const m = ev.m; if (!m || V.destroyed) return;
       if (ev.t === 'ins') {
-        if (V.msgs.has(m.id)) { V.msgs.set(m.id, Object.assign(V.msgs.get(m.id), m)); rerender(m.id); return; }
+        if (V.msgs.has(m.id)) { merge(V.msgs.get(m.id), m); rerender(m.id); return; }
         // своё «ожидающее» сообщение (показали сразу) — заменить настоящим
         const tmp = V.order.find(id => typeof id === 'string' && id.startsWith('tmp') && V.msgs.get(id)?.text === m.text && V.msgs.get(id)?.mine);
         if (tmp) { V.msgs.delete(tmp); V.order = V.order.filter(x => x !== tmp); list.querySelector(`.mv-m[data-id="${tmp}"]`)?.remove(); }
@@ -514,7 +522,7 @@
         if (V.A.caps.react === 'site' && typeof renderReactionsFor === 'function') renderReactionsFor(m.id);
       } else if (ev.t === 'upd') {
         const old = V.msgs.get(m.id); if (!old) return;
-        Object.assign(old, m);
+        merge(old, m);
         if (old.deleted) { V.order = V.order.filter(x => x !== m.id); V.msgs.delete(m.id); }
         rerender(m.id);
       }
