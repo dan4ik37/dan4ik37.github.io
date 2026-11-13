@@ -126,3 +126,13 @@
   Local store: IndexedDB «d37-files» (phone 200 MB / PC 600 MB, LRU, undelivered pinned). Server copy of files: not built (flag in cfg).
 - Measurements: scripts/t141-e2e.cjs (nav, leak, video, soak, files, prof). Not checked in a real browser with an account: communities
   phone sheets, 🔔 modes, moderation log (needs the owner's login — agents do not log in).
+
+## T-162 (13.11.2026, branch t162-chat) — edit keeps attachments, Discord-like settings (English, short)
+- Bug: an edited message lost its video / image / file card until reload. Cause: Supabase realtime UPDATE omits unchanged TOASTed
+  columns (att jsonb with the thumb) → offMsg / cmMsg made att null → msgview wiped it. Now a missing key → undefined and msgview
+  `merge()` keeps old fields; an opened ▶ video card is moved into the re-rendered message; reply quotes use V.refs.
+- Settings (community.sql part 10, community2.js block T-162, flag `T162`): channel emoji and "who sees" (all / 9+ / 13+ / 16+,
+  no 18+/NSFW) — server-side via restrictive RLS on messages / community_messages + trigger chan_age_guard; server rules (shown once
+  to newcomers, d37_ds_rules), welcome text, default channel (cm_server_get / cm_server_set / cm_chan_extra; audit log rows).
+  Site server ⚙️ also shows the invite link and the site roles. Without part 10 on the server everything works as before.
+- Tests: scripts/chat-settings-sql-test.mjs (PGlite, 36), scripts/t162-e2e.cjs (headless Chrome, 20; fails 5 on old code).
