@@ -23,6 +23,7 @@ user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparen
 .d37h-jump{right:16px;bottom:calc(24px + env(safe-area-inset-bottom))}.d37h-orbit{right:16px;bottom:calc(92px + env(safe-area-inset-bottom))}
 .d37h-ward{right:16px;bottom:calc(160px + env(safe-area-inset-bottom))}
 @media (pointer:fine){.d37h-orbit{bottom:24px}.d37h-ward{bottom:92px}}
+.d37h-game.d37h-jump{bottom:calc(76px + env(safe-area-inset-bottom))}.d37h-game.d37h-ward{bottom:calc(144px + env(safe-area-inset-bottom))}
 .d37h-hint{position:absolute;z-index:2;left:50%;bottom:calc(10px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:min(92%,640px);
 padding:6px 12px;border-radius:10px;background:rgba(0,0,0,.5);color:#fff;font:13px/1.35 system-ui,sans-serif;text-align:center;pointer-events:none;transition:opacity .8s}
 .d37h-wardrobe{position:absolute;z-index:4;right:84px;top:64px;width:min(360px,calc(100% - 100px));max-height:calc(100% - 80px);overflow-y:auto;
@@ -224,7 +225,7 @@ export async function start(o) {
   });
 
   // buttons over the canvas (touch first; the mouse can use them too): jump, orbit <-> ground, wardrobe
-  const button = (cls, text, title) => { const b = add(el('button', 'd37h-btn ' + cls, text)); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); return b; };
+  const button = (cls, text, title) => { const b = add(el('button', 'd37h-btn ' + cls + (game ? ' d37h-game' : ''), text)); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); return b; };
   const hold = (b, set) => {
     const h = (v) => (e) => { e.preventDefault(); e.stopPropagation(); set(v); publish(); };
     b.addEventListener('pointerdown', h(true));

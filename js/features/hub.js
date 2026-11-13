@@ -340,7 +340,8 @@
   const EVENTS = { landed: '🛬 Приземлился! Теперь можно гулять и плавать', wade: '🌊 Вброд по воде', swim: '🏊 Плывёшь — пробел вверх', dive: '🤿 Нырнул!', orbit: '🚀 Снова на орбите' };
   const PHASES = { wasm: 'Загружаем движок', gpu: 'Готовим видеокарту', world: 'Строим мир' };
   function buildUi(mode){
-    const box = el('div', 'hub-play');
+    // долина: своя строка подсказок движка вверху — полоса сайта над картинкой, не поверх неё
+    const box = el('div', 'hub-play' + (mode === 'play' ? ' hub-game' : ''));
     box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', mode === 'wardrobe' ? 'Гардероб D37' : mode === 'planet' ? 'Планета D37' : 'Игра D37');
     const bar = el('div', 'hub-bar');
     const back = el('button', 'hub-back', '← На сайт'); back.type = 'button';
