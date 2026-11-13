@@ -111,7 +111,8 @@
   }
   // → { html, cards: [описание], big: только эмодзи }. o.kid — ребёнок до 13 (js/core/age.js) в общем канале: ссылки скрыты
   // (кроме роликов и игр сайта), телефоны, почта и соцсети — «[скрыто]»; в ЛС (только друзья) — как у всех
-  MV.rich = (text, myNick, o = {}) => {
+  // ds-msg (js/features/ds-msg.js): MV.dsm.md — разметка (**жирный**, ||спойлер||, `код`…) поверх этой функции
+  const richBase = MV.richBase = (text, myNick, o = {}) => {
     const cards = [];
     const kid = !!o.kid && !!window.D37Age;
     const words = (kid ? window.D37Age.kidText(String(text || ''), { at: false }) : String(text || '')).split(/(\s+)/);
@@ -137,6 +138,8 @@
     const big = P.onlyEmoji(text) || (/^(:[a-z0-9_]{1,32}:\s*){1,4}$/.test(String(text).trim()) && !!emojiImg(String(text).trim().split(':')[1]));
     return { html, cards, big };
   };
+  MV.rich = (t, n, o = {}) => (MV.dsm?.md ? MV.dsm.md(t, n, o, richBase) : richBase(t, n, o));
+  MV.EXT_RE = EXT_RE; MV.sitePath = sitePath;
   const ugcCache = new Map(), invCache = new Map();
   MV.cardHtml = c => {
     if (c.t === 'video') {
@@ -328,7 +331,7 @@
       const body = blocked
         ? `<div class="mv-text mv-blk">🚫 Сообщение от заблокированного <button type="button" data-a="showblk">показать</button></div>`
         : m.sticker ? `<div class="mv-text mv-sticker">${e(m.text)}</div>`
-        : `<div class="mv-text${r.big ? ' mv-big' : ''}">${r.html}${m.edited ? ` <span class="mv-ed" title="${e(P.when(m.edited))}">(изменено)</span>` : ''}</div>${r.cards.length ? `<div class="mv-cards">${r.cards.map(MV.cardHtml).join('')}</div>` : ''}${m.att && window.D37Files ? window.D37Files.cardHtml(m.att, m, V.A?.fileKind) : ''}`;
+        : `${MV.dsm?.pre?.(m, V) || ''}<div class="mv-text${r.big ? ' mv-big' : ''}">${r.html}${m.edited ? ` <span class="mv-ed" title="${e(P.when(m.edited))}">(изменено)</span>` : ''}</div>${r.cards.length ? `<div class="mv-cards">${r.cards.map(MV.cardHtml).join('')}</div>` : ''}${m.att && window.D37Files ? window.D37Files.cardHtml(m.att, m, V.A?.fileKind) : ''}${MV.dsm?.post?.(m, V) || ''}`;
       return `<div class="mv-m${first ? ' mv-first' : ''}${mine ? ' mv-mine' : ''}${hl ? ' mv-hl' : ''}${m.hidden ? ' mv-hid' : ''}" data-id="${e(m.id)}" data-nick="${e(m.nick)}"${m.uid ? ` data-uid="${e(m.uid)}"` : ''}>
         ${rq}${first ? ava : `<time class="mv-t2" title="${e(P.when(m.at))}">${P.hm(m.at)}</time>`}
         <div class="mv-b">${first ? `<div class="mv-h"><button type="button" class="mv-nick" data-a="user" style="${color}">${e(m.nick)}</button>${badgeHtml(m, st, crole)}<time title="${e(new Date(m.at).toLocaleString('ru-RU'))}">${P.when(m.at)}</time>${m.pinned ? '<i class="mv-pin" title="Закреплено">📌</i>' : ''}${m.hidden ? '<i class="mv-flag" title="Скрыто жалобами — видят только модераторы">🚩</i>' : ''}</div>` : ''}${body}${reacts}</div>
@@ -434,7 +437,7 @@
       try { r = await A.load({ before: first }); } catch (er) { r = null; }
       V.loading = false;
       if (A !== V.A || !r) return;
-      const add = (r.list || []).filter(m => !V.msgs.has(m.id));
+      const add = (r.list || []).filter(m => !V.msgs.has(m.id) && !MV.dsm?.skip?.({ t: 'load', m }, V));
       add.forEach(m => V.msgs.set(m.id, m));
       V.order = [...add.map(m => m.id), ...V.order];
       V.more = !!r.more;
@@ -489,6 +492,7 @@
       try { r = await A.load({}); } catch (er) { r = { list: [], err: er }; }
       if (seq !== V.seq || V.destroyed) return;
       if (r.err && !(r.list || []).length) { list.innerHTML = `<div class="mv-empty">😵 ${e(r.errText || 'Не удалось загрузить сообщения')}<br><button type="button" class="mv-retry" data-a="retry">Ещё раз</button></div>`; return; }
+      if (MV.dsm?.skip) r.list = (r.list || []).filter(m => !MV.dsm.skip({ t: 'load', m }, V));   // ds-msg: ответы в ветках — не в ленте
       for (const m of r.list || []) { V.msgs.set(m.id, m); V.order.push(m.id); }
       V.more = !!r.more;
       const firstNew = lastRead ? (r.list || []).find(m => typeof m.id === 'number' && m.id > lastRead && !(m.uid && m.uid === myUid())) : null;
@@ -501,11 +505,13 @@
       V.unsub = A.sub ? A.sub(onEvent) : null;
       if (A.typing) V.typOff = A.typing.on(onTyping);
       if (!touch() && !opt.noFocus) setTimeout(() => { if (seq === V.seq && V.canWrite) input.focus({ preventScroll: true }); }, 50);
+      MV.dsm?.loaded?.(V);
     };
     // T-162: поле, которого нет в событии (undefined — realtime не прислал неизменённое вложение / реакции), остаётся прежним
     function merge(old, m){ for (const k of Object.keys(m)) if (m[k] !== undefined) old[k] = m[k]; return old; }
     function onEvent(ev){
       const m = ev.m; if (!m || V.destroyed) return;
+      if (MV.dsm?.skip?.(ev, V)) return;   // ds-msg: ответ в ветке уходит в панель ветки
       if (ev.t === 'ins') {
         if (V.msgs.has(m.id)) { merge(V.msgs.get(m.id), m); rerender(m.id); return; }
         // своё «ожидающее» сообщение (показали сразу) — заменить настоящим
@@ -696,10 +702,10 @@
       return over.querySelector('.mv-obody');
     }
     function closeOver(){ over.hidden = true; over.innerHTML = ''; }
-    const resultRow = m => `<button type="button" class="mv-res" data-go="${e(m.id)}"><b>${e(m.nick)}</b><time>${e(P.when(m.at))}</time><span>${e((m.sticker ? m.text : P.clean(m.text || '')).slice(0, 160))}</span></button>`;
+    const resultRow = m => MV.dsm?.resRow?.(m, V) || `<button type="button" class="mv-res" data-go="${e(m.id)}"><b>${e(m.nick)}</b><time>${e(P.when(m.at))}</time><span>${e((m.sticker ? m.text : P.clean(m.text || '')).slice(0, 160))}</span></button>`;
     V.search = () => {
       if (!V.A?.search) return;
-      const b = openOver('<input type="search" class="mv-sq" placeholder="🔍 Поиск по каналу…" aria-label="Поиск по каналу">', '<div class="mv-dim">Введи слово или ник</div>');
+      const b = openOver(`<input type="search" class="mv-sq" placeholder="${e(MV.dsm?.searchHint || '🔍 Поиск по каналу…')}" aria-label="Поиск по каналу">`, '<div class="mv-dim">Введи слово или ник</div>');
       const inp = over.querySelector('.mv-sq'); inp.focus();
       let t = 0;
       inp.addEventListener('input', () => {
@@ -707,7 +713,7 @@
         t = setTimeout(async () => {
           const s = inp.value.trim(); if (s.length < 2) { b.innerHTML = '<div class="mv-dim">Введи хотя бы 2 буквы</div>'; return; }
           b.innerHTML = '<div class="mv-dim">Ищем…</div>';
-          let r = []; try { r = await V.A.search(s); } catch (er) {}
+          let r = []; try { r = MV.dsm?.search ? await MV.dsm.search(V, s) : await V.A.search(s); } catch (er) {}
           if (inp.value.trim() !== s) return;
           b.innerHTML = r.length ? r.map(resultRow).join('') : '<div class="mv-dim">Ничего не нашли</div>';
         }, 350);
@@ -744,6 +750,7 @@
       if (m.uid || m.nick) items.push('<button type="button" data-m="user">👤 Профиль автора</button>');
       if (A.caps.report && logged && !mine && !MV.noReport?.(m)) items.push('<button type="button" data-m="report">🚩 Пожаловаться</button>');
       if (m.uid && logged && !mine) items.push(`<button type="button" data-m="block">${MV.blocked.has(m.uid) ? '✅ Разблокировать' : '🚫 Заблокировать автора'}</button>`);
+      items.push(...(MV.dsm?.menu?.(m, V) || []));   // ds-msg: 🧵 ветка, 🔗 ссылка, 🕘 история правок
       const mods = A.modActions?.(m) || [];
       if (mods.length) items.push('<div class="mv-msep">Модерация</div>' + mods.map(([k, t]) => `<button type="button" data-m="mod:${e(k)}" class="warn">${t}</button>`).join(''));
       if ((mine && A.caps.del) || A.canDel?.(m)) items.push('<button type="button" data-m="del" class="bad">🗑 Удалить</button>');
@@ -776,6 +783,7 @@
       }
       else if (k === 'report') reportFlow(m);
       else if (k === 'block') blockFlow(m.uid, m.nick);
+      else if (k.startsWith('dsm:')) MV.dsm?.act?.(k.slice(4), m, V);
       else if (k.startsWith('mod:')) { const r = await A.mod(k.slice(4), m); if (r?.msg) note(r.msg, !r.ok, 2600); if (r?.ok && r.removed) { V.order = V.order.filter(x => x !== m.id); V.msgs.delete(m.id); rerender(m.id); } }
     }
     async function react(m, em){
@@ -891,12 +899,14 @@
     V.push = m => { const id = 'sys' + Date.now() + Math.random(); const x = Object.assign({ id, sys: true, at: new Date().toISOString() }, m, { id }); V.msgs.set(id, x); V.order.push(id); appendOne(x); if (nearBottom()) toBottom(); };
     V.addLocal = m => { const id = 'tmp' + Date.now(); const x = Object.assign({ at: new Date().toISOString(), mine: true }, m, { id }); V.msgs.set(id, x); V.order.push(id); appendOne(x); toBottom(); return id; };
     V.focus = () => input.focus();
+    V.openOver = openOver; V.closeOver = closeOver; V.rerender = rerender; V.list = list; V.toBottom = toBottom; V.opt = opt; V.onEvent = onEvent;   // ds-msg
     V.refreshAll = () => renderAll();
     // чёрный список поменялся — перерисовать; закрыли ленту — слушатель снять (раньше оставался на каждое открытие чата и держал ленту в памяти)
     const onBlocks = () => { if (!V.destroyed && V.A) renderAll(); };
     const filesOff = window.D37Files?.watch ? window.D37Files.watch(list, id => V.msgs.get(isNaN(+id) ? id : +id) || V.msgs.get(id)) : null;
     V.destroy = () => { V.destroyed = true; filesOff?.(); V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('d37:blocks', onBlocks); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
     window.addEventListener('d37:blocks', onBlocks);
+    MV.dsm?.mount?.(V);
     if (opt.adapter) V.setAdapter(opt.adapter);
     return V;
   };

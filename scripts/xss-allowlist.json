@@ -2852,16 +2852,6 @@
    ]
   },
   {
-   "f": "js/features/msgview.js",
-   "fn": "rich",
-   "k": "markup:url",
-   "c": "url-checked",
-   "n": "sitePath: только свои пути (не //), карточки — «#/…» или GAMES.href",
-   "xs": [
-    "e(hrefOf(path))"
-   ]
-  },
-  {
    "f": "js/features/notifications.js",
    "fn": "notifRender",
    "k": "markup:attr",
@@ -7661,6 +7651,169 @@
    "n": "T-164: ссылка на журнал — hubLink() (DS.link от id сервера и константы), ещё и esc()",
    "xs": [
     "e(hubLink(mode, srv, 'log'))"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "richBase",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "sitePath: только свои пути (не //), карточки — «#/…» или GAMES.href",
+   "xs": [
+    "e(hrefOf(path))"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "load",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "P.plural(c.members, 'участник', 'участника', 'участников')"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenJoin",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "P.plural(c.members, 'участник', 'участника', 'участников')"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenReports",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "P.plural(r.n, 'жалоба', 'жалобы', 'жалоб')"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "repTab",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "P.plural(r.n, 'жалоба', 'жалобы', 'жалоб')"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "md",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "ds-msg: результат MV.richBase (esc каждого слова) + fix() — теги разметки из своих констант, чужой текст только через esc",
+   "xs": [
+    "line(m[2])",
+    "g.join('<br>')",
+    "x"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "pollHtml",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "счётчики голосов опроса (dsm_poll_json: count(*)::int)",
+   "xs": [
+    "p.counts[i]",
+    "p.voters"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "pollHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "plural — одна из трёх своих строк",
+   "xs": [
+    "plural(p.voters, 'голос', 'голоса', 'голосов')"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "row",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "MV.rich — esc каждого слова (msgview.js) + разметка ds-msg",
+   "xs": [
+    "MV.rich(t, '', { kid }).html"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "postForm",
+   "k": "markup:attr",
+   "c": "num-local",
+   "n": "maxLen адаптера — число из кода",
+   "xs": [
+    "V.A.maxLen || 500"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "mdHelp",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "MV.rich своих примеров разметки",
+   "xs": [
+    "MV.rich(t, '', {}).html"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "post",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "thread_n — счётчик ответов (int, ставят только триггеры ч. 12)",
+   "xs": [
+    "m.tn"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "openMenu",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "пункты меню — свои константы, e() и MV.dsm.menu (ds-msg: константы и числа)",
+   "xs": [
+    "items.join('')"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "post",
+   "k": "markup:text",
+   "c": "const",
+   "n": "plural — одна из трёх своих строк",
+   "xs": [
+    "plural(m.tn, 'ответ', 'ответа', 'ответов')"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "thread_n — число (ставят триггеры ч. 12), остальное константа",
+   "xs": [
+    "m.tn > 0 ? `Открыть ветку (${m.tn})` : 'Начать ветку'"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "commInvite",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "P.plural(+c.members || 1, 'участник', 'участника', 'участников')"
    ]
   }
  ]
