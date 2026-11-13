@@ -39,7 +39,7 @@ const PAGES = {
   phone:      ['phone-page'],    // телефон 📱 на странице (js/features/phone.js)
   photo:      ['photo-page'],    // 🖼 фоторедактор (js/apps/apps.js грузит редактор при входе); страница для поиска — /tools/photo
   ai3d:       ['ai3d-page'],     // 🧊 3D-мастерская AI3D (T-112): адрес /tools/3d, скрытая (noindex; нет в поиске, меню, подвале, sitemap)
-  hub:        ['hub-page']       // 🎮 платформа D37 (T-159 первая версия): /hub — меню, /hub/play — планета движка, /hub/wardrobe — гардероб (js/features/hub.js)
+  hub:        ['hub-page']       // 🎮 платформа D37 (T-159 первая версия): /hub — меню, /hub/play — долина движка (игра), /hub/planet — полёт, /hub/wardrobe — гардероб (js/features/hub.js)
 };
 const ALL_PAGE_IDS = Object.values(PAGES).flat();
 

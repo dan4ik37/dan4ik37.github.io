@@ -40,8 +40,9 @@
 .hub-big .hub-ic{font-size:64px}
 .hub-big .hub-tt{font-size:30px}
 .hub-big .hub-ts{font-size:14.5px;max-width:420px}
-.hub-t-play{--hub-g:radial-gradient(90% 120% at 80% 20%,#3b82f6 0%,transparent 60%),radial-gradient(70% 90% at 15% 90%,#22c55e 0%,transparent 60%),linear-gradient(135deg,#0b1d4a,#123a6b 55%,#0e5a4a)}
+.hub-t-play{--hub-g:radial-gradient(90% 120% at 80% 15%,#fbbf24 0%,transparent 45%),radial-gradient(80% 100% at 15% 95%,#22c55e 0%,transparent 60%),linear-gradient(135deg,#0f3d2e,#14532d 55%,#1e6b3a)}
 .hub-t-ward{--hub-g:linear-gradient(135deg,#db2777,#9333ea)}
+.hub-t-planet{--hub-g:radial-gradient(80% 110% at 75% 25%,#60a5fa 0%,transparent 55%),linear-gradient(135deg,#0b1030,#1e3a8a)}
 .hub-t-world{--hub-g:linear-gradient(135deg,#16a34a,#0d9488)}
 .hub-t-studio{--hub-g:linear-gradient(135deg,#f59e0b,#ea580c)}
 .hub-t-mini{--hub-g:linear-gradient(135deg,#6366f1,#0ea5e9)}

@@ -156,7 +156,7 @@ async function playUntilLoaded(C, label){
           await C.send('Page.navigate', { url: site.base + '/hub' });
           ok(await C.until(READY + ` && document.querySelectorAll('#hub-page .hub-tile').length >= 6`, 60000), 'меню /hub: 6 плиток');
           ok(await C.ev(`document.querySelector('.bt-item[data-route="hub"]') && !document.querySelector('.bt-item[data-route="hub"]').hidden && getComputedStyle(document.getElementById('hub-page')).display !== 'none'`), 'нижнее меню телефона: «Играть» видно, раздел открыт');
-          ok(await C.ev(`[...document.querySelectorAll('#hub-page .hub-tile')].map(t => t.dataset.tile).join(',') === 'play,wardrobe,world,studio,mini,invite,howto,gfx,save'`), 'плитки: Играть, Гардероб, Мир Денчика, Студия, Мини-игры, Позвать друга, Как играть, Графика, Сохранение');
+          ok(await C.ev(`[...document.querySelectorAll('#hub-page .hub-tile')].map(t => t.dataset.tile).join(',') === 'play,wardrobe,planet,world,studio,mini,invite,howto,gfx,save'`), 'плитки: Играть, Гардероб, Полёт над планетой, Мир Денчика, Студия, Мини-игры, Позвать друга, Как играть, Графика, Сохранение');
           ok(await C.ev(`(document.querySelector('[data-tile="howto"]').click(), !!document.querySelector('.hub-sheet .hub-sheet-row'))`), '«Как играть» открывает лист с кнопками');
           await sleep(300); await C.shot('howto_phone.png');
           await C.ev(`(document.querySelector('.hub-sheet-x').click(), true)`);
@@ -187,6 +187,21 @@ async function playUntilLoaded(C, label){
             await C.shot('wardrobe_open_pc.png');
             const want = await C.ev(ENGINE_LOOK);
             ok(want && want.body === 'boy' && want.text && want.text !== look0.text, 'движок: мальчик, цвета поменялись', { before: look0, after: want });
+            // EP7: игра в долине — дерево рубится действием (E), верстак ставится, автосохранение уходит в мир
+            const GS = `D37Hub._st.h.gameStats()`;
+            const g0 = await C.ev(GS);
+            ok(g0 && g0.on === true && g0.ring > 150, 'долина: игровой слой включён, вокруг деревья, камни, ягоды', g0);
+            await C.ev(`(D37Hub._st.h.send({ t: 'wardrobe', on: false }), D37Hub._st.h.state.app.admin('game plant tree_broad 1.2'), true)`);
+            await sleep(300);
+            await C.ev(`(window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true })), setTimeout(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE', bubbles: true })), 6500), true)`);
+            await sleep(9000);
+            const g1 = await C.ev(GS);
+            ok(g1 && (g1.items > g0.items || g1.drops > g0.drops), 'E (действие) рубит дерево: брёвна / палки', { before: g0, after: g1 });
+            await C.shot('game_chop_pc.png');
+            await C.ev(`(D37Hub._st.h.state.app.admin('game give plank 6; game give stick 2; game craft workbench; game place workbench 2.5 1.5 0'), true)`);
+            ok(await C.until(`(() => { const g = ${GS}; return g && g.parts === 1 && g.saves > 0; })()`, 8000), 'верстак сделан и поставлен, игра сохранилась сама', await C.ev(GS));
+            const gBuilt = await C.ev(GS);
+            await sleep(1500); await C.shot('game_build_pc.png');
             const er = await C.ev(`(() => { window.__e2eErr = []; window.d37Err = (w, e) => __e2eErr.push(w + ': ' + (e && e.message)); D37Hub._st.h.send({ t: 'nope' }); return __e2eErr; })()`);
             ok(er.length === 1 && /^engine:host_in: .*nope/.test(er[0]), 'ошибка движка ушла в мониторинг (d37Err)', er);
             // ← На сайт: мир сохранён в браузере, движок выгружен
@@ -209,7 +224,8 @@ async function playUntilLoaded(C, label){
             // продолжение: /hub/play берёт сохранение
             await C.ev(GO('/hub/play'));
             if (await playUntilLoaded(C, 'продолжение')) {
-              ok(await C.ev(`!!D37Hub._st.resumed && D37Hub._st.resumed.scene === 'planet'`), 'игра продолжилась с сохранения', await C.ev(`D37Hub._st.resumed`));
+              ok(await C.ev(`!!D37Hub._st.resumed && D37Hub._st.resumed.scene === 'valley'`), 'игра продолжилась с сохранения', await C.ev(`D37Hub._st.resumed`));
+              ok(await C.until(`(() => { const g = D37Hub._st.h.gameStats(); return g && g.parts === 1; })()`, 8000), 'долина та же: верстак на месте, вещи те же', { want: gBuilt, got: await C.ev(`D37Hub._st.h.gameStats()`) });
               await sleep(2000); await C.shot('game_in_site_phone.png');
             }
             await C.ev(GO('/hub'));
@@ -224,7 +240,7 @@ async function playUntilLoaded(C, label){
         try {
           await C.view(412, 915, true);
           await C.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-          await C.send('Page.navigate', { url: site.base + '/hub/play' });
+          await C.send('Page.navigate', { url: site.base + '/hub/planet' });
           ok(await C.until(READY, 60000), 'сайт загрузился (телефон)');
           if (await playUntilLoaded(C, 'телефон')) {
             ok(await C.ev(`!!(document.querySelector('.d37h-jump') && document.querySelector('.d37h-orbit') && document.querySelector('.d37h-ward'))`), 'кнопки на экране: прыжок, орбита ↔ земля, гардероб');
@@ -250,6 +266,13 @@ async function playUntilLoaded(C, label){
             const moved = Math.hypot(pos1[0] - pos0[0], pos1[2] - pos0[2]);
             ok(moved > 1, 'левый «стик» на телефоне двигает персонажа', { moved: Math.round(moved * 10) / 10 });
             await C.shot('walk_phone.png');
+            // долина на телефоне: игровой слой с кнопками ДЕЙСТВИЕ / СУМКА / РЕМЕСЛО (рисует движок)
+            await C.ev(GO('/hub/play'));
+            await C.until(`D37Hub._st.mode === 'play' && !!D37Hub._st.h`, 30000);
+            if (await playUntilLoaded(C, 'долина на телефоне')) {
+              ok(await C.ev(`D37Hub._st.h.state.game === true && !document.querySelector('.d37h-orbit')`), 'телефон: долина с игровым слоем, без кнопки орбиты');
+              await sleep(3000); await C.shot('game_phone.png');
+            }
           }
           const errs = C.errs.filter(e => !/supabase|realtime|websocket|Failed to fetch|NetworkError/i.test(e));
           ok(errs.length === 0, 'нет ошибок JS на странице', errs.slice(0, 5));

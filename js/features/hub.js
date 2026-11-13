@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════
 //  🎮 ПЛАТФОРМА D37 — главное меню «как в Роблоксе, только лучше» + игра нового движка внутри сайта (T-159 первая версия, EP7 13.11)
 // ═══════════════════════════════════════
-// Раздел /hub (PAGES.hub, js/ui/router.js): плитки «Играть» (планета нового движка), «Гардероб» (игра сразу в гардеробе), «Мир Денчика»,
+// Раздел /hub (PAGES.hub, js/ui/router.js): плитки «Играть» (долина: добыча, крафт, стройка — сцена valley), «Полёт над планетой» (/hub/planet), «Гардероб» (игра сразу в гардеробе), «Мир Денчика»,
 // «Студия», «Мини-игры» (раздел игр сайта — одной плиткой, сам раздел не трогаем), «Позвать друга». /hub/play и /hub/wardrobe — игра
 // поверх сайта: экран загрузки с настоящим прогрессом, холст движка, «← На сайт», ⛶ на весь экран.
 // Движок (Rust → wasm) — папка HUB_ENGINE (js/core/config.js; сейчас /d37/ — там же тестовая страница движка). С ним говорит только
@@ -26,8 +26,9 @@
 
   // ═══ Плитки меню (одна таблица; названия — владельца) ═══
   const TILES = [
-    { id: 'play', big: 1, icon: '🪐', title: 'Играть', sub: 'Планета нового движка: лети с орбиты, приземляйся, плавай и ныряй', href: '/hub/play', cls: 'hub-t-play' },
+    { id: 'play', big: 1, icon: '🌲', title: 'Играть', sub: 'Долина на планете: руби деревья, собирай камни и ягоды, делай топор и строй дом — всё сохраняется', href: '/hub/play', cls: 'hub-t-play' },
     { id: 'wardrobe', icon: '👕', title: 'Гардероб', sub: 'Девочка, мальчик или манекен, цвета каждой части', href: '/hub/wardrobe', cls: 'hub-t-ward' },
+    { id: 'planet', icon: '🪐', title: 'Полёт над планетой', sub: 'С орбиты вниз, посадка где хочешь, плавание и ныряние', href: '/hub/planet', cls: 'hub-t-planet' },
     { id: 'world', icon: '🌍', title: 'Мир Денчика', sub: 'Город, кафе и столики с играми — онлайн', href: '/play/world', cls: 'hub-t-world', age: '12+' },
     { id: 'studio', icon: '🧱', title: 'Студия', sub: 'Построй свой 3D-мир со скриптами', href: '/play/studio3d', cls: 'hub-t-studio' },
     { id: 'mini', icon: '🎲', title: 'Мини-игры', sub: 'Шахматы, «5 букв», дурак, клеточки и ещё 50 игр', href: '/play', cls: 'hub-t-mini' },
@@ -80,6 +81,9 @@
     return cloudP;
   }
   const GAME = 'engine', WORLD = 'planet';
+  // режимы игры: play — долина (добыча, крафт, стройка; сцена valley), planet — полёт с орбиты, wardrobe — гардероб на земле
+  const MODES = { play: 'valley', planet: 'planet', wardrobe: 'planet_ground' };
+  const SAVES = m => m === 'play' || m === 'planet';
 
   // ═══ Состояние ═══
   const st = { gen: 0, active: false, mode: '', h: null, starting: false, t0: 0, playBase: 0, cloudVer: null, lastCloud: 0, saves: 0, cloudSaves: 0, look: null,
@@ -116,7 +120,7 @@
   const playSeconds = () => st.playBase + (st.t0 ? (performance.now() - st.t0) / 1000 : 0);
   async function saveWorld(why){
     const h = st.h;
-    if (!h || st.mode !== 'play' || st.saveBusy) return false;
+    if (!h || !SAVES(st.mode) || st.saveBusy) return false;
     const bytes = h.save();
     if (!bytes || !bytes.length) return false;
     st.saveBusy = true;
@@ -218,8 +222,8 @@
     wrap.appendChild(grid);
     const note = el('div', 'hub-note');
     note.appendChild(el('b', '', 'Что уже есть: '));
-    note.append('планета с океанами и континентами, полёт с орбиты и посадка, ходьба, бег, прыжки, плавание и ныряние, гардероб с цветами. ' +
-      'Дальше — добыча, крафт и стройка, игра вместе с друзьями. Это ранняя версия: если что-то сломалось — напиши в чат.');
+    note.append('долина на планете: рубка деревьев, камни, ягоды, 15 рецептов (топор, кирка, верстак, костёр, факел, стены, дверь, крыша, мост), стройка с сохранением; ' +
+      'полёт с орбиты и посадка, плавание и ныряние, гардероб с цветами. Дальше — голод, животные, игра вместе с друзьями. Это ранняя версия: если что-то сломалось — напиши в чат.');
     wrap.appendChild(note);
     page.appendChild(wrap);
     // «Продолжить»: есть сохранение в браузере — сколько уже наиграно
@@ -253,12 +257,15 @@
   function howto(){
     sheet('Как играть', box => {
       const rows = [
-        ['📱 Телефон', 'левая половина экрана — идти (до упора — бегом), правая — смотреть; ⤒ — прыжок, 🌍 — с орбиты на землю и обратно, 👕 — гардероб'],
+        ['🌲 Долина', 'подойди к дереву и держи ДЕЙСТВИЕ (ЛКМ или E) — дерево упадёт и станет брёвнами; камни, траву, ягоды и ветки тоже можно собрать. Руками медленно — сделай топор, кирку и лопату'],
+        ['🔨 Ремесло', 'T или кнопка РЕМЕСЛО — доски, палки, инструменты, верстак, костёр, факел; стены, дверь, крыша, пол и мост — рядом с верстаком'],
+        ['🏠 Стройка', 'возьми деталь в руку (1-8 или СУМКА) и поставь (ПКМ или ДЕЙСТВИЕ); R — повернуть; стены цепляются к стенам, крыша — на стены. Зажми ДЕЙСТВИЕ на детали — забрать обратно'],
+        ['📱 Телефон', 'левая половина экрана — идти (до упора — бегом), правая — смотреть; ⤒ — прыжок, 👕 — гардероб; в полёте над планетой 🌍 — с орбиты на землю и обратно'],
         ['🖥 Компьютер', 'нажми на картинку — мышь смотрит; W A S D — идти, Shift — бегом, Пробел — прыжок (в воде — вверх), C — присесть'],
-        ['🪐 Планета', 'игра начинается на орбите: зажми O (или 🌍) — полетишь вниз и приземлишься; ещё раз — обратно в космос'],
+        ['🪐 Полёт', '«Полёт над планетой» начинается на орбите: зажми O (или 🌍) — полетишь вниз и приземлишься; ещё раз — обратно в космос'],
         ['🌊 Вода', 'в воду можно зайти вброд, глубже — плыть; ныряй и смотри на дно'],
         ['👕 Гардероб', 'B или 👕 — девочка, мальчик или манекен, цвет волос, верха, низа, обуви и кожи; образ сохраняется сам'],
-        ['💾 Сохранение', 'каждую минуту и при выходе — в браузере; вошёл в аккаунт — ещё и в облаке, на любом устройстве'],
+        ['💾 Сохранение', 'само, через пару секунд после каждого дела и при выходе — в браузере; вошёл в аккаунт — ещё и в облаке, на любом устройстве'],
         ['⛶ Экран', '⛶ — на весь экран, V — вид от первого лица / со спины, колесо мыши — ближе и дальше'],
       ];
       for (const [k, v] of rows) { const r = el('div', 'hub-sheet-row'); r.append(el('b', '', k), el('span', '', v)); box.appendChild(r); }
@@ -277,17 +284,17 @@
       const has = rec && rec.bytes && rec.bytes.length;
       box.appendChild(el('p', 'hub-sheet-p', has
         ? 'Твоя планета: ' + fmtMin(rec.gt) + ' в игре, сохранено ' + new Date(rec.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + (rec.cloud && rec.cloud.on ? ' — копия в облаке ☁️.' : ' — в этом браузере.')
-        : 'Сохранения пока нет. Начни игру — она сохранится сама каждую минуту и при выходе.'));
+        : 'Сохранения пока нет. Начни игру — она сохранится сама после каждого дела и при выходе.'));
       if (!me()) box.appendChild(el('p', 'hub-sheet-p hub-muted', 'Войди в аккаунт — мир будет в облаке и откроется на любом устройстве.'));
       const row = el('div', 'hub-er');
       const go = el('a', 'hub-btn', has ? '▶ Продолжить' : '🪐 Играть'); go.href = '/hub/play'; row.appendChild(go);
       if (has) {
         const fresh = el('button', 'hub-btn hub-btn3', 'Начать заново'); fresh.type = 'button';
         fresh.addEventListener('click', async () => {
-          if (!confirm('Начать планету заново? Сохранение ' + (rec.cloud && rec.cloud.on ? '(и в облаке) ' : '') + 'удалится, вернуть его будет нельзя.')) return;
+          if (!confirm('Начать заново? Долина, вещи и постройки ' + (rec.cloud && rec.cloud.on ? '(и в облаке) ' : '') + 'удалятся, вернуть их будет нельзя.')) return;
           await idbPut(WORLD, null);
           if (me() && rec.cloud && rec.cloud.on) { const C = await cloud(); try { C && C.available() && await C.del(GAME, WORLD); } catch (e) {} }
-          close(); renderMenu(); toastMenu('Готово — следующая игра начнётся с орбиты');
+          close(); renderMenu(); toastMenu('Готово — следующая игра начнётся с чистой долины');
         });
         row.appendChild(fresh);
       }
@@ -331,26 +338,28 @@
   function status(t){ st.status = t; if (ui && ui.stat) { ui.stat.textContent = t; ui.stat.classList.add('on'); clearTimeout(ui.statT); ui.statT = setTimeout(() => ui && ui.stat && ui.stat.classList.remove('on'), 3500); } }
   function toast(t){ if (!ui) return; const x = el('div', 'hub-gtoast', t); ui.box.appendChild(x); setTimeout(() => x.remove(), 3200); }
   const EVENTS = { landed: '🛬 Приземлился! Теперь можно гулять и плавать', wade: '🌊 Вброд по воде', swim: '🏊 Плывёшь — пробел вверх', dive: '🤿 Нырнул!', orbit: '🚀 Снова на орбите' };
-  const PHASES = { wasm: 'Загружаем движок', gpu: 'Готовим видеокарту', world: 'Строим планету' };
+  const PHASES = { wasm: 'Загружаем движок', gpu: 'Готовим видеокарту', world: 'Строим мир' };
   function buildUi(mode){
     const box = el('div', 'hub-play');
-    box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', mode === 'wardrobe' ? 'Гардероб D37' : 'Игра D37');
+    box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', mode === 'wardrobe' ? 'Гардероб D37' : mode === 'planet' ? 'Планета D37' : 'Игра D37');
     const bar = el('div', 'hub-bar');
     const back = el('button', 'hub-back', '← На сайт'); back.type = 'button';
     back.addEventListener('click', () => { if (root.D37Route) D37Route.go('/hub'); else location.href = '/hub'; });
-    const title = el('b', 'hub-title', mode === 'wardrobe' ? '👕 Гардероб' : '🪐 Планета D37');
+    const title = el('b', 'hub-title', mode === 'wardrobe' ? '👕 Гардероб' : mode === 'planet' ? '🪐 Планета D37' : '🌲 Долина D37');
     const stat = el('span', 'hub-stat', '');
     const full = el('button', 'hub-full', '⛶'); full.type = 'button'; full.title = 'На весь экран'; full.setAttribute('aria-label', 'На весь экран');
     full.addEventListener('click', () => toggleFull(box));
     bar.append(back, title, stat, full);
     const stage = el('div', 'hub-stage');
     const load = el('div', 'hub-load');
-    const lt = el('div', 'hub-lt', mode === 'wardrobe' ? 'Открываем гардероб' : 'Летим на планету');
+    const lt = el('div', 'hub-lt', mode === 'wardrobe' ? 'Открываем гардероб' : mode === 'planet' ? 'Летим на планету' : 'Идём в долину');
     const ph = el('div', 'hub-ph', 'Загружаем движок');
     const barO = el('div', 'hub-pb'), barI = el('i', '');
     barO.appendChild(barI);
     const pct = el('div', 'hub-pct', '0%');
-    const tip = el('div', 'hub-tip', touchDev() ? 'Слева на экране — идти, справа — смотреть, 🌍 — с орбиты на землю.' : 'Нажми на картинку, чтобы смотреть мышью. W A S D — идти, O — с орбиты на землю, B — гардероб.');
+    const tip = el('div', 'hub-tip', mode === 'play'
+      ? (touchDev() ? 'Слева — идти, справа — смотреть. Кнопка ДЕЙСТВИЕ — рубить и брать, СУМКА и РЕМЕСЛО — вещи и крафт.' : 'Нажми на картинку. ЛКМ или E — рубить и брать, Q — сумка, T — ремесло, 1-8 — в руку, ПКМ — поставить.')
+      : touchDev() ? 'Слева на экране — идти, справа — смотреть, 🌍 — с орбиты на землю.' : 'Нажми на картинку, чтобы смотреть мышью. W A S D — идти, O — с орбиты на землю, B — гардероб.');
     const cancel = el('button', 'hub-cancel', 'Отмена'); cancel.type = 'button';
     cancel.addEventListener('click', () => back.click());
     load.append(lt, ph, barO, pct, tip, cancel);
@@ -418,7 +427,7 @@
     ym('d37_open');
     if (!await canRun3d()) { showError('nogpu'); st.starting = false; return; }
     const info = await buildInfo();
-    const save = mode === 'play' ? await pickSave() : null;
+    const save = SAVES(mode) ? await pickSave() : null;
     if (gen !== st.gen || !st.active || !ui) { if (gen === st.gen) st.starting = false; return; }   // ушли со страницы, пока ждали
     st.playBase = save && +save.gt || 0;
     let host;
@@ -431,7 +440,7 @@
       const look = lookNow(), g = gfxNow().id;
       st.look = look;
       const h = await host.start({
-        root: ui.stage, scene: mode === 'wardrobe' ? 'planet_ground' : 'planet', rawSize: +(info && info.wasm_raw) || 0, gl: st.gl || g === 'gl',
+        root: ui.stage, scene: MODES[mode] || 'valley', rawSize: +(info && info.wasm_raw) || 0, gl: st.gl || g === 'gl',
         quality: g === 'max' || g === 'mid' || g === 'low' ? g : touchDev() ? 'low' : '', session: sessionMsg(), look, save: save && save.bytes, wardrobe: mode === 'wardrobe',
         onProgress: progress, onMessage: onMsg,
       });
@@ -449,7 +458,7 @@
     else if (m.t === 'look_changed') onLook(m);
     else if (m.t === 'save_ready') saveWorld(String(m.why || ''));
     else if (m.t === 'event') { st.events.push(String(m.code)); if (EVENTS[m.code]) toast(EVENTS[m.code]); }
-    else if (m.t === 'resumed') { st.resumed = m.summary || null; if (m.summary && st.mode === 'play') toast('▶ Продолжаем с того места, где ты был'); }
+    else if (m.t === 'resumed') { st.resumed = m.summary || null; if (m.summary && SAVES(st.mode)) toast(st.mode === 'play' ? '▶ Твоя долина: всё, что построил, на месте' : '▶ Продолжаем с того места, где ты был'); }
     else if (m.t === 'error') {
       st.errors.push(String(m.code) + ': ' + String(m.msg || ''));
       report(String(m.code).replace(/[^a-z_-]/gi, '').slice(0, 20) || 'x', m.msg);
@@ -461,7 +470,7 @@
   async function close(why){
     if (!st.active) return;
     const h = st.h;
-    if (h && st.mode === 'play') { try { h.pause(); await saveWorld('exit'); } catch (e) {} }
+    if (h && SAVES(st.mode)) { try { h.pause(); await saveWorld('exit'); } catch (e) {} }
     // последний образ — сразу, не ждать 1,5 с
     if (st.lookT) { clearTimeout(st.lookT); st.lookT = 0; const [b, t] = st.lastLook.split('|'); if (b) keepLook(b, t || ''); }
     try { h && h.dispose(); } catch (e) {}
@@ -487,7 +496,7 @@
   // ═══ Вход из роутера ═══
   function render(param){
     const p = String(param || '').split('/')[0];
-    if (ON() && (p === 'play' || p === 'wardrobe')) { open(p); return; }
+    if (ON() && MODES[p]) { open(p); return; }
     renderMenu();
     // из игры в меню: мир сохраняется при выходе — «▶ Продолжить» и «Сохранение» перерисовать, когда запишется
     if (st.active) close('menu').then(() => { if (!st.active && typeof currentRoute === 'function' && currentRoute() === 'hub') renderMenu(); });
