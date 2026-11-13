@@ -3424,3 +3424,678 @@ revoke all on function public.cm_server_set(bigint, text, text, text) from publi
 grant execute on function public.cm_server_set(bigint, text, text, text) to authenticated;
 revoke all on function public.cm_chan_extra(bigint, text, text, int) from public, anon;
 grant execute on function public.cm_chan_extra(bigint, text, text, int) to authenticated;
+
+-- ═══ часть 11 (ds-mod) ═══
+-- 🛡 ОДИН центр модерации и починка жалоб (T-164, владелец 13.11: «нет одной какой-то общей категории для модераторов, я пожаловался сам
+--     на себя ещё… На создателя разве можно жаловаться?»).
+--     Почему «Жалобы — 0»: 🚩 у карточки файла (files.js) был и на СВОЁМ файле, а file_report не проверял автора — жалоба уходила в
+--     отдельную вкладку «📎 Файлы», а «🚩 Жалобы» считали только жалобы на сообщения. Теперь: на себя — нельзя (сервер отвечает 'self'),
+--     на создателя сайта (role = 'admin') — нельзя ('creator'), жалоба на команду (сайта или сообщества) уходит ТОЛЬКО создателю
+--     (to_owner) и не скрывает сообщение; тот, на кого жалуются, свою жалобу не видит. У жалобы — статус (new / work / done / rejected),
+--     кто взял и когда, снимок переписки (ctx: 3 сообщения до + само), жалобщику — 🔔 «рассмотрено». Все жалобы (сообщения, файлы,
+--     сообщества) — одним списком mod_reports. Участники (поиск, тайм-аут / кик / бан с причиной и сроком, заметки команды), режим рейда,
+--     запрещённые слова, медленный режим новичкам (проверяет СЕРВЕР — триггер mod_guard), журнал с фильтрами, обзор.
+--     Откат одной строкой (клиент): MOD_HUB = false в js/features/ds-mod.js; сервер: drop trigger mod_guard on public.messages;
+--     drop trigger mod_guard on public.community_messages; — старые функции и экраны продолжают работать.
+
+-- ═══ 11.1 Колонки жалоб и новые таблицы ═══
+alter table public.chat_reports add column if not exists state text not null default 'new';
+alter table public.chat_reports add column if not exists handled_by uuid references public.profiles(id) on delete set null;
+alter table public.chat_reports add column if not exists handled_at timestamptz;
+alter table public.chat_reports add column if not exists note text not null default '';
+alter table public.chat_reports add column if not exists to_owner boolean not null default false;
+alter table public.chat_reports add column if not exists ctx jsonb;
+alter table public.chat_reports add column if not exists target_id uuid references public.profiles(id) on delete set null;
+alter table public.community_reports add column if not exists state text not null default 'new';
+alter table public.community_reports add column if not exists handled_by uuid references public.profiles(id) on delete set null;
+alter table public.community_reports add column if not exists handled_at timestamptz;
+alter table public.community_reports add column if not exists note text not null default '';
+alter table public.community_reports add column if not exists to_owner boolean not null default false;
+alter table public.community_reports add column if not exists ctx jsonb;
+alter table public.file_reports add column if not exists state text not null default 'new';
+alter table public.file_reports add column if not exists handled_by uuid references public.profiles(id) on delete set null;
+alter table public.file_reports add column if not exists handled_at timestamptz;
+alter table public.file_reports add column if not exists note text not null default '';
+alter table public.file_reports add column if not exists to_owner boolean not null default false;
+alter table public.file_reports add column if not exists target_id uuid references public.profiles(id) on delete set null;
+alter table public.file_reports add column if not exists cid bigint;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'chat_reports_state_chk') then
+    alter table public.chat_reports add constraint chat_reports_state_chk check (state in ('new', 'work', 'done', 'rejected')); end if;
+  if not exists (select 1 from pg_constraint where conname = 'community_reports_state_chk') then
+    alter table public.community_reports add constraint community_reports_state_chk check (state in ('new', 'work', 'done', 'rejected')); end if;
+  if not exists (select 1 from pg_constraint where conname = 'file_reports_state_chk') then
+    alter table public.file_reports add constraint file_reports_state_chk check (state in ('new', 'work', 'done', 'rejected')); end if;
+end $$;
+-- старые закрытые жалобы — «готово» / «отклонено» (повторный прогон ничего не меняет)
+update public.chat_reports set state = 'done' where status = 'done' and state = 'new';
+update public.community_reports set state = 'done' where status = 'done' and state = 'new';
+update public.file_reports set state = case status when 'blocked' then 'done' else 'rejected' end where status <> 'new' and state = 'new';
+create index if not exists idx_chat_reports_state on public.chat_reports (state, created_at desc) where state in ('new', 'work');
+create index if not exists idx_creport_state on public.community_reports (community_id, state) where state in ('new', 'work');
+create index if not exists idx_file_reports_state on public.file_reports (state, created_at desc) where state in ('new', 'work');
+
+-- Заметки команды о человеке (видит только команда этого сервера; сам человек — никогда)
+create table if not exists public.mod_notes (
+  id bigint generated always as identity primary key,
+  community_id bigint references public.communities(id) on delete cascade,   -- null — сервер сайта
+  target_id uuid not null references public.profiles(id) on delete cascade,
+  author_id uuid references public.profiles(id) on delete set null,
+  text text not null check (char_length(text) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_mod_notes on public.mod_notes (community_id, target_id, id desc);
+alter table public.mod_notes enable row level security;   -- читать и писать — только функциями
+revoke all on public.mod_notes from anon, authenticated;
+
+-- Доп. автомодерация сервера: запрещённые слова, медленный режим новичкам, режим рейда (scope 0 — сервер сайта, иначе id сообщества)
+create table if not exists public.mod_cfg (
+  scope bigint primary key,
+  cfg jsonb not null default '{}'::jsonb,             -- {"words": ["…"], "newslow": 30}
+  raid_until timestamptz,
+  updated_at timestamptz not null default now()
+);
+alter table public.mod_cfg enable row level security;
+revoke all on public.mod_cfg from anon, authenticated;
+
+-- ═══ 11.2 Помощники ═══
+-- Создатель сайта = role 'admin' (на сайте он один — владелец)
+create or replace function public.mod_is_owner(p_uid uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select p_uid is not null and coalesce((select role = 'admin' from public.profiles where id = p_uid), false);
+$$;
+-- Команда сервера: сайт — admin / moderator / helper; сообщество — право «модерация» (бит 2: владелец, модераторы, роль; персонал сайта)
+create or replace function public.mod_can(p_cid bigint, p_uid uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select p_uid is not null and case when p_cid is null then public.chat_staff_role(p_uid) is not null else public.comm_perm(p_cid, p_uid, 2) end;
+$$;
+-- Человек из команды (сайта или этого сообщества) — жалоба на него идёт только создателю
+create or replace function public.mod_target_staff(p_cid bigint, p_uid uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select p_uid is not null and (public.chat_staff_role(p_uid) is not null or (p_cid is not null and public.comm_perm(p_cid, p_uid, 2)));
+$$;
+-- Можно ли пожаловаться: null — можно; 'self' — на себя; 'creator' — на создателя сайта
+create or replace function public.mod_report_guard(p_reporter uuid, p_target uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select case when p_target is not null and p_target = p_reporter then 'self'
+              when p_target is not null and public.mod_is_owner(p_target) then 'creator' end;
+$$;
+-- Снимок переписки к жалобе: 3 сообщения до и само (текст как был в момент жалобы)
+create or replace function public.mod_ctx_chat(p_id bigint)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'nick', x.nick, 'text', left(case when coalesce(x.deleted, false) then '' else x.text end, 300), 'at', x.created_at) order by x.id), '[]'::jsonb)
+  from (select m.id, m.nick, m.text, m.deleted, m.created_at from public.messages m
+    where m.id between p_id - 3000 and p_id and coalesce(m.channel, 'general') = (select coalesce(channel, 'general') from public.messages where id = p_id)
+    order by m.id desc limit 4) x;
+$$;
+create or replace function public.mod_ctx_cm(p_id bigint)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'nick', x.nick, 'text', left(case when x.deleted then '' else x.text end, 300), 'at', x.created_at) order by x.id), '[]'::jsonb)
+  from (select m.id, m.nick, m.text, m.deleted, m.created_at from public.community_messages m
+    where m.channel_id = (select channel_id from public.community_messages where id = p_id) and m.id <= p_id
+    order by m.id desc limit 4) x;
+$$;
+
+-- ═══ 11.3 Пожаловаться: на себя и на создателя нельзя; на команду — только создателю; снимок переписки ═══
+create or replace function public.chat_report(p_id bigint, p_reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); v record; n int; r record; g text; staff boolean; ins int;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if (select count(*) from public.chat_reports where reporter_id = uid and created_at > now() - interval '1 hour') >= 10 then
+    return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  select id, user_id, deleted, text into v from public.messages where id = p_id;
+  if not found or coalesce(v.deleted, false) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  g := public.mod_report_guard(uid, v.user_id);
+  if g is not null then return jsonb_build_object('ok', false, 'reason', g); end if;
+  staff := public.mod_target_staff(null, v.user_id);
+  insert into public.chat_reports (message_id, reporter_id, reason, target_id, to_owner, ctx)
+    values (p_id, uid, left(btrim(coalesce(p_reason, '')), 200), v.user_id, staff, public.mod_ctx_chat(p_id)) on conflict do nothing;
+  get diagnostics ins = row_count;
+  if ins = 0 then return jsonb_build_object('ok', true, 'again', true); end if;
+  select count(distinct reporter_id) into n from public.chat_reports where message_id = p_id and status = 'open';
+  if n >= 3 and not staff then update public.messages set deleted = true where id = p_id; end if;
+  if n = 1 then
+    for r in select id from public.profiles where (case when staff then role = 'admin' else role in ('admin', 'moderator') end)
+        and id is distinct from v.user_id limit 20 loop
+      perform public.comm_notify(r.id, 'cm_report', null, case when staff then '🚩 Жалоба на команду' else '🚩 Жалоба в общем чате' end,
+        left(coalesce(v.text, ''), 140), '#/chat/mod/reports', 'chrep:' || p_id);
+    end loop;
+  end if;
+  return jsonb_build_object('ok', true, 'hidden', n >= 3 and not staff, 'to_owner', staff);
+end $$;
+
+create or replace function public.cm_report(p_msg bigint, p_reason text, p_community bigint default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); v record; cid bigint; n int; c record; r record; g text; staff boolean; ins int;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if (select count(*) from public.community_reports where reporter_id = uid and created_at > now() - interval '1 hour') >= 10 then
+    return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  if p_msg is not null then
+    select * into v from public.community_messages where id = p_msg;
+    if not found or v.deleted then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    cid := v.community_id;
+    if not public.comm_is_member(cid) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+    g := public.mod_report_guard(uid, v.user_id);
+    if g is not null then return jsonb_build_object('ok', false, 'reason', g); end if;
+    staff := public.mod_target_staff(cid, v.user_id);
+    insert into public.community_reports (community_id, message_id, target_id, reporter_id, reason, to_owner, ctx)
+      values (cid, p_msg, v.user_id, uid, left(btrim(coalesce(p_reason, '')), 200), staff, public.mod_ctx_cm(p_msg)) on conflict do nothing;
+    get diagnostics ins = row_count;
+    if ins = 0 then return jsonb_build_object('ok', true, 'again', true); end if;
+    select count(distinct reporter_id) into n from public.community_reports where message_id = p_msg and status = 'open';
+    if n >= 3 and not staff then update public.community_messages set hidden = true where id = p_msg; end if;
+    select name into c from public.communities where id = cid;
+    if staff then
+      for r in select id as user_id from public.profiles where role = 'admin' and id is distinct from v.user_id limit 5 loop
+        perform public.comm_notify(r.user_id, 'cm_report', null, '🚩 Жалоба на команду «' || left(c.name, 40) || '»', left(v.text, 140),
+          '#/chat/mod/reports/owner', 'cmrep:' || p_msg);
+      end loop;
+    elsif n = 1 then
+      for r in select user_id from public.community_members where community_id = cid and role in ('owner', 'mod') and user_id is distinct from v.user_id loop
+        perform public.comm_notify(r.user_id, 'cm_report', null, '🚩 Жалоба в «' || left(c.name, 40) || '»', left(v.text, 140),
+          '#/phone/comm/' || cid || '/mod/reports', 'cmrep:' || p_msg);
+      end loop;
+    end if;
+    return jsonb_build_object('ok', true, 'hidden', n >= 3 and not staff, 'to_owner', staff);
+  end if;
+  select * into c from public.communities where id = p_community;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  g := public.mod_report_guard(uid, c.owner_id);
+  if g is not null then return jsonb_build_object('ok', false, 'reason', g); end if;
+  insert into public.community_reports (community_id, message_id, target_id, reporter_id, reason)
+    values (p_community, null, c.owner_id, uid, left(btrim(coalesce(p_reason, '')), 200)) on conflict do nothing;
+  return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.file_report(p_kind text, p_mid bigint, p_why text default '') returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); a jsonb; cid bigint; s uuid; r uuid; g text; staff boolean;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_kind = 'chat' then select att, user_id into a, s from public.messages where id = p_mid and not coalesce(deleted, false);
+  elsif p_kind = 'cm' then
+    select att, community_id, user_id into a, cid, s from public.community_messages where id = p_mid and not deleted;
+    if not exists (select 1 from public.community_members where community_id = cid and user_id = uid) and public.chat_staff_role(uid) is null then a := null; end if;
+  elsif p_kind = 'dm' and to_regclass('public.direct_messages') is not null then
+    execute 'select att, sender_id, recipient_id from public.direct_messages where id = $1' into a, s, r using p_mid;
+    if uid is distinct from s and uid is distinct from r then a := null; end if;
+  end if;
+  if a is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  g := public.mod_report_guard(uid, s);
+  if g is not null then return jsonb_build_object('ok', false, 'reason', g); end if;
+  if (select count(*) from public.file_reports where reporter = uid and created_at > now() - interval '1 hour') >= 20 then return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  staff := public.mod_target_staff(cid, s);
+  insert into public.file_reports (reporter, kind, mid, phash, att, why, target_id, cid, to_owner)
+    values (uid, p_kind, p_mid, a->>'phash', a - 'thumb', left(coalesce(p_why, ''), 200), s, cid, staff)
+    on conflict (reporter, kind, mid) do nothing;
+  return jsonb_build_object('ok', true, 'to_owner', staff);
+end $$;
+
+-- Старые экраны (флаг выключен): жалобы на команду — только создателю, свою жалобу человек не видит
+create or replace function public.chat_reports_list()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); own boolean := public.mod_is_owner(auth.uid());
+begin
+  if coalesce(public.chat_staff_role(), '') not in ('admin', 'moderator') then return null; end if;
+  return (select coalesce(jsonb_agg(x order by x.n desc, x.at desc), '[]'::jsonb) from (
+    select r.message_id as mid, count(*) as n, max(r.created_at) as at, string_agg(distinct nullif(r.reason, ''), ' · ') as reasons,
+      max(m.text) as text, max(m.nick) as author, (array_agg(m.user_id))[1] as target, bool_or(coalesce(m.deleted, false)) as hidden,
+      max(coalesce(m.channel, 'general')) as channel
+    from public.chat_reports r left join public.messages m on m.id = r.message_id
+    where r.status = 'open' and (own or not r.to_owner) and m.user_id is distinct from uid
+    group by r.message_id order by count(*) desc limit 100) x);
+end $$;
+create or replace function public.cm_reports(p_community bigint default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); own boolean := public.mod_is_owner(auth.uid());
+begin
+  if p_community is null and not public.comm_is_staff() then return null; end if;
+  if p_community is not null and not public.comm_perm(p_community, auth.uid(), 2) then return null; end if;
+  return (select coalesce(jsonb_agg(x order by x.n desc, x.at desc), '[]'::jsonb) from (
+    select min(r.id) as id, r.community_id as cid, max(c.name) as cname, r.message_id as mid, max(m.text) as text, max(m.nick) as author,
+      (array_agg(r.target_id))[1] as target, count(*) as n, max(r.created_at) as at, bool_or(coalesce(m.hidden, false)) as hidden,
+      string_agg(distinct nullif(r.reason, ''), ' · ') as reasons, (array_agg(m.channel_id))[1] as chid
+    from public.community_reports r
+    join public.communities c on c.id = r.community_id
+    left join public.community_messages m on m.id = r.message_id
+    where r.status = 'open' and (p_community is null or r.community_id = p_community)
+      and (r.message_id is not null or public.comm_is_staff())
+      and (own or not r.to_owner) and r.target_id is distinct from uid
+    group by r.community_id, r.message_id
+    order by count(*) desc, max(r.created_at) desc limit 100) x);
+end $$;
+create or replace function public.file_reports_list() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); own boolean := public.mod_is_owner(auth.uid());
+begin
+  if public.chat_staff_role(auth.uid()) is null then return '[]'::jsonb; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'kind', r.kind, 'mid', r.mid, 'phash', r.phash, 'att', r.att, 'why', r.why, 'n',
+      (select count(*) from public.file_reports x where x.phash = r.phash), 'at', r.created_at) order by r.id desc)
+    from (select * from public.file_reports where status = 'new' and (own or not to_owner) and target_id is distinct from uid order by id desc limit 100) r), '[]'::jsonb);
+end $$;
+
+-- Старые кнопки «Оставить / Удалить / Запретить» закрывают жалобу и в новых статусах (кто, когда)
+create or replace function public.mod_report_stamp()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_table_name = 'file_reports' then
+    if new.status is distinct from old.status and new.status in ('blocked', 'dismissed') and new.state in ('new', 'work') then
+      new.state := case new.status when 'blocked' then 'done' else 'rejected' end;
+      new.handled_by := coalesce(auth.uid(), new.handled_by); new.handled_at := now();
+    end if;
+  elsif new.status is distinct from old.status and new.status = 'done' and new.state in ('new', 'work') then
+    new.state := 'done'; new.handled_by := coalesce(auth.uid(), new.handled_by); new.handled_at := now();
+  end if;
+  return new;
+end $$;
+drop trigger if exists mod_report_stamp on public.chat_reports;
+create trigger mod_report_stamp before update on public.chat_reports for each row execute function public.mod_report_stamp();
+drop trigger if exists mod_report_stamp on public.community_reports;
+create trigger mod_report_stamp before update on public.community_reports for each row execute function public.mod_report_stamp();
+drop trigger if exists mod_report_stamp on public.file_reports;
+create trigger mod_report_stamp before update on public.file_reports for each row execute function public.mod_report_stamp();
+
+-- ═══ 11.4 Все жалобы одним списком ═══
+-- p_cid: null — сервер сайта, иначе сообщество. p_scope: 'here' — этот сервер (сайт: общий чат + файлы чата и ЛС; сообщество: его
+-- сообщения и файлы), 'all' — все сообщества (admin / moderator), 'owner' — жалобы на команду (только создатель).
+-- p_state: 'open' (new + work) | 'closed' (done + rejected) | new | work | done | rejected. p_kind: null | 'msg' | 'file'.
+create or replace function public.mod_reports(p_cid bigint, p_scope text default 'here', p_state text default 'open', p_kind text default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); own boolean := public.mod_is_owner(auth.uid()); sts text[]; sc text := coalesce(p_scope, 'here');
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if sc = 'here' and not public.mod_can(p_cid, uid) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if sc = 'all' and not public.comm_is_staff(uid) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if sc = 'owner' and not own then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if sc not in ('here', 'all', 'owner') then return jsonb_build_object('ok', false, 'reason', 'scope'); end if;
+  sts := case coalesce(p_state, 'open') when 'open' then array['new', 'work'] when 'closed' then array['done', 'rejected']
+    when 'new' then array['new'] when 'work' then array['work'] when 'done' then array['done'] when 'rejected' then array['rejected'] else array['new', 'work'] end;
+  return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(to_jsonb(x) order by (x.state = 'new') desc, x.n desc, x.at desc), '[]'::jsonb) from (
+    -- общий чат сайта
+    select 'chat' as kind, r.message_id as key, r.message_id as mid, null::bigint as cid, '' as cname, max(coalesce(m.channel, 'general')) as channel,
+      max(m.nick) as author, (array_agg(coalesce(r.target_id, m.user_id)))[1] as target, max(m.text) as text, (array_agg(r.ctx order by r.id desc))[1] as ctx,
+      count(*) as n, string_agg(distinct nullif(r.reason, ''), ' · ') as reasons, max(r.created_at) as at, (array_agg(r.state order by r.id desc))[1] as state,
+      (select nick from public.profiles where id = (array_agg(r.handled_by order by r.id desc))[1]) as by_nick, max(r.handled_at) as by_at,
+      bool_or(coalesce(m.deleted, false)) as hidden, bool_or(r.to_owner) as to_owner, null::jsonb as att
+    from public.chat_reports r left join public.messages m on m.id = r.message_id
+    where r.state = any(sts) and (own or not r.to_owner) and coalesce(r.target_id, m.user_id) is distinct from uid
+      and coalesce(p_kind, 'msg') = 'msg' and ((sc = 'here' and p_cid is null) or (sc = 'owner' and r.to_owner))
+    group by r.message_id
+    union all
+    -- сообщества
+    select 'cm', min(r.id), r.message_id, r.community_id, max(c.name), coalesce(max(ch.name), ''), max(m.nick), (array_agg(r.target_id))[1], max(m.text),
+      (array_agg(r.ctx order by r.id desc))[1], count(*), string_agg(distinct nullif(r.reason, ''), ' · '), max(r.created_at), (array_agg(r.state order by r.id desc))[1],
+      (select nick from public.profiles where id = (array_agg(r.handled_by order by r.id desc))[1]), max(r.handled_at),
+      bool_or(coalesce(m.hidden, false)), bool_or(r.to_owner), null::jsonb
+    from public.community_reports r join public.communities c on c.id = r.community_id
+      left join public.community_messages m on m.id = r.message_id left join public.community_channels ch on ch.id = m.channel_id
+    where r.state = any(sts) and (own or not r.to_owner) and r.target_id is distinct from uid and coalesce(p_kind, 'msg') = 'msg'
+      and ((sc = 'here' and p_cid is not null and r.community_id = p_cid) or (sc = 'all') or (sc = 'owner' and r.to_owner))
+      and (r.message_id is not null or public.comm_is_staff(uid))
+    group by r.community_id, r.message_id
+    union all
+    -- файлы
+    select 'file', min(f.id), f.mid, max(f.cid), coalesce(max(c.name), ''), max(f.kind), (select nick from public.profiles where id = (array_agg(f.target_id))[1]),
+      (array_agg(f.target_id))[1], '', null::jsonb, count(*), string_agg(distinct nullif(f.why, ''), ' · '), max(f.created_at), (array_agg(f.state order by f.id desc))[1],
+      (select nick from public.profiles where id = (array_agg(f.handled_by order by f.id desc))[1]), max(f.handled_at),
+      false, bool_or(f.to_owner), (array_agg(f.att))[1] || jsonb_build_object('phash', max(f.phash), 'fkind', max(f.kind))
+    from public.file_reports f left join public.communities c on c.id = f.cid
+    where f.state = any(sts) and (own or not f.to_owner) and f.target_id is distinct from uid and coalesce(p_kind, 'file') = 'file'
+      and ((sc = 'here' and p_cid is null and f.kind in ('chat', 'dm') and public.chat_staff_role(uid) is not null)
+        or (sc = 'here' and p_cid is not null and f.kind = 'cm' and f.cid = p_cid) or (sc = 'all' and f.kind = 'cm') or (sc = 'owner' and f.to_owner))
+    group by f.kind, f.mid
+  ) x where x.state = any(sts) limit 150));
+end $$;
+
+-- Взять в работу / готово (нарушение) / отклонено. p_action: '' | 'delete' (удалить сообщение) | 'block' (файл в чёрный список).
+-- «Отклонено» снимает скрытие жалобами. Жалобщикам — 🔔 «рассмотрено» (без имени модератора). Запись в журнал
+create or replace function public.mod_report_set(p_kind text, p_key bigint, p_state text, p_action text default '', p_note text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); v_note text := left(btrim(coalesce(p_note, '')), 200); v_cid bigint; tgt uuid; v_mid bigint; fk text; ph text;
+  toown boolean; txt text; chn text; rep record; k int := 0; sitemod boolean := coalesce(public.chat_staff_role(auth.uid()), '') in ('admin', 'moderator');
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_state not in ('work', 'done', 'rejected') then return jsonb_build_object('ok', false, 'reason', 'state'); end if;
+  if coalesce(p_action, '') not in ('', 'delete', 'block') then return jsonb_build_object('ok', false, 'reason', 'action'); end if;
+  if public.comm_bad(v_note) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if p_kind = 'chat' then
+    select null::bigint, (array_agg(coalesce(r.target_id, m.user_id)))[1], bool_or(r.to_owner), max(m.text), max(coalesce(m.channel, 'general'))
+      into v_cid, tgt, toown, txt, chn from public.chat_reports r left join public.messages m on m.id = r.message_id where r.message_id = p_key;
+    if toown is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    v_mid := p_key;
+  elsif p_kind = 'cm' then
+    select community_id, message_id, target_id into v_cid, v_mid, tgt from public.community_reports where id = p_key;
+    if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    select bool_or(to_owner) into toown from public.community_reports where community_id = v_cid and coalesce(message_id, 0) = coalesce(v_mid, 0) and state in ('new', 'work');
+    select text, channel_id::text into txt, chn from public.community_messages where id = v_mid;
+  elsif p_kind = 'file' then
+    select f.kind, f.mid, f.cid, f.target_id, f.phash into fk, v_mid, v_cid, tgt, ph from public.file_reports f where id = p_key;
+    if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    select bool_or(to_owner) into toown from public.file_reports where kind = fk and file_reports.mid = v_mid and state in ('new', 'work');
+    txt := '📎 ' || coalesce((select att->>'name' from public.file_reports where id = p_key), 'файл'); chn := fk;
+    if fk <> 'cm' then v_cid := null; end if;
+  else return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
+  toown := coalesce(toown, false);
+  if tgt is not null and tgt = uid then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if toown and not public.mod_is_owner(uid) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if not public.mod_can(v_cid, uid) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if p_kind = 'file' and fk <> 'cm' and not sitemod and not public.mod_is_owner(uid) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if p_action = 'block' and (p_kind <> 'file' or not sitemod) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  perform set_config('d37.reason', coalesce(nullif(v_note, ''), '🚩 по жалобе'), true);
+  -- действие с сообщением / файлом
+  if p_state = 'done' and p_action = 'delete' and v_mid is not null then
+    if p_kind = 'chat' then update public.messages set deleted = true where id = v_mid;
+    elsif p_kind = 'cm' then update public.community_messages set deleted = true, hidden = false, text = '', reactions = '{}'::jsonb where id = v_mid;
+    end if;
+  elsif p_state = 'rejected' and v_mid is not null then
+    if p_kind = 'chat' then update public.messages set deleted = false where id = v_mid and deleted
+      and (select count(distinct reporter_id) from public.chat_reports where message_id = v_mid and status = 'open') >= 3;
+    elsif p_kind = 'cm' then update public.community_messages set hidden = false where id = v_mid and hidden;
+    end if;
+  end if;
+  if p_kind = 'file' and p_action = 'block' and ph ~ '^[0-9a-f]{64}$' then
+    insert into public.file_block (phash, reason, by_uid) values (ph, coalesce(nullif(v_note, ''), 'жалоба'), uid) on conflict (phash) do nothing;
+  end if;
+  -- статусы
+  if p_kind = 'chat' then
+    for rep in update public.chat_reports set state = p_state, handled_by = uid, handled_at = now(), note = v_note,
+        status = case when p_state = 'work' then status else 'done' end
+      where message_id = v_mid and state in ('new', 'work') returning reporter_id loop
+      k := k + 1;
+      if p_state <> 'work' then perform public.mod_done_notice(rep.reporter_id, p_state, 'chat:' || v_mid); end if;
+    end loop;
+  elsif p_kind = 'cm' then
+    for rep in update public.community_reports set state = p_state, handled_by = uid, handled_at = now(), note = v_note,
+        status = case when p_state = 'work' then status else 'done' end
+      where community_id = v_cid and coalesce(message_id, 0) = coalesce(v_mid, 0) and state in ('new', 'work') returning reporter_id loop
+      k := k + 1;
+      if p_state <> 'work' then perform public.mod_done_notice(rep.reporter_id, p_state, 'cm:' || p_key); end if;
+    end loop;
+  else
+    for rep in update public.file_reports set state = p_state, handled_by = uid, handled_at = now(), note = v_note,
+        status = case p_state when 'work' then status when 'done' then (case when p_action = 'block' then 'blocked' else 'dismissed' end) else 'dismissed' end
+      where kind = fk and file_reports.mid = v_mid and state in ('new', 'work') returning reporter loop
+      k := k + 1;
+      if p_state <> 'work' then perform public.mod_done_notice(rep.reporter, p_state, 'file:' || fk || ':' || v_mid); end if;
+    end loop;
+  end if;
+  if k = 0 then return jsonb_build_object('ok', false, 'reason', 'closed'); end if;
+  perform public.comm_log(case when toown then null else v_cid end, uid, tgt, '', 'report_' || p_state, v_note, left(coalesce(txt, ''), 140), coalesce(chn, ''));
+  return jsonb_build_object('ok', true, 'n', k);
+end $$;
+
+-- 🔔 жалобщику: «рассмотрено» (без имени модератора, один раз на жалобу)
+create or replace function public.mod_done_notice(p_user uuid, p_state text, p_key text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_user is null then return; end if;
+  perform public.comm_notify(p_user, 'report_done', null, '✅ Твою жалобу рассмотрели',
+    case when p_state = 'done' then 'Модераторы приняли меры. Спасибо, что помогаешь!' else 'Нарушений не нашли. Спасибо, что следишь за порядком!' end,
+    '', 'repdone:' || p_key || ':' || p_user);
+end $$;
+
+-- ═══ 11.5 Участники: поиск, наказания с причиной и сроком (старые cm_mod / chat_mod), бан ника, заметки ═══
+-- p_filter: all | muted | banned | staff. Сайт без поиска — кто писал в общий чат недавно. Год рождения не отдаём никогда
+create or replace function public.mod_members(p_cid bigint, p_q text default '', p_filter text default 'all')
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); q text := lower(left(btrim(coalesce(p_q, '')), 24)); f text := coalesce(p_filter, 'all'); lim bigint;
+begin
+  if not public.mod_can(p_cid, uid) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  q := replace(replace(replace(q, '\', ''), '%', ''), '_', '\_');
+  if p_cid is not null then
+    if f = 'banned' then
+      return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(jsonb_build_object('id', b.user_id, 'nick', p.nick, 'banned', true, 'until', b.until,
+        'reason', b.reason, 'at', b.created_at) order by b.created_at desc), '[]'::jsonb)
+        from public.community_bans b join public.profiles p on p.id = b.user_id
+        where b.community_id = p_cid and (b.until is null or b.until > now()) and (q = '' or lower(p.nick) like '%' || q || '%') limit 100));
+    end if;
+    return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) from (
+      select m.user_id as id, p.nick, m.role, m.joined_at as at, case when m.muted_until > now() then m.muted_until end as muted_until,
+        (select count(*) from public.mod_notes n where n.community_id = p_cid and n.target_id = m.user_id) as notes,
+        (select count(*) from public.comm_modlog l where l.community_id = p_cid and l.target_id = m.user_id and l.action in ('warn', 'mute', 'kick', 'ban') and l.created_at > now() - interval '30 days') as strikes
+      from public.community_members m join public.profiles p on p.id = m.user_id
+      where m.community_id = p_cid and (q = '' or lower(p.nick) like '%' || q || '%')
+        and (f <> 'muted' or m.muted_until > now()) and (f <> 'staff' or m.role <> 'member' or public.comm_perm(p_cid, m.user_id, 2))
+      order by (m.role = 'owner') desc, (m.role = 'mod') desc, m.joined_at desc limit 60) x));
+  end if;
+  -- сервер сайта
+  if f = 'banned' then
+    return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(jsonb_build_object('id', p.id, 'nick', b.nick, 'banned', true) order by lower(b.nick)), '[]'::jsonb)
+      from public.banned_nicks b left join public.profiles p on lower(p.nick) = lower(b.nick) where q = '' or lower(b.nick) like '%' || q || '%' limit 100));
+  elsif f = 'muted' then
+    return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) from (
+      select distinct on (coalesce(t.user_id::text, lower(t.nick))) t.user_id as id, coalesce(p.nick, t.nick) as nick, p.role, t.until as muted_until, t.reason
+      from public.chat_mutes t left join public.profiles p on p.id = t.user_id
+      where t.until > now() and (q = '' or lower(coalesce(p.nick, t.nick)) like '%' || q || '%')
+      order by coalesce(t.user_id::text, lower(t.nick)), t.until desc limit 100) x));
+  end if;
+  lim := coalesce((select max(id) from public.messages), 0) - 500;
+  return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) from (
+    select p.id, p.nick, p.role, p.created_at as at,
+      (select max(until) from public.chat_mutes t where t.user_id = p.id and t.until > now()) as muted_until,
+      exists (select 1 from public.banned_nicks b where lower(b.nick) = lower(p.nick)) as banned,
+      (select count(*) from public.mod_notes n where n.community_id is null and n.target_id = p.id) as notes,
+      (select count(*) from public.comm_modlog l where l.community_id is null and l.target_id = p.id and l.action in ('warn', 'mute', 'ban') and l.created_at > now() - interval '30 days') as strikes
+    from public.profiles p
+    where case when f = 'staff' then p.role in ('admin', 'moderator', 'helper')
+      when q <> '' then lower(p.nick) like q || '%'
+      else p.id in (select m.user_id from public.messages m where m.id > lim and m.user_id is not null) end
+    order by (p.role = 'admin') desc, lower(p.nick) limit 40) x));
+end $$;
+
+-- Карточка человека для команды: заметки и что с ним делали на этом сервере
+create or replace function public.mod_member(p_cid bigint, p_user uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.mod_can(p_cid, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  return jsonb_build_object('ok', true,
+    'notes', (select coalesce(jsonb_agg(jsonb_build_object('id', n.id, 'text', n.text, 'by', p.nick, 'mine', n.author_id = auth.uid(), 'at', n.created_at) order by n.id desc), '[]'::jsonb)
+      from (select * from public.mod_notes where community_id is not distinct from p_cid and target_id = p_user order by id desc limit 30) n left join public.profiles p on p.id = n.author_id),
+    'log', (select coalesce(jsonb_agg(jsonb_build_object('action', l.action, 'by', l.actor_nick, 'reason', l.reason, 'detail', l.detail, 'at', l.created_at) order by l.id desc), '[]'::jsonb)
+      from (select * from public.comm_modlog where community_id is not distinct from p_cid and target_id = p_user order by id desc limit 15) l),
+    'can', public.mod_target_staff(p_cid, p_user) is not true or public.mod_is_owner(auth.uid()));
+end $$;
+
+create or replace function public.mod_note_add(p_cid bigint, p_user uuid, p_text text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v text := btrim(coalesce(p_text, '')); v_id bigint;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.mod_can(p_cid, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if p_user is null or p_user = auth.uid() then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if char_length(v) < 1 or char_length(v) > 500 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+  if (select count(*) from public.mod_notes where author_id = auth.uid() and created_at > now() - interval '1 hour') >= 60 then
+    return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  insert into public.mod_notes (community_id, target_id, author_id, text) values (p_cid, p_user, auth.uid(), v) returning id into v_id;
+  perform public.comm_log(p_cid, auth.uid(), p_user, '', 'note', '', '', '');
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+create or replace function public.mod_note_del(p_id bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare n record;
+begin
+  select * into n from public.mod_notes where id = p_id;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if n.author_id is distinct from auth.uid() and not public.comm_can_see_log(n.community_id, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  delete from public.mod_notes where id = p_id;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Бан ника на сервере сайта (как раньше banned_nicks из chat.js, но с проверками и причиной в журнале): admin / moderator;
+-- себя и создателя — нельзя; команду банит только создатель
+create or replace function public.mod_site_ban(p_user uuid, p_on boolean, p_reason text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me text := public.chat_staff_role(); v_nick text; v_reason text := left(btrim(coalesce(p_reason, '')), 200);
+begin
+  if coalesce(me, '') not in ('admin', 'moderator') then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+  if p_user is null or p_user = auth.uid() then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if public.mod_is_owner(p_user) then return jsonb_build_object('ok', false, 'reason', 'creator'); end if;
+  if public.chat_staff_role(p_user) is not null and me <> 'admin' then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if public.comm_bad(v_reason) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  select nick into v_nick from public.profiles where id = p_user;
+  if coalesce(v_nick, '') = '' then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  perform set_config('d37.reason', v_reason, true);
+  if coalesce(p_on, true) then
+    if not exists (select 1 from public.banned_nicks where lower(nick) = lower(v_nick)) then
+      insert into public.banned_nicks (nick, banned_by) values (v_nick, auth.uid());
+    end if;
+  else
+    delete from public.banned_nicks where lower(nick) = lower(v_nick);
+  end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ═══ 11.6 Доп. автомодерация: запрещённые слова, медленный режим новичкам, режим рейда — проверяет СЕРВЕР ═══
+create or replace function public.mod_cfg_get(p_cid bigint)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare m record;
+begin
+  if not public.mod_can(p_cid, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  select * into m from public.mod_cfg where scope = coalesce(p_cid, 0);
+  return jsonb_build_object('ok', true, 'cfg', coalesce(m.cfg, '{}'::jsonb), 'raid_until', case when m.raid_until > now() then m.raid_until end,
+    'can', public.comm_can_see_log(p_cid, auth.uid()));
+end $$;
+create or replace function public.mod_cfg_set(p_cid bigint, p_cfg jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare w jsonb; s int;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.comm_can_see_log(p_cid, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if jsonb_typeof(coalesce(p_cfg, '{}'::jsonb)) <> 'object' then return jsonb_build_object('ok', false, 'reason', 'data'); end if;
+  select coalesce(jsonb_agg(distinct x), '[]'::jsonb) into w from (
+    select lower(btrim(v)) as x from jsonb_array_elements_text(case when jsonb_typeof(p_cfg->'words') = 'array' then p_cfg->'words' else '[]'::jsonb end) v
+    where char_length(btrim(v)) between 2 and 30 limit 50) y;
+  s := coalesce(nullif(p_cfg->>'newslow', '')::int, 0);
+  if s not in (0, 10, 30, 60, 120, 300) then return jsonb_build_object('ok', false, 'reason', 'slow'); end if;
+  insert into public.mod_cfg (scope, cfg, updated_at) values (coalesce(p_cid, 0), jsonb_build_object('words', w, 'newslow', s), now())
+    on conflict (scope) do update set cfg = excluded.cfg, updated_at = now();
+  perform public.comm_log(p_cid, auth.uid(), null, '', 'modcfg', '', 'слов: ' || jsonb_array_length(w) || ', новичкам 🐢 ' || s || ' с', '');
+  return jsonb_build_object('ok', true, 'cfg', jsonb_build_object('words', w, 'newslow', s));
+end $$;
+-- 🛡 Режим рейда на N минут (0 — выключить): новички (аккаунт / в сообществе меньше суток, гости) только читают. Включить может любой из команды
+create or replace function public.mod_raid(p_cid bigint, p_minutes int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v timestamptz;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.mod_can(p_cid, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if coalesce(p_minutes, -1) < 0 or p_minutes > 1440 then return jsonb_build_object('ok', false, 'reason', 'minutes'); end if;
+  v := case when p_minutes = 0 then null else now() + make_interval(mins => p_minutes) end;
+  insert into public.mod_cfg (scope, raid_until, updated_at) values (coalesce(p_cid, 0), v, now())
+    on conflict (scope) do update set raid_until = excluded.raid_until, updated_at = now();
+  perform public.comm_log(p_cid, auth.uid(), null, '', case when v is null then 'raid_off' else 'raid_on' end, '', case when v is null then '' else p_minutes || ' мин' end, '');
+  return jsonb_build_object('ok', true, 'until', v);
+end $$;
+
+-- Перед сообщением (общий чат и сообщества): режим рейда, запрещённые слова, медленный режим новичкам. Команду не трогает.
+-- Сломалась сама проверка — сообщение проходит (как chat_automod)
+create or replace function public.mod_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); cid bigint; m record; fresh boolean; t text; w text; v_last timestamptz; s int; verdict text; n int; lim bigint;
+begin
+  if coalesce(auth.role(), '') not in ('authenticated', 'anon') then return new; end if;
+  begin
+    if tg_table_name = 'community_messages' then cid := new.community_id; end if;   -- у messages нет community_id (поле читаем только в своей ветке)
+    select * into m from public.mod_cfg where scope = coalesce(cid, 0);
+    if found and not public.mod_can(cid, uid) then
+      if cid is null then fresh := uid is null or coalesce((select created_at from public.profiles where id = uid), now()) > now() - interval '1 day';
+      else fresh := coalesce((select joined_at from public.community_members where community_id = cid and user_id = uid), now()) > now() - interval '1 day'; end if;
+      if m.raid_until > now() and fresh then
+        verdict := '🛡 Сейчас защита от рейда — новички пока только читают (ещё ' || greatest(1, ceil(extract(epoch from (m.raid_until - now())) / 60)::int) || ' мин)';
+      end if;
+      if verdict is null and jsonb_typeof(m.cfg->'words') = 'array' and jsonb_array_length(m.cfg->'words') > 0 then
+        t := lower(coalesce(new.text, ''));
+        for w in select jsonb_array_elements_text(m.cfg->'words') loop
+          if w <> '' and position(w in t) > 0 then verdict := '🤖 Автомодерация: такое слово здесь запрещено'; exit; end if;
+        end loop;
+      end if;
+      s := coalesce(nullif(m.cfg->>'newslow', '')::int, 0);
+      if verdict is null and fresh and s > 0 then
+        if cid is null then
+          lim := coalesce((select max(id) from public.messages), 0) - 300;
+          select max(created_at) into v_last from public.messages x where x.id > lim and x.created_at > now() - make_interval(secs => s)
+            and ((uid is not null and x.user_id = uid) or (uid is null and x.user_id is null and x.nick = new.nick));
+        else
+          select max(created_at) into v_last from public.community_messages x where x.user_id = uid and x.community_id = cid and x.created_at > now() - make_interval(secs => s);
+        end if;
+        if v_last is not null then
+          verdict := '🐢 Новичкам здесь — одно сообщение раз в ' || s || ' с (ещё ' || greatest(1, ceil(extract(epoch from (v_last + make_interval(secs => s) - now())))::int) || ' с)';
+        end if;
+      end if;
+    end if;
+  exception when others then verdict := null;
+  end;
+  if verdict is not null then raise exception '%', verdict; end if;
+  return new;
+end $$;
+drop trigger if exists mod_guard on public.messages;
+create trigger mod_guard before insert on public.messages for each row execute function public.mod_guard();
+drop trigger if exists mod_guard on public.community_messages;
+create trigger mod_guard before insert on public.community_messages for each row execute function public.mod_guard();
+
+-- ═══ 11.7 Обзор и журнал с фильтрами ═══
+create or replace function public.mod_overview(p_cid bigint)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); L jsonb; o jsonb := null; j10 int; a10 int; mu int; ru timestamptz;
+begin
+  if not public.mod_can(p_cid, uid) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  L := coalesce(public.mod_reports(p_cid, 'here', 'open', null)->'list', '[]'::jsonb);
+  if public.mod_is_owner(uid) then o := coalesce(public.mod_reports(p_cid, 'owner', 'open', null)->'list', '[]'::jsonb); end if;
+  if p_cid is null then
+    select count(*) into j10 from public.profiles where created_at > now() - interval '10 minutes';
+    select count(*) into mu from public.chat_mutes where until > now();
+  else
+    select count(*) into j10 from public.community_members where community_id = p_cid and joined_at > now() - interval '10 minutes';
+    select count(*) into mu from public.community_members where community_id = p_cid and muted_until > now();
+  end if;
+  select count(*) into a10 from public.comm_modlog where community_id is not distinct from p_cid and action = 'automod' and created_at > now() - interval '10 minutes';
+  select case when raid_until > now() then raid_until end into ru from public.mod_cfg where scope = coalesce(p_cid, 0);
+  return jsonb_build_object('ok', true,
+    'new', (select count(*) from jsonb_array_elements(L) x where x->>'state' = 'new'),
+    'work', (select count(*) from jsonb_array_elements(L) x where x->>'state' = 'work'),
+    'files', (select count(*) from jsonb_array_elements(L) x where x->>'kind' = 'file'),
+    'owner', case when o is null then null else jsonb_array_length(o) end,
+    'joins10', j10, 'automod10', a10, 'muted', mu, 'raid_until', ru, 'raid_hint', j10 >= 8 or a10 >= 15,
+    'log', case when public.comm_can_see_log(p_cid, uid) then (select coalesce(jsonb_agg(jsonb_build_object('action', l.action, 'actor_nick', l.actor_nick, 'target_nick', l.target_nick,
+        'reason', l.reason, 'detail', l.detail, 'at', l.created_at) order by l.id desc), '[]'::jsonb)
+      from (select * from public.comm_modlog where community_id is not distinct from p_cid order by id desc limit 8) l) end);
+end $$;
+
+-- Журнал: p_group — all | msg (удаления, чистки, автомод) | punish (предупреждения, тайм-ауты, кики, баны) | report (жалобы) | settings;
+-- p_q — ник того, кто сделал, или кому
+create or replace function public.mod_log(p_cid bigint, p_group text default 'all', p_q text default '', p_before bigint default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare q text := lower(left(btrim(coalesce(p_q, '')), 24)); g text := coalesce(p_group, 'all');
+begin
+  if not public.comm_can_see_log(p_cid, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  q := replace(replace(replace(q, '\', ''), '%', ''), '_', '\_');
+  return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(to_jsonb(x) order by x.id desc), '[]'::jsonb) from (
+    select l.id, l.actor_nick, l.target_nick, l.action, l.reason, l.detail, l.channel, l.created_at as at
+    from public.comm_modlog l where l.community_id is not distinct from p_cid and (p_before is null or l.id < p_before)
+      and (g = 'all' or (g = 'msg' and l.action in ('delete', 'purge', 'automod'))
+        or (g = 'punish' and l.action in ('warn', 'mute', 'unmute', 'kick', 'ban', 'unban', 'note'))
+        or (g = 'report' and l.action like 'report\_%')
+        or (g = 'settings' and l.action not in ('delete', 'purge', 'automod', 'warn', 'mute', 'unmute', 'kick', 'ban', 'unban', 'note') and l.action not like 'report\_%'))
+      and (q = '' or lower(l.actor_nick) like '%' || q || '%' or lower(l.target_nick) like '%' || q || '%')
+    order by l.id desc limit 50) x));
+end $$;
+
+-- ═══ 11.8 Права на функции ═══
+do $$
+declare f text;
+begin
+  foreach f in array array['mod_reports(bigint,text,text,text)', 'mod_report_set(text,bigint,text,text,text)', 'mod_members(bigint,text,text)',
+      'mod_member(bigint,uuid)', 'mod_note_add(bigint,uuid,text)', 'mod_note_del(bigint)', 'mod_site_ban(uuid,boolean,text)', 'mod_cfg_get(bigint)',
+      'mod_cfg_set(bigint,jsonb)', 'mod_raid(bigint,integer)', 'mod_overview(bigint)', 'mod_log(bigint,text,text,bigint)',
+      'chat_report(bigint,text)', 'cm_report(bigint,text,bigint)', 'file_report(text,bigint,text)', 'chat_reports_list()', 'cm_reports(bigint)', 'file_reports_list()'] loop
+    execute format('revoke all on function public.%s from public, anon', f);
+    execute format('grant execute on function public.%s to authenticated', f);
+  end loop;
+  foreach f in array array['mod_is_owner(uuid)', 'mod_can(bigint,uuid)', 'mod_target_staff(bigint,uuid)', 'mod_report_guard(uuid,uuid)', 'mod_ctx_chat(bigint)',
+      'mod_ctx_cm(bigint)', 'mod_done_notice(uuid,text,text)', 'mod_guard()', 'mod_report_stamp()'] loop
+    execute format('revoke all on function public.%s from public, anon, authenticated', f);
+  end loop;
+end $$;
