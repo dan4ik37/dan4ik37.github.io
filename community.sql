@@ -3272,3 +3272,155 @@ begin
 end $$;
 revoke all on function public.file_expire() from public, anon, authenticated;
 grant execute on function public.file_expire() to service_role;
+
+
+-- ═══ 10. ⚙️ Настройки сервера и каналов «как в Дискорде» (T-162, владелец 13.11: «дискорд норм сделать… настройки слабые»).
+--     Канал: значок-эмодзи и «с какого возраста» (0 — всем, 9 / 13 / 16 — по возрастным полосам сайта; 18+ и NSFW-каналов НЕТ —
+--     детский сайт). Сервер: правила (показываем новичку один раз), приветствие, канал по умолчанию.
+--     Возраст решает СЕРВЕР: читать — ограничительная политика RLS (as restrictive) на messages / community_messages, писать —
+--     триггер chan_age_guard. Команда сайта (admin/moderator) и те, кто управляет каналами сообщества, видят всё.
+--     Откат одной строкой (всем снова всё видно): update public.chat_channels set min_age = 0; update public.community_channels set min_age = 0;
+alter table public.community_channels add column if not exists emoji text not null default '';
+alter table public.community_channels add column if not exists min_age int not null default 0;
+alter table public.chat_channels add column if not exists emoji text not null default '';
+alter table public.chat_channels add column if not exists min_age int not null default 0;
+alter table public.communities add column if not exists rules text not null default '';
+alter table public.communities add column if not exists welcome text not null default '';
+alter table public.communities add column if not exists default_ch bigint references public.community_channels(id) on delete set null;
+alter table public.chat_settings add column if not exists rules text not null default '';
+alter table public.chat_settings add column if not exists welcome text not null default '';
+alter table public.chat_settings add column if not exists default_ch text;
+
+-- Пускает ли канал «с N лет» этого человека (N: 0 / 9 / 13 / 16). Неизвестный возраст и гость — только каналы «всем»
+create or replace function public.chan_age_ok(p_min int, p_uid uuid default auth.uid())
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare g text;
+begin
+  if coalesce(p_min, 0) <= 0 then return true; end if;
+  if p_uid is null then return false; end if;
+  if coalesce(public.chat_staff_role(p_uid), '') in ('admin', 'moderator') then return true; end if;
+  g := public.age_group_of(p_uid);
+  if g is null or g = 'unknown' then return false; end if;
+  if p_min <= 9 then return not public.age_u9(p_uid); end if;
+  return public.age_rank(g) >= case when p_min >= 16 then 2 else 1 end;
+end $$;
+-- Канал сервера сайта (null — #общий, всегда всем)
+create or replace function public.chat_chan_age_ok(p_ch text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare v int;
+begin
+  if p_ch is null then return true; end if;
+  select min_age into v from public.chat_channels where id = p_ch;
+  return coalesce(v, 0) <= 0 or public.chan_age_ok(v);
+end $$;
+-- Канал сообщества (кто управляет каналами — видит свой канал всегда, не запрёт сам себя)
+create or replace function public.cm_chan_age_ok(p_ch bigint)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare v int; v_cid bigint;
+begin
+  select min_age, community_id into v, v_cid from public.community_channels where id = p_ch;
+  return coalesce(v, 0) <= 0 or public.chan_age_ok(v) or public.chan_can_manage(v_cid, auth.uid());
+end $$;
+
+drop policy if exists messages_age on public.messages;
+create policy messages_age on public.messages as restrictive for select using (channel is null or public.chat_chan_age_ok(channel));
+drop policy if exists cmsg_age on public.community_messages;
+create policy cmsg_age on public.community_messages as restrictive for select using (public.cm_chan_age_ok(channel_id));
+
+-- Писать в канал не по возрасту нельзя (сервер — бот с ключом service_role — мимо)
+create or replace function public.chan_age_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare ok boolean;
+begin
+  if coalesce(auth.role(), '') = 'service_role' then return new; end if;
+  if tg_table_name = 'messages' then ok := public.chat_chan_age_ok(new.channel);
+  else ok := public.cm_chan_age_ok(new.channel_id); end if;
+  if not ok then raise exception 'Этот канал — для тех, кто старше' using errcode = 'P0001'; end if;
+  return new;
+end $$;
+drop trigger if exists chan_age_guard on public.messages;
+create trigger chan_age_guard before insert on public.messages for each row execute function public.chan_age_guard();
+drop trigger if exists chan_age_guard on public.community_messages;
+create trigger chan_age_guard before insert on public.community_messages for each row execute function public.chan_age_guard();
+
+-- Прочитать: правила, приветствие, канал по умолчанию, значки и возраст каналов (+ пускает ли меня). p_community null — сервер сайта
+create or replace function public.cm_server_get(p_community bigint)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); c record; s record; ch jsonb; mng boolean := public.chan_can_manage(p_community, auth.uid());
+begin
+  if p_community is null then
+    select * into s from public.chat_settings where id = 1;
+    select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'emoji', x.emoji, 'min_age', x.min_age, 'ok', public.chan_age_ok(x.min_age, uid))), '[]'::jsonb) into ch
+      from public.chat_channels x;
+    return jsonb_build_object('ok', true, 'rules', coalesce(s.rules, ''), 'welcome', coalesce(s.welcome, ''), 'default_ch', s.default_ch, 'manage', mng, 'chans', ch);
+  end if;
+  select * into c from public.communities where id = p_community;
+  if not found or (c.status <> 'active' and not public.comm_is_staff()) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if not c.is_public and not public.comm_is_staff() and not exists (select 1 from public.community_members where community_id = p_community and user_id = uid) then
+    return jsonb_build_object('ok', false, 'reason', 'private'); end if;
+  select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'emoji', x.emoji, 'min_age', x.min_age, 'ok', mng or public.chan_age_ok(x.min_age, uid))), '[]'::jsonb) into ch
+    from public.community_channels x where x.community_id = p_community;
+  return jsonb_build_object('ok', true, 'rules', c.rules, 'welcome', c.welcome, 'default_ch', c.default_ch, 'manage', mng, 'chans', ch);
+end $$;
+
+-- Правила, приветствие, канал по умолчанию — кто управляет каналами (сайт: admin/moderator; сообщество: право «📁 каналы»)
+create or replace function public.cm_server_set(p_community bigint, p_rules text, p_welcome text, p_default_ch text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_rules text := btrim(coalesce(p_rules, '')); v_wel text := btrim(coalesce(p_welcome, '')); v_def text := nullif(btrim(coalesce(p_default_ch, '')), ''); v_cid bigint;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.chan_can_manage(p_community, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if char_length(v_rules) > 2000 then return jsonb_build_object('ok', false, 'reason', 'rules'); end if;
+  if char_length(v_wel) > 300 then return jsonb_build_object('ok', false, 'reason', 'about'); end if;
+  if public.comm_bad(v_rules) or public.comm_bad(v_wel) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if public.comm_has_link(v_rules) or public.comm_has_link(v_wel) then return jsonb_build_object('ok', false, 'reason', 'link'); end if;
+  if p_community is null then
+    if v_def is not null and not exists (select 1 from public.chat_channels where id = v_def and kind = 'text' and not archived and min_age = 0) then
+      return jsonb_build_object('ok', false, 'reason', 'channel'); end if;
+    update public.chat_settings set rules = v_rules, welcome = v_wel, default_ch = v_def where id = 1;
+  else
+    if v_def is not null then
+      begin v_cid := v_def::bigint; exception when others then return jsonb_build_object('ok', false, 'reason', 'channel'); end;
+      if not exists (select 1 from public.community_channels where id = v_cid and community_id = p_community and kind = 'text' and not archived and min_age = 0) then
+        return jsonb_build_object('ok', false, 'reason', 'channel'); end if;
+    end if;
+    update public.communities set rules = v_rules, welcome = v_wel, default_ch = v_cid where id = p_community;
+  end if;
+  perform public.comm_log(p_community, auth.uid(), null, '', 'server_edit', '', 'правила, приветствие, канал по умолчанию', '');
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Значок и возраст канала. #общий и «новости» сервера сайта и канал по умолчанию — всегда всем. В значке — только эмодзи
+create or replace function public.cm_chan_extra(p_community bigint, p_id text, p_emoji text, p_min_age int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_em text := btrim(coalesce(p_emoji, '')); v_age int := coalesce(p_min_age, 0); v_cid bigint; v_name text;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.chan_can_manage(p_community, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if v_age not in (0, 9, 13, 16) then return jsonb_build_object('ok', false, 'reason', 'age'); end if;
+  if char_length(v_em) > 8 or v_em ~ '[\x01-\x7f]' or v_em ~ '[[:alpha:]]' then return jsonb_build_object('ok', false, 'reason', 'emoji'); end if;
+  if p_community is null then
+    if v_age > 0 and (p_id in ('general', 'news') or p_id is not distinct from (select default_ch from public.chat_settings where id = 1)) then
+      return jsonb_build_object('ok', false, 'reason', 'last'); end if;
+    update public.chat_channels set emoji = v_em, min_age = v_age where id = p_id returning name into v_name;
+  else
+    begin v_cid := p_id::bigint; exception when others then return jsonb_build_object('ok', false, 'reason', 'not_found'); end;
+    if v_age > 0 and v_cid is not distinct from (select default_ch from public.communities where id = p_community) then
+      return jsonb_build_object('ok', false, 'reason', 'last'); end if;
+    update public.community_channels set emoji = v_em, min_age = v_age where id = v_cid and community_id = p_community returning name into v_name;
+  end if;
+  if v_name is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  perform public.comm_log(p_community, auth.uid(), null, '', 'chan_edit', '', '#' || v_name || case when v_age > 0 then ' · с ' || v_age || ' лет' else '' end, p_id);
+  return jsonb_build_object('ok', true);
+end $$;
+
+revoke all on function public.chan_age_ok(int, uuid) from public, anon, authenticated;
+grant execute on function public.chat_chan_age_ok(text) to anon, authenticated;   -- зовёт политика RLS от имени читающего
+grant execute on function public.cm_chan_age_ok(bigint) to anon, authenticated;
+revoke all on function public.chan_age_guard() from public, anon, authenticated;
+revoke all on function public.cm_server_get(bigint) from public;
+grant execute on function public.cm_server_get(bigint) to anon, authenticated;
+revoke all on function public.cm_server_set(bigint, text, text, text) from public, anon;
+grant execute on function public.cm_server_set(bigint, text, text, text) to authenticated;
+revoke all on function public.cm_chan_extra(bigint, text, text, int) from public, anon;
+grant execute on function public.cm_chan_extra(bigint, text, text, int) to authenticated;
