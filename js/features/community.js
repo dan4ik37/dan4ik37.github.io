@@ -231,6 +231,7 @@
     const acts = [];
     if (srv.official || srv.role) acts.push(`<button type="button" class="ds-hb" data-ds4="notif" data-srv="${srv.official ? 'o' : e(srv.id)}" title="Уведомления и «прочитано»" aria-label="Уведомления">${DS.muteOf?.(srv) ? '🔕' : '🔔'}</button>`);
     if (srv.official) {
+      if (srv.staff === 'helper' && window.D37Mod) acts.push(`<a class="ds-hb" href="${link(mode, OFF_ID, 'reports')}" title="Модерация: жалобы, участники, рейд">🛡</a>`);   // T-164: хелперу — центр модерации
       if (srv.staff === 'admin' || srv.staff === 'moderator') acts.push(`<a class="ds-hb" href="${link(mode, OFF_ID, 'reports')}" title="Модерация: жалобы, журнал, автомодерация">🛡</a>`, `<a class="ds-hb" href="${link(mode, OFF_ID, 'settings')}" title="Настройки каналов">⚙️</a>`);
     } else {
       if (srv.role) acts.push(`<button type="button" class="ds-hb" data-ds="invite" title="Пригласить">🔗</button>`);
@@ -711,7 +712,7 @@
   // Приглашение #/c/<код> → страница чата с экраном вступления
   DS._test = { cmMsg, link, REASON, canMod, railHtml: () => railHtml('page', OFF_ID), membersRender, commAdapter };
   // для community2.js: адреса, данные сообществ, переходы
-  Object.assign(DS, { OFF_ID, link, special, go, server, loadMy, dropC, why, mine: () => S.my, ICONS, membersOf });
+  Object.assign(DS, { OFF_ID, link, special, go, server, loadMy, dropC, why, mine: () => S.my, ICONS, membersOf, screenSettings });   // screenSettings — 🛡 центр (ds-mod.js)
   // свои роли загрузились — перерисовать участников и цвета ников в открытой ленте
   window.addEventListener('d37:roles', ev => {
     if (!page?.srv || String(page.srv.id) !== String(ev.detail) || !page.root.isConnected) return;

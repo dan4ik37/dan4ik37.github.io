@@ -7631,6 +7631,37 @@
    "xs": [
     "href('#/games/studio')"
    ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "hub",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "T-164: адреса центра модерации собирает DS.link() из числового id сервера и констант разделов; ещё и esc()",
+   "xs": [
+    "e(closeLink(mode, srv))",
+    "e(hubLink(mode, srv, id))"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "tile",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "T-164: плитки обзора — hubLink() (DS.link от id сервера и константы раздела), ещё и esc()",
+   "xs": [
+    "e(href)"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "overview",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "T-164: ссылка на журнал — hubLink() (DS.link от id сервера и константы), ещё и esc()",
+   "xs": [
+    "e(hubLink(mode, srv, 'log'))"
+   ]
   }
  ]
 }

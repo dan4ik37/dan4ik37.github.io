@@ -3560,7 +3560,7 @@ begin
     for r in select id from public.profiles where (case when staff then role = 'admin' else role in ('admin', 'moderator') end)
         and id is distinct from v.user_id limit 20 loop
       perform public.comm_notify(r.id, 'cm_report', null, case when staff then '🚩 Жалоба на команду' else '🚩 Жалоба в общем чате' end,
-        left(coalesce(v.text, ''), 140), '#/chat/mod/reports', 'chrep:' || p_id);
+        left(coalesce(v.text, ''), 140), case when staff then '#/chat/reports/owner' else '#/chat/reports/reports' end, 'chrep:' || p_id);
     end loop;
   end if;
   return jsonb_build_object('ok', true, 'hidden', n >= 3 and not staff, 'to_owner', staff);
@@ -3591,12 +3591,12 @@ begin
     if staff then
       for r in select id as user_id from public.profiles where role = 'admin' and id is distinct from v.user_id limit 5 loop
         perform public.comm_notify(r.user_id, 'cm_report', null, '🚩 Жалоба на команду «' || left(c.name, 40) || '»', left(v.text, 140),
-          '#/chat/mod/reports/owner', 'cmrep:' || p_msg);
+          '#/chat/reports/owner', 'cmrep:' || p_msg);
       end loop;
     elsif n = 1 then
       for r in select user_id from public.community_members where community_id = cid and role in ('owner', 'mod') and user_id is distinct from v.user_id loop
         perform public.comm_notify(r.user_id, 'cm_report', null, '🚩 Жалоба в «' || left(c.name, 40) || '»', left(v.text, 140),
-          '#/phone/comm/' || cid || '/mod/reports', 'cmrep:' || p_msg);
+          '#/phone/comm/' || cid || '/reports/reports', 'cmrep:' || p_msg);
       end loop;
     end if;
     return jsonb_build_object('ok', true, 'hidden', n >= 3 and not staff, 'to_owner', staff);

@@ -742,7 +742,7 @@
       if (A.caps.pin && A.canPin?.(m)) items.push(`<button type="button" data-m="pin">${m.pinned ? '📌 Открепить' : '📌 Закрепить'}</button>`);
       if (!m.sticker) items.push('<button type="button" data-m="copy">📋 Скопировать текст</button>');
       if (m.uid || m.nick) items.push('<button type="button" data-m="user">👤 Профиль автора</button>');
-      if (A.caps.report && logged && !mine) items.push('<button type="button" data-m="report">🚩 Пожаловаться</button>');
+      if (A.caps.report && logged && !mine && !MV.noReport?.(m)) items.push('<button type="button" data-m="report">🚩 Пожаловаться</button>');
       if (m.uid && logged && !mine) items.push(`<button type="button" data-m="block">${MV.blocked.has(m.uid) ? '✅ Разблокировать' : '🚫 Заблокировать автора'}</button>`);
       const mods = A.modActions?.(m) || [];
       if (mods.length) items.push('<div class="mv-msep">Модерация</div>' + mods.map(([k, t]) => `<button type="button" data-m="mod:${e(k)}" class="warn">${t}</button>`).join(''));
@@ -824,7 +824,7 @@
       }
       const A = V.A;
       const actions = {
-        report: m && A?.caps?.report ? () => reportFlow(m) : null,
+        report: m && A?.caps?.report && !MV.noReport?.(m) ? () => reportFlow(m) : null,   // T-164: на себя и на создателя — нет (ds-mod.js)
         mods: (u, n) => (A?.userMod ? A.userMod(u, n) || [] : []),
         modDo: async (k, u, n) => { const r = await A.userModDo(k, u, n); if (r?.msg) note(r.msg, !r.ok, 2600); return r; },
         block: (u, n) => blockFlow(u, n),

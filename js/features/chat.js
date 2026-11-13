@@ -357,7 +357,7 @@ function chatAdapter(chId){
     async report(m, why){
       const { data, error } = await sbClient.rpc('chat_report', { p_id: m.id, p_reason: why });
       if (error) return { ok: false, err: humanErr(error) };
-      return data?.ok ? { ok: true, hidden: data.hidden } : { ok: false, err: { rate: 'слишком много жалоб — попробуй позже', self: 'на себя нельзя' }[data?.reason] || 'не получилось' };
+      return data?.ok ? { ok: true, hidden: data.hidden } : { ok: false, err: { rate: 'слишком много жалоб — попробуй позже', self: 'на себя нельзя', creator: 'на создателя сайта жаловаться нельзя' }[data?.reason] || 'не получилось' };
     },
     async fetch(ids){
       const { data } = await sbClient.from('messages').select('*').in('id', ids.filter(x => typeof x === 'number'));
