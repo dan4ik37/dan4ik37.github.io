@@ -181,6 +181,7 @@
     const pcache = uid ? (PC.get(uid)?.p || P()?.prof?.(uid) || null) : null;
     paintHead(pcache || { nick: open.nick, role: null }, true);
     paintActs({ status: null });
+    card.querySelectorAll('.ppl-c').forEach(x => x.remove());   // ds-people: блок прошлого человека
     q('.d37m-ask').hidden = true;
     if (root.hidden) {   // появление — анимацией CSS (.in) с первого кадра, без принудительного пересчёта раскладки
       root.classList.add('in');
@@ -233,6 +234,7 @@
     const look = await pLook; if (!live()) return;
     paintChar(look);
     place();
+    window.D37People?.card?.(card, uid, { live, self, place });   // ds-people: статус, свой статус, сервер, общие, «был в сети», игнор
   }
 
   // ═══ Отрисовка частей (текст игроков — только textContent) ═══

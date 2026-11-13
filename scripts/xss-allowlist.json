@@ -7631,6 +7631,96 @@
    "xs": [
     "href('#/games/studio')"
    ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "railHtml",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-164 ds-people.js railTop: своя разметка, чужого текста нет (число заявок и адрес-константа)",
+   "xs": [
+    "DS.x?.railTop?.(mode, sel) || ''"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "meHtml",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-164 ds-people.js meBtn: своя разметка, эмодзи статуса и подпись — через esc()",
+   "xs": [
+    "(me && DS.x?.meBtn?.()) || ''"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "dot",
+   "k": "markup:attr",
+   "c": "enum",
+   "n": "T-164: stOk() отдаёт только ключ таблицы ST (online / idle / dnd / invisible / offline)",
+   "xs": [
+    "stOk(s)"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "railTop",
+   "k": "markup:url",
+   "c": "const",
+   "n": "T-164: адрес DS.special — '#/chat/' или '#/phone/comm/' + константа",
+   "xs": [
+    "special(mode, 'friends')"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "card",
+   "k": "markup:style",
+   "c": "regex",
+   "n": "T-164: цвет роли проверен /^#[0-9a-f]{6}$/i, иначе константа",
+   "xs": [
+    "/^#[0-9a-f]{6}$/i.test(x.color || '') ? x.color : '#888888'"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "friendsScreen",
+   "k": "markup:url",
+   "c": "const",
+   "n": "T-164: адрес DS.special + ключ вкладки из константы TABS",
+   "xs": [
+    "special(mode, 'friends/' + k)"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "groupsTab",
+   "k": "markup:url",
+   "c": "num-db",
+   "n": "T-164: адрес DS.special + номер группы (bigint, +g.id)",
+   "xs": [
+    "special(mode, 'gdm/' + (+g.id))"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "gdmScreen",
+   "k": "markup:url",
+   "c": "const",
+   "n": "T-164: адрес-константа",
+   "xs": [
+    "special(mode, 'friends/groups')"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "paintHd",
+   "k": "markup:url",
+   "c": "const",
+   "n": "T-164: адрес-константа",
+   "xs": [
+    "special(mode, 'friends/groups')"
+   ]
   }
  ]
 }

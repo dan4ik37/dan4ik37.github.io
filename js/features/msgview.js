@@ -312,7 +312,7 @@
     // ── Отрисовка одного сообщения ──
     function html(m, prev){
       if (m.sys) return `<div class="mv-sys" data-id="${e(m.id)}">${e(m.text)}</div>`;
-      const st = authorStyle(m, m.uid ? V.A?.colorOf?.(m.uid) : null), blocked = m.uid && MV.blocked.has(m.uid);
+      const st = authorStyle(m, m.uid ? V.A?.colorOf?.(m.uid) : null), blocked = m.uid && (MV.blocked.has(m.uid) || !!window.D37People?.isIgnored?.(m.uid));   // ds-people: игнор тоже прячет
       const first = !prev || prev.sys || prev.uid !== m.uid || prev.nick !== m.nick || m.reply || Date.parse(m.at) - Date.parse(prev.at) > GROUP_MS || dayName(prev.at) !== dayName(m.at);
       const me = myNick(), mine = m.mine || (m.uid ? m.uid === myUid() : !!me && m.nick === me && !myUid());
       const r = blocked ? { html: '', cards: [] } : MV.rich(m.text, me, { kid: kidView() });
@@ -326,12 +326,12 @@
       const tools = `<div class="mv-tools">${V.A.caps.react ? '<button type="button" data-a="react" title="Реакция">😊</button>' : ''}${V.A.caps.reply && V.canWrite ? '<button type="button" data-a="reply" title="Ответить">↩</button>' : ''}<button type="button" data-a="more" title="Ещё">⋯</button></div>`;
       const reacts = V.A.caps.react === 'site' ? `<div class="msg-reactions mv-reacts" data-mr="${e(m.id)}"></div>` : V.A.caps.react === 'count' ? `<div class="msg-reactions mv-reacts">${countReacts(m)}</div>` : '';
       const body = blocked
-        ? `<div class="mv-text mv-blk">🚫 Сообщение от заблокированного <button type="button" data-a="showblk">показать</button></div>`
+        ? `<div class="mv-text mv-blk">${MV.blocked.has(m.uid) ? '🚫 Сообщение от заблокированного' : '🙈 Скрыто: ты игнорируешь'} <button type="button" data-a="showblk">показать</button></div>`
         : m.sticker ? `<div class="mv-text mv-sticker">${e(m.text)}</div>`
         : `<div class="mv-text${r.big ? ' mv-big' : ''}">${r.html}${m.edited ? ` <span class="mv-ed" title="${e(P.when(m.edited))}">(изменено)</span>` : ''}</div>${r.cards.length ? `<div class="mv-cards">${r.cards.map(MV.cardHtml).join('')}</div>` : ''}${m.att && window.D37Files ? window.D37Files.cardHtml(m.att, m, V.A?.fileKind) : ''}`;
       return `<div class="mv-m${first ? ' mv-first' : ''}${mine ? ' mv-mine' : ''}${hl ? ' mv-hl' : ''}${m.hidden ? ' mv-hid' : ''}" data-id="${e(m.id)}" data-nick="${e(m.nick)}"${m.uid ? ` data-uid="${e(m.uid)}"` : ''}>
         ${rq}${first ? ava : `<time class="mv-t2" title="${e(P.when(m.at))}">${P.hm(m.at)}</time>`}
-        <div class="mv-b">${first ? `<div class="mv-h"><button type="button" class="mv-nick" data-a="user" style="${color}">${e(m.nick)}</button>${badgeHtml(m, st, crole)}<time title="${e(new Date(m.at).toLocaleString('ru-RU'))}">${P.when(m.at)}</time>${m.pinned ? '<i class="mv-pin" title="Закреплено">📌</i>' : ''}${m.hidden ? '<i class="mv-flag" title="Скрыто жалобами — видят только модераторы">🚩</i>' : ''}</div>` : ''}${body}${reacts}</div>
+        <div class="mv-b">${first ? `<div class="mv-h"><button type="button" class="mv-nick" data-a="user" style="${color}">${e((m.uid && window.D37People?.srvNick?.(V.A, m.uid)) || m.nick)}</button>${badgeHtml(m, st, crole)}<time title="${e(new Date(m.at).toLocaleString('ru-RU'))}">${P.when(m.at)}</time>${m.pinned ? '<i class="mv-pin" title="Закреплено">📌</i>' : ''}${m.hidden ? '<i class="mv-flag" title="Скрыто жалобами — видят только модераторы">🚩</i>' : ''}</div>` : ''}${body}${reacts}</div>
         ${tools}</div>`;
     }
     function replyQuote(id){

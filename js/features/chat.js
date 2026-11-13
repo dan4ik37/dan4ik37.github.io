@@ -542,7 +542,8 @@ function subscribeRealtime() {
 // Чем занят (мир и сервер, игра и комната — для «📍 К другу», phone.js) — только у профилей «видят все» (privacy.sql)
 function onlineMeta(){
   const meta = { nick: chatNick || 'Гость', ts: Date.now() };
-  if (currentUser && !currentProfile?.privacy_invisible) {
+  let pplInv = false; try { pplInv = !!currentUser && localStorage.getItem('d37_ppl_inv') === currentUser.id; } catch (e) {}   // ds-people: статус «невидимка»
+  if (currentUser && !currentProfile?.privacy_invisible && !pplInv) {
     meta.u = currentUser.id;
     if (currentRole && currentRole !== 'user') meta.r = currentRole;
     const t = typeof getVipTier === 'function' && currentProfile ? getVipTier(currentProfile) : null;
