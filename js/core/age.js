@@ -398,7 +398,8 @@
     if (known() || S.no || ssGet(SEEN) || +lsGet(SNOOZE) > now() || sheet) return;
     if (authed() && srv === null) { askT = setTimeout(maybeAsk, 4000); return; }   // ждём год аккаунта с сервера
     const busy = doc.body.classList.contains('game-on') || doc.documentElement.classList.contains('gs-full') || doc.documentElement.classList.contains('gs-set-open')
-      || doc.querySelector('#globalAuthModal.open, #modal.open, #privacyModal.open, .s3, .wld-edit');
+      || doc.querySelector('#globalAuthModal.open, #modal.open, #privacyModal.open, .s3, .wld-edit')
+      || /^\/hub\/(play|creative|planet|wardrobe)/.test((doc.defaultView && doc.defaultView.location && doc.defaultView.location.pathname) || '');   // EP8: не поверх игры движка
     if (busy) { if (++askTries < 6) askT = setTimeout(maybeAsk, 20e3); return; }
     ask();
   }

@@ -199,39 +199,48 @@ export async function start(o) {
   // typing in the page (chat, search) is never game input
   const typing = () => { const a = document.activeElement; return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable); };
   const live = () => !st.paused && !st.dead && st.inputOn && !typing();
+  // look-fix: a turn the page means exactly (keys, the lift after a landing) skips the engine's spike filter
+  const turn = (dx, dy) => { if (st.app.turn_look) st.app.turn_look(dx, dy); else st.app.add_look(dx, dy); };
   on(window, 'keydown', (e) => {
     if (!live() || e.ctrlKey || e.metaKey || e.altKey) return;
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
     if (!e.repeat) {
       if (e.code === 'KeyV') { third = !third; st.app.set_third_person(third); }
       if (e.code === 'KeyF') fly = !fly;
-      if (e.code === 'KeyG') run('character ' + (NEXT_BODY[body] || 'girl'));
+      if (e.code === 'KeyG' && !game) run('character ' + (NEXT_BODY[body] || 'girl')); // in a game G drops (inv-fix)
       if (e.code === 'KeyB') send({ t: 'wardrobe', on: !wardrobeShown });
       // the game takes digits, R, Q / I, T, Esc in a menu (a menu frees the mouse)
       if (game) { try { if (st.app.game_key(e.code)) { if (menuOpen() && document.pointerLockElement === canvas) document.exitPointerLock(); e.preventDefault(); } } catch (er) { /* not a game key */ } }
     }
-    if (studio && !e.repeat) { const t = { KeyA: [-180, 0], ArrowLeft: [-180, 0], KeyD: [180, 0], ArrowRight: [180, 0], KeyW: [0, -60], ArrowUp: [0, -60], KeyS: [0, 60], ArrowDown: [0, 60] }[e.code]; if (t) st.app.add_look(t[0], t[1]); }
+    if (studio && !e.repeat) { const t = { KeyA: [-180, 0], ArrowLeft: [-180, 0], KeyD: [180, 0], ArrowRight: [180, 0], KeyW: [0, -60], ArrowUp: [0, -60], KeyS: [0, 60], ArrowDown: [0, 60] }[e.code]; if (t) turn(t[0], t[1]); }
     keys.add(e.code); publish();
     // the key is the game's: the page under it (site hotkeys, Esc of its panels, a focused site button) never sees it
     e.stopPropagation();
   }, true);
   on(window, 'keyup', (e) => { if (keys.delete(e.code)) publish(); if (live() && !e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation(); }, true);
   on(window, 'blur', () => { keys.clear(); drag = false; publish(); });
+  // look-fix (owner 13.11 «резко в разные стороны тащит»): the engine drops pointer-lock spikes (camera::LookFilter);
+  // a new lock drops its first event (the cursor's jump to the centre), a drag or a finger starts a fresh gesture
+  const lookReset = (skip) => { try { if (st.app && st.app.look_reset) st.app.look_reset(skip); } catch (e) { /* an older engine: no filter */ } };
+  on(document, 'pointerlockchange', () => { if (document.pointerLockElement === canvas) lookReset(true); });
   if (studio) on(window, 'resize', place);   // the phone turned / the window changed: the character stays above the panel
   let drag = false;
   on(canvas, 'click', () => { canvas.focus({ preventScroll: true }); if (!touch && !wardrobeShown && !menuOpen() && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging works */ } } });
   on(canvas, 'contextmenu', (e) => { if (game) e.preventDefault(); });
+  let hudMouse = false;
   on(canvas, 'mousedown', (e) => {
     if (touch) return;
     if (game && live()) {
       const [x, y] = toCanvas(e);
       // a menu or the tray takes the click; with the pointer locked: left = the action, right = place / eat
-      if (document.pointerLockElement !== canvas && st.app.game_pointer(x, y, 0, 1)) { st.app.game_pointer(x, y, 2, 1); return; }
+      // (the HUD's release comes on mouseup: the inventory window drags items; the other menus act the same on it)
+      if (document.pointerLockElement !== canvas && st.app.game_pointer(x, y, 0, 1)) { hudMouse = true; return; }
       if (document.pointerLockElement === canvas) { if (e.button === 0) mouse.act = true; if (e.button === 2) mouse.use = true; publish(); return; }
     }
     drag = true;
+    lookReset(false);
   });
-  on(window, 'mouseup', (e) => { drag = false; if (game) { if (e.button === 0) mouse.act = false; if (e.button === 2) mouse.use = false; publish(); } });
+  on(window, 'mouseup', (e) => { drag = false; if (hudMouse) { hudMouse = false; if (game) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 2, 1); } return; } if (game) { if (e.button === 0) mouse.act = false; if (e.button === 2) mouse.use = false; publish(); } });
   on(canvas, 'wheel', (e) => { e.preventDefault(); st.app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   on(window, 'mousemove', (e) => {
     if (!live()) return;
@@ -260,7 +269,7 @@ export async function start(o) {
       if (game) { const [x, y] = toCanvas(e); if (st.app.game_pointer(x, y, 0, e.pointerId)) { hudTouch.add(e.pointerId); publish(); return; } }
       const r = canvas.getBoundingClientRect();
       if (!studio && e.clientX - r.left < r.width / 2 && stick.id === -1) { stick.id = e.pointerId; stick.x0 = e.clientX; stick.y0 = e.clientY; stick.sx = 0; stick.sy = 0; }
-      else if (look.id === -1) { look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; }
+      else if (look.id === -1) { look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; lookReset(false); }
     });
     on(canvas, 'pointermove', (e) => {
       if (hudTouch.has(e.pointerId)) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 1, e.pointerId); return; }
@@ -333,7 +342,7 @@ export async function start(o) {
   // After a landing, a start on the ground and in the wardrobe the look is lifted to just under the horizon (add_look:
   // 0.08° per pixel, moving up looks up); a player who looks down on purpose later is not touched.
   function levelLook(target) {
-    try { const [, pitch] = Array.from(st.app.look_deg()); if (pitch < target - 13) st.app.add_look(0, (pitch - target) / 0.08); } catch (e) { /* the look stays */ }
+    try { const [, pitch] = Array.from(st.app.look_deg()); if (pitch < target - 13) turn(0, (pitch - target) / 0.08); } catch (e) { /* the look stays */ }
   }
 
   // ── the frame: jobs to idle Workers, one engine frame, the bridge's messages ──
@@ -395,7 +404,9 @@ export async function start(o) {
   function spawnOnce() {
     if (spawned || !game) return;
     spawned = true;
-    const cmds = o.newWorld ? ['game progress new'] : o.skipTribe ? ['game progress skip tribe'] : o.spawn === 'orbit' ? ['travel orbit'] : o.spawn === 'home' ? ['game place goto home_valley'] : [];
+    // EP8 fix (play check): «Играть» with no world yet starts the path from the cell, like «Новый мир»
+    const fresh = o.scene === 'valley' && !(o.save && o.save.length) && !o.skipTribe && o.spawn !== 'orbit';
+    const cmds = o.newWorld || fresh ? ['game progress new'] : o.skipTribe ? ['game progress skip tribe'] : o.spawn === 'orbit' ? ['travel orbit'] : o.spawn === 'home' ? ['game place goto home_valley'] : [];
     for (const c of cmds) { const r = run(c); if (typeof r === 'string' && /^отказ|error|no such/i.test(r)) emit({ t: 'error', code: 'spawn', msg: (c + ': ' + r).slice(0, 200) }); }
   }
   publish();
@@ -411,8 +422,8 @@ export async function start(o) {
     gameStats() { try { return st.app && game ? JSON.parse(st.app.game_stats()) : null; } catch (e) { return null; } },
     // a DOM sheet over the world (chat, menu): the keys stop reaching the game
     input(enabled) { st.inputOn = !!enabled; if (!enabled) { keys.clear(); if (document.pointerLockElement === canvas) document.exitPointerLock(); } publish(); },
-    pause() { if (st.paused || st.dead) return; st.paused = true; keys.clear(); publish(); cancelAnimationFrame(st.raf); st.raf = 0; if (document.pointerLockElement === canvas) document.exitPointerLock(); },
-    resume() { if (!st.paused || st.dead) return; st.paused = false; last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
+    pause() { if (st.paused || st.dead) return; st.paused = true; keys.clear(); publish(); try { st.app && st.app.audio_park(true); } catch (e) { /* no sound */ } cancelAnimationFrame(st.raf); st.raf = 0; if (document.pointerLockElement === canvas) document.exitPointerLock(); },
+    resume() { if (!st.paused || st.dead) return; st.paused = false; try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
     // everything this start made goes away: the frame loop, listeners, Workers, the GPU device (free), the DOM
     dispose() {
       if (st.disposed) return;
@@ -424,6 +435,8 @@ export async function start(o) {
       for (const s of st.pool) { try { s.w.terminate(); } catch (e) { /* gone */ } }
       st.pool.length = 0;
       const a = st.app; st.app = null;
+      // the game's sound stops with the game (it lives outside the app object and would keep playing on the site)
+      try { a && a.audio_close(); } catch (e) { /* no sound */ }
       try { a && a.free(); } catch (e) { /* already freed */ }
       for (const e of made) e.remove();
       made.length = 0;

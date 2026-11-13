@@ -56,7 +56,7 @@ async function main() {
   try { if (invY === null) invY = localStorage.getItem('d37.invert_y'); else localStorage.setItem('d37.invert_y', invY); } catch (e) { /* storage blocked */ }
   app.set_invert_y(invY === '1');
   // tests: look() -> [yaw, pitch] in degrees; look(dx, dy) turns as a mouse move would, then returns the angles
-  state.look = (dx, dy) => { if (dx !== undefined) app.add_look(dx, dy || 0); return Array.from(app.look_deg()); };
+  state.look = (dx, dy) => { if (dx !== undefined) (app.turn_look ? app.turn_look(dx, dy || 0) : app.add_look(dx, dy || 0)); return Array.from(app.look_deg()); };
 
   // Workers: each has its own copy of the wasm and one builder (terrain columns, or planet chunks)
   const pool = [];
@@ -371,9 +371,13 @@ async function main() {
       if (document.pointerLockElement === canvas) { if (e.button === 0) mouse.act = true; if (e.button === 2) mouse.use = true; publish(); return; }
     }
     drag = true;
+    lookReset(false);
   });
   addEventListener('mouseup', (e) => { drag = false; if (game) { if (e.button === 0) mouse.act = false; if (e.button === 2) mouse.use = false; publish(); } });
   addEventListener('blur', () => { drag = false; });
+  // look-fix: the engine drops pointer-lock spikes; a new lock drops its first event, a drag or a finger starts afresh
+  const lookReset = (skip) => { try { if (app.look_reset) app.look_reset(skip); } catch (e) { /* an older engine */ } };
+  document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement === canvas) lookReset(true); });
   // the third-person zoom: the mouse wheel (as the site's «Мир Денчика»)
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   addEventListener('mousemove', (e) => {
@@ -410,7 +414,7 @@ async function main() {
       e.preventDefault();
       if (game) { const [x, y] = toCanvas(e); if (app.game_pointer(x, y, 0, e.pointerId)) { hudTouch.add(e.pointerId); publish(); return; } }
       if (e.clientX < innerWidth / 2 && stick.id === -1) { stick.id = e.pointerId; stick.x0 = e.clientX; stick.y0 = e.clientY; stick.sx = 0; stick.sy = 0; }
-      else if (look.id === -1) { look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; }
+      else if (look.id === -1) { look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; lookReset(false); }
     });
     canvas.addEventListener('pointermove', (e) => {
       if (hudTouch.has(e.pointerId)) { const [x, y] = toCanvas(e); app.game_pointer(x, y, 1, e.pointerId); return; }
