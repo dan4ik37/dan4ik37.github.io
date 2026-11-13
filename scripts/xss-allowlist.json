@@ -62,6 +62,17 @@
   {
    "f": "api/_lib/forum-blocks.js",
    "fn": "toHtml",
+   "k": "markup:attr",
+   "c": "html-arg",
+   "n": "toHtml: alt() = tx(подпись) без тегов — tx экранирует (esc или publicText().html), кавычки → &quot;; провайдер — esc",
+   "xs": [
+    "alt(b.cap)",
+    "b.cap ? alt(b.cap) : esc(providerName(b.p))"
+   ]
+  },
+  {
+   "f": "api/_lib/forum-blocks.js",
+   "fn": "toHtml",
    "k": "markup:text",
    "c": "html-arg",
    "n": "toHtml: tx — экранирование (esc по умолчанию) или publicText().html у серверной страницы; теги вокруг — константы",
@@ -1506,6 +1517,16 @@
    "f": "js/features/community.js",
    "fn": "load",
    "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "P.plural(c.members, 'участник', 'участника', 'участников')"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "load",
+   "k": "markup:text",
    "c": "num-db",
    "xs": [
     "c.members"
@@ -1519,6 +1540,16 @@
    "n": "ссылки #/chat/… из номеров сообществ, каналов и событий",
    "xs": [
     "link(mode, c.id)"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "meHtml",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-164 ds-people.js meBtn: своя разметка, эмодзи статуса и подпись — через esc()",
+   "xs": [
+    "(me && DS.x?.meBtn?.()) || ''"
    ]
   },
   {
@@ -1560,6 +1591,16 @@
    "n": "channelsHtml собирает названия через e()",
    "xs": [
     "srv ? channelsHtml(mode, srv, chId) : ''"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "railHtml",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-164 ds-people.js railTop: своя разметка, чужого текста нет (число заявок и адрес-константа)",
+   "xs": [
+    "DS.x?.railTop?.(mode, sel) || ''"
    ]
   },
   {
@@ -1626,6 +1667,16 @@
    "f": "js/features/community.js",
    "fn": "screenJoin",
    "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "P.plural(c.members, 'участник', 'участника', 'участников')"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenJoin",
+   "k": "markup:text",
    "c": "html-helper",
    "n": "community2.js: всё через e()",
    "xs": [
@@ -1659,6 +1710,16 @@
    "n": "community2.js: всё через e()",
    "xs": [
     "DS.x?.officialMore?.(srv, mode) || ''"
+   ]
+  },
+  {
+   "f": "js/features/community.js",
+   "fn": "screenReports",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "P.plural(r.n, 'жалоба', 'жалобы', 'жалоб')"
    ]
   },
   {
@@ -1824,6 +1885,16 @@
   {
    "f": "js/features/community2.js",
    "fn": "officialMore",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-162: обёртка над прежним officialMore (ссылки сайта, константы)",
+   "xs": [
+    "moreO ? moreO(srv, mode) : ''"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "officialMore",
    "k": "markup:url",
    "c": "id-db",
    "n": "ссылки #/chat/… из номеров",
@@ -1871,6 +1942,16 @@
    "f": "js/features/community2.js",
    "fn": "repTab",
    "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "P.plural(r.n, 'жалоба', 'жалобы', 'жалоб')"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "repTab",
+   "k": "markup:text",
    "c": "num-db",
    "n": "задержка канала и число жалоб",
    "xs": [
@@ -1901,6 +1982,16 @@
    "f": "js/features/community2.js",
    "fn": "setHtml",
    "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-162: X.chanExtraHtml — сама экранирует (e()) значок канала; возраст — число из списка AGES",
+   "xs": [
+    "X.chanExtraHtml ? X.chanExtraHtml(c, S) : ''"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "setHtml",
+   "k": "markup:text",
    "c": "num-db",
    "n": "задержка канала и число жалоб",
    "xs": [
@@ -1915,6 +2006,16 @@
    "n": "значок возраста D37Age.badge (число) / settingsMore",
    "xs": [
     "more0 ? more0(srv, mode) : ''"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "settingsMore",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-162: обёртка над прежним settingsMore (его тело разбирает этот же тест)",
+   "xs": [
+    "moreC ? moreC(srv, mode) : ''"
    ]
   },
   {
@@ -2044,6 +2145,312 @@
    ]
   },
   {
+   "f": "js/features/ds-fun.js",
+   "fn": "annivBadge",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк (после слияния полос T-164)",
+   "xs": [
+    "P.plural(d, 'день', 'дня', 'дней')"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "annivBadge",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк (после слияния полос T-164)",
+   "xs": [
+    "P.plural(y, 'год', 'года', 'лет')"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "ccard",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "части готовой карточки X.ccard из community2.js (экранирована там); метки — e()",
+   "xs": [
+    "h.slice(0, i)",
+    "h.slice(i)"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "chanTop",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "цепочка DS.x.chanTop из community2.js (строка «📅 События» — уже экранирована там)",
+   "xs": [
+    "top0 ? top0(mode, srv, selCh) : ''"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "flush",
+   "k": "sink:src [img]",
+   "c": "url-checked",
+   "n": "T-164: img.src только после IMG_RE /^data:image/(png|webp|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$/ (MEDIA кладётся после проверки); сервер (cf_media_add) проверяет то же",
+   "xs": [
+    "m.data"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "playTogether",
+   "k": "markup:text",
+   "c": "const",
+   "n": "значок игры из таблицы GAMES",
+   "xs": [
+    "g.icon"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "tabLevels",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "X.annivBadge: числа и дата через e()",
+   "xs": [
+    "X.annivBadge(me.since)",
+    "X.annivBadge(x.since)"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
+   "fn": "voiceDraw",
+   "k": "markup:url",
+   "c": "regex",
+   "n": "go из рассылки проверен onBc: /^(hub|#/games/[a-z0-9]+/(coop/)?[a-z0-9]{4,12})$/, и ещё e()",
+   "xs": [
+    "x.go === 'hub' ? '/hub/play' : e(x.go)"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "draw",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк (после слияния полос T-164)",
+   "xs": [
+    "plural(L.length, 'жалоба', 'жалобы', 'жалоб')"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "hub",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "T-164: адреса центра модерации собирает DS.link() из числового id сервера и констант разделов; ещё и esc()",
+   "xs": [
+    "e(closeLink(mode, srv))",
+    "e(hubLink(mode, srv, id))"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "overview",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "T-164: ссылка на журнал — hubLink() (DS.link от id сервера и константы), ещё и esc()",
+   "xs": [
+    "e(hubLink(mode, srv, 'log'))"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "repRow",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк (после слияния полос T-164)",
+   "xs": [
+    "plural(+x.n, 'жалоба', 'жалобы', 'жалоб')"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "tile",
+   "k": "markup:url",
+   "c": "url-checked",
+   "n": "T-164: плитки обзора — hubLink() (DS.link от id сервера и константы раздела), ещё и esc()",
+   "xs": [
+    "e(href)"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "md",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "ds-msg: результат MV.richBase (esc каждого слова) + fix() — теги разметки из своих констант, чужой текст только через esc",
+   "xs": [
+    "line(m[2])",
+    "g.join('<br>')",
+    "x"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "mdHelp",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "MV.rich своих примеров разметки",
+   "xs": [
+    "MV.rich(t, '', {}).html"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "thread_n — число (ставят триггеры ч. 12), остальное константа",
+   "xs": [
+    "m.tn > 0 ? `Открыть ветку (${m.tn})` : 'Начать ветку'"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "pollHtml",
+   "k": "markup:text",
+   "c": "const",
+   "n": "plural — одна из трёх своих строк",
+   "xs": [
+    "plural(p.voters, 'голос', 'голоса', 'голосов')"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "pollHtml",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "счётчики голосов опроса (dsm_poll_json: count(*)::int)",
+   "xs": [
+    "p.counts[i]",
+    "p.voters"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "post",
+   "k": "markup:text",
+   "c": "const",
+   "n": "plural — одна из трёх своих строк",
+   "xs": [
+    "plural(m.tn, 'ответ', 'ответа', 'ответов')"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "post",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "thread_n — счётчик ответов (int, ставят только триггеры ч. 12)",
+   "xs": [
+    "m.tn"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "postForm",
+   "k": "markup:attr",
+   "c": "num-local",
+   "n": "maxLen адаптера — число из кода",
+   "xs": [
+    "V.A.maxLen || 500"
+   ]
+  },
+  {
+   "f": "js/features/ds-msg.js",
+   "fn": "row",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "MV.rich — esc каждого слова (msgview.js) + разметка ds-msg",
+   "xs": [
+    "MV.rich(t, '', { kid }).html"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "card",
+   "k": "markup:style",
+   "c": "regex",
+   "n": "T-164: цвет роли проверен /^#[0-9a-f]{6}$/i, иначе константа",
+   "xs": [
+    "/^#[0-9a-f]{6}$/i.test(x.color || '') ? x.color : '#888888'"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "dot",
+   "k": "markup:attr",
+   "c": "enum",
+   "n": "T-164: stOk() отдаёт только ключ таблицы ST (online / idle / dnd / invisible / offline)",
+   "xs": [
+    "stOk(s)"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "friendsScreen",
+   "k": "markup:url",
+   "c": "const",
+   "n": "T-164: адрес DS.special + ключ вкладки из константы TABS",
+   "xs": [
+    "special(mode, 'friends/' + k)"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "gdmScreen",
+   "k": "markup:url",
+   "c": "const",
+   "n": "T-164: адрес-константа",
+   "xs": [
+    "special(mode, 'friends/groups')"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "groupsTab",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк (после слияния полос T-164)",
+   "xs": [
+    "P.plural((g.members || []).length, 'участник', 'участника', 'участнико"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "groupsTab",
+   "k": "markup:url",
+   "c": "num-db",
+   "n": "T-164: адрес DS.special + номер группы (bigint, +g.id)",
+   "xs": [
+    "special(mode, 'gdm/' + (+g.id))"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "paintHd",
+   "k": "markup:url",
+   "c": "const",
+   "n": "T-164: адрес-константа",
+   "xs": [
+    "special(mode, 'friends/groups')"
+   ]
+  },
+  {
+   "f": "js/features/ds-people.js",
+   "fn": "railTop",
+   "k": "markup:url",
+   "c": "const",
+   "n": "T-164: адрес DS.special — '#/chat/' или '#/phone/comm/' + константа",
+   "xs": [
+    "special(mode, 'friends')"
+   ]
+  },
+  {
    "f": "js/features/forum-blocks.js",
    "fn": "a",
    "k": "markup:text",
@@ -2061,6 +2468,17 @@
    "n": "toHtml: ссылка текста — только если https() (как forum_https в SQL); файл — адрес хранилища o.media(key) по регулярке ключа",
    "xs": [
     "esc(href)"
+   ]
+  },
+  {
+   "f": "js/features/forum-blocks.js",
+   "fn": "toHtml",
+   "k": "markup:attr",
+   "c": "html-arg",
+   "n": "toHtml: alt() = tx(подпись) без тегов — tx экранирует (esc или publicText().html), кавычки → &quot;; провайдер — esc",
+   "xs": [
+    "alt(b.cap)",
+    "b.cap ? alt(b.cap) : esc(providerName(b.p))"
    ]
   },
   {
@@ -2348,6 +2766,36 @@
    "n": "таблицы игр, сезонов и наград в коде",
    "xs": [
     "D37Route.href(h)"
+   ]
+  },
+  {
+   "f": "js/features/hub-catalog.js",
+   "fn": "card",
+   "k": "sink:href [a]",
+   "c": "url-checked",
+   "n": "T-163: витрина — константы SHOW (свои пути /hub/…, /play/…); игры игроков — свой путь D37Route.toPath(\"#/games/studio|studio3d|unity/play/\" + encodeURIComponent(id))",
+   "xs": [
+    "g.href"
+   ]
+  },
+  {
+   "f": "js/features/hub-catalog.js",
+   "fn": "card",
+   "k": "sink:src [im]",
+   "c": "const",
+   "n": "T-163: картинка только у витрины Денчика — константы SHOW (img/games/<id>.png); у игр игроков картинки нет",
+   "xs": [
+    "g.img"
+   ]
+  },
+  {
+   "f": "js/features/hub-catalog.js",
+   "fn": "makeCard",
+   "k": "sink:href [g]",
+   "c": "const",
+   "n": "T-163: «Создать свою» — свой путь Студии игр",
+   "xs": [
+    "href('#/games/studio')"
    ]
   },
   {
@@ -2791,6 +3239,16 @@
   },
   {
    "f": "js/features/msgview.js",
+   "fn": "fillCards",
+   "k": "sink:outerHTML",
+   "c": "html-helper",
+   "n": "MV.cardHtml экранирует всё; обёртка ds-fun.js добавляет только постоянную карточку «Долина D37»",
+   "xs": [
+    "MV.cardHtml({ t: 'invite', code })"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
    "fn": "html",
    "k": "markup:style",
    "c": "regex",
@@ -2808,6 +3266,16 @@
    "xs": [
     "first ? ava : `<time class=\"mv-t2\" title=\"${e(P.when(m.at))}\">${P.hm(m",
     "r.html"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "html",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "MV.cardHtml экранирует всё; обёртка ds-fun.js добавляет только постоянную карточку «Долина D37»",
+   "xs": [
+    "r.cards.map(MV.cardHtml).join('')"
    ]
   },
   {
@@ -2843,6 +3311,16 @@
   },
   {
    "f": "js/features/msgview.js",
+   "fn": "openMenu",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "пункты меню — свои константы, e() и MV.dsm.menu (ds-msg: константы и числа)",
+   "xs": [
+    "items.join('')"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
    "fn": "openPanel",
    "k": "markup:text",
    "c": "const",
@@ -2853,7 +3331,7 @@
   },
   {
    "f": "js/features/msgview.js",
-   "fn": "rich",
+   "fn": "richBase",
    "k": "markup:url",
    "c": "url-checked",
    "n": "sitePath: только свои пути (не //), карточки — «#/…» или GAMES.href",
@@ -2898,6 +3376,16 @@
    "n": "таблицы игр и зон мира; x — суффикс класса кнопки",
    "xs": [
     "p.age"
+   ]
+  },
+  {
+   "f": "js/features/phone-apps.js",
+   "fn": "commInvite",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "P.plural(+c.members || 1, 'участник', 'участника', 'участников')"
    ]
   },
   {
@@ -7548,88 +8036,6 @@
    "n": "адреса библиотек jsDelivr и Worker-ы, которые выдаёт сама библиотека потоков",
    "xs": [
     "t.workerUrl"
-   ]
-  },
-  {
-   "f": "api/_lib/forum-blocks.js",
-   "fn": "toHtml",
-   "k": "markup:attr",
-   "c": "html-arg",
-   "n": "toHtml: alt() = tx(подпись) без тегов — tx экранирует (esc или publicText().html), кавычки → &quot;; провайдер — esc",
-   "xs": [
-    "alt(b.cap)",
-    "b.cap ? alt(b.cap) : esc(providerName(b.p))"
-   ]
-  },
-  {
-   "f": "js/features/forum-blocks.js",
-   "fn": "toHtml",
-   "k": "markup:attr",
-   "c": "html-arg",
-   "n": "toHtml: alt() = tx(подпись) без тегов — tx экранирует (esc или publicText().html), кавычки → &quot;; провайдер — esc",
-   "xs": [
-    "alt(b.cap)",
-    "b.cap ? alt(b.cap) : esc(providerName(b.p))"
-   ]
-  },
-  {
-   "f": "js/features/community2.js",
-   "fn": "setHtml",
-   "k": "markup:text",
-   "c": "html-helper",
-   "n": "T-162: X.chanExtraHtml — сама экранирует (e()) значок канала; возраст — число из списка AGES",
-   "xs": [
-    "X.chanExtraHtml ? X.chanExtraHtml(c, S) : ''"
-   ]
-  },
-  {
-   "f": "js/features/community2.js",
-   "fn": "settingsMore",
-   "k": "markup:text",
-   "c": "html-helper",
-   "n": "T-162: обёртка над прежним settingsMore (его тело разбирает этот же тест)",
-   "xs": [
-    "moreC ? moreC(srv, mode) : ''"
-   ]
-  },
-  {
-   "f": "js/features/community2.js",
-   "fn": "officialMore",
-   "k": "markup:text",
-   "c": "html-helper",
-   "n": "T-162: обёртка над прежним officialMore (ссылки сайта, константы)",
-   "xs": [
-    "moreO ? moreO(srv, mode) : ''"
-   ]
-  },
-  {
-   "f": "js/features/hub-catalog.js",
-   "fn": "card",
-   "k": "sink:href [a]",
-   "c": "url-checked",
-   "n": "T-163: витрина — константы SHOW (свои пути /hub/…, /play/…); игры игроков — свой путь D37Route.toPath(\"#/games/studio|studio3d|unity/play/\" + encodeURIComponent(id))",
-   "xs": [
-    "g.href"
-   ]
-  },
-  {
-   "f": "js/features/hub-catalog.js",
-   "fn": "card",
-   "k": "sink:src [im]",
-   "c": "const",
-   "n": "T-163: картинка только у витрины Денчика — константы SHOW (img/games/<id>.png); у игр игроков картинки нет",
-   "xs": [
-    "g.img"
-   ]
-  },
-  {
-   "f": "js/features/hub-catalog.js",
-   "fn": "makeCard",
-   "k": "sink:href [g]",
-   "c": "const",
-   "n": "T-163: «Создать свою» — свой путь Студии игр",
-   "xs": [
-    "href('#/games/studio')"
    ]
   }
  ]

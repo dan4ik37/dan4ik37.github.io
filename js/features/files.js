@@ -475,7 +475,7 @@
     if (!a || typeof a !== 'object' || !/^[0-9a-f]{64}$/.test(a.chash || '')) return '';
     const k = kind(String(a.mime || '')), w = +a.w || 0, h = +a.h || 0;
     const box = a.thumb && /^data:image\/(webp|jpeg);base64,/.test(a.thumb) ? `<span class="mvf-th" style="aspect-ratio:${w && h ? w + '/' + h : '16/9'}"><img src="${e(a.thumb)}" alt="" loading="lazy" decoding="async"></span>` : '';
-    return `<div class="mv-file mvf-${k}" data-fh="${e(a.chash)}" data-fk="${e(fk || '')}" data-fm="${e(m?.id ?? '')}">${box}<div class="mvf-row"><span class="mvf-ic">${ICON[k]}</span><span class="mvf-n"><b>${e(a.name)}</b><small>${e(F.size(+a.size || 0))}${a.dur ? ' · ' + e(Math.round(a.dur)) + ' с' : ''} · <span class="mvf-st">…</span></small></span><span class="mvf-bt"></span></div></div>`;
+    return `<div class="mv-file mvf-${k}" data-fh="${e(a.chash)}" data-fk="${e(fk || '')}" data-fm="${e(m?.id ?? '')}"${m && (m.mine || (m.uid && m.uid === P()?.me?.()) || window.MsgView?.noReport?.(m)) ? ' data-fself="1"' : ''}>${box}<div class="mvf-row"><span class="mvf-ic">${ICON[k]}</span><span class="mvf-n"><b>${e(a.name)}</b><small>${e(F.size(+a.size || 0))}${a.dur ? ' · ' + e(Math.round(a.dur)) + ' с' : ''} · <span class="mvf-st">…</span></small></span><span class="mvf-bt"></span></div></div>`;
   };
   const CARDS = new Map();   // chash → Set(el)
   const URLS = new WeakMap();
@@ -488,14 +488,16 @@
     if (m && await F.blob(h)) {
       const ss = m.sent ? SEND.get(h) : null;
       st.textContent = !m.sent ? '✅ на устройстве' : m.got || ss?.got ? '✅ доставлено' : ss && !ss.done ? `📤 передаём… ${ss.pct}%${/relay/.test(ss.via || '') ? ' · через посредник' : ''}` : ss?.done ? '📤 отправлено, ждём подтверждения…' : '⏳ ждёт получателя — уйдёт само, пока у тебя открыт сайт';
-      bt.innerHTML = `<button type="button" data-f="open">${kind(a.mime) === 'file' ? '💾 Сохранить' : '▶ Открыть'}</button><button type="button" data-f="rep" title="Пожаловаться">🚩</button>`;
+      bt.innerHTML = `<button type="button" data-f="open">${kind(a.mime) === 'file' ? '💾 Сохранить' : '▶ Открыть'}</button>${repBtn(el)}`;
       return;
     }
     if (g) { st.textContent = F.noteText(F.state(h)); bt.innerHTML = '<button type="button" data-f="stop" title="Остановить">✕</button>'; return; }
     const er = ERR.get(h);
     st.textContent = er || 'передаётся от человека к человеку';
-    bt.innerHTML = `<button type="button" data-f="get">${er ? '🔁 Повторить' : '⬇ Получить'}</button><button type="button" data-f="rep" title="Пожаловаться">🚩</button>`;
+    bt.innerHTML = `<button type="button" data-f="get">${er ? '🔁 Повторить' : '⬇ Получить'}</button>${repBtn(el)}`;
   }
+  // 🚩 — не на свой файл и не на файл создателя сайта (T-164: владелец пожаловался сам на себя, жалоба ушла не туда)
+  const repBtn = el => (el.dataset.fself ? '' : '<button type="button" data-f="rep" title="Пожаловаться">🚩</button>');
   async function act(el, k){
     const a = el._att; if (!a) return;
     if (k === 'get') { F.fetch(a).then(() => paint(el), () => paint(el)); paint(el); }
@@ -503,7 +505,7 @@
     else if (k === 'rep') {
       if (!confirm('Пожаловаться на этот файл? Модераторы посмотрят, и если он плохой — его больше нельзя будет отправить.')) return;
       const { data, error } = await sb().rpc('file_report', { p_kind: el.dataset.fk, p_mid: +el.dataset.fm, p_why: '' });
-      P()?.toast?.(!error && data?.ok ? '🚩 Жалоба отправлена' : '⚠️ Не получилось', !error && data?.ok);
+      P()?.toast?.(!error && data?.ok ? '🚩 Жалоба отправлена' : '⚠️ ' + ({ self: 'на свой файл жаловаться нельзя', creator: 'на создателя сайта жаловаться нельзя', rate: 'слишком много жалоб — попробуй позже' }[data?.reason] || 'Не получилось'), !error && data?.ok);
     } else if (k === 'open') {
       const blob = await F.blob(a.chash); if (!blob) { paint(el); return; }
       const m = await F.meta(a.chash); if (m) { m.used = Date.now(); putMeta(m).catch(() => {}); }

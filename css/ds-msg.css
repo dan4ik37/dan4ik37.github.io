@@ -1,0 +1,92 @@
+/* ds-msg (js/features/ds-msg.js): разметка, ветки, опросы, форумы, история правок. Цвета — переменные темы (тёмная / светлая) */
+.mv-text .dsm-b{font-weight:800}
+.mv-text .dsm-i{font-style:italic}
+.mv-text .dsm-u{text-decoration:underline}
+.mv-text .dsm-s{text-decoration:line-through;opacity:.8}
+.mv-text .dsm-c,.dsm-mdh code{font-family:ui-monospace,Consolas,monospace;font-size:.9em;padding:1px 5px;border-radius:5px;background:rgba(var(--fg-rgb),.09);overflow-wrap:anywhere}
+.mv-text .dsm-pre{margin:4px 0;padding:8px 10px;border-radius:8px;background:rgba(var(--fg-rgb),.07);border:1px solid rgba(var(--fg-rgb),.08);max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.mv-text .dsm-pre code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+.mv-text .dsm-q{margin:3px 0;padding:1px 0 1px 10px;border-left:3px solid rgba(var(--fg-rgb),.25)}
+.mv-text .dsm-ul,.mv-text .dsm-ol{margin:3px 0;padding-left:22px}
+.mv-text .dsm-h{display:block;font-weight:800;margin:3px 0 1px}
+.mv-text .dsm-h1{font-size:1.3em}.mv-text .dsm-h2{font-size:1.15em}.mv-text .dsm-h3{font-size:1.05em}
+.dsm-sp{background:rgba(var(--fg-rgb),.75);color:transparent;border-radius:4px;cursor:pointer;transition:background .15s}
+.dsm-sp *{visibility:hidden}
+.dsm-sp.on{background:rgba(var(--fg-rgb),.1);color:inherit;cursor:text}
+.dsm-sp.on *{visibility:visible}
+:root:not([data-theme="light"]) .dsm-sp:not(.on){background:#1e1f22}   /* T-164: тёмная тема — тёмно-серый блок, как в Дискорде, а не белая плашка */
+.dsm-sp:focus-visible{outline:2px solid var(--accent,#9147ff)}
+
+/* 🧵 ветка: счётчик под сообщением и панель */
+.dsm-tc{display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:4px 10px;border:1px solid rgba(var(--fg-rgb),.12);border-radius:99px;background:rgba(var(--fg-rgb),.04);color:var(--c-link,#60a5fa);font:700 12.5px inherit;font-family:inherit;cursor:pointer;min-height:30px}
+.dsm-tc:hover{background:rgba(var(--fg-rgb),.08)}
+.dsm-thr{position:absolute;inset:0;z-index:9;display:flex;flex-direction:column;background:rgb(var(--bg-rgb))}
+.dsm-thr-side .dsm-thr{left:auto;width:400px;max-width:45%;border-left:1px solid rgba(var(--fg-rgb),.1);box-shadow:-8px 0 24px rgba(0,0,0,.18)}
+.dsm-thh{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid rgba(var(--fg-rgb),.1);flex:none}
+.dsm-thh b{font-size:14px;white-space:nowrap}
+.dsm-tht{flex:1;min-width:0;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsm-hb{flex:none;min-width:36px;min-height:36px;padding:0 10px;border:0;border-radius:9px;background:rgba(var(--fg-rgb),.06);color:var(--text);font:700 12.5px inherit;font-family:inherit;cursor:pointer}
+.dsm-hb:hover{background:rgba(var(--fg-rgb),.12)}
+.dsm-thv{flex:1;min-height:0;position:relative}
+
+/* ➕ и ⬆ к первому новому */
+.dsm-plus[hidden],.dsm-unr[hidden]{display:none}
+.dsm-unr{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:5;padding:6px 14px;border:0;border-radius:99px;background:var(--c-new,#ef4444);color:#fff;font:800 12.5px inherit;font-family:inherit;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.dsm-forum .dsm-unr{top:52px}
+.dsm-plus-list{display:flex;flex-direction:column;max-width:460px;margin:0 auto;width:100%}
+
+/* 📊 опрос */
+.dsm-poll{margin-top:6px;padding:10px 12px;max-width:440px;border-radius:12px;background:rgba(var(--fg-rgb),.05);border:1px solid rgba(var(--fg-rgb),.1);display:flex;flex-direction:column;gap:6px}
+.dsm-pq{font-size:14.5px;overflow-wrap:anywhere}
+.dsm-poll small{color:var(--muted);font-size:12px}
+.dsm-po{position:relative;display:flex;align-items:center;gap:8px;min-height:38px;padding:7px 10px;border:1px solid rgba(var(--fg-rgb),.14);border-radius:9px;background:none;color:var(--text);font:600 13.5px inherit;font-family:inherit;text-align:left;cursor:pointer;overflow:hidden}
+.dsm-po i{position:absolute;left:0;top:0;bottom:0;background:rgba(var(--fg-rgb),.1);transition:width .3s;pointer-events:none}
+.dsm-po.on{border-color:var(--accent,#9147ff)}
+.dsm-po.on i{background:rgba(145,71,255,.25)}
+.dsm-po span{position:relative;flex:1;overflow-wrap:anywhere}
+.dsm-po em{position:relative;font-style:normal;font-size:12px;color:var(--muted);white-space:nowrap}
+.dsm-po:disabled{cursor:default}
+.dsm-pf{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.dsm-pf span{flex:1}
+.dsm-pf button{border:0;border-radius:7px;padding:5px 9px;background:rgba(var(--fg-rgb),.07);color:var(--text);font:700 12px inherit;font-family:inherit;cursor:pointer;min-height:30px}
+.dsm-poll.off{opacity:.85}
+
+/* формы (опрос, пост, форум) */
+.dsm-form{display:flex;flex-direction:column;gap:10px;max-width:460px;margin:0 auto;width:100%;box-sizing:border-box}
+.dsm-form label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.dsm-form input:not([type=checkbox]),.dsm-form select,.dsm-form textarea{padding:9px 11px;border-radius:9px;border:1px solid rgba(var(--fg-rgb),.15);background:rgba(var(--fg-rgb),.05);color:var(--text);font:500 14px inherit;font-family:inherit;box-sizing:border-box;width:100%}
+.dsm-form textarea{resize:vertical}
+.dsm-form .dsm-chk{flex-direction:row;align-items:center;gap:8px;color:var(--text)}
+.dsm-opts{display:flex;flex-direction:column;gap:6px}
+.dsm-lbtn{align-self:flex-start;border:0;background:none;color:var(--c-link,#60a5fa);font:700 13px inherit;font-family:inherit;cursor:pointer;padding:4px 0}
+.dsm-err{color:#ef4444;font-size:13px;font-weight:600}
+.dsm-err[hidden]{display:none}
+.dsm-tagpick,.dsm-ftags{display:flex;flex-wrap:wrap;gap:6px}
+.dsm-tagpick button,.dsm-ftags button{padding:5px 11px;border-radius:99px;border:1px solid rgba(var(--fg-rgb),.15);background:none;color:var(--text);font:700 12px inherit;font-family:inherit;cursor:pointer;min-height:30px}
+.dsm-tagpick button.on,.dsm-ftags button.on{background:var(--accent,#9147ff);border-color:transparent;color:#fff}
+
+/* 🗂 форум */
+.dsm-fbar{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(var(--fg-rgb),.08);flex:none;overflow-x:auto;scrollbar-width:none}
+.dsm-fbar b{white-space:nowrap;font-size:13px}
+.dsm-ftags{flex-wrap:nowrap;flex:1}
+.dsm-fnew{flex:none;padding:6px 12px;border:0;border-radius:99px;background:linear-gradient(135deg,var(--tw,#9147ff),#6d28d9);color:#fff;font:800 12.5px inherit;font-family:inherit;cursor:pointer;min-height:32px}
+.dsm-post{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 3px}
+.dsm-ptitle{font-size:15.5px;font-weight:800;overflow-wrap:anywhere}
+.dsm-tag{font-style:normal;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(var(--fg-rgb),.08);color:var(--muted)}
+.mv[data-dsmtag] .mv-list>.mv-m{display:none}
+.mv[data-dsmtag="0"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t0"]),.mv[data-dsmtag="1"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t1"]),
+.mv[data-dsmtag="2"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t2"]),.mv[data-dsmtag="3"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t3"]),
+.mv[data-dsmtag="4"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t4"]),.mv[data-dsmtag="5"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t5"]),
+.mv[data-dsmtag="6"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t6"]),.mv[data-dsmtag="7"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t7"]),
+.mv[data-dsmtag="8"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t8"]),.mv[data-dsmtag="9"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t9"]),
+.mv[data-dsmtag="10"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t10"]),.mv[data-dsmtag="11"] .mv-list>.mv-m:has(.dsm-post[data-tags~="t11"]){display:grid}
+
+/* 🕘 история правок, ✍️ подсказка */
+.dsm-hv{padding:8px 10px;margin-bottom:6px;border-radius:10px;background:rgba(var(--fg-rgb),.04)}
+.dsm-hv.cur{border:1px solid rgba(var(--fg-rgb),.14)}
+.dsm-hv time{display:block;font-size:11.5px;color:var(--muted);margin-bottom:3px}
+.mv-ed{cursor:pointer}
+.dsm-mdh{display:flex;flex-direction:column;gap:8px;max-width:460px;margin:0 auto;width:100%}
+.dsm-mdh>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:center}
+.dsm-mdh code{white-space:pre-wrap}
+@media (max-width:600px){.dsm-thr-side .dsm-thr{width:auto;max-width:none;left:0}}

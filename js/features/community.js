@@ -69,7 +69,8 @@
   // T-162: realtime UPDATE не присылает неизменённые «большие» (TOAST) jsonb — att с превью, reactions. Нет ключа → undefined, и лента
   // (msgview onEvent 'upd') оставляет старое значение, а не стирает вложение
   const cmMsg = r => ({ id: r.id, uid: r.user_id || null, nick: r.nick || 'игрок', text: r.text || '', at: r.created_at, reply: r.reply_to || null,
-    edited: r.edited_at || null, deleted: !!r.deleted, hidden: !!r.hidden, reactions: 'reactions' in r ? r.reactions || {} : undefined, pinned: !!r.pinned_at, ch: r.channel_id, att: 'att' in r ? r.att || null : undefined });
+    edited: r.edited_at || null, deleted: !!r.deleted, hidden: !!r.hidden, reactions: 'reactions' in r ? r.reactions || {} : undefined, pinned: !!r.pinned_at, ch: r.channel_id, att: 'att' in r ? r.att || null : undefined,
+    thread: 'thread_id' in r ? r.thread_id || null : undefined, tn: 'thread_n' in r ? r.thread_n || 0 : undefined, tat: 'thread_at' in r ? r.thread_at || null : undefined });   // ds-msg: ветки (ч. 12)
 
   // ═══ Адаптер канала сообщества для MsgView ═══
   function commAdapter(C, ch){
@@ -111,6 +112,7 @@
         if (!C.role && !C.staff) return { list: [], more: false };
         let qy = sbClient.from('community_messages').select('*').eq('channel_id', chId).eq('deleted', false).order('id', { ascending: false }).limit(50);
         if (before) qy = qy.lt('id', before);
+        if (window.D37Dsm?.ready) qy = qy.is('thread_id', null);   // ds-msg: ответы в ветках — только в панели ветки
         const { data, error } = await qy;
         if (error) return { list: [], err: error, errText: P.err(error) };
         const list = await withMine((data || []).map(cmMsg).reverse());
@@ -124,8 +126,8 @@
           .subscribe();
         return () => { try { sbClient.removeChannel(chan); } catch (er) {} };
       },
-      async send(text, reply){
-        const r = await P.rpc('cm_send', { p_channel: chId, p_text: text, p_reply: typeof reply === 'number' ? reply : null });
+      async send(text, reply, thr){   // thr — ответ в ветке (ds-msg, community.sql ч. 12: dsm_thread_send — те же проверки, что cm_send)
+        const r = typeof thr === 'number' ? await P.rpc('dsm_thread_send', { p_root: thr, p_text: text }) : await P.rpc('cm_send', { p_channel: chId, p_text: text, p_reply: typeof reply === 'number' ? reply : null });
         if (r.data?.ok) return { ok: true, m: Object.assign(cmMsg(r.data.msg), { myReacts: new Set() }) };
         if (r.data?.reason === 'slow') return { ok: false, err: `🐢 медленный режим — ещё ${r.data.wait} с` };
         if (r.data?.reason === 'automod') return { ok: false, err: r.data.why || '🤖 автомодерация' };   // объяснение сервера (ч. 4)
@@ -205,7 +207,8 @@
     const offUnread = !DS.muteOf?.(OFF_ID) && (window.D37Chat?.channels?.() || []).some(c => c.kind === 'text' && !c.archived && !DS.muteOf?.(OFF_ID, c) && (window.D37Chat.lastId(c.id) || 0) > MV.lastRead('o:' + c.id));
     const offMent = Object.values(window.D37Chat?.mentions || {}).reduce((a, b) => a + b, 0);
     const item = (id, icon, name, unread, ment, href) => `<a class="ds-srv${String(sel) === String(id) ? ' on' : ''}${unread ? ' unread' : ''}" href="${href}" title="${e(name)}" aria-label="${e(name)}"><span class="ds-pill"></span><span class="ds-sic">${icon}</span>${ment ? `<em class="ds-ment">${ment > 9 ? '9+' : ment}</em>` : ''}</a>`;
-    return item(OFF_ID, '<img src="/icon-192.png" alt="">', 'Денчик37 — сервер сайта', offUnread, offMent, link(mode, OFF_ID))
+    return (DS.x?.railTop?.(mode, sel) || '')   // ds-people: 👥 друзья и группы (ds-people.js)
+      + item(OFF_ID, '<img src="/icon-192.png" alt="">', 'Денчик37 — сервер сайта', offUnread, offMent, link(mode, OFF_ID))
       + '<i class="ds-rsep"></i>'
       + S.my.map(c => item(c.id, c.anim ? `<b class="ds-anim">${e(c.icon)}</b>` : e(c.icon), c.name, commUnread(c) && !DS.muteOf?.(c.id) && String(sel) !== String(c.id), 0, link(mode, c.id))).join('')
       + `<a class="ds-srv ds-add" href="${special(mode, 'new')}" title="Создать сообщество" aria-label="Создать сообщество"><span class="ds-sic">＋</span></a>`
@@ -231,6 +234,7 @@
     const acts = [];
     if (srv.official || srv.role) acts.push(`<button type="button" class="ds-hb" data-ds4="notif" data-srv="${srv.official ? 'o' : e(srv.id)}" title="Уведомления и «прочитано»" aria-label="Уведомления">${DS.muteOf?.(srv) ? '🔕' : '🔔'}</button>`);
     if (srv.official) {
+      if (srv.staff === 'helper' && window.D37Mod) acts.push(`<a class="ds-hb" href="${link(mode, OFF_ID, 'reports')}" title="Модерация: жалобы, участники, рейд">🛡</a>`);   // T-164: хелперу — центр модерации
       if (srv.staff === 'admin' || srv.staff === 'moderator') acts.push(`<a class="ds-hb" href="${link(mode, OFF_ID, 'reports')}" title="Модерация: жалобы, журнал, автомодерация">🛡</a>`, `<a class="ds-hb" href="${link(mode, OFF_ID, 'settings')}" title="Настройки каналов">⚙️</a>`);
     } else {
       if (srv.role) acts.push(`<button type="button" class="ds-hb" data-ds="invite" title="Пригласить">🔗</button>`);
@@ -248,7 +252,7 @@
     const onlineIds = new Set(on.users.map(u => u.id));
     const group = (t, list) => list.length ? `<div class="ds-mg">${t} — ${list.length}</div>${list.map(row).join('')}` : '';
     const nickOf = u => u.top && !['admin', 'moderator', 'helper'].includes(u.role) ? `<span class="ph-nick" style="color:${e(u.top.color)}">${e(u.nick)}</span>` : P.nick(P.prof(u.id) || { nick: u.nick, role: u.role }, u.nick);
-    const row = u => `<button type="button" class="ds-mem${u.off ? ' off' : ''}" data-uid="${e(u.id)}" data-nick="${e(u.nick)}">${P.avatar(P.prof(u.id) || { nick: u.nick, role: u.role }, u.nick, 30)}<span>${nickOf(u)}${u.sub ? `<small>${e(u.sub)}</small>` : ''}</span>${u.crole === 'owner' ? '<i title="Владелец">👑</i>' : u.crole === 'mod' ? '<i title="Модератор">🛡</i>' : ''}</button>`;
+    const row = u => `<button type="button" class="ds-mem${u.off ? ' off' : ''}" data-uid="${e(u.id)}" data-nick="${e(u.nick)}"${u.top ? ` data-top="${e(u.top.id)}"` : ''}>${P.avatar(P.prof(u.id) || { nick: u.nick, role: u.role }, u.nick, 30)}<span>${nickOf(u)}${u.sub ? `<small>${e(u.sub)}</small>` : ''}</span>${u.crole === 'owner' ? '<i title="Владелец">👑</i>' : u.crole === 'mod' ? '<i title="Модератор">🛡</i>' : ''}</button>`;
     on.users.forEach(x => { x.sub = x.a ? P.actText(P.actParse(x.a)) : ''; });   // чем занят («в Мире, сервер 2»…)
     const actOf = new Map(on.users.map(x => [x.id, x.sub]));
     if (srv.official) {
@@ -260,6 +264,7 @@
       box.innerHTML = `<div class="ds-mtitle">В сети — ${on.total || 0}</div>` + group('👑 Админ', admins) + group('🛡 Модераторы', mods) + group('✨ VIP', vip) + group('🟢 В сети', rest)
         + (on.guests ? `<div class="ds-mg">👤 Гости — ${on.guests}</div>` : '') + group('⚪ Не в сети', recent)
         + (!u.length && !on.guests ? '<div class="ds-dim">Никого — позови друзей!</div>' : '');
+      DS.x?.membersDecor?.(box, srv);   // ds-people: статусы, ники на сервере, свой статус
       return;
     }
     if (!srv.role && !srv.staff) { box.innerHTML = `<div class="ds-dim">Участники видны после вступления. Всего: ${srv.c?.members || 0}</div>`; return; }
@@ -269,10 +274,11 @@
     const all = list.map(m => ({ id: m.id, nick: m.nick, crole: m.role, role: P.prof(m.id)?.role, sub: m.muted_until ? '🔇 заглушён' : actOf.get(m.id) || '', off: !onlineIds.has(m.id),
       top: R && Array.isArray(m.roles) && m.roles.length ? R.byId.get(m.roles[0]) || null : null }));
     // в сети — группами по верхней своей роли (как в Дискорде), без роли — «В сети»
-    const rgroups = R ? R.roles.map(r => group(`<span style="color:${e(r.color)}">${e(r.name)}</span>`, all.filter(x => !x.off && x.crole === 'member' && x.top?.id === r.id))).join('') : '';
+    const rgroups = R ? R.roles.map(r => group(`<span style="color:${e(r.color)}" data-rid="${e(r.id)}">${e(r.name)}</span>`, all.filter(x => !x.off && x.crole === 'member' && x.top?.id === r.id))).join('') : '';
     const onl = all.filter(x => !x.off), off = all.filter(x => x.off);
     box.innerHTML = `<div class="ds-mtitle">Участники — ${list.length}</div>` + group('👑 Владелец', onl.filter(x => x.crole === 'owner')) + group('🛡 Модераторы', onl.filter(x => x.crole === 'mod'))
       + rgroups + group('🟢 В сети', onl.filter(x => x.crole === 'member' && !x.top)) + group('⚪ Не в сети', off);
+    DS.x?.membersDecor?.(box, srv);   // ds-people: статусы, ники на сервере, значки ролей
   }
   // Голосовой канал: кто сейчас в нём (под названием канала) — calls.js сообщает
   function voicePeople(root){
@@ -291,7 +297,7 @@
     if (!nick) return voice + `<div class="ds-me guest"><span class="ds-dim">Ты не в чате</span><button type="button" class="ds-btn" data-ds="guest">👤 Гостем</button><button type="button" class="ds-btn ghost" data-ds="login">Войти</button></div>`;
     const p = me ? P.prof(me) || (typeof currentProfile !== 'undefined' ? currentProfile : null) : null;
     const role = typeof currentRole !== 'undefined' ? currentRole : null;
-    return voice + `<div class="ds-me">${P.avatar(p, nick, 32)}<span><b>${e(nick)}</b><small>${role === 'admin' ? '👑 админ' : role === 'moderator' ? '🛡 модератор' : role === 'helper' ? '🧹 хелпер' : me ? '🟢 в сети' : '👤 гость'}</small></span>${me ? '' : '<button type="button" class="ds-btn ghost" data-ds="login">Войти</button>'}<button type="button" class="ds-hb" data-ds="phone" title="Телефон 📱 — звонки, друзья, личные сообщения">📱</button></div>`;
+    return voice + `<div class="ds-me">${P.avatar(p, nick, 32)}<span><b>${e(nick)}</b><small>${role === 'admin' ? '👑 админ' : role === 'moderator' ? '🛡 модератор' : role === 'helper' ? '🧹 хелпер' : me ? '🟢 в сети' : '👤 гость'}</small></span>${(me && DS.x?.meBtn?.()) || ''}${me ? '' : '<button type="button" class="ds-btn ghost" data-ds="login">Войти</button>'}<button type="button" class="ds-hb" data-ds="phone" title="Телефон 📱 — звонки, друзья, личные сообщения">📱</button></div>`;
   }
 
   // ═══ Экраны: найти, создать, приглашение, настройки, жалобы ═══
@@ -453,6 +459,7 @@
       host.innerHTML = '<div class="ds-voice"><div class="ds-dim">Загружаем голосовой…</div></div>';
       P.need('calls').then(() => window.D37Calls.voiceView(host.firstChild, srv.official ? { kind: 'official', channel: 0, title: `${ch.name} · Денчик37`, name: ch.name } : { kind: 'community', channel: ch.id, cid: srv.id, title: `${ch.name} · ${srv.name}`, name: ch.name, topic: ch.topic, member: !!(srv.role || srv.staff) }))
         .catch(() => { host.firstChild.innerHTML = '<div class="ds-dim">Не загрузилось — проверь интернет</div>'; });
+      DS.x?.voiceMore?.(host, srv, ch);   // T-164 ds-fun.js: звуковая панель, сцена, «Играть вместе»
       return;
     }
     const A0 = srv.official ? window.D37Chat.adapter(ch.id) : commAdapter(srv.raw, ch), A = DS.x?.wrapAdapter ? DS.x.wrapAdapter(A0, srv, ch) : A0;   // ч. 4: модерация с причиной
@@ -711,7 +718,7 @@
   // Приглашение #/c/<код> → страница чата с экраном вступления
   DS._test = { cmMsg, link, REASON, canMod, railHtml: () => railHtml('page', OFF_ID), membersRender, commAdapter };
   // для community2.js: адреса, данные сообществ, переходы
-  Object.assign(DS, { OFF_ID, link, special, go, server, loadMy, dropC, why, mine: () => S.my, ICONS, membersOf });
+  Object.assign(DS, { OFF_ID, link, special, go, server, loadMy, dropC, why, mine: () => S.my, ICONS, membersOf, screenSettings });   // screenSettings — 🛡 центр (ds-mod.js)
   // свои роли загрузились — перерисовать участников и цвета ников в открытой ленте
   window.addEventListener('d37:roles', ev => {
     if (!page?.srv || String(page.srv.id) !== String(ev.detail) || !page.root.isConnected) return;
