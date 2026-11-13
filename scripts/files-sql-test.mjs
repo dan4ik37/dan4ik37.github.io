@@ -26,7 +26,7 @@ if (!PGlite) {
   process.exit(0);
 }
 
-let sql = fs.readFileSync(path.join(SITE, 'community.sql'), 'utf8'); const k0 = sql.indexOf('-- ═══ 9. 📎'); sql = sql.slice(k0);
+let sql = fs.readFileSync(path.join(SITE, 'community.sql'), 'utf8'); const k0 = sql.indexOf('-- ═══ 9. 📎'), k1 = sql.indexOf('-- ═══ 10. ', k0); sql = sql.slice(k0, k1 > 0 ? k1 : undefined);   // ч. 10 — свой тест (chat-settings-sql-test.mjs)
 const db = new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth;
 create table cur(u uuid); insert into cur values (null);
