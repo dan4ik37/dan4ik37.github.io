@@ -123,7 +123,7 @@ async function renderProfileChar(uid, isOwn){
   else { const m = await D37Char.looksOf([uid]); look = m[uid] || null; }
   if (!look || document.getElementById('profileChar') !== el) return;
   el.querySelector('img').src = D37Char.img(look, 96);
-  el.href = isOwn ? '#/games/wardrobe' : '#/games/wardrobe';
+  el.href = isOwn && (typeof HUB_ON === 'undefined' || HUB_ON) ? '/hub/wardrobe' : '#/games/wardrobe';   // T-163: свой — лёгкий гардероб платформы
   el.title = isOwn ? 'Мой персонаж — открыть гардероб' : 'Персонаж игрока — собери своего в гардеробе';
   el.hidden = false;
 }

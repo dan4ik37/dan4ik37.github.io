@@ -266,11 +266,13 @@ function renderGamesMe(){
   const box = document.getElementById('gamesMe');
   if (!box || !window.D37Char || !window.D37Coins) return;
   box.hidden = false;
-  box.innerHTML = `<a class="gm-me-char" href="/play/wardrobe" title="Мой персонаж — гардероб" aria-label="Мой персонаж"><canvas width="112" height="112"></canvas></a>
+  // T-163: гардероб — лёгкий гардероб платформы (только персонаж, без мира); раздел платформы выключен — старый редактор
+  const W = (typeof HUB_ON === 'undefined' || HUB_ON) ? '/hub/wardrobe' : '/play/wardrobe';
+  box.innerHTML = `<a class="gm-me-char" href="${W}" title="Мой персонаж — гардероб" aria-label="Мой персонаж"><canvas width="112" height="112"></canvas></a>
     <div class="gm-me-body"><b>Мой персонаж</b><span>🪙 <b class="js-coins">${Number(D37Coins.coins()).toLocaleString('ru')}</b> монет${window.D37Gems?.isOn() ? ` · <a class="gm-gems" href="/shop" title="Магазин кристаллов">💎 <b class="js-gems">${D37Gems.num(D37Gems.balance())}</b></a>` : ''}</span></div>
     ${D37Coins.canDaily() ? '<button type="button" class="gm-me-btn" onclick="gamesDailyBonus(this)">🎁 Бонус дня</button>' : ''}
     ${window.D37AdPlaces?.coinOffer?.('hub') || ''}
-    <a class="gm-me-btn ghost" href="/play/wardrobe">🎭 Гардероб</a>`;
+    <a class="gm-me-btn ghost" href="${W}">🎭 Гардероб</a>`;
   D37Char.draw(box.querySelector('canvas').getContext('2d'), D37Char.look(), 56, 106, 88, { t: 0 });
 }
 async function gamesDailyBonus(btn){

@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════
 //  🎮 ПЛАТФОРМА D37 — главное меню «как в Роблоксе, только лучше» + игра нового движка внутри сайта (T-159 первая версия, EP7 13.11)
 // ═══════════════════════════════════════
-// Раздел /hub (PAGES.hub, js/ui/router.js): плитки «Играть» (долина: добыча, крафт, стройка — сцена valley), «Полёт над планетой» (/hub/planet), «Гардероб» (игра сразу в гардеробе), «Мир Денчика»,
+// Раздел /hub (PAGES.hub, js/ui/router.js): плитки «Играть» (долина: добыча, крафт, стройка — сцена valley), «Творческий режим» (/hub/creative — отдельный мир, свободный полёт; T-163), «Гардероб» (лёгкий: только персонаж, без мира; T-163), «Мир Денчика»,
 // «Студия», «Мини-игры» (раздел игр сайта — одной плиткой, сам раздел не трогаем), «Позвать друга». /hub/play и /hub/wardrobe — игра
 // поверх сайта: экран загрузки с настоящим прогрессом, холст движка, «← На сайт», ⛶ на весь экран.
 // Движок (Rust → wasm) — папка HUB_ENGINE (js/core/config.js; сейчас /d37/ — там же тестовая страница движка). С ним говорит только
@@ -28,7 +28,7 @@
   const TILES = [
     { id: 'play', big: 1, icon: '🌲', title: 'Играть', sub: 'Долина на планете: руби деревья, собирай камни и ягоды, делай топор и строй дом — всё сохраняется', href: '/hub/play', cls: 'hub-t-play' },
     { id: 'wardrobe', icon: '👕', title: 'Гардероб', sub: 'Девочка, мальчик или манекен, цвета каждой части', href: '/hub/wardrobe', cls: 'hub-t-ward' },
-    { id: 'planet', icon: '🪐', title: 'Полёт над планетой', sub: 'С орбиты вниз, посадка где хочешь, плавание и ныряние', href: '/hub/planet', cls: 'hub-t-planet' },
+    { id: 'creative', icon: '🪐', title: 'Творческий режим', sub: 'Отдельный мир: свободный полёт над планетой, без голода и опасностей — своё сохранение', href: '/hub/creative', cls: 'hub-t-planet' },
     { id: 'world', icon: '🌍', title: 'Мир Денчика', sub: 'Город, кафе и столики с играми — онлайн', href: '/play/world', cls: 'hub-t-world', age: '12+' },
     { id: 'studio', icon: '🧱', title: 'Студия', sub: 'Построй свой 3D-мир со скриптами', href: '/play/studio3d', cls: 'hub-t-studio' },
     { id: 'mini', icon: '🎲', title: 'Мини-игры', sub: 'Шахматы, «5 букв», дурак, клеточки и ещё 50 игр', href: '/play', cls: 'hub-t-mini' },
@@ -81,9 +81,13 @@
     return cloudP;
   }
   const GAME = 'engine', WORLD = 'planet';
-  // режимы игры: play — долина (добыча, крафт, стройка; сцена valley), planet — полёт с орбиты, wardrobe — гардероб на земле
-  const MODES = { play: 'valley', planet: 'planet', wardrobe: 'planet_ground' };
-  const SAVES = m => m === 'play' || m === 'planet';
+  // режимы игры: play — главный мир (долина: добыча, крафт, стройка; сцена valley), creative — «Творческий режим» (T-163: отдельный мир,
+  // свободный полёт с орбиты, без выживания; старый адрес /hub/planet ведёт туда же), wardrobe — лёгкий гардероб (T-163: персонаж один
+  // на подставке, без планеты — сцена wardrobe; в игре гардероб по-прежнему B / 👕)
+  const MODES = { play: 'valley', creative: 'creative', planet: 'creative', wardrobe: 'wardrobe' };
+  const SLOT = { play: WORLD, creative: 'creative', planet: 'creative' };   // у творческого мира своё сохранение (и в облаке — мир 'creative')
+  const SAVES = m => !!SLOT[m];
+  const slot = () => SLOT[st.mode] || WORLD;
 
   // ═══ Состояние ═══
   const st = { gen: 0, active: false, mode: '', h: null, starting: false, t0: 0, playBase: 0, cloudVer: null, lastCloud: 0, saves: 0, cloudSaves: 0, look: null,
@@ -125,10 +129,10 @@
     if (!bytes || !bytes.length) return false;
     st.saveBusy = true;
     try {
-      const prev = await idbGet(WORLD);
+      const W = slot(), prev = await idbGet(W);
       const gt = Math.round(playSeconds());
       const rec = { bytes, at: Date.now(), gt, cloud: Object.assign({ on: false, ver: null }, prev && prev.cloud, { dirty: true }) };
-      await idbPut(WORLD, rec);
+      await idbPut(W, rec);
       st.saves++;
       const u = me();
       if (!u) { status('Сохранено в браузере · войди — мир будет и в облаке'); return true; }
@@ -137,10 +141,10 @@
       if (!C || !C.available()) { status('Сохранено в браузере'); return true; }
       st.lastCloud = Date.now();
       const base = Number.isInteger(rec.cloud.ver) ? rec.cloud.ver : null;
-      const r = await C.put(GAME, WORLD, { name: 'Планета D37', data: bytes, gt, base });
+      const r = await C.put(GAME, W, { name: W === WORLD ? 'Планета D37' : 'Творческий мир D37', data: bytes, gt, base });
       if (r && r.ok) {
         rec.cloud = { on: true, ver: r.ver, dirty: false };
-        await idbPut(WORLD, rec);
+        await idbPut(W, rec);
         st.cloudSaves++;
         status('☁️ Сохранено в облаке');
       } else status(r && r.reason === 'conflict' ? 'В облаке мир новее (другое устройство) — зайди в игру заново' : 'Сохранено в браузере (облако: ' + (r && r.reason || 'нет связи') + ')');
@@ -151,24 +155,25 @@
   // Какое сохранение взять при входе в игру: облако новее и здесь не менялось — облачное; поменялись оба — новее по времени игры
   async function pickSave(){
     let local = null;
-    try { local = await idbGet(WORLD); } catch (e) {}
+    const W = slot();
+    try { local = await idbGet(W); } catch (e) {}
     if (!me()) return local;
     const C = await cloud();
     if (!C || !C.available()) return local;
     try {
       const L = await C.list(GAME);
       if (!L || !L.ok) return local;
-      const row = (L.list || []).find(r => r.world === WORLD) || null;
+      const row = (L.list || []).find(r => r.world === W) || null;
       const how = C.resolve(local && local.cloud, row);
       const takeCloud = row && (how === 'down' || !local || (how === 'conflict' && (+row.gt || 0) > (+(local && local.gt) || 0)));
       if (takeCloud) {
         const bytes = await C.get(GAME, row);
         const rec = { bytes, at: Date.now(), gt: +row.gt || 0, cloud: { on: true, ver: row.ver, dirty: false } };
-        await idbPut(WORLD, rec);
+        await idbPut(W, rec);
         status('☁️ Мир взят из облака');
         return rec;
       }
-      if (local && row && how === 'conflict') { local.cloud = { on: true, ver: row.ver, dirty: true }; await idbPut(WORLD, local); }   // оставили этот — он и уйдёт в облако
+      if (local && row && how === 'conflict') { local.cloud = { on: true, ver: row.ver, dirty: true }; await idbPut(W, local); }   // оставили этот — он и уйдёт в облако
       return local;
     } catch (e) { report('cloud', e && e.message); return local; }
   }
@@ -193,14 +198,15 @@
   async function renderMenu(){
     const page = $('hub-page'); if (!page) return;
     page.textContent = '';
-    const wrap = el('div', 'hub wrap');
+    const wrap = el('div', 'hub wrap hub-menu');   // hub-menu: на телефоне порядок другой (css/hub.css — «Играть» на первом экране)
     const head = el('div', 'hub-head');
     head.appendChild(el('div', 'hub-kick', 'Новый движок D37 · первая версия'));
     head.appendChild(el('h1', 'hub-h1', 'Во что играем?'));
     head.appendChild(el('p', 'hub-lead', 'Своя планета, свой персонаж и все игры сайта — в одном меню.'));
     wrap.appendChild(head);
     if (!ON()) { wrap.appendChild(el('p', 'hub-soon', 'Скоро здесь будет новое меню игр. А пока — раздел «Игры».')); page.appendChild(wrap); return; }
-    account(wrap);
+    const CAT = root.D37HubCat;   // T-163: «кто ты в игре» и строка «Игры игроков» (js/features/hub-catalog.js)
+    if (CAT) { CAT.me(wrap); CAT.row(wrap); } else account(wrap);   // строка игр — сразу под плашкой, её видно без прокрутки на ПК
     const grid = el('div', 'hub-grid');
     for (const t of TILES) {
       const a = el(t.href ? 'a' : 'button', 'hub-tile ' + t.cls + (t.big ? ' hub-big' : ''));
@@ -260,9 +266,9 @@
         ['🌲 Долина', 'подойди к дереву и держи ДЕЙСТВИЕ (ЛКМ или E) — дерево упадёт и станет брёвнами; камни, траву, ягоды и ветки тоже можно собрать. Руками медленно — сделай топор, кирку и лопату'],
         ['🔨 Ремесло', 'T или кнопка РЕМЕСЛО — доски, палки, инструменты, верстак, костёр, факел; стены, дверь, крыша, пол и мост — рядом с верстаком'],
         ['🏠 Стройка', 'возьми деталь в руку (1-8 или СУМКА) и поставь (ПКМ или ДЕЙСТВИЕ); R — повернуть; стены цепляются к стенам, крыша — на стены. Зажми ДЕЙСТВИЕ на детали — забрать обратно'],
-        ['📱 Телефон', 'левая половина экрана — идти (до упора — бегом), правая — смотреть; ⤒ — прыжок, 👕 — гардероб; в полёте над планетой 🌍 — с орбиты на землю и обратно'],
+        ['📱 Телефон', 'левая половина экрана — идти (до упора — бегом), правая — смотреть; ⤒ — прыжок, 👕 — гардероб; в творческом режиме 🌍 — с орбиты на землю и обратно'],
         ['🖥 Компьютер', 'нажми на картинку — мышь смотрит; W A S D — идти, Shift — бегом, Пробел — прыжок (в воде — вверх), C — присесть'],
-        ['🪐 Полёт', '«Полёт над планетой» начинается на орбите: зажми O (или 🌍) — полетишь вниз и приземлишься; ещё раз — обратно в космос'],
+        ['🪐 Творческий режим', 'отдельный мир без голода и опасностей, начинается на орбите: зажми O (или 🌍) — полетишь вниз и приземлишься; ещё раз — обратно в космос'],
         ['🌊 Вода', 'в воду можно зайти вброд, глубже — плыть; ныряй и смотри на дно'],
         ['👕 Гардероб', 'B или 👕 — девочка, мальчик или манекен, цвет волос, верха, низа, обуви и кожи; образ сохраняется сам'],
         ['💾 Сохранение', 'само, через пару секунд после каждого дела и при выходе — в браузере; вошёл в аккаунт — ещё и в облаке, на любом устройстве'],
@@ -326,7 +332,7 @@
   }
   async function invite(e){
     e && e.preventDefault && e.preventDefault();
-    const url = (root.D37Route ? D37Route.abs('/hub') : location.origin + '/hub');
+    const url = (root.D37Route ? D37Route.abs('/hub/play') : location.origin + '/hub/play');
     const text = 'Залетай на мою планету в новом движке dan4ik37!';
     try { if (navigator.share) { await navigator.share({ title: 'Планета D37', text, url }); return; } } catch (er) { if (er && er.name === 'AbortError') return; }
     try { await navigator.clipboard.writeText(url); toastMenu('Ссылка скопирована — отправь другу'); } catch (er) { toastMenu(url); }
@@ -342,23 +348,24 @@
   function buildUi(mode){
     // долина: своя строка подсказок движка вверху — полоса сайта над картинкой, не поверх неё
     const box = el('div', 'hub-play' + (mode === 'play' ? ' hub-game' : ''));
-    box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', mode === 'wardrobe' ? 'Гардероб D37' : mode === 'planet' ? 'Планета D37' : 'Игра D37');
+    const cre = mode === 'creative' || mode === 'planet';
+    box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', mode === 'wardrobe' ? 'Гардероб D37' : cre ? 'Творческий режим D37' : 'Игра D37');
     const bar = el('div', 'hub-bar');
     const back = el('button', 'hub-back', '← На сайт'); back.type = 'button';
-    back.addEventListener('click', () => { if (root.D37Route) D37Route.go('/hub'); else location.href = '/hub'; });
-    const title = el('b', 'hub-title', mode === 'wardrobe' ? '👕 Гардероб' : mode === 'planet' ? '🪐 Планета D37' : '🌲 Долина D37');
+    back.addEventListener('click', () => leave(mode));
+    const title = el('b', 'hub-title', mode === 'wardrobe' ? '👕 Гардероб' : cre ? '🪐 Творческий режим' : '🌲 Долина D37');
     const stat = el('span', 'hub-stat', '');
     const full = el('button', 'hub-full', '⛶'); full.type = 'button'; full.title = 'На весь экран'; full.setAttribute('aria-label', 'На весь экран');
     full.addEventListener('click', () => toggleFull(box));
     bar.append(back, title, stat, full);
     const stage = el('div', 'hub-stage');
     const load = el('div', 'hub-load');
-    const lt = el('div', 'hub-lt', mode === 'wardrobe' ? 'Открываем гардероб' : mode === 'planet' ? 'Летим на планету' : 'Идём в долину');
+    const lt = el('div', 'hub-lt', mode === 'wardrobe' ? 'Открываем гардероб' : cre ? 'Летим в творческий мир' : 'Идём в долину');
     const ph = el('div', 'hub-ph', 'Загружаем движок');
     const barO = el('div', 'hub-pb'), barI = el('i', '');
     barO.appendChild(barI);
     const pct = el('div', 'hub-pct', '0%');
-    const tip = el('div', 'hub-tip', mode === 'play'
+    const tip = el('div', 'hub-tip', mode === 'wardrobe' ? 'Только персонаж — без мира, поэтому быстро. Образ сохранится сам.' : mode === 'play'
       ? (touchDev() ? 'Слева — идти, справа — смотреть. Кнопка ДЕЙСТВИЕ — рубить и брать, СУМКА и РЕМЕСЛО — вещи и крафт.' : 'Нажми на картинку. ЛКМ или E — рубить и брать, Q — сумка, T — ремесло, 1-8 — в руку, ПКМ — поставить.')
       : touchDev() ? 'Слева на экране — идти, справа — смотреть, 🌍 — с орбиты на землю.' : 'Нажми на картинку, чтобы смотреть мышью. W A S D — идти, O — с орбиты на землю, B — гардероб.');
     const cancel = el('button', 'hub-cancel', 'Отмена'); cancel.type = 'button';
@@ -464,6 +471,7 @@
     if (!m || typeof m.t !== 'string') return;
     if (m.t === 'loaded') { if (ui) ui.load.hidden = true; ym('d37_ready'); }
     else if (m.t === 'look_changed') onLook(m);
+    else if (m.t === 'wardrobe' && m.on === false && st.mode === 'wardrobe') leave('wardrobe');
     else if (m.t === 'save_ready') saveWorld(String(m.why || ''));
     else if (m.t === 'event') { st.events.push(String(m.code)); if (EVENTS[m.code]) toast(EVENTS[m.code]); }
     else if (m.t === 'resumed') { st.resumed = m.summary || null; if (m.summary && SAVES(st.mode)) toast(st.mode === 'play' ? '▶ Твоя долина: всё, что построил, на месте' : '▶ Продолжаем с того места, где ты был'); }
@@ -488,6 +496,12 @@
     document.body.classList.remove('hub-on', 'e2-calm');
     if (!/^#\/games\/./.test(root.D37Route ? D37Route.hash() : '')) document.body.classList.remove('game-on');
   }
+  // «← На сайт» / «Готово» в гардеробе: туда, откуда пришли (профиль, раздел игр), иначе — меню платформы
+  let prevPath = '', curPath = typeof location !== 'undefined' ? location.pathname : '';
+  function leave(mode){
+    const to = mode === 'wardrobe' && prevPath && !/^\/hub\/(play|creative|planet|wardrobe)/.test(prevPath) ? prevPath : '/hub';
+    if (root.D37Route) D37Route.go(to); else location.href = to;
+  }
   async function restart(){ const m = st.mode; await close('restart'); if (m) open(m); }
 
   // Образ поменяли не здесь (вошёл с другого устройства — настройки пришли из аккаунта) — показать его в игре
@@ -505,13 +519,17 @@
   function render(param){
     const p = String(param || '').split('/')[0];
     if (ON() && MODES[p]) { open(p); return; }
+    if (ON() && p === 'games' && root.D37HubCat) { if (st.active) close('menu'); D37HubCat.page($('hub-page')); return; }
     renderMenu();
     // из игры в меню: мир сохраняется при выходе — «▶ Продолжить» и «Сохранение» перерисовать, когда запишется
     if (st.active) close('menu').then(() => { if (!st.active && typeof currentRoute === 'function' && currentRoute() === 'hub') renderMenu(); });
   }
   if (typeof window !== 'undefined') {
     // ушли из /hub — сохранить и выгрузить движок; вкладку спрятали — сохранить и поставить на паузу
-    window.addEventListener('d37:route', () => { setTimeout(() => { if (st.active && (typeof currentRoute !== 'function' || currentRoute() !== 'hub' || !/^(play|wardrobe)/.test(String(currentRouteParam() || '')))) close('route'); profileCard(); }, 400); });
+    window.addEventListener('d37:route', () => {
+      if (location.pathname !== curPath) { prevPath = curPath; curPath = location.pathname; }
+      setTimeout(() => { if (st.active && (typeof currentRoute !== 'function' || currentRoute() !== 'hub' || !/^(play|wardrobe|creative|planet)/.test(String(currentRouteParam() || '')))) close('route'); profileCard(); }, 400);
+    });
     window.addEventListener('load', () => setTimeout(profileCard, 1500));
     document.addEventListener('visibilitychange', () => {
       if (!st.h) return;
@@ -529,5 +547,5 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', navOn); else navOn();
   }
   root.renderHubPage = render;
-  root.D37Hub = { TILES, open, close, render, invite, saveWorld, pickSave, lookNow, get active(){ return st.active; }, _st: st, _idb: { get: idbGet, put: idbPut } };
+  root.D37Hub = { TILES, open, close, render, invite, saveWorld, pickSave, lookNow, fmtMin, get active(){ return st.active; }, _st: st, _idb: { get: idbGet, put: idbPut } };
 })();
