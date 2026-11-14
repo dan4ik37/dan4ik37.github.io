@@ -53,3 +53,13 @@
   from the URL → no ads, without a nick → ads (SHARE_ADS). Watch achievements are not offered or shown as a title (achShown).
 - Owner-only (AdSense UI): Auto ads off or page exclusions (/play, /chat, /phone, /profile, /adv, /invite), EEA consent message,
   blocking controls (gambling, dating, alcohol), «Запросить проверку» after deploy; GitHub Pages mirror off (Settings → Pages).
+
+## Trust pages (14.11.2026, branch ads-about-trust; AdSense «Бесполезный контент»)
+- Every server page footer starts with page.js TRUST_LINKS (О сайте и авторе, /sitemap, DEVLOG_URL = '/devlog' from branch ads-devlog — change
+  or blank it there, Контакты, /privacy, /privacy#ads «Реклама и cookie»); index.html footer, privacy.html and 404.html carry the same links.
+- /sitemap — HTML site map (routes/sitemap-page.js, no ads, in sitemap-pages.xml): same addresses as sitemap-pages.xml minus single forum
+  posts / ideas / player games. New indexable section → a line there too.
+- /about: sections «Что за сайт», «Как сделаны игры и инструменты», «Модерация и защита детей», «Как связаться» — facts only (age.sql,
+  community automod, ugc/forum review, score caps, ADS_RULES.age). Organization + WebSite JSON-LD with shared @id (#org, #website,
+  #person): page.js SITE_LD, the same block in index.html <head>. /contacts without seller data: title «Контакты сайта», general contact first.
+
