@@ -36,6 +36,7 @@
     { id: 'howto', icon: '🎓', title: 'Как играть', sub: 'Кнопки на телефоне и на ПК', act: 'howto', cls: 'hub-t-howto' },
     { id: 'gfx', icon: '✨', title: 'Графика', sub: '', act: 'gfx', cls: 'hub-t-gfx' },
     { id: 'save', icon: '💾', title: 'Сохранение', sub: 'Пока пусто — начни игру', act: 'save', cls: 'hub-t-save' },
+    { id: 'shots', icon: '📸', title: 'Снимки', sub: 'F2 в игре — кадр сюда (последние 12)', act: 'shots', cls: 'hub-t-shots' },
   ];
   // Графика игры (только вид — игра одинаковая): выбор живёт в этом браузере; «Простой режим» — WebGL2 вместо WebGPU
   const GFX = [
@@ -252,6 +253,7 @@
       if (t.act === 'howto') a.addEventListener('click', howto);
       if (t.act === 'gfx') { a.querySelector('.hub-ts').textContent = gfxNow().label + ' · ' + gfxNow().sub; a.addEventListener('click', () => gfxPick(a)); }
       if (t.act === 'save') a.addEventListener('click', saveSheet);
+      if (t.act === 'shots') a.addEventListener('click', () => shotsSheet());
       grid.appendChild(a);
     }
     wrap.appendChild(grid);
@@ -312,17 +314,19 @@
   }
   const fmtMin = s => { const m = Math.max(1, Math.round((+s || 0) / 60)); return m >= 60 ? Math.floor(m / 60) + ' ч ' + (m % 60) + ' мин' : m + ' мин'; };
   // лист поверх меню (как играть, сохранение): заголовок, строки, кнопки; закрывается кнопкой, фоном и Esc
-  function sheet(title, build){
-    const page = $('hub-page'); if (!page) return null;
+  function sheet(title, build){ return sheetIn(null, title, build); }
+  function sheetIn(host, title, build, onClose){
+    const page = host || $('hub-page'); if (!page) return null;
     page.querySelector('.hub-sheet-bg')?.remove();
     const bg = el('div', 'hub-sheet-bg'), box = el('div', 'hub-sheet');
     box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', title);
     const x = el('button', 'hub-sheet-x', '✕'); x.type = 'button'; x.setAttribute('aria-label', 'Закрыть');
-    const close = () => { bg.remove(); document.removeEventListener('keydown', esc); };
-    const esc = e => { if (e.key === 'Escape') close(); };
+    const close = () => { bg.remove(); document.removeEventListener('keydown', esc, true); if (onClose) onClose(); };
+    // Esc закрывает лист и дальше не идёт (в игре он не должен открыть паузу движка)
+    const esc = e => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); } };
     x.addEventListener('click', close);
     bg.addEventListener('click', e => { if (e.target === bg) close(); });
-    document.addEventListener('keydown', esc);
+    document.addEventListener('keydown', esc, true);
     box.append(x, el('h2', 'hub-sheet-h', title));
     build(box, close);
     bg.appendChild(box); page.appendChild(bg);
@@ -377,6 +381,36 @@
       box.appendChild(row);
     });
   }
+  // F2-снимки (ep9-left): галерея на этом устройстве — последние 12 кадров из IndexedDB; открыть крупно, удалить. Ничего не скачивается.
+  // `host` — куда положить лист (меню платформы или открытая игра); без него — меню.
+  async function shotsSheet(host){
+    const list = await idbGet(SHOTS).catch(() => null);
+    const shots = (Array.isArray(list) ? list : []).filter(s => s && s.blob instanceof Blob);
+    const urls = [];
+    const box = sheetIn(host, 'Снимки', (box, close) => {
+      if (!shots.length) { box.appendChild(el('p', 'hub-sheet-p', 'Пока пусто. В игре нажми F2 (или «СНИМОК» в меню паузы) — кадр появится здесь.')); return; }
+      const grid = el('div', 'hub-shots');
+      shots.slice().reverse().forEach(s => {
+        const cell = el('figure', 'hub-shot');
+        const img = document.createElement('img');
+        const u = URL.createObjectURL(s.blob); urls.push(u);
+        img.src = u; img.alt = 'Снимок'; img.loading = 'lazy';
+        img.addEventListener('click', () => cell.classList.toggle('big'));
+        const cap = el('figcaption', '', new Date(+s.t || 0).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }));
+        const del = el('button', 'hub-shot-x', '🗑'); del.type = 'button'; del.title = 'Удалить'; del.setAttribute('aria-label', 'Удалить снимок');
+        del.addEventListener('click', async ev => {
+          ev.stopPropagation();
+          const cur = (await idbGet(SHOTS).catch(() => null)) || [];
+          await idbPut(SHOTS, (Array.isArray(cur) ? cur : []).filter(x => !(x && x.t === s.t))).catch(() => {});
+          cell.remove();
+        });
+        cell.append(img, cap, del);
+        grid.appendChild(cell);
+      });
+      box.appendChild(grid);
+    }, () => urls.forEach(u => { try { URL.revokeObjectURL(u); } catch (e) {} }));
+    return box;
+  }
   // Карточка игры в своём профиле: персонаж D37, сколько наиграно, «Играть» и «Гардероб» (profile.js не трогаем — вставка по переходу)
   async function profileCard(){
     if (!ON() || typeof currentRoute !== 'function' || currentRoute() !== 'profile') return;
@@ -411,7 +445,18 @@
 
   // ═══ Игра поверх сайта ═══
   let ui = null;
-  function status(t){ st.status = t; if (ui && ui.stat) { ui.stat.textContent = t; ui.stat.classList.add('on'); clearTimeout(ui.statT); ui.statT = setTimeout(() => ui && ui.stat && ui.stat.classList.remove('on'), 3500); } }
+  // ep9-left (владелец: «плашка „Сохранено…“ поверх игры»): в игре без полосы сайта — только значок 💾 у ⏸ на 2 с, полный текст —
+  // в подсказке значка и в меню паузы сайта; в гардеробе (там полоса) — как было
+  function status(t){
+    st.status = t;
+    if (!ui || !ui.stat) return;
+    const float = ui.stat.classList.contains('hub-stat-float');
+    ui.stat.textContent = float ? (/облак/.test(t) && !/Сохранено в браузере/.test(t) ? '☁️' : '💾') : t;
+    ui.stat.title = t;
+    if (ui.psave) ui.psave.textContent = '💾 ' + t;
+    ui.stat.classList.add('on'); clearTimeout(ui.statT);
+    ui.statT = setTimeout(() => ui && ui.stat && ui.stat.classList.remove('on'), float ? 2000 : 3500);
+  }
   function toast(t){ if (!ui) return; const x = el('div', 'hub-gtoast', t); ui.box.appendChild(x); setTimeout(() => x.remove(), 3200); }
   const EVENTS = { landed: '🛬 Приземлился! Теперь можно гулять и плавать', wade: '🌊 Вброд по воде', swim: '🏊 Плывёшь — пробел вверх', dive: '🤿 Нырнул!', orbit: '🚀 Снова на орбите' };
   const PHASES = { wasm: 'Загружаем движок', gpu: 'Готовим видеокарту', world: 'Строим мир' };
@@ -430,7 +475,7 @@
     bar.append(back, title, stat, full);
     // В игре полосы сайта нет (владелец 13.11: «это явно лишнее, оно должно быть в паузе, а не занимать игру»): маленькая ⏸ в углу,
     // «На сайт» и «На весь экран» — в меню паузы. Гардероб оставляет свою полосу (там «Готово»).
-    let pause = null;
+    let pause = null, psave = null;
     if (mode !== 'wardrobe') {
       box.classList.add('hub-nobar');
       stat.classList.add('hub-stat-float');
@@ -441,13 +486,25 @@
       const fullP = el('button', 'hub-pbtn', '⛶ На весь экран'); fullP.type = 'button';
       fullP.addEventListener('click', () => { toggleFull(box); closePause(); });
       back.classList.add('hub-pbtn');
-      card.append(el('b', 'hub-ptitle', title.textContent), resume, fullP, back);
+      const shotsB = el('button', 'hub-pbtn', '📸 Снимки'); shotsB.type = 'button';
+      shotsB.addEventListener('click', () => shotsSheet(box));
+      psave = el('div', 'hub-psave', st.status ? '💾 ' + st.status : '');
+      card.append(el('b', 'hub-ptitle', title.textContent), resume, fullP, shotsB, back, psave);
       pause.appendChild(card);
-      const openPause = () => { if (!pause.hidden) return; pause.hidden = false; try { st.h && st.h.pause(); } catch (e) {} resume.focus({ preventScroll: true }); };
+      const openSite = () => { if (!pause.hidden) return; pause.hidden = false; try { st.h && st.h.pause(); } catch (e) {} resume.focus({ preventScroll: true }); };
       const closePause = () => { if (pause.hidden) return; pause.hidden = true; try { st.h && st.h.resume(); } catch (e) {} };
+      // ep9-left (телефон): ⏸ открывает паузу САМОЙ игры (ПРОДОЛЖИТЬ / НАСТРОЙКИ / УПРАВЛЕНИЕ / НА САЙТ — пальцем, мир стоит);
+      // меню сайта — только пока движок не готов или в нём нет этой паузы (старый движок)
+      const openPause = () => {
+        const h = st.h;
+        if (h && typeof h.pauseMenu === 'function' && st.ready) { try { h.pauseMenu(true); return; } catch (e) {} }
+        openSite();
+      };
       pbtn.addEventListener('click', openPause);
       resume.addEventListener('click', closePause);
       pause.addEventListener('click', e => { if (e.target === pause) closePause(); });
+      // Esc в открытом меню сайта = «Продолжить» (и не уходит в движок — тот открыл бы свою паузу поверх)
+      pause.closePause = closePause;   // Esc — общий обработчик ниже (один на страницу, без утечек при каждом входе)
       box.append(pbtn, stat);
     }
     const stage = el('div', 'hub-stage');
@@ -474,7 +531,7 @@
     document.body.appendChild(box);
     // кнопка сайта, по которой зашли, остаётся в фокусе — пробел / Enter в игре нажимали бы её снова
     try { const a = document.activeElement; if (a && a !== document.body && a.blur) a.blur(); } catch (e) {}
-    return { box, bar, stage, load, ph, barI, pct, err, stat, statT: 0 };
+    return { box, bar, stage, load, ph, barI, pct, err, stat, statT: 0, psave, pause };
   }
   const touchDev = () => { try { return matchMedia('(pointer: coarse)').matches; } catch (e) { return false; } };
   function toggleFull(box){
@@ -573,7 +630,7 @@
   }
   function onMsg(m){
     if (!m || typeof m.t !== 'string') return;
-    if (m.t === 'loaded') { if (ui) ui.load.hidden = true; ym('d37_ready'); if (st.opt === 'new') toast('🦠 Новый мир: ты — клетка в приливной луже'); else if (st.opt === 'tribe') toast('🔥 Племя: собирай, строй, зови людей'); }
+    if (m.t === 'loaded') { st.ready = true; if (ui) ui.load.hidden = true; ym('d37_ready'); if (st.opt === 'new') toast('🦠 Новый мир: ты — клетка в приливной луже'); else if (st.opt === 'tribe') toast('🔥 Племя: собирай, строй, зови людей'); }
     else if (m.t === 'look_changed') onLook(m);
     else if (m.t === 'wardrobe' && m.on === false && st.mode === 'wardrobe') leave('wardrobe');
     else if (m.t === 'save_ready') saveWorld(String(m.why || ''));
@@ -606,7 +663,7 @@
     // последний образ — сразу, не ждать 1,5 с
     if (st.lookT) { clearTimeout(st.lookT); st.lookT = 0; const [b, t] = st.lastLook.split('|'); if (b) keepLook(b, t || ''); }
     try { h && h.dispose(); } catch (e) {}
-    st.h = null; st.active = false; st.mode = ''; st.opt = ''; st.t0 = 0; st.gen++;
+    st.h = null; st.active = false; st.ready = false; st.mode = ''; st.opt = ''; st.t0 = 0; st.gen++;
     if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
     if (ui) { ui.box.remove(); ui = null; }
     document.body.classList.remove('hub-on', 'e2-calm');
@@ -652,6 +709,13 @@
       if (document.hidden) { st.h.pause(); saveWorld('hidden'); } else st.h.resume();
     });
     window.addEventListener('pagehide', () => { if (st.h) saveWorld('exit'); });
+    // ep9-left: Esc в открытом меню паузы сайта = «Продолжить»; дальше не идёт (движок открыл бы свою паузу поверх). Открытый лист
+    // («Снимки») закрывается своим обработчиком первым.
+    document.addEventListener('keydown', e => {
+      const p = ui && ui.pause;
+      if (e.key !== 'Escape' || !p || p.hidden || !p.closePause || ui.box.querySelector('.hub-sheet-bg')) return;
+      e.stopPropagation(); e.preventDefault(); p.closePause();
+    }, true);
     window.addEventListener('d37:auth', () => { if (st.h) st.h.send(Object.assign({ t: 'session' }, sessionMsg())); if (!st.active && typeof currentRoute === 'function' && currentRoute() === 'hub') renderMenu(); setTimeout(profileCard, 1200); });
     setTimeout(watchSettings, 0);
     // меню сайта: пункт «🪐 Играть» виден, только когда раздел включён; в нижнем меню телефона он стоит на месте «🌍 Мир»
