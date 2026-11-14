@@ -105,7 +105,7 @@ async function main() {
   const keys = new Set();
   let fly = false, third = true;
   const stick = { id: -1, x0: 0, y0: 0, sx: 0, sy: 0 }, look = { id: -1, x: 0, y: 0 };
-  let touchJump = false, orbitHeld = false;
+  let touchJump = false, touchCrouch = false, orbitHeld = false;
   const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64 };
   // EP7 the game layer (a scene with a `game` block): the HUD is drawn and hit tested by the engine; the page forwards
   // keys / pointers and keeps the world's save in this browser (local storage; the site's host may use save() instead)
@@ -131,7 +131,7 @@ async function main() {
     if (touchJump) b |= BTN.jump;
     if (k('ShiftLeft') || k('ShiftRight')) b |= BTN.run;
     if (k('Space')) b |= BTN.jump;
-    if (k('ControlLeft') || k('ControlRight') || k('KeyC')) b |= BTN.crouch;
+    if (touchCrouch || k('ControlLeft') || k('ControlRight') || k('KeyC')) b |= BTN.crouch;
     if (fly) b |= BTN.fly;
     if (planet && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
     if (game && (mouse.act || k('KeyE'))) b |= BTN.act;
@@ -479,6 +479,14 @@ async function main() {
     const jump = $('jump');
     jump.style.display = 'flex';
     hold(jump, (v) => { touchJump = v; });
+    // ep11-fix-body (CHECK-BODY 2): crouch (roll, let go of a hang / tree / ladder); fly only in the creative world
+    $('crouch').style.display = 'flex';
+    hold($('crouch'), (v) => { touchCrouch = v; });
+    if (/creative:\s*true/.test(sceneText)) {
+      const bFly = $('fly');
+      bFly.style.display = 'flex';
+      bFly.addEventListener('pointerdown', (e) => { e.preventDefault(); fly = !fly; bFly.classList.toggle('on', fly); publish(); });
+    }
     const hudTouch = new Set();
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse') return;

@@ -1,16 +1,16 @@
 {
- "id": "b320206451",
+ "id": "41ae19c907",
  "bridge": 1,
- "wasm_raw": 15840551,
- "made": "2026-11-14T15:23:34.372Z",
+ "wasm_raw": 17794889,
+ "made": "2026-11-14T16:26:24.413Z",
  "files": {
-  "d37-page.js": 42779,
+  "d37-page.js": 43273,
   "d37-terrain-worker.js": 2996,
-  "d37_web.js": 197923,
-  "d37_web_bg.wasm": 15840551,
-  "index.html": 4597,
+  "d37_web.js": 199793,
+  "d37_web_bg.wasm": 17794889,
+  "index.html": 4864,
   "LICENSES.txt": 224,
-  "scenes/creative.ron": 1937,
+  "scenes/creative.ron": 2366,
   "scenes/crowd.ron": 540,
   "scenes/eclipse.ron": 2172,
   "scenes/meadow.ron": 1351,
@@ -23,12 +23,17 @@
   "scenes/planet_swim.ron": 1482,
   "scenes/planet_water.ron": 4841,
   "scenes/ridge.ron": 1114,
+  "scenes/rivers.ron": 1285,
   "scenes/scatter_lod.ron": 1879,
   "scenes/shore.ron": 1146,
   "scenes/valley.ron": 1303,
   "scenes/valley_orbit.ron": 1548,
   "scenes/wardrobe.ron": 1415,
+  "scenes/world.ron": 1628,
+  "scenes/world_1001.ron": 924,
+  "scenes/world_777777.ron": 930,
+  "scenes/world_play.ron": 1904,
   "scenes/yard.ron": 896,
-  "engine-host.js": 41598
+  "engine-host.js": 43836
  }
 }

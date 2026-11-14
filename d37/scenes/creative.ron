@@ -1,7 +1,9 @@
 // T-163 «Творческий режим» (owner 13.11: «полёт над планетами можно вообще оставить как творческий режим просто, для отдельного
-// мира»): the same home planet as scenes/planet.ron (seed 37), free flight from orbit, no game layer (no survival). The
-// site keeps its save in its own slot (world «creative»), never the main world's; the main world is scenes/valley.ron.
-// The player starts in orbit with the whole planet in view, flies down, lands and walks; one button flies back up.
+// мира»): the same home planet as scenes/planet.ron (seed 37), free flight from orbit. w11 creative (R-LATE-1113-10): the
+// game layer with creative rules (`creative: true`, crates/d37-app/src/game/sys/creative): no hunger or damage, every
+// block / part / item without materials, fast place / remove, time / weather / animals on call. The site keeps its save
+// in its own slot (world «creative»), never the main world's; the main world is scenes/valley.ron (nothing from thin air).
+// The player starts in orbit with the whole planet in view, flies down, lands and builds; one button flies back up.
 // `terrain`, `sun` and `cameras` belong to flat scenes and are not used by a planet scene (the sun is the planet's).
 (
     version: 0,
@@ -29,4 +31,6 @@
             "shore_water": (lat: 29, lon: 80.03, altitude: 2.5, yaw_deg: 75, pitch_deg: -7, time: 1930, fov_y_deg: 70),
         },
     ),
+    // w11 creative: the game layer in creative mode (no guided start: the palette is in the pockets)
+    game: (spawn: Home, hints: false, radius: 72, forest: 0.5, creative: true),
 )
