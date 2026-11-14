@@ -16,6 +16,7 @@ import { makeForumBlocks } from './_lib/forum-blocks.js';
 const FB = makeForumBlocks();   // адрес статьи форума — FB.slug, как в forum.sql
 import { payConfig } from './_lib/pay.js';
 import { sellerReady } from './_lib/seller.js';
+import { newsUrls } from './_lib/routes/news.js';   // «Что нового» /news/<slug> (api/_lib/news-posts.js)
 
 const url = (loc, freq, prio, lastmod) =>
   `<url><loc>${loc}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}${freq ? `<changefreq>${freq}</changefreq>` : ''}<priority>${prio}</priority></url>`;
@@ -62,6 +63,8 @@ export default async function handler(req, res) {
     : [
       url(`${SITE}/`, 'daily', '1.0'),
       url(`${SITE}/about`, 'weekly', '0.9'),
+      url(`${SITE}/news`, 'weekly', '0.7', esc(newsUrls()[0]?.date || '')),
+      ...newsUrls().map(n => url(`${SITE}${esc(n.path)}`, 'monthly', '0.6', esc(n.date))),
       // разделы сайта с настоящими адресами (js/ui/router.js); личное и служебное (/profile, /phone, /adv, /invite, /play…) — не здесь
       url(`${SITE}/shorts`, 'daily', '0.7'),
       url(`${SITE}/chat`, 'weekly', '0.6'),
