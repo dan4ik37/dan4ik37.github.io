@@ -65,3 +65,8 @@
   from the URL → no ads, without a nick → ads (SHARE_ADS). Watch achievements are not offered or shown as a title (achShown).
 - Owner-only (AdSense UI): Auto ads off or page exclusions (/play, /chat, /phone, /profile, /adv, /invite), EEA consent message,
   blocking controls (gambling, dating, alcohol), «Запросить проверку» after deploy; GitHub Pages mirror off (Settings → Pages).
+- 14.11 «Что нового» /news (branch ads-devlog; AdSense 14.11: «Бесполезный контент»): server-rendered dated posts with our own
+  text and engine shots — /news (list, no ads), /news/<slug> (BlogPosting LD, one `forum_article` slot under the text only when the
+  post has >= 150 own words, routes/news.js ADS_MIN_WORDS / NEWS_ADS), /news/rss.xml; in sitemap-pages. Data: api/_lib/news-posts.js;
+  new post: `python -X utf8 scripts/news-add.py …` (shots → img/news/*.webp < 200 KB); test: node scripts/news-test.mjs. Write a post
+  for every engine episode / big site feature: what changed and what is still weak — never filler.

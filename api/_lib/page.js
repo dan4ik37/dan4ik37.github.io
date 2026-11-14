@@ -87,7 +87,7 @@ const RSV_HEAD = `<script>window.__d37Rsv=function(){try{var s=document.currentS
 const SLOT_JS = '<script>window.__d37Rsv&&__d37Rsv()</script>';
 // обычное место (не карточка ленты): <div data-ad="ключ" hidden></div> → и скрипт сразу за ним ($& — само найденное место)
 const withRsv = body => String(body).replace(/<div data-ad="[\w-]+" hidden><\/div>/g, '$&' + SLOT_JS);
-export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false, spa = '', share = false }) {
+export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false, spa = '', share = false, head = '' }) {
   if (noindex && !(share && SHARE_ADS)) noAds = true;
   const rsv = SLOT_RSV && !noAds;
   return `<!DOCTYPE html>
@@ -113,6 +113,7 @@ ${url ? `<meta property="og:type" content="${esc(ogType)}">
 <meta property="og:locale" content="ru_RU">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="${esc(image)}">` : ''}
+${head}
 ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -150,6 +151,7 @@ ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.a
     <a href="/play/words">🔤 Слово дня</a>
     <a href="/chat">💬 Чат</a>
     <a href="/forum">📋 Форум</a>
+    <a href="/news">📰 Что нового</a>
     <a href="/ideas">💡 Идеи для видео</a>
     <a href="/vip">✨ VIP</a>
     <a href="/shop">💎 Магазин</a>
@@ -160,7 +162,7 @@ ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.a
 </header>
 ${rsv ? withRsv(body) : body}
 <footer class="foot">
-  <a href="/">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/studio">Студия игр</a> · <a href="/forum">Форум</a> · <a href="/ideas">Идеи для видео</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/tools/random">Рандомайзер</a> · <a href="/tools/typing">Тест печати</a> · <a href="/tools/photo">Фоторедактор</a> · <a href="/vip">VIP</a> · <a href="/shop">💎 Магазин</a> · <a href="/donate">💝 Поддержать</a> · <a href="/reklama">Реклама</a> · <a href="/adv">Разместить рекламу</a> · <a href="/ads-terms">Правила рекламы</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> ·<a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
+  <a href="/">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/news">Что нового</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/studio">Студия игр</a> · <a href="/forum">Форум</a> · <a href="/ideas">Идеи для видео</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/tools/random">Рандомайзер</a> · <a href="/tools/typing">Тест печати</a> · <a href="/tools/photo">Фоторедактор</a> · <a href="/vip">VIP</a> · <a href="/shop">💎 Магазин</a> · <a href="/donate">💝 Поддержать</a> · <a href="/reklama">Реклама</a> · <a href="/adv">Разместить рекламу</a> · <a href="/ads-terms">Правила рекламы</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> ·<a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
   <a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch</a> ·
   <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" rel="noopener">Telegram</a> ·
   <a href="https://vk.com/dan4ik37" target="_blank" rel="noopener">ВКонтакте</a>

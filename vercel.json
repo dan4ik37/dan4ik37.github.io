@@ -199,6 +199,18 @@
       "destination": "/api/pages?page=about"
     },
     {
+      "source": "/news",
+      "destination": "/api/pages?page=news"
+    },
+    {
+      "source": "/news/rss.xml",
+      "destination": "/api/pages?page=news&rss=1"
+    },
+    {
+      "source": "/news/:slug",
+      "destination": "/api/pages?page=news&slug=:slug"
+    },
+    {
       "source": "/reklama",
       "destination": "/api/pages?page=reklama"
     },
