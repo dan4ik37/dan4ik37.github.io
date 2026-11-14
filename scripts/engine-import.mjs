@@ -19,7 +19,8 @@ if (!hostSrc) die('нет web/engine-host.js в движке (мост v1)');
 const glue = fs.readFileSync(path.join(dist, 'd37_web.js'), 'utf8');
 if (!/export function bridge_version\b/.test(glue) || !/host_in\(/.test(glue)) die('в сборке нет моста v1 (bridge_version / host_in) — это старая сборка');
 const wasm = fs.readFileSync(path.join(dist, 'd37_web_bg.wasm'));
-if (wasm.length > 16 * 1048576) die(`wasm ${wasm.length} байт — больше 16 МБ, так не выкладываем`);
+// owner-side limit is load time; 14.11 coordinator raised for w12 content (was 16 MiB); binaryen wasm-opt would need the owner yes
+if (wasm.length > 24 * 1048576) die(`wasm ${wasm.length} байт — больше 24 МБ, так не выкладываем`);
 
 fs.mkdirSync(path.join(out, 'scenes'), { recursive: true });
 const copied = {};
