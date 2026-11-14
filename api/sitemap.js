@@ -62,6 +62,7 @@ export default async function handler(req, res) {
     : [
       url(`${SITE}/`, 'daily', '1.0'),
       url(`${SITE}/about`, 'weekly', '0.9'),
+      url(`${SITE}/sitemap`, 'weekly', '0.5'),   // карта сайта для людей (routes/sitemap-page.js)
       // разделы сайта с настоящими адресами (js/ui/router.js); личное и служебное (/profile, /phone, /adv, /invite, /play…) — не здесь
       url(`${SITE}/shorts`, 'daily', '0.7'),
       url(`${SITE}/chat`, 'weekly', '0.6'),

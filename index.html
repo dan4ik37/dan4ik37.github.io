@@ -105,14 +105,15 @@ try { put({ t: 'x', m: String(where).slice(0, 60) + (er && er.message ? ': ' + e
 <meta property="og:locale" content="ru_RU">
 <meta property="og:site_name" content="dan4ik37">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="dan4ik37 — Официальный сайт">
-<meta name="twitter:description" content="Видео, стримы, донат и все соцсети dan4ik37">
+<meta name="twitter:title" content="dan4ik37 — видео, стримы и игры с друзьями">
+<meta name="twitter:description" content="Игровые видео и стримы dan4ik37, живой чат и бесплатные онлайн-игры: «5 букв», морской бой, города, шашки — с ботом или с другом по ссылке.">
 <meta name="twitter:image" content="https://dan4ik37.vercel.app/og-image.jpg">
 <!-- Structured data — помогает Google понять, что это персона-стример с этими соцсетями -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "Person",
+  "@id": "https://dan4ik37.vercel.app/#person",
   "name": "dan4ik37",
   "alternateName": ["Денчик37", "Денчик 37", "Dan4ik37Yt"],
   "url": "https://dan4ik37.vercel.app/",
@@ -127,15 +128,39 @@ try { put({ t: 'x', m: String(where).slice(0, 60) + (er && er.message ? ': ' + e
   ]
 }
 </script>
-<!-- Название сайта в выдаче Google (WebSite.name) + варианты, как его ищут -->
+<!-- Название сайта в выдаче Google (WebSite.name) + варианты, как его ищут; кто выпускает сайт (Organization). Те же @id —
+     в api/_lib/page.js SITE_LD (на /about и /sitemap) -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "WebSite",
-  "name": "dan4ik37",
-  "alternateName": ["Денчик37", "Сайт dan4ik37"],
-  "url": "https://dan4ik37.vercel.app/",
-  "inLanguage": "ru"
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://dan4ik37.vercel.app/#website",
+      "name": "dan4ik37",
+      "alternateName": ["Денчик37", "Сайт dan4ik37"],
+      "url": "https://dan4ik37.vercel.app/",
+      "inLanguage": "ru",
+      "publisher": { "@id": "https://dan4ik37.vercel.app/#org" }
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://dan4ik37.vercel.app/#org",
+      "name": "dan4ik37",
+      "alternateName": ["Денчик37", "Сайт dan4ik37"],
+      "url": "https://dan4ik37.vercel.app/",
+      "logo": "https://dan4ik37.vercel.app/icon-512.png",
+      "email": "dan4ik37k@gmail.com",
+      "founder": { "@id": "https://dan4ik37.vercel.app/#person" },
+      "sameAs": [
+        "https://www.youtube.com/@Dan4ik37Yt",
+        "https://www.twitch.tv/dan4ik37",
+        "https://www.tiktok.com/@.dan4ik37",
+        "https://vk.com/dan4ik37",
+        "https://t.me/+LE25p4pQojkyYjli"
+      ]
+    }
+  ]
 }
 </script>
 <link rel="preconnect" href="https://zdisuowyjgqirhvcyjfq.supabase.co" crossorigin>
@@ -2434,6 +2459,12 @@ body.low .donation-alert-icon{animation:none}
 
 <footer>
   <div class="footer-logo">dan4ik37</div>
+  <!-- Доверие (AdSense, 14.11.2026): кто ведёт сайт, карта сайта, новости, контакты, данные и реклама — как в подвале серверных
+       страниц (api/_lib/page.js TRUST_LINKS) -->
+  <nav class="footer-links footer-trust" aria-label="О сайте">
+    <a href="/about" data-server>О сайте и авторе</a><a href="/sitemap" data-server>Карта сайта</a><a href="/devlog" data-server>Дневник разработки</a>
+    <a href="/contacts" data-server>Контакты</a><a href="/privacy" data-server>Конфиденциальность</a><a href="/privacy#ads" data-server>Реклама и cookie</a>
+  </nav>
   <div class="footer-tag">Контент · Стримы · Общение <button type="button" class="d37-secret" data-secret="footer" aria-label="Секретный знак">✦</button></div>
   <div class="footer-links">
     <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank">YouTube</a>

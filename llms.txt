@@ -3,7 +3,8 @@
 > dan4ik37 (читается «Денчик37») — русскоязычный ютубер и стример, автор игрового YouTube-канала Dan4ik37 (@dan4ik37yt, канал с 18 марта 2016 года, около 6000 видео). Стримит на Twitch (twitch.tv/dan4ik37), снимает ролики и шортсы по Roblox, Counter-Strike 2, Minecraft, Hollow Knight: Silksong, хоррорам и инди-играм. Официальный сайт — https://dan4ik37.vercel.app
 
 ## Об авторе
-- [Кто такой dan4ik37](https://dan4ik37.vercel.app/about): справка — канал, живые цифры YouTube, во что играет, где найти
+- [Кто такой dan4ik37](https://dan4ik37.vercel.app/about): справка — канал, живые цифры YouTube, во что играет, где найти; что есть на сайте, как сделаны игры, модерация и защита детей, связь
+- [Карта сайта](https://dan4ik37.vercel.app/sitemap): все разделы, игры, тесты и инструменты на одной странице
 - [История канала по годам](https://dan4ik37.vercel.app/history): сколько роликов в каждом году и главные игры года
 - [Игры канала](https://dan4ik37.vercel.app/topics): ролики по играм (Roblox, CS2, Minecraft, Dead Rails, Silksong, FNAF…)
 - [Все видео](https://dan4ik37.vercel.app/videos): архив всех роликов от новых к старым

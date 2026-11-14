@@ -199,6 +199,10 @@
       "destination": "/api/pages?page=about"
     },
     {
+      "source": "/sitemap",
+      "destination": "/api/pages?page=map"
+    },
+    {
       "source": "/reklama",
       "destination": "/api/pages?page=reklama"
     },
