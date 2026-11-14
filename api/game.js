@@ -110,10 +110,24 @@ function hubPage() {
   return page({ title: HUB.title, description: HUB.description, url, image: cardImage('games'), ld, body: body.replace(/<\/main>\s*$/, () => `  ${tmNote('игры', HUB.title, HUB.h1, HUB.lead, HUB.description, ...GAME_PAGES.map(x => x.description), ...MORE.map(m => m[3]))}\n</main>`), css: GAME_CSS });
 }
 
+function relatedGames(id, n) {
+  const i = GAME_PAGES.findIndex(x => x.id === id), len = GAME_PAGES.length, out = [];
+  for (let k = 1; out.length < Math.min(n, len - 1); k++) {
+    for (const j of [i + k, i - k]) {
+      const x = GAME_PAGES[((j % len) + len) % len];
+      if (x.id !== id && !out.includes(x) && out.length < n) out.push(x);
+    }
+  }
+  return out;
+}
+
 function gamePage(g, ch) {
   const url = `${SITE}/games/${g.id}`;
   const play = `/play/${g.id}`;   // раздел игр сайта (js/ui/router.js); /games/<id> — эта страница для поиска
-  const others = GAME_PAGES.filter(x => x.id !== g.id);
+  // «Другие игры» — 8 соседей по списку (4 до и 4 после, по кругу), а не все 76: иначе общий список ≈ 2000 слов
+  // повторяется на каждой странице и забивает уникальный гайд (AdSense «Бесполезный контент», 14.11). Кольцо даёт
+  // каждой странице 8 входящих ссылок; полный список — на /games.
+  const others = relatedGames(g.id, 8);
   const [age, ageWhy] = ageOf(g.id);
   const ld = {
     '@context': 'https://schema.org',
@@ -174,7 +188,7 @@ function gamePage(g, ch) {
   <div class="cta center"><a class="btn btn-acc big" href="${play}">▶ Играть в «${esc(g.name)}»</a></div>
 
   <section class="more"><h2>Другие игры</h2><div class="ggrid">${others.map(card).join('')}</div>
-    <p class="all"><a href="/games">Все игры →</a></p></section>
+    <p class="all"><a href="/games">Все ${GAME_PAGES.length} игр →</a></p></section>
   ${joinBlock()}
   ${tmNote('игра', ...gameTexts(g))}
 </main>`;
