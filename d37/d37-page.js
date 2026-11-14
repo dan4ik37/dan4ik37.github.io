@@ -176,6 +176,7 @@ async function main() {
   // A garment is cut for one body: this version recolours, it does not move clothes between the girl and the boy.
   const wardrobe = $('wardrobe');
   let wSlot = null, wHue = 330, wSat = 0.3, wVal = 1;
+  let evoMsg = ''; // the last refusal of the «Эволюция» tab (not enough points …), shown above its rows
   const hex2 = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
   const hsv = (h, sat, v) => { const c = v * sat, hp = (((h % 360) + 360) % 360) / 60, x = c * (1 - Math.abs((hp % 2) - 1)); const m = v - c; const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x]; return hex2(r + m) + hex2(g + m) + hex2(b + m); };
   function keepWardrobe() { try { localStorage.setItem('d37.look', app.wardrobe_look()); localStorage.setItem('d37.character', body); } catch (e) { /* storage blocked */ } }
@@ -218,12 +219,18 @@ async function main() {
     if (app.evo_json) {
       const e = JSON.parse(app.evo_json());
       if (e.cats) {
-        const erun = (cmd) => { try { app.evo_admin(cmd); localStorage.setItem('d37.evo', app.evo_look()); } catch (er) { /* refused or storage blocked */ } buildWardrobe(); };
-        const h = document.createElement('div'); h.className = 'atitle'; h.textContent = 'Эволюция' + (e.fx ? ' — ' + e.fx : ''); wardrobe.appendChild(h);
+        const erun = (cmd) => {
+          evoMsg = '';
+          try { app.evo_admin(cmd); } catch (er) { evoMsg = String((er && er.message) || er || 'нельзя'); } // refused: say why
+          try { localStorage.setItem('d37.evo', app.evo_look()); } catch (er) { /* storage blocked */ }
+          buildWardrobe();
+        };
+        const h = document.createElement('div'); h.className = 'atitle'; h.textContent = 'Эволюция' + (e.points === null || e.points === undefined ? '' : ' (очки: ' + e.points + ')') + (e.fx ? ' — ' + e.fx : ''); wardrobe.appendChild(h);
+        if (evoMsg) { const m = document.createElement('div'); m.className = 'atitle'; m.textContent = evoMsg; wardrobe.appendChild(m); }
         for (const c of e.cats) {
           const r = row(c.icon + ' ' + c.name);
           r.appendChild(btn('нет', c.worn === null, () => erun('off ' + c.id)));
-          for (const pt of c.parts) { const b = btn(pt.icon + ' ' + pt.name, pt.worn, () => erun('wear ' + pt.id + (c.col !== null ? ' ' + c.col : ''))); b.title = pt.fx + (e.points === null ? '' : ' · ' + pt.cost + ' очк.'); r.appendChild(b); }
+          for (const pt of c.parts) { const b = btn(pt.icon + ' ' + pt.name + (e.points === null || pt.owned ? '' : ' · ' + pt.cost), pt.worn, () => erun('wear ' + pt.id + (c.col !== null ? ' ' + c.col : ''))); b.title = pt.fx + (e.points === null ? '' : ' · ' + pt.cost + ' очк.'); r.appendChild(b); }
           if (c.worn !== null) {
             const rc = row('цвет: ' + c.name);
             for (const col of e.colors) { const b = btn('', c.col === col.i, () => erun('color ' + c.id + ' ' + col.i)); b.className += ' sw'; b.style.background = '#' + col.hex; b.title = col.name; rc.appendChild(b); }
