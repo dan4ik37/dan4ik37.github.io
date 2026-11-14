@@ -852,7 +852,7 @@ const WHATSNEW = [['/hub', '🪐', 'Планета D37 — новый движо
 function whatsNewHtml(){
   let seen = ''; try { seen = localStorage.getItem('d37_whatsnew') || ''; } catch (e) {}
   if (seen === WHATSNEW_VER) return '';
-  return `<div class="whatsnew" id="whatsNew"><b>🆕 Новое на сайте</b><div class="wn-links">${WHATSNEW.slice(0, 10).map(([h, ic, t]) => `<a href="${D37Route.href(h)}">${ic} ${esc(t)}</a>`).join('')}<a href="/play">🎮 Все игры →</a></div>
+  return `<div class="whatsnew" id="whatsNew"><b>🆕 Новое на сайте</b><div class="wn-links">${WHATSNEW.slice(0, 10).map(([h, ic, t]) => `<a href="${D37Route.href(h)}">${ic} ${esc(t)}</a>`).join('')}<a href="/play">🎮 Все игры →</a><a href="/news" data-server>📰 Что нового — все записи →</a></div>
     <button type="button" class="wn-x" aria-label="Скрыть" onclick="hideWhatsNew()">✕</button></div>`;
 }
 function hideWhatsNew(){ try { localStorage.setItem('d37_whatsnew', WHATSNEW_VER); } catch (e) {} document.getElementById('whatsNew')?.remove(); }
