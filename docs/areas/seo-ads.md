@@ -20,8 +20,19 @@
 
 ## AdSense status and ad rules (05.11.2026, branch ads-fix)
 - Status: 28.10 AdSense rejected the site, «Обнаружены нарушения правил» (api/_lib/yt.js note; gambling promo codes in 562 videos,
-  fixed in a2b30cd). Since 26.10 the site row says «Требуется действие». The exact policy name and example URLs were never written
-  down: the owner reads AdSense → «Сайты» and «Политики» and sends screenshots; then replace this line with the real reason.
+  fixed in a2b30cd). Since 26.10 the site row says «Требуется действие». Real reason (owner's screenshot 14.11): «Ваш сайт не готов к
+  показу рекламы» → «Обнаружены нарушения правил» → «Бесполезный контент» (low-value content; ownership confirmed). Google judges the
+  whole site: the sitemaps handed it 2808 URLs, 2651 of them /v/<id> with only a copy of the YouTube description, plus video lists.
+- Index diet (14.11, branch ads-index-diet; api/_lib/page.js INDEX_DIET, rollback = false + remove the shell X-Robots-Tag blocks in
+  vercel.json): thin pages stay reachable (200) but answer noindex (follow) and are out of the sitemaps — /v/<id> without >= 150 own
+  words (yt.js ownWords; video-snap.js snapIndexable), /videos /top /topics /topic/<slug> /history, /ideas and /ideas/<id>,
+  /forum/t/<tag>, forum articles under FORUM_MIN_CHARS (1000 chars ~ 150 words), /forum itself while < 3 such articles, player games
+  /g/<id>; SPA shells /chat /profile /phone /shorts /invite /adv /donate /poll /soundboard /clicker /lfg /app /hub (+ sub-paths, /photo/*,
+  /shop/*) via X-Robots-Tag in vercel.json and router.js NOINDEX. Sitemaps: 157 + 2651 = 2808 URLs → 102 + 1 = 103. Kept: /, /about,
+  /games + 75 /games/<id>, /tools/* (7), /quiz + 10 tests, /studio, /vip, /reklama, /privacy, /contacts (+ /shop, /terms, /refund
+  when live; forum articles with real text; the devlog when it lands — add it to sitemap-pages). The videos sitemap leaves the index
+  when no video qualifies. Check: `node scripts/index-diet.mjs [--prod] [--list]` (renders every sitemap URL, fails on a noindex /
+  non-200 URL in a sitemap or an indexable thin page). Then the owner presses «Запросить проверку» (owner only).
 - Ads only on screens with our own content: /games, /games/<id>, /tools/*, /quiz*, the home page, after-round under a game.
   No ads: /v/<id> unless the description has >= 150 words of the author's own text (yt.js ownWords; 1 of 3799 today), 16+/18+ videos,
   video lists /videos /top /topics /topic/<slug> /history (page.js VIDEO_LIST_ADS = false), every noindex page (404, 503).
@@ -29,12 +40,13 @@
   (ad-places.js ADS_RULES.gStrict). The Google after-round unit is one per game screen and is removed as soon as play resumes.
   No ads inside the «game over the world» window (mir-play.js P.ad). Rollback: each flag = one line.
 - GGDROP banner on streams May 2025 - Jan 2026: every video of that window is hidden (yt.js HIDE_GG_WINDOW, GG_WINDOW).
-- Shorts: /v/<id> noindex, not in sitemap-videos (2651 long videos left). App routes /donate /lfg /soundboard /poll /clicker are
+- Shorts: /v/<id> noindex, not in sitemap-videos (since 14.11 long videos too unless they have own text — index diet above). App routes /donate /lfg /soundboard /poll /clicker are
   not in sitemap-pages (the server returns the home HTML there). /play/* — X-Robots-Tag noindex; /index.html → / (308).
 - Canonical of the static SPA pages (11.11): index.html is one file for `/`, /chat, /shorts…, so it carries NO static
-  `<link rel="canonical">` (it would point /chat and /shorts at the home page until JS runs). The three SPA addresses in
-  sitemap-pages (`/`, /shorts, /chat) get it as an HTTP header `Link: <…>; rel="canonical"` (vercel.json headers, exact paths);
-  router.js still sets the tag + og:url after JS. Adding an SPA address to the sitemap → add its Link header too.
+  `<link rel="canonical">` (it would point /chat and /shorts at the home page until JS runs). The SPA addresses in sitemap-pages
+  get it as an HTTP header `Link: <…>; rel="canonical"` (vercel.json headers, exact paths) — since 14.11 only `/` (/shorts and /chat
+  are noindex shells, their Link headers removed); router.js still sets the tag + og:url after JS. Adding an SPA address to the
+  sitemap → add its Link header too and drop it from the shell X-Robots-Tag list.
 - Round 2 (05.11): home video grid has no network/direct ads between YouTube cards, own promo cards only (ad-places.js
   ADS_RULES.videoFeed = false). Unfilled / blocked Google units never shift the page: below the screen the slot is removed, on or above
   the screen it becomes own promo of the same height (ADS_RULES.settle, guard() watches data-ad-status, adsbygoogle.loaded and the
