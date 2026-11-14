@@ -70,3 +70,13 @@
   post has >= 150 own words, routes/news.js ADS_MIN_WORDS / NEWS_ADS), /news/rss.xml; in sitemap-pages. Data: api/_lib/news-posts.js;
   new post: `python -X utf8 scripts/news-add.py …` (shots → img/news/*.webp < 200 KB); test: node scripts/news-test.mjs. Write a post
   for every engine episode / big site feature: what changed and what is still weak — never filler.
+
+## Trust pages (14.11.2026, branch ads-about-trust; AdSense «Бесполезный контент»)
+- Every server page footer starts with page.js TRUST_LINKS (О сайте и авторе, /sitemap, DEVLOG_URL = '/news' (merged with ads-devlog) — change
+  or blank it there, Контакты, /privacy, /privacy#ads «Реклама и cookie»); index.html footer, privacy.html and 404.html carry the same links.
+- /sitemap — HTML site map (routes/sitemap-page.js, no ads, in sitemap-pages.xml): same addresses as sitemap-pages.xml minus single forum
+  posts / ideas / player games. New indexable section → a line there too.
+- /about: sections «Что за сайт», «Как сделаны игры и инструменты», «Модерация и защита детей», «Как связаться» — facts only (age.sql,
+  community automod, ugc/forum review, score caps, ADS_RULES.age). Organization + WebSite JSON-LD with shared @id (#org, #website,
+  #person): page.js SITE_LD, the same block in index.html <head>. /contacts without seller data: title «Контакты сайта», general contact first.
+

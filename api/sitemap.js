@@ -76,6 +76,7 @@ ${withVideos ? `<sitemap><loc>${SITE}/sitemap-videos.xml</loc><lastmod>${today}<
       url(`${SITE}/about`, 'weekly', '0.9'),
       url(`${SITE}/news`, 'weekly', '0.7', esc(newsUrls()[0]?.date || '')),
       ...newsUrls().map(n => url(`${SITE}${esc(n.path)}`, 'monthly', '0.6', esc(n.date))),
+      url(`${SITE}/sitemap`, 'weekly', '0.5'),   // карта сайта для людей (routes/sitemap-page.js)
       // разделы сайта с настоящими адресами (js/ui/router.js); личное и служебное (/profile, /phone, /adv, /invite, /play…) — не здесь
       ...(D ? [] : [url(`${SITE}/shorts`, 'daily', '0.7'), url(`${SITE}/chat`, 'weekly', '0.6')]),   // оболочки приложения (X-Robots-Tag noindex)
       ...(!D || threads.length >= 3 ? [url(`${SITE}/forum`, 'daily', '0.7')] : []),   // список форума — от 3 настоящих статей (routes/forum.js)

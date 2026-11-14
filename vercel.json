@@ -211,6 +211,10 @@
       "destination": "/api/pages?page=news&slug=:slug"
     },
     {
+      "source": "/sitemap",
+      "destination": "/api/pages?page=map"
+    },
+    {
       "source": "/reklama",
       "destination": "/api/pages?page=reklama"
     },

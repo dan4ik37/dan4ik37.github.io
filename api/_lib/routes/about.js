@@ -4,13 +4,13 @@
 // возраст, город) здесь нет, пока их не даст сам владелец.
 import { SITE, ALL_UPLOADS, getUploads, getChannelStats, isGambling, esc, fmtCount, SNAPSHOT_AT } from '../yt.js';
 import { videoFromSnapshot } from '../video-snap.js';
-import { page, YT_CHANNEL } from '../page.js';
+import { page, YT_CHANNEL, SITE_LD, SAME_AS, DEVLOG_URL } from '../page.js';
 import { TOPICS } from '../topics.js';
+import { GAME_PAGES } from '../games-seo.js';
+import { QUIZZES } from '../quizzes.js';
+import { TOOLS } from './sitemap-page.js';   // инструменты для игроков — список карты сайта
 
-const SOCIAL = [
-  ['YouTube', YT_CHANNEL], ['Twitch', 'https://www.twitch.tv/dan4ik37'], ['TikTok', 'https://www.tiktok.com/@.dan4ik37'],
-  ['ВКонтакте', 'https://vk.com/dan4ik37'], ['Telegram', 'https://t.me/+LE25p4pQojkyYjli'],
-];
+const SOCIAL = ['YouTube', 'Twitch', 'TikTok', 'ВКонтакте', 'Telegram'].map((n, i) => [n, SAME_AS[i]]);   // адреса — page.js SAME_AS
 const ruDate = d => new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Moscow' });
 const num = n => Number(n || 0).toLocaleString('ru-RU');
 
@@ -46,13 +46,14 @@ export default async function handler(req, res) {
       image: ch?.thumb || SITE + '/icon-512.png', description: lead, jobTitle: 'Ютубер и стример', knowsLanguage: 'ru',
       sameAs: SOCIAL.map(s => s[1]),
       ...(ch ? { agentInteractionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/FollowAction', userInteractionCount: +ch.subscriberCount } } : {}) },
+    ...SITE_LD,
     { '@type': 'FAQPage', mainEntity: faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
   ] };
   const fact = (k, v) => v ? `<div><dt>${k}</dt><dd>${v}</dd></div>` : '';
   const body = `
 <main class="wrap">
   <nav class="crumbs"><a href="/">Главная</a> › <span>Кто такой dan4ik37</span></nav>
-  <h1>Кто такой dan4ik37 (Денчик37)</h1>
+  <h1>Кто такой dan4ik37 (Денчик37) и что есть на сайте</h1>
   <p class="lead">${esc(lead)}</p>
   <dl class="ab-facts">
     ${fact('YouTube-канал', `<a href="${YT_CHANNEL}" target="_blank" rel="noopener">${esc(ch?.title || 'Dan4ik37')} · ${esc(ch?.handle || '@dan4ik37yt')}</a>`)}
@@ -79,6 +80,37 @@ export default async function handler(req, res) {
     <li><a href="/quiz">Тесты</a> — какой ты моб из Майнкрафта, кто ты из FNAF и Роблокса, какой ты зритель.</li>
     <li>Полезное для игроков — <a href="/tools/nick">генератор ников</a>, <a href="/tools/fonts">шрифты для ника</a>, <a href="/tools/cps">CPS тест</a>, <a href="/tools/wheel">колесо фортуны</a>, <a href="/tools/random">генератор случайных чисел</a>, <a href="/tools/typing">тест скорости печати</a>, <a href="/tools/photo">фоторедактор онлайн</a>.</li>
     <li><a href="/vip">VIP</a> за поддержку — цветной ник, стикеры, своя тема сайта.</li>
+  </ul></section>
+  <section class="box" id="site"><h2>Что за сайт</h2>
+    <p>dan4ik37.vercel.app — сайт Денчика37, автора канала. Здесь собраны его ролики и стримы, а ещё то, чего на YouTube нет:
+    ${esc(String(GAME_PAGES.length))} браузерных игр, в которые можно играть одному, с ботом или с другом по ссылке, ${esc(String(QUIZZES.length))} тестов,
+    ${TOOLS.length} инструментов для игроков, форум со статьями и гайдами, «Идеи для видео», где зрители предлагают темы роликов, и живой чат.
+    Всё бесплатно, большинство разделов работает без регистрации. Полный список — <a href="/sitemap">«Карта сайта»</a>.</p></section>
+  <section class="box" id="how"><h2>Как сделаны игры и инструменты</h2><ul>
+    <li>Игры, тесты и инструменты написаны для этого сайта и открываются прямо в браузере — на телефоне и на компьютере, без установки.</li>
+    <li>Правила в играх одинаковые на любом устройстве: игра считает ход с постоянным шагом, поэтому слабый телефон и мощный компьютер
+      играют по одним и тем же законам — меняется только качество картинки.</li>
+    <li>Рекорды проверяет сервер: у каждой игры есть предел очков за раунд, поэтому в таблицах лидеров нет «накрученных» результатов.
+      Ничего купленного не даёт преимущества в рейтингах, турнирах и тестах.</li>
+    <li>Для графики и физики используются открытые библиотеки с разрешительными лицензиями (например, three.js и Rapier).</li>
+    <li>Для больших 3D-игр сайта делается новый движок на языке Rust: один и тот же код работает и как программа для компьютера, и в
+      браузере через WebAssembly. Первая сборка — планета, по которой можно ходить и копать${DEVLOG_URL ? `; что сделано за неделю — в <a href="${DEVLOG_URL}">«Дневнике разработки»</a>` : ''}.</li>
+  </ul></section>
+  <section class="box" id="safety"><h2>Модерация и защита детей</h2><ul>
+    <li>Сайт помечен как 12+. У каждой игры, раздела и темы роликов своя возрастная метка — от 0+ до 18+; ролики 18+ несовершеннолетним не показываются.</li>
+    <li>Возраст спрашиваем только годом рождения, и указывать его необязательно. Год видит только сам человек — ни модераторы, ни администрация, ни другие игроки.</li>
+    <li>Детям до 13 лет взрослые не могут писать в личные сообщения, звонить и отправлять заявки в друзья; до 9 лет чаты доступны
+      только для чтения и реакций. В общем чате и сообществах ребёнку не видны чужие ссылки и контакты.</li>
+    <li>В чате и сообществах работает автомодерация (мат, флуд, сообщения капсом), на любое сообщение можно пожаловаться. Модераторы
+      удаляют нарушения, выдают мут и бан, каждое их действие записывается в журнал.</li>
+    <li>Статьи форума и игры, которые сделали игроки, попадают в общий каталог только после проверки; возрастную метку игры ставит автор, а модератор её проверяет.</li>
+    <li>Реклама стоит только рядом с собственным содержимым сайта — играми, тестами и инструментами: не на страницах ошибок и не во время игры,
+      а после раунда. Детям и тем, кто не указал возраст, Google показывает только неперсонализированную рекламу. Подробно — <a href="/privacy">«Политика конфиденциальности»</a>.</li>
+  </ul></section>
+  <section class="box" id="contact"><h2>Как связаться</h2><ul>
+    <li>Реклама, сотрудничество, вопросы о данных и покупках — почта <a href="mailto:dan4ik37k@gmail.com">dan4ik37k@gmail.com</a>; реквизиты — <a href="/contacts">«Контакты»</a>.</li>
+    <li>Предложить тему ролика — <a href="/ideas">«Идеи для видео»</a>, обсудить игры — <a href="/forum">форум</a>, пообщаться — <a href="/chat">чат</a> и стримы на Twitch.</li>
+    <li>Ошибка на сайте — напиши на почту или в чат, с адресом страницы и что случилось.</li>
   </ul></section>
   <section class="box faq"><h2>Частые вопросы</h2>${faq.map(([q, a]) => `<details${q.startsWith('Кто') ? ' open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
 </main>`;
