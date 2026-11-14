@@ -1,11 +1,11 @@
-// /sitemap — карта сайта для людей (14.11.2026, AdSense «Бесполезный контент»): все разделы, которые открыты поисковикам, на одной
-// странице — те же адреса, что в /sitemap-pages.xml (api/sitemap.js), кроме отдельных статей форума, идей и игр игроков (они — по
-// ссылкам из своих разделов). Новый раздел в sitemap-pages.xml → строка и здесь. Без рекламы: это страница-оглавление.
-import { SITE, ALL_UPLOADS, getUploads, esc } from '../yt.js';
+// /sitemap — карта сайта для людей (14.11.2026, AdSense «Бесполезный контент»): все разделы на одной странице. Открытые поисковикам
+// адреса (/sitemap-pages.xml, api/sitemap.js) — все здесь, включая записи /news; кроме них — входы в видео и сообщество (они сами
+// noindex после «диеты индекса», но людям нужны). Списки тем роликов (/topic/*) не повторяем — они на /topics. Без рекламы.
+import { SITE, esc } from '../yt.js';
 import { page, SITE_LD, DEVLOG_URL } from '../page.js';
 import { GAME_PAGES } from '../games-seo.js';
 import { QUIZZES } from '../quizzes.js';
-import { TOPICS } from '../topics.js';
+import { POSTS } from '../news-posts.js';
 import { payConfig } from '../pay.js';
 import { sellerReady } from '../seller.js';
 
@@ -22,10 +22,6 @@ export const TOOLS = [
 
 export default async function handler(req, res) {
   const url = `${SITE}/sitemap`;
-  let vids = [];
-  try { vids = await getUploads(ALL_UPLOADS); } catch (e) { /* без тем роликов — остальное всё равно показываем */ }
-  // темы роликов — как в sitemap-pages.xml: только игры, по которым на канале не меньше 30 роликов
-  const topics = TOPICS.map(t => ({ t, n: vids.filter(v => t.re.test(v.title)).length })).filter(x => x.n >= 30).sort((a, b) => b.n - a.n);
   const li = (href, name, note) => `<li><a href="${esc(href)}">${esc(name)}</a>${note ? ` <span class="muted">— ${esc(note)}</span>` : ''}</li>`;
   const sec = (h, items, more = '') => items.length ? `<section class="sm-box"><h2>${h}</h2><ul class="sm-list">${items.join('')}</ul>${more}</section>` : '';
   const site = [
@@ -48,8 +44,8 @@ export default async function handler(req, res) {
     li('/topics', 'Игры канала', 'ролики, разложенные по играм'),
     li('/history', 'История канала', 'как менялся канал год за годом'),
     li('/shorts', 'Shorts', 'короткие моменты со стримов'),
-    ...topics.map(x => li(`/topic/${x.t.slug}`, x.t.name, `${x.n.toLocaleString('ru-RU')} видео`)),
   ];
+  const news = [...POSTS].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).map(p => li(`/news/${p.slug}`, p.title, p.date.split('-').reverse().join('.')));
   const people = [
     li('/forum', 'Форум', 'статьи, гайды и новости игр от игроков'),
     li('/ideas', 'Идеи для видео', 'предложи тему ролика и голосуй за чужие'),
@@ -65,6 +61,7 @@ export default async function handler(req, res) {
   ${sec(`Игры онлайн (${GAME_PAGES.length})`, games, '<p class="muted sm-more"><a href="/games">Все игры с описаниями и рекордами →</a></p>')}
   ${sec('Инструменты для игроков', tools)}
   ${sec(`Тесты (${QUIZZES.length})`, quiz, '<p class="muted sm-more"><a href="/quiz">Все тесты →</a></p>')}
+  ${sec('Дневник разработки', news, `<p class="muted sm-more"><a href="${esc(DEVLOG_URL || '/news')}">Все записи →</a></p>`)}
   ${sec('Видео канала', video)}
   ${sec('Сообщество', people)}
 </main>`;
@@ -73,7 +70,7 @@ export default async function handler(req, res) {
     { '@type': 'WebPage', '@id': url, url, name: 'Карта сайта dan4ik37', inLanguage: 'ru', isPartOf: { '@id': SITE + '/#website' } },
   ] };
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', vids.length ? 'public, s-maxage=21600, stale-while-revalidate=604800' : 'public, s-maxage=600');
+  res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=604800');
   res.status(200).send(page({
     title: 'Карта сайта dan4ik37 — все игры, тесты, инструменты и разделы',
     description: `Все разделы сайта dan4ik37 на одной странице: ${GAME_PAGES.length} онлайн-игр, ${QUIZZES.length} тестов, инструменты для игроков, видео по играм, форум и чат.`,
