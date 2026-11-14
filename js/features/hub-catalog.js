@@ -28,7 +28,7 @@
   // ═══ Витрина Денчика (пока игроки ничего не выложили): значок на своём цвете (картинки img/games/*.png — это открытки для соцсетей с текстом, не обложки) ═══
   const SHOW = [
     { id: 'valley', title: 'Долина D37', icon: '🌲', href: '/hub/play', age: 0, tag: 'Новый движок', g: 'linear-gradient(135deg,#14532d,#22c55e)' },
-    { id: 'creative', title: 'Творческий режим', icon: '🪐', href: '/hub/creative', age: 0, tag: 'Полёт над планетой', g: 'linear-gradient(135deg,#0b1030,#1e3a8a 60%,#60a5fa)' },
+    { id: 'creative', title: 'Творческий режим', icon: '🪐', href: '/hub/creative', age: 0, tag: 'Строй без материалов', g: 'linear-gradient(135deg,#0b1030,#1e3a8a 60%,#60a5fa)' },
     { id: 'world', title: 'Мир Денчика', icon: '🌍', href: '/play/world', age: 12, tag: 'Онлайн-город', g: 'linear-gradient(135deg,#16a34a,#0d9488)' },
     { id: 'kubomir', title: 'Кубомир', icon: '🧊', href: '/play/kubomir', age: 6, tag: 'Строй из кубиков', g: 'linear-gradient(135deg,#0ea5e9,#4338ca)' },
     { id: 'horde', title: 'Орда', icon: '🧟', href: '/play/horde', age: 12, tag: 'Выживи с друзьями', g: 'linear-gradient(135deg,#7c2d12,#b91c1c)' },

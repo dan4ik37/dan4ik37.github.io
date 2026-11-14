@@ -28,7 +28,7 @@
   const TILES = [
     { id: 'play', big: 1, icon: '🌍', title: 'Играть', sub: 'Твой мир на планете — от клетки до космоса: руби, строй, зови людей в племя. Всё сохраняется', href: '/hub/play', cls: 'hub-t-play' },
     { id: 'wardrobe', icon: '👕', title: 'Гардероб', sub: 'Девочка, мальчик или манекен, цвета каждой части', href: '/hub/wardrobe', cls: 'hub-t-ward' },
-    { id: 'creative', icon: '🪐', title: 'Творческий режим', sub: 'Отдельный мир: свободный полёт над планетой, без голода и опасностей — своё сохранение', href: '/hub/creative', cls: 'hub-t-planet' },
+    { id: 'creative', icon: '🪐', title: 'Творческий режим', sub: 'Отдельный мир: строй что угодно без материалов, летай над планетой, меняй время и погоду, зови зверей. Без голода и опасностей — своё сохранение', href: '/hub/creative', cls: 'hub-t-planet' },
     { id: 'world', icon: '🌍', title: 'Мир Денчика', sub: 'Город, кафе и столики с играми — онлайн', href: '/play/world', cls: 'hub-t-world', age: '12+' },
     { id: 'studio', icon: '🧱', title: 'Студия', sub: 'Построй свой 3D-мир со скриптами', href: '/play/studio3d', cls: 'hub-t-studio' },
     { id: 'mini', icon: '🎲', title: 'Мини-игры', sub: 'Шахматы, «5 букв», дурак, клеточки и ещё 50 игр', href: '/play', cls: 'hub-t-mini' },
