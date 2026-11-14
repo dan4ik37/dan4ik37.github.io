@@ -1,13 +1,13 @@
 {
- "id": "a686844ed6",
+ "id": "21450636af",
  "bridge": 1,
- "wasm_raw": 17794889,
- "made": "2026-11-14T16:26:24.413Z",
+ "wasm_raw": 17052861,
+ "made": "2026-11-14T18:14:49.509Z",
  "files": {
   "d37-page.js": 43273,
   "d37-terrain-worker.js": 2996,
   "d37_web.js": 199793,
-  "d37_web_bg.wasm": 17794889,
+  "d37_web_bg.wasm": 17052861,
   "index.html": 4864,
   "LICENSES.txt": 224,
   "scenes/creative.ron": 2366,
@@ -34,6 +34,6 @@
   "scenes/world_777777.ron": 930,
   "scenes/world_play.ron": 1904,
   "scenes/yard.ron": 896,
-  "engine-host.js": 44808
+  "engine-host.js": 44197
  }
 }
