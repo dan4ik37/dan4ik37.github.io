@@ -10,7 +10,7 @@
 // старой базе, у «на проверке» и скрытых страниц (их сервер вообще не отдаёт) — без рекламы. Данные — по service-ключу, только публичные поля (ник, роль);
 // ник ребёнка до 13 — «Игрок» (age.sql: age_public_kids — сервер узнаёт только «прятать или нет», без возраста).
 import { SITE, esc } from '../yt.js';
-import { page } from '../page.js';
+import { page, INDEX_DIET, FORUM_MIN_CHARS } from '../page.js';
 import { sbSelect, sbRpc, sbPatch, storeConfigured, oldDb } from '../store.js';
 import { makeForumBlocks } from '../forum-blocks.js';   // T-157: блоки статей — тот же код, что в браузере
 import { indexNow } from '../indexnow.js';
@@ -156,7 +156,7 @@ async function forumPage(res, tag){
   const url = tag ? `${SITE}/forum/t/${encodeURIComponent(tag)}` : `${SITE}/forum`;
   const got = await threads('status=eq.published&age_min=lte.12&realm=eq.kids'
     + (tag ? '&tags=cs.' + encodeURIComponent('{"' + tag + '"}') : '')
-    + '&select=id,title,author_id,pinned,locked,created_at,published_at,excerpt,cover,tags,rating,comments&order=pinned.desc,published_at.desc&limit=60',
+    + '&select=id,title,author_id,pinned,locked,created_at,published_at,excerpt,cover,tags,rating,comments,chars&order=pinned.desc,published_at.desc&limit=60',
     tag ? '' : 'select=id,title,author_id,pinned,locked,created_at,forum_posts(count)&order=pinned.desc,created_at.desc&limit=60');   // старая база — как раньше
   if (got.err) return busy(res);
   const v2 = got.v2, rows = got.rows || [];
@@ -188,7 +188,10 @@ async function forumPage(res, tag){
   res.status(200).send(page({
     title: tag ? `#${tag} — статьи на форуме dan4ik37` : 'Форум dan4ik37 — статьи, гайды и новости игр',
     description: tag ? `Статьи с меткой #${tag} на форуме сайта dan4ik37: гайды, новости и истории игроков.` : 'Форум сайта dan4ik37: статьи игроков с фото и видео — гайды, новости игр, истории. Читать могут все, писать — после входа.',
-    url, image: items.find(i => i.cover)?.cover || SITE + '/og-image.jpg', body, css: CSS, noAds: !v2 || items.length < 3, noindex: !!tag && !items.length,
+    // индекс-диета 14.11 (page.js INDEX_DIET): страница метки — только карточки, noindex; список форума — в поиске от 3 статей
+    // со своим текстом (≥ FORUM_MIN_CHARS знаков, как в api/sitemap.js)
+    url, image: items.find(i => i.cover)?.cover || SITE + '/og-image.jpg', body, css: CSS, noAds: !v2 || items.length < 3,
+    noindex: (!!tag && !items.length) || (INDEX_DIET && (!!tag || rows.filter(t => (t.chars || 0) >= FORUM_MIN_CHARS).length < 3)),
     spa: tag ? '#/forum/t/' + encodeURIComponent(tag) : '#/forum',
     ld: [{ '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': url, url, name: tag ? `#${tag} — форум dan4ik37` : 'Форум dan4ik37', inLanguage: 'ru',
       mainEntity: { '@type': 'ItemList', itemListOrder: 'https://schema.org/ItemListOrderDescending', numberOfItems: items.length,
@@ -266,7 +269,8 @@ async function threadPage(res, id, raw){
   res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=3600');
   res.status(200).send(page({
     title: `${title} — форум dan4ik37`, description, url, image: v2 ? imageOf(t) : SITE + '/og-image.jpg', ogType: 'article', body, css: CSS, noAds: !ads,
-    noindex: age >= 16, spa: `#/forum/${t.id}`,
+    // индекс-диета 14.11: короткая статья (меньше FORUM_MIN_CHARS знаков текста) — страница есть, в поиск и в карту сайта не идёт
+    noindex: age >= 16 || (INDEX_DIET && Array.from(v2 ? FB.toText(t.blocks) : bodyText || '').length < FORUM_MIN_CHARS), spa: `#/forum/${t.id}`,
     ld: [ld, crumbs([['Главная', SITE + '/'], ['Форум', SITE + '/forum'], [title, url]])],
   }));
 }
@@ -318,7 +322,7 @@ async function ideasPage(res){
   res.status(200).send(page({
     title: 'Идеи для видео dan4ik37 — предложи и проголосуй',
     description: 'Предложи идею для ролика или стрима dan4ik37 и голосуй за чужие — лучшие идеи становятся видео.',
-    url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true, spa: '#/ideas',
+    url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true, noindex: INDEX_DIET, spa: '#/ideas',   // индекс-диета 14.11: список идей зрителей — не в поиск
     ld: [{ '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': url, url, name: 'Идеи для видео dan4ik37', inLanguage: 'ru',
       mainEntity: { '@type': 'ItemList', itemListOrder: 'https://schema.org/ItemListOrderDescending', numberOfItems: items.length,
         itemListElement: items.map((i, n) => ({ '@type': 'ListItem', position: n + 1, url: `${SITE}/ideas/${i.id}`, name: i.title })) } },
@@ -354,7 +358,7 @@ async function ideaPage(res, id){
   res.status(200).send(page({
     title: `${title} — идея для видео dan4ik37`, description: short(r.body) || `Идея для видео dan4ik37: «${title}». ${st}, ${num(r.votes)} ${plural(r.votes || 0, 'голос', 'голоса', 'голосов')}.`,
     url, image: video ? `https://i.ytimg.com/vi/${video}/hqdefault.jpg` : SITE + '/og-image.jpg', ogType: 'article', body, css: CSS, noAds: true,
-    spa: `#/ideas/${r.id}`, noindex: r.status === 'rejected',
+    spa: `#/ideas/${r.id}`, noindex: r.status === 'rejected' || INDEX_DIET,   // индекс-диета 14.11: идея — пара строк зрителя, не в поиск
     ld: [ld, crumbs([['Главная', SITE + '/'], ['Идеи для видео', SITE + '/ideas'], [title, url]])],
   }));
 }

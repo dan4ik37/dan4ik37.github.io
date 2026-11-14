@@ -1123,7 +1123,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
     }
     const longOne = shown.find(r => !Y.isShortVideo(r.title, r.at, r.dur) && videoAge(r.title).age < 16);
     const rl = await call(video, { id: longOne.id });
-    ok(rl.code === 200 && !adsOn(rl.html) && !/<ul class="tags">/.test(rl.html) && /max-image-preview/.test(rl.html), '/v/<длинный, без своего текста>: 200, в поиске, без рекламы и без списка тегов', longOne);
+    ok(rl.code === 200 && !adsOn(rl.html) && !/<ul class="tags">/.test(rl.html) && /<meta name="robots" content="noindex">/.test(rl.html), '/v/<длинный, без своего текста>: 200 (для зрителей), noindex (индекс-диета 14.11), без рекламы и без списка тегов', longOne);
     ok(!/Made with Restream/.test(rl.html.split('<main')[1] || ''), '/v/<id>: строки Restream в описании не печатаются');
     const shortOne = shown.find(r => Y.isShortVideo(r.title, r.at, r.dur));
     const rs = await call(video, { id: shortOne.id });
@@ -1190,7 +1190,10 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
     const sv = await call(sm, { part: 'videos' }), sp = await call(sm, { part: 'pages' });
     const locs = (sv.html.match(/<loc>[^<]+<\/loc>/g) || []).map(x => x.slice(5 + Y.SITE.length + 3, -6));
     const byId = new Map(rows.map(r => [r.id, r]));
-    ok(locs.length > 500 && locs.every(id => { const r = byId.get(id); return r && !Y.isShortVideo(r.title, r.at, r.dur); }), `sitemap-videos: ${locs.length} роликов, шортсов нет`);
+    // индекс-диета 14.11: в карте только длинные ролики со своим текстом автора (≥ VIDEO_OWN_WORDS слов) — их страницы без noindex
+    ok(locs.length < 50 && locs.every(id => { const r = byId.get(id); return r && !Y.isShortVideo(r.title, r.at, r.dur) && Y.ownWords(videoFromSnapshot(id).snippet.description) >= Y.VIDEO_OWN_WORDS; }), `sitemap-videos: ${locs.length} роликов, все со своим текстом, шортсов нет`);
+    for (const id of locs.slice(0, 3)) { const x = await call(video, { id }); ok(x.code === 200 && !/content="noindex"/.test(x.html), `/v/${id} из карты: в поиске`); }
+    ok(!/\/(videos|top|topics|topic|history|ideas|shorts|chat|g)[<\/?]/.test(sp.html), 'sitemap-pages: списки роликов, идеи, оболочки, игры игроков — не в карте (индекс-диета)');
     ok(!/\/(lfg|soundboard|poll|clicker|donate)</.test(sp.html) && /\/games</.test(sp.html), 'sitemap-pages: /lfg, /soundboard, /poll, /clicker, /donate — не в карте');
   } catch (e) { ok(false, 'серверные страницы', String(e && e.stack || e)); }
   fs.rmSync(tmp, { recursive: true, force: true });

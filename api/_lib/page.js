@@ -66,6 +66,15 @@ export const SHARE_ADS = true;
 // Реклама на списках роликов (/videos, /top, /topics, /topic/<slug>, /history): там только данные YouTube (названия и превью) —
 // для AdSense это «скопированное без своего текста», для YouTube API — III.G.1.d. false — без рекламы; вернуть как было — true.
 export const VIDEO_LIST_ADS = false;
+// Индекс-диета (14.11.2026): AdSense отклонил сайт за «Бесполезный контент» — Google судит весь сайт, а в поиске были в основном
+// страницы без своего текста (2651 /v/<id> с копией описания YouTube, списки роликов, пустые оболочки приложения). Теперь такие
+// страницы открываются как раньше, но с noindex (ссылки по ним робот проходит: «noindex» без «nofollow» = follow) и не попадают в карты сайта (api/sitemap.js):
+// /v/<id> без ≥ VIDEO_OWN_WORDS слов своего текста, /videos /top /topics /topic/<slug> /history, /ideas*, /forum/t/<метка>,
+// статьи форума короче FORUM_MIN_CHARS, игры игроков /g/<id>; оболочки /chat /shorts /profile… — X-Robots-Tag в vercel.json.
+// Вернуть как было — INDEX_DIET = false (и убрать заголовки X-Robots-Tag оболочек в vercel.json).
+export const INDEX_DIET = true;
+// Статья форума в поиске — от стольких знаков своего текста (forum_threads.chars, forum.sql) ≈ 150 слов
+export const FORUM_MIN_CHARS = 1000;
 // Место рекламы на первом экране (05.11.2026). Место <div data-ad> встаёт, только когда подъезжает снизу (ad-places.js lazyBelow:
 // блок не сдвигает видимый текст), — а у тестов /quiz/<тест>, рандомайзера, теста печати и генератора ников оно уже на первом
 // экране, и рекламы там не было вовсе. Теперь сразу за местом — крошечный скрипт (SLOT_JS): место на первом экране и не VIP —

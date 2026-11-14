@@ -277,17 +277,18 @@ function browser(startUrl, routing){
     ok(M('home').canonical === 'https://dan4ik37.vercel.app/' && !M('home').noindex, 'главная: canonical «/», индексируется');
     ok(M('forum', '42').canonical === 'https://dan4ik37.vercel.app/forum/42' && !M('forum', '42').noindex, 'тема форума: canonical /forum/42 (как у серверной страницы)');
     ok(M('ideas', '7').canonical === 'https://dan4ik37.vercel.app/ideas/7', 'идея: canonical /ideas/7');
-    ok(['profile', 'phone', 'adv', 'invite', 'games'].every(r => M(r).noindex) && M('chat', 'c/5').noindex && M('shop', 'o/D37-1').noindex && !M('chat').noindex && !M('shop').noindex,
-      'noindex: профиль, телефон, кабинет, приглашения, экраны игр, каналы чата, заказы магазина; /chat и /shop — индексируются');
+    ok(['profile', 'phone', 'adv', 'invite', 'games'].every(r => M(r).noindex) && M('chat', 'c/5').noindex && M('shop', 'o/D37-1').noindex && !M('shop').noindex
+      && ['chat', 'shorts', 'donate', 'poll', 'soundboard', 'clicker', 'lfg', 'ideas', 'hub'].every(r => M(r).noindex) && !M('about').noindex && !M('forum').noindex,
+      'noindex: профиль, телефон, кабинет, приглашения, экраны игр, каналы чата, заказы; оболочки приложения (чат, шортсы, донат… — индекс-диета 14.11); /shop, /about, /forum — индексируются');
     ok(M('shorts', 'dQw4w9WgXcQ').canonical === 'https://dan4ik37.vercel.app/v/dQw4w9WgXcQ' && M('ads').canonical === 'https://dan4ik37.vercel.app/reklama', 'Shorts → страница ролика, «Реклама» → /reklama');
     const titles = routes.map(r => M(r).title), descs = routes.map(r => M(r).description);
     ok(new Set(titles).size === titles.length && new Set(descs).size === descs.length, 'у каждого раздела свой заголовок и описание');
     ok(titles.every(t => t.length >= 15 && t.length <= 70) && descs.every(d => d.length >= 50 && d.length <= 200), 'длины заголовков (15–70) и описаний (50–200)', titles.filter(t => t.length > 70));
     B.R.meta(M('profile')); const d = B.document;
     ok(d.title === 'Профиль — dan4ik37' && d.head.querySelector('meta[name="robots"]')?.attrs.content === 'noindex', 'meta: заголовок и noindex');
-    B.R.meta(M('chat'));
-    ok(d.head.querySelector('meta[name="robots"]')?.attrs.content === 'max-image-preview:large' && d.head.querySelector('link[rel="canonical"]').attrs.href === 'https://dan4ik37.vercel.app/chat'
-      && d.head.querySelector('meta[property="og:url"]').attrs.content === 'https://dan4ik37.vercel.app/chat' && d.head.querySelector('meta[name="description"]'), 'meta: noindex снят, canonical и og:url — раздел');
+    B.R.meta(M('about'));
+    ok(d.head.querySelector('meta[name="robots"]')?.attrs.content === 'max-image-preview:large' && d.head.querySelector('link[rel="canonical"]').attrs.href === 'https://dan4ik37.vercel.app/about'
+      && d.head.querySelector('meta[property="og:url"]').attrs.content === 'https://dan4ik37.vercel.app/about' && d.head.querySelector('meta[name="description"]'), 'meta: noindex снят, canonical и og:url — раздел');
     B.R.meta({ title: 'Тема <b>x</b> — форум dan4ik37' });
     ok(d.title === 'Тема <b>x</b> — форум dan4ik37' && d.head.querySelector('meta[property="og:title"]').attrs.content === 'Тема <b>x</b> — форум dan4ik37', 'meta({ title }) — текстом (без разметки)');
   }
@@ -398,12 +399,14 @@ function browser(startUrl, routing){
     // карта сайта
     const sitemap = (await import(pathToFileURL(path.join(tmp, 'api/sitemap.js')).href)).default;
     r = await call(sitemap, { part: 'pages' });
-    for (const u of ['/forum', '/forum/5', '/forum/6', '/ideas', '/ideas/9', '/shorts', '/chat', '/games', '/about'])
+    for (const u of ['/games', '/about', '/tools/nick', '/quiz', '/privacy'])
       ok(r.body.includes(`<loc>https://dan4ik37.vercel.app${u}</loc>`), `карта сайта: ${u}`);
+    // 14.11.2026 индекс-диета (AdSense «Бесполезный контент»): без своего текста — не в карте (старая база без chars — темы тоже)
+    for (const u of ['/forum<', '/forum/5', '/forum/6', '/ideas', '/shorts', '/chat', '/videos', '/top<', '/topics', '/topic/', '/history', '/g/'])
+      ok(!r.body.includes(`<loc>https://dan4ik37.vercel.app${u}`), `карта сайта (индекс-диета): без ${u}`);
     // 05.11.2026: разделы-приложения без своего HTML (сервер отдаёт главную) — не в карте
     for (const u of ['/profile', '/phone', '/adv', '/invite', '/play', '/shop/', '/donate', '/lfg', '/soundboard', '/poll', '/clicker', '/terms', '/refund', '/ads-terms'])
       ok(!r.body.includes(`<loc>https://dan4ik37.vercel.app${u}`), `карта сайта: без ${u}`);
-    ok(r.body.includes('<loc>https://dan4ik37.vercel.app/forum/6</loc><lastmod>2026-10-03</lastmod>'), 'карта сайта: дата темы');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   // robots.txt
   const robots = src('robots.txt');

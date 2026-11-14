@@ -5,7 +5,7 @@
 import { SITE, ALL_UPLOADS, getUploads, isGambling, esc, fmtCount } from '../yt.js';
 import { videoFromSnapshot } from '../video-snap.js';
 import { QUIZZES } from '../quizzes.js';
-import { page, YT_CHANNEL, VIDEO_LIST_ADS } from '../page.js';
+import { page, YT_CHANNEL, VIDEO_LIST_ADS, INDEX_DIET } from '../page.js';
 import { TOPICS, TOPIC_INTRO, topicOf } from '../topics.js';
 import { videoAge, ageBadge, ageAttr } from '../age.js';
 
@@ -63,7 +63,7 @@ function hubPage(counts){
   <p class="all"><a href="/videos">Все видео канала →</a> · <a href="/games">🎮 Игры на сайте</a></p>
 </main>`;
   return page({ title: 'Во что играет dan4ik37 — все игры канала', description: `Ролики dan4ik37 по играм: ${list.slice(0, 8).map(x => x.name).join(', ')} и другие.`,
-    url, image: SITE + '/og-image.jpg', ld, body, css: CSS, noAds: !VIDEO_LIST_ADS });
+    url, image: SITE + '/og-image.jpg', ld, body, css: CSS, noAds: !VIDEO_LIST_ADS, noindex: INDEX_DIET });   // индекс-диета 14.11: список роликов — данные YouTube без своего текста, noindex (page.js INDEX_DIET)
 }
 
 // «Самые популярные» по теме — просмотры из снимка (video-details.js), без роликов про кейсы/депозит (на странице реклама)
@@ -113,7 +113,7 @@ function topicPage(t, all, counts, req){
   ${t.slug === 'horror' ? '<div class="secret-spot"><button type="button" class="d37-secret" data-secret="horror" aria-label="Секретный знак">✦</button></div>' : ''}
 </main>`;
   const title = p > 1 ? `${t.name} — видео dan4ik37, страница ${p}` : `${t.name} — все видео dan4ik37 (${n.toLocaleString('ru')})`;
-  return page({ title, description: `${t.name}: ${vids(n)} dan4ik37 — ${t.about}`.slice(0, 300), url, image: list[0]?.thumb || SITE + '/og-image.jpg', ld, body, css: CSS, noAds: !ads });
+  return page({ title, description: `${t.name}: ${vids(n)} dan4ik37 — ${t.about}`.slice(0, 300), url, image: list[0]?.thumb || SITE + '/og-image.jpg', ld, body, css: CSS, noAds: !ads, noindex: INDEX_DIET });
 }
 
 const CSS = `

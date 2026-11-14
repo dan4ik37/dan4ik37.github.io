@@ -2,7 +2,7 @@
 // сколько роликов вышло за год, во что больше всего играл (темы из api/_lib/topics.js), первое видео
 // года. Ничего не выдумываем: текста «от автора» тут нет — только цифры и ссылки на ролики.
 import { SITE, ALL_UPLOADS, getUploads, isGambling, esc } from '../yt.js';
-import { page, YT_CHANNEL, VIDEO_LIST_ADS } from '../page.js';
+import { page, YT_CHANNEL, VIDEO_LIST_ADS, INDEX_DIET } from '../page.js';
 import { TOPICS } from '../topics.js';
 
 const ru = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
   return res.status(200).send(page({
     title: `История канала dan4ik37 — ${years[0]}–${years[years.length - 1]}`,
     description: `Как менялся канал dan4ik37 с ${years[0]} года: ${vids.length.toLocaleString('ru')} роликов, по годам — сколько видео и во что играл.`,
-    url, image: first.thumb ? first.thumb.replace('mqdefault', 'hqdefault') : SITE + '/og-image.jpg', body, css: CSS, noAds: !VIDEO_LIST_ADS,
+    url, image: first.thumb ? first.thumb.replace('mqdefault', 'hqdefault') : SITE + '/og-image.jpg', body, css: CSS, noAds: !VIDEO_LIST_ADS, noindex: INDEX_DIET,
     ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'История канала dan4ik37', url, inLanguage: 'ru' }
   }));
 }
