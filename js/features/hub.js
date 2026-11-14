@@ -31,6 +31,7 @@
     { id: 'creative', icon: '🪐', title: 'Творческий режим', sub: 'Отдельный мир: свободный полёт над планетой, без голода и опасностей — своё сохранение', href: '/hub/creative', cls: 'hub-t-planet' },
     { id: 'world', icon: '🌍', title: 'Мир Денчика', sub: 'Город, кафе и столики с играми — онлайн', href: '/play/world', cls: 'hub-t-world', age: '12+' },
     { id: 'studio', icon: '🧱', title: 'Студия', sub: 'Построй свой 3D-мир со скриптами', href: '/play/studio3d', cls: 'hub-t-studio' },
+    { id: 'klet', icon: '🟢', title: 'Клеточки', sub: 'Ешь, расти, делись — теперь на движке D37: с ботами, а в комнате — с друзьями', href: '/hub/play/klet', cls: 'hub-t-mini' },   // w11: старая io-игра на Rust (движок: game klet play)
     { id: 'mini', icon: '🎲', title: 'Мини-игры', sub: 'Шахматы, «5 букв», дурак, клеточки и ещё 50 игр', href: '/play', cls: 'hub-t-mini' },
     { id: 'invite', icon: '📍', title: 'Позвать друга', sub: 'Скинь ссылку — играйте на одной планете (скоро вместе)', act: 'invite', cls: 'hub-t-invite' },
     { id: 'howto', icon: '🎓', title: 'Как играть', sub: 'Кнопки на телефоне и на ПК', act: 'howto', cls: 'hub-t-howto' },
@@ -88,7 +89,7 @@
   const SLOT = { play: WORLD, creative: 'creative', planet: 'creative' };   // у творческого мира своё сохранение (и в облаке — мир 'creative')
   const SAVES = m => !!SLOT[m];
   const slot = () => SLOT[st.mode] || WORLD;
-  const SPAWNS = { home: 1, orbit: 1, new: 1, tribe: 1 };
+  const SPAWNS = { home: 1, orbit: 1, new: 1, tribe: 1, klet: 1 };   // klet — «Клеточки» в движке (w11), мир игрока не меняется
   // W11 «Играть вместе»: общий мир на нашем сервере миров (движок: crates/d37-server, deploy/oracle). /hub/play?join=<КОД>
   // (и /play/d37?join=<КОД>) открывает мир с этим кодом. NET_URL — адрес сервера (wss://…: сайт на https); '' — сервер ещё
   // не включён: игра идёт в своём мире и говорит об этом. Откат — NET_URL = ''.
@@ -569,7 +570,7 @@
       const h = await host.start({
         root: ui.stage, scene: MODES[mode] || 'valley', rawSize: +(info && info.wasm_raw) || 0, gl: st.gl || g === 'gl',
         quality: g === 'max' || g === 'mid' || g === 'low' ? g : touchDev() ? 'low' : '', session: sessionMsg(), look, save: save && save.bytes, wardrobe: mode === 'wardrobe',
-        newWorld: opt === 'new', skipTribe: opt === 'tribe', spawn: opt === 'home' || opt === 'orbit' ? opt : 'last',
+        newWorld: opt === 'new', skipTribe: opt === 'tribe', spawn: opt === 'home' || opt === 'orbit' ? opt : 'last', arena: opt === 'klet' ? 'klet' : '',
         join: jc && NET_URL ? { url: NET_URL, code: jc } : null,   // W11 «Играть вместе»
         onProgress: progress, onMessage: onMsg, fullscreenEl: ui.box,   // F11 игры — на весь экран вместе с полосой сайта
       });
