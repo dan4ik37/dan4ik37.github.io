@@ -1,0 +1,28 @@
+// w10 space-bodies (R-LATE-1113-20): THE MOON as a real place — the body that circles the home planet (the same orbit,
+// size and period as the moon in home's sky), its own world and save region. The player starts in the orbit flight
+// above the near side (the home planet hangs in the black sky), flies down with the same orbit flight, lands on the
+// grey plains of a mare by the rim of a crater and walks in low gravity (home x 0.165, the body record in
+// game/sys/space). Digging and building are the same systems as at home; nothing appears from the air there either.
+// `d37 play scenarios/space.ron` gives the pictures.
+(
+    version: 0,
+    name: "moon",
+    seed: 38,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 30),
+    cameras: {},
+    planet: (
+        profile: "moon",
+        at: (10.0, 100.0),
+        altitude: 0,
+        yaw_deg: 40,
+        pitch_deg: -6,
+        time: 2600,
+        views: {
+            "moon_orbit": (lat: 10, lon: 100, altitude: 60000, pitch_deg: -90, time: 2600),
+            "moon_high": (lat: 10, lon: 100, altitude: 3000, yaw_deg: 40, pitch_deg: -30, time: 2600),
+            "moon_ground": (lat: 10, lon: 100, altitude: 1.7, yaw_deg: 40, pitch_deg: -4, time: 2600, fov_y_deg: 70),
+        },
+    ),
+    game: (spawn: Home, hints: false, radius: 72, forest: 0.0),
+)
