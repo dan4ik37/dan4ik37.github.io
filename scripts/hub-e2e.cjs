@@ -159,7 +159,7 @@ async function playUntilLoaded(C, label){
           await C.send('Page.navigate', { url: site.base + '/hub' });
           ok(await C.until(READY + ` && document.querySelectorAll('#hub-page .hub-tile').length >= 6`, 60000), 'меню /hub: 6 плиток');
           ok(await C.ev(`document.querySelector('.bt-item[data-route="hub"]') && !document.querySelector('.bt-item[data-route="hub"]').hidden && getComputedStyle(document.getElementById('hub-page')).display !== 'none'`), 'нижнее меню телефона: «Играть» видно, раздел открыт');
-          ok(await C.ev(`[...document.querySelectorAll('#hub-page .hub-tile')].map(t => t.dataset.tile).join(',') === 'play,wardrobe,creative,world,studio,mini,invite,howto,gfx,save'`), 'плитки: Играть, Гардероб, Творческий режим, Мир Денчика, Студия, Мини-игры, Позвать друга, Как играть, Графика, Сохранение');
+          ok(await C.ev(`[...document.querySelectorAll('#hub-page .hub-tile')].map(t => t.dataset.tile).join(',') === 'play,wardrobe,creative,world,studio,klet,mini,invite,howto,gfx,save,shots'`), 'плитки: Играть, Гардероб, Творческий режим, Мир Денчика, Студия, Клеточки, Мини-игры, Позвать друга, Как играть, Графика, Сохранение, Снимки');
           // T-163: «кто ты в игре» и строка «Игры игроков» (игроки ещё ничего не выложили — витрина Денчика и «Сделай первую игру»)
           ok(await C.until(`(() => { const p = document.querySelector('#hub-page [data-tile="play"]').getBoundingClientRect(), m = document.querySelector('.hc-me').getBoundingClientRect(), r = document.querySelector('[data-row="people"]').getBoundingClientRect(); return p.bottom <= innerHeight && p.top < m.top && m.top < r.top && m.height < 90; })()`, 8000), 'телефон: «Играть» на первом экране, под ним плашка в одну строку, потом строка игр', await C.ev(`[...document.querySelectorAll('#hub-page [data-tile="play"], .hc-me, [data-row="people"]')].map(e => Math.round(e.getBoundingClientRect().top) + '/' + Math.round(e.getBoundingClientRect().height))`));
           ok(await C.ev(`(() => { const w = () => getComputedStyle(document.querySelector('.hc-worlds')).display; const a = w(); document.querySelector('.hc-more').click(); const b = w(); document.querySelector('.hc-more').click(); return a === 'none' && b !== 'none'; })()`), 'телефон: «Подробнее ▾» раскрывает миры, друзей и кнопки');
@@ -188,6 +188,8 @@ async function playUntilLoaded(C, label){
           await C.ev(`localStorage.removeItem('d37_theme'), true`); await C.send('Page.reload'); await C.until(READY, 60000);
           // «Играть» — экран загрузки, потом планета внутри сайта
           await C.view(1366, 800, false);
+          // EP11: карточка «Играть» заполняется после чтения сохранения (IndexedDB) — ждём её кнопки, иначе клик по «/hub/play» без мира = клетка
+          await C.until(`document.querySelector('#hub-page [data-tile="play"] .hub-spawn')?.childElementCount > 0`, 10000);
           await C.ev(`(document.querySelector('#hub-page [data-tile="play"] a[href="/hub/play/tribe"]') || document.querySelector('#hub-page [data-tile="play"] a.hub-play-main')).click(), true`);   // W8: без сохранения главная кнопка — «Новый мир» (клетка); рубить дерево — сразу с племени
           ok(await C.until(`!!document.querySelector('.hub-play .hub-load') && !document.querySelector('.hub-play .hub-load').hidden`, 10000), 'экран загрузки показан');
           await C.until(`/[1-9]/.test(document.querySelector('.hub-pct')?.textContent || '')`, 15000);
@@ -254,7 +256,7 @@ async function playUntilLoaded(C, label){
             await C.view(1366, 800, false);
             await C.ev(`document.querySelector('#hub-page a[data-tile="creative"]').click(), true`);
             if (await playUntilLoaded(C, 'творческий режим')) {
-              ok(await C.ev(`location.pathname === '/hub/creative' && D37Hub._st.mode === 'creative' && D37Hub._st.h.state.app.is_planet() === true && D37Hub._st.h.gameStats() === null && !!document.querySelector('.d37h-orbit')`), 'творческий режим: планета, полёт (🌍), без игрового слоя (без выживания)');
+              ok(await C.ev(`location.pathname === '/hub/creative' && D37Hub._st.mode === 'creative' && D37Hub._st.h.state.app.is_planet() === true && !!document.querySelector('.d37h-orbit')`), 'творческий режим: планета, полёт (🌍; w11: игровой слой с творческими правилами)');
               await sleep(1500); await C.shot('creative_pc.png');
               await C.ev(`document.querySelector('.hub-back').click(), true`);
               ok(await C.until(`!D37Hub.active && location.pathname === '/hub'`, 15000), 'из творческого режима — в меню');

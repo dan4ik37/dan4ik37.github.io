@@ -26,7 +26,11 @@ user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparen
 .d37h-btn:active,.d37h-btn.on{background:rgba(255,160,60,.55)}
 .d37h-jump{right:16px;bottom:calc(24px + env(safe-area-inset-bottom))}.d37h-orbit{right:16px;bottom:calc(92px + env(safe-area-inset-bottom))}
 .d37h-ward{right:16px;bottom:calc(160px + env(safe-area-inset-bottom))}
-@media (pointer:fine){.d37h-orbit{bottom:24px}.d37h-ward{bottom:92px}}
+/* ep11-fix-body: crouch (roll, let go of a hang / tree / ladder) and the creative world's fly toggle, the same right column */
+.d37h-crouch{right:16px;bottom:calc(228px + env(safe-area-inset-bottom))}.d37h-fly{right:16px;bottom:calc(296px + env(safe-area-inset-bottom))}
+.d37h-game.d37h-crouch{bottom:calc(212px + env(safe-area-inset-bottom))}.d37h-game.d37h-fly{bottom:calc(280px + env(safe-area-inset-bottom))}
+.d37h-game.d37h-orbit{bottom:calc(348px + env(safe-area-inset-bottom))}
+@media (pointer:fine){.d37h-orbit,.d37h-game.d37h-orbit{bottom:24px}.d37h-ward{bottom:92px}}
 .d37h-game.d37h-jump{bottom:calc(76px + env(safe-area-inset-bottom))}.d37h-game.d37h-ward{bottom:calc(144px + env(safe-area-inset-bottom))}
 .d37h-cell .d37h-jump,.d37h-cell .d37h-ward,.d37h-cell .d37h-orbit,.d37h-cell .d37h-hint{display:none!important}
 .d37h-safe{position:absolute;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
@@ -84,6 +88,7 @@ async function compileWasm(url, rawSize, onBytes) {
 // o: { root, scene: 'planet' | 'planet_ground' | 'valley' (EP7: the game) | 'creative' (T-163: the free-flight world) | 'wardrobe'
 //      (T-163: the character alone on a pedestal — the light wardrobe), rawSize, gl, quality, session, look: {body, text}, save: Uint8Array,
 //      wardrobe: bool, workers: number, onMessage(msg), onProgress({phase, done, total}),
+//      w11 kit-port: arena: 'klet' (`game klet play`: «Клеточки» as an engine mode in the player's world).
 //      W8 hub: newWorld: bool (`game progress new`: a cell at the tide pool), skipTribe: bool (`game progress skip tribe`),
 //      spawn: 'last' | 'home' | 'orbit' (where a saved world starts: as saved / `game place goto home_valley` / `travel orbit`),
 //      W11 net-shards: join: {url, code} («Играть вместе»: the shared world with that join code on our d37-server) }
@@ -166,6 +171,7 @@ export async function start(o) {
   // EP7 the game layer (a scene with a `game` block): the HUD is drawn and hit tested by the engine; this glue only
   // forwards keys / pointers (the same rules as the engine's page d37-page.js). Its save rides in save() (GAME section).
   const game = app.game_on();
+  const creative = o.scene === 'creative';   // ep11 publish: the orbit button in the creative world (see the touch buttons)
   st.game = game;
   if (game) app.game_set_touch(touch);
   const mouse = { act: false, use: false };
@@ -209,7 +215,7 @@ export async function start(o) {
 
   // ── input: the held keys -> one action state (the same as the engine's test page d37-page.js) ──
   const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64 };
-  let fly = false, third = true, body = (o.look && o.look.body) || 'girl', touchJump = false, orbitHeld = false;
+  let fly = false, third = true, body = (o.look && o.look.body) || 'girl', touchJump = false, touchCrouch = false, orbitHeld = false;
   const stick = { id: -1, x0: 0, y0: 0, sx: 0, sy: 0 }, look = { id: -1, x: 0, y: 0 };
   const NEXT_BODY = { girl: 'boy', boy: 'mannequin', mannequin: 'girl' };
   const keys = st.keys;
@@ -224,9 +230,9 @@ export async function start(o) {
     sx = Math.max(-1, Math.min(1, sx)); fw = Math.max(-1, Math.min(1, fw));
     if (touchJump || k('Space')) b |= BTN.jump;
     if (k('ShiftLeft') || k('ShiftRight')) b |= BTN.run;
-    if (k('ControlLeft') || k('ControlRight') || k('KeyC')) b |= BTN.crouch;
+    if (touchCrouch || k('ControlLeft') || k('ControlRight') || k('KeyC')) b |= BTN.crouch;
     if (fly) b |= BTN.fly;
-    if (planet && !game && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
+    if (planet && (!game || creative) && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
     if (game && (mouse.act || k('KeyE'))) b |= BTN.act;
     if (game && mouse.use) b |= BTN.use;
     st.app.set_move(sx, fw, b);
@@ -367,9 +373,17 @@ export async function start(o) {
   const bWard = button('d37h-ward', '👕', 'Гардероб (B)');
   if (studio) bWard.style.display = 'none';
   bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
-  if (planet && !game) hold(button('d37h-orbit', '🌍', 'Орбита ↔ земля (O)'), (v) => { orbitHeld = v; });
+  // ep11 publish: the creative world has the game layer (creative rules) and still flies back up with one button
+  if (planet && (!game || creative)) hold(button('d37h-orbit', '🌍', 'Орбита ↔ земля (O)'), (v) => { orbitHeld = v; });
   if (touch) {
     if (!studio) hold(button('d37h-jump', '⤒', 'Прыжок'), (v) => { touchJump = v; });
+    // ep11-fix-body (CHECK-BODY 2): the touch prompts say «ПРИСЕСТЬ: СЛЕЗТЬ / СПРЫГНУТЬ», the roll needs crouch at the
+    // landing, and the creative world flies (F on a PC): a held crouch disc and a fly toggle
+    if (!studio) hold(button('d37h-crouch', '⤓', 'Присесть / слезть (C)'), (v) => { touchCrouch = v; });
+    if (o.scene === 'creative') {
+      const bFly = button('d37h-fly', '🕊', 'Полёт (F)');
+      bFly.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); fly = !fly; bFly.classList.toggle('on', fly); publish(); });
+    }
     const R = 56;
     const hudTouch = new Set();
     on(canvas, 'pointerdown', (e) => {
@@ -541,8 +555,11 @@ export async function start(o) {
     if (spawned || !game) return;
     spawned = true;
     // EP8 fix (play check): «Играть» with no world yet starts the path from the cell, like «Новый мир»
-    const fresh = o.scene === 'valley' && !(o.save && o.save.length) && !o.skipTribe && o.spawn !== 'orbit';
+    const fresh = o.scene === 'valley' && !(o.save && o.save.length) && !o.skipTribe && o.spawn !== 'orbit' && !o.arena;
     const cmds = o.newWorld || fresh ? ['game progress new'] : o.skipTribe ? ['game progress skip tribe'] : o.spawn === 'orbit' ? ['travel orbit'] : o.spawn === 'home' ? ['game place goto home_valley'] : [];
+    // w11 kit-port: an old site game as an engine mode, started in the player's world (only known modes; the realm
+    // comes from the bridge session: an adult arena only for a verified adult)
+    if (o.arena === 'klet') cmds.push(o.session && o.session.realm === 'adult' && o.session.band === 'adult' ? 'game klet play adult' : 'game klet play');
     for (const c of cmds) { const r = run(c); if (typeof r === 'string' && /^отказ|error|no such/i.test(r)) emit({ t: 'error', code: 'spawn', msg: (c + ': ' + r).slice(0, 200) }); }
     // W11 net-shards: «Играть вместе» — the shared world by its code; an older engine build without join_code plays alone
     if (o.join && o.join.url && o.join.code) {
