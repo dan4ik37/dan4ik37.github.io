@@ -7,7 +7,7 @@
 // Плеер — «фасад»: сначала превью, iframe YouTube грузится по клику
 // (страница лёгкая, просмотр при воспроизведении засчитывается каналу).
 import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, isGambling, hiddenVideo, esc, fmtDuration, fmtCount, cleanDesc, ownWords, VIDEO_OWN_WORDS, isShortVideo, SNAPSHOT_AT } from './_lib/yt.js';
-import { page, YT_CHANNEL } from './_lib/page.js';
+import { page, YT_CHANNEL, INDEX_DIET } from './_lib/page.js';
 import { videoFromSnapshot } from './_lib/video-snap.js';
 import { topicsFor } from './_lib/topics.js';
 import { QUIZZES } from './_lib/quizzes.js';
@@ -58,6 +58,9 @@ export default async function handler(req, res) {
   const noAds = isGambling(sn.title, rawDesc) || va.age >= 16 || ownWords(rawDesc) < VIDEO_OWN_WORDS;
   // Шортс — короткий клип (часто кусок того же стрима, что и длинный ролик): страница есть, в поиск — нет (yt.js isShortVideo)
   const short = isShortVideo(sn.title, sn.publishedAt, v.contentDetails?.duration);
+  // Индекс-диета (14.11.2026, AdSense: «Бесполезный контент»): ролик без своего текста в описании (< VIDEO_OWN_WORDS слов) — страница
+  // для зрителей остаётся (ссылки, плеер, похожие), но в поиск не идёт и в карте сайта её нет (api/sitemap.js, page.js INDEX_DIET)
+  const thin = INDEX_DIET && ownWords(rawDesc) < VIDEO_OWN_WORDS;
   // Цифры — с датой, на когда они (правила YouTube API III.E.4.f): из снимка — его день, из API — день сборки страницы (CDN держит сутки).
   // Вернулся с YouTube после «👍 Лайк на YouTube» — свежие цифры (js/core/vlike.js → /api/vstats) и «обновлено ЧЧ:ММ».
   const statsAt = snap ? 'данные YouTube на ' + new Date(SNAPSHOT_AT).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -123,7 +126,7 @@ export default async function handler(req, res) {
   return res.status(200).send(page({
     title: `${sn.title} — dan4ik37`,
     description: metaDesc,
-    url, image: thumb, ld, body, script: playerJs(id), ogType: 'video.other', noAds, noindex: short
+    url, image: thumb, ld, body, script: playerJs(id), ogType: 'video.other', noAds, noindex: short || thin
   }));
 }
 

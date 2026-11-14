@@ -136,8 +136,10 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
       fs.writeFileSync(path.join(tmp, 'package.json'), '{"type":"module"}');
       process.env.SUPABASE_URL = 'https://sb.test'; process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
       const now = '2026-11-01T10:00:00Z', cover = U + '/abcdefabcdefabcdef.webp';
+      // статья со своим текстом ≥ FORUM_MIN_CHARS (page.js, индекс-диета 14.11) — в поиске и в карте сайта; короткая — noindex
+      const LONG = 'Базу ставим у реки на холме: вода рядом, а паводок не достанет. Стены сначала из брёвен, потом из камня. '.repeat(12);
       const ART = { id: 7, title: 'Гайд по базе', author_id: U, pinned: false, locked: false, created_at: now, published_at: now, edited_at: null, status: 'published',
-        blocks: [{ t: 'p', r: [{ x: 'Текст статьи. Звони +7 999 123 45 67' }] }, { t: 'video', p: 'yt', id: 'dQw4w9WgXcQ' }], cover, tags: ['гайд'], source_url: 'https://news.example/a', source_title: 'Новости',
+        blocks: [{ t: 'p', r: [{ x: 'Текст статьи. Звони +7 999 123 45 67' }] }, { t: 'p', r: [{ x: LONG }] }, { t: 'video', p: 'yt', id: 'dQw4w9WgXcQ' }], chars: LONG.length + 36, cover, tags: ['гайд'], source_url: 'https://news.example/a', source_title: 'Новости',
         excerpt: 'Текст статьи', age_min: 12, realm: 'kids', rating: 5, votes_up: 6, comments: 1, trusted: true, reports_open: 0 };
       let art = ART, pinged = 0; const idx = [];
       const J = (b, st = 200) => new Response(JSON.stringify(b), { status: st, headers: { 'Content-Type': 'application/json' } });
@@ -166,6 +168,11 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
       ok(r.code === 200 && post && post.image.includes('/forum-media/' + cover) && post.video && post.video.thumbnailUrl && post.citation === 'https://news.example/a' && post.keywords === 'гайд', 'article: JSON-LD (image, video, citation, keywords)', post);
       ok(/<link rel="canonical" href="https:\/\/dan4ik37\.vercel\.app\/forum\/7-gaid-po-baze">/.test(r.body) && /og:image" content="https:\/\/sb\.test\/storage\/v1\/object\/public\/forum-media\//.test(r.body), 'article: canonical + og:image = cover');
       ok(/data-ad="forum_article"/.test(r.body) && /adsbygoogle\.js/.test(r.body) && /\[скрыто\]/.test(r.body) && /rel="nofollow ugc noopener"/.test(r.body), 'article: one ad place (trusted), contacts hidden, source nofollow ugc');
+      ok(!/name="robots" content="noindex"/.test(r.body), 'long article (>= FORUM_MIN_CHARS) → indexable');
+      art = { ...ART, blocks: [{ t: 'p', r: [{ x: 'Коротко: привет всем.' }] }], chars: 21 }; r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' });
+      ok(r.code === 200 && /name="robots" content="noindex"/.test(r.body) && !/adsbygoogle\.js/.test(r.body), 'short article → 200, noindex, no ads (index diet)');
+      r = await call(sitemap, { part: 'pages' });
+      ok(!/\/forum\/7-gaid-po-baze</.test(r.body) && !/\/forum<\/loc>/.test(r.body), 'sitemap: short article and a forum with < 3 real articles are left out');
       art = { ...ART, trusted: false }; r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' });
       ok(!/data-ad=/.test(r.body) && !/adsbygoogle\.js/.test(r.body), 'not-yet-trusted author → no ads');
       art = { ...ART, reports_open: 2 }; r = await call(pages, { page: 'forum', id: '7-gaid-po-baze' });
@@ -187,15 +194,17 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
       art = ART;
       r = await call(pages, { page: 'forum' });
       ok(r.code === 200 && r.body.includes('href="/forum/7-gaid-po-baze"') && r.body.includes('href="/forum/new"') && /fr-cover/.test(r.body), 'feed: slug links, write → /forum/new, cover');
+      ok(/name="robots" content="noindex"/.test(r.body), 'feed with < 3 real articles → noindex (index diet)');
       r = await call(pages, { page: 'forum', tag: encodeURIComponent('гайд') });
       ok(r.code === 200 && /<h1>#гайд/.test(r.body) && /forum\/t\/%D0%B3%D0%B0%D0%B9%D0%B4/.test(r.body), 'tag page /forum/t/гайд');
+      ok(/name="robots" content="noindex"/.test(r.body), 'tag page → noindex (only cards, index diet)');
       r = await call(pages, { page: 'forum', tag: '<x>' }); ok(r.code === 404, 'bad tag → 404');
       for (const [q, to] of [[{ id: 'new' }, '/#/forum/new'], [{ id: 'my' }, '/#/forum/my'], [{ id: 'mod' }, '/#/forum/mod'], [{ id: '7', spa: 'edit' }, '/#/forum/edit/7'], [{ id: U, spa: 'u' }, '/#/forum/u/' + U]]) {
         r = await call(pages, { page: 'forum', ...q }); ok(r.code === 302 && r.headers.Location === to, 'SPA path → ' + to, r.headers);
       }
       r = await call(pages, { page: 'forum', id: 'x', spa: 'edit' }); ok(r.code === 404, 'bad edit id → 404');
       r = await call(sitemap, { part: 'pages' });
-      ok(r.body.includes('<loc>https://dan4ik37.vercel.app/forum/7-gaid-po-baze</loc>') && r.body.includes('/forum/t/%D0%B3%D0%B0%D0%B9%D0%B4'), 'sitemap: article slug + tag page');
+      ok(r.body.includes('<loc>https://dan4ik37.vercel.app/forum/7-gaid-po-baze</loc>') && !r.body.includes('/forum/t/'), 'sitemap: long article slug, no tag pages (index diet)');
       r = await call(pages, { page: 'forumping' }, 'POST', { id: 7 });
       ok(JSON.parse(r.body).sent === true && idx.length >= 1 && idx[0].includes('https://dan4ik37.vercel.app/forum/7-gaid-po-baze'), 'IndexNow ping on publish', idx);
       r = await call(pages, { page: 'forumping' }, 'POST', { id: 7 }); ok(JSON.parse(r.body).sent === false, 'second ping does nothing (pinged_at)');
@@ -217,7 +226,7 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
       r = await call(pages, { page: 'forum' });
       ok(r.code === 503 && !/Скрытая/.test(r.body), 'feed: v2 query fails → 503, no unfiltered legacy list', r.code);
       r = await call(sitemap, { part: 'pages' });
-      ok(!/\/forum\/7</.test(r.body) && r.body.includes('<loc>https://dan4ik37.vercel.app/forum</loc>'), 'sitemap: v2 query fails → no thread URLs from the unfiltered legacy query');
+      ok(!/\/forum\/7</.test(r.body) && r.body.includes('<loc>https://dan4ik37.vercel.app/games</loc>'), 'sitemap: v2 query fails → no thread URLs from the unfiltered legacy query');
       // настоящая старая база (нет колонки status: 400 + 42703) — старые страницы как раньше
       globalThis.fetch = async (url) => { const u = String(url);
         if (u.includes('/rest/v1/forum_threads?') && /status|age_min/.test(u)) return new Response('{"code":"42703","message":"column forum_threads.status does not exist"}', { status: 400 });
@@ -228,7 +237,7 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
       r = await call(pages, { page: 'forum', id: '7' });
       ok(r.code === 200 && /текст старой темы/.test(r.body), 'old database (42703) → old thread page as before', r.code);
       r = await call(sitemap, { part: 'pages' });
-      ok(r.body.includes('<loc>https://dan4ik37.vercel.app/forum/7</loc>'), 'old database → sitemap lists old threads as before');
+      ok(!r.body.includes('<loc>https://dan4ik37.vercel.app/forum/7</loc>'), 'old database (no chars column) → old short threads left out of the sitemap (index diet)');
     } finally { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} }
   }
 

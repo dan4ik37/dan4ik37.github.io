@@ -5,7 +5,7 @@
 // поисковик находит и связывает их, человек может пролистать архив, старые видео не теряются.
 // На канале ~6000 роликов — страницы по PER штук: /videos, /videos?p=2 …; годы ведут на страницу, где год начинается.
 import { SITE, ALL_UPLOADS, getUploads, isGambling, esc } from '../yt.js';
-import { page, YT_CHANNEL, VIDEO_LIST_ADS } from '../page.js';
+import { page, YT_CHANNEL, VIDEO_LIST_ADS, INDEX_DIET } from '../page.js';
 import { TOPICS } from '../topics.js';
 import { videoAge, ageBadge, ageAttr } from '../age.js';
 
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
   return res.status(200).send(page({
     title: p > 1 ? `Все видео dan4ik37 — страница ${p} из ${pages}` : `Все видео dan4ik37 — архив роликов (${n.toLocaleString('ru')})`,
     description: `Все ${n} ${plural} YouTube-канала dan4ik37 по годам: игры, стримы, шортсы. Смотри прямо на сайте.`,
-    url, image: SITE + '/og-image.jpg', ld, body, css: CSS, noAds
+    url, image: SITE + '/og-image.jpg', ld, body, css: CSS, noAds, noindex: INDEX_DIET   // индекс-диета 14.11: список роликов — данные YouTube без своего текста, noindex (page.js INDEX_DIET)
   }));
 }
 

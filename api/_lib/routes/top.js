@@ -2,7 +2,7 @@
 // video-details.js на дату снимка, без квоты API). Отдельно ролики и шортсы. Ролики про кейсы/промокоды на депозит
 // (isGambling) сюда не попадают — на странице реклама, а AdSense запрещает её рядом с азартными играми.
 import { SITE, ALL_UPLOADS, getUploads, isGambling, esc, fmtCount, fmtDuration } from '../yt.js';
-import { page, VIDEO_LIST_ADS } from '../page.js';
+import { page, VIDEO_LIST_ADS, INDEX_DIET } from '../page.js';
 import { videoFromSnapshot } from '../video-snap.js';
 import { DETAILS_AT } from '../video-details.js';
 
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
   return res.status(200).send(page({
     title: 'Самые популярные видео dan4ik37 — топ по просмотрам',
     description: `Топ-${N} видео и шортсов dan4ik37 по просмотрам: ${longs.slice(0, 3).map(v => v.title).join(' · ').slice(0, 200)}`,
-    url, image: SITE + '/img/share/top.png', ld, body, css: CSS, noAds: !VIDEO_LIST_ADS
+    url, image: SITE + '/img/share/top.png', ld, body, css: CSS, noAds: !VIDEO_LIST_ADS, noindex: INDEX_DIET
   }));
 }
 

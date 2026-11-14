@@ -31,9 +31,11 @@ import raid from './_lib/routes/raid.js';            // набеги: POST /api/
 import forum from './_lib/routes/forum.js';          // форум /forum, /forum/t/<метка>, /forum/<id>-<slug>, IndexNow /api/forum-ping и идеи /ideas, /ideas/<id>
 import diag from './_lib/routes/diag.js';            // мониторинг: POST /api/diag — отчёты браузеров об ошибках сайта (ops.sql, docs/OPS.md)
 import photo from './_lib/routes/photo.js';          // 🖼 «Фоторедактор онлайн» /tools/photo — для поиска; сам редактор — раздел /photo
+import news from './_lib/routes/news.js';            // 📰 «Что нового» /news, /news/<slug>, /news/rss.xml — записи из api/_lib/news-posts.js
+import map from './_lib/routes/sitemap-page.js';     // /sitemap — карта сайта для людей (все разделы, открытые поиску)
 
 const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, vstats, top, quiz, wheel, random, typing, ugc,
-  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, forumping: forum, photo, diag };   // raid — набеги
+  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, forumping: forum, photo, map, news, diag };   // raid — набеги
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];

@@ -7,7 +7,10 @@
 import { SITE, esc } from './_lib/yt.js';
 import { tmNote, TM_CSS } from './_lib/trademarks.js';   // «X» — товарный знак владельца (игры «как X»)
 // весь видимый текст страницы игры (названия чужих игр бывают и в правилах, советах, вопросах — «Это Block Blast?»)
-const gameTexts = g => [g.name, g.title, g.h1, g.description, g.lead, ...[g.features, g.rules, g.tips, g.faq].flat(2)];
+const gameTexts = g => [g.name, g.title, g.h1, g.description, g.lead, ...[g.features, g.rules, g.tips, g.faq, g.controls, g.score, g.tipsMore, g.faqMore].filter(Boolean).flat(2)];
+// гайд (api/_lib/games-guide.js): вопросы и советы страницы = из games-seo.js + дополнительные
+const faqOf = g => [...g.faq, ...(g.faqMore || [])];
+const tipsOf = g => [...g.tips, ...(g.tipsMore || [])];
 import { page } from './_lib/page.js';
 import { GAME_PAGES, HUB, scoreLabel } from './_lib/games-seo.js';
 import { GAME_AGE, ageBadge } from './_lib/age.js';
@@ -107,10 +110,24 @@ function hubPage() {
   return page({ title: HUB.title, description: HUB.description, url, image: cardImage('games'), ld, body: body.replace(/<\/main>\s*$/, () => `  ${tmNote('игры', HUB.title, HUB.h1, HUB.lead, HUB.description, ...GAME_PAGES.map(x => x.description), ...MORE.map(m => m[3]))}\n</main>`), css: GAME_CSS });
 }
 
+function relatedGames(id, n) {
+  const i = GAME_PAGES.findIndex(x => x.id === id), len = GAME_PAGES.length, out = [];
+  for (let k = 1; out.length < Math.min(n, len - 1); k++) {
+    for (const j of [i + k, i - k]) {
+      const x = GAME_PAGES[((j % len) + len) % len];
+      if (x.id !== id && !out.includes(x) && out.length < n) out.push(x);
+    }
+  }
+  return out;
+}
+
 function gamePage(g, ch) {
   const url = `${SITE}/games/${g.id}`;
   const play = `/play/${g.id}`;   // раздел игр сайта (js/ui/router.js); /games/<id> — эта страница для поиска
-  const others = GAME_PAGES.filter(x => x.id !== g.id);
+  // «Другие игры» — 8 соседей по списку (4 до и 4 после, по кругу), а не все 76: иначе общий список ≈ 2000 слов
+  // повторяется на каждой странице и забивает уникальный гайд (AdSense «Бесполезный контент», 14.11). Кольцо даёт
+  // каждой странице 8 входящих ссылок; полный список — на /games.
+  const others = relatedGames(g.id, 8);
   const [age, ageWhy] = ageOf(g.id);
   const ld = {
     '@context': 'https://schema.org',
@@ -125,7 +142,12 @@ function gamePage(g, ch) {
       },
       {
         '@type': 'FAQPage',
-        mainEntity: g.faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } }))
+        mainEntity: faqOf(g).map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } }))
+      },
+      // HowTo — шаги из правил (те же, что видны на странице)
+      {
+        '@type': 'HowTo', name: `Как играть в «${g.name}»`, inLanguage: 'ru',
+        step: g.rules.map((r, i) => ({ '@type': 'HowToStep', position: i + 1, text: r }))
       },
       {
         '@type': 'BreadcrumbList',
@@ -156,15 +178,17 @@ function gamePage(g, ch) {
 
   <section class="box"><h2>Что есть в игре</h2><ul class="feat">${g.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul></section>
   <section class="box"><h2>${esc(g.rulesTitle || 'Правила')}</h2><ol>${g.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol></section>
-  <section class="box"><h2>${esc(g.tipsTitle || 'Советы')}</h2><ul>${g.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>
+  ${g.controls ? `<section class="box"><h2>Управление</h2><ul class="ctl"><li><b>🖥 Компьютер.</b> ${esc(g.controls[0])}</li><li><b>📱 Телефон.</b> ${esc(g.controls[1])}</li></ul></section>` : ''}
+  <section class="box"><h2>${esc(g.tipsTitle || 'Советы')}</h2><ul>${tipsOf(g).map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>
+  ${g.score?.length ? `<section class="box"><h2>Очки, победа и рекорды</h2><ul>${g.score.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>` : ''}
   <div data-ad="seo_game" hidden></div>
   <section class="box faq"><h2>Частые вопросы</h2>
-    ${g.faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}
+    ${faqOf(g).map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}
   </section>
   <div class="cta center"><a class="btn btn-acc big" href="${play}">▶ Играть в «${esc(g.name)}»</a></div>
 
   <section class="more"><h2>Другие игры</h2><div class="ggrid">${others.map(card).join('')}</div>
-    <p class="all"><a href="/games">Все игры →</a></p></section>
+    <p class="all"><a href="/games">Все ${GAME_PAGES.length} игр →</a></p></section>
   ${joinBlock()}
   ${tmNote('игра', ...gameTexts(g))}
 </main>`;

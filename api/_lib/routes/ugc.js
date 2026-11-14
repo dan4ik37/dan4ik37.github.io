@@ -3,7 +3,7 @@
 // Данные — ugc_games (ugc.sql) по service-ключу: только игры по ссылке / на проверке / в каталоге. В поиск (index) — только
 // игры «в каталоге» (прошли модерацию); у остальных noindex и без рекламы. Пока ugc.sql не выполнен — студия без списка игр.
 import { SITE, esc } from '../yt.js';
-import { page } from '../page.js';
+import { page, INDEX_DIET } from '../page.js';
 import { sbSelect, sbRpc, storeConfigured } from '../store.js';
 import { ageBadge, UGC_AGE, publicKids as kidsOf, publicNick, KID_NICK } from '../age.js';
 // ники детей до 13 — «Игрок» (страницы индексирует поиск; age.sql: age_public_kids — только «прятать или нет»)
@@ -86,7 +86,7 @@ async function gamePage(req, res, id){
   <p class="ug-warn">Игру сделал игрок сайта. Никогда не вводи в играх пароли и личные данные. Нашёл нарушение — нажми ⚠️ на странице игры.</p>
 </main>`;
   res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(page({ title, description, url, image: `${SITE}/img/share/studio.png`, ld, body, css: CSS, noindex: !pub, noAds: !pub, ogType: 'website' }));
+  res.send(page({ title, description, url, image: `${SITE}/img/share/studio.png`, ld, body, css: CSS, noindex: !pub || INDEX_DIET, noAds: !pub, ogType: 'website' }));   // индекс-диета 14.11: игра из шаблона + пара строк описания — не в поиск (page.js INDEX_DIET)
 }
 
 async function studioPage(req, res){

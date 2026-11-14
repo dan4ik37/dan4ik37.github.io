@@ -215,7 +215,10 @@ const D37Route = (() => {
     hub: ['Играть — планета D37, гардероб и игры | dan4ik37',
       'Новый 3D-движок сайта dan4ik37: своя планета с океанами — лети с орбиты, приземляйся, плавай, наряжай персонажа. Играй в браузере на телефоне и ПК, без установки.'],
   };
-  const NOINDEX = new Set(['profile', 'invite', 'adv', 'phone', 'games', 'ai3d']);   // ai3d — скрытая 3D-мастерская /tools/3d
+  // 14.11.2026 индекс-диета (AdSense: «Бесполезный контент»): оболочки приложения без своего текста для робота — чат, шортсы (ролики
+  // YouTube), донат, опрос, саундборд, кликер, тиммейты, идеи, меню /hub — тоже noindex (сервер шлёт X-Robots-Tag, vercel.json)
+  const NOINDEX = new Set(['profile', 'invite', 'adv', 'phone', 'games', 'ai3d',   // ai3d — скрытая 3D-мастерская /tools/3d
+    'chat', 'shorts', 'donate', 'poll', 'soundboard', 'clicker', 'lfg', 'ideas', 'hub']);
   // Что разделу показать поисковику: { title, description, canonical, noindex }
   function routeMeta(route, param){
     const m = ROUTE_META[route] || ROUTE_META.home;
@@ -230,7 +233,6 @@ const D37Route = (() => {
       if (route === 'shorts' && /^[A-Za-z0-9_-]{11}$/.test(param)) canon = '/v/' + param;   // тот же ролик — страница ролика
       if (route === 'forum') title = 'Тема форума — dan4ik37';
       if (route === 'ideas') title = 'Идея для видео — dan4ik37';
-      if (route === 'hub') noindex = true;   // экран игры и гардероб — не для поиска; само меню /hub — для поиска
     }
     if (route === 'ads') canon = '/reklama';
     if (route === 'photo') { canon = '/tools/photo'; if (param) noindex = true; }   // для поиска — серверная страница /tools/photo

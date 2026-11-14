@@ -108,20 +108,20 @@
       ]
     },
     {
-      "source": "/shorts",
+      "source": "/:shell(chat|profile|phone|shorts|invite|adv|donate|poll|soundboard|clicker|lfg|app|hub)",
       "headers": [
         {
-          "key": "Link",
-          "value": "<https://dan4ik37.vercel.app/shorts>; rel=\"canonical\""
+          "key": "X-Robots-Tag",
+          "value": "noindex"
         }
       ]
     },
     {
-      "source": "/chat",
+      "source": "/:shell(chat|profile|phone|shorts|invite|adv|photo|shop)/:path+",
       "headers": [
         {
-          "key": "Link",
-          "value": "<https://dan4ik37.vercel.app/chat>; rel=\"canonical\""
+          "key": "X-Robots-Tag",
+          "value": "noindex"
         }
       ]
     },
@@ -197,6 +197,22 @@
     {
       "source": "/about",
       "destination": "/api/pages?page=about"
+    },
+    {
+      "source": "/news",
+      "destination": "/api/pages?page=news"
+    },
+    {
+      "source": "/news/rss.xml",
+      "destination": "/api/pages?page=news&rss=1"
+    },
+    {
+      "source": "/news/:slug",
+      "destination": "/api/pages?page=news&slug=:slug"
+    },
+    {
+      "source": "/sitemap",
+      "destination": "/api/pages?page=map"
     },
     {
       "source": "/reklama",

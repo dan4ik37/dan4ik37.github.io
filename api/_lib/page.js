@@ -52,6 +52,24 @@ export const REF_HEAD = `<script>(${refHead.toString()})()</script>`;
 export const SITE_AGE = 12;
 export const AGE_MARK = `<span class="age-mark" title="Сайт для ${SITE_AGE}+: игры, видео и разделы помечены своей меткой (0+…18+)">${SITE_AGE}+</span>`;
 
+// Доверие (AdSense «Бесполезный контент», 14.11.2026): на каждой странице — строка «кто ведёт сайт, карта сайта, новости
+// разработки, контакты, данные и реклама» над общим списком ссылок. DEVLOG — адрес «Дневника разработки» (ветка ads-devlog);
+// другой адрес — поменять здесь; пусто — ссылка не показывается.
+export const DEVLOG_URL = '/news';
+export const TRUST_LINKS = [
+  ['/about', 'О сайте и авторе'], ['/sitemap', 'Карта сайта'], ...(DEVLOG_URL ? [[DEVLOG_URL, 'Дневник разработки']] : []),
+  ['/contacts', 'Контакты'], ['/privacy', 'Конфиденциальность'], ['/privacy#ads', 'Реклама и cookie'],
+];
+// Кто выпускает сайт — для поисковиков (schema.org Organization + WebSite). Те же @id — в <head> index.html и на /about.
+const SITE_URL = 'https://dan4ik37.vercel.app';
+export const SAME_AS = [YT_CHANNEL, 'https://www.twitch.tv/dan4ik37', 'https://www.tiktok.com/@.dan4ik37', 'https://vk.com/dan4ik37', 'https://t.me/+LE25p4pQojkyYjli'];
+export const SITE_LD = [
+  { '@type': 'Organization', '@id': SITE_URL + '/#org', name: 'dan4ik37', alternateName: ['Денчик37', 'Сайт dan4ik37'], url: SITE_URL + '/',
+    logo: SITE_URL + '/icon-512.png', email: 'dan4ik37k@gmail.com', founder: { '@id': SITE_URL + '/#person' }, sameAs: SAME_AS },
+  { '@type': 'WebSite', '@id': SITE_URL + '/#website', name: 'dan4ik37', alternateName: ['Денчик37', 'Сайт dan4ik37'], url: SITE_URL + '/',
+    inLanguage: 'ru', publisher: { '@id': SITE_URL + '/#org' } },
+];
+
 // noAds — без рекламы на странице: ни скрипта AdSense, ни мест, ни полоски РСЯ (ролики про кейсы/промокоды на депозит —
 // AdSense запрещает рекламу рядом с азартными играми; ad-places.js получает контекст «gambling»)
 // spa — у страницы есть раздел сайта-приложения с тем же адресом (/forum/42 ↔ '#/forum/42', js/ui/router.js): вкладка, где сайт уже
@@ -66,6 +84,15 @@ export const SHARE_ADS = true;
 // Реклама на списках роликов (/videos, /top, /topics, /topic/<slug>, /history): там только данные YouTube (названия и превью) —
 // для AdSense это «скопированное без своего текста», для YouTube API — III.G.1.d. false — без рекламы; вернуть как было — true.
 export const VIDEO_LIST_ADS = false;
+// Индекс-диета (14.11.2026): AdSense отклонил сайт за «Бесполезный контент» — Google судит весь сайт, а в поиске были в основном
+// страницы без своего текста (2651 /v/<id> с копией описания YouTube, списки роликов, пустые оболочки приложения). Теперь такие
+// страницы открываются как раньше, но с noindex (ссылки по ним робот проходит: «noindex» без «nofollow» = follow) и не попадают в карты сайта (api/sitemap.js):
+// /v/<id> без ≥ VIDEO_OWN_WORDS слов своего текста, /videos /top /topics /topic/<slug> /history, /ideas*, /forum/t/<метка>,
+// статьи форума короче FORUM_MIN_CHARS, игры игроков /g/<id>; оболочки /chat /shorts /profile… — X-Robots-Tag в vercel.json.
+// Вернуть как было — INDEX_DIET = false (и убрать заголовки X-Robots-Tag оболочек в vercel.json).
+export const INDEX_DIET = true;
+// Статья форума в поиске — от стольких знаков своего текста (forum_threads.chars, forum.sql) ≈ 150 слов
+export const FORUM_MIN_CHARS = 1000;
 // Место рекламы на первом экране (05.11.2026). Место <div data-ad> встаёт, только когда подъезжает снизу (ad-places.js lazyBelow:
 // блок не сдвигает видимый текст), — а у тестов /quiz/<тест>, рандомайзера, теста печати и генератора ников оно уже на первом
 // экране, и рекламы там не было вовсе. Теперь сразу за местом — крошечный скрипт (SLOT_JS): место на первом экране и не VIP —
@@ -78,7 +105,7 @@ const RSV_HEAD = `<script>window.__d37Rsv=function(){try{var s=document.currentS
 const SLOT_JS = '<script>window.__d37Rsv&&__d37Rsv()</script>';
 // обычное место (не карточка ленты): <div data-ad="ключ" hidden></div> → и скрипт сразу за ним ($& — само найденное место)
 const withRsv = body => String(body).replace(/<div data-ad="[\w-]+" hidden><\/div>/g, '$&' + SLOT_JS);
-export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false, spa = '', share = false }) {
+export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false, spa = '', share = false, head = '' }) {
   if (noindex && !(share && SHARE_ADS)) noAds = true;
   const rsv = SLOT_RSV && !noAds;
   return `<!DOCTYPE html>
@@ -104,6 +131,7 @@ ${url ? `<meta property="og:type" content="${esc(ogType)}">
 <meta property="og:locale" content="ru_RU">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="${esc(image)}">` : ''}
+${head}
 ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -141,6 +169,7 @@ ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.a
     <a href="/play/words">🔤 Слово дня</a>
     <a href="/chat">💬 Чат</a>
     <a href="/forum">📋 Форум</a>
+    <a href="/news">📰 Что нового</a>
     <a href="/ideas">💡 Идеи для видео</a>
     <a href="/vip">✨ VIP</a>
     <a href="/shop">💎 Магазин</a>
@@ -151,6 +180,7 @@ ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.a
 </header>
 ${rsv ? withRsv(body) : body}
 <footer class="foot">
+  <nav class="foot-trust" aria-label="О сайте">${TRUST_LINKS.map(([u, n]) => `<a href="${u}">${n}</a>`).join('')}</nav>
   <a href="/">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/studio">Студия игр</a> · <a href="/forum">Форум</a> · <a href="/ideas">Идеи для видео</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/tools/random">Рандомайзер</a> · <a href="/tools/typing">Тест печати</a> · <a href="/tools/photo">Фоторедактор</a> · <a href="/vip">VIP</a> · <a href="/shop">💎 Магазин</a> · <a href="/donate">💝 Поддержать</a> · <a href="/reklama">Реклама</a> · <a href="/adv">Разместить рекламу</a> · <a href="/ads-terms">Правила рекламы</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> ·<a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
   <a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch</a> ·
   <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" rel="noopener">Telegram</a> ·
@@ -260,6 +290,8 @@ h2{font-family:Oswald,sans-serif;font-weight:600;font-size:1.3rem;text-transform
 .foot{padding:2rem 1rem;text-align:center;font-size:.78rem;color:var(--muted);border-top:1px solid var(--line)}
 .foot a{text-decoration:none}
 .foot-age{margin-top:.8rem}
+.foot-trust{display:flex;flex-wrap:wrap;justify-content:center;gap:.35rem 1.1rem;margin-bottom:.9rem;font-weight:700;font-size:.82rem}
+.foot-trust a{color:var(--text);display:inline-flex;align-items:center;min-height:32px}
 .age-mark{display:inline-flex;align-items:center;justify-content:center;min-width:2.4em;height:1.6em;padding:0 .4em;border-radius:6px;border:1.5px solid rgba(var(--text-rgb),.45);font-weight:800;font-size:.72rem;color:var(--text);vertical-align:middle;margin-right:.4rem}
 .age-b{display:inline-flex;align-items:center;justify-content:center;min-width:2.15em;height:1.5em;padding:0 .38em;border-radius:6px;font:800 .66rem/1 Montserrat,system-ui,sans-serif;color:#fff;background:#475569;border:1px solid rgba(var(--fg-rgb),.28);vertical-align:middle;white-space:nowrap}
 .age-b0{background:#15803d}.age-b6{background:#0e7490}.age-b12{background:#a16207}.age-b16{background:#c2410c}.age-b18{background:#b91c1c}
