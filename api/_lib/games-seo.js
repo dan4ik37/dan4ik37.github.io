@@ -5,6 +5,7 @@
 // id совпадают с GAMES в js/features/games.js: кнопка «Играть» ведёт на /play/<id> (раздел игр сайта).
 
 import { ARCADE_PAGES, ARCADE_UNITS } from './games-seo-arcade.js';
+import { GUIDE, TOP, ACH, QUEST } from './games-guide.js';
 // T-145: «Планета» и «Новая земля» открыты всем. Откат одной строкой: T145_OPEN = false — их страниц /games/<id> и строк карты
 // сайта нет (каталог сайта — тот же флаг в js/features/games.js). Таблица не меняется во время работы — разбор XSS видит её сам
 const T145_OPEN = true;
@@ -1504,6 +1505,19 @@ export const GAME_PAGES = [
   // мини-игры (js/games/arcade, T-140): страницы собирает node scripts/make-arcade.mjs из js/games/arcade/<id>.json
   ...ARCADE_PAGES,
 ];
+// Гайд (AdSense 14.11.2026): управление ПК / телефон, очки и победа, ещё советы и вопросы — api/_lib/games-guide.js.
+// rules и tips не трогаем: из них собирается окно «📖 Правила» в игре (scripts/make-rules.mjs).
+for (const p of GAME_PAGES) {
+  const x = GUIDE[p.id];
+  if (!x) continue;
+  p.controls = [x.pc, x.phone];
+  p.score = [...(x.score || [])];
+  if (TOP[p.id]) p.score.push(`Таблица рекордов «Игр»: ${TOP[p.id]} — за 7 дней и за всё время. Чтобы попасть в неё, войди на сайт.`);
+  for (const [t, d] of ACH[p.id] || []) p.score.push(`Ачивка «${t}» — ${d}.`);
+  if (QUEST[p.id]) p.score.push(`Бывает заданием дня: «${QUEST[p.id]}».`);
+  p.tipsMore = x.tips || [];
+  p.faqMore = x.faq || [];
+}
 
 
 export const HUB = {
