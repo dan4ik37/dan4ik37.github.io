@@ -218,6 +218,8 @@ function gamesLoadScript(src){
 // Роутер зовёт при каждом заходе на #/games[/id]
 function renderGamesPage(param){
   const [first, ...rest] = String(param || '').split('/');
+  // W11: /play/d37?join=<код> — общий мир движка D37 живёт в платформе (/hub/play), код идёт с ним
+  if (first === 'd37' && window.D37Route?.go) { D37Route.go('/hub/play' + (/^\?join=[A-Za-z0-9]{6}$/.test(location.search) ? location.search : ''), { replace: true }); return; }
   const id = GAMES.some(g => g.id === first && !g.href) || GAMES_HIDDEN.some(g => g.id === first) ? first : null;
   if (id) openGame(id, rest.join('/') || null); else closeGame(true);
 }

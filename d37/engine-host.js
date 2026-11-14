@@ -83,7 +83,8 @@ async function compileWasm(url, rawSize, onBytes) {
 //      (T-163: the character alone on a pedestal — the light wardrobe), rawSize, gl, quality, session, look: {body, text}, save: Uint8Array,
 //      wardrobe: bool, workers: number, onMessage(msg), onProgress({phase, done, total}),
 //      W8 hub: newWorld: bool (`game progress new`: a cell at the tide pool), skipTribe: bool (`game progress skip tribe`),
-//      spawn: 'last' | 'home' | 'orbit' (where a saved world starts: as saved / `game place goto home_valley` / `travel orbit`) }
+//      spawn: 'last' | 'home' | 'orbit' (where a saved world starts: as saved / `game place goto home_valley` / `travel orbit`),
+//      W11 net-shards: join: {url, code} («Играть вместе»: the shared world with that join code on our d37-server) }
 // The 'wardrobe' scene is a studio: the panel is open from the start, no walking (the keys and the left half of a phone
 // turn the camera round the character instead), no jump / orbit / 👕 buttons; «Готово» is sent to the page as
 // {t:'wardrobe', on:false} as always (the site goes back where it came from).
@@ -518,6 +519,13 @@ export async function start(o) {
     const fresh = o.scene === 'valley' && !(o.save && o.save.length) && !o.skipTribe && o.spawn !== 'orbit';
     const cmds = o.newWorld || fresh ? ['game progress new'] : o.skipTribe ? ['game progress skip tribe'] : o.spawn === 'orbit' ? ['travel orbit'] : o.spawn === 'home' ? ['game place goto home_valley'] : [];
     for (const c of cmds) { const r = run(c); if (typeof r === 'string' && /^отказ|error|no such/i.test(r)) emit({ t: 'error', code: 'spawn', msg: (c + ': ' + r).slice(0, 200) }); }
+    // W11 net-shards: «Играть вместе» — the shared world by its code; an older engine build without join_code plays alone
+    if (o.join && o.join.url && o.join.code) {
+      try {
+        if (typeof st.app.join_code === 'function') { st.app.join_code(String(o.join.url), String(o.join.code), ''); emit({ t: 'event', code: 'net_join' }); }
+        else emit({ t: 'error', code: 'join', msg: 'engine build without join_code' });
+      } catch (e) { emit({ t: 'error', code: 'join', msg: String(e && e.message || e).slice(0, 200) }); }
+    }
   }
   publish();
   st.raf = requestAnimationFrame(frame);
