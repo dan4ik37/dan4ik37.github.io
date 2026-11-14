@@ -421,20 +421,31 @@ async function main() {
   // the mouse: pointer lock where the browser gives it; embedded browsers refuse it — then holding the button and
   // dragging looks around (both paths call the same add_look)
   let drag = false;
-  canvas.addEventListener('click', () => { if (!TOUCH && !(game && app.game_menu_open()) && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging still works */ } } });
+  // cell2 phone: the cell stage (the engine says "cell"): no pointer lock, the held mouse steers, no jump / orbit buttons
+  let cellMode = false, cellMouse = false;
+  const cellSync = () => {
+    let on = false;
+    try { on = game && !!app.game_mode && app.game_mode() === 'cell'; } catch (e) { /* an older engine */ }
+    if (on === cellMode) return;
+    cellMode = on;
+    for (const id of ['jump', 'orbit']) { const b = document.getElementById(id); if (b) b.style.visibility = on ? 'hidden' : ''; }
+    if (on && document.pointerLockElement === canvas) document.exitPointerLock();
+  };
+  canvas.addEventListener('click', () => { if (!TOUCH && !cellMode && !(game && app.game_menu_open()) && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging still works */ } } });
   canvas.addEventListener('contextmenu', (e) => { if (game) e.preventDefault(); });
   canvas.addEventListener('mousedown', (e) => {
     if (TOUCH) return;
     if (game) {
       const [x, y] = toCanvas(e);
       // a menu or the tray takes the click; with the pointer locked: left = the action, right = place / eat
+      if (cellMode && app.game_pointer(x, y, 0, 1)) { cellMouse = true; gameActs(); publish(); return; }
       if (document.pointerLockElement !== canvas && app.game_pointer(x, y, 0, 1)) { app.game_pointer(x, y, 2, 1); gameActs(); publish(); return; }
       if (document.pointerLockElement === canvas) { if (e.button === 0) mouse.act = true; if (e.button === 2) mouse.use = true; publish(); return; }
     }
     drag = true;
     lookReset(false);
   });
-  addEventListener('mouseup', (e) => { drag = false; if (game) { if (e.button === 0) mouse.act = false; if (e.button === 2) mouse.use = false; publish(); } });
+  addEventListener('mouseup', (e) => { drag = false; if (cellMouse) { cellMouse = false; const [x, y] = toCanvas(e); app.game_pointer(x, y, 2, 1); gameActs(); publish(); return; } if (game) { if (e.button === 0) mouse.act = false; if (e.button === 2) mouse.use = false; publish(); } });
   addEventListener('blur', () => { drag = false; });
   // look-fix: the engine drops pointer-lock spikes; a new lock drops its first event, a drag or a finger starts afresh
   const lookReset = (skip) => { try { if (app.look_reset) app.look_reset(skip); } catch (e) { /* an older engine */ } };
@@ -442,7 +453,7 @@ async function main() {
   // the third-person zoom: the mouse wheel (as the site's «Мир Денчика»)
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   addEventListener('mousemove', (e) => {
-    if (game && app.game_menu_open()) { const [x, y] = toCanvas(e); app.game_pointer(x, y, 1, 1); return; }
+    if (game && (app.game_menu_open() || cellMouse)) { const [x, y] = toCanvas(e); app.game_pointer(x, y, 1, 1); return; }
     if (document.pointerLockElement === canvas || drag) app.add_look(e.movementX, e.movementY);
   });
 
@@ -549,7 +560,7 @@ async function main() {
         canvas.toBlob((b) => { if (b) save(b, 'd37_' + name + '.png'); save(new Blob([receipt], { type: 'application/json' }), 'd37_' + name + '.json'); });
       }
       if (state.shotWanted) { state.shotWanted = false; const w = canvas.width, h = canvas.height; canvas.toBlob((b) => { if (b) { state.shots.push({ w, h, size: b.size, blob: b }); if (state.shots.length > 8) state.shots.shift(); hint.textContent = '📸 Снимок сделан (F2)'; } }, 'image/png'); }
-      if (game && n === 0) { try { app.game_set_fps(state.fps); } catch (e) { /* numbers only */ } }
+      if (game && n === 0) { try { app.game_set_fps(state.fps); } catch (e) { /* numbers only */ } cellSync(); }
       if (state.firstFrameMs === null) { state.firstFrameMs = performance.now(); state.ready = true; }
       if (!state.loaded && app.loaded()) { state.loaded = true; state.loadedMs = performance.now(); }
     } catch (e) {

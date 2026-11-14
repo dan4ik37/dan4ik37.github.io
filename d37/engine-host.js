@@ -28,6 +28,8 @@ user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparen
 .d37h-ward{right:16px;bottom:calc(160px + env(safe-area-inset-bottom))}
 @media (pointer:fine){.d37h-orbit{bottom:24px}.d37h-ward{bottom:92px}}
 .d37h-game.d37h-jump{bottom:calc(76px + env(safe-area-inset-bottom))}.d37h-game.d37h-ward{bottom:calc(144px + env(safe-area-inset-bottom))}
+.d37h-cell .d37h-jump,.d37h-cell .d37h-ward,.d37h-cell .d37h-orbit,.d37h-cell .d37h-hint{display:none!important}
+.d37h-safe{position:absolute;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 .d37h-hint{position:absolute;z-index:2;left:50%;bottom:calc(10px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:min(92%,640px);
 padding:6px 12px;border-radius:10px;background:rgba(0,0,0,.5);color:#fff;font:13px/1.35 system-ui,sans-serif;text-align:center;pointer-events:none;transition:opacity .8s}
 .d37h-wardrobe{position:absolute;z-index:4;right:84px;top:64px;width:min(360px,calc(100% - 100px));max-height:calc(100% - 80px);overflow-y:auto;
@@ -169,6 +171,29 @@ export async function start(o) {
   const mouse = { act: false, use: false };
   const toCanvas = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * canvas.width / Math.max(1, r.width), (e.clientY - r.top) * canvas.height / Math.max(1, r.height)]; };
   const menuOpen = () => { try { return game && st.app.game_menu_open(); } catch (e) { return false; } };
+  // cell2 phone: the cell stage (the engine says "cell"): every pointer is the game's (swim to the finger / the held
+  // mouse, double tap = dash), no pointer lock, the page's own buttons hidden; the safe-area insets go to the engine
+  let cellMode = false;
+  const safeProbe = add(el('div', 'd37h-safe'));
+  function cellSync() {
+    let m = '';
+    try { m = st.app.game_mode ? st.app.game_mode() : ''; } catch (e) { /* an older engine */ }
+    const on = m === 'cell';
+    if (on !== cellMode) {
+      cellMode = on;
+      root.classList.toggle('d37h-cell', on);
+      if (on && document.pointerLockElement === canvas) { try { document.exitPointerLock(); } catch (e) { /* not locked */ } }
+    }
+    if (!on || !st.app.game_set_safe) return;
+    try {
+      const cs = getComputedStyle(safeProbe), r = canvas.getBoundingClientRect(), k = canvas.width / Math.max(1, r.width);
+      const px = (v) => (parseFloat(v) || 0) * k;
+      st.app.game_set_safe(px(cs.paddingLeft), px(cs.paddingTop), px(cs.paddingRight), px(cs.paddingBottom));
+      let joy = false;
+      try { joy = localStorage.getItem('d37_cell_joystick') === '1'; } catch (e) { /* storage off */ }
+      st.app.game_set_joystick(joy);
+    } catch (e) { /* numbers only */ }
+  }
   const paused = () => { try { return game && st.app.game_paused(); } catch (e) { return false; } };
   // W9 keys: our own release of the pointer lock (a menu, the wardrobe) is not the player's Esc
   let selfRelease = false, hadLock = false, pauseAt = -1e9;
@@ -309,7 +334,7 @@ export async function start(o) {
   on(document, 'pointerlockchange', () => { if (document.pointerLockElement === canvas) lookReset(true); });
   if (studio) on(window, 'resize', place);   // the phone turned / the window changed: the character stays above the panel
   let drag = false;
-  on(canvas, 'click', () => { canvas.focus({ preventScroll: true }); if (!touch && !wardrobeShown && !menuOpen() && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging works */ } } });
+  on(canvas, 'click', () => { canvas.focus({ preventScroll: true }); if (!touch && !cellMode && !wardrobeShown && !menuOpen() && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging works */ } } });
   on(canvas, 'contextmenu', (e) => { if (game) e.preventDefault(); });
   let hudMouse = false;
   on(canvas, 'mousedown', (e) => {
@@ -328,7 +353,7 @@ export async function start(o) {
   on(canvas, 'wheel', (e) => { e.preventDefault(); st.app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   on(window, 'mousemove', (e) => {
     if (!live()) return;
-    if (menuOpen()) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 1, 1); return; }
+    if (menuOpen() || (cellMode && hudMouse)) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 1, 1); return; }
     if (document.pointerLockElement === canvas || drag) st.app.add_look(e.movementX, e.movementY);
   });
 
@@ -493,7 +518,7 @@ export async function start(o) {
     acc += now - last; last = now; n++;
     if (now - lastT > 250) {
       st.fps = n * 1000 / Math.max(acc, 1); acc = 0; n = 0; lastT = now;
-      if (game) { try { a.game_set_fps(st.fps); } catch (e) { /* numbers only */ } }
+      if (game) { try { a.game_set_fps(st.fps); } catch (e) { /* numbers only */ } cellSync(); }
       if (!st.loaded && planet) { try { const p = JSON.parse(a.planet_stats()); progress('world', p.shown || 0, (p.shown || 0) + (p.queued || 0) + (p.ready || 0)); } catch (e) { /* numbers only */ } }
     }
     st.raf = requestAnimationFrame(frame);
