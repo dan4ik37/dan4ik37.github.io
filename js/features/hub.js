@@ -89,6 +89,13 @@
   const SAVES = m => !!SLOT[m];
   const slot = () => SLOT[st.mode] || WORLD;
   const SPAWNS = { home: 1, orbit: 1, new: 1, tribe: 1 };
+  // W11 «Играть вместе»: общий мир на нашем сервере миров (движок: crates/d37-server, deploy/oracle). /hub/play?join=<КОД>
+  // (и /play/d37?join=<КОД>) открывает мир с этим кодом. NET_URL — адрес сервера (wss://…: сайт на https); '' — сервер ещё
+  // не включён: игра идёт в своём мире и говорит об этом. Откат — NET_URL = ''.
+  const NET_URL = '';
+  const JOIN_RE = /^[A-HJKMNP-Z2-9]{6}$/;   // как CODE_ALPHABET сервера: без I, L, O, 0, 1
+  const joinCode = () => { try { const c = String(new URLSearchParams(location.search).get('join') || '').trim().toUpperCase(); return JOIN_RE.test(c) ? c : ''; } catch (e) { return ''; } };
+  const newJoinCode = () => { const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', b = new Uint8Array(6); try { crypto.getRandomValues(b); } catch (e) { for (let i = 0; i < 6; i++) b[i] = Math.random() * 256 | 0; } return Array.from(b, x => A[x % A.length]).join(''); };
   // «Путь» от клетки до космоса: шаги (как в движке, assets/game/hub/path.ron) и где игрок — из байтов сохранения (раздел progress
   // мира: «(v:1,stage:S,era:E,…»); стадия 0 клетка, 1 существо, 2 человек; эпоха E0..E7 → шаг пути
   const PATH = [['🦠', 'Клетка'], ['🐟', 'Существо'], ['🔥', 'Племя'], ['🏡', 'Посёлок'], ['🏰', 'Город'], ['🏭', 'Заводы'], ['🚀', 'Космос']];
@@ -413,7 +420,7 @@
   let ui = null;
   function status(t){ st.status = t; if (ui && ui.stat) { ui.stat.textContent = t; ui.stat.classList.add('on'); clearTimeout(ui.statT); ui.statT = setTimeout(() => ui && ui.stat && ui.stat.classList.remove('on'), 3500); } }
   function toast(t){ if (!ui) return; const x = el('div', 'hub-gtoast', t); ui.box.appendChild(x); setTimeout(() => x.remove(), 3200); }
-  const EVENTS = { landed: '🛬 Приземлился! Теперь можно гулять и плавать', wade: '🌊 Вброд по воде', swim: '🏊 Плывёшь — пробел вверх', dive: '🤿 Нырнул!', orbit: '🚀 Снова на орбите' };
+  const EVENTS = { net_join: '🤝 Ты в общем мире — все, кто зашёл по этой ссылке, рядом', landed: '🛬 Приземлился! Теперь можно гулять и плавать', wade: '🌊 Вброд по воде', swim: '🏊 Плывёшь — пробел вверх', dive: '🤿 Нырнул!', orbit: '🚀 Снова на орбите' };
   const PHASES = { wasm: 'Загружаем движок', gpu: 'Готовим видеокарту', world: 'Строим мир' };
   function buildUi(mode){
     // долина: своя строка подсказок движка вверху — полоса сайта над картинкой, не поверх неё
@@ -527,7 +534,7 @@
 
   async function open(mode, opt){
     opt = mode === 'play' && SPAWNS[opt] ? opt : '';
-    if (st.active && st.mode === mode && st.opt === opt) return;
+    if (st.active && st.mode === mode && st.opt === opt && (st.join || '') === (mode === 'play' ? joinCode() : '')) return;   // W11: другой код — другой мир
     if (st.active) await close('switch');
     // новый мир поверх сохранённого — только с согласия (иначе — продолжить свой)
     if (opt === 'new' || opt === 'tribe') {
@@ -548,6 +555,8 @@
     const save = SAVES(mode) && !fresh ? await pickSave() : null;
     if (gen !== st.gen || !st.active || !ui) { if (gen === st.gen) st.starting = false; return; }   // ушли со страницы, пока ждали
     st.playBase = save && +save.gt || 0;
+    const jc = mode === 'play' ? joinCode() : '';   // W11: общий мир по коду
+    st.join = jc;
     let host;
     try {
       const v = info && /^[0-9a-f]{6,16}$/.test(String(info.id || '')) ? '?v=' + info.id : '';
@@ -561,6 +570,7 @@
         root: ui.stage, scene: MODES[mode] || 'valley', rawSize: +(info && info.wasm_raw) || 0, gl: st.gl || g === 'gl',
         quality: g === 'max' || g === 'mid' || g === 'low' ? g : touchDev() ? 'low' : '', session: sessionMsg(), look, save: save && save.bytes, wardrobe: mode === 'wardrobe',
         newWorld: opt === 'new', skipTribe: opt === 'tribe', spawn: opt === 'home' || opt === 'orbit' ? opt : 'last',
+        join: jc && NET_URL ? { url: NET_URL, code: jc } : null,   // W11 «Играть вместе»
         onProgress: progress, onMessage: onMsg, fullscreenEl: ui.box,   // F11 игры — на весь экран вместе с полосой сайта
       });
       if (gen !== st.gen || !st.active || !ui) { h.dispose(); return; }
@@ -573,6 +583,7 @@
   }
   function onMsg(m){
     if (!m || typeof m.t !== 'string') return;
+    if (m.t === 'loaded' && st.join && !NET_URL) toast('🌍 Общие миры скоро — пока играешь в своём мире');
     if (m.t === 'loaded') { if (ui) ui.load.hidden = true; ym('d37_ready'); if (st.opt === 'new') toast('🦠 Новый мир: ты — клетка в приливной луже'); else if (st.opt === 'tribe') toast('🔥 Племя: собирай, строй, зови людей'); }
     else if (m.t === 'look_changed') onLook(m);
     else if (m.t === 'wardrobe' && m.on === false && st.mode === 'wardrobe') leave('wardrobe');
@@ -581,6 +592,7 @@
     else if (m.t === 'shot') keepShot(m);      // F2 — снимок в галерею
     else if (m.t === 'event') { st.events.push(String(m.code)); if (EVENTS[m.code]) toast(EVENTS[m.code]); }
     else if (m.t === 'resumed') { st.resumed = m.summary || null; if (m.summary && SAVES(st.mode)) toast(st.mode === 'play' ? (st.opt === 'orbit' ? '🚀 Твой мир внизу — зажми O, чтобы приземлиться' : st.opt === 'home' ? '🏕 Ты дома, в лагере' : '▶ Твой мир: всё, что построил, на месте') : '▶ Продолжаем с того места, где ты был'); }
+    else if (m.t === 'error' && m.code === 'join') { st.errors.push('join: ' + String(m.msg || '')); report('join', m.msg); toast('Не получилось войти в общий мир — играешь в своём'); }
     else if (m.t === 'error') {
       st.errors.push(String(m.code) + ': ' + String(m.msg || ''));
       report(String(m.code).replace(/[^a-z_-]/gi, '').slice(0, 20) || 'x', m.msg);
@@ -663,5 +675,5 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', navOn); else navOn();
   }
   root.renderHubPage = render;
-  root.D37Hub = { TILES, PATH, open, close, render, invite, saveWorld, pickSave, lookNow, fmtMin, pathStep, get active(){ return st.active; }, _st: st, _idb: { get: idbGet, put: idbPut } };
+  root.D37Hub = { TILES, PATH, open, close, render, invite, newJoinCode, joinCode, saveWorld, pickSave, lookNow, fmtMin, pathStep, get active(){ return st.active; }, _st: st, _idb: { get: idbGet, put: idbPut } };
 })();

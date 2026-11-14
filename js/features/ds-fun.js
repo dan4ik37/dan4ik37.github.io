@@ -163,7 +163,8 @@
     sheet('🎮 Во что играем вместе?', body).then(gid => {
       if (!gid) return;
       let text, go;
-      if (gid === 'hub') { text = `🎮 Играем вместе в «Долину D37» — заходите! ${SITE}/hub/play`; go = '/hub/play'; }
+      // W11: у каждого приглашения свой общий мир — код в ссылке (сервер миров сам проверяет детский / взрослый мир)
+      if (gid === 'hub') { const jc = window.D37Hub?.newJoinCode?.(); go = '/hub/play' + (jc ? '?join=' + jc : ''); text = `🎮 Играем вместе в «Долину D37» — заходите! ${SITE}${go}`; }
       else {
         const g = GAMES.find(x => x.id === gid); if (!g) return;
         const code = window.GameRoom?.newCode?.() || Math.random().toString(36).slice(2, 8);
@@ -176,9 +177,10 @@
   }
   // карточка Долины D37 в ленте (комнаты игр — уже есть: «Зовёт в …» с «▶ Войти»)
   const cardOf0 = MV.cardOf, cardHtml0 = MV.cardHtml;
-  MV.cardOf = path => (/^(?:#\/hub|\/hub)\/play\/?$/.test(path) ? { t: 'hubplay' } : cardOf0(path));
+  const HUB_RE = /^(?:#\/hub|\/hub)\/play\/?(?:\?join=([A-HJKMNP-Z2-9]{6}))?$/;   // W11: ?join=<код общего мира>
+  MV.cardOf = path => { const m = HUB_RE.exec(path); return m ? (m[1] ? { t: 'hubplay', code: m[1] } : { t: 'hubplay' }) : cardOf0(path); };
   MV.cardHtml = c => (c?.t === 'hubplay'
-    ? '<div class="mv-card mv-game mv-room" style="--gc:#22c55e"><i>🌲</i><span><b>Играть вместе: Долина D37</b><small>Новый движок сайта — заходи, все в одном мире</small></span><a class="mv-cbtn" href="/hub/play">▶ Войти</a></div>'
+    ? `<div class="mv-card mv-game mv-room" style="--gc:#22c55e"><i>🌲</i><span><b>Играть вместе: Долина D37</b><small>Новый движок сайта — заходи, все в одном мире</small></span><a class="mv-cbtn" href="/hub/play${c.code && /^[A-HJKMNP-Z2-9]{6}$/.test(c.code) ? '?join=' + e(c.code) : ''}">▶ Войти</a></div>`
     : cardHtml0(c));
 
   // ═══ Окно (как в community2 ч. 4): заголовок, тело, кнопки data-v ═══

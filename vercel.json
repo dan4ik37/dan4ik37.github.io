@@ -154,6 +154,11 @@
   ],
   "redirects": [
     {
+      "source": "/play/d37",
+      "destination": "/hub/play",
+      "permanent": false
+    },
+    {
       "source": "/home",
       "destination": "/",
       "permanent": true
