@@ -1,13 +1,13 @@
 {
- "id": "9bd5d43906",
+ "id": "b457cf2538",
  "bridge": 1,
- "wasm_raw": 17080811,
- "made": "2026-11-14T22:13:52.157Z",
+ "wasm_raw": 17083297,
+ "made": "2026-11-15T02:42:16.328Z",
  "files": {
   "d37-page.js": 43273,
   "d37-terrain-worker.js": 2996,
-  "d37_web.js": 199793,
-  "d37_web_bg.wasm": 17080811,
+  "d37_web.js": 200693,
+  "d37_web_bg.wasm": 17083297,
   "index.html": 4864,
   "LICENSES.txt": 224,
   "scenes/creative.ron": 2366,
