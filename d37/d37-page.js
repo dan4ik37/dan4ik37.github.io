@@ -13,7 +13,7 @@
 // level instead (WebAudio, asked only on that click). Views: F6 / F7 / F8 or X — 3D, from the side, from above (2D views of the same world).
 // The admin / test menu: ` or F10 (or ⚙), ?admin=1 shows it at load; its buttons run `app.admin(<command>)`.
 // The wardrobe menu: B (or «Гардероб» in the admin menu) — body, colours per slot, the microphone; kept in this browser.
-import init, { D37Web, ground_layer } from './d37_web.js';
+import init, { D37Web, ground_layer, wasm_memory_bytes } from './d37_web.js';
 
 const q = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);
@@ -39,8 +39,15 @@ function fitCanvas() {
   return false;
 }
 
+// ep13-worker: where the world ticks by default — 'worker' (its own thread) or '' (this page's thread); ?world=worker
+// or ?world=main choose per page. Rollback: ''.
+const WORLD_DEFAULT = '';
+
 async function main() {
-  await init({ module_or_path: new URL('./d37_web_bg.wasm', import.meta.url) });
+  // one compile of the module; the world Worker gets it (no second download or compile)
+  let module = null;
+  try { module = await WebAssembly.compileStreaming(fetch(new URL('./d37_web_bg.wasm', import.meta.url))); } catch (e) { module = null; }
+  await init({ module_or_path: module || new URL('./d37_web_bg.wasm', import.meta.url) });
   const sceneUrl = q.get('scene') || new URL('./scenes/planet.ron', import.meta.url).href;   // next to this file, whatever the page address is
   const res = await fetch(sceneUrl);
   if (!res.ok) throw new Error('сцена ' + sceneUrl + ': HTTP ' + res.status);
@@ -95,11 +102,40 @@ async function main() {
     }
   }
   state.workers = pool.length;
-  app.load_scene(sceneText, pool.length > 0);
+  // ep13-worker: the world in its own thread (?world=worker); any failure falls back to this page's thread
+  let ww = null;
+  if ((q.get('world') || WORLD_DEFAULT) === 'worker' && typeof Worker !== 'undefined' && typeof app.load_scene_remote === 'function') {
+    let w = null;
+    try {
+      w = new Worker(new URL('./d37-world-worker.js', import.meta.url), { type: 'module' });
+      const ready = new Promise((res, rej) => {
+        const to = setTimeout(() => rej(new Error('no first world frame in 20 s')), 20000);
+        w.onmessage = (ev) => {
+          const m = ev.data;
+          if (m.type === 'frame') { clearTimeout(to); app.world_in(new Uint8Array(m.bytes)); res(); }
+          else if (m.type === 'error') { clearTimeout(to); rej(new Error(m.error)); }
+        };
+        w.onerror = (e) => { clearTimeout(to); try { e.preventDefault(); } catch (er) { /* old event */ } rej(new Error(e.message || 'the world Worker did not load')); };
+      });
+      w.postMessage({ type: 'init', scene: sceneText, save: null, module, slow: +(q.get('world_slow') || 1) });
+      app.load_scene_remote(sceneText, pool.length > 0);
+      await ready;
+      w.onmessage = (ev) => { const m = ev.data; if (m.type === 'frame') app.world_in(new Uint8Array(m.bytes)); else if (m.type === 'error') fail('world Worker: ' + m.error); };
+      w.onerror = (e) => fail('world Worker: ' + (e.message || 'error'));
+      ww = w;
+    } catch (e) {
+      console.warn('d37: world Worker off —', String(e && e.message || e).slice(0, 200));
+      try { w && w.terminate(); } catch (er) { /* gone */ }
+    }
+  }
+  state.world = ww ? 'worker' : 'main';
+  state.worldStats = () => JSON.parse(app.world_stats());
+  state.memBytes = () => wasm_memory_bytes();
+  if (!ww) app.load_scene(sceneText, pool.length > 0);
   state.app = app;   // tests read the character's state through stats() and drive admin()
   const planet = app.is_planet();
   state.isPlanet = planet;
-  for (const s of pool) s.w.postMessage({ type: 'init', scene: sceneText, planet });
+  for (const s of pool) s.w.postMessage({ type: 'init', scene: sceneText, planet, module });
 
   // input: the keys held right now -> one action state
   const keys = new Set();
@@ -560,6 +596,8 @@ async function main() {
     try {
       app.frame(now);
       state.frames++;
+      // ep13-worker: this frame's action state and commands to the world's thread
+      if (ww) { const b = app.world_out(); if (b.length) ww.postMessage({ type: 'in', bytes: b.buffer }, [b.buffer]); }
       // a screenshot asked by the admin menu: read the canvas in the same task as the frame (WebGPU clears it after)
       if (state.shotNext) {
         const name = state.shotNext; state.shotNext = null;

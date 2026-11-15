@@ -16,6 +16,15 @@ import init, { D37Web, ground_layer, bridge_version, last_panic } from './d37_we
 
 export const BRIDGE = 1;
 const HERE = (f) => new URL('./' + f, import.meta.url).href;
+// ep13-worker: where the world ticks — 'worker' = in its own thread (web/d37-world-worker.js; the page's thread only
+// draws), '' = on the page's thread as before. o.world or the page address ?world=worker|main choose; this is the
+// build default. Rollback: ''. Any failure to start the Worker falls back to the page's thread by itself.
+const WORLD_DEFAULT = '';
+function worldWanted(o) {
+  let q = '';
+  try { q = new URLSearchParams(location.search).get('world') || ''; } catch (e) { /* no address */ }
+  return (o.world || q || WORLD_DEFAULT) === 'worker';
+}
 const TOUCH = () => (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 const HEX = /^[0-9a-f]{6}$/i;
 
@@ -166,7 +175,42 @@ export async function start(o) {
   if (o.save && o.save.length) {
     try { emit({ t: 'resumed', summary: JSON.parse(app.load_save(o.save)) }); } catch (e) { emit({ t: 'error', code: 'save', msg: String(e).slice(0, 200) }); }
   }
-  app.load_scene(sceneText, st.pool.length > 0);
+  // ep13-worker: the world in its own thread; the Worker builds its world while this thread makes the renderer's
+  let ww = null;
+  if (worldWanted(o) && typeof Worker !== 'undefined' && typeof app.load_scene_remote === 'function') {
+    let w = null;
+    try {
+      w = new Worker(HERE('d37-world-worker.js'), { type: 'module' });
+      const ready = new Promise((res, rej) => {
+        const to = setTimeout(() => rej(new Error('no first world frame in 20 s')), 20000);
+        w.onmessage = (ev) => {
+          const m = ev.data;
+          if (m.type === 'frame') { clearTimeout(to); if (st.app) st.app.world_in(new Uint8Array(m.bytes)); res(); }
+          else if (m.type === 'error') { clearTimeout(to); rej(new Error(m.error)); }
+        };
+        w.onerror = (e) => { clearTimeout(to); try { e.preventDefault(); } catch (er) { /* old event */ } rej(new Error(e.message || 'the world Worker did not load')); };
+      });
+      w.postMessage({ type: 'init', scene: sceneText, save: o.save && o.save.length ? o.save : null, module });
+      app.load_scene_remote(sceneText, st.pool.length > 0);
+      await ready;
+      w.onmessage = (ev) => {
+        const m = ev.data;
+        if (!st.app || st.dead) return;
+        if (m.type === 'frame') st.app.world_in(new Uint8Array(m.bytes));
+        else if (m.type === 'error') fail('world-worker', m.error);
+      };
+      w.onerror = (e) => fail('world-worker', e.message || 'world Worker error');
+      ww = w;
+    } catch (e) {
+      // the page's thread runs the world (the save is handed in again: load_scene_remote took it)
+      console.warn('d37 host: world Worker off —', String(e && e.message || e).slice(0, 200));
+      try { w && w.terminate(); } catch (er) { /* gone */ }
+      if (o.save && o.save.length) { try { app.load_save(o.save); } catch (er) { /* refused before: reported then */ } }
+    }
+  }
+  st.worldWorker = ww;
+  st.world = ww ? 'worker' : 'main';
+  if (!ww) app.load_scene(sceneText, st.pool.length > 0);
   const planet = app.is_planet();
   // EP7 the game layer (a scene with a `game` block): the HUD is drawn and hit tested by the engine; this glue only
   // forwards keys / pointers (the same rules as the engine's page d37-page.js). Its save rides in save() (GAME section).
@@ -513,6 +557,8 @@ export async function start(o) {
       }
       a.frame(now);
       st.frames++;
+      // ep13-worker: this frame's action state and commands to the world's thread
+      if (ww) { const b = a.world_out(); if (b.length) ww.postMessage({ type: 'in', bytes: b.buffer }, [b.buffer]); }
       if (shotWanted) { shotWanted = false; takeShot(); }
       const out = a.host_out();
       if (out) {
@@ -582,12 +628,12 @@ export async function start(o) {
     gameStats() { try { return st.app && game ? JSON.parse(st.app.game_stats()) : null; } catch (e) { return null; } },
     // a DOM sheet over the world (chat, menu): the keys stop reaching the game
     input(enabled) { st.inputOn = !!enabled; if (!enabled) { keys.clear(); unlock(); } publish(); },
-    pause() { if (st.paused || st.dead) return; st.paused = true; keys.clear(); publish(); try { st.app && st.app.audio_park(true); } catch (e) { /* no sound */ } cancelAnimationFrame(st.raf); st.raf = 0; unlock(); },
+    pause() { if (st.paused || st.dead) return; st.paused = true; if (ww) ww.postMessage({ type: 'pause' }); keys.clear(); publish(); try { st.app && st.app.audio_park(true); } catch (e) { /* no sound */ } cancelAnimationFrame(st.raf); st.raf = 0; unlock(); },
     // W9 keys: the pictures F2 took this run (newest last, at most 8; Blob PNG)
     shots() { return st.shots.slice(); },
     // W9 keys: the game's pause menu (the page opens it e.g. when its own sheet closes)
     pauseMenu(on) { if (game && st.app && !st.dead) { try { st.app.game_pause(!!on); if (on) unlock(); publish(); } catch (e) { /* gone */ } } },
-    resume() { if (!st.paused || st.dead) return; st.paused = false; try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
+    resume() { if (!st.paused || st.dead) return; st.paused = false; if (ww) ww.postMessage({ type: 'resume' }); try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
     // everything this start made goes away: the frame loop, listeners, Workers, the GPU device (free), the DOM
     dispose() {
       if (st.disposed) return;
@@ -599,6 +645,7 @@ export async function start(o) {
       st.listeners.length = 0;
       for (const s of st.pool) { try { s.w.terminate(); } catch (e) { /* gone */ } }
       st.pool.length = 0;
+      if (ww) { try { ww.terminate(); } catch (e) { /* gone */ } ww = null; st.worldWorker = null; }
       const a = st.app; st.app = null;
       // the game's sound stops with the game (it lives outside the app object and would keep playing on the site)
       try { a && a.audio_close(); } catch (e) { /* no sound */ }
