@@ -1,8 +1,9 @@
 // d37-page.js — the page glue of the D37 web build (no simulation and no rendering here: both are in the wasm).
 // It owns the canvas size, the keys, the mouse (pointer lock, or dragging where the browser refuses the lock),
 // touch controls, the frame callback and the Workers (terrain columns of flat scenes, chunks of the planet).
-// The default scene is the planet. URL parameters (tests and old scenes): ?scene=<url> another scene,
+// The default scene is the populated creative planet. Use ?scene=<url> to open a different scene.
 // ?gl=1 forces WebGL2, ?auto=1 walks forward by itself, ?workers=0 builds on the main thread, ?hud=1 shows numbers,
+// ?gpu_cull=1 enables experimental object and chunk culling on WebGPU.
 // ?q=max|mid|low the graphics tier (mid by default), ?invert_y=1 moving the pointer up looks down, ?holes=1 the hole
 // probe of the tests (a small second frame without the sky, read back: below-horizon pixels nothing was drawn on).
 // Ground materials are made by code in the Workers at load.
@@ -14,6 +15,7 @@
 // The admin / test menu: ` or F10 (or ⚙), ?admin=1 shows it at load; its buttons run `app.admin(<command>)`.
 // The wardrobe menu: B (or «Гардероб» in the admin menu) — body, colours per slot, the microphone; kept in this browser.
 import init, { D37Web, ground_layer, wasm_memory_bytes } from './d37_web.js';
+import { planetJobs } from './planet-jobs.js';
 
 const q = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);
@@ -48,13 +50,16 @@ async function main() {
   let module = null;
   try { module = await WebAssembly.compileStreaming(fetch(new URL('./d37_web_bg.wasm', import.meta.url))); } catch (e) { module = null; }
   await init({ module_or_path: module || new URL('./d37_web_bg.wasm', import.meta.url) });
-  const sceneUrl = q.get('scene') || new URL('./scenes/planet.ron', import.meta.url).href;   // next to this file, whatever the page address is
+  const sceneUrl = q.get('scene') || new URL('./scenes/creative.ron', import.meta.url).href;
   const res = await fetch(sceneUrl);
   if (!res.ok) throw new Error('сцена ' + sceneUrl + ': HTTP ' + res.status);
   const sceneText = await res.text();
   fitCanvas();
   const app = await D37Web.create(canvas, q.get('gl') === '1');
   state.backend = app.backend();
+  if (q.get('gpu_cull') === '1' && typeof app.set_gpu_culling === 'function') {
+    state.gpuCullingEnabled = await app.set_gpu_culling(true);
+  }
   if (q.get('q')) { try { app.set_quality(q.get('q')); } catch (e) { fail(e); return; } }
   state.quality = app.quality();
   // the player's setting: moving the mouse / finger up looks down (off by default): ?invert_y=1 (or 0), remembered
@@ -555,7 +560,8 @@ async function main() {
   if (q.get('holes') === '1') { const pw = 480; app.enable_hole_probe(pw, Math.max(16, Math.round(pw * canvas.height / Math.max(1, canvas.width)))); }
   publish();
 
-  let last = performance.now(), acc = 0, n = 0, lastHud = 0, scatterRows = null;
+  let last = performance.now(), acc = 0, n = 0, lastHud = 0;
+  const dispatchPlanetJobs = planetJobs(app, pool);
   function frame(now) {
     if (state.error) return;
     if (fitCanvas()) app.resize(canvas.width, canvas.height);
@@ -576,16 +582,7 @@ async function main() {
       }
     }
     if (idle.length && planet) {
-      const jobs = app.take_chunk_jobs(idle.length);
-      for (let i = 0; i * 2 < jobs.length; i++) { idle[i].busy = true; idle[i].w.postMessage({ type: 'chunk', lo: jobs[i * 2], hi: jobs[i * 2 + 1] }); }
-      // fly-hitch: Workers left idle build scatter LOD tiles (at most half of them, so chunks never wait long)
-      idle = idle.slice(jobs.length / 2);
-      const room = Math.max(1, pool.length >> 1) - pool.filter((s) => s.busy && s.scatter).length;
-      if (idle.length && room > 0) {
-        if (!scatterRows) scatterRows = Array.from(app.scatter_rows());
-        const sj = scatterRows.length ? app.take_scatter_jobs(Math.min(idle.length, room)) : [];
-        for (let i = 0; i * 5 < sj.length; i++) { idle[i].busy = true; idle[i].scatter = true; idle[i].w.postMessage({ type: 'scatter', w: Array.from(sj.subarray(i * 5, i * 5 + 5)), rows: scatterRows }); }
-      }
+      dispatchPlanetJobs(idle, state.loaded);
     } else if (idle.length) {
       const jobs = app.take_jobs(idle.length);
       for (let i = 0; i * 4 < jobs.length; i++) {

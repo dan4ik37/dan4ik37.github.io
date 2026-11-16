@@ -13,6 +13,7 @@
 // (site-owned js/features/hub.js) talks only to the handle start() returns. Text from the engine is codes and the look
 // text; this file puts strings into the DOM with textContent only.
 import init, { D37Web, ground_layer, bridge_version, last_panic } from './d37_web.js';
+import { planetJobs } from './planet-jobs.js';
 
 export const BRIDGE = 1;
 const HERE = (f) => new URL('./' + f, import.meta.url).href;
@@ -145,6 +146,10 @@ export async function start(o) {
   const app = await D37Web.create(canvas, !!o.gl);
   st.app = app;
   st.backend = app.backend();
+  if (typeof app.set_gpu_culling === 'function'
+    && (o.gpuCulling ?? (new URLSearchParams(location.search).get('gpu_cull') === '1'))) {
+    st.gpuCullingEnabled = await app.set_gpu_culling(true);
+  }
   if (o.quality) { try { app.set_quality(o.quality); } catch (e) { /* keeps mid */ } }
   progress('gpu', 1, 1);
 
@@ -524,6 +529,7 @@ export async function start(o) {
     cancelAnimationFrame(st.raf);
     emit({ t: 'error', code, msg: (panic || st.error).slice(0, 300) });
   }
+  let dispatchPlanetJobs;
   function frame(now) {
     st.raf = 0;
     if (st.dead || st.paused || !st.app) return;
@@ -539,18 +545,8 @@ export async function start(o) {
           else a.push_ground(ground_layer(g[i], g[0]));
         }
         if (g.length > 1) idle = idle.slice(g.length - 1);
-        if (idle.length) {
-          const jobs = a.take_chunk_jobs(idle.length);
-          for (let i = 0; i * 2 < jobs.length; i++) { idle[i].busy = true; idle[i].w.postMessage({ type: 'chunk', lo: jobs[i * 2], hi: jobs[i * 2 + 1] }); }
-          // fly-hitch: Workers left idle build scatter LOD tiles (at most half of them, so chunks never wait long)
-          idle = idle.slice(jobs.length / 2);
-          const room = Math.max(1, st.pool.length >> 1) - st.pool.filter((s) => s.busy && s.scatter).length;
-          if (idle.length && room > 0) {
-            if (!st.scatterRows) st.scatterRows = Array.from(a.scatter_rows());
-            const sj = st.scatterRows.length ? a.take_scatter_jobs(Math.min(idle.length, room)) : [];
-            for (let i = 0; i * 5 < sj.length; i++) { idle[i].busy = true; idle[i].scatter = true; idle[i].w.postMessage({ type: 'scatter', w: Array.from(sj.subarray(i * 5, i * 5 + 5)), rows: st.scatterRows }); }
-          }
-        }
+        dispatchPlanetJobs ??= planetJobs(a, st.pool);
+        dispatchPlanetJobs(idle, st.loaded);
       } else if (idle.length) {
         const jobs = a.take_jobs(idle.length);
         for (let i = 0; i * 4 < jobs.length; i++) { idle[i].busy = true; idle[i].w.postMessage({ type: 'job', cx: jobs[i * 4], cz: jobs[i * 4 + 1], lo: jobs[i * 4 + 2] >>> 0, hi: jobs[i * 4 + 3] >>> 0 }); }

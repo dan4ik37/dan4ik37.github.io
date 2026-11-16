@@ -1,22 +1,24 @@
 {
- "id": "af1373ab5e",
+ "id": "7f281dace2",
  "bridge": 1,
- "wasm_raw": 17232402,
- "made": "2026-11-15T05:27:23.360Z",
+ "wasm_raw": 17308638,
+ "made": "2026-11-16T02:33:11.780Z",
  "files": {
-  "d37-page.js": 45708,
+  "d37-page.js": 45118,
   "d37-terrain-worker.js": 2996,
   "d37-world-worker.js": 2826,
-  "d37_web.js": 213717,
-  "d37_web_bg.wasm": 17232402,
+  "d37_web.js": 220373,
+  "d37_web_bg.wasm": 17308638,
+  "engine-host.js": 46500,
   "index.html": 4864,
-  "LICENSES.txt": 224,
+  "LICENSES.txt": 226,
+  "planet-jobs.js": 1534,
   "scenes/creative.ron": 2366,
   "scenes/crowd.ron": 540,
   "scenes/eclipse.ron": 2172,
   "scenes/meadow.ron": 1351,
   "scenes/moon.ron": 1337,
-  "scenes/planet.ron": 1598,
+  "scenes/planet.ron": 1568,
   "scenes/planet_dive.ron": 647,
   "scenes/planet_flight.ron": 734,
   "scenes/planet_ground.ron": 1720,
@@ -34,7 +36,6 @@
   "scenes/world_1001.ron": 924,
   "scenes/world_777777.ron": 930,
   "scenes/world_play.ron": 1904,
-  "scenes/yard.ron": 896,
-  "engine-host.js": 47092
+  "scenes/yard.ron": 896
  }
 }
