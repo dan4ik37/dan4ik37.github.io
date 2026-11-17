@@ -1,0 +1,26 @@
+// w11 rivers: the planet's own rivers and lakes (d37-planet hydro.rs; the same seed 37 planet as scenes/planet.ron).
+// A 12 m river 56 km from home (lat 42.237, lon 46.994, flowing roughly west), seen from the bank, low and top-down,
+// and a mountain lake. `d37 shot scenes/rivers.ron --cam <view> -o out.png`.
+(
+    version: 0,
+    name: "rivers",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "home",
+        at: (42.2368, 46.99385),
+        altitude: 3.0,
+        yaw_deg: 0,
+        pitch_deg: -10,
+        time: 1930,
+        views: {
+            "river_top_80": (lat: 42.2368, lon: 46.99385, altitude: 80, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "river_top_400": (lat: 42.2368, lon: 46.99385, altitude: 400, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+            "river_low": (lat: 42.2372, lon: 46.9945, altitude: 25, yaw_deg: 250, pitch_deg: -20, time: 1930, fov_y_deg: 60),
+            "river_far": (lat: 42.25, lon: 47.02, altitude: 900, yaw_deg: 240, pitch_deg: -30, time: 1930, fov_y_deg: 60),
+            "lake_high": (lat: 37.59059, lon: 61.7711, altitude: 2500, yaw_deg: 0, pitch_deg: -90, time: 1930, fov_y_deg: 60),
+        },
+    ),
+)

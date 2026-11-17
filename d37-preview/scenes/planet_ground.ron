@@ -1,0 +1,31 @@
+// EP2 looks: the same planet as scenes/planet.ron, the player starting on the ground near the western shore (the
+// character's shadow, the water). The world of D37: the home planet (the same planet as on the site: seed 37, the same continents). The player
+// starts in orbit with the whole planet in view, flies down, lands and walks; one button flies back up.
+// `terrain`, `sun` and `cameras` belong to flat scenes and are not used by a planet scene (the sun is the planet's).
+(
+    version: 0,
+    name: "planet_ground",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "home",
+        // a green coast under the morning sun
+        at: (29.0, 80.32),
+        altitude: 1.0,
+        yaw_deg: 0,
+        pitch_deg: -75,
+        time: 1930,
+        views: {
+            "orbit_day": (lat: 29, lon: 81, altitude: 175000, pitch_deg: -90, time: 1930),
+            "orbit_terminator": (lat: 29, lon: 81, altitude: 175000, pitch_deg: -90, time: 2500),
+            "high_20km": (lat: 29, lon: 81, altitude: 20000, yaw_deg: 30, pitch_deg: -35, time: 1930),
+            "low_1km": (lat: 29, lon: 81, altitude: 1000, yaw_deg: 30, pitch_deg: -18, time: 1930),
+            "ground_noon": (lat: 29, lon: 81, altitude: 1.7, yaw_deg: 30, pitch_deg: 2, time: 1860, fov_y_deg: 70),
+            "ground_sunset": (lat: 29, lon: 81, altitude: 1.7, yaw_deg: 250, pitch_deg: 6, time: 2356, fov_y_deg: 70),
+            // EP2: the western shore of the same coast (water: waves, depth colour, foam, the sky in it)
+            "shore_water": (lat: 29, lon: 80.26, altitude: 2.5, yaw_deg: 262, pitch_deg: -9, time: 1930, fov_y_deg: 70),
+        },
+    ),
+)

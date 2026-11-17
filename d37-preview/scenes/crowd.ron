@@ -1,0 +1,15 @@
+// E3a bench scene — "crowd": the yard's ground with 12 mannequin bots around the player's start (every third
+// stands and looks around, the others walk or run circles). For benches only; the owner's scenes have no bots.
+(
+    version: 0,
+    name: "crowd",
+    seed: 1337,
+    terrain: (gen: 2, radius: 8, sea_level: 0.3),
+    sun: (azimuth_deg: 150, elevation_deg: 38),
+    cameras: {
+        "main": (pos: (-87.5, 1.7, 23), look_at: (-78, 0.5, 30.5)),
+    },
+    objects: [],
+    player: (at: (-80, 34), yaw_deg: 52),
+    bots: 12,
+)

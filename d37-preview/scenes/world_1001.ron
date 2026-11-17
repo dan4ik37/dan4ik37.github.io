@@ -1,0 +1,24 @@
+// w12 planet-gen (R-LATE-1114-01): THE GENERATED WORLD — a 600 km planet laid out from the seed (profile "world",
+// generator Rocky2: plates, continents, mountain belts, island chains, mesas, canyons, strata terraces). Another seed
+// is another planet: `profile: "world@<seed>"` (scenes/world_b.ron, world_c.ron show two more). The views are the
+// pictures in d37-play/EP12-shots/planet-gen.
+(
+    version: 0,
+    name: "world_1001",
+    seed: 1001,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "world@1001",
+        at: (20.0, 40.0),
+        altitude: 1400000,
+        yaw_deg: 0,
+        pitch_deg: -75,
+        time: 2100,
+        views: {
+            "orbit": (lat: 20, lon: 40, altitude: 1400000, pitch_deg: -90, time: 2100),
+            "orbit_b": (lat: -25, lon: 160, altitude: 1400000, pitch_deg: -90, time: 1300),
+        },
+    ),
+)

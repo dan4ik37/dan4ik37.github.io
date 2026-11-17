@@ -1,0 +1,20 @@
+// «Flight without holes» (owner 12.11: «мерцает планета будто пропадает. когда летаешь»): the home planet,
+// the start 120 m over the western shore of the green coast (where the owner flew over shallow water), flying.
+// Used by scenarios/planet_flight.ron (d37 flight); `terrain`, `sun`, `cameras` are not used by a planet scene.
+(
+    version: 0,
+    name: "planet_flight",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "home",
+        // a green coast under the morning sun
+        at: (29.0, 80.03),
+        altitude: 120,
+        yaw_deg: 75,
+        pitch_deg: -4,
+        time: 1930,
+    ),
+)

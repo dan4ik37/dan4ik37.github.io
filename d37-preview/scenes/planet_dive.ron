@@ -1,0 +1,20 @@
+// Diving «закладка» (owner 12.11 «не умеет плавать под водой»): the "home" planet over the open sea east of the
+// planet_swim coast, about 90 m deep (lat 24.4, lon 87.8). The player
+// starts on the sea bed (scenarios/planet_dive.ron looks around down there and rises to the surface).
+(
+    version: 0,
+    name: "planet_dive",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "home",
+        at: (24.4, 87.8),
+        altitude: 0.0,
+        yaw_deg: 0,
+        pitch_deg: -14,
+        time: 1930,
+        views: {},
+    ),
+)

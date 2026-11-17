@@ -1,0 +1,19 @@
+// E3a scene — "yard": the meadow's ground (seed 1337) with nothing on it but two crates for scale, and a round
+// pit dug south-east of the start (its wall is steeper than the mover climbs: walking over the rim is a slide).
+// The character scenario (scenarios/character.ron) walks here; the hill to the south is its slope.
+(
+    version: 0,
+    name: "yard",
+    seed: 1337,
+    terrain: (gen: 2, radius: 8, sea_level: 0.3, edits: [(-74, 10.6, 56, 7, 0)]),
+    sun: (azimuth_deg: 150, elevation_deg: 38),
+    cameras: {
+        "main": (pos: (-87.5, 1.7, 23), look_at: (-78, 0.5, 30.5)),
+        "pit": (pos: (-62, 4.5, 50), look_at: (-74, -1.5, 56), fov_y_deg: 60),
+    },
+    objects: [
+        (def: Name("PH_wooden_crate_02"), at: (-90, 27.5), yaw_deg: 70),
+        (def: Name("PH_wooden_military_crate"), at: (-70, 40), yaw_deg: 25),
+    ],
+    player: (at: (-87.5, 23), yaw_deg: 52),
+)

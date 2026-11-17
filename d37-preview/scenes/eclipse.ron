@@ -1,0 +1,34 @@
+// w10 space-bodies (R-LATE-1113-20 / -06): ECLIPSES on the home planet, from the geometry (no scripted event): the
+// date is in an eclipse season (the sun near the equator, so the moon's 5° plane can cross it), the place and the
+// times are where the moon's shadow falls (total solar eclipse, t 13720) and where the moon stands overhead while it
+// passes through the planet's shadow (lunar eclipse, t 5330). Found by game/sys/space/tests.rs
+// (`the_sun_and_the_sky_dim_where_the_moons_shadow_falls`). In game: `game space eclipse` lists the next ones.
+(
+    version: 0,
+    name: "eclipse",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "home",
+        at: (-3.43, 25.82),
+        altitude: 2,
+        yaw_deg: 0,
+        pitch_deg: 60,
+        time: 13720,
+        date_ms: 1787565600000,
+        views: {
+            "solar_total_y0": (lat: -3.43, lon: 25.82, altitude: 2, yaw_deg: 0, pitch_deg: 12, time: 13720, fov_y_deg: 80),
+            "solar_after_y0": (lat: -3.43, lon: 25.82, altitude: 2, yaw_deg: 0, pitch_deg: 12, time: 14300, fov_y_deg: 80),
+            "solar_total_y90": (lat: -3.43, lon: 25.82, altitude: 2, yaw_deg: 90, pitch_deg: 12, time: 13720, fov_y_deg: 80),
+            "solar_after_y90": (lat: -3.43, lon: 25.82, altitude: 2, yaw_deg: 90, pitch_deg: 12, time: 14300, fov_y_deg: 80),
+            "solar_total_y180": (lat: -3.43, lon: 25.82, altitude: 2, yaw_deg: 180, pitch_deg: 12, time: 13720, fov_y_deg: 80),
+            "solar_after_y180": (lat: -3.43, lon: 25.82, altitude: 2, yaw_deg: 180, pitch_deg: 12, time: 14300, fov_y_deg: 80),
+            "solar_total_y270": (lat: -3.43, lon: 25.82, altitude: 2, yaw_deg: 270, pitch_deg: 12, time: 13720, fov_y_deg: 80),
+            "solar_after_y270": (lat: -3.43, lon: 25.82, altitude: 2, yaw_deg: 270, pitch_deg: 12, time: 14300, fov_y_deg: 80),
+            "lunar_before": (lat: 0.24, lon: 97.75, altitude: 2, yaw_deg: 0, pitch_deg: 89, time: 4750, fov_y_deg: 12),
+            "lunar_total": (lat: 0.24, lon: 97.75, altitude: 2, yaw_deg: 0, pitch_deg: 89, time: 5330, fov_y_deg: 12),
+        },
+    ),
+)
