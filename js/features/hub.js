@@ -704,9 +704,11 @@
         join: jc && NET_URL ? { url: NET_URL, code: jc } : null,   // W11 «Играть вместе»
         onProgress: progress, onMessage: onMsg, fullscreenEl: ui.box,   // F11 игры — на весь экран вместе с полосой сайта
         // T-166: слои настроек (общий файл → файл игры → строка site_config по флагу; ?tune= движок добавит сам), перечитываются при
-        // возврате во вкладку и раз в 5 минут; «Перезагрузить» после вылета — перезапуск игры без перезагрузки сайта
+        // возврате во вкладку и раз в 5 минут
         config: { build: String(info.id || ''), poll: 300000, layers: [{ name: 'engine', url: CFG_DIR + 'engine.json' }].concat(game.text ? [{ name: 'game:' + game.id, text: game.text }] : [], game.site ? [{ name: 'site', text: game.site }] : []) },
-        build: String(info.id || ''), onReload: () => restart(),
+        // «Перезагрузить» после вылета — страница целиком: упавший wasm страницы не переиспользуем; игра продолжится с последнего
+        // целого сохранения
+        build: String(info.id || ''), onReload: () => { try { location.reload(); } catch (e) {} },
       });
       if (gen !== st.gen || !st.active || !ui) { h.dispose(); return; }
       st.h = h; st.t0 = performance.now();
