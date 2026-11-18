@@ -26,7 +26,7 @@
 //   состояние) — всем (плоский мир рисует 📱 над игроком). Чистая функция: D37Phone.handFor(открыт, путь, звонок).
 // Приложение: D37Phone.define(id, { render(el, arg, ctx) → функция уборки (необязательно), title }).
 (() => {
-  const VER = '20';   // 20 — T-164: ds-fun: эмодзи, стикеры, звуки сервера, «Играть вместе», сцена, уровни (ds-fun.js, msgview, community); ds-people: статусы, карточка, друзья, группы ЛС, игнор (ds-people.js; крючки msgview, community, minicard); ds-msg: ветки, опросы, разметка, поиск from:/has:, история правок, форумы (js/features/ds-msg.js); 🛡 центр модерации (ds-mod.js, css/ds-mod.css), жалобы на себя и на создателя скрыты (msgview, files); 19 — T-162: правка не стирает вложение, настройки «как в Дискорде» (msgview, community, community2); 18 — T-160: файлы — кнопки карточки, причины, TURN, номер сообщения общего чата (files.js; sw.js отдаёт ?v= из кэша, без нового VER телефон держит старый files.js); 17 — T-141: 📎 файлы от устройства к устройству (files.js); 16 — T-141: «📺 Смотреть вместе» (chatplayer.js), «🕶 Скрыть мой адрес» и ⚙️ в звонке (calls.js), «📍 Позвать» ко мне / в игру / на сервер (phone-apps.js P.invite); 15 — карточка человека в ленте — общая мини-карточка сайта (js/features/minicard.js, T-086), community.js; 14 — worldchat.js: «🌍 Весь мир» не держит закрытый мир в памяти (T-085); 13 — «🏦 Банк» (денки «Живого города», js/games/mir-econ.js); 12 — msgview: ссылка «сайт//чужой.сайт» больше не считается своей (T-011); 11 — безопасность детей (ЛС, звонки с пропуском, «только читать» до 9): msgview, community, calls, phone-apps; 10 — настоящие адреса
+  const VER = '21';   // 21 — T-165: файлы приложений качаются параллельно (порядок выполнения прежний), P.rpc помнит «функции нет», лента: подгрузка истории без перерисовки всего, текст файла без повтора имени (msgview, files); 20 — T-164: ds-fun: эмодзи, стикеры, звуки сервера, «Играть вместе», сцена, уровни (ds-fun.js, msgview, community); ds-people: статусы, карточка, друзья, группы ЛС, игнор (ds-people.js; крючки msgview, community, minicard); ds-msg: ветки, опросы, разметка, поиск from:/has:, история правок, форумы (js/features/ds-msg.js); 🛡 центр модерации (ds-mod.js, css/ds-mod.css), жалобы на себя и на создателя скрыты (msgview, files); 19 — T-162: правка не стирает вложение, настройки «как в Дискорде» (msgview, community, community2); 18 — T-160: файлы — кнопки карточки, причины, TURN, номер сообщения общего чата (files.js; sw.js отдаёт ?v= из кэша, без нового VER телефон держит старый files.js); 17 — T-141: 📎 файлы от устройства к устройству (files.js); 16 — T-141: «📺 Смотреть вместе» (chatplayer.js), «🕶 Скрыть мой адрес» и ⚙️ в звонке (calls.js), «📍 Позвать» ко мне / в игру / на сервер (phone-apps.js P.invite); 15 — карточка человека в ленте — общая мини-карточка сайта (js/features/minicard.js, T-086), community.js; 14 — worldchat.js: «🌍 Весь мир» не держит закрытый мир в памяти (T-085); 13 — «🏦 Банк» (денки «Живого города», js/games/mir-econ.js); 12 — msgview: ссылка «сайт//чужой.сайт» больше не считается своей (T-011); 11 — безопасность детей (ЛС, звонки с пропуском, «только читать» до 9): msgview, community, calls, phone-apps; 10 — настоящие адреса
   // файлы приложений (грузятся при первом открытии); лента сообщений msgview.js — общая для чата, сообществ и ЛС
   const MODS = { mv: ['js/features/files.js', 'js/features/msgview.js', 'js/features/ds-msg.js'], apps: ['js/features/files.js', 'js/features/msgview.js', 'js/features/ds-msg.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/files.js', 'js/features/msgview.js', 'js/features/ds-msg.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/ds-fun.js', 'js/features/ds-mod.js', 'js/features/chatplayer.js', 'js/features/ds-people.js'], wchat: ['js/features/worldchat.js'], econ: ['js/games/mir-econ.js'], ppl: ['js/features/ds-people.js'] };
   const APPS = [
@@ -95,11 +95,24 @@
   P.myNick = () => (typeof currentProfile !== 'undefined' && currentProfile?.nick) || '';
   // функции ещё нет на сервере (SQL не выполнен) — PGRST202 / 404
   P.missing = e => !!e && (e.code === 'PGRST202' || e.code === '42883' || e.code === '42P01' || /could not find the function|schema cache|does not exist/i.test(e.message || ''));
+  // T-165: функции нет на сервере (PGRST202) — 3 ч не зовём её снова: каждый вызов — красная строка 404 в консоли на каждом заходе
+  // (ч. 11–14 community.sql ещё не выполнены → 4–5 таких строк на /chat). Новый VER (выкладка) сбрасывает память. Откат: RPC_MISS = false.
+  const RPC_MISS = true, MISS_TTL = 3 * 3600e3;
+  let MISS = {};
+  try { const j = JSON.parse(localStorage.getItem('d37_rpc_miss') || 'null'); if (j && j.v === VER && j.t) MISS = j.t; } catch (e) {}
+  const missSave = () => { try { localStorage.setItem('d37_rpc_miss', JSON.stringify({ v: VER, t: MISS })); } catch (e) {} };
   P.rpc = async (name, args) => {
     const s = sb(); if (!s) return { error: { message: 'нет связи с сервером' }, offline: true };
-    try { const r = await s.rpc(name, args || {}); return { data: r.data, error: r.error, missing: P.missing(r.error) }; }
+    if (RPC_MISS && MISS[name] && Date.now() - MISS[name] < MISS_TTL) return { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + name + ' (запомнено)' }, missing: true, cached: true };
+    try {
+      const r = await s.rpc(name, args || {});
+      if (RPC_MISS && r.error?.code === 'PGRST202') { MISS[name] = Date.now(); missSave(); }
+      else if (RPC_MISS && MISS[name] && !r.error) { delete MISS[name]; missSave(); }
+      return { data: r.data, error: r.error, missing: P.missing(r.error) };
+    }
     catch (e) { return { error: e, missing: false }; }
   };
+  P.rpcForget = () => { MISS = {}; missSave(); };
   P.err = e => (typeof humanErr === 'function' ? humanErr(e) : String(e?.message || e || 'ошибка'));
   // Профили по id: ник, роль, аватар, VIP (публичные колонки, privacy.sql); кэш на визит
   const profCache = new Map();
@@ -417,11 +430,12 @@
   }
   P.define = (id, d) => { defs.set(id, d); if (isOpen && cur && cur.split('/')[0] === id && !view.querySelector('.ph-app-' + id)) show(cur); };
   // загрузить файл(ы) приложения один раз; общий файл (msgview.js) — тоже один раз на всех
-  const files = new Map();
+  const files = new Map(), PAR_LOAD = true;
   const loadFile = src => {
     if (files.has(src)) return files.get(src);
     const p = new Promise((res, rej) => {
       const s = document.createElement('script');
+      s.async = false;   // T-165: порядок выполнения = порядок вставки (PAR_LOAD)
       s.src = src + '?v=' + VER;
       s.onload = () => res(); s.onerror = () => { files.delete(src); rej(new Error('не загрузилось: ' + src)); };
       document.head.appendChild(s);
@@ -432,7 +446,9 @@
   P.need = name => {
     if (!MODS[name]) return Promise.resolve();
     if (mods.has(name)) return mods.get(name);
-    const p = MODS[name].reduce((acc, src) => acc.then(() => loadFile(src)), Promise.resolve());
+    // T-165: файлы качаются сразу все (раньше — по одному: 9 файлов чата = 9 ожиданий сети подряд), а выполняются по порядку
+    // (s.async = false у всех — браузер держит порядок вставки). Откат: PAR_LOAD = false.
+    const p = PAR_LOAD ? Promise.all(MODS[name].map(loadFile)).then(() => {}) : MODS[name].reduce((acc, src) => acc.then(() => loadFile(src)), Promise.resolve());
     p.catch(() => mods.delete(name));
     mods.set(name, p);
     return p;

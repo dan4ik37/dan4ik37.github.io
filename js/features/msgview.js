@@ -21,6 +21,7 @@
   // 🚩 не на себя и не на создателя (role admin); ds-mod.js заменяет точной проверкой со списком админов. Сервер всё равно решает сам.
   if (!MV.noReport) MV.noReport = m => !!m && ((m.uid && m.uid === P.me()) || m.role === 'admin');
   const GROUP_MS = 7 * 60e3, KEEP = 350;
+  const PREPEND = true, FILE_TEXT = true;   // T-165: откат одной строкой — история перерисовкой всей ленты / текст файла как есть
   const touch = () => matchMedia('(pointer: coarse)').matches;
   const e = s => (typeof esc === 'function' ? esc(s) : String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
 
@@ -321,7 +322,8 @@
       const st = authorStyle(m, m.uid ? V.A?.colorOf?.(m.uid) : null), blocked = m.uid && (MV.blocked.has(m.uid) || !!window.D37People?.isIgnored?.(m.uid));   // ds-people: игнор тоже прячет
       const first = !prev || prev.sys || prev.uid !== m.uid || prev.nick !== m.nick || m.reply || Date.parse(m.at) - Date.parse(prev.at) > GROUP_MS || dayName(prev.at) !== dayName(m.at);
       const me = myNick(), mine = m.mine || (m.uid ? m.uid === myUid() : !!me && m.nick === me && !myUid());
-      const r = blocked ? { html: '', cards: [] } : MV.rich(m.text, me, { kid: kidView() });
+      const ft = FILE_TEXT && m.att ? fileText(m) : m.text;
+      const r = blocked ? { html: '', cards: [] } : MV.rich(ft, me, { kid: kidView() });
       const hl = !mine && me && (new RegExp('@' + me.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}0-9_])', 'iu').test(m.text || '') || (m.reply && V.msgs.get(m.reply)?.mine));
       const color = st.rgb ? `color:rgb(${st.rgb})` : st.color ? `color:${e(st.color)}` : '';
       const prof = m.uid ? P.prof(m.uid) : null;
@@ -334,7 +336,7 @@
       const body = blocked
         ? `<div class="mv-text mv-blk">${MV.blocked.has(m.uid) ? '🚫 Сообщение от заблокированного' : '🙈 Скрыто: ты игнорируешь'} <button type="button" data-a="showblk">показать</button></div>`
         : m.sticker ? `<div class="mv-text mv-sticker">${e(m.text)}</div>`
-        : `${MV.dsm?.pre?.(m, V) || ''}<div class="mv-text${r.big ? ' mv-big' : ''}">${r.html}${m.edited ? ` <span class="mv-ed" title="${e(P.when(m.edited))}">(изменено)</span>` : ''}</div>${r.cards.length ? `<div class="mv-cards">${r.cards.map(MV.cardHtml).join('')}</div>` : ''}${m.att && window.D37Files ? window.D37Files.cardHtml(m.att, m, V.A?.fileKind) : ''}${MV.dsm?.post?.(m, V) || ''}`;
+        : `${MV.dsm?.pre?.(m, V) || ''}${ft || m.edited || !m.att ? `<div class="mv-text${r.big ? ' mv-big' : ''}">${r.html}${m.edited ? ` <span class="mv-ed" title="${e(P.when(m.edited))}">(изменено)</span>` : ''}</div>` : ''}${r.cards.length ? `<div class="mv-cards">${r.cards.map(MV.cardHtml).join('')}</div>` : ''}${m.att && window.D37Files ? window.D37Files.cardHtml(m.att, m, V.A?.fileKind) : ''}${MV.dsm?.post?.(m, V) || ''}`;
       return `<div class="mv-m${first ? ' mv-first' : ''}${mine ? ' mv-mine' : ''}${hl ? ' mv-hl' : ''}${m.hidden ? ' mv-hid' : ''}" data-id="${e(m.id)}" data-nick="${e(m.nick)}"${m.uid ? ` data-uid="${e(m.uid)}"` : ''}>
         ${rq}${first ? ava : `<time class="mv-t2" title="${e(P.when(m.at))}">${P.hm(m.at)}</time>`}
         <div class="mv-b">${first ? `<div class="mv-h"><button type="button" class="mv-nick" data-a="user" style="${color}">${e((m.uid && window.D37People?.srvNick?.(V.A, m.uid)) || m.nick)}</button>${badgeHtml(m, st, crole)}<time title="${e(new Date(m.at).toLocaleString('ru-RU'))}">${P.when(m.at)}</time>${m.pinned ? '<i class="mv-pin" title="Закреплено">📌</i>' : ''}${m.hidden ? '<i class="mv-flag" title="Скрыто жалобами — видят только модераторы">🚩</i>' : ''}</div>` : ''}${body}${reacts}</div>
@@ -353,20 +355,52 @@
     }
 
     // ── Список: полностью / добавить / заменить ──
-    function renderAll(){
+    // кусок ленты: дни, «новые сообщения», группировка по автору
+    function chunk(ids){
       let out = '', prev = null, lastDay = '';
-      for (const id of V.order) {
+      for (const id of ids) {
         const m = V.msgs.get(id); if (!m || m.deleted) continue;
         const day = dayName(m.at);
         if (day !== lastDay) { out += `<div class="mv-day"><span>${e(day)}</span></div>`; lastDay = day; prev = null; }
         if (V.divider && id === V.divider) out += '<div class="mv-new"><span>Новые сообщения</span></div>';
         out += html(m, prev); prev = m;
       }
-      if (V.more) out = `<button type="button" class="mv-older" data-a="older">⬆ Загрузить раньше</button>` + out;
-      else if (V.order.length) out = `<div class="mv-start">${e(V.A.startText || 'Это начало канала')}</div>` + out;
+      return { out, prev, lastDay };
+    }
+    const topHtml = () => (V.more ? `<button type="button" class="mv-older" data-a="older">⬆ Загрузить раньше</button>` : V.order.length ? `<div class="mv-start">${e(V.A.startText || 'Это начало канала')}</div>` : '');
+    function renderAll(){
+      let out = chunk(V.order).out;
+      if (out) out = topHtml() + out;
       list.innerHTML = out || `<div class="mv-empty">${e(V.A.emptyText || 'Пока тихо — напиши первым! 👋')}</div>`;
       after(list);
     }
+    // T-165: старые сообщения — вставить сверху, не перерисовывая всю ленту (раньше каждая страница истории заново
+    // разбирала все N сообщений: 2000 сообщений = 40 страниц ≈ 40 000 разборов). Откат: PREPEND = false → renderAll().
+    function prepend(ids){
+      const c = chunk(ids);
+      if (!c.out) { const o = list.querySelector(':scope > .mv-older, :scope > .mv-start'); if (o) o.outerHTML = topHtml(); return; }
+      list.querySelector(':scope > .mv-older, :scope > .mv-start')?.remove();
+      // тот же день сверху старой части — разделитель один, первое старое сообщение может прилипнуть к группе автора
+      const top = list.firstElementChild;
+      if (top?.classList.contains('mv-day') && top.textContent === c.lastDay) {
+        top.remove();
+        const fe = list.firstElementChild?.classList.contains('mv-m') ? list.firstElementChild : null, fm = fe && V.msgs.get(isNaN(+fe.dataset.id) ? fe.dataset.id : +fe.dataset.id);
+        if (fe && fm && !fe.querySelector('.mvf-th video, .mvf-th audio, .mvf-th img[src^="blob:"]')) {
+          const t = document.createElement('template'); t.innerHTML = html(fm, c.prev).trim();
+          const ne = t.content.firstElementChild; if (ne) { fe.replaceWith(ne); after(ne); }
+        }
+      }
+      const t = document.createElement('template'); t.innerHTML = topHtml() + c.out;
+      const nodes = [...t.content.children];
+      list.prepend(t.content);
+      for (const n of nodes) if (n.classList.contains('mv-m')) after(n);
+    }
+    // текст файла без повтора: «📎 имя · размер подпись» → только подпись (имя и размер — в карточке файла)
+    const fileText = m => {
+      const a = m.att, F = window.D37Files; if (!a || !F || typeof m.text !== 'string' || !a.name) return m.text;
+      const pre = '📎 ' + a.name + ' · ' + F.size(+a.size || 0);
+      return m.text.startsWith(pre) ? m.text.slice(pre.length).trim() : m.text;
+    };
     function after(scope){
       if (V.A.caps.react === 'site' && typeof renderReactionsFor === 'function') scope.querySelectorAll('[data-mr]').forEach(x => renderReactionsFor(+x.dataset.mr));
       if (typeof xpQueueBadges === 'function') xpQueueBadges();
@@ -442,9 +476,10 @@
       if (A !== V.A || !r) return;
       const add = (r.list || []).filter(m => !V.msgs.has(m.id) && !MV.dsm?.skip?.({ t: 'load', m }, V));
       add.forEach(m => V.msgs.set(m.id, m));
+      const hadMsgs = !!list.querySelector('.mv-m');
       V.order = [...add.map(m => m.id), ...V.order];
       V.more = !!r.more;
-      renderAll();
+      if (PREPEND && hadMsgs) prepend(add.map(m => m.id)); else renderAll();
       list.scrollTop = list.scrollHeight - h0 + t0;
       loadReplies(add); loadAuthors(add);
       if (A.caps.react === 'site' && typeof loadReactionsFor === 'function') loadReactionsFor(add.map(m => m.id));
