@@ -248,3 +248,26 @@ html.ph-open:has(.ph:not(.docked)) .chat-toast{display:none}
 .ph-game{display:flex;flex-direction:column;align-items:center;gap:6px}
 .ph-game canvas{display:block;width:100%;max-width:330px;height:auto;border-radius:18px;touch-action:manipulation;cursor:pointer;box-shadow:0 6px 22px rgba(0,0,0,.35)}
 .ph-gbest{font-size:13px;color:#fde047}
+/* T-167: камера в разговоре, «кто внутри», лимит, проверка устройств */
+.vc-tile.vid{padding:0;overflow:hidden;justify-content:flex-end;aspect-ratio:4/3;background:#000}
+.vc-tile.vid .vc-vid{position:absolute;inset:0}
+.vc-tile.vid video{width:100%;height:100%;object-fit:cover;display:block}
+.vc-tile.vid video.me{transform:scaleX(-1)}
+.vc-tile.vid b,.vc-tile.vid small{position:relative;z-index:1;background:rgba(0,0,0,.55);color:#fff;padding:1px 8px;border-radius:8px;margin:0 6px 4px}
+.vc-tile.vid .vc-ic{z-index:1}
+.vc-tile[data-vu]{cursor:pointer}
+@media (max-width:700px){.vc-vgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.vc-who{display:flex;flex-direction:column;gap:6px;margin:6px 0}
+.vc-in{display:flex;flex-wrap:wrap;gap:6px}
+.vc-in span{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 3px;border-radius:999px;background:rgba(var(--fg-rgb,255,255,255),.06);font-size:12.5px}
+.vc-lim{display:flex;align-items:center;gap:8px;font-size:13px}
+.vc-lim select,.dc select{min-height:40px;border-radius:10px;padding:0 10px;background:transparent;color:inherit;border:1px solid rgba(var(--fg-rgb,255,255,255),.2);max-width:100%}
+.vc-lim select option,.dc select option{color:#111}
+.dc{display:flex;flex-direction:column;gap:12px}
+.dc-sec{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:14px;background:rgba(var(--fg-rgb,255,255,255),.04)}
+.dc-row{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.dc-sw{display:inline-flex;align-items:center;gap:6px;font-size:13px;min-height:40px}
+.dc-meter{height:10px;border-radius:6px;background:rgba(var(--fg-rgb,255,255,255),.1);overflow:hidden}
+.dc-meter i{display:block;height:100%;width:0;background:#22c55e;transition:width .08s linear}
+.dc-cam{border-radius:12px;overflow:hidden;background:#000;aspect-ratio:4/3;max-height:45vh}
+.dc-cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
