@@ -66,3 +66,19 @@ The first target is stable 60 server TPS, p99 tick time within 16.67 ms at 60 Hz
 ### First task for Claude
 
 Start from `codex/gpu-m1` at `78b0727`. Add the stage counters in step 1, then replay the same camp with 1 and 10 peers on a separate authoritative test server. Track whether `replicate`, full-save digest generation, synchronous autosave or `step` owns the long ticks. Fix the largest measured cost and rerun the same inputs before touching other systems. Keep the user's saves outside the fixture and test backward compatibility of the web bundle and the room protocol separately. Record the tested builds, fixture, counters, failures and next action in this handoff. Timed runs wait for the shared measurement switch and use `HEAVY.lock`.
+
+## Claude 18.11: results
+
+Tested build: branch `ep14-perf`, `b99a344` on `78b0727`, native release (worktree `M:\d37\d37-wt\ep14-perf`). Not merged or published yet. Numbers were taken through the shared job queue while other lanes were working on the same PC, so they carry noise; the legacy / new pair was run twice in one process on the same scripted inputs and both runs agree.
+
+- **Fixture:** `crates/d37-app/tests/data/perf_camp.txt`, scripted with no user save: 48 NPCs, 46 parts, 15 digs.
+- **Bench:** `cargo test --release -p d37-app --test perf_authority -- --ignored --nocapture --test-threads 1`. It covers 1 peer, 10 in the camp and 10 spread 330 m apart, A/B through `D37_AUTH_LEGACY=1`.
+- **Counters:** `Status::auth_perf` / `hub_perf` (stages tick / step / round.{ents,index,interest,digest,encode,queue}, hub event / intent / save / gap, peer queue bytes and age, shed, counts); sysprof ids `~cmds` / `~g.*` / `~actor.*` / `dig.sphere.sample`; Worker `pace_stats()` (actual TPS, tick debt, discarded ms, input-to-apply, snapshot age, longest frame gap).
+- **Finding:** the world step owns the long ticks, not replicate, digest or disk. Its spikes came from deep worms' `game dig sphere … blast` at 11.7 ms each. Sampling the terrain height once per column keeps the same world hash and brings tick p95 / p99 / worst from 16.4 / 25.8 / 41.9 ms to 8.2 / 12.7 / 22.2 ms for 1 peer. The 10-peer layouts are similar. TPS is 60, with no shedding. Replication rounds stay under 1 ms mean, queues at most 3.6 KB per peer.
+- **Also switched on:** headless authority skips drawing-only animation; digests read a lean parts save (rebuild 0.83 → 0.06 ms); the hub drains waiting events (camp10 input-to-ack worst 83 → 18 ms).
+- **Native client in the same camp:** tick p95 / p99 / worst 16.0 / 23.7 / 41.8 → 5.0 / 6.7 / 18.1 ms (worms dig on every client).
+- **Failures:** the browser's 40 ms `~actor_animation` is not reproduced natively (0.51 ms for 48 actors). It needs one browser F3 profile with the new `~actor.*` ids.
+- **Not done:** table rows 2-5, the 30-minute soak and the 30-minute acceptance route; determinism was checked native only (world / mover / game hashes equal with the dig switch on and off), the 30 / 60 / 144 FPS and native-vs-wasm runs were not repeated.
+- **Next action:** `fauna.find_water`, about 17 ms when nothing is within 160 m (needs an exact nearby-water index — a "no water here" cache with a retry delay would change behaviour); server `npc` at 1.4 ms/step; then the 30-minute route scenario with per-minute counters (frame p95 / p99, `pace_stats`, `wasm_memory_bytes`, GPU residency, scatter and object counts, queue ages).
+
+Related lanes of the same wave: `ep14-scenes` (sectors / portals / activation: klet, dungeon, caves), `ep14-config` (layered live settings), `ep15-look` (light and air in the generated world).
