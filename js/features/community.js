@@ -224,7 +224,7 @@
       if (c.soon) return `<span class="ds-ch soon" title="Канал появится, когда сайт обновится"><i>${ic}</i><span>${e(c.name)}</span><small>скоро</small></span>`;
       const ment = srv.official ? window.D37Chat.mentions[c.id] || 0 : 0;
       const voiceIn = c.kind === 'voice' ? `<div class="ds-vppl" data-vch="${e(srv.official ? 'o' : c.id)}"></div>` : '';
-      return `<a class="ds-ch${String(selCh) === String(c.id) ? ' on' : ''}${muted(c) ? ' muted' : ''}${c.kind !== 'voice' && c.kind !== 'twitch' && unread(c) ? ' unread' : ''}" href="${link(mode, srv.id, c.id)}"><i>${ic}</i><span>${e(c.name)}</span>${c.min_age ? `<small class="ds-age" title="Канал с ${+c.min_age} лет">${+c.min_age}+</small>` : ''}${c.slow ? '<small title="Медленный режим">🐢</small>' : ''}${c.mods_only ? '<small title="Пишут только модераторы">📢</small>' : ''}${muted(c) ? '<small title="Заглушён">🔕</small>' : ''}${mng && c.kind !== 'twitch' ? `<b class="ds4-chg" data-ds4="chset" data-mode="${mode}" data-srv="${srv.official ? 'o' : e(srv.id)}" data-ch="${e(c.id)}" title="Настройки канала">⚙</b>` : ''}${ment ? `<em class="ds-ment">${ment}</em>` : ''}</a>${voiceIn}`;
+      return `<a class="ds-ch${String(selCh) === String(c.id) ? ' on' : ''}${muted(c) ? ' muted' : ''}${c.kind !== 'voice' && c.kind !== 'twitch' && unread(c) ? ' unread' : ''}" href="${link(mode, srv.id, c.id)}"><i>${ic}</i><span>${e(c.name)}</span>${c.min_age ? `<small class="ds-age" title="Канал с ${+c.min_age} лет">${+c.min_age}+</small>` : ''}${c.slow ? '<small title="Медленный режим">🐢</small>' : ''}${!srv.official && PW.get(srv.id)?.m?.has(c.id) ? `<small title="Канал с паролем">${PW.get(srv.id).m.get(c.id) ? '🔓' : '🔒'}</small>` : ''}${c.mods_only ? '<small title="Пишут только модераторы">📢</small>' : ''}${muted(c) ? '<small title="Заглушён">🔕</small>' : ''}${mng && c.kind !== 'twitch' ? `<b class="ds4-chg" data-ds4="chset" data-mode="${mode}" data-srv="${srv.official ? 'o' : e(srv.id)}" data-ch="${e(c.id)}" title="Настройки канала">⚙</b>` : ''}${ment ? `<em class="ds-ment">${ment}</em>` : ''}</a>${voiceIn}`;
     };
     const text = ch.filter(c => c.kind !== 'voice'), voice = ch.filter(c => c.kind === 'voice');
     const lay = DS.x?.chanLayout?.(mode, srv, selCh, row);   // ч. 4: папки и архив (null — их нет, как раньше)
@@ -445,6 +445,57 @@
     else location.hash = href;
   }
 
+  // ═══ T-167 🔒 Канал с паролем (community.sql ч. 15: cm_chan_pw_state / cm_chan_pw_try / cm_chan_pw_set). Решает сервер: без пароля
+  //  сообщения канала не читаются (RLS) и не пишутся (триггер). Нет ч. 15 — значков и окна нет. Откат: PW_ON = false.
+  const PW_ON = true, PW = new Map();   // id сообщества → { at, m: Map(id канала → открыт ли мне) }
+  async function pwState(cid, fresh){
+    const c = PW.get(cid);
+    if (c && !fresh && Date.now() - c.at < 60e3) return c.m;
+    const r = await P.rpc('cm_chan_pw_state', { p_community: cid });
+    if (r.missing || r.error || !Array.isArray(r.data)) { PW.set(cid, { at: Date.now(), m: null }); return null; }
+    const m = new Map(r.data.map(x => [+x.id, !!x.ok]));
+    PW.set(cid, { at: Date.now(), m });
+    return m;
+  }
+  const canManage = srv => !srv.official && (srv.role === 'owner' || srv.role === 'mod' || !!srv.staff || !!(DS.x?.roleSync?.(srv.id)?.my & 1));
+  function lockScreen(host, mode, srv, ch){
+    host.innerHTML = `<div class="ds-pane ds-pwlock"><b>🔒 #${e(ch.name)} — канал с паролем</b>
+      <p>Пароль даёт владелец или модераторы сообщества.</p>
+      <form class="ds-pwrow"><input type="password" class="ds-in" maxlength="64" autocomplete="off" aria-label="Пароль канала" placeholder="Пароль"><button type="submit" class="ds-btn">Открыть</button></form>
+      <div class="ds-pwerr vc-note bad" hidden></div>
+      <small class="ds-dim">Пароль проверяет сервер сайта. Это не сквозное шифрование: команда сайта и модераторы сообщества могут видеть сообщения канала. Не пиши в чатах свои пароли, адрес и телефон.</small></div>`;
+    const f = host.querySelector('form'), inp = f.querySelector('input'), er = host.querySelector('.ds-pwerr');
+    if (!P.touch()) inp.focus();
+    f.addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const b = f.querySelector('button'); b.disabled = true;
+      const r = await P.rpc('cm_chan_pw_try', { p_ch: ch.id, p_pw: inp.value });
+      b.disabled = false;
+      if (r.data?.ok) { await pwState(srv.id, true); refreshSide(); if (host.isConnected) showChannel(host, mode, srv, ch); return; }
+      er.hidden = false;
+      er.textContent = { wrong: `Неверный пароль${Number.isFinite(+r.data?.left) ? ' — осталось попыток: ' + r.data.left : ''}`, rate: 'Слишком много попыток — подожди 15 минут', member: 'Сначала вступи в сообщество', auth: 'Войди в аккаунт' }[r.data?.reason] || 'Не получилось — проверь интернет';
+      inp.select();
+    });
+  }
+  async function pwSet(srv, ch){
+    const locked = !!PW.get(srv.id)?.m?.has(ch.id);
+    const v = prompt(`${locked ? 'Новый пароль' : 'Пароль'} для #${ch.name} (4–64 знака). Пусто — ${locked ? 'убрать пароль' : 'отмена'}.\n\nЭто не шифрование: пароль только закрывает вход в канал. Сменишь пароль — всем придётся ввести новый.`, '');
+    if (v === null || (!v && !locked)) return;
+    const r = await P.rpc('cm_chan_pw_set', { p_ch: ch.id, p_pw: v });
+    P.toast(r.data?.ok ? (r.data.locked ? '🔒 Пароль поставлен' : '🔓 Пароль убран') : r.data?.reason === 'len' ? 'Пароль — от 4 до 64 знаков' : '⚠️ Не получилось', !!r.data?.ok);
+    if (r.data?.ok) { await pwState(srv.id, true); refreshSide(); }
+  }
+  // кнопка «🔒» в шапке канала — тем, кто управляет каналами
+  function pwButton(root, srv, ch){
+    const tools = root?.querySelector?.('.ds-top .ds-tools'); if (!tools) return;
+    let b = tools.querySelector('[data-ds7="pw"]');
+    const show = PW_ON && !srv.official && ch.kind === 'text' && canManage(srv) && PW.get(srv.id)?.m !== null && PW.has(srv.id);
+    if (!b && show) { b = Object.assign(document.createElement('button'), { type: 'button', className: 'ds-hb', title: 'Пароль канала', textContent: '🔒' }); b.dataset.ds7 = 'pw'; b.setAttribute('aria-label', 'Пароль канала'); tools.prepend(b); }
+    if (!b) return;
+    b.hidden = !show;
+    b.onclick = () => pwSet(srv, ch);
+  }
+
   // ═══ Канал справа: лента / голосовой / Twitch / «скоро» ═══
   let mv = null, mvHost = null;
   function showChannel(host, mode, srv, ch){
@@ -465,6 +516,12 @@
       DS.x?.voiceMore?.(host, srv, ch);   // T-164 ds-fun.js: звуковая панель, сцена, «Играть вместе»
       return;
     }
+    if (PW_ON && !srv.official && ch.kind === 'text') {
+      const st = PW.get(srv.id);
+      pwButton(page?.root, srv, ch);
+      if (st?.m?.has(ch.id) && !st.m.get(ch.id)) { dropView(); lockScreen(host, mode, srv, ch); return; }
+      if (!st || Date.now() - st.at > 60e3) pwState(srv.id).then(m => { pwButton(page?.root, srv, ch); if (m && m.has(ch.id) && !m.get(ch.id) && host.isConnected) showChannel(host, mode, srv, ch); else if (m?.size) refreshSide(); });
+    } else pwButton(page?.root, srv, ch);
     const A0 = srv.official ? window.D37Chat.adapter(ch.id) : commAdapter(srv.raw, ch), A = DS.x?.wrapAdapter ? DS.x.wrapAdapter(A0, srv, ch) : A0;   // ч. 4: модерация с причиной
     if (!srv.official) A.lastMax = srv.lastMax;
     if (!mv || mvHost !== host || !host.contains(mvHost?.firstChild)) {

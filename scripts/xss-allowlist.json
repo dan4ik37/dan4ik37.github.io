@@ -2187,6 +2187,16 @@
   },
   {
    "f": "js/features/ds-fun.js",
+   "fn": "extVerify",
+   "k": "sink:src [img]",
+   "c": "self-made",
+   "n": "T-167: blob: URL, созданный нами из байтов, сверенных по sha-256 (проверка /^blob:/ перед присвоением)",
+   "xs": [
+    "it.src"
+   ]
+  },
+  {
+   "f": "js/features/ds-fun.js",
    "fn": "flush",
    "k": "sink:src [img]",
    "c": "url-checked",

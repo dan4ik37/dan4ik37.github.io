@@ -21,7 +21,16 @@
   // 🚩 не на себя и не на создателя (role admin); ds-mod.js заменяет точной проверкой со списком админов. Сервер всё равно решает сам.
   if (!MV.noReport) MV.noReport = m => !!m && ((m.uid && m.uid === P.me()) || m.role === 'admin');
   const GROUP_MS = 7 * 60e3, KEEP = 350;
-  const PREPEND = true, FILE_TEXT = true;   // T-165: откат одной строкой — история перерисовкой всей ленты / текст файла как есть
+  const PREPEND = true, FILE_TEXT = true;
+  // T-167 черновики: недописанное сообщение остаётся у канала (перешёл в другой канал / закрыл сайт — вернулся, текст на месте).
+  // Только на этом устройстве (localStorage d37_drafts, до 30 каналов, 14 дней). Откат: DRAFTS = false.
+  const DRAFTS = true;
+  const DR = { get(){ try { return JSON.parse(localStorage.getItem('d37_drafts') || '{}') || {}; } catch (er) { return {}; } },
+    put(k, t){ if (!DRAFTS || !k) return; const d = DR.get(); if (t) d[k] = { t: t.slice(0, 2000), at: Date.now() }; else delete d[k];
+      const ks = Object.keys(d).filter(x => Date.now() - (d[x]?.at || 0) < 14 * 864e5).sort((a, b) => d[b].at - d[a].at).slice(0, 30), o = {}; ks.forEach(x => { o[x] = d[x]; });
+      try { localStorage.setItem('d37_drafts', JSON.stringify(o)); } catch (er) {} },
+    take(k){ const x = DRAFTS && k ? DR.get()[k] : null; return x && Date.now() - x.at < 14 * 864e5 ? String(x.t || '') : ''; } };
+  MV.drafts = DR;   // T-165: откат одной строкой — история перерисовкой всей ленты / текст файла как есть
   const touch = () => matchMedia('(pointer: coarse)').matches;
   const e = s => (typeof esc === 'function' ? esc(s) : String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
 
@@ -519,7 +528,7 @@
       V.unsub?.(); V.unsub = null; V.typOff?.(); V.typOff = null; V.typers.clear(); renderTyping();
       V.A = A; V.msgs.clear(); V.order = []; V.more = false; V.reply = null; V.editing = null; V.newCount = 0; V.divider = 0; V.refs = null;
       closeOver(); closeMenu(); closePanel(); setReply(null); setEdit(null);
-      input.value = ''; autosize();
+      input.value = DR.take(A.key); autosize();
       input.placeholder = A.placeholder || `Написать в ${A.title || 'чат'}`;
       input.maxLength = A.maxLen || 500;
       q('.mv-stk').hidden = !A.caps.stickers;
@@ -655,10 +664,10 @@
         return;
       }
       const reply = V.reply;
-      input.value = ''; autosize(); setReply(null); closePanel(); closeAc();
+      input.value = ''; autosize(); setReply(null); closePanel(); closeAc(); DR.put(A.key, '');
       const r = await A.send(text, reply);
       if (!r?.ok) {
-        if (!input.value) input.value = text; autosize();
+        if (!input.value) input.value = text; autosize(); DR.put(A.key, input.value);
         if (reply && V.msgs.get(reply)) setReply(V.msgs.get(reply));
         note('⚠️ Не отправлено: ' + (r?.err || 'ошибка'));
         return;
@@ -666,8 +675,10 @@
       if (r.m && !V.msgs.has(r.m.id)) onEvent({ t: 'ins', m: r.m });
       toBottom();
     }
+    let drT = 0;
     input.addEventListener('input', () => {
       autosize();
+      if (DRAFTS && !V.editing) { const k = V.A?.key, t = input.value; clearTimeout(drT); drT = setTimeout(() => DR.put(k, t.trim() ? t : ''), 400); }
       if (V.A?.typing && input.value.trim() && Date.now() - V.lastTyping > 3000 && !V.editing) { V.lastTyping = Date.now(); try { V.A.typing.send(); } catch (er) {} }
       acCheck();
     });

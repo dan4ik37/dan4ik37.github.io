@@ -149,3 +149,26 @@
 - api/push-check.js: «❓ Вопрос дня» — the bot posts one question into #общий daily from 12:00 Almaty (bot_posts key dq:<date>);
   site_config 'daily_q' = JSON array of strings or 'off'; flag `DAILY_Q_ON`.
 - Test: scripts/t165-e2e.cjs (headless Chrome, phone profile).
+
+## T-167 (19.11.2026, branch t167-ds2) — messenger features (English, short)
+- community.sql part 15 (ds2; check ds2_info → {"ok":true,"v":1}; needs parts 11–14 applied together — one file):
+  - voice limits: community_channels.user_limit, voice_here (cv_pass writes, cv_ping every 25 s, cv_leave, stale after 75 s); cv_pass
+    returns reason 'full' and `cam`; cv_check admits only people listed in voice_here; cv_who (who is inside, can_set);
+    cm_voice_limit_set. site_config 'voice_cap' (default 6), 'comm_member_cap' (default 500, as before).
+  - camera: cam_me() / cam_ok(uid) — site_config 'call_video' 'off' | 'adult' | 'teen' (default 'adult' — coordinator 19.11: a minor's camera is not shown to anyone until the owner decides; 'teen' = 13+); never under 13 or unknown age.
+  - password channels (community text channels): chan_pw (bcrypt hash, private table), chan_pw_ok, chan_pw_try (5 / 15 min per
+    channel, 30 / hour); restrictive RLS cmsg_pw + trigger chan_pw_guard; cm_chan_pw_set / _try / _state. Not E2E encryption.
+  - community pictures from their own server (OFF: site_config 'ext_media' = 'on' + EXT_PICS in ds-fun.js): cf_ext_media
+    registry (url, sha256, bytes, w, h, mime, status checking → pending → approved / rejected / broken), cf_ext_hosts_set,
+    cf_ext_add, cf_ext_todo + cf_ext_verified (service_role only), cf_ext_review / cf_ext_queue / cf_ext_off (site staff),
+    cf_ext_list (members only). Guide for community owners: docs/ext-pics-server.md.
+- calls.js flags: DEVCHECK (phone app 'devcheck' «🎛 Проверка»: mic meter, speaker test via setSinkId, camera preview,
+  device pickers remembered in d37_phone micId / camId / spkId, ns / ec / agc toggles), CAM_ON (video transceiver from the
+  start, on/off = replaceTrack, caps by participant count; kids: transceiver 'inactive'), NETFIX (ICE restart before rebuild,
+  per-tile state «напрямую / через посредник / переподключаем / нет прямой связи», online/offline events), VLIMIT, UVOL
+  (per-person volume, d37_uvol), TURN_CF (/api/turn-cred → Cloudflare Realtime TURN when env CF_TURN_KEY_ID / _TOKEN exist).
+- api/_lib/routes/ds2.js: /api/turn-cred, /api/ext-check (through api/pages.js; still 10 functions).
+- community.js PW_ON (lock screen, 🔒 in the list, 🔒 button in the header for channel managers — page mode only);
+  msgview.js DRAFTS (per-channel drafts, d37_drafts, 30 channels / 14 days).
+- Tests: scripts/t167-test.cjs (node), scripts/ds2-sql-test.mjs (PGlite — not run locally, no PGlite on this PC),
+  scripts/t167-e2e.cjs (two headless Chrome with fake devices, live Supabase Realtime).

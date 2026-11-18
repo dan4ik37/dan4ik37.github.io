@@ -23,14 +23,59 @@
   C.hideIp = () => HIDE_IP && (P.set.hide === 'on' || ((P.set.hide || 'auto') === 'auto' && kidsRealm()));
   const turnList = () => (Array.isArray(window.D37_TURN) ? window.D37_TURN : []).filter(s => [].concat(s?.urls || []).some(u => /^turns?:/i.test(String(u))));
   C.relayOk = () => turnList().length > 0;
+  // T-167: TURN Cloudflare Realtime через наш сервер (/api/turn-cred). Выключено, пока владелец не задаст ключи в Vercel — тогда сервер
+  // отвечает { off: true } и мы 30 минут не спрашиваем. Свой TURN (D37RT, window.D37_TURN) — главнее. Откат: TURN_CF = false.
+  const TURN_CF = true, cfT = { at: 0, p: null, exp: 0 };
+  function cfTurn(){
+    if (!TURN_CF || (Array.isArray(window.D37_TURN) && window.D37_TURN.length && !cfT.mine) || typeof sbClient === 'undefined') return Promise.resolve();
+    if (cfT.p) return cfT.p;
+    if (Date.now() < cfT.at || (cfT.mine && Date.now() < cfT.exp)) return Promise.resolve();
+    cfT.p = (async () => {
+      try {
+        const tok = (await sbClient.auth.getSession())?.data?.session?.access_token; if (!tok) { cfT.at = Date.now() + 60e3; return; }
+        const r = await fetch('/api/turn-cred', { headers: { Authorization: 'Bearer ' + tok }, cache: 'no-store' });
+        const j = r.ok ? await r.json() : null;
+        if (!j?.ok || !Array.isArray(j.iceServers) || !j.iceServers.length) { cfT.at = Date.now() + 30 * 60e3; return; }
+        if (window.D37_TURN === undefined || window.D37_TURN === cfT.mine) { window.D37_TURN = j.iceServers; cfT.mine = j.iceServers; cfT.exp = Date.now() + (j.ttl || 3600) * 1000 - 5 * 60e3; }
+      } catch (er) { cfT.at = Date.now() + 5 * 60e3; }
+      finally { cfT.p = null; }
+    })();
+    return cfT.p;
+  }
   // перед входом в комнату: адрес скрываем, а пароли TURN ещё не пришли — попросить и подождать до 4 с
   async function ensureRelay(){
+    if (TURN_CF) await Promise.race([cfTurn(), new Promise(r => setTimeout(r, 1500))]);
     if (!C.hideIp() || C.relayOk()) return;
     try { window.D37RT?.prefetchTurn?.(); window.D37RT?.ice?.(); } catch (er) {}
     for (let i = 0; i < 20 && !C.relayOk(); i++) await new Promise(r => setTimeout(r, 200));
   }
   const RELAY_NOTE = '🕶 Адрес скрыт, но сервер-посредник сейчас недоступен — звук не соединится. Попробуй через минуту или выключи «Скрыть мой адрес» в ⚙️ → 📱 Телефон (тогда собеседник сможет узнать твой адрес в сети).';
   const MAX = 6, RING_MS = 40000, DIAL_MS = 35000, CONNECT_MS = 30000;
+  // T-167 (владелец 19.11: «вебкамера, проверка камеры, микро… прямое подключение… количество участников в войсе»). Откат — по флагу:
+  //   DEVCHECK — экран «🎛 Проверка микрофона и камеры» и выбор устройств; CAM_ON — камера в звонках и голосовых (по возрасту — решает
+  //   сервер: cam_me / cv_pass.cam, community.sql ч. 15; без ч. 15 кнопки камеры нет); NETFIX — перезапуск ICE вместо нового соединения,
+  //   состояние у каждого, «нет интернета → вернулся»; VLIMIT — лимит голосового канала и «кто внутри» (cv_who / cv_ping / cv_leave);
+  //   UVOL — своя громкость каждого собеседника (нажми на плитку).
+  const DEVCHECK = true, CAM_ON = true, NETFIX = true, VLIMIT = true, UVOL = true;
+  // выбранные устройства — на этом устройстве (d37_phone): micId / camId / spkId; шумоподавление ns, эхо ec, автогромкость agc
+  const micC = () => Object.assign({ echoCancellation: P.set.ec !== false, noiseSuppression: P.set.ns !== false, autoGainControl: P.set.agc !== false, channelCount: 1 },
+    DEVCHECK && P.set.micId ? { deviceId: { ideal: P.set.micId } } : {});
+  const camC = () => Object.assign({ width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 24 } }, DEVCHECK && P.set.camId ? { deviceId: { ideal: P.set.camId } } : {});
+  const sinkOk = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
+  const setSink = el => { if (DEVCHECK && sinkOk && P.set.spkId && el?.setSinkId) el.setSinkId(P.set.spkId).catch(() => {}); };
+  // громкость каждого: uid → 0…1 (localStorage d37_uvol)
+  const UV = (() => { try { return JSON.parse(localStorage.getItem('d37_uvol') || '{}') || {}; } catch (er) { return {}; } })();
+  const uvOf = uid => (UVOL && uid && Number.isFinite(UV[uid]) ? Math.max(0, Math.min(1, UV[uid])) : 1);
+  const camErr = er => {
+    const n = er?.name || '';
+    if (n === 'NotAllowedError' || n === 'PermissionDeniedError') return '📷 Нет доступа к камере. Нажми на значок 🔒 слева от адреса сайта → «Камера» → «Разрешить» и попробуй ещё раз.';
+    if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') return '📷 Камера не найдена. Подключи камеру или выбери другую в «🎛 Проверка».';
+    if (n === 'NotReadableError') return '📷 Камера занята другой программой (Zoom, OBS?) — закрой её.';
+    if (n === 'SecurityError') return '📷 Камера работает только на https-адресе сайта.';
+    return '📷 Не удалось включить камеру: ' + (er?.message || n || 'ошибка');
+  };
+  // видео по числу людей: чем больше, тем меньше (сетка — каждый шлёт каждому)
+  const camCap = n => (n <= 2 ? { maxBitrate: 600000, scaleResolutionDownBy: 1, maxFramerate: 24 } : n <= 4 ? { maxBitrate: 280000, scaleResolutionDownBy: 1.5, maxFramerate: 15 } : { maxBitrate: 150000, scaleResolutionDownBy: 2, maxFramerate: 12 });
   const e = s => esc(s);
   // Безопасность детей (community.sql ч. 5, js/core/age.js): до 9 — звонков нет; ребёнку до 13 — не со взрослыми и не с «без возраста»
   const kidMsg = k => window.D37Age?.kidMsg?.(k) || '🚫 Нельзя позвонить этому игроку';
@@ -104,7 +149,11 @@
       return s;
     }
     if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no'), { name: window.isSecureContext ? 'NotSupportedError' : 'SecurityError' });
-    return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: P.set.ns !== false, autoGainControl: true, channelCount: 1 }, video: false });
+    try { return await navigator.mediaDevices.getUserMedia({ audio: micC(), video: false }); }
+    catch (er) {   // выбранного микрофона больше нет — берём любой
+      if (P.set.micId && (er?.name === 'NotFoundError' || er?.name === 'OverconstrainedError')) return navigator.mediaDevices.getUserMedia({ audio: Object.assign(micC(), { deviceId: undefined }), video: false });
+      throw er;
+    }
   }
   const micErr = er => {
     const n = er?.name || '';
@@ -118,11 +167,12 @@
   // ═══ Комната голоса: присутствие + знакомство + сетка WebRTC ═══
   // opt: { topic, max, me: { uid, nick }, verify(meta) → Promise<{ uid, nick } | null>, stream, onChange(), onFull(), onEmpty(), onError(text), onDecline() }
   async function openRoom(opt){
-    if (!opt.observe) await ensureRelay();
+    if (!opt.observe) await ensureRelay(); else cfTurn();
     const keys = await myKeys();
     const myKey = (opt.me.uid || 'g') + '~' + rid(6);
     const R = { opt, myKey, keys, members: new Map(), verified: new Map(), pubs: new Map(), peers: new Map(), early: new Map(), stream: opt.stream,
-      closed: false, mute: false, deaf: false, at: Date.now(), state: 'joining', changeT: 0, hiT: new Map(), seen: false };
+      closed: false, mute: false, deaf: false, at: Date.now(), state: 'joining', changeT: 0, hiT: new Map(), seen: false,
+      camOk: CAM_ON && opt.cam === true, camTrack: null, vids: new Map(), net: { restarts: 0, rebuilds: 0, drops: 0 } };
     const audioBox = document.getElementById('d37Audio') || Object.assign(document.createElement('div'), { id: 'd37Audio', hidden: true });
     if (!audioBox.parentElement) document.body.appendChild(audioBox);
     R.changed = () => { clearTimeout(R.changeT); R.changeT = setTimeout(() => { if (!R.closed) opt.onChange?.(R); }, 60); };
@@ -157,6 +207,9 @@
     if (bye) setTimeout(() => { try { sbClient.removeChannel(R.ch); } catch (er) {} }, 300);
     else { try { sbClient.removeChannel(R.ch); } catch (er) {} }
     if (R.stream && R.ownStream) { R.stream.getTracks().forEach(t => t.stop()); R.stream._stop?.(); }
+    if (R.camTrack) { try { R.camTrack.stop(); } catch (er) {} R.camTrack = null; }
+    for (const v of R.vids.values()) { v.srcObject = null; v.remove(); }
+    R.vids.clear();
   }
   async function sync(R){
     if (R.closed) return;
@@ -203,7 +256,8 @@
     R.hiT.set(key, setTimeout(() => hiCheck(R, key, n + 1), 9000));
   }
   function newPeer(R, key, offerer){
-    const p = { key, offerer, sid: '', state: 'connecting', tries: 0, timer: 0, ice: [], iceT: 0, pend: [], audio: null, an: null, vad: {}, speaking: false, mute: false, deaf: false };
+    const p = { key, offerer, sid: '', state: 'connecting', tries: 0, timer: 0, ice: [], iceT: 0, pend: [], audio: null, an: null, vad: {}, speaking: false, mute: false, deaf: false,
+      t0: Date.now(), tc: 0, restarts: 0, discT: 0, route: '', vt: null, vstream: null, cam: false };
     makePc(R, p);
     return p;
   }
@@ -213,20 +267,72 @@
     const pc = new RTCPeerConnection(hide ? { iceServers: turnList(), iceTransportPolicy: 'relay' } : { iceServers: ICE() });
     p.pc = pc; p.relay = hide;
     if (R.stream) R.stream.getTracks().forEach(t => pc.addTrack(t, R.stream));
+    // T-167 камера: место под видео есть с самого начала (вкл/выкл — replaceTrack, без нового знакомства)
+    p.vt = null;
+    if (R.camOk && p.offerer) { try { p.vt = pc.addTransceiver('video', { direction: 'sendrecv' }); if (R.camTrack) p.vt.sender.replaceTrack(R.camTrack).catch(() => {}); } catch (er) { p.vt = null; } }
     pc.onicecandidate = ev => {
       if (!ev.candidate || pc !== p.pc) return;
       if (hide && !/ typ relay/.test(ev.candidate.candidate || '')) return;   // на всякий случай: свой адрес не отдаём никогда
       p.ice.push(ev.candidate.toJSON());
       if (!p.iceT) p.iceT = setTimeout(() => { p.iceT = 0; const c = p.ice.splice(0, 40); if (c.length) R.send({ t: 'ice', to: p.key, sid: p.sid, c }); }, 250);   // пачкой: меньше сообщений
     };
-    pc.ontrack = ev => { if (pc === p.pc) attachAudio(R, p, ev.streams[0] || new MediaStream([ev.track])); };
+    pc.ontrack = ev => {
+      if (pc !== p.pc) return;
+      if (ev.track.kind === 'video') { p.vstream = new MediaStream([ev.track]); R.changed(); return; }
+      attachAudio(R, p, ev.streams[0] || new MediaStream([ev.track]));
+    };
     pc.onconnectionstatechange = () => {
       if (pc !== p.pc) return;
       const s = pc.connectionState;
-      if (s === 'connected') { p.state = 'ok'; clearTimeout(p.timer); R.changed(); R.opt.onConnected?.(R, p); }
-      else if (s === 'failed') { if (p.offerer && p.tries < 3) offer(R, p); else { p.state = 'fail'; R.changed(); } }
-      else if (s === 'disconnected') { p.state = 'connecting'; R.changed(); }
+      clearTimeout(p.discT);
+      if (s === 'connected') {
+        p.state = 'ok'; clearTimeout(p.timer); p.restarts = 0;
+        if (!p.tc) p.tc = Date.now() - p.t0;
+        R.changed(); R.opt.onConnected?.(R, p); routeOf(R, p); camCaps(R);
+        if (R.camTrack || R.mute || R.deaf) R.send({ t: 'st', mute: R.mute, deaf: R.deaf, cam: !!R.camTrack });   // новенький узнаёт, что у меня камера / микрофон
+      } else if (s === 'failed') {
+        if (!NETFIX) { if (p.offerer && p.tries < 3) offer(R, p); else { p.state = 'fail'; R.changed(); } return; }
+        if (p.offerer) { if (p.restarts < 2) restart(R, p); else if (p.tries < 4) { R.net.rebuilds++; offer(R, p); } else { p.state = 'fail'; R.changed(); } }
+        else { p.state = 'reconnect'; R.send({ t: 'hi', to: p.key }); R.changed(); }   // предлагает тот, кто вошёл раньше — попросить
+      } else if (s === 'disconnected') {
+        p.state = NETFIX ? 'reconnect' : 'connecting'; R.net.drops++; R.changed();
+        // связь моргнула: 3 с ждём сама вернётся, потом — перезапуск ICE (тот же разговор, новые пути)
+        if (NETFIX && p.offerer) p.discT = setTimeout(() => { if (pc === p.pc && pc.connectionState !== 'connected' && !R.closed) restart(R, p); }, 3000);
+      }
     };
+  }
+  // T-167: перезапуск ICE — то же соединение (тот же sid), только новые пути; звук не надо заново знакомить
+  async function restart(R, p){
+    if (R.closed || !p.pc) return;
+    p.restarts++; R.net.restarts++; p.state = 'reconnect'; R.changed();
+    clearTimeout(p.timer);
+    p.timer = setTimeout(() => { if (!R.closed && p.state !== 'ok' && R.peers.get(p.key) === p) { if (p.tries < 4) { R.net.rebuilds++; offer(R, p); } else { p.state = 'fail'; R.changed(); } } }, 9000);
+    try {
+      const pc = p.pc;
+      pc.restartIce?.();
+      await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+      R.send({ t: 'offer', to: p.key, sid: p.sid, sdp: pc.localDescription.toJSON() });
+    } catch (er) { if (p.tries < 4) { R.net.rebuilds++; offer(R, p); } else { p.state = 'fail'; R.changed(); } }
+  }
+  // как соединились: напрямую или через сервер-посредник (TURN) — честно в плитке
+  async function routeOf(R, p){
+    try {
+      const st = await p.pc.getStats(); let pair = null; const loc = new Map();
+      st.forEach(x => { if (x.type === 'transport' && x.selectedCandidatePairId) pair = st.get(x.selectedCandidatePairId); if (x.type === 'local-candidate') loc.set(x.id, x); });
+      if (!pair) st.forEach(x => { if (x.type === 'candidate-pair' && x.nominated && x.state === 'succeeded') pair = x; });
+      const lc = pair && loc.get(pair.localCandidateId);
+      p.route = lc ? (lc.candidateType === 'relay' ? 'relay' : 'direct') : '';
+      R.changed();
+    } catch (er) {}
+  }
+  // камера: ограничение видео по числу людей (на каждом отправителе)
+  function camCaps(R){
+    if (!R.camOk) return;
+    const cap = camCap(R.peers.size + 1);
+    for (const p of R.peers.values()) {
+      const snd = p.vt?.sender; if (!snd?.getParameters) continue;
+      try { const prm = snd.getParameters(); prm.encodings = prm.encodings?.length ? prm.encodings : [{}]; Object.assign(prm.encodings[0], cap); snd.setParameters(prm).catch(() => {}); } catch (er) {}
+    }
   }
   async function offer(R, p){
     if (R.closed) return;
@@ -236,7 +342,7 @@
     p.timer = setTimeout(() => { if (!R.closed && p.state !== 'ok' && R.peers.get(p.key) === p) { if (p.tries < 3) offer(R, p); else { p.state = 'fail'; R.changed(); } } }, 9000);
     try {
       const pc = p.pc;
-      await pc.setLocalDescription(await pc.createOffer({ offerToReceiveAudio: true }));
+      await pc.setLocalDescription(await pc.createOffer());
       R.send({ t: 'offer', to: p.key, sid: p.sid, sdp: pc.localDescription.toJSON() });
     } catch (er) { p.state = 'fail'; R.changed(); }
   }
@@ -259,6 +365,10 @@
       p.sid = d.sid; p.pend = [];
       try {
         await p.pc.setRemoteDescription(d.sdp);
+        if (CAM_ON) {
+          const vt = p.pc.getTransceivers().find(t => !t.stopped && t.receiver?.track?.kind === 'video' && t.mid != null);
+          if (vt) { p.vt = R.camOk ? vt : null; try { vt.direction = R.camOk ? 'sendrecv' : 'inactive'; if (R.camOk) await vt.sender.replaceTrack(R.camTrack || null); } catch (er) {} }
+        }
         for (const c of R.early.get(from + '/' + d.sid) || []) await p.pc.addIceCandidate(c).catch(() => {});
         R.early.delete(from + '/' + d.sid);
         await p.pc.setLocalDescription(await p.pc.createAnswer());
@@ -267,6 +377,8 @@
     } else if (d.t === 'answer') {
       const p = R.peers.get(from); if (!p || !p.offerer || p.sid !== d.sid) return;
       try { await p.pc.setRemoteDescription(d.sdp); for (const c of p.pend.splice(0)) await p.pc.addIceCandidate(c).catch(() => {}); } catch (er) {}
+      // T-167: перезапуск ICE на живом соединении — состояние так и остаётся «connected», события не будет: отмечаем сами
+      if (p.state === 'reconnect' && p.pc.connectionState === 'connected') { p.state = 'ok'; p.restarts = 0; clearTimeout(p.timer); R.changed(); routeOf(R, p); }
     } else if (d.t === 'ice') {
       const p = R.peers.get(from);
       if (!p || p.sid !== d.sid) { const k = from + '/' + d.sid, l = R.early.get(k) || []; if (l.length < 80) R.early.set(k, l.concat(d.c)); return; }
@@ -274,14 +386,15 @@
     } else if (d.t === 'hi') {
       const p = R.peers.get(from); if (p && p.offerer && p.state !== 'ok') { p.tries = 0; offer(R, p); }
     } else if (d.t === 'st') {
-      const p = R.peers.get(from); if (m) { m.mute = !!d.mute; m.deaf = !!d.deaf; }
-      if (p) { p.mute = !!d.mute; p.deaf = !!d.deaf; }
+      const p = R.peers.get(from); if (m) { m.mute = !!d.mute; m.deaf = !!d.deaf; m.cam = !!d.cam; }
+      if (p) { p.mute = !!d.mute; p.deaf = !!d.deaf; p.cam = !!d.cam; }
       R.changed();
     } else if (d.t === 'decline') R.opt.onDecline?.(R, m);
     else if (d.t === 'bye') { const p = R.peers.get(from); if (p) { dropPeer(R, p); R.peers.delete(from); } }
   }
   function dropPeer(R, p){
-    clearTimeout(p.timer); clearTimeout(p.iceT);
+    clearTimeout(p.timer); clearTimeout(p.iceT); clearTimeout(p.discT);
+    const v = R.vids?.get(p.key); if (v) { v.srcObject = null; v.remove(); R.vids.delete(p.key); }
     try { p.pc.close(); } catch (er) {}
     if (p.audio) { p.audio.srcObject = null; p.audio.remove(); }
     try { p.an?.src.disconnect(); } catch (er) {}
@@ -289,10 +402,11 @@
   }
   // громкость собеседников — окно ⚙️: «🔊 Звук» → «Общая громкость» × «Голос» (settings.js → D37Opt); «звук в играх» звонок не глушит
   const voiceVol = () => { const O = window.D37Opt; const v = O ? (O.vol ?? 1) * (O.volVoice ?? 1) : 1; return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1; };
-  window.addEventListener('d37:settings', () => { const v = voiceVol(); for (const p of S?.room?.peers?.values() || []) if (p.audio) p.audio.volume = v; });
+  const peerVol = (R, p) => voiceVol() * uvOf(R?.members?.get(p.key)?.uid);
+  window.addEventListener('d37:settings', () => { const R = S?.room; for (const p of R?.peers?.values() || []) if (p.audio) p.audio.volume = peerVol(R, p); });
   function attachAudio(R, p, stream){
     if (!p.audio) { p.audio = document.createElement('audio'); p.audio.autoplay = true; p.audio.setAttribute('playsinline', ''); document.getElementById('d37Audio').appendChild(p.audio); }
-    p.audio.srcObject = stream; p.audio.muted = R.deaf; p.audio.volume = voiceVol();
+    p.audio.srcObject = stream; p.audio.muted = R.deaf; p.audio.volume = peerVol(R, p); setSink(p.audio);
     p.audio.play().catch(() => {});
     try { p.an?.src.disconnect(); } catch (er) {}
     p.an = analyser(stream);
@@ -331,7 +445,8 @@
     const R = S?.room; if (!R) return;
     if (!P.set.ptt) pttHeld = false;
     applyMic(R);
-    R.stream?.getAudioTracks().forEach(t => { try { t.applyConstraints?.({ echoCancellation: true, noiseSuppression: P.set.ns !== false, autoGainControl: true })?.catch?.(() => {}); } catch (er) {} });
+    R.stream?.getAudioTracks().forEach(t => { try { t.applyConstraints?.({ echoCancellation: P.set.ec !== false, noiseSuppression: P.set.ns !== false, autoGainControl: P.set.agc !== false })?.catch?.(() => {}); } catch (er) {} });
+    for (const p of R.peers.values()) if (p.audio) setSink(p.audio);
     R.changed(); pill();
   });
 
@@ -366,11 +481,12 @@
   const clock = () => { const s = Math.floor((Date.now() - (S?.t0 || Date.now())) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const people = () => {
     const R = S?.room; if (!R) return [];
-    const out = [{ key: R.myKey, uid: P.me(), nick: P.myNick() || 'Я', me: true, speaking: !!R.speaking, mute: R.mute || (P.set.ptt && !pttHeld), deaf: R.deaf, state: 'ok' }];
+    const out = [{ key: R.myKey, uid: P.me(), nick: P.myNick() || 'Я', me: true, speaking: !!R.speaking, mute: R.mute || (P.set.ptt && !pttHeld), deaf: R.deaf, state: 'ok', cam: !!R.camTrack }];
     for (const [key, m] of R.members) {
       if (key === R.myKey || R.verified.get(key) !== true) continue;
       const p = R.peers.get(key);
-      out.push({ key, uid: m.uid, nick: m.nick, speaking: !!p?.speaking, mute: !!(p?.mute || m.mute), deaf: !!(p?.deaf || m.deaf), state: p ? p.state : (R.failed?.has(key) ? 'fail' : 'connecting') });
+      out.push({ key, uid: m.uid, nick: m.nick, speaking: !!p?.speaking, mute: !!(p?.mute || m.mute), deaf: !!(p?.deaf || m.deaf), state: p ? p.state : (R.failed?.has(key) ? 'fail' : 'connecting'),
+        cam: !!(R.camOk && p?.cam && p?.vstream), route: p?.route || '' });
     }
     return out;
   };
@@ -380,6 +496,7 @@
   async function startRoom(opt){
     let stream;
     try { stream = await getMic(); } catch (er) { return { err: micErr(er) }; }
+    if (CAM_ON && opt.cam === undefined) { const cm = await P.rpc('cam_me'); opt.cam = cm.data?.cam === true; }   // звонок / компания: можно ли мне камеру
     const R = await openRoom(Object.assign({ stream, me: { uid: P.me(), nick: P.myNick() || (typeof chatNick !== 'undefined' && chatNick) || 'игрок' },
       onChange: () => {
         // ник собеседника — из комнаты, если профиль ещё не загрузился
@@ -397,6 +514,8 @@
     ring(false);
     clearTimeout(s.timer); clearInterval(s.tick);
     if (s.room) { closeRoom(s.room, true); s.room = null; }
+    clearInterval(s.pingT);
+    if (VLIMIT && s.kind === 'voice' && s.spec && s.passOk) P.rpc('cv_leave', { p_channel: s.spec.channel });
     if (s.watch) { closeRoom(s.watch, false); s.watch = null; }
     if (s.t0) logCall({ dir: s.dir, uid: s.peer?.uid, nick: s.peer?.nick || s.title, kind: s.kind, at: s.at, dur: Math.round((Date.now() - s.t0) / 1000) });
     P.sfx('hang');
@@ -598,17 +717,20 @@
     const keys = await myKeys();
     const pr = await P.rpc('cv_pass', { p_channel: spec.channel, p_pub: keys.pub });
     if (pr.error) return { err: pr.missing ? 'soon' : P.err(pr.error) };
-    if (!pr.data?.ok) return { err: { member: 'Сначала вступи в сообщество', banned: 'Тебя забанили', muted: 'Тебя заглушили в чате', new: 'Голосовой канал сайта — для аккаунтов старше суток', not_found: 'Канал не найден', u9: kidMsg('u9voice') }[pr.data?.reason] || 'Не получилось' };
+    if (!pr.data?.ok) return { err: { member: 'Сначала вступи в сообщество', banned: 'Тебя забанили', muted: 'Тебя заглушили в чате', new: 'Голосовой канал сайта — для аккаунтов старше суток', not_found: 'Канал не найден', u9: kidMsg('u9voice'), full: `👥 Канал заполнен (${+pr.data?.max || MAX} из ${+pr.data?.max || MAX}) — подожди, пока кто-нибудь выйдет.` }[pr.data?.reason] || 'Не получилось' };
     const code = 'v' + spec.channel;
     S = { kind: 'voice', dir: 'out', state: 'idle', code: null, topic: pr.data.topic, title: spec.title, spec, at: Date.now() };
     setState('join');
     const ch = spec.channel;
-    const r = await startRoom({ topic: pr.data.topic, max: pr.data.max || MAX, pass: pr.data.pass,
+    S.passOk = true;
+    const r = await startRoom({ topic: pr.data.topic, max: pr.data.max || MAX, pass: pr.data.pass, cam: CAM_ON && pr.data.cam === true,
       verify: async m => { if (typeof m.pass !== 'string') return null; const { data } = await P.rpc('cv_check', { p_channel: ch, p_pass: m.pass, p_pub: m.pub }); return data && data.uid === m.uid ? { uid: data.uid, nick: data.nick } : null; },
       onFull: () => { if (S?.kind === 'voice') { S.full = true; render(); } } });
     if (!S || S.kind !== 'voice' || S.topic !== pr.data.topic) { if (r.R) closeRoom(r.R, false); return { err: 'busy' }; }
     if (r.err) { S.reason = 'mic'; S.err = r.err; setState('failed'); return { err: r.err }; }
     S.room = r.R; S.t0 = Date.now(); S.state = 'live'; armConnect();
+    // ч. 15: «я ещё тут» раз в 25 с (сервер считает людей для лимита; без ч. 15 — функции нет, P.rpc запомнит)
+    if (VLIMIT && pr.data.max !== undefined) { const s = S; s.pingT = setInterval(() => { if (S === s && s.state === 'live') P.rpc('cv_ping', { p_channel: ch }); else clearInterval(s.pingT); }, 25000); }
     P.sfx('join'); render(); pill(); window.dispatchEvent(new Event('d37:voice'));
     return { ok: true, code };
   };
@@ -618,10 +740,13 @@
       if (!el.isConnected) { window.removeEventListener('d37:voice', draw); return; }
       const here = S && S.kind === 'voice' && S.spec.kind === spec.kind && String(S.spec.channel) === String(spec.channel) && S.state !== 'ended';
       if (!here) {
-        el.innerHTML = `<div class="vc"><div class="vc-head"><b>🔊 ${e(spec.name)}</b><small>до 6 человек · ${C.hideIp() ? '🕶 адрес скрыт' : 'звук напрямую между браузерами'}</small></div>
+        el.innerHTML = `<div class="vc"><div class="vc-head"><b>🔊 ${e(spec.name)}</b><small class="vc-cap">до ${MAX} человек · ${C.hideIp() ? '🕶 адрес скрыт' : 'звук напрямую между браузерами'}</small></div>
           <div class="vc-note">🎧 Зайди — и говори голосом. Микрофон спросит браузер. Не называй в голосовом адрес, телефон и школу.</div>
-          ${spec.kind === 'community' && !spec.member ? '<div class="vc-note">Сначала вступи в сообщество.</div>' : `<div class="vc-ctrl"><button type="button" class="go" data-v="join">🔊 Зайти в голосовой</button></div>`}
+          <div class="vc-who" hidden></div>
+          ${spec.kind === 'community' && !spec.member ? '<div class="vc-note">Сначала вступи в сообщество.</div>' : `<div class="vc-ctrl"><button type="button" class="go" data-v="join">🔊 Зайти в голосовой</button>${DEVCHECK ? '<button type="button" data-v="dev" title="Проверить микрофон, звук и камеру">🎛 Проверка</button>' : ''}</div>`}
           <div class="vc-err"></div></div>`;
+        el.querySelector('[data-v="dev"]')?.addEventListener('click', () => P.open('devcheck'));
+        if (VLIMIT && P.me()) whoBox(el, spec);
         el.querySelector('[data-v="join"]')?.addEventListener('click', async ev => {
           ev.currentTarget.disabled = true;
           const r = await C.voiceJoin(spec);
@@ -636,6 +761,11 @@
     window.addEventListener('d37:voice', draw);
     draw();
   };
+
+  if (NETFIX) {
+    window.addEventListener('online', () => { const R = S?.room; if (!R) return; for (const p of R.peers.values()) if (p.state !== 'ok' && p.offerer) restart(R, p); else if (p.state !== 'ok') R.send({ t: 'hi', to: p.key }); R.changed(); });
+    window.addEventListener('offline', () => { S?.room?.changed(); });
+  }
 
   // ═══ Плашка разговора на любой странице ═══
   let pillEl = null, pillT = 0;
@@ -674,22 +804,90 @@
   function sessionHtml(){
     const ps = people(), R = S.room;
     const bad = S.netWarn || ps.some(p => p.state === 'fail');
-    return `<div class="vc"><div class="vc-head"><b>${e(S.title)}</b><small>${S.t0 ? clock() + ' · ' : ''}${ps.length} из ${MAX}</small></div>
-      ${S.full ? '<div class="vc-note bad">Канал полон (6 человек) — подожди, пока кто-нибудь выйдет.</div>' : ''}
+    const max = R?.opt?.max || MAX, off = NETFIX && navigator.onLine === false;
+    return `<div class="vc"><div class="vc-head"><b>${e(S.title)}</b><small>${S.t0 ? clock() + ' · ' : ''}${ps.length} из ${+max}</small></div>
+      ${S.full ? `<div class="vc-note bad">👥 Канал заполнен (${+max} из ${+max}) — подожди, пока кто-нибудь выйдет.</div>` : ''}
+      ${off ? '<div class="vc-note bad">📡 Нет интернета — разговор вернётся сам, как только связь появится.</div>' : ''}
       ${S.kidBlocked ? `<div class="vc-note bad">${e(kidMsg(S.kidBlocked === 'u9' ? 'u9' : 'agecall'))}</div>` : ''}
       ${bad ? `<div class="vc-note bad">${TURN_NOTE_FN()}</div>` : privHtml()}
-      <div class="vc-grid">${ps.map(p => `<div class="vc-tile${p.speaking ? ' spk' : ''}${p.state === 'fail' ? ' bad' : ''}">${P.avatar(P.prof(p.uid) || null, p.nick, 64)}<b>${e(p.nick)}${p.me ? ' (ты)' : ''}</b><small>${p.state === 'fail' ? '⚠️ нет связи' : p.state === 'connecting' ? 'соединяем…' : p.speaking ? 'говорит' : ' '}</small><span class="vc-ic">${p.deaf ? '🔈' : p.mute ? '🔇' : ''}</span></div>`).join('')}</div>
+      <div class="vc-grid${ps.some(p => p.cam) ? ' vc-vgrid' : ''}">${ps.map(p => `<div class="vc-tile${p.speaking ? ' spk' : ''}${p.state === 'fail' ? ' bad' : ''}${p.cam ? ' vid' : ''}" data-vk="${e(p.key)}"${!p.me && UVOL && p.uid ? ` data-vu="${e(p.uid)}" role="button" title="Громкость ${e(p.nick)}"` : ''}>${p.cam ? '<span class="vc-vid"></span>' : P.avatar(P.prof(p.uid) || null, p.nick, 64)}<b>${e(p.nick)}${p.me ? ' (ты)' : ''}</b><small>${tileState(p)}</small><span class="vc-ic">${p.deaf ? '🔈' : p.mute ? '🔇' : ''}${!p.me && uvOf(p.uid) < 1 ? '🔉' : ''}</span></div>`).join('')}</div>
       <div class="vc-ctrl">
         <button type="button" data-v="mute" class="${R?.mute ? 'on' : ''}">${R?.mute ? '🔇 Микрофон выкл' : '🎙 Микрофон'}</button>
         <button type="button" data-v="deaf" class="${R?.deaf ? 'on' : ''}">${R?.deaf ? '🔈 Звук выкл' : '🎧 Звук'}</button>
+        ${R?.camOk ? `<button type="button" data-v="cam" class="${R.camTrack ? 'on' : ''}">${R.camTrack ? '📷 Камера вкл' : '📷 Камера'}</button>` : ''}
         ${P.set.ptt ? '<button type="button" class="vc-ptt" data-v="ptt">📻 Держи, чтобы говорить</button>' : ''}
         ${S.kind !== 'voice' ? '<button type="button" data-v="invite">➕ Позвать</button>' : ''}
         ${INV_ON && P.gameInvite ? '<button type="button" data-v="ginv" title="Позвать в игру или на сервер">📍 В игру</button>' : ''}
+        ${DEVCHECK ? '<button type="button" data-v="dev" title="Проверить микрофон, звук и камеру" aria-label="Проверка устройств">🎛</button>' : ''}
         <button type="button" data-v="set" title="Настройки звонка" aria-label="Настройки звонка">⚙️</button>
         <button type="button" class="end" data-v="leave">📞 Выйти</button>
       </div></div>`;
   }
+  // подпись под плиткой: как идёт связь (честно)
+  const tileState = p => p.state === 'fail' ? '⚠️ нет прямой связи' : p.state === 'reconnect' ? '🔄 переподключаем…' : p.state === 'connecting' ? 'соединяем…'
+    : p.speaking ? 'говорит' : !p.me && p.route === 'relay' ? 'через посредник' : ' ';
+  // видео — одни и те же элементы <video> переносятся в новую плитку (экран перерисовывается часто — без мигания)
+  function attachVideos(el){
+    const R = S?.room; if (!R) return;
+    el.querySelectorAll('.vc-tile.vid[data-vk]').forEach(t => {
+      const k = t.dataset.vk, me = k === R.myKey, p = me ? null : R.peers.get(k);
+      const src = me ? (R.camTrack ? (R.camPrev = R.camPrev?.getTracks()[0] === R.camTrack ? R.camPrev : new MediaStream([R.camTrack])) : null) : p?.vstream;
+      if (!src) return;
+      let v = R.vids.get(k);
+      if (!v) { v = document.createElement('video'); v.autoplay = true; v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); if (me) v.className = 'me'; R.vids.set(k, v); }
+      if (v.srcObject !== src) { v.srcObject = src; v.play().catch(() => {}); }
+      t.querySelector('.vc-vid')?.appendChild(v);
+    });
+  }
+  // камера вкл / выкл (только если сервер разрешил — R.camOk)
+  C.camToggle = async () => {
+    const R = S?.room; if (!R) return;
+    if (!R.camOk) { P.toast('📷 Камера в звонках пока недоступна для твоего возраста (или возраст не указан)', false); return; }
+    if (R.camTrack) {
+      try { R.camTrack.stop(); } catch (er) {}
+      R.camTrack = null;
+      for (const p of R.peers.values()) p.vt?.sender.replaceTrack(null).catch(() => {});
+    } else {
+      let st; try { st = await navigator.mediaDevices.getUserMedia({ video: camC(), audio: false }); } catch (er) { P.toast(camErr(er), false); return; }
+      if (S?.room !== R || R.closed) { st.getTracks().forEach(t => t.stop()); return; }
+      R.camTrack = st.getVideoTracks()[0];
+      R.camTrack.onended = () => { if (R.camTrack) C.camToggle(); };
+      for (const p of R.peers.values()) p.vt?.sender.replaceTrack(R.camTrack).catch(() => {});
+      camCaps(R);
+    }
+    R.send({ t: 'st', mute: R.mute, deaf: R.deaf, cam: !!R.camTrack }); R.changed();
+  };
+  // своя громкость собеседника (0–100 %, на этом устройстве)
+  function volSheet(uid){
+    const nick = people().find(p => p.uid === uid)?.nick || 'игрок', v = Math.round(uvOf(uid) * 100);
+    P.sheet(`<b>🔉 Громкость: ${e(nick)}</b><div class="gs-range" style="margin:12px 0"><input type="range" min="0" max="100" step="5" value="${v}" data-uv aria-label="Громкость"><output>${v}%</output></div><small class="ph-dim">Только у тебя. Общая громкость голоса — ⚙️ → «🔊 Звук».</small>`, () => {});
+    const inp = document.querySelector('[data-uv]'); if (!inp) return;
+    inp.addEventListener('input', () => {
+      const x = (+inp.value) / 100; UV[uid] = x; if (x >= 1) delete UV[uid];
+      try { localStorage.setItem('d37_uvol', JSON.stringify(UV)); } catch (er) {}
+      inp.nextElementSibling.textContent = inp.value + '%';
+      const R = S?.room; for (const p of R?.peers?.values() || []) if (p.audio && R.members.get(p.key)?.uid === uid) p.audio.volume = peerVol(R, p);
+    });
+  }
+  // «кто внутри» и лимит — до входа (ч. 15: cv_who); управляющий каналами меняет лимит прямо тут
+  async function whoBox(el, spec){
+    const r = await P.rpc('cv_who', { p_channel: spec.channel });
+    const box = el.querySelector('.vc-who'); if (!box || !r.data?.ok) return;
+    const d = r.data, ppl = Array.isArray(d.people) ? d.people : [], max = +d.max || MAX, cap = +d.cap || MAX;
+    el.querySelector('.vc-cap').textContent = `${ppl.length} из ${max} · ${C.hideIp() ? '🕶 адрес скрыт' : 'звук напрямую между браузерами'}`;
+    box.hidden = false;
+    box.innerHTML = `${ppl.length ? `<div class="vc-in">${ppl.slice(0, 12).map(x => `<span>${P.avatar(P.prof(x.uid) || null, x.nick, 22)} ${e(x.nick)}</span>`).join('')}</div>` : '<small class="ph-dim">Внутри пока никого — зайди первым.</small>'}
+      ${ppl.length >= max ? `<div class="vc-note bad">👥 Канал заполнен (${max} из ${max}).</div>` : ''}
+      ${d.can_set ? `<label class="vc-lim">👥 Лимит канала <select data-v="lim">${[0, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 25].filter(n => n <= cap).map(n => `<option value="${n}"${+d.limit === n ? ' selected' : ''}>${n ? n : 'без своего (' + cap + ')'}</option>`).join('')}</select></label><small class="ph-dim">Больше ${cap} — не даёт сайт: звук идёт «каждый с каждым», с бо́льшим числом людей связь ненадёжна.</small>` : ''}`;
+    box.querySelector('[data-v="lim"]')?.addEventListener('change', async ev => {
+      const rr = await P.rpc('cm_voice_limit_set', { p_channel: spec.channel, p_limit: +ev.target.value });
+      P.toast(rr.data?.ok ? '✅ Лимит сохранён' : '⚠️ Не получилось', !!rr.data?.ok);
+      whoBox(el, spec);
+    });
+  }
   function wireSession(el){
+    attachVideos(el);
+    el.querySelectorAll('[data-vu]').forEach(t => t.addEventListener('click', () => volSheet(t.dataset.vu)));
     el.querySelectorAll('[data-v]').forEach(b => {
       const k = b.dataset.v;
       if (k === 'ptt') {
@@ -702,6 +900,8 @@
         if (k === 'mute') C.voiceMute(); else if (k === 'deaf') C.voiceDeaf(); else if (k === 'leave') C.leave();
         else if (k === 'invite') inviteSheet();
         else if (k === 'set') C.settings();
+        else if (k === 'cam') C.camToggle();
+        else if (k === 'dev') P.open('devcheck');
         else if (k === 'ginv') ginvSheet();
       });
     });
@@ -762,6 +962,80 @@
     render(el){ incallEl = el; render(); pill(); return () => { if (incallEl === el) incallEl = null; setTimeout(pill, 0); }; },
   });
 
+  // ═══ 🎛 Проверка микрофона, звука и камеры (T-167, DEVCHECK). Ничего не записывается и не уходит с устройства ═══
+  C.deviceCheck = el => {
+    let mic = null, cam = null, an = null, raf = 0, toneStop = null, dead = false;
+    const camAllowed = () => { const g = window.D37Age?.group?.(); return g === 'teen' || g === 'teen16' || g === 'adult'; };
+    const stopMic = () => { cancelAnimationFrame(raf); try { an?.src.disconnect(); } catch (er) {} an = null; mic?.getTracks().forEach(t => t.stop()); mic = null; };
+    const stopCam = () => { cam?.getTracks().forEach(t => t.stop()); cam = null; };
+    const opt = (list, cur, none) => list.length ? list.map((d, i) => `<option value="${e(d.deviceId)}"${d.deviceId === cur ? ' selected' : ''}>${e(d.label || none + ' ' + (i + 1))}</option>`).join('') : `<option value="">${none} — по умолчанию</option>`;
+    async function draw(){
+      let devs = []; try { devs = await navigator.mediaDevices?.enumerateDevices?.() || []; } catch (er) {}
+      if (dead) return;
+      const mics = devs.filter(d => d.kind === 'audioinput' && d.deviceId), cams = devs.filter(d => d.kind === 'videoinput' && d.deviceId), spks = devs.filter(d => d.kind === 'audiooutput' && d.deviceId);
+      const sw = (k, t) => `<label class="dc-sw"><input type="checkbox" data-dc-sw="${k}"${P.set[k] !== false ? ' checked' : ''}> ${t}</label>`;
+      el.innerHTML = P.head('🎛 Проверка') + `<div class="ph-body dc">
+        <p class="ph-dim">Проверь, что тебя слышно и видно, до входа в голосовой. Ничего не записывается и не уходит с этого устройства.</p>
+        <div class="dc-sec"><b>🎙 Микрофон</b><select data-dc="micId" aria-label="Микрофон">${opt(mics, P.set.micId, 'Микрофон')}</select>
+          <div class="dc-meter" aria-label="Уровень микрофона"><i></i></div><small class="dc-mnote ph-dim">${mic ? 'Скажи что-нибудь — полоска должна прыгать.' : ''}</small>
+          <div class="dc-row"><button type="button" class="ph-btn" data-dc-a="mic">${mic ? '⏹ Остановить' : '🎙 Проверить микрофон'}</button></div>
+          <div class="dc-row">${sw('ns', 'Шумоподавление')}${sw('ec', 'Убирать эхо')}${sw('agc', 'Автогромкость')}</div></div>
+        <div class="dc-sec"><b>🔊 Звук</b>${sinkOk ? `<select data-dc="spkId" aria-label="Куда выводить звук">${opt(spks, P.set.spkId, 'Динамик')}</select>` : '<small class="ph-dim">Этот браузер выбирает динамик сам (настройки телефона / системы).</small>'}
+          <div class="dc-row"><button type="button" class="ph-btn" data-dc-a="tone">🔔 Проверить звук</button></div></div>
+        <div class="dc-sec"><b>📷 Камера</b>${CAM_ON && camAllowed() ? `<select data-dc="camId" aria-label="Камера">${opt(cams, P.set.camId, 'Камера')}</select>
+          <div class="dc-cam"${cam ? '' : ' hidden'}><video muted playsinline autoplay></video></div>
+          <div class="dc-row"><button type="button" class="ph-btn" data-dc-a="cam">${cam ? '⏹ Выключить' : '📷 Проверить камеру'}</button></div>
+          <small class="ph-dim">В разговоре камера выключена, пока сам не включишь 📷.</small>` : '<small class="ph-dim">📷 Камера в звонках пока недоступна для твоего возраста или возраст не указан (⚙️ → «🌐 Сайт» → возраст).</small>'}</div>
+        <div class="dc-err vc-note bad" hidden></div>
+      </div>`;
+      if (cam) { const v = el.querySelector('.dc-cam video'); v.srcObject = cam; v.play().catch(() => {}); }
+      if (mic) meter();
+    }
+    const err = t => { const b = el.querySelector('.dc-err'); if (b) { b.hidden = !t; b.textContent = t || ''; } };
+    function meter(){
+      const i = el.querySelector('.dc-meter i');
+      const tick = () => { if (dead || !an) return; if (i) i.style.width = Math.min(100, level(an) * 900) + '%'; raf = requestAnimationFrame(tick); };
+      tick();
+    }
+    async function startMic(){
+      stopMic();
+      try { mic = await navigator.mediaDevices.getUserMedia({ audio: micC(), video: false }); } catch (er) { err(micErr(er)); draw(); return; }
+      if (dead) { stopMic(); return; }
+      an = analyser(mic); err(''); draw();
+    }
+    async function startCam(){
+      stopCam();
+      try { cam = await navigator.mediaDevices.getUserMedia({ video: camC(), audio: false }); } catch (er) { err(camErr(er)); draw(); return; }
+      if (dead) { stopCam(); return; }
+      err(''); draw();
+    }
+    function tone(){
+      toneStop?.();
+      const ctx = P.audioCtx(); if (!ctx) return;
+      const o = ctx.createOscillator(), g = ctx.createGain(), dst = ctx.createMediaStreamDestination(), a = new Audio();
+      o.frequency.value = 660; g.gain.setValueAtTime(.0001, ctx.currentTime); g.gain.exponentialRampToValueAtTime(.25, ctx.currentTime + .05); g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + .9);
+      o.connect(g); g.connect(dst); o.start(); o.stop(ctx.currentTime + 1);
+      a.srcObject = dst.stream; setSink(a); a.volume = voiceVol(); a.play().catch(() => {});
+      toneStop = () => { try { o.stop(); } catch (er) {} a.srcObject = null; toneStop = null; };
+      setTimeout(() => toneStop?.(), 1200);
+    }
+    el.addEventListener('click', ev => {
+      const b = ev.target.closest('[data-dc-a]'); if (!b) return;
+      const k = b.dataset.dcA;
+      if (k === 'mic') { if (mic) { stopMic(); draw(); } else startMic(); }
+      else if (k === 'cam') { if (cam) { stopCam(); draw(); } else startCam(); }
+      else if (k === 'tone') tone();
+    });
+    el.addEventListener('change', ev => {
+      const s = ev.target.closest('[data-dc]'), w = ev.target.closest('[data-dc-sw]');
+      if (s) { P.set[s.dataset.dc] = s.value || ''; P.saveSet(); if (s.dataset.dc === 'micId' && mic) startMic(); if (s.dataset.dc === 'camId' && cam) startCam(); }
+      if (w) { P.set[w.dataset.dcSw] = w.checked; P.saveSet(); if (mic) startMic(); }
+    });
+    draw();
+    return () => { dead = true; stopMic(); stopCam(); toneStop?.(); };
+  };
+  if (DEVCHECK) P.define('devcheck', { render(el){ return C.deviceCheck(el); } });
+
   // ═══ Приложение «Звонки»: компания, позвонить другу, история ═══
   P.define('calls', {
     render(el, arg){
@@ -794,5 +1068,17 @@
     },
   });
 
-  C._test = { FSM, step, plan, sigOk, vad, fakeMic: f => { fakeFreq = f || 0; }, state: () => S, people };
+  C._test = { FSM, step, plan, sigOk, vad, fakeMic: f => { fakeFreq = f || 0; }, state: () => S, people, camCap,
+    net: () => { const R = S?.room; return R ? { net: R.net, peers: [...R.peers.values()].map(p => ({ state: p.state, tc: p.tc, restarts: p.restarts, tries: p.tries, route: p.route, cam: p.cam, vstream: !!p.vstream })) } : null; },
+    room: () => S?.room || null, restart: () => { const R = S?.room; for (const p of R?.peers?.values() || []) if (p.offerer) restart(R, p); },
+    // проверка «двое в одной комнате» без входа (scripts/t167-e2e.cjs): та же комната, что у компании, без пропуска (как без ч. 5)
+    party: async (code, nick, cam) => {
+      if (!/^[a-z0-9]{8,16}$/.test(code || '')) return false;
+      S = { kind: 'party', dir: 'out', state: 'idle', code, topic: 'call-' + code, title: '🎧 Проверка', at: Date.now() };
+      setState('join');
+      const r = await startRoom({ topic: S.topic, max: MAX, cam: !!cam, me: { uid: null, nick: String(nick || 'тест').slice(0, 24) } });
+      if (r.err) return r.err;
+      S.room = r.R; S.t0 = Date.now(); S.state = 'live'; armConnect(); render(); pill();
+      return true;
+    } };
 })();
