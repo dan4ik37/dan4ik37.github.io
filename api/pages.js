@@ -36,7 +36,7 @@ import map from './_lib/routes/sitemap-page.js';
 import { turnCred, extCheck } from './_lib/routes/ds2.js';   // T-167: пароли TURN Cloudflare /api/turn-cred (выключено без ключей) и проверка картинок сообществ /api/ext-check     // /sitemap — карта сайта для людей (все разделы, открытые поиску)
 
 const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, vstats, top, quiz, wheel, random, typing, ugc,
-  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, forumping: forum, photo, map, news, diag, turncred: turnCred, extcheck: extCheck };   // raid — набеги
+  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, forumping: forum, photo, map, news, turncred: turnCred, extcheck: extCheck, diag };   // raid — набеги
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];

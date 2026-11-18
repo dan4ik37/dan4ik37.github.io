@@ -60,6 +60,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const ci = read('scripts/ci-run.cjs');
     const inManifest = new Set([...ci.matchAll(/\{ f: '([^']+)'/g)].map(m => m[1]));
     const NOT_IN_CI = {   // нужны своя среда, долгие или медленные — запускаются руками
+      't167-e2e.cjs': 'два Chrome с ненастоящими камерой и микрофоном, настоящий Supabase Realtime: проверка устройств, звонок, камера, перезапуск ICE',
       't165-e2e.cjs': 'Chrome, профиль телефона (ЦП ×4), настоящий Supabase: загрузка чата, память «функции нет», история 2000, утечки 20 переходов',
       't141-e2e.cjs': 'Chrome, профиль телефона (ЦП ×4), настоящий Supabase: переходы, утечки, плеер, 10 минут чата, файлы между несколькими Chrome',
       'climate-e2e.cjs': 'Chrome, долгая (погода, 1–2 мин), снимки', 'iogames-e2e.cjs': 'Chrome, своя раздача и боты (12+ с)', 'arcade-e2e.cjs': 'Chrome, два браузера и Supabase Realtime (⚔️), 3–4 мин', 'iogames-online-e2e.cjs': 'Chrome, две вкладки, связь',
