@@ -15,7 +15,7 @@
 // The admin / test menu: ` or F10 (or ⚙), ?admin=1 shows it at load; its buttons run `app.admin(<command>)`.
 // The wardrobe menu: B (or «Гардероб» in the admin menu) — body, colours per slot, the microphone; kept in this browser.
 import init, { D37Web, ground_layer, wasm_memory_bytes } from './d37_web.js';
-import { planetJobs } from './planet-jobs.js';
+import { finishDigJob, planetJobs, terrainWorkerCount } from './planet-jobs.js';
 
 const q = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);
@@ -43,7 +43,7 @@ function fitCanvas() {
 
 // ep13-worker: where the world ticks by default — 'worker' (its own thread) or '' (this page's thread); ?world=worker
 // or ?world=main choose per page. Rollback: ''.
-const WORLD_DEFAULT = '';
+const WORLD_DEFAULT = (navigator.hardwareConcurrency || 2) >= 4 ? 'worker' : '';
 
 async function main() {
   // one compile of the module; the world Worker gets it (no second download or compile)
@@ -72,8 +72,9 @@ async function main() {
 
   // Workers: each has its own copy of the wasm and one builder (terrain columns, or planet chunks)
   const pool = [];
+  const worldWanted = (q.get('world') || WORLD_DEFAULT) === 'worker' && typeof Worker !== 'undefined' && typeof app.load_scene_remote === 'function';
   if (q.get('workers') !== '0' && typeof Worker !== 'undefined') {
-    const n = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+    const n = terrainWorkerCount(navigator.hardwareConcurrency || 2, TOUCH, worldWanted);
     for (let i = 0; i < n; i++) {
       try {
         const w = new Worker(new URL('./d37-terrain-worker.js', import.meta.url), { type: 'module' });
@@ -89,6 +90,10 @@ async function main() {
             slot.busy = false;
             try { app.push_chunk(new Uint8Array(m.bytes), m.ms); } catch (e) { fail(e); }
           }
+          if (m.type === 'dig') {
+            try { finishDigJob(app, slot, m); } catch (e) { fail(e); }
+            if (m.error) console.warn('d37 cave worker', m.error);
+          }
           if (m.type === 'scatter') {
             slot.busy = false; slot.scatter = false;
             if (m.error) console.warn('d37 scatter worker', m.error);
@@ -101,15 +106,23 @@ async function main() {
           }
           if (m.type === 'error') fail(m.error);
         };
-        w.onerror = (e) => { slot.dead = true; console.warn('d37 worker failed', e.message); };
+        w.onerror = (e) => { slot.dead = true; finishDigJob(app, slot); console.warn('d37 worker failed', e.message); };
         pool.push(slot);
       } catch (e) { console.warn('d37: no worker', e); }
     }
   }
   state.workers = pool.length;
+  const initTerrain = () => {
+    const planet = app.is_planet();
+    for (const s of pool) {
+      if (s.initialized) continue;
+      s.w.postMessage({ type: 'init', scene: sceneText, planet, module });
+      s.initialized = true;
+    }
+  };
   // ep13-worker: the world in its own thread (?world=worker); any failure falls back to this page's thread
   let ww = null;
-  if ((q.get('world') || WORLD_DEFAULT) === 'worker' && typeof Worker !== 'undefined' && typeof app.load_scene_remote === 'function') {
+  if (worldWanted) {
     let w = null;
     try {
       w = new Worker(new URL('./d37-world-worker.js', import.meta.url), { type: 'module' });
@@ -122,10 +135,18 @@ async function main() {
         };
         w.onerror = (e) => { clearTimeout(to); try { e.preventDefault(); } catch (er) { /* old event */ } rej(new Error(e.message || 'the world Worker did not load')); };
       });
-      w.postMessage({ type: 'init', scene: sceneText, save: null, module, slow: +(q.get('world_slow') || 1) });
+      const profile = q.get('world_profile') === '1';
+      w.postMessage({ type: 'init', scene: sceneText, save: null, module, profile, slow: +(q.get('world_slow') || 1) });
       app.load_scene_remote(sceneText, pool.length > 0);
+      initTerrain();
       await ready;
-      w.onmessage = (ev) => { const m = ev.data; if (m.type === 'frame') app.world_in(new Uint8Array(m.bytes)); else if (m.type === 'error') fail('world Worker: ' + m.error); };
+      if (profile) state.requestWorldProfile = () => { state.worldProfile = null; w.postMessage({ type: 'profile' }); };
+      w.onmessage = (ev) => {
+        const m = ev.data;
+        if (m.type === 'frame') app.world_in(new Uint8Array(m.bytes));
+        else if (m.type === 'profile') state.worldProfile = m.report;
+        else if (m.type === 'error') fail('world Worker: ' + m.error);
+      };
       w.onerror = (e) => fail('world Worker: ' + (e.message || 'error'));
       ww = w;
     } catch (e) {
@@ -136,11 +157,13 @@ async function main() {
   state.world = ww ? 'worker' : 'main';
   state.worldStats = () => JSON.parse(app.world_stats());
   state.memBytes = () => wasm_memory_bytes();
-  if (!ww) app.load_scene(sceneText, pool.length > 0);
+  if (!ww) {
+    app.load_scene(sceneText, pool.length > 0);
+    initTerrain();
+  }
   state.app = app;   // tests read the character's state through stats() and drive admin()
   const planet = app.is_planet();
   state.isPlanet = planet;
-  for (const s of pool) s.w.postMessage({ type: 'init', scene: sceneText, planet, module });
 
   // input: the keys held right now -> one action state
   const keys = new Set();
@@ -581,7 +604,7 @@ async function main() {
         idle = idle.slice(g.length - 1);
       }
     }
-    if (idle.length && planet) {
+    if (planet) {
       dispatchPlanetJobs(idle, state.loaded);
     } else if (idle.length) {
       const jobs = app.take_jobs(idle.length);

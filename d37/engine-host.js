@@ -13,18 +13,18 @@
 // (site-owned js/features/hub.js) talks only to the handle start() returns. Text from the engine is codes and the look
 // text; this file puts strings into the DOM with textContent only.
 import init, { D37Web, ground_layer, bridge_version, last_panic } from './d37_web.js';
-import { planetJobs } from './planet-jobs.js';
+import { finishDigJob, planetJobs, terrainWorkerCount } from './planet-jobs.js';
 
 export const BRIDGE = 1;
 const HERE = (f) => new URL('./' + f, import.meta.url).href;
-// ep13-worker: where the world ticks — 'worker' = in its own thread (web/d37-world-worker.js; the page's thread only
-// draws), '' = on the page's thread as before. o.world or the page address ?world=worker|main choose; this is the
-// build default. Rollback: ''. Any failure to start the Worker falls back to the page's thread by itself.
-const WORLD_DEFAULT = '';
-function worldWanted(o) {
+// Match the standalone page for solo play. Keep the existing default for shared worlds and the wardrobe.
+// o.world or ?world=worker|main override the default. Failure to start the Worker falls back to the page's thread.
+function worldWanted(o, studio) {
   let q = '';
   try { q = new URLSearchParams(location.search).get('world') || ''; } catch (e) { /* no address */ }
-  return (o.world || q || WORLD_DEFAULT) === 'worker';
+  const requested = o.world || q;
+  if (requested === 'worker' || requested === 'main') return requested === 'worker';
+  return !studio && !o.join && (navigator.hardwareConcurrency || 2) >= 4;
 }
 const TOUCH = () => (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 const HEX = /^[0-9a-f]{6}$/i;
@@ -122,19 +122,22 @@ export async function start(o) {
   const st = { app: null, pool: [], raf: 0, paused: false, dead: false, loaded: false, error: null, frames: 0, fps: 0, backend: '', listeners: [], keys: new Set(), inputOn: true };
   const on = (t, ev, f, opt) => { t.addEventListener(ev, f, opt); st.listeners.push([t, ev, f, opt]); };
 
-  // 1. the wasm (bytes), 2. the device, 3. the world
-  progress('wasm', 0, o.rawSize || 0);
-  const module = await compileWasm(HERE('d37_web_bg.wasm'), o.rawSize || 0, (d, t) => progress('wasm', d, t));
-  await init({ module_or_path: module });
-  if (bridge_version() !== BRIDGE) throw new Error('bridge version ' + bridge_version() + ', the page speaks ' + BRIDGE);
   const sceneName = SCENES.includes(o.scene) ? o.scene : 'planet';
   const studio = sceneName === 'wardrobe';
   // a portrait phone: the wardrobe panel takes the lower 44 % — the studio draws the character in the free part above it
   const place = () => { canvas.style.height = studio && typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches ? '56%' : '100%'; };
   place();
-  const res = await fetch(HERE('scenes/' + sceneName + '.ron'));
-  if (!res.ok) throw new Error('scene: HTTP ' + res.status);
-  const sceneText = await res.text();
+  // Fetch the scene while the WASM is downloading and compiling.
+  progress('wasm', 0, o.rawSize || 0);
+  const [module, sceneText] = await Promise.all([
+    compileWasm(HERE('d37_web_bg.wasm'), o.rawSize || 0, (d, t) => progress('wasm', d, t)),
+    fetch(HERE('scenes/' + sceneName + '.ron')).then(res => {
+      if (!res.ok) throw new Error('scene: HTTP ' + res.status);
+      return res.text();
+    }),
+  ]);
+  await init({ module_or_path: module });
+  if (bridge_version() !== BRIDGE) throw new Error('bridge version ' + bridge_version() + ', the page speaks ' + BRIDGE);
   progress('gpu', 0, 1);
   const fit = () => {
     const dpr = Math.min(window.devicePixelRatio || 1, touch ? 1.5 : 2);
@@ -154,7 +157,8 @@ export async function start(o) {
   progress('gpu', 1, 1);
 
   // Workers: each builds planet chunks / ground layers from the module compiled above
-  const nW = Math.max(0, Math.min(o.workers == null ? 4 : o.workers, touch ? 2 : 4, (navigator.hardwareConcurrency || 2) - 1));
+  const useWorldWorker = worldWanted(o, studio) && typeof Worker !== 'undefined' && typeof app.load_scene_remote === 'function';
+  const nW = terrainWorkerCount(navigator.hardwareConcurrency || 2, touch, useWorldWorker, o.workers ?? 4);
   for (let i = 0; i < nW && typeof Worker !== 'undefined'; i++) {
     try {
       const w = new Worker(HERE('d37-terrain-worker.js'), { type: 'module' });
@@ -166,23 +170,32 @@ export async function start(o) {
           if (m.type === 'ready') slot.ready = true;
           else if (m.type === 'done') { slot.busy = false; st.app.push_result(m.cx, m.cz, m.lo, m.hi, new Uint8Array(m.bytes), m.ms); }
           else if (m.type === 'chunk') { slot.busy = false; st.app.push_chunk(new Uint8Array(m.bytes), m.ms); }
+          else if (m.type === 'dig') { finishDigJob(st.app, slot, m); if (m.error) console.warn('d37 cave worker', m.error); }
           else if (m.type === 'ground') { slot.busy = false; slot.ground = false; st.app.push_ground(new Uint8Array(m.bytes)); }
           // fly-hitch: a scatter LOD tile built off the page's thread (an error is looks only: logged, not fatal)
           else if (m.type === 'scatter') { slot.busy = false; slot.scatter = false; if (m.error) console.warn('d37 scatter worker', m.error); else st.app.push_scatter(new Uint8Array(m.bytes)); }
           else if (m.type === 'error') { slot.dead = true; emit({ t: 'error', code: 'worker', msg: String(m.error).slice(0, 200) }); }
         } catch (e) { fail('worker-result', e); }
       };
-      w.onerror = () => { slot.dead = true; };
+      w.onerror = () => { slot.dead = true; if (st.app) finishDigJob(st.app, slot); };
       st.pool.push(slot);
     } catch (e) { /* no Worker: built on this thread */ }
   }
+  const initTerrain = () => {
+    const planet = app.is_planet();
+    for (const s of st.pool) {
+      if (s.initialized) continue;
+      s.w.postMessage({ type: 'init', scene: sceneText, planet, module });
+      s.initialized = true;
+    }
+  };
   // a save made earlier: the world starts where it was made (refused saves are reported, the world starts fresh)
   if (o.save && o.save.length) {
     try { emit({ t: 'resumed', summary: JSON.parse(app.load_save(o.save)) }); } catch (e) { emit({ t: 'error', code: 'save', msg: String(e).slice(0, 200) }); }
   }
   // ep13-worker: the world in its own thread; the Worker builds its world while this thread makes the renderer's
   let ww = null;
-  if (worldWanted(o) && typeof Worker !== 'undefined' && typeof app.load_scene_remote === 'function') {
+  if (useWorldWorker) {
     let w = null;
     try {
       w = new Worker(HERE('d37-world-worker.js'), { type: 'module' });
@@ -197,6 +210,7 @@ export async function start(o) {
       });
       w.postMessage({ type: 'init', scene: sceneText, save: o.save && o.save.length ? o.save : null, module });
       app.load_scene_remote(sceneText, st.pool.length > 0);
+      initTerrain();
       await ready;
       w.onmessage = (ev) => {
         const m = ev.data;
@@ -215,7 +229,10 @@ export async function start(o) {
   }
   st.worldWorker = ww;
   st.world = ww ? 'worker' : 'main';
-  if (!ww) app.load_scene(sceneText, st.pool.length > 0);
+  if (!ww) {
+    app.load_scene(sceneText, st.pool.length > 0);
+    initTerrain();
+  }
   const planet = app.is_planet();
   // EP7 the game layer (a scene with a `game` block): the HUD is drawn and hit tested by the engine; this glue only
   // forwards keys / pointers (the same rules as the engine's page d37-page.js). Its save rides in save() (GAME section).
@@ -253,7 +270,6 @@ export async function start(o) {
   // W9 keys: our own release of the pointer lock (a menu, the wardrobe) is not the player's Esc
   let selfRelease = false, hadLock = false, pauseAt = -1e9;
   const unlock = () => { if (document.pointerLockElement === canvas) { selfRelease = true; try { document.exitPointerLock(); } catch (e) { /* gone */ } } };
-  for (const s of st.pool) s.w.postMessage({ type: 'init', scene: sceneText, planet, module });
   const send = (m) => {
     if (!st.app) return false;
     try { st.app.host_in(JSON.stringify(Object.assign({ v: BRIDGE }, m))); return true; } catch (e) { emit({ t: 'error', code: 'host_in', msg: String(e).slice(0, 200) }); return false; }

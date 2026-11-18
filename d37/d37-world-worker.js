@@ -37,6 +37,7 @@ onmessage = async (ev) => {
       // the page passes the module it compiled already: no second download or compile
       await init({ module_or_path: m.module || new URL('./d37_web_bg.wasm', import.meta.url) });
       world = new WorldWorker(m.scene, m.save && m.save.length ? m.save : new Uint8Array(0));
+      if (m.profile) world.set_profile(true);
       if (m.slow > 1) world.set_slow(m.slow);   // tests: a phone emulation's CPU factor (DevTools cannot throttle Workers)
       wake();
     } catch (e) { fail(e); }
@@ -47,6 +48,8 @@ onmessage = async (ev) => {
       // a stepped run (tests): tick at once instead of on the clock
       if (world.stepped()) { clearTimeout(timer); wake(); }
     } catch (e) { fail(e); }
+  } else if (m.type === 'profile' && world) {
+    postMessage({ type: 'profile', report: world.profile() });
   } else if (m.type === 'pause') {
     // the host page paused the game (a sheet over it, the tab): no ticks until it resumes (time is dropped, as on
     // the page's thread)

@@ -1,4 +1,4 @@
-> **17 November browser engine.** See the [performance handoff](docs/D37_BROWSER_PERF_HANDOFF.md) for the preview build, regressions and the next implementation step.
+> **18 November browser engine.** See the [performance handoff](docs/D37_BROWSER_PERF_HANDOFF.md) for build `4bea8e710c`, the engine worktree, open checks and the first server optimisation task.
 
 > OWNER 11.11 (binding, read first): everything new is Rust only, in ONE engine — cargo workspace E:\d37-engine on d37-core / d37-terrain, native + browser (wasm) from one code path, built agent-first (one headless CLI `d37`, text sources, PNG shots + diff, replay). Unity is frozen (crash / save loss only). Own character model + animation (d37-anim). Charter and order E0–E5: E:\d37-core\spec\ENGINE_ONE.md. On this site: no new JS simulation and no new three.js render features — JS is page glue and UI; existing games keep running.
 

@@ -13,6 +13,15 @@ const pending = [];
 
 function run(m) {
   const t0 = performance.now();
+  if (m.type === 'dig') {
+    try {
+      const bytes = builder.build_dig(new Uint8Array(m.bytes));
+      postMessage({ type: 'dig', ticket: m.ticket, bytes: bytes.buffer, ms: performance.now() - t0 }, [bytes.buffer]);
+    } catch (e) {
+      postMessage({ type: 'dig', ticket: m.ticket, error: String(e) });
+    }
+    return;
+  }
   if (m.type === 'scatter') {
     let b;
     try {
@@ -50,7 +59,7 @@ onmessage = async (ev) => {
       if (m.planet) builder = new PlanetWorker(m.scene); else mesher = new ColumnWorker(m.scene);
       postMessage({ type: 'ready' });
       while (pending.length) run(pending.shift());
-    } else if (m.type === 'job' || m.type === 'chunk' || m.type === 'ground' || m.type === 'scatter') {
+    } else if (m.type === 'job' || m.type === 'chunk' || m.type === 'ground' || m.type === 'scatter' || m.type === 'dig') {
       if (mesher || builder) run(m); else pending.push(m);
     }
   } catch (e) {
