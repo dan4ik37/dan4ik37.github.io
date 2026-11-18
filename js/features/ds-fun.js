@@ -50,6 +50,7 @@
     const d = r.data?.ok ? { manage: !!r.data.manage, list: r.data.list || [] } : null;
     if (d) d.list.forEach(m => { if (m.status === 'ok' && m.kind === 'emoji' && IMG_RE.test(m.data || '')) MEDIA.set(+m.id, m); });
     LIST.set(k, { at: Date.now(), d });
+    if (EXT_PICS && !srv?.official) extList(srv);   // T-167: картинки с сервера сообщества (выключено)
     return d;
   }
   const want = new Set(); let wantT = 0;
@@ -71,8 +72,63 @@
     });
     if (want.size) flush();
   }
+  // ═══ T-167 🖼 Картинки с сервера самого сообщества (владелец 19.11: «делали у себя мини сервер… но сервер это проверял»).
+  //  ВЫКЛЮЧЕНО: EXT_PICS = false (и на сервере site_config 'ext_media' <> 'on'). Решения владельца — в отчёте T-167.
+  //  Реестр (community.sql ч. 15, cf_ext_*): адрес, sha-256, размер, ширина/высота, тип; наш сервер проверил файл (api/_lib/routes/ds2.js),
+  //  человек из команды сайта одобрил. Браузер: только участник, открывший сообщество, и только после согласия («сервер сообщества
+  //  увидит твой адрес в сети»); качает без cookies и referrer, без перенаправлений, сверяет sha-256 — не совпало (файл подменили) —
+  //  картинки нет, остаётся :имя:. Показ — только из blob: (не по чужому адресу). Гостям и на открытых страницах — никогда.
+  const EXT_PICS = false;
+  const XM = new Map();   // id → { id, name, kind, url, sha256, bytes, mime, src, st: 'wait' | 'ok' | 'bad' }
+  const XL = new Map();   // id сообщества → { at, d }
+  const extOk = cid => !!LS('d37_ext_ok', {})[cid];
+  async function extList(srv, fresh){
+    if (!EXT_PICS || srv?.official || !P.me()) return null;
+    const cid = cidOf(srv), c = XL.get(cid);
+    if (c && !fresh && Date.now() - c.at < 120e3) return c.d;
+    const r = await P.rpc('cf_ext_list', { p_cid: cid });
+    const d = r.data?.ok ? r.data : null;
+    XL.set(cid, { at: Date.now(), d });
+    if (d) (d.list || []).forEach(x => { if (x.status === 'approved' && /^[0-9a-f]{64}$/.test(x.sha256 || '') && !XM.has(+x.id)) XM.set(+x.id, Object.assign({ st: 'wait', src: '' }, x, { id: +x.id })); });
+    if (d && (d.list || []).some(x => x.status === 'approved') && LS('d37_ext_ok', {})[cid] === undefined) extAsk(srv, d);
+    else if (d && extOk(cid)) extLoadAll();
+    return d;
+  }
+  async function extAsk(srv, d){
+    const hosts = (d.hosts || []).map(h => e(h)).join(', ');
+    const k = await sheet('🖼 Картинки сообщества', `<p>Свои эмодзи и стикеры этого сообщества лежат на его сервере (${hosts}). Чтобы их показать, твой браузер скачает их оттуда — <b>этот сервер увидит твой адрес в сети</b> (как любой сайт). Картинки проверены командой сайта; подменённый файл не покажется.</p><button type="button" class="ds4-wide ds4-go" data-v="yes">Показывать</button><button type="button" class="ds4-wide" data-v="no">Не показывать</button>`);
+    if (k !== 'yes' && k !== 'no') return;
+    LSset('d37_ext_ok', Object.assign(LS('d37_ext_ok', {}), { [cidOf(srv)]: k === 'yes' }));
+    if (k === 'yes') extLoadAll();
+  }
+  const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  async function extVerify(it){
+    if (it.st !== 'wait') return;
+    it.st = 'load';
+    const ac = new AbortController(), t = setTimeout(() => ac.abort(), 6000);
+    try {
+      const r = await fetch(it.url, { mode: 'cors', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', cache: 'force-cache', signal: ac.signal });
+      if (!r.ok) throw new Error('http');
+      const buf = await r.arrayBuffer();
+      if (buf.byteLength !== +it.bytes || hex(await crypto.subtle.digest('SHA-256', buf)) !== it.sha256) throw new Error('hash');
+      it.src = URL.createObjectURL(new Blob([buf], { type: it.mime }));
+      it.st = 'ok';
+    } catch (er) { it.st = 'bad'; }
+    clearTimeout(t);
+    document.querySelectorAll(`img[data-dsx="${it.id}"]`).forEach(img => { if (it.st === 'ok') { img.src = it.src; img.hidden = false; } else img.replaceWith(document.createTextNode(':' + it.name + ':')); });
+  }
+  function extLoadAll(){ for (const it of XM.values()) if (it.st === 'wait') extVerify(it); }
+  X.extVerify = extVerify;   // для проверки (scripts/t167-e2e.cjs)
+  X.extPics = () => EXT_PICS;
+
   // MsgView рисует :ce_<id>: и :stk_<id>: (крючок в msgview.js emojiImg). Только наши номера, только data:image
   MV.emojiHook = name => {
+    const xm = EXT_PICS && /^xe_(\d{1,12})$/.exec(name);
+    if (xm) {   // T-167: картинка сообщества — только из blob: после сверки хеша
+      const it = XM.get(+xm[1]);
+      if (!it) return `:${e(name)}:`;
+      return `<img class="${it.kind === 'sticker' ? 'dsf-stk' : 'custom-emoji-img inline-emoji dsf-emo'}" data-dsx="${+it.id}"${it.st === 'ok' && /^blob:/.test(it.src) ? ` src="${e(it.src)}"` : ' hidden'} alt=":${e(it.name)}:" title=":${e(it.name)}:" decoding="async">`;
+    }
     const m = /^(ce|stk)_(\d{1,12})$/.exec(name); if (!m) return null;
     const id = +m[2], it = MEDIA.get(id), stk = m[1] === 'stk';
     if (!it) fetchSoon(id);
@@ -85,7 +141,8 @@
   const toIds = (text, srv) => {
     const d = LIST.get(skey(srv))?.d; if (!d || !text.includes(':')) return text;
     const by = new Map(d.list.filter(m => m.kind === 'emoji' && m.status === 'ok').map(m => [m.name, m.id]));
-    return text.replace(/:([a-z0-9_]{2,24}):/g, (all, n) => (by.has(n) ? `:ce_${by.get(n)}:` : all));
+    if (EXT_PICS && !srv?.official) for (const it of XM.values()) if (it.kind === 'emoji' && !by.has(it.name)) by.set(it.name, 'x' + it.id);
+    return text.replace(/:([a-z0-9_]{2,24}):/g, (all, n) => { const v = by.get(n); return v === undefined ? all : String(v)[0] === 'x' ? `:xe_${String(v).slice(1)}:` : `:ce_${v}:`; });
   };
   const wrap0 = X.wrapAdapter;
   X.wrapAdapter = (A0, srv, ch) => {
@@ -449,6 +506,7 @@
         ${m.manage ? `<div class="ds-row dsf-up"><input class="ds-in ds-sm" data-fm="name" data-k="${k}" maxlength="24" placeholder="имя (латиница)" aria-label="Имя"><label class="ds-btn ghost ds-sm">📁 Файл<input type="file" hidden data-fm="file" data-k="${k}" accept="${k === 'sound' ? 'audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4,audio/aac' : 'image/png,image/webp,image/jpeg,image/gif'}"></label><span class="ds-dim" data-fm="msg" data-k="${k}" role="status"></span></div>` : ''}</div>`; }).join('')}
       <div class="ds-sect"><b>🔉 Звуки у меня</b><div class="ds-row"><label class="dsf-vol">Громкость<input type="range" min="0" max="100" value="${Math.round(s.vol * 100)}" data-fm="vol"></label><label><input type="checkbox" data-fm="off"${s.off ? ' checked' : ''}> не слышать звуки панели</label></div></div>`;
     body.oninput = ev => { const r = ev.target.closest('[data-fm="vol"]'); if (r) LSset('d37_ds_sb', Object.assign(SB(), { vol: +r.value / 100 })); };
+    extSection(body, srv);
     body.onchange = async ev => {
       const t = ev.target;
       if (t.dataset.fm === 'off') { LSset('d37_ds_sb', Object.assign(SB(), { off: t.checked })); return; }
@@ -475,6 +533,36 @@
         MEDIA.delete(+b.dataset.id); mediaList(srv, true).then(d => tabMedia(body, srv, d));
       }
     };
+  }
+  // T-167: «🌐 С сервера сообщества» — узлы, адрес картинки, статусы проверки (только при EXT_PICS)
+  const XST = { checking: '🔎 проверяем файл…', pending: '⏳ ждёт проверки командой сайта', approved: '✅ одобрено', rejected: '❌ отклонено', broken: '⚠️ файл не подошёл' };
+  async function extSection(body, srv){
+    if (!EXT_PICS || srv.official) return;
+    const d = await extList(srv, true); if (!d || !body.isConnected) return;
+    const box = document.createElement('div'); box.className = 'ds-sect dsf-ext';
+    box.innerHTML = `<b>🌐 С сервера сообщества</b> <span class="ds-dim">картинки лежат у вас, сайт проверяет файл и запоминает его отпечаток — подменённый файл не покажется. Как сделать свой мини-сервер — docs/ext-pics-server.md.</span>
+      <div class="dsf-mlist">${(d.list || []).map(x => `<div class="dsf-mi"><span>:${e(x.name)}: <small>${e(XST[x.status] || x.status)}${x.why ? ' — ' + e(x.why) : ''}</small></span></div>`).join('') || '<div class="ds-dim">Пока нет.</div>'}</div>
+      ${d.manage ? `<div class="ds-row"><input class="ds-in ds-sm" data-xe="hosts" maxlength="200" value="${e((d.hosts || []).join(', '))}" placeholder="узлы через запятую: pics.example.com" aria-label="Узлы"><button type="button" class="ds-btn ghost ds-sm" data-xe="savehosts">Сохранить узлы</button></div>
+      <div class="ds-row"><input class="ds-in ds-sm" data-xe="name" maxlength="32" placeholder="имя (латиница)" aria-label="Имя"><input class="ds-in ds-sm" data-xe="url" maxlength="300" placeholder="https://…/smile.png" aria-label="Адрес картинки"><select data-xe="kind" aria-label="Вид"><option value="emoji">эмодзи</option><option value="sticker">стикер</option></select><button type="button" class="ds-btn ds-sm" data-xe="add">Добавить</button></div><small class="ds-dim" data-xe="msg"></small>` : ''}`;
+    body.appendChild(box);
+    box.addEventListener('click', async ev => {
+      const b = ev.target.closest('[data-xe]'); if (!b || b.tagName !== 'BUTTON') return;
+      const msg = box.querySelector('[data-xe="msg"]'), v = k => box.querySelector(`[data-xe="${k}"]`)?.value || '';
+      if (b.dataset.xe === 'savehosts') {
+        const r = await P.rpc('cf_ext_hosts_set', { p_cid: cidOf(srv), p_hosts: v('hosts').split(/[\s,]+/).filter(Boolean) });
+        msg.textContent = r.data?.ok ? '✅ Узлы сохранены' : '⚠️ ' + ({ host: 'узел не подходит: ' + (r.data?.host || ''), many: 'не больше 3 узлов' }[r.data?.reason] || why(r));
+      } else if (b.dataset.xe === 'add') {
+        const r = await P.rpc('cf_ext_add', { p_cid: cidOf(srv), p_kind: v('kind'), p_name: v('name').toLowerCase(), p_url: v('url').trim() });
+        if (!r.data?.ok) { msg.textContent = '⚠️ ' + ({ host: 'адрес не на разрешённом узле', url: 'нужен адрес https://…', dup: 'такое имя уже есть', many: 'не больше 50', rate: 'не больше 10 в день', bad: 'имя — латиница, цифры, _' }[r.data?.reason] || why(r)); return; }
+        msg.textContent = '🔎 Проверяем файл…';
+        try {
+          const tok = (await sbClient.auth.getSession())?.data?.session?.access_token;
+          const j = await (await fetch('/api/ext-check?id=' + (+r.data.id), { method: 'POST', headers: { Authorization: 'Bearer ' + tok } })).json();
+          msg.textContent = j.ok ? '✅ Файл подошёл — ждёт проверки командой сайта' : '⚠️ ' + (j.reason || 'не подошёл');
+        } catch (er) { msg.textContent = '⚠️ проверка не ответила — попробуй позже'; }
+      } else return;
+      setTimeout(() => { box.remove(); extSection(body, srv); }, 900);
+    });
   }
   // картинка → квадрат до size px (webp; нет webp — png), ужимаем качество, пока не влезет в max знаков. EXIF и анимация пропадают
   async function prepImage(file, size, max){

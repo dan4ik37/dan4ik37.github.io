@@ -23,8 +23,28 @@
   C.hideIp = () => HIDE_IP && (P.set.hide === 'on' || ((P.set.hide || 'auto') === 'auto' && kidsRealm()));
   const turnList = () => (Array.isArray(window.D37_TURN) ? window.D37_TURN : []).filter(s => [].concat(s?.urls || []).some(u => /^turns?:/i.test(String(u))));
   C.relayOk = () => turnList().length > 0;
+  // T-167: TURN Cloudflare Realtime через наш сервер (/api/turn-cred). Выключено, пока владелец не задаст ключи в Vercel — тогда сервер
+  // отвечает { off: true } и мы 30 минут не спрашиваем. Свой TURN (D37RT, window.D37_TURN) — главнее. Откат: TURN_CF = false.
+  const TURN_CF = true, cfT = { at: 0, p: null, exp: 0 };
+  function cfTurn(){
+    if (!TURN_CF || (Array.isArray(window.D37_TURN) && window.D37_TURN.length && !cfT.mine) || typeof sbClient === 'undefined') return Promise.resolve();
+    if (cfT.p) return cfT.p;
+    if (Date.now() < cfT.at || (cfT.mine && Date.now() < cfT.exp)) return Promise.resolve();
+    cfT.p = (async () => {
+      try {
+        const tok = (await sbClient.auth.getSession())?.data?.session?.access_token; if (!tok) { cfT.at = Date.now() + 60e3; return; }
+        const r = await fetch('/api/turn-cred', { headers: { Authorization: 'Bearer ' + tok }, cache: 'no-store' });
+        const j = r.ok ? await r.json() : null;
+        if (!j?.ok || !Array.isArray(j.iceServers) || !j.iceServers.length) { cfT.at = Date.now() + 30 * 60e3; return; }
+        if (window.D37_TURN === undefined || window.D37_TURN === cfT.mine) { window.D37_TURN = j.iceServers; cfT.mine = j.iceServers; cfT.exp = Date.now() + (j.ttl || 3600) * 1000 - 5 * 60e3; }
+      } catch (er) { cfT.at = Date.now() + 5 * 60e3; }
+      finally { cfT.p = null; }
+    })();
+    return cfT.p;
+  }
   // перед входом в комнату: адрес скрываем, а пароли TURN ещё не пришли — попросить и подождать до 4 с
   async function ensureRelay(){
+    if (TURN_CF) await Promise.race([cfTurn(), new Promise(r => setTimeout(r, 1500))]);
     if (!C.hideIp() || C.relayOk()) return;
     try { window.D37RT?.prefetchTurn?.(); window.D37RT?.ice?.(); } catch (er) {}
     for (let i = 0; i < 20 && !C.relayOk(); i++) await new Promise(r => setTimeout(r, 200));
@@ -147,7 +167,7 @@
   // ═══ Комната голоса: присутствие + знакомство + сетка WebRTC ═══
   // opt: { topic, max, me: { uid, nick }, verify(meta) → Promise<{ uid, nick } | null>, stream, onChange(), onFull(), onEmpty(), onError(text), onDecline() }
   async function openRoom(opt){
-    if (!opt.observe) await ensureRelay();
+    if (!opt.observe) await ensureRelay(); else cfTurn();
     const keys = await myKeys();
     const myKey = (opt.me.uid || 'g') + '~' + rid(6);
     const R = { opt, myKey, keys, members: new Map(), verified: new Map(), pubs: new Map(), peers: new Map(), early: new Map(), stream: opt.stream,
