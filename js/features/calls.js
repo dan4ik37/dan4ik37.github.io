@@ -803,8 +803,8 @@
     const ps = people(), R = S.room;
     const bad = S.netWarn || ps.some(p => p.state === 'fail');
     const max = R?.opt?.max || MAX, off = NETFIX && navigator.onLine === false;
-    return `<div class="vc"><div class="vc-head"><b>${e(S.title)}</b><small>${S.t0 ? clock() + ' · ' : ''}${ps.length} из ${max}</small></div>
-      ${S.full ? `<div class="vc-note bad">👥 Канал заполнен (${max} из ${max}) — подожди, пока кто-нибудь выйдет.</div>` : ''}
+    return `<div class="vc"><div class="vc-head"><b>${e(S.title)}</b><small>${S.t0 ? clock() + ' · ' : ''}${ps.length} из ${+max}</small></div>
+      ${S.full ? `<div class="vc-note bad">👥 Канал заполнен (${+max} из ${+max}) — подожди, пока кто-нибудь выйдет.</div>` : ''}
       ${off ? '<div class="vc-note bad">📡 Нет интернета — разговор вернётся сам, как только связь появится.</div>' : ''}
       ${S.kidBlocked ? `<div class="vc-note bad">${e(kidMsg(S.kidBlocked === 'u9' ? 'u9' : 'agecall'))}</div>` : ''}
       ${bad ? `<div class="vc-note bad">${TURN_NOTE_FN()}</div>` : privHtml()}
@@ -1068,5 +1068,15 @@
 
   C._test = { FSM, step, plan, sigOk, vad, fakeMic: f => { fakeFreq = f || 0; }, state: () => S, people, camCap,
     net: () => { const R = S?.room; return R ? { net: R.net, peers: [...R.peers.values()].map(p => ({ state: p.state, tc: p.tc, restarts: p.restarts, tries: p.tries, route: p.route, cam: p.cam, vstream: !!p.vstream })) } : null; },
-    room: () => S?.room || null, restart: () => { const R = S?.room; for (const p of R?.peers?.values() || []) if (p.offerer) restart(R, p); } };
+    room: () => S?.room || null, restart: () => { const R = S?.room; for (const p of R?.peers?.values() || []) if (p.offerer) restart(R, p); },
+    // проверка «двое в одной комнате» без входа (scripts/t167-e2e.cjs): та же комната, что у компании, без пропуска (как без ч. 5)
+    party: async (code, nick, cam) => {
+      if (!/^[a-z0-9]{8,16}$/.test(code || '')) return false;
+      S = { kind: 'party', dir: 'out', state: 'idle', code, topic: 'call-' + code, title: '🎧 Проверка', at: Date.now() };
+      setState('join');
+      const r = await startRoom({ topic: S.topic, max: MAX, cam: !!cam, me: { uid: null, nick: String(nick || 'тест').slice(0, 24) } });
+      if (r.err) return r.err;
+      S.room = r.R; S.t0 = Date.now(); S.state = 'live'; armConnect(); render(); pill();
+      return true;
+    } };
 })();

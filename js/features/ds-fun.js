@@ -115,7 +115,7 @@
       it.st = 'ok';
     } catch (er) { it.st = 'bad'; }
     clearTimeout(t);
-    document.querySelectorAll(`img[data-dsx="${it.id}"]`).forEach(img => { if (it.st === 'ok') { img.src = it.src; img.hidden = false; } else img.replaceWith(document.createTextNode(':' + it.name + ':')); });
+    document.querySelectorAll(`img[data-dsx="${it.id}"]`).forEach(img => { if (it.st === 'ok' && /^blob:/.test(it.src)) { img.src = it.src; img.hidden = false; } else img.replaceWith(document.createTextNode(':' + it.name + ':')); });
   }
   function extLoadAll(){ for (const it of XM.values()) if (it.st === 'wait') extVerify(it); }
   X.extVerify = extVerify;   // для проверки (scripts/t167-e2e.cjs)
