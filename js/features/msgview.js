@@ -438,7 +438,7 @@
     const nearBottom = () => list.scrollHeight - list.scrollTop - list.clientHeight < 80;
     function toBottom(){ list.scrollTop = list.scrollHeight; V.atBottom = true; V.newCount = 0; downBtn(); markRead(); }
     function downBtn(){
-      const b = q('.mv-down');
+      const b = q('.mv-down'); if (!b) return;   // T-165: лента уже закрыта (прокрутка пришла после destroy)
       const divEl = list.querySelector('.mv-new');
       const far = list.scrollHeight - list.scrollTop - list.clientHeight > list.clientHeight * 1.5;   // листает историю далеко — тоже «↓»
       const show = !V.atBottom && (V.newCount > 0 || !!divEl || far);
@@ -451,6 +451,7 @@
       if (typeof last === 'number') MV.markRead(V.A.key, last);
     }
     list.addEventListener('scroll', () => {
+      if (V.destroyed) return;
       V.atBottom = nearBottom();
       if (V.atBottom) { V.newCount = 0; markRead(); }
       downBtn();

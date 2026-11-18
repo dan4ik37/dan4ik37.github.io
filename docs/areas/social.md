@@ -136,3 +136,16 @@
   to newcomers, d37_ds_rules), welcome text, default channel (cm_server_get / cm_server_set / cm_chan_extra; audit log rows).
   Site server ⚙️ also shows the invite link and the site roles. Without part 10 on the server everything works as before.
 - Tests: scripts/chat-settings-sql-test.mjs (PGlite, 36), scripts/t162-e2e.cjs (headless Chrome, 20; fails 5 on old code).
+
+## T-165 (18.11.2026, branch t165-ds) — speed, quiet console, daily hook (English, short)
+- Server fact 18.11 (REST as guest): community.sql parts 11–14 (T-164: mod_reports, dsm_info, ds_card, cf_server_get) are NOT applied —
+  PGRST202. All T-164 screens stay hidden / fall back to the old ones until the owner runs them.
+- phone.js `P.need`: chat modules download in parallel, execute in order (`s.async = false`; flag `PAR_LOAD`). `P.rpc` remembers PGRST202
+  per function for 3 h (localStorage d37_rpc_miss, reset by a new VER; flag `RPC_MISS`; `P.rpcForget()`) — no 404 lines on every visit.
+- msgview: older history is prepended (no full re-render per page; flag `PREPEND`), `content-visibility:auto` on all but the last 40
+  messages (ds.css); a file message no longer repeats «📎 name · size» above its card — only the caption (flag `FILE_TEXT`).
+  Phone: image / video thumbs ≤ 45vh.
+- community.js: «👥 N» online count on the members button in the channel header (flag `ONLINE_CHIP`).
+- api/push-check.js: «❓ Вопрос дня» — the bot posts one question into #общий daily from 12:00 Almaty (bot_posts key dq:<date>);
+  site_config 'daily_q' = JSON array of strings or 'off'; flag `DAILY_Q_ON`.
+- Test: scripts/t165-e2e.cjs (headless Chrome, phone profile).
