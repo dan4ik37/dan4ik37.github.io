@@ -377,6 +377,8 @@
     } else if (d.t === 'answer') {
       const p = R.peers.get(from); if (!p || !p.offerer || p.sid !== d.sid) return;
       try { await p.pc.setRemoteDescription(d.sdp); for (const c of p.pend.splice(0)) await p.pc.addIceCandidate(c).catch(() => {}); } catch (er) {}
+      // T-167: перезапуск ICE на живом соединении — состояние так и остаётся «connected», события не будет: отмечаем сами
+      if (p.state === 'reconnect' && p.pc.connectionState === 'connected') { p.state = 'ok'; p.restarts = 0; clearTimeout(p.timer); R.changed(); routeOf(R, p); }
     } else if (d.t === 'ice') {
       const p = R.peers.get(from);
       if (!p || p.sid !== d.sid) { const k = from + '/' + d.sid, l = R.early.get(k) || []; if (l.length < 80) R.early.set(k, l.concat(d.c)); return; }

@@ -83,7 +83,7 @@ const READY = `typeof sbClient !== 'undefined' && !!window.D37Phone && document.
     ok(await A.ev(`window.__trk.filter(t => t.readyState === 'live').length`) === 0, '20 раз открыть / закрыть проверку — ни одной включённой дорожки', await A.ev(`window.__trk.length`));
     // 2) двое в одной комнате
     const code = 't167' + Math.random().toString(36).slice(2, 10).replace(/[^a-z0-9]/g, 'a');
-    await Promise.all([A.ev(`D37Phone.need('calls'), 1`), B.ev(`D37Phone.need('calls'), 1`)]);
+    await Promise.all([A.ev(`D37Phone.need('calls').then(() => 1)`), B.ev(`D37Phone.need('calls').then(() => 1)`)]);
     const t0 = Date.now();
     const [ra, rb] = await Promise.all([A.ev(`D37Calls._test.party(${JSON.stringify(code)}, 'Телефон', true)`), B.ev(`D37Calls._test.party(${JSON.stringify(code)}, 'Компьютер', true)`)]);
     ok(ra === true && rb === true, 'оба вошли в комнату', [ra, rb]);
