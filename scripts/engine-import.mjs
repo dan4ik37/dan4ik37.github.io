@@ -34,6 +34,23 @@ let html = fs.readFileSync(idx, 'utf8');
 if (!/<base href=/.test(html)) { html = html.replace(/(<meta charset="utf-8">\r?\n)/, '$1<base href="/d37/">\n'); fs.writeFileSync(idx, html); }
 const id = crypto.createHash('sha256').update(wasm).update(glue).update(fs.readFileSync(hostSrc)).digest('hex').slice(0, 10);
 const bridge = +((/export const BRIDGE = (\d+)/.exec(fs.readFileSync(hostSrc, 'utf8')) || [])[1] || 0);
-const info = { id, bridge, wasm_raw: wasm.length, made: new Date().toISOString(), files: copied };
+// T-166: таблица ключей настроек этой сборки — d37-config/keys.json (её читает scripts/engine-config-test.cjs) и справочник
+// d37-config/REFERENCE.md; оба делает сам wasm (config_dump_json / config_dump_md), руками не правим. Сборка без EP14-config — пропуск.
+// Все игры переходят на новый движок этим одним импортом в d37/ (их файлы в /d37-config/ не трогаются); вернуть одну игру — строка
+// "engine": { "channel": "preview" } или { "build": "<id>" } в её /d37-config/games/<id>.json (docs/D37_CONFIG.md).
+let configBuild = 0;
+if (/export function config_dump_json\b/.test(glue)) {
+  const { pathToFileURL } = await import('node:url');
+  const mod = await import(pathToFileURL(path.join(out, 'd37_web.js')).href);
+  await mod.default({ module_or_path: wasm });
+  const table = mod.config_dump_json();
+  configBuild = JSON.parse(table).build | 0;
+  const cfgDir = path.join(site, 'd37-config');
+  fs.mkdirSync(path.join(cfgDir, 'games'), { recursive: true });
+  fs.writeFileSync(path.join(cfgDir, 'keys.json'), table);
+  fs.writeFileSync(path.join(cfgDir, 'REFERENCE.md'), mod.config_dump_md());
+  console.log(`engine-import: d37-config/keys.json и REFERENCE.md — таблица ключей поколения ${configBuild}`);
+}
+const info = { id, bridge, config_build: configBuild, wasm_raw: wasm.length, made: new Date().toISOString(), files: copied };
 fs.writeFileSync(path.join(out, 'build.json'), JSON.stringify(info, null, 1) + '\n');
 console.log(`engine-import: d37/ ← ${dist} (id ${id}, мост v${bridge}, wasm ${(wasm.length / 1048576).toFixed(2)} МБ, файлов ${Object.keys(copied).length})`);

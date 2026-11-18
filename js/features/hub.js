@@ -11,6 +11,12 @@
 // Мир: байты сохранения движка (D37S v1: место, время, образ + разделы игры) — IndexedDB 'd37-hub' (браузер главный), вошёл — копия в
 // облаке D37Cloud (ugc.sql cloud_saves, игра 'engine', мир 'planet'; пределы — cloud_rule на сервере). Ошибки движка — d37Err (errlog).
 // Откат — HUB_ON = false. Тест: node scripts/hub-e2e.cjs (настоящий Chrome: меню, игра, образ после перезагрузки — гость и вход).
+// T-166 (владелец 18.11: «игры должны автоматически подхватывать новые настройки движка… и мы могли спокойно что-то поменять»): игра —
+// маленький пакет данных /d37-config/games/<id>.json (id, сцена, канал движка stable / preview или закреплённая сборка, свои отличия
+// настроек) поверх ОДНОЙ папки движка; общие настройки — /d37-config/engine.json; строка site_config 'engine_config' — только при
+// HUB_CONFIG_LIVE (js/core/config.js, выкл.). Файлы читает engine-host.js параллельно с wasm, проверяет таблица ключей движка.
+// Как менять — docs/D37_CONFIG.md. Вылет движка: сообщение и «Перезагрузить» рисует engine-host.js, отчёт — d37Err, сохранение после
+// вылета не пишется.
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   if (root.D37Hub) return;
@@ -95,6 +101,51 @@
   // (и /play/d37?join=<КОД>) открывает мир с этим кодом. NET_URL — адрес сервера (wss://…: сайт на https); '' — сервер ещё
   // не включён: игра идёт в своём мире и говорит об этом. Откат — NET_URL = ''.
   const NET_URL = '';
+  // T-166: какая игра (пакет данных /d37-config/games/<id>.json) и на каком движке. Канал stable = HUB_ENGINE (/d37/), preview =
+  // /d37-preview/; engine.build — закреплённая сборка (ищется в stable, preview, /d37-builds/<id>/; нет — stable и отчёт).
+  const CFG_DIR = '/d37-config/';
+  const CHANNELS = { stable: () => BASE(), preview: () => '/d37-preview/' };
+  const gameId = (mode, opt) => opt === 'klet' ? 'klet' : mode === 'play' ? 'valley' : mode === 'planet' ? 'creative' : mode;
+  const cfgLive = () => { try { return typeof HUB_CONFIG_LIVE !== 'undefined' && !!HUB_CONFIG_LIVE; } catch (e) { return false; } };
+  async function getText(url, ms){
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const to = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, ms || 2500);
+    try { const r = await fetch(url, { cache: 'no-cache', signal: ctl ? ctl.signal : undefined }); return r.ok ? await r.text() : null; } catch (e) { return null; } finally { clearTimeout(to); }
+  }
+  // строка владельца site_config 'engine_config' (тот же формат, что у файлов) — мгновенно, без выкладки; только по флагу
+  async function siteLayer(){
+    if (!cfgLive()) return null;
+    try {
+      if (typeof sbClient === 'undefined' || !sbClient) return null;
+      const q = sbClient.from('site_config').select('value').eq('key', 'engine_config').maybeSingle();
+      const r = await Promise.race([q, new Promise(res => setTimeout(() => res(null), 1500))]);
+      const v = r && r.data && r.data.value;
+      return typeof v === 'string' && v.length < 65536 ? v : null;
+    } catch (e) { return null; }
+  }
+  async function buildAt(base){
+    const t = await getText(base + 'build.json', 3000);
+    try { const b = t && JSON.parse(t); return b && /^[0-9a-f]{6,16}$/.test(String(b.id || '')) ? b : null; } catch (e) { return null; }
+  }
+  // пакет игры + выбор движка: { id, text (файл игры или null), base, build, channel, pin, note }
+  async function resolveGame(id){
+    const [text, stable, site] = await Promise.all([getText(CFG_DIR + 'games/' + id + '.json'), buildInfo(), siteLayer()]);
+    let pack = null; try { pack = text ? JSON.parse(text) : null; } catch (e) { pack = null; }
+    const eng = pack && pack.engine && typeof pack.engine === 'object' ? pack.engine : {};
+    const channel = CHANNELS[eng.channel] ? eng.channel : 'stable';
+    const pin = /^[0-9a-f]{6,16}$/.test(String(eng.build || '')) ? String(eng.build) : '';
+    let base = CHANNELS[channel](), build = channel === 'stable' ? stable : await buildAt(base), note = '';
+    if (pin) {
+      if (stable && stable.id === pin) { base = BASE(); build = stable; }
+      else {
+        const pre = channel === 'preview' ? build : await buildAt('/d37-preview/');
+        if (pre && pre.id === pin) { base = '/d37-preview/'; build = pre; }
+        else { const arch = await buildAt('/d37-builds/' + pin + '/'); if (arch && arch.id === pin) { base = '/d37-builds/' + pin + '/'; build = arch; } else { base = BASE(); build = stable; note = 'pin ' + pin + ' нет — stable'; report('pin', note); } }
+      }
+    }
+    if (!build) { base = BASE(); build = stable; }
+    return { id, text, base, build: build || {}, channel: pin && !note ? 'pin' : channel, pin, note, site };
+  }
   const JOIN_RE = /^[A-HJKMNP-Z2-9]{6}$/;   // как CODE_ALPHABET сервера: без I, L, O, 0, 1
   const joinCode = () => { try { const c = String(new URLSearchParams(location.search).get('join') || '').trim().toUpperCase(); return JOIN_RE.test(c) ? c : ''; } catch (e) { return ''; } };
   const newJoinCode = () => { const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', b = new Uint8Array(6); try { crypto.getRandomValues(b); } catch (e) { for (let i = 0; i < 6; i++) b[i] = Math.random() * 256 | 0; } return Array.from(b, x => A[x % A.length]).join(''); };
@@ -162,9 +213,9 @@
   const playSeconds = () => st.playBase + (st.t0 ? (performance.now() - st.t0) / 1000 : 0);
   async function saveWorld(why){
     const h = st.h;
-    if (!h || !SAVES(st.mode) || st.saveBusy) return false;
+    if (!h || !SAVES(st.mode) || st.saveBusy || st.crashed) return false;   // T-166: после вылета последнее хорошее сохранение не трогаем
     const bytes = h.save();
-    if (!bytes || !bytes.length) return false;
+    if (!okSave(bytes)) return false;
     st.saveBusy = true;
     try {
       const W = slot(), prev = await idbGet(W);
@@ -189,6 +240,15 @@
       return true;
     } catch (e) { report('save', e && e.message); return false; }
     finally { st.saveBusy = false; }
+  }
+  // T-166: только целое сохранение движка (D37S v1: «D37S», версия, разделы, контрольная сумма FNV-1a в конце) — пустое, обрезанное
+  // или испорченное (вылет посреди записи) не заменяет прошлое
+  function okSave(b){
+    if (!(b instanceof Uint8Array) || b.length < 16 || b[0] !== 68 || b[1] !== 51 || b[2] !== 55 || b[3] !== 83) return false;
+    let h = 0x811c9dc5;
+    for (let i = 0; i < b.length - 4; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193) >>> 0; }
+    const t = b.length - 4, sum = (b[t] | b[t + 1] << 8 | b[t + 2] << 16 | b[t + 3] << 24) >>> 0;
+    return sum === h;
   }
   // Какое сохранение взять при входе в игру: облако новее и здесь не менялось — облачное; поменялись оба — новее по времени игры
   async function pickSave(){
@@ -497,7 +557,11 @@
       const shotsB = el('button', 'hub-pbtn', '📸 Снимки'); shotsB.type = 'button';
       shotsB.addEventListener('click', () => shotsSheet(box));
       psave = el('div', 'hub-psave', st.status ? '💾 ' + st.status : '');
-      card.append(el('b', 'hub-ptitle', title.textContent), resume, fullP, shotsB, back, psave);
+      // T-166: для отчётов — какая игра, канал и сборка движка, хэш настроек (мелко, внизу паузы)
+      const dbg = el('div', 'hub-psave hub-pdbg', '');
+      dbg.style.cssText = 'opacity:.55;font-size:11px;word-break:break-all';
+      card.append(el('b', 'hub-ptitle', title.textContent), resume, fullP, shotsB, back, psave, dbg);
+      card.addEventListener('focusin', () => { dbg.textContent = debugLine(); });
       pause.appendChild(card);
       const openSite = () => { if (!pause.hidden) return; pause.hidden = false; try { st.h && st.h.pause(); } catch (e) {} resume.focus({ preventScroll: true }); };
       const closePause = () => { if (pause.hidden) return; pause.hidden = true; try { st.h && st.h.resume(); } catch (e) {} };
@@ -541,6 +605,11 @@
     try { const a = document.activeElement; if (a && a !== document.body && a.blur) a.blur(); } catch (e) {}
     return { box, bar, stage, load, ph, barI, pct, err, stat, statT: 0, psave, pause };
   }
+  // T-166: строка отладки: игра · канал · сборка · настройки (cfg / rules / слои)
+  function debugLine(){
+    const g = st.game; if (!g) return '';
+    return 'игра ' + g.id + ' · движок ' + (g.build || '?') + ' · ' + g.channel + (g.note ? ' (' + g.note + ')' : '') + (g.config ? ' · ' + g.config : '');
+  }
   const touchDev = () => { try { return matchMedia('(pointer: coarse)').matches; } catch (e) { return false; } };
   function toggleFull(box){
     const d = document;
@@ -566,6 +635,7 @@
     e.appendChild(el('div', 'hub-et', code === 'nogpu' ? 'Этот браузер не тянет 3D' : 'Игра не запустилась'));
     e.appendChild(el('div', 'hub-em', code === 'nogpu' ? 'Нужен браузер с WebGPU или WebGL2 (свежий Chrome, Edge, Яндекс, Safari 17+). Мини-игры сайта работают везде.' : 'Мы уже получили отчёт об ошибке. Можно попробовать простой режим графики.'));
     const row = el('div', 'hub-er');
+    if (code !== 'nogpu') { const r = el('button', 'hub-btn', 'Перезагрузить'); r.type = 'button'; r.addEventListener('click', () => restart()); row.appendChild(r); }
     if (code !== 'nogpu' && !st.gl) { const b = el('button', 'hub-btn', 'Простой режим (WebGL2)'); b.type = 'button'; b.addEventListener('click', () => { st.gl = true; restart(); }); row.appendChild(b); }
     const m = el('a', 'hub-btn hub-btn2', 'Мини-игры'); m.href = '/play'; row.appendChild(m);
     const back = el('a', 'hub-btn hub-btn2', '← Меню'); back.href = '/hub'; row.appendChild(back);
@@ -608,7 +678,10 @@
     ui = buildUi(mode);
     ym('d37_open');
     if (!await canRun3d()) { showError('nogpu'); st.starting = false; return; }
-    const info = await buildInfo();
+    const game = await resolveGame(gameId(mode, opt));   // T-166: пакет игры и её движок (канал / закреплённая сборка)
+    const info = game.build;
+    st.game = { id: game.id, channel: game.channel, build: String(info.id || ''), base: game.base, note: game.note, config: '' };
+    st.crashed = false;
     const fresh = opt === 'new' || opt === 'tribe';
     const save = SAVES(mode) && !fresh ? await pickSave() : null;
     if (gen !== st.gen || !st.active || !ui) { if (gen === st.gen) st.starting = false; return; }   // ушли со страницы, пока ждали
@@ -618,7 +691,7 @@
     let host;
     try {
       const v = info && /^[0-9a-f]{6,16}$/.test(String(info.id || '')) ? '?v=' + info.id : '';
-      host = await import(BASE() + 'engine-host.js' + v + (v ? '&' : '?') + 'k=3');   // k — версия обёртки (3: Esc и F1–F11 — игре, пауза, F2-снимки)
+      host = await import(game.base + 'engine-host.js' + v + (v ? '&' : '?') + 'k=3');   // k — версия обёртки (3: Esc и F1–F11 — игре, пауза, F2-снимки)
     } catch (e) { report('import', e && e.message); showError('import', e); st.starting = false; return; }
     if (gen !== st.gen || !st.active || !ui) return;
     try {
@@ -630,6 +703,10 @@
         newWorld: opt === 'new', skipTribe: opt === 'tribe', spawn: opt === 'home' || opt === 'orbit' ? opt : 'last', arena: opt === 'klet' ? 'klet' : '',
         join: jc && NET_URL ? { url: NET_URL, code: jc } : null,   // W11 «Играть вместе»
         onProgress: progress, onMessage: onMsg, fullscreenEl: ui.box,   // F11 игры — на весь экран вместе с полосой сайта
+        // T-166: слои настроек (общий файл → файл игры → строка site_config по флагу; ?tune= движок добавит сам), перечитываются при
+        // возврате во вкладку и раз в 5 минут; «Перезагрузить» после вылета — перезапуск игры без перезагрузки сайта
+        config: { build: String(info.id || ''), poll: 300000, layers: [{ name: 'engine', url: CFG_DIR + 'engine.json' }].concat(game.text ? [{ name: 'game:' + game.id, text: game.text }] : [], game.site ? [{ name: 'site', text: game.site }] : []) },
+        build: String(info.id || ''), onReload: () => restart(),
       });
       if (gen !== st.gen || !st.active || !ui) { h.dispose(); return; }
       st.h = h; st.t0 = performance.now();
@@ -651,10 +728,20 @@
     else if (m.t === 'event') { st.events.push(String(m.code)); if (EVENTS[m.code]) toast(EVENTS[m.code]); }
     else if (m.t === 'resumed') { st.resumed = m.summary || null; if (m.summary && SAVES(st.mode)) toast(st.mode === 'play' ? (st.opt === 'orbit' ? '🚀 Твой мир внизу — зажми O, чтобы приземлиться' : st.opt === 'home' ? '🏕 Ты дома, в лагере' : '▶ Твой мир: всё, что построил, на месте') : '▶ Продолжаем с того места, где ты был'); }
     else if (m.t === 'error' && m.code === 'join') { st.errors.push('join: ' + String(m.msg || '')); report('join', m.msg); toast('Не получилось войти в общий мир — играешь в своём'); }
+    else if (m.t === 'config') { if (st.game && m.report) st.game.config = String(m.report.line || '').slice(0, 160); if (m.report && m.report.warnings && !m.live) report('config', String(m.report.line || '')); }
+    else if (m.t === 'error' && m.crash) {
+      // T-166: движок упал и сам показал сообщение с «Перезагрузить»; отчёт — с текстом паники, сборкой, настройками, режимом мира и
+      // последними строками журнала (errlog берёт до 400 знаков на запись: журнал — второй записью); сохранение после вылета не пишем
+      st.crashed = true;
+      const c = m.crash;
+      st.errors.push(String(m.code) + ': ' + String(c.panic || m.msg || ''));
+      report('crash:' + String(m.code).replace(/[^a-z_-]/gi, '').slice(0, 20), String(c.panic || m.msg || '').slice(0, 220) + ' | b=' + String(c.build || '').slice(0, 16) + ' cfg=' + String(c.config || '').slice(0, 8) + ' rules=' + String(c.rules || '').slice(0, 8) + ' w=' + String(c.world || '').slice(0, 8) + ' ' + String(c.backend || '').slice(0, 12) + ' g=' + (st.game ? st.game.id + '/' + st.game.channel : ''));
+      report('crashlog', (Array.isArray(c.log) ? c.log : []).slice(-20).map(String).join(' ⏎ ').slice(-380));
+    }
     else if (m.t === 'error') {
       st.errors.push(String(m.code) + ': ' + String(m.msg || ''));
       report(String(m.code).replace(/[^a-z_-]/gi, '').slice(0, 20) || 'x', m.msg);
-      if (m.code === 'frame' || m.code === 'worker-result') showError('start', m.msg);
+      if (m.code === 'frame' || m.code === 'worker-result') { st.crashed = true; showError('start', m.msg); }   // старый движок без своего экрана
     }
     // ready приходит после первого кадра; экран загрузки уходит на loaded (или через 25 с — планета видна и так)
     if (m.t === 'ready' && ui) setTimeout(() => { if (ui) ui.load.hidden = true; }, 25000);
@@ -740,5 +827,5 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', navOn); else navOn();
   }
   root.renderHubPage = render;
-  root.D37Hub = { TILES, PATH, open, close, render, invite, newJoinCode, joinCode, saveWorld, pickSave, lookNow, fmtMin, pathStep, get active(){ return st.active; }, _st: st, _idb: { get: idbGet, put: idbPut } };
+  root.D37Hub = { TILES, PATH, open, close, render, invite, newJoinCode, joinCode, saveWorld, pickSave, lookNow, fmtMin, pathStep, debugLine, okSave, resolveGame, get active(){ return st.active; }, _st: st, _idb: { get: idbGet, put: idbPut } };
 })();

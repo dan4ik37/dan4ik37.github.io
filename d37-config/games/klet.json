@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "id": "klet",
+  "title": "Клеточки",
+  "scene": "valley",
+  "engine": { "channel": "stable" },
+  "note": "Только отличия этой игры от общих настроек (engine.json). Канал движка: stable (папка /d37/) или preview (/d37-preview/); \"build\": \"<id>\" — закрепить сборку.",
+  "values": {}
+}
