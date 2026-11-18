@@ -5578,7 +5578,7 @@ grant execute on function public.cf_levels_top(bigint) to anon, authenticated;
 --         cv_check пропускает к соседям только того, кто есть в этом списке. Лимит участников сообщества — site_config 'comm_member_cap'
 --         (по умолчанию 500 — как было).
 --     (б) 📷 камера в звонках: cam_me() — можно ли мне включать и смотреть видео: по возрасту (site_config 'call_video': 'off' | 'adult' |
---         'teen' — с 13 лет, по умолчанию 'teen'; до 13 и «возраст не указан» — никогда). Видео идёт напрямую между браузерами — сервер
+--         'teen' — с 13 лет; по умолчанию 'adult' — только 18+, пока владелец не решил; до 13 и «возраст не указан» — никогда). Видео идёт напрямую между браузерами — сервер
 --         его не видит; браузер ребёнка не отправляет и не принимает видео.
 --     (в) 🔒 канал с паролем (текстовые каналы сообществ): пароль ставит тот, кто управляет каналами; хранится только «солёный» медленный
 --         хеш (pgcrypto bcrypt); проверка — только cm_chan_pw_try (5 попыток за 15 минут на канал, 30 в час всего); без пароля сообщения
@@ -5640,7 +5640,7 @@ $$;
 -- (б) камера: можно ли мне (по возрасту и выключателю сайта)
 create or replace function public.cam_ok(p_uid uuid) returns boolean
 language plpgsql stable security definer set search_path = public as $$
-declare mode text := lower(public.site_cfg_text('call_video', 'teen')); g text;
+declare mode text := lower(public.site_cfg_text('call_video', 'adult')); g text;
 begin
   if p_uid is null or mode = 'off' then return false; end if;
   g := public.age_group_of(p_uid);

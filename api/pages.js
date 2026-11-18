@@ -32,8 +32,8 @@ import forum from './_lib/routes/forum.js';          // форум /forum, /foru
 import diag from './_lib/routes/diag.js';            // мониторинг: POST /api/diag — отчёты браузеров об ошибках сайта (ops.sql, docs/OPS.md)
 import photo from './_lib/routes/photo.js';          // 🖼 «Фоторедактор онлайн» /tools/photo — для поиска; сам редактор — раздел /photo
 import news from './_lib/routes/news.js';            // 📰 «Что нового» /news, /news/<slug>, /news/rss.xml — записи из api/_lib/news-posts.js
-import map from './_lib/routes/sitemap-page.js';
-import { turnCred, extCheck } from './_lib/routes/ds2.js';   // T-167: пароли TURN Cloudflare /api/turn-cred (выключено без ключей) и проверка картинок сообществ /api/ext-check     // /sitemap — карта сайта для людей (все разделы, открытые поиску)
+import map from './_lib/routes/sitemap-page.js';     // /sitemap — карта сайта для людей (все разделы, открытые поиску)
+import { turnCred, extCheck } from './_lib/routes/ds2.js';   // T-167: пароли TURN Cloudflare /api/turn-cred (выключено без ключей) и проверка картинок сообществ /api/ext-check
 
 const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, vstats, top, quiz, wheel, random, typing, ugc,
   shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, forumping: forum, photo, map, news, turncred: turnCred, extcheck: extCheck, diag };   // raid — набеги

@@ -842,7 +842,7 @@
   // камера вкл / выкл (только если сервер разрешил — R.camOk)
   C.camToggle = async () => {
     const R = S?.room; if (!R) return;
-    if (!R.camOk) { P.toast('📷 Камера в звонках — с 13 лет (и если возраст указан)', false); return; }
+    if (!R.camOk) { P.toast('📷 Камера в звонках пока недоступна для твоего возраста (или возраст не указан)', false); return; }
     if (R.camTrack) {
       try { R.camTrack.stop(); } catch (er) {}
       R.camTrack = null;
@@ -985,7 +985,7 @@
         <div class="dc-sec"><b>📷 Камера</b>${CAM_ON && camAllowed() ? `<select data-dc="camId" aria-label="Камера">${opt(cams, P.set.camId, 'Камера')}</select>
           <div class="dc-cam"${cam ? '' : ' hidden'}><video muted playsinline autoplay></video></div>
           <div class="dc-row"><button type="button" class="ph-btn" data-dc-a="cam">${cam ? '⏹ Выключить' : '📷 Проверить камеру'}</button></div>
-          <small class="ph-dim">В разговоре камера выключена, пока сам не включишь 📷.</small>` : '<small class="ph-dim">📷 Камера в звонках — с 13 лет, если возраст указан (⚙️ → «🌐 Сайт» → возраст).</small>'}</div>
+          <small class="ph-dim">В разговоре камера выключена, пока сам не включишь 📷.</small>` : '<small class="ph-dim">📷 Камера в звонках пока недоступна для твоего возраста или возраст не указан (⚙️ → «🌐 Сайт» → возраст).</small>'}</div>
         <div class="dc-err vc-note bad" hidden></div>
       </div>`;
       if (cam) { const v = el.querySelector('.dc-cam video'); v.srcObject = cam; v.play().catch(() => {}); }

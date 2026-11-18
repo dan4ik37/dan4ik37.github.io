@@ -155,7 +155,7 @@
   - voice limits: community_channels.user_limit, voice_here (cv_pass writes, cv_ping every 25 s, cv_leave, stale after 75 s); cv_pass
     returns reason 'full' and `cam`; cv_check admits only people listed in voice_here; cv_who (who is inside, can_set);
     cm_voice_limit_set. site_config 'voice_cap' (default 6), 'comm_member_cap' (default 500, as before).
-  - camera: cam_me() / cam_ok(uid) — site_config 'call_video' 'off' | 'adult' | 'teen' (default 'teen'); never under 13 or unknown age.
+  - camera: cam_me() / cam_ok(uid) — site_config 'call_video' 'off' | 'adult' | 'teen' (default 'adult' — coordinator 19.11: a minor's camera is not shown to anyone until the owner decides; 'teen' = 13+); never under 13 or unknown age.
   - password channels (community text channels): chan_pw (bcrypt hash, private table), chan_pw_ok, chan_pw_try (5 / 15 min per
     channel, 30 / hour); restrictive RLS cmsg_pw + trigger chan_pw_guard; cm_chan_pw_set / _try / _state. Not E2E encryption.
   - community pictures from their own server (OFF: site_config 'ext_media' = 'on' + EXT_PICS in ds-fun.js): cf_ext_media

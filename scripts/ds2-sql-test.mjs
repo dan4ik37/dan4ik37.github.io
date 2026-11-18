@@ -108,8 +108,8 @@ await as(AD); t((await q(`select public.cv_pass(80, '${PUB}') r`)).reason === 'f
 // ── (б) камера ──
 const cam = async u => { await as(u); return (await q(`select public.cam_me() r`)).cam; };
 t(await cam(KID) === false && await cam(NOAGE) === false, 'camera: under 13 and unknown age — never');
-t(await cam(T14) === true && await cam(AD) === true, 'camera: 13+ by default (call_video teen)');
-await db.exec(`insert into site_config values ('call_video', 'adult')`); t(await cam(T14) === false && await cam(AD) === true, 'call_video adult: only 18+');
+t(await cam(T14) === false && await cam(AD) === true, 'camera: 18+ by default (call_video adult)');
+await db.exec(`insert into site_config values ('call_video', 'teen')`); t(await cam(T14) === true && await cam(AD) === true, 'call_video teen: 13+');
 await db.exec(`update site_config set value = 'off' where key = 'call_video'`); t(await cam(AD) === false, 'call_video off: nobody');
 await as(T14); await db.exec(`delete from voice_here`); await db.exec(`update site_config set value = 'teen' where key = 'call_video'`);
 t((await q(`select public.cv_pass(80, '${PUB}') r`)).cam === true, 'cv_pass carries cam');
