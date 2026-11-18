@@ -13,6 +13,7 @@
 // Мёртвые подписки (404/410 от push-сервиса) удаляются.
 // «Денчик-бот» (community.sql): тот же эфир / новый ролик — ещё и сообщением в канал «📢 новости» сервера «Денчик37»
 // (bot_post — только с ключом сервера; нет функции — молча). События сообществ: напоминание 🔔 за 15 минут (bot_event_remind).
+// T-165: «❓ Вопрос дня» — бот в #общий раз в день с 12:00 по Алматы (site_config 'daily_q').
 // T-141: праздники — поздравление бота в «📢 новости» один раз в день праздника (с 9:00 по Алматы; список — site_config 'holidays').
 //
 // Переменные окружения: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET,
@@ -61,6 +62,7 @@ export default async function handler(req, res) {
   catch (e) { out.words = { error: String(e?.message || e) }; console.error('[push words]', e); }   // push-words.sql не выполнен — ошибка только здесь
   out.events = await eventReminders();
   out.holiday = await holidayPost();
+  out.daily = await dailyQuestion();
   out.files = await fileExpire();
   return res.status(200).json(out);
 }
@@ -164,8 +166,8 @@ async function checkWords(prev, deadline) {
 }
 
 // ── «Денчик-бот»: сообщение в канал «📢 новости» (community.sql → bot_post). Ошибка рассылку не останавливает ──
-async function botPost(text, key) {
-  try { const r = await sbRpc('bot_post', { p_channel: 'news', p_text: text.slice(0, 500), p_key: key }); return r?.dup ? 'dup' : r?.ok ? 'posted' : (r?.reason || 'no'); }
+async function botPost(text, key, channel = 'news') {
+  try { const r = await sbRpc('bot_post', { p_channel: channel, p_text: text.slice(0, 500), p_key: key }); return r?.dup ? 'dup' : r?.ok ? 'posted' : (r?.reason || 'no'); }
   catch (e) { return /PGRST202|Could not find/i.test(String(e?.message)) ? 'no_sql' : 'error'; }
 }
 // ── События сообществ: 🔔 «через 15 минут» тем, кто нажал «✅ Пойду» (community.sql → bot_event_remind) ──
@@ -211,6 +213,42 @@ async function holidayPost() {
   const out = [];
   for (let i = 0; i < hit.length; i++) out.push(await botPost(String(hit[i].t).trim(), `holiday:${y}-${md}:${i}`));
   return { status: 'checked', posts: out };
+}
+// ── T-165: «❓ Вопрос дня» — бот задаёт один вопрос в #общий раз в день, с 12:00 по Алматы (повод заглянуть и ответить;
+// ничего не разыгрываем и не раздаём). Повод в bot_posts — dq:<ГГГГ-ММ-ДД> (один раз). Вопросы — данные: site_config key='daily_q' =
+// JSON-массив строк (свой список) или 'off' (выключить). Нет строки — список ниже (для всех возрастов). Откат — DAILY_Q_ON = false.
+const DAILY_Q_ON = true;
+export const DAILY_Q_DEF = [
+  'Во что вы сейчас играете больше всего?', 'Какая игра на сайте у вас любимая и почему?', 'Какой стрим Денчика вам запомнился больше всего?',
+  'Если бы вы могли добавить на сайт одну игру — какую?', 'Кошки или собаки? 🐱🐶', 'Какой у вас рекорд в любой игре сайта? Хвастайтесь 🏆',
+  'Что лучше: играть одному или с друзьями?', 'Какую суперсилу вы бы выбрали?', 'Самая страшная игра, в которую вы играли? 👻',
+  'Какое видео Денчику снять следующим?', 'Лето или зима? ☀️❄️', 'Какой ваш любимый персонаж из игр?',
+  'Что вы сегодня ели на обед? 🍕', 'Телефон или компьютер — где вы чаще играете?', 'Какую музыку слушаете во время игры? 🎧',
+  'Майнкрафт или Роблокс? ⛏️', 'Какую игру вы прошли последней?', 'Если бы вы делали свою игру — про что она была бы?',
+  'Какой смайлик описывает ваше настроение сегодня?', 'Что бы вы построили в «Мире Денчика»? 🏰', 'Любимый жанр игр?',
+  'Какой самый смешной момент со стрима вы помните? 😂', 'Утро или вечер — когда вам лучше играется?', 'Какое приложение на телефоне вы открываете чаще всего?',
+  'Какую игру из детства вы бы хотели вернуть?', 'Чему вы научились на этой неделе?', 'Какие у вас планы на выходные? 🎉',
+  'Если бы у вас был питомец-дракон, как бы вы его назвали? 🐉', 'Какой праздник у вас любимый?', 'Что сделать на сайте, чтобы вам было интереснее?',
+];
+// Вопрос на день ГГГГ-ММ-ДД: по кругу по номеру дня (чистая функция — проверка в scripts/t165-e2e.cjs)
+export function dailyQFor(list, ymd) {
+  const L = (Array.isArray(list) ? list : []).filter(x => typeof x === 'string' && x.trim());
+  const d = Date.parse(ymd + 'T00:00:00Z'); if (!L.length || !Number.isFinite(d)) return '';
+  return L[Math.floor(d / 864e5) % L.length].trim().slice(0, 300);
+}
+async function dailyQuestion() {
+  if (!DAILY_Q_ON) return { status: 'off' };
+  const local = new Date(Date.now() + 5 * HOUR), ymd = local.toISOString().slice(0, 10);
+  if (local.getUTCHours() < 12) return { status: 'early' };
+  let list = DAILY_Q_DEF;
+  try {
+    const v = (await sbSelect('site_config', 'key=eq.daily_q&select=value'))?.[0]?.value;
+    if (v === 'off') return { status: 'off' };
+    if (v) { const j = typeof v === 'string' ? JSON.parse(v) : v; if (Array.isArray(j)) list = j; }
+  } catch (e) {}
+  const q = dailyQFor(list, ymd);
+  if (!q) return { status: 'none' };
+  return { status: 'checked', post: await botPost(`❓ Вопрос дня: ${q} Отвечайте здесь 👇`, `dq:${ymd}`, 'general') };
 }
 const oneLine = t => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 200);
 
