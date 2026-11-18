@@ -245,6 +245,7 @@
     const bg = srv.boost && DS.x?.BANNERS?.[srv.banner];   // баннер буста — над каналами
     return `<div class="ds-sh${bg ? ' ds-shb' : ''}"${bg ? ` style="background-image:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.55)),${bg}"` : ''}><span class="ds-shi${srv.anim ? ' ds-anim' : ''}">${srv.icon}</span><b title="${e(srv.about || '')}">${e(srv.name)}</b><span class="ds-shacts">${acts.join('')}</span></div>`;
   }
+  const ONLINE_CHIP = true;   // T-165: число «в сети» на 👥 в шапке канала; откат — false
   // Участники: на сервере сайта — кто онлайн (по группам) и кто писал недавно; в сообществе — все участники (онлайн — сверху)
   async function membersRender(box, srv){
     if (!box) return;
@@ -265,6 +266,8 @@
         + (on.guests ? `<div class="ds-mg">👤 Гости — ${on.guests}</div>` : '') + group('⚪ Не в сети', recent)
         + (!u.length && !on.guests ? '<div class="ds-dim">Никого — позови друзей!</div>' : '');
       DS.x?.membersDecor?.(box, srv);   // ds-people: статусы, ники на сервере, свой статус
+      // T-165: «👥 3» — сколько в сети, прямо в шапке канала (на телефоне участники спрятаны в панель — гость не видел, что тут живые люди)
+      if (ONLINE_CHIP) { const b = page?.root?.querySelector('.ds-top [data-ds="right"]'), n = on.total || 0; if (b) { b.dataset.n = n > 99 ? '99+' : n ? String(n) : ''; b.title = n ? `Участники — в сети ${n}` : 'Участники'; } }
       return;
     }
     if (!srv.role && !srv.staff) { box.innerHTML = `<div class="ds-dim">Участники видны после вступления. Всего: ${srv.c?.members || 0}</div>`; return; }
