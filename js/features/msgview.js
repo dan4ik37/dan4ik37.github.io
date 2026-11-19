@@ -380,7 +380,7 @@
     function renderAll(){
       let out = chunk(V.order).out;
       if (out) out = topHtml() + out;
-      list.innerHTML = out || `<div class="mv-empty">${e(V.A.emptyText || 'Пока тихо — напиши первым! 👋')}</div>`;
+      list.innerHTML = out || `<div class="mv-empty">${e(V.A.emptyText || (V.A.state?.()?.mode === 'write' ? 'Здесь пока пусто. Напишите первое сообщение — поле внизу 👇' : 'Здесь пока пусто.'))}</div>`;
       after(list);
     }
     // T-165: старые сообщения — вставить сверху, не перерисовывая всю ленту (раньше каждая страница истории заново

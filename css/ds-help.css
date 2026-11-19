@@ -1,0 +1,51 @@
+/* ❓ Объяснения «Дискорда» (T-168, js/features/ds-help.js): приветствие, страница «что здесь есть», гайд «свой сервер», подсказка у значка,
+   пустые экраны с действием. Цвета — переменные сайта (--text / --muted / --accent / --fg-rgb): обе темы работают сами. */
+/* приветствие над лентой */
+.ds-tip.dsh-hi{display:flex;flex-direction:column;align-items:stretch;gap:10px;margin:10px 12px 0;padding:14px 16px;border-radius:14px;
+  background:linear-gradient(135deg,rgba(var(--accent-rgb,255,45,85),.12),rgba(var(--fg-rgb),.04));border:1px solid rgba(var(--fg-rgb),.1);flex:none;position:relative}
+.ds-tip.dsh-hi[hidden]{display:none}
+.dsh-hi-t{display:flex;flex-direction:column;gap:4px;font-size:13.5px;line-height:1.45;padding-right:26px}
+.dsh-hi-t b{font-size:15px;color:var(--text-hi)}
+.dsh-hi-b{display:flex;flex-wrap:wrap;gap:8px}
+.dsh-x{position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:8px;border:0;background:none;color:var(--muted);font-size:15px;cursor:pointer}
+.dsh-x:hover{background:rgba(var(--fg-rgb),.08);color:var(--text-hi)}
+/* страница «что здесь есть» */
+.dsh-list{display:flex;flex-direction:column;gap:6px;margin:12px 0 16px}
+.dsh-it{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:rgba(var(--fg-rgb),.035);border:1px solid var(--line)}
+.dsh-it>i{font-style:normal;font-size:20px;width:28px;text-align:center;flex:none;line-height:1.3;font-weight:800;color:var(--muted)}
+.dsh-it>span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dsh-it b{font-size:14px}
+.dsh-it small{font-size:13px;line-height:1.45;color:var(--c-t3,var(--muted))}
+/* гайд */
+.dsh-steps{display:flex;gap:4px;list-style:none;margin:0 0 18px;padding:0;counter-reset:none}
+.dsh-steps li{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--muted);text-align:center;min-width:0}
+.dsh-steps li span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.dsh-steps i{font-style:normal;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(var(--fg-rgb),.08);font-size:13px;font-weight:800}
+.dsh-steps li.on{color:var(--text-hi)}
+.dsh-steps li.on i{background:var(--accent);color:#fff}
+.dsh-steps li.done i{background:#16a34a;color:#fff}
+.dsh-step h3{margin-bottom:4px}
+.dsh-step .ds-in{margin:8px 0}
+.dsh-nav{margin-top:18px}
+.dsh-alt{margin-top:18px;font-size:12.5px}
+.dsh-alt a{color:var(--accent);text-decoration:underline}
+.dsh-tpls{display:grid;gap:8px;margin:12px 0}
+.dsh-tpl{display:flex;flex-direction:column;gap:3px;text-align:left;padding:12px 14px;border-radius:12px;border:2px solid transparent;background:rgba(var(--fg-rgb),.05);color:var(--text);font:inherit;cursor:pointer}
+.dsh-tpl b{font-size:15px}
+.dsh-tpl small{color:var(--muted);font-size:12.5px}
+.dsh-tpl em{font-style:normal;font-size:12px;color:var(--c-t4,var(--muted))}
+.dsh-tpl.on{border-color:var(--accent);background:rgba(255,45,85,.1)}
+.dsh-roles{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.dsh-role{display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:rgba(var(--fg-rgb),.05);cursor:pointer}
+.dsh-role input{grid-row:span 2}
+.dsh-role small{color:var(--muted);font-size:12.5px}
+/* подсказка у значка (долгое нажатие на телефоне) */
+.dsh-tip{position:fixed;z-index:2147483000;max-width:min(280px,80vw);padding:7px 11px;border-radius:9px;background:#111214;color:#fff;font:700 12.5px/1.35 'Montserrat',system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.35);pointer-events:none}
+/* пустые экраны — со следующим шагом */
+.ppl-empty{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0;padding:14px;border-radius:12px;background:rgba(var(--fg-rgb),.035);border:1px dashed rgba(var(--fg-rgb),.14)}
+.ppl-empty>span{flex:1 1 100%;font-size:13.5px;color:var(--c-t3,var(--muted));line-height:1.45}
+@media (max-width:860px){
+  .dsh-hi-b .ds-btn{flex:1 1 auto}
+  .ds-tip.dsh-hi{margin:8px 8px 0;padding:12px}
+  .dsh-steps li span{display:none}
+}

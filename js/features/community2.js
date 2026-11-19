@@ -236,7 +236,7 @@
       const rows = Array.isArray(r.data) ? r.data : [];
       st.list = st.list.concat(rows); st.off += rows.length;
       const html = st.list.map(c => X.ccard(c, mode)).join('');
-      box.innerHTML = html || `<div class="ds-dim">Ничего не нашли${st.q || st.cat ? '' : ' — пока пусто'}. Создай своё!</div>`;
+      box.innerHTML = html || `<div class="ppl-empty"><span>${st.q || st.cat ? 'Ничего не нашли — попробуй другое слово или раздел.' : 'Открытых серверов пока нет — твой может стать первым. Здесь его найдут другие игроки.'}</span><a class="ds-btn ds-sm" href="${DS.special(mode, DS.x?.special?.guide ? 'guide' : 'new')}">＋ Создать сервер</a><a class="ds-btn ghost ds-sm" href="${DS.link(mode, DS.OFF_ID)}">💬 В общий чат</a></div>`;   // T-168: пустой обзор — со следующим шагом
       q('morebox').hidden = st.old || rows.length < 24;
     };
     let t = 0;

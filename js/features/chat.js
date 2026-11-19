@@ -314,7 +314,7 @@ function chatAdapter(chId){
     key: 'o:' + id, title: '#' + ch.name, maxLen: MAX_MSG_LEN, official: true, ch, fileKind: 'chat',   // 📎 files.js
     placeholder: `Написать в #${ch.name}`,
     startText: id === 'general' ? 'Это начало общего чата сайта dan4ik37 👋' : `Это начало канала #${ch.name}. ${ch.about || ''}`,
-    emptyText: ch.mods_only ? (id === 'news' ? 'Новостей пока нет — здесь появятся эфиры, новые видео и события 📢' : 'Пока пусто — здесь пишут только админ и модераторы 📢') : 'Пока тихо — напиши первым! 👋',
+    emptyText: ch.mods_only ? (id === 'news' ? 'Новостей пока нет — здесь появятся эфиры, новые видео и события 📢' : 'Пока пусто — здесь пишут только админ и модераторы 📢') : 'Здесь пока пусто. Напишите первое сообщение — поле внизу 👇',   // T-168: пустой канал — со следующим шагом
     pinsEmpty: 'Закреплённых сообщений нет. VIP и команда сайта могут закреплять свои сообщения (кнопка «⋯» → 📌)',
     get caps(){ const nw = chatHasNew(); return { reply: nw, edit: nw && !!currentUser, del: nw && !!currentUser, react: 'site', pin: true, report: nw && !!currentUser, typing: true, search: true, stickers: true }; },
     async load({ before }){
@@ -579,8 +579,7 @@ function subscribeOnline(){
   let syncT = 0;
   onlineChannel
     .on('presence', { event: 'sync' }, () => {
-      const state = onlineChannel.presenceState();
-      const online = Object.keys(state).length;
+      const online = chatOnline().total;   // T-168: одно число на всём сайте (люди без повторов вкладок + гости)
       const cnt = document.getElementById('chatOnlineCount'); if (cnt) cnt.textContent = online;
       window.__d37Online = online;
       window.dispatchEvent(new CustomEvent('d37:online', { detail: online }));   // «Сейчас на сайте» на главной (games.js)
@@ -599,7 +598,9 @@ function chatOnline(){
     if (typeof m.u === 'string' && /^[0-9a-f-]{36}$/.test(m.u)) { if (!users.has(m.u)) users.set(m.u, { id: m.u, nick: String(m.nick || 'игрок').slice(0, 24), role: ['admin', 'moderator', 'helper'].includes(m.r) ? m.r : null, vip: ['gold', 'silver', 'bronze'].includes(m.v) ? m.v : null, a: typeof m.a === 'string' ? m.a.slice(0, 200) : '' }); }
     else guests++;
   }
-  return { users: [...users.values()], guests, total: Object.keys(st).length };
+  // T-168: total = люди без повторов + гости — одно число для заголовка «В сети», групп и 👥 (раньше считались вкладки: одна вкладка
+  // на телефоне и одна на ПК = «В сети — 2», а в списке «В сети — 1»). Откат: total: Object.keys(st).length
+  return { users: [...users.values()], guests, total: users.size + guests };
 }
 // Кто писал недавно (для «не в сети») — один запрос за визит
 let chatAuthorsLoaded = false;
