@@ -160,6 +160,12 @@ async function main() {
         else if (m.type === 'error') fail('world Worker: ' + m.error);
       };
       w.onerror = (e) => fail('world Worker: ' + (e.message || 'error'));
+      // hotfix ep14: a hidden tab draws nothing: the Worker stops sending frames (the world keeps ticking); shown
+      // again, the page and the Worker start again from a keyframe
+      document.addEventListener('visibilitychange', () => {
+        const hidden = document.visibilityState === 'hidden';
+        try { w.postMessage({ type: 'quiet', on: hidden }); if (!hidden && typeof app.world_resync === 'function') app.world_resync(); } catch (e) { /* gone */ }
+      });
       ww = w;
     } catch (e) {
       console.warn('d37: world Worker off —', String(e && e.message || e).slice(0, 200));
@@ -657,6 +663,8 @@ async function main() {
       if (state.lastAdmin && /budgets off/.test(state.lastAdmin)) { state.budgets = false; }
       let text = state.backend + '\n' + state.fps.toFixed(0) + ' кадров/с · тик ' + s.tick + ' · пропущено ' + s.dropped_ticks + '\n';
       if (state.paceStats) text += 'мир (поток): ' + state.paceStats + '\n';
+      // hotfix ep14: the frame stream from the world Worker (applied, gaps, keyframes applied / asked)
+      if (ww) { try { const k = state.worldStats(); text += 'кадры мира: ' + k.applied + ' · разрывы ' + k.gaps + ' · ошибки ' + k.errors + ' · ключевые ' + k.keys_applied + '/' + k.keys_asked + (k.waiting_key ? ' · ждём ключевой' : '') + '\n'; } catch (e) { /* numbers only */ } }
       if (planet) {
         const p = JSON.parse(app.planet_stats());
         state.planet = p;

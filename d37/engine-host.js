@@ -307,6 +307,14 @@ export async function start(o) {
       };
       w.onerror = (e) => fail('world-worker', e.message || 'world Worker error');
       w.onmessageerror = () => fail('world-worker', 'world Worker message error');
+      // hotfix ep14: a hidden tab draws nothing: the Worker stops sending frames (the world keeps ticking); shown
+      // again, the page and the Worker start again from a keyframe
+      on(document, 'visibilitychange', () => {
+        if (st.dead || !st.app) return;
+        const hidden = document.visibilityState === 'hidden';
+        try { w.postMessage({ type: 'quiet', on: hidden }); if (!hidden && typeof st.app.world_resync === 'function') st.app.world_resync(); } catch (e) { /* gone */ }
+        if (!hidden) st.worldAt = performance.now();
+      });
       ww = w;
     } catch (e) {
       // the page's thread runs the world (the save is handed in again: load_scene_remote took it)

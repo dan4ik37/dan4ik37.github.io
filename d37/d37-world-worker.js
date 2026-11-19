@@ -10,6 +10,10 @@
 //   this world runs the page's RULE values -> {type:'config', report: {hash, rules_hash}} (the page compares);
 //   {type:'config', config} later = a live change (LOOK values only). {type:'alive'} every 2 s while no frame went
 //   out (the pause menu): the page's watchdog knows a silent Worker from a dead one. {type:'debug_panic'} (tests).
+// hotfix ep14: every frame carries its sequence number; the page asks for a keyframe inside its input bytes (a gap,
+//   an overflow, a failed apply, a stall). {type:'quiet', on} = the page is hidden (on) / shown again (off): the
+//   world keeps ticking but makes no frames while hidden (nothing piles up for a page that does not draw); shown
+//   again, the next frame is a keyframe (WorldWorker::set_quiet).
 import init, * as api from './d37_web.js';
 const { WorldWorker, last_panic } = api;
 
@@ -72,6 +76,9 @@ onmessage = async (ev) => {
     try { api.debug_panic('worker'); } catch (e) { fail(e); }
   } else if (m.type === 'profile' && world) {
     postMessage({ type: 'profile', report: world.profile() });
+  } else if (m.type === 'quiet') {
+    // an engine build without the method: frames go on as before
+    try { if (world && typeof world.set_quiet === 'function') world.set_quiet(!!m.on); } catch (e) { fail(e); }
   } else if (m.type === 'pause') {
     // the host page paused the game (a sheet over it, the tab): no ticks until it resumes (time is dropped, as on
     // the page's thread)
