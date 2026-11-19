@@ -39,6 +39,10 @@ if (UI_V2) document.documentElement.classList.add('ui2');
 // обновляет scripts/engine-import.mjs из сборки движка dist/web).
 const HUB_ON = true;
 const HUB_ENGINE = '/d37/';
+// T-166: настройки движка слоями (docs/D37_CONFIG.md): общий файл /d37-config/engine.json и файлы игр /d37-config/games/<id>.json —
+// всегда; строка site_config 'engine_config' (меняется в базе без выкладки, читать могут все) — только при true. Владелец включит, когда
+// захочет менять настройки мгновенно. Откат — false.
+const HUB_CONFIG_LIVE = false;
 
 // ═══════════════════════════════════════
 //  ИНТЕРФЕЙС ИГР 2.0 (T-123, docs/HUD_V2.md) — откат одной строкой
