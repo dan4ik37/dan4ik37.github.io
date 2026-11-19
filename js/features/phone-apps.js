@@ -234,7 +234,7 @@
         }, 300); });
       };
       draw();
-      const t = setInterval(() => { if (alive && !P.sheetOpen()) draw(); }, 20000);
+      const t = setInterval(() => { if (alive && !P.sheetOpen() && !document.hidden) draw(); }, 30000);   // T-169: свёрнутая вкладка не опрашивает; 30 с вместо 20
       return () => { alive = false; clearInterval(t); };
     },
   });
