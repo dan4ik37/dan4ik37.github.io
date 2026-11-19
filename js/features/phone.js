@@ -26,9 +26,9 @@
 //   состояние) — всем (плоский мир рисует 📱 над игроком). Чистая функция: D37Phone.handFor(открыт, путь, звонок).
 // Приложение: D37Phone.define(id, { render(el, arg, ctx) → функция уборки (необязательно), title }).
 (() => {
-  const VER = '23';   // 23 — T-168: «в сети» одним числом (chat.js), приветствие, гайд «свой сервер», страница «что здесь есть», подсказки у значков (ds-help.js), пустые экраны с действием (ds-people, msgview), раскладка как приложение (community.js); 22 — T-167: проверка микрофона и камеры, камера в звонках, перезапуск ICE, лимит голосового, громкость каждого (calls.js), пароль канала (community.js), черновики (msgview.js), картинки с сервера сообщества — выключено (ds-fun.js); 21 — T-165: файлы приложений качаются параллельно (порядок выполнения прежний), P.rpc помнит «функции нет», лента: подгрузка истории без перерисовки всего, текст файла без повтора имени (msgview, files); 20 — T-164: ds-fun: эмодзи, стикеры, звуки сервера, «Играть вместе», сцена, уровни (ds-fun.js, msgview, community); ds-people: статусы, карточка, друзья, группы ЛС, игнор (ds-people.js; крючки msgview, community, minicard); ds-msg: ветки, опросы, разметка, поиск from:/has:, история правок, форумы (js/features/ds-msg.js); 🛡 центр модерации (ds-mod.js, css/ds-mod.css), жалобы на себя и на создателя скрыты (msgview, files); 19 — T-162: правка не стирает вложение, настройки «как в Дискорде» (msgview, community, community2); 18 — T-160: файлы — кнопки карточки, причины, TURN, номер сообщения общего чата (files.js; sw.js отдаёт ?v= из кэша, без нового VER телефон держит старый files.js); 17 — T-141: 📎 файлы от устройства к устройству (files.js); 16 — T-141: «📺 Смотреть вместе» (chatplayer.js), «🕶 Скрыть мой адрес» и ⚙️ в звонке (calls.js), «📍 Позвать» ко мне / в игру / на сервер (phone-apps.js P.invite); 15 — карточка человека в ленте — общая мини-карточка сайта (js/features/minicard.js, T-086), community.js; 14 — worldchat.js: «🌍 Весь мир» не держит закрытый мир в памяти (T-085); 13 — «🏦 Банк» (денки «Живого города», js/games/mir-econ.js); 12 — msgview: ссылка «сайт//чужой.сайт» больше не считается своей (T-011); 11 — безопасность детей (ЛС, звонки с пропуском, «только читать» до 9): msgview, community, calls, phone-apps; 10 — настоящие адреса
+  const VER = '24';   // 24 — T-169: несколько голосовых сайта и лимит (community.js, calls.js), из жалобы к файлу и сообщению (ds-mod.js), своё — без 🚩 (msgview.js); 23 — T-168: «в сети» одним числом (chat.js), приветствие, гайд «свой сервер», страница «что здесь есть», подсказки у значков (ds-help.js), пустые экраны с действием (ds-people, msgview), раскладка как приложение (community.js); 22 — T-167: проверка микрофона и камеры, камера в звонках, перезапуск ICE, лимит голосового, громкость каждого (calls.js), пароль канала (community.js), черновики (msgview.js), картинки с сервера сообщества — выключено (ds-fun.js); 21 — T-165: файлы приложений качаются параллельно (порядок выполнения прежний), P.rpc помнит «функции нет», лента: подгрузка истории без перерисовки всего, текст файла без повтора имени (msgview, files); 20 — T-164: ds-fun: эмодзи, стикеры, звуки сервера, «Играть вместе», сцена, уровни (ds-fun.js, msgview, community); ds-people: статусы, карточка, друзья, группы ЛС, игнор (ds-people.js; крючки msgview, community, minicard); ds-msg: ветки, опросы, разметка, поиск from:/has:, история правок, форумы (js/features/ds-msg.js); 🛡 центр модерации (ds-mod.js, css/ds-mod.css), жалобы на себя и на создателя скрыты (msgview, files); 19 — T-162: правка не стирает вложение, настройки «как в Дискорде» (msgview, community, community2); 18 — T-160: файлы — кнопки карточки, причины, TURN, номер сообщения общего чата (files.js; sw.js отдаёт ?v= из кэша, без нового VER телефон держит старый files.js); 17 — T-141: 📎 файлы от устройства к устройству (files.js); 16 — T-141: «📺 Смотреть вместе» (chatplayer.js), «🕶 Скрыть мой адрес» и ⚙️ в звонке (calls.js), «📍 Позвать» ко мне / в игру / на сервер (phone-apps.js P.invite); 15 — карточка человека в ленте — общая мини-карточка сайта (js/features/minicard.js, T-086), community.js; 14 — worldchat.js: «🌍 Весь мир» не держит закрытый мир в памяти (T-085); 13 — «🏦 Банк» (денки «Живого города», js/games/mir-econ.js); 12 — msgview: ссылка «сайт//чужой.сайт» больше не считается своей (T-011); 11 — безопасность детей (ЛС, звонки с пропуском, «только читать» до 9): msgview, community, calls, phone-apps; 10 — настоящие адреса
   // файлы приложений (грузятся при первом открытии); лента сообщений msgview.js — общая для чата, сообществ и ЛС
-  const MODS = { mv: ['js/features/files.js', 'js/features/msgview.js', 'js/features/ds-msg.js'], apps: ['js/features/files.js', 'js/features/msgview.js', 'js/features/ds-msg.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/files.js', 'js/features/msgview.js', 'js/features/ds-msg.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/ds-fun.js', 'js/features/ds-mod.js', 'js/features/chatplayer.js', 'js/features/ds-people.js', 'js/features/ds-help.js'], wchat: ['js/features/worldchat.js'], econ: ['js/games/mir-econ.js'], ppl: ['js/features/ds-people.js'] };
+  const MODS = { mv: ['js/features/files.js', 'js/features/msgview.js', 'js/features/ds-msg.js'], apps: ['js/features/files.js', 'js/features/msgview.js', 'js/features/ds-msg.js', 'js/features/phone-apps.js'], calls: ['js/features/ns2.js', 'js/features/calls.js'], ds: ['js/features/files.js', 'js/features/msgview.js', 'js/features/ds-msg.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/ds-fun.js', 'js/features/ds-mod.js', 'js/features/chatplayer.js', 'js/features/ds-people.js', 'js/features/ds-help.js'], wchat: ['js/features/worldchat.js'], econ: ['js/games/mir-econ.js'], ppl: ['js/features/ds-people.js'] };
   const APPS = [
     { id: 'msgs', ic: '💬', t: 'Сообщения', bg: '#22c55e,#15803d', mod: 'apps', b: 'msgs' },
     { id: 'calls', ic: '📞', t: 'Звонки', bg: '#34d399,#059669', mod: 'calls', b: 'calls' },
@@ -116,8 +116,11 @@
   P.err = e => (typeof humanErr === 'function' ? humanErr(e) : String(e?.message || e || 'ошибка'));
   // Профили по id: ник, роль, аватар, VIP (публичные колонки, privacy.sql); кэш на визит
   const profCache = new Map();
+  const profMiss = new Map();
   P.profiles = async ids => {
-    const need = [...new Set(ids.filter(id => id && !profCache.has(id)))];
+    // T-169: кого база не вернула (удалён, скрыт) — не спрашиваем снова 5 минут (раньше — на каждую перерисовку участников)
+    const need = [...new Set(ids.filter(id => id && !profCache.has(id) && !(Date.now() - (profMiss.get(id) || 0) < 300000)))];
+    need.forEach(id => profMiss.set(id, Date.now())); if (profMiss.size > 2000) profMiss.clear();
     if (need.length && sb() && typeof sbProfiles === 'function') {
       try {
         for (let i = 0; i < need.length; i += 100) {
@@ -729,14 +732,17 @@
   async function ping(force){
     if (!P.me() || pingOff || document.hidden) return;
     const pl = place();
-    if (!force && Date.now() - lastPing < 55000 && pl === lastPlace) return;
+    if (!force && Date.now() - lastPing < (LOAD2 ? 115000 : 55000) && pl === lastPlace) return;
     if (force && Date.now() - lastPing < 4000 && pl === lastPlace) return;
     lastPing = Date.now(); lastPlace = pl;
     const { error } = await P.rpc('comm_ping', { p_place: pl });
     if (error && P.missing(error)) pingOff = true;
   }
   P.ping = ping;
-  setInterval(() => ping(false), 60000);
+  // T-169 (docs/areas/social-load.md): «я на сайте» — раз в 2 мин, а не раз в минуту (сервер считает человека в сети 3 мин; смена места
+  // и возврат на вкладку — сразу, как раньше). Откат: LOAD2 = false
+  const LOAD2 = true;
+  setInterval(() => ping(false), LOAD2 ? 120000 : 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(false); });
   window.addEventListener('d37:route', () => setTimeout(() => ping(true), 1200));
 

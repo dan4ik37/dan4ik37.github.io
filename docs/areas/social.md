@@ -187,3 +187,24 @@
   members column hidden state remembered (d37_ds_mhide), a fresh channel link waits for the channel list (was: fell back to #общий).
 - Empty states with a next step: friends, no own servers, 🧭 with no open servers, empty channel.
 - No SQL. Test: scripts/t168-e2e.cjs (headless Chrome, desktop + phone, faked login, writes stubbed).
+
+## T-169 (19.11.2026, branch t169-ds4) — voice channels, channel card, moderation jumps, load, noise suppression (English, short)
+- community.sql part 16 (check: rpc ds3_info → {"ok":true,"v":1}; site_voice_list → {"ok":true,"channels":[…]}; PGRST202 = not applied):
+  site voice channels table (0 «Общий» = the old «Голосовой», same room; -1 «Игра», -2 «Тихий»; up to 10, admin / moderator manage:
+  site_voice_list / site_voice_save / site_voice_delete); cv_pass / cv_check / cv_who / cm_voice_limit_set accept site channels ≤ 0 —
+  fixes «Количество человек не редактируется» (channel 0 had no row, can_set was always false); one voice channel at a time
+  (a new pass removes you from the old «who is inside»); password on community voice channels (cm_chan_pw_set accepts voice,
+  cv_pass refuses without it — not encryption). Test: scripts/ds3-sql-test.mjs (PGlite; skipped on this PC).
+- community.js SV_ON: site voice channels from site_voice_list (#/chat/voice, #/chat/voice-1 …); without part 16 — one «Голосовой» as before
+  and a one-line note for staff. calls.js VSWITCH: voice → voice switch without the «выйти?» question.
+- community2.js CARD: one card per channel in 📁 Каналы — a plain sentence under each control, people limit and «кто внутри» for voice,
+  password (communities), «↺ По умолчанию», ✕; full-screen on a phone; site voice channels as their own list (↑ ↓ ⚙️ 🗑, «＋ 🔊 голос»).
+- ds-mod.js GOTO: report rows get «👁 Открыть файл» (thumbnail stored in the report + name / type / size; the file itself stays on people's
+  devices) and «↗ Перейти к сообщению» (opens the channel and jumps to the message; DMs — snapshot only). msgview MV.isMine — one
+  own-message check (by id, by nick when the old message has no id) for the menu, the phone sheet, files and 🚩.
+- Load: docs/areas/social-load.md (measured numbers, what is direct, what stays on the server, next steps); META_TTL (ds-people),
+  profMiss + LOAD2 (phone.js), friends app refresh 30 s and not while hidden.
+- Noise suppression ns2.js + ns2-worklet.js + d37-ns.wasm (flag NS2_ON off; try with localStorage d37_ns2 = '1' → switch and A/B in
+  «🎛 Проверка»). Source: local repo M:\d37\d37-audio (crate d37-ns, nnnoiseless 0.5.2 BSD-3-Clause; licence text
+  js/features/d37-ns.LICENSE.txt; credit on /about).
+- Tests: scripts/t169-e2e.cjs (stubbed admin, two Chrome voice switch on real Realtime, noise suppression CPU and A/B, idle load).

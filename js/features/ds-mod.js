@@ -26,7 +26,7 @@
 
   // стили центра — отдельный файл (css/ds-mod.css), чтобы не мешать соседним правкам ds.css
   if (!document.querySelector('link[data-dsmod]')) {
-    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'css/ds-mod.css?v=1'; l.dataset.dsmod = '1'; document.head.appendChild(l);
+    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'css/ds-mod.css?v=2'; l.dataset.dsmod = '1'; document.head.appendChild(l);
   }
 
   // ═══ Кто создатель сайта (role = 'admin' в profiles_public): на него — без «🚩 Пожаловаться» ═══
@@ -35,7 +35,7 @@
     try { if (typeof sbProfiles !== 'function') return; const { data } = await sbProfiles().select('id').eq('role', 'admin').limit(5); (data || []).forEach(x => ADMINS.add(x.id)); } catch (er) {}
   })();
   // msgview.js и minicard: true — кнопку жалобы не показывать (своё сообщение, создатель сайта)
-  MV.noReport = m => !!m && ((m.uid && m.uid === P.me()) || m.role === 'admin' || (m.uid && ADMINS.has(m.uid)));
+  MV.noReport = m => !!m && ((m.uid && m.uid === P.me()) || !!MV.isMine?.(m) || m.role === 'admin' || (m.uid && ADMINS.has(m.uid)));
   const RSN = { creator: 'на создателя сайта жаловаться нельзя', self: 'на себя жаловаться нельзя', closed: 'жалобу уже закрыли', state: 'неверный статус',
     rights: 'нет прав', staff: 'только админ и модераторы сайта', not_found: 'не найдено', bad: 'без мата, пожалуйста', len: 'заметка — до 500 символов',
     rate: 'слишком часто — попробуй позже', slow: 'неверная задержка', minutes: 'такой срок нельзя', guest: 'у гостя нет уведомлений — только тайм-аут',
@@ -123,6 +123,32 @@
     };
   }
 
+  // ═══ T-169: из жалобы — к файлу и к сообщению ═══
+  const GOTO = true;   // откат: false (кнопок «👁 Открыть файл» / «↗ Перейти к сообщению» нет)
+  // Превью файла: только картинка-миниатюра из самой строки (data:image/webp|jpeg;base64 — своя, без чужих адресов), имя, тип, размер.
+  // Сам файл лежит на устройствах людей (передаётся напрямую) — открыть его можно в ленте: «↗ Перейти к сообщению» → карточка файла.
+  function fileSheet(a, it){
+    const th = typeof a.thumb === 'string' && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(a.thumb) ? a.thumb : '';
+    const size = a.size ? (window.D37Files?.size ? window.D37Files.size(+a.size) : (+a.size) + ' Б') : '';
+    const go = it?.querySelector('[data-ra="goto"]');
+    X.sheet('👁 Файл из жалобы', `${th ? `<img class="dm-fprev" src="${e(th)}" alt="Миниатюра файла">` : '<p class="ds-dim">Миниатюры нет — это не картинка или она не сохранилась.</p>'}
+      <p><b>${e(a.name || 'файл')}</b><br><span class="ds-dim">${e(a.mime || 'тип не указан')}${size ? ' · ' + e(size) : ''}${a.w && a.h ? ' · ' + (+a.w) + '×' + (+a.h) : ''}</span></p>
+      <p class="ds-dim">Сам файл хранится у людей на устройствах. Открыть его — в ленте: «↗ Перейти к сообщению», там карточка файла. Не открывай незнакомые программы и архивы.</p>
+      ${go ? '<button type="button" class="ds4-wide ds4-go" data-v="go">↗ Перейти к сообщению</button>' : ''}`).then(v => { if (v === 'go') go.click(); });
+  }
+  async function gotoMsg(fk, mid, cid, mode){
+    if (!mid) return;
+    const sb = typeof sbClient !== 'undefined' ? sbClient : null; if (!sb) return;
+    let href = '';
+    try {
+      if (fk === 'chat') { const { data } = await sb.from('messages').select('channel').eq('id', mid).maybeSingle(); href = DS.link(mode, DS.OFF_ID, (data && data.channel) || 'general'); }
+      else if (fk === 'cm' && cid) { const { data } = await sb.from('community_messages').select('channel_id').eq('id', mid).maybeSingle(); if (data?.channel_id) href = DS.link(mode, +cid, +data.channel_id); }
+    } catch (er) {}
+    if (!href) { P.toast?.('⚠️ Сообщение удалено или нет доступа к каналу', false); return; }
+    DS.pendingJump = mid;
+    DS.go(mode, href);
+  }
+
   // ═══ 🚩 Жалобы ═══
   const ST = { new: ['🆕', 'новая'], work: ['🙋', 'в работе'], done: ['✅', 'готово'], rejected: ['❌', 'отклонено'] };
   const STF = [['open', 'Открытые'], ['new', '🆕 Новые'], ['work', '🙋 В работе'], ['done', '✅ Готово'], ['rejected', '❌ Отклонено']];
@@ -143,8 +169,13 @@
         ${scope === 'owner' ? '<p class="ds-dim">👑 Жалобы на модераторов и хелперов сайта и на команды сообществ видит только создатель сайта — тот, на кого жалуются, их не видит.</p>' : ''}
         <h4>${L.length} ${plural(L.length, 'жалоба', 'жалобы', 'жалоб')}</h4>${L.map(repRow).join('') || '<div class="ds-dim dm-empty">Жалоб нет 🎉</div>'}`;
     };
+    const ATT = new Map();   // T-169: вложение жалобы на файл (для «👁 Открыть файл»), по ключу строки
     function repRow(x){
       const s = ST[x.state] || ST.new, file = x.kind === 'file', a = x.att || {};
+      if (file) ATT.set(String(x.key), a);
+      // T-169: перейти к сообщению / открыть файл прямо из жалобы (владелец 19.11: «нельзя перейти к файлу с жалобы»). ЛС — только снимок.
+      const fk = file ? String(a.fkind || x.channel || '') : x.kind, canGo = GOTO && x.mid != null && fk !== 'dm';
+      const nav = GOTO ? `<div class="ds-row dm-nav">${file ? '<button type="button" class="ds-btn ghost ds-sm" data-ra="fopen">👁 Открыть файл</button>' : ''}${canGo ? `<button type="button" class="ds-btn ghost ds-sm" data-ra="goto" data-mid="${+x.mid}" data-fk="${e(fk)}">↗ Перейти к сообщению</button>` : ''}</div>` : '';
       const where = file ? (x.channel === 'dm' ? 'файл в ЛС' : x.channel === 'cm' ? 'файл в сообществе' : 'файл в общем чате') : x.kind === 'chat' ? '#' + (x.channel || 'общий') : '#' + (x.channel || '?');
       const ctx = Array.isArray(x.ctx) && x.ctx.length > 1 ? `<details class="dm-ctx"><summary>💬 Переписка в момент жалобы</summary>${x.ctx.map(c => `<div class="${+c.id === +x.mid ? 'dm-hit' : ''}"><b>${e(c.nick || '—')}</b> ${e(clean(c.text) || '(удалено)')}</div>`).join('')}</details>` : '';
       const open = x.state === 'new' || x.state === 'work';
@@ -152,7 +183,7 @@
         <div class="dm-rh"><span class="dm-st dm-st-${e(x.state)}">${s[0]} ${s[1]}</span><b>${e(x.author || '—')}</b><small>${e(where)}${x.cname ? ' · ' + e(x.cname) : ''} · ${+x.n} ${plural(+x.n, 'жалоба', 'жалобы', 'жалоб')}${x.hidden ? ' · скрыто' : ''}${x.to_owner ? ' · 👑 на команду' : ''} · ${e(ago(x.at))}</small></div>
         ${x.reasons ? `<div class="dm-why">🚩 ${e(x.reasons)}</div>` : ''}
         ${file ? `<p>📎 <b>${e(a.name || 'файл')}</b> <span class="ds-dim">${e(a.mime || '')}${a.size ? ' · ' + e(window.D37Files?.size ? window.D37Files.size(+a.size) : a.size + ' Б') : ''}</span></p>` : `<p>${e(clean(x.text) || (x.mid == null ? '(жалоба на сообщество)' : '(удалено)'))}</p>`}
-        ${ctx}${x.by_nick ? `<div class="ds-dim dm-by">${x.state === 'work' ? '🙋 Взял(а)' : 'Решил(а)'}: <b>${e(x.by_nick)}</b>${x.by_at ? ' · ' + e(ago(x.by_at)) : ''}</div>` : ''}
+        ${ctx}${nav}${x.by_nick ? `<div class="ds-dim dm-by">${x.state === 'work' ? '🙋 Взял(а)' : 'Решил(а)'}: <b>${e(x.by_nick)}</b>${x.by_at ? ' · ' + e(ago(x.by_at)) : ''}</div>` : ''}
         ${open ? `<div class="ds-row ds4-acts">${x.state === 'new' ? '<button type="button" class="ds-btn ghost ds-sm" data-ra="work">🙋 В работу</button>' : ''}<button type="button" class="ds-btn bad ds-sm" data-ra="done">✅ Нарушение…</button><button type="button" class="ds-btn ghost ds-sm" data-ra="rejected">❌ Отклонить…</button>${x.target && !file ? '<button type="button" class="ds-btn ghost ds-sm" data-ra="punish">⏳ Наказать…</button>' : ''}${x.target ? '<button type="button" class="ds-btn ghost ds-sm" data-ra="card">👤 Карточка</button>' : ''}</div>` : ''}</div>`;
     }
     box.onclick = async ev => {
@@ -164,6 +195,8 @@
       const it = b.closest('[data-key]'), k = it.dataset.k, key = +it.dataset.key, a = b.dataset.ra;
       const cid = it.dataset.cid ? +it.dataset.cid : cidOf(srv);
       if (a === 'card') return memberCard(mode, srv.official && k !== 'cm' && !(k === 'file' && it.dataset.cid) ? srv : { id: cid, official: false, name: '' }, it.dataset.uid, it.dataset.nick);
+      if (a === 'fopen') return fileSheet(ATT.get(String(key)) || {}, it);
+      if (a === 'goto') return gotoMsg(b.dataset.fk, +b.dataset.mid, cid, mode);
       if (a === 'punish') return punish(srv.official && k === 'chat' ? null : cid, it.dataset.uid, it.dataset.nick, 'mute');
       let act = '', note = '';
       if (a === 'done' || a === 'rejected') {

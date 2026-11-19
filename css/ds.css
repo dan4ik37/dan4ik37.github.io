@@ -597,3 +597,12 @@ body.high .ds-ccic.anim{animation:dsBoost 2.6s ease-in-out infinite}
 .ds-pwlock{display:flex;flex-direction:column;gap:10px;max-width:460px;margin:24px auto;padding:0 16px}
 .ds-pwrow{display:flex;gap:8px}
 .ds-pwrow .ds-in{flex:1;min-height:42px;border-radius:10px;padding:0 12px;border:1px solid rgba(var(--fg-rgb),.2);background:transparent;color:inherit;font-size:16px}
+/* T-169: карточка канала (community2.js CARD): подсказка под каждым полем, шапка с ✕; на телефоне — во весь экран */
+.ds4-hint{display:block;margin:-4px 0 4px;font-size:12px;line-height:1.4;color:var(--muted)}
+.ds4-sethd{display:flex;align-items:center;gap:8px}
+.ds4-sethd b{flex:1;min-width:0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds4-sethd small{color:var(--muted);font-size:12px}
+.ds4-vh{margin:18px 0 4px}
+@media (max-width:700px){
+  .ds4-set.ds4-card{position:fixed;inset:0;z-index:9600;margin:0;border-radius:0;overflow-y:auto;background:var(--ds-main);padding:calc(12px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom))}
+}

@@ -19,7 +19,10 @@
   const P = window.D37Phone;
   const MV = window.MsgView = window.MsgView || {};
   // 🚩 не на себя и не на создателя (role admin); ds-mod.js заменяет точной проверкой со списком админов. Сервер всё равно решает сам.
-  if (!MV.noReport) MV.noReport = m => !!m && ((m.uid && m.uid === P.me()) || m.role === 'admin');
+  // T-169: «моё ли сообщение» — одна проверка для меню, листа на телефоне, файлов и 🚩 (владелец 19.11: «можно жаловаться на мои сообщения»):
+  // без uid (старые сообщения, написанные до входа) — по нику, когда я вошёл
+  MV.isMine = m => !!m && (!!m.mine || (m.uid ? !!P.me() && m.uid === P.me() : !!P.me() && !!m.nick && m.nick === (P.myNick?.() || (typeof chatNick !== 'undefined' ? chatNick : ''))));
+  if (!MV.noReport) MV.noReport = m => !!m && (MV.isMine(m) || m.role === 'admin');
   const GROUP_MS = 7 * 60e3, KEEP = 350;
   const PREPEND = true, FILE_TEXT = true;
   // T-167 черновики: недописанное сообщение остаётся у канала (перешёл в другой канал / закрыл сайт — вернулся, текст на месте).
@@ -789,7 +792,7 @@
     // ── Меню сообщения ──
     function closeMenu(){ menu.hidden = true; menu.innerHTML = ''; root.querySelector('.mv-m.mv-sel')?.classList.remove('mv-sel'); }
     function openMenu(m, anchor){
-      const A = V.A, mine = m.uid ? m.uid === myUid() : m.mine, logged = !!P.me();
+      const A = V.A, mine = (m.uid ? m.uid === myUid() : m.mine) || MV.isMine(m), logged = !!P.me();
       const items = [];
       if (A.caps.react === 'count' && V.canReact) items.push(`<div class="mv-qr">${(A.reactSet || ['👍', '❤️', '😂', '🔥', '😮', '🎉']).map(x => `<button type="button" data-m="react:${e(x)}">${x}</button>`).join('')}</div>`);
       if (A.caps.react === 'site') items.push(`<button type="button" data-m="reactpick">😊 Реакция</button>`);
@@ -882,7 +885,7 @@
       }
       const A = V.A;
       const actions = {
-        report: m && A?.caps?.report && !MV.noReport?.(m) ? () => reportFlow(m) : null,   // T-164: на себя и на создателя — нет (ds-mod.js)
+        report: m && A?.caps?.report && !MV.isMine(m) && !MV.noReport?.(m) ? () => reportFlow(m) : null,   // T-164: на себя и на создателя — нет (ds-mod.js)
         mods: (u, n) => (A?.userMod ? A.userMod(u, n) || [] : []),
         modDo: async (k, u, n) => { const r = await A.userModDo(k, u, n); if (r?.msg) note(r.msg, !r.ok, 2600); return r; },
         block: (u, n) => blockFlow(u, n),

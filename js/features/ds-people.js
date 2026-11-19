@@ -103,13 +103,21 @@
     return m ? 'c' + m[1] : /^#\/(chat|phone\/comm)(\/|$)/.test(h) ? 'd37' : null;
   };
   const NK = new Map(), MC = new Map(), ICONS = new Map();   // NK: scope → Map(uid → ник | '' ), MC: scope|uid → { s, c, t }
+  const META_TTL = 60000;
   async function meta(scope, ids){
     if (missing || !scope || !ids.length) return null;
+    // T-169 (docs/areas/social-load.md): список участников перерисовывается на каждое «кто-то зашёл / вышел» — статусы тех же людей
+    // не спрашиваем снова 60 с (раньше — 3–4 запроса в минуту у гостя в покое). Откат: META_TTL = 0
+    if (META_TTL && ICONS.has(scope) && ids.every(id => { const m = MC.get(scope + '|' + id); return m && Date.now() - m.t < META_TTL; })) {
+      const nk0 = NK.get(scope);
+      return { list: ids.map(id => ({ id, m: MC.get(scope + '|' + id) })).filter(x => x.m.s != null).map(x => ({ id: x.id, s: x.m.s, c: x.m.c, n: nk0?.get(x.id) || '' })), icons: ICONS.get(scope) };
+    }
     const r = await rpc('ds_people_meta', { p_scope: scope, p_ids: ids.slice(0, 300) });
     if (!r.data?.ok) return null;
     const nk = NK.get(scope) || new Map(); NK.set(scope, nk);
     for (const id of ids) if (!nk.has(id)) nk.set(id, '');
     const list = Array.isArray(r.data.list) ? r.data.list : [];
+    for (const id of ids) if (UUID.test(id || '')) MC.set(scope + '|' + id, { s: null, c: null, t: Date.now() });   // нет в ответе — тоже запомнили
     for (const x of list) { if (!UUID.test(x.id || '')) continue; nk.set(x.id, typeof x.n === 'string' ? x.n.slice(0, 32) : ''); MC.set(scope + '|' + x.id, { s: x.s || 'offline', c: x.c || null, t: Date.now() }); }
     if (nk.size > 3000) NK.set(scope, new Map([...nk].slice(-1500)));
     if (MC.size > 3000) MC.clear();

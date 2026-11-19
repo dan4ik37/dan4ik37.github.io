@@ -616,6 +616,7 @@
   };
 
   // ═══ 📁 «Каналы и категории»: порядок, категории, настройки канала ═══
+  const CARD = true;   // T-169: понятная карточка канала (подсказка под каждым полем, предел и пароль, «по умолчанию», на телефоне — во весь экран); откат — false
   X.sub.channels = {
     title: '📁 Каналы',
     async render(el, mode, srv, rest){
@@ -630,7 +631,8 @@
       if (!can) { el.innerHTML = '<div class="ds-pane"><h3>📁 Каналы и категории</h3><p class="ds-dim">Каналы настраивают владелец, модераторы и роли с правом «📁 Каналы».</p></div>'; return; }
       const admin = off && S.staff === 'admin', R = off ? null : await X.roleData?.(srv.id);
       const cats = (S.cats || []).slice().sort((a, b) => a.pos - b.pos || a.id - b.id);
-      const chans = (S.channels || []).filter(c => !c.soon && c.kind !== 'twitch').map(c => ({ ...c }));
+      const siteV = off && CARD && DS.sv?.list ? (S.channels || []).filter(c => c.kind === 'voice' && c.sv != null).map(c => ({ ...c })) : [];   // T-169: голосовые сайта — своим списком (ч. 16)
+      const chans = (S.channels || []).filter(c => !c.soon && c.kind !== 'twitch' && !siteV.some(v => v.id === c.id)).map(c => ({ ...c }));
       const has = id => cats.some(k => k.id === id);
       const arch = chans.filter(c => c.archived);
       // порядок — один список: каналы без категории, потом категории со своими каналами; категория канала — ближайшая выше
@@ -638,19 +640,25 @@
         ...cats.flatMap(k => [{ t: 'cat', k }, ...chans.filter(c => !c.archived && c.cat === k.id).map(c => ({ t: 'ch', c }))])];
       let open = rest?.[0] || '';
       const touch = !!P.touch?.();
-      const SLOW = [0, 5, 30, 60, 300];
+      const SLOW = [0, 5, 30, 60, 300], capV = +DS.sv?.cap || 6;
       const setHtml = c => {
         const sl = SLOW.includes(c.slow || 0) ? SLOW : SLOW.concat(c.slow).sort((a, b) => a - b);
         const who = c.mods_only ? (c.write_role ? 'r' + c.write_role : 'mods') : 'all';
         const canDel = off ? admin && !['general', 'news', 'voice'].includes(c.id) : true;
         const canArch = off ? c.kind === 'text' && !['general', 'news'].includes(c.id) : true;
-        return `<div class="ds4-set" data-set="${e(c.id)}">
-          <label class="ds-lbl">Название<input class="ds-in" data-s="name" maxlength="32" value="${e(c.name)}"></label>
-          <label class="ds-lbl">Тема — видна под названием канала<input class="ds-in" data-s="about" maxlength="200" value="${e(c.about || '')}" placeholder="О чём этот канал"></label>
-          ${X.chanExtraHtml ? X.chanExtraHtml(c, S) : ''}
-          ${c.kind === 'text' ? `<label class="ds-lbl">Медленный режим<select class="ds-in" data-s="slow">${sl.map(s => `<option value="${s}"${(c.slow || 0) === s ? ' selected' : ''}>${s ? '🐢 раз в ' + (s >= 60 ? s / 60 + ' мин' : s + ' с') : 'без задержки'}</option>`).join('')}</select></label>
-          <label class="ds-lbl">Кто пишет<select class="ds-in" data-s="who"><option value="all"${who === 'all' ? ' selected' : ''}>Все участники</option><option value="mods"${who === 'mods' ? ' selected' : ''}>📢 Только ${off ? 'команда сайта' : 'владелец и модераторы'}</option>${(R?.roles || []).map(x => `<option value="r${e(x.id)}"${who === 'r' + x.id ? ' selected' : ''}>📢 Модераторы и роль «${e(x.name)}»</option>`).join('')}</select></label>` : ''}
-          <div class="ds-row ds4-acts"><button type="button" class="ds-btn" data-a="save">💾 Сохранить</button>${canArch ? `<button type="button" class="ds-btn ghost" data-a="arch">${c.archived ? '🗄 Вернуть из архива' : '🗄 В архив'}</button>` : ''}${canDel ? '<button type="button" class="ds-btn bad" data-a="del">🗑 Удалить</button>' : ''}</div>
+        const H = t => CARD ? `<small class="ds4-hint">${t}</small>` : '', sv = c.sv != null && siteV.some(v => v.id === c.id);
+        const vlim = c.kind === 'voice' && CARD ? `<label class="ds-lbl">Сколько человек внутри<select class="ds-in" data-s="limit">${[0, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 25].filter(n => n <= capV).map(n => `<option value="${n}"${(+c.user_limit || 0) === n ? ' selected' : ''}>${n ? 'до ' + n : 'без своего предела (сайт: ' + capV + ')'}</option>`).join('')}</select></label>${H('Больше людей не зайдёт — сервер не даст пропуск. Предел сайта — ' + capV + '.')}<div class="ds4-vwho" data-vwho="${sv ? +c.sv : e(c.id)}"></div>` : '';
+        const pw = CARD && !off && (c.kind === 'text' || c.kind === 'voice') ? `<label class="ds-lbl">Пароль на канал<input class="ds-in" type="password" data-s="pw" maxlength="64" autocomplete="new-password" placeholder="новый пароль — 4–64 знака (пусто — не менять)"></label>
+          <label class="ds-chk ds-sm"><input type="checkbox" data-s="pwoff"> убрать пароль</label>${H('Зайдут только те, кто знает пароль. Это замок на двери, а не шифрование: сообщения хранятся на сайте как обычно.')}` : '';
+        return `<div class="ds4-set${CARD ? ' ds4-card' : ''}" data-set="${e(c.id)}">
+          ${CARD ? `<div class="ds4-sethd"><b>${c.kind === 'voice' ? '🔊' : '#'} ${e(c.name)}</b><small>${c.kind === 'voice' ? 'голосовой' : 'текстовый'} канал</small><button type="button" class="ds-hb" data-a="set" title="Закрыть настройки канала" aria-label="Закрыть настройки канала">✕</button></div>` : ''}
+          <label class="ds-lbl">Название<input class="ds-in" data-s="name" maxlength="32" value="${e(c.name)}"></label>${H('Так канал называется в списке слева.')}
+          ${sv ? '' : `<label class="ds-lbl">Тема — видна под названием канала<input class="ds-in" data-s="about" maxlength="200" value="${e(c.about || '')}" placeholder="О чём этот канал"></label>${H('Одна строка: о чём здесь говорят.')}`}
+          ${sv || !X.chanExtraHtml ? '' : X.chanExtraHtml(c, S)}
+          ${c.kind === 'text' ? `<label class="ds-lbl">Медленный режим<select class="ds-in" data-s="slow">${sl.map(s => `<option value="${s}"${(c.slow || 0) === s ? ' selected' : ''}>${s ? '🐢 раз в ' + (s >= 60 ? s / 60 + ' мин' : s + ' с') : 'без задержки'}</option>`).join('')}</select></label>${H('Как часто один человек может писать. Помогает, когда пишут слишком много.')}
+          <label class="ds-lbl">Кто пишет<select class="ds-in" data-s="who"><option value="all"${who === 'all' ? ' selected' : ''}>Все участники</option><option value="mods"${who === 'mods' ? ' selected' : ''}>📢 Только ${off ? 'команда сайта' : 'владелец и модераторы'}</option>${(R?.roles || []).map(x => `<option value="r${e(x.id)}"${who === 'r' + x.id ? ' selected' : ''}>📢 Модераторы и роль «${e(x.name)}»</option>`).join('')}</select></label>${H('Читать могут все, кто видит канал; писать — только выбранные.')}` : ''}
+          ${vlim}${pw}
+          <div class="ds-row ds4-acts"><button type="button" class="ds-btn" data-a="save">💾 Сохранить</button>${CARD ? '<button type="button" class="ds-btn ghost" data-a="dflt" title="Вернуть обычные настройки (название остаётся); потом — 💾 Сохранить">↺ По умолчанию</button>' : ''}${canArch && !sv ? `<button type="button" class="ds-btn ghost" data-a="arch">${c.archived ? '🗄 Вернуть из архива' : '🗄 В архив'}</button>` : ''}${canDel || (sv && +c.sv !== 0) ? '<button type="button" class="ds-btn bad" data-a="del">🗑 Удалить</button>' : ''}</div>
           <p class="ds-dim">🗄 Архив — канал спрятан от участников, история сохраняется.</p></div>`;
       };
       const btn = (a, t, l) => `<button type="button" class="ds-hb" data-a="${a}" title="${l}" aria-label="${l}">${t}</button>`;
@@ -664,10 +672,18 @@
           <p class="ds-dim">${touch ? '↑ ↓ — порядок (через край категории — в соседнюю)' : 'Перетаскивай за ⠿ (на категорию — внутрь неё) или ↑ ↓'}; ⚙️ — название, тема, 🐢, кто пишет, архив.</p>
           <div class="ds4-tree">${items.map((it, i) => (it.t === 'cat' ? catRow(it.k, i) : chRow(it.c, i))).join('')}
             ${arch.length ? `<div class="ds4-row cat arch"><span>🗄 Архив — ${arch.length}</span></div>${arch.map(c => chRow(c, -1)).join('')}` : ''}</div>
+          ${siteV.length ? `<h4 class="ds4-vh">🔊 Голосовые каналы сайта</h4><p class="ds-dim">У каждого свой предел людей. Перейти из одного в другой можно, не выходя из голоса.</p><div class="ds4-tree">${siteV.map((c, i) => `<div class="ds4-row" data-vi="${i}" data-ch="${e(c.id)}"><span>🔊 ${e(c.name)}${c.user_limit ? ' · до ' + (+c.user_limit) : ''}</span>${btn('vup', '↑', 'Выше')}${btn('vdown', '↓', 'Ниже')}${btn('set', '⚙️', 'Настройки канала')}</div>${String(open) === String(c.id) ? setHtml(c) : ''}`).join('')}</div>` : ''}
           <div class="ds-row"><input class="ds-in" data-f="newcat" maxlength="32" placeholder="Новая категория" aria-label="Новая категория"><button type="button" class="ds-btn ghost" data-a="cadd">＋ Категория</button></div>
-          <div class="ds-row"><input class="ds-in" data-f="newch" maxlength="32" placeholder="Новый канал" aria-label="Новый канал">${off ? '' : '<select class="ds-in ds-sm" data-f="newkind" aria-label="Тип канала"><option value="text"># текст</option><option value="voice">🔊 голос</option></select>'}<button type="button" class="ds-btn ghost" data-a="chadd">＋ Канал</button></div>
+          <div class="ds-row"><input class="ds-in" data-f="newch" maxlength="32" placeholder="Новый канал" aria-label="Новый канал">${off && !siteV.length ? '' : '<select class="ds-in ds-sm" data-f="newkind" aria-label="Тип канала"><option value="text"># текст</option><option value="voice">🔊 голос</option></select>'}<button type="button" class="ds-btn ghost" data-a="chadd">＋ Канал</button></div>
           <div class="ds-err" hidden></div></div>`;
         if (open) el.querySelector(`[data-set]`)?.scrollIntoView?.({ block: 'nearest' });
+        // T-169: «кто внутри» голосового — прямо в карточке
+        el.querySelectorAll('[data-vwho]').forEach(async w => {
+          const r = await P.rpc('cv_who', { p_channel: +w.dataset.vwho });
+          if (!w.isConnected || !r.data?.ok) return;
+          const ppl = Array.isArray(r.data.people) ? r.data.people : [];
+          w.innerHTML = `<small class="ds4-hint">Сейчас внутри: ${ppl.length ? ppl.slice(0, 12).map(x => e(x.nick || 'игрок')).join(', ') : 'никого'} (${ppl.length} из ${+r.data.max || capV})</small>`;
+        });
       };
       const block = i => { let j = i + 1; while (j < items.length && items[j].t === 'ch') j++; return [i, j]; };
       const move = (i, d) => {
@@ -706,7 +722,32 @@
         const id = b.closest('[data-ch]')?.dataset.ch ?? b.closest('[data-set]')?.dataset.set;
         const c = id != null ? chans.find(x => String(x.id) === String(id)) : null;
         if ((a === 'up' || a === 'down') && i >= 0) { if (move(i, a === 'up' ? -1 : 1)) { draw(); saveLayout(); } return; }
-        if (a === 'set' && c) { open = String(open) === String(c.id) ? '' : c.id; draw(); return; }
+        const sc = id != null ? siteV.find(x => String(x.id) === String(id)) : null, cc = c || sc;
+        if (a === 'set' && cc) { open = String(open) === String(cc.id) ? '' : cc.id; draw(); return; }
+        if (a === 'dflt' && cc) {   // T-169: «по умолчанию» — заполнить форму обычными значениями, сохранить — кнопкой
+          const box = b.closest('[data-set]'), q = s2 => box?.querySelector(`[data-s="${s2}"]`);
+          if (q('about')) q('about').value = ''; if (q('slow')) q('slow').value = '0'; if (q('who')) q('who').value = 'all'; if (q('limit')) q('limit').value = '0';
+          if (q('emoji')) q('emoji').value = ''; if (q('age') && !q('age').disabled) q('age').value = '0';
+          toast('↺ Обычные настройки подставлены — нажми 💾 Сохранить', true); return;
+        }
+        if ((a === 'vup' || a === 'vdown') && sc) {
+          const j = siteV.indexOf(sc), k2 = j + (a === 'vup' ? -1 : 1); if (k2 < 0 || k2 >= siteV.length) return;
+          [siteV[j], siteV[k2]] = [siteV[k2], siteV[j]];
+          for (let n2 = 0; n2 < siteV.length; n2++) { const v = siteV[n2]; const r = await P.rpc('site_voice_save', { p_id: +v.sv, p_name: v.name, p_position: n2, p_limit: +v.user_limit || 0 }); if (!r.data?.ok) { err(why4(r)); break; } }
+          await DS.svLoad?.(true); after(); return again();
+        }
+        if (a === 'save' && sc) {
+          const box = b.closest('[data-set]'), q = s2 => box?.querySelector(`[data-s="${s2}"]`);
+          const r = await P.rpc('site_voice_save', { p_id: +sc.sv, p_name: q('name').value, p_position: null, p_limit: +(q('limit')?.value || 0) });
+          if (!r.data?.ok) { err(why4(r)); return; }
+          toast('✅ Сохранено', true); await DS.svLoad?.(true); after(); return again(sc.id);
+        }
+        if (a === 'del' && sc) {
+          if (await sheet(`🗑 Удалить голосовой <b>${e(sc.name)}</b>?`, '<p class="ds-dim">Кто внутри — выйдет. Канал «Общий» удалить нельзя.</p><button type="button" class="ds4-wide bad" data-v="yes">🗑 Удалить</button>') !== 'yes') return;
+          const r = await P.rpc('site_voice_delete', { p_id: +sc.sv });
+          if (!r.data?.ok) { err(why4(r)); return; }
+          toast('🗑 Голосовой удалён', true); await DS.svLoad?.(true); after(); return again();
+        }
         if ((a === 'save' || a === 'arch') && c) {
           const box = b.closest('[data-set]'), q = s => box?.querySelector(`[data-s="${s}"]`);
           const who = q('who')?.value || (c.mods_only ? 'mods' : 'all');
@@ -715,6 +756,11 @@
             p_archived: a === 'arch' ? !c.archived : !!c.archived });
           if (!r.data?.ok) { err(why4(r)); return; }
           if (a === 'save' && X.chanExtraSave) { const r2 = await X.chanExtraSave(box, c, S); if (!r2.ok) { err(r2.err); return; } }   // T-162: значок, возраст
+          if (a === 'save' && CARD && !off) {   // T-169: предел голосового и пароль — в той же карточке
+            if (q('limit') && +q('limit').value !== (+c.user_limit || 0)) { const r3 = await P.rpc('cm_voice_limit_set', { p_channel: +c.id, p_limit: +q('limit').value }); if (!r3.data?.ok) { err(why4(r3)); return; } }
+            const pwv = q('pw')?.value || '', pwOff = !!q('pwoff')?.checked;
+            if (pwv || pwOff) { const r4 = await P.rpc('cm_chan_pw_set', { p_ch: +c.id, p_pw: pwOff ? '' : pwv }); if (!r4.data?.ok) { err(why4(r4)); return; } DS.pwDrop?.(srv.id); }
+          }
           toast(a === 'arch' ? (c.archived ? '🗄 Канал вернулся из архива' : '🗄 Канал в архиве — история сохранена') : '✅ Сохранено', true);
           after(); return again(a === 'arch' ? '' : c.id);
         }
@@ -727,10 +773,12 @@
         if (a === 'cadd' || a === 'chadd') {
           const n = el.querySelector(`[data-f="${a === 'cadd' ? 'newcat' : 'newch'}"]`).value.trim(); if (!n) return;
           const r = a === 'cadd' ? await P.rpc('cm_cat_save', { p_community: off ? null : srv.id, p_id: null, p_name: n })
+            : off && siteV.length && el.querySelector('[data-f="newkind"]')?.value === 'voice' ? await P.rpc('site_voice_save', { p_id: null, p_name: n, p_position: null, p_limit: 0 })
             : off ? await P.rpc('chat_chan_add', { p_name: n })
             : await P.rpc('cm_channel_save', { p_community: srv.id, p_id: null, p_name: n, p_kind: el.querySelector('[data-f="newkind"]').value, p_slow: 0, p_mods_only: false });
           if (!r.data?.ok) { err(why4(r)); return; }
           if (a === 'chadd') toast('＋ Канал создан — перетащи его в нужную категорию', true);
+          if (a === 'chadd' && off && siteV.length) await DS.svLoad?.(true);
           after(); return again(a === 'chadd' ? r.data.id : '');
         }
         if ((a === 'cren' || a === 'cdel') && items[i]?.t === 'cat') {
