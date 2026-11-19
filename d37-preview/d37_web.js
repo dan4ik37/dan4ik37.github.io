@@ -553,8 +553,9 @@ export class D37Web {
     }
     /**
      * ep12-fps: the newest GPU pass times in ms ([] when the adapter has no timestamp queries): first the pass
-     * flags of that frame (1 shadows, 2 clouds, 4 overlay), then one value per pass in graph order (shadows when
-     * flagged, depth_prepass, opaque, sky, clouds when flagged, post, overlay when flagged).
+     * flags of that frame (1 shadows, 2 clouds, 4 overlay, 8 ao, 16 shafts, 32 bloom), then one value per pass in
+     * graph order (shadows when flagged, depth_prepass, opaque, sky, clouds when flagged, ao, shafts, the five bloom
+     * passes when flagged, post, overlay when flagged; d37_render::ALL_PASSES).
      * @returns {Float64Array}
      */
     gpu_ms() {
@@ -823,7 +824,7 @@ export class D37Web {
         }
     }
     /**
-     * True once the first full terrain around the player is on the GPU.
+     * True once the scene can be entered. Distant planet detail may still be streaming.
      * @returns {boolean}
      */
     loaded() {
@@ -854,6 +855,24 @@ export class D37Web {
      */
     look_reset(skip_first) {
         wasm.d37web_look_reset(this.__wbg_ptr, skip_first);
+    }
+    /**
+     * ep15-look L2: the CC0 object classes the page fetches beside the wasm (`materials/cc0/obj_<class>_albedo.png`
+     * and `_surface.png`), in class order.
+     * @returns {string[]}
+     */
+    object_texture_classes() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            wasm.d37web_object_texture_classes(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var v1 = getArrayJsValueFromWasm0(r0, r1);
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
     }
     /**
      * The planet's numbers for the page: JSON (ask a few times a second). "{}" in a flat scene.
@@ -932,6 +951,34 @@ export class D37Web {
             if (r1) {
                 throw takeFromExternrefTable0(r0);
             }
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * ep15-look L2: one fetched object image (`class` = index in `object_texture_classes`, `kind` 0 albedo / 1
+     * surface); once every class has both, they go to the renderer (the things get their materials). Returns true
+     * then.
+     * @param {number} _class
+     * @param {number} kind
+     * @param {Uint8Array | number[]} png
+     * @returns {boolean}
+     */
+    push_object_texture(_class, kind, png) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            const val2 = +_class;
+            const val3 = +kind;
+            const ptr0 = passArray8ToWasm0(png, wasm.__wbindgen_export);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.d37web_push_object_texture(retptr, this.__wbg_ptr, val2, val3, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeFromExternrefTable0(r1);
+            }
+            return r0 !== 0;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -1654,6 +1701,26 @@ export class WorldWorker {
         }
     }
     /**
+     * ep14-perf: the pacing counters as one JSON line (`PaceStats::report`); the page may show it in F3.
+     * @returns {string}
+     */
+    pace_stats() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            wasm.worldworker_pace_stats(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export3(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * @returns {string}
      */
     profile() {
@@ -1892,6 +1959,231 @@ export function character_hash(name) {
 }
 
 /**
+ * Apply layers (`[{"name", "text"}, …]`, lowest first) and return the report JSON (hashes, layers, warnings, RULE
+ * values). `start` = a world is about to start: the RULE values are frozen for it; otherwise (a file changed
+ * mid-session) only the LOOK values change and `rules_pending` says the RULE values wait for the next start. Never
+ * throws: a broken list = the defaults, with the reason in `error`.
+ * @param {string} layers_json
+ * @param {boolean} start
+ * @returns {string}
+ */
+export function config_apply(layers_json, start) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        const val2 = +start;
+        const ptr0 = passStringToWasm0(layers_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.config_apply(retptr, ptr0, len0, val2);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred3_0 = r0;
+        deferred3_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Check one settings file as `d37 config check` does: {"ok", "skipped", "keys", "warn": [...], "hash"}.
+ * @param {string} name
+ * @param {string} text
+ * @returns {string}
+ */
+export function config_check(name, text) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        wasm.config_check(retptr, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred3_0 = r0;
+        deferred3_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * The key table as JSON (`d37 config dump --json`).
+ * @returns {string}
+ */
+export function config_dump_json() {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        wasm.config_dump_json(retptr);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred1_0 = r0;
+        deferred1_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
+ * The Russian reference (`d37 config dump --md`): the site's import writes it next to the files.
+ * @returns {string}
+ */
+export function config_dump_md() {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        wasm.config_dump_md(retptr);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred1_0 = r0;
+        deferred1_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
+ * The report of the settings in force (the HUD, error reports).
+ * @returns {string}
+ */
+export function config_report() {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        wasm.config_report(retptr);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred1_0 = r0;
+        deferred1_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
+ * The determinism probe: the same line as native `d37 config hash` (scripts/wasm-check.mjs compares them).
+ * @param {string} layers_json
+ * @param {string} scene_ron
+ * @param {number} ticks
+ * @returns {string}
+ */
+export function config_world_hash(layers_json, scene_ron, ticks) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        const val3 = +ticks;
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(layers_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(scene_ron, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        wasm.config_world_hash(retptr, ptr0, len0, ptr1, len1, val3);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr4 = r0;
+        var len4 = r1;
+        if (r3) {
+            ptr4 = 0; len4 = 0;
+            throw takeFromExternrefTable0(r2);
+        }
+        deferred5_0 = ptr4;
+        deferred5_1 = len4;
+        return getStringFromWasm0(ptr4, len4);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred5_0, deferred5_1, 1);
+    }
+}
+
+/**
+ * The bisect probe: the same lines as native `d37 config probe` (per tick: core, mover, every piece of the game hash).
+ * @param {string} layers_json
+ * @param {string} scene_ron
+ * @param {number} ticks
+ * @returns {string}
+ */
+export function config_world_probe(layers_json, scene_ron, ticks) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        const val3 = +ticks;
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(layers_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(scene_ron, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        wasm.config_world_probe(retptr, ptr0, len0, ptr1, len1, val3);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        var ptr4 = r0;
+        var len4 = r1;
+        if (r3) {
+            ptr4 = 0; len4 = 0;
+            throw takeFromExternrefTable0(r2);
+        }
+        deferred5_0 = ptr4;
+        deferred5_1 = len4;
+        return getStringFromWasm0(ptr4, len4);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred5_0, deferred5_1, 1);
+    }
+}
+
+/**
+ * Tests of the crash path (EP14-config): a real wasm panic (`RuntimeError: unreachable`) with a known text. Only a
+ * test calls it (engine-host.js `debugCrash`); it changes nothing before it panics.
+ * @param {string} place
+ */
+export function debug_panic(place) {
+    const ptr0 = passStringToWasm0(place, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    wasm.debug_panic(ptr0, len0);
+}
+
+/**
  * The page's encoder of an input message (tests build the same messages D37Web sends).
  * @param {number} move_x
  * @param {number} move_z
@@ -1982,6 +2274,69 @@ export function ground_layer(index, size) {
         return v1;
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * ep15-look L2: terrain layer `index` from its CC0 set's two PNG files at `size` (the same bytes as `ground_layer`).
+ * @param {number} index
+ * @param {number} size
+ * @param {Uint8Array | number[]} albedo_png
+ * @param {Uint8Array | number[]} surface_png
+ * @returns {Uint8Array}
+ */
+export function ground_layer_cc0(index, size, albedo_png, surface_png) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        const val3 = +index;
+        const val4 = +size;
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passArray8ToWasm0(albedo_png, wasm.__wbindgen_export);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passArray8ToWasm0(surface_png, wasm.__wbindgen_export);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        wasm.ground_layer_cc0(retptr, val3, val4, ptr0, len0, ptr1, len1);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+        if (r3) {
+            throw takeFromExternrefTable0(r2);
+        }
+        var v5 = getArrayU8FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export3(r0, r1 * 1, 1);
+        return v5;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
+ * ep15-look L2: the CC0 file stem of terrain layer `index` ("" = the layer is made by code): the Worker fetches
+ * `materials/cc0/<stem>_albedo.png` and `_surface.png` beside the page and calls `ground_layer_cc0`.
+ * @param {number} index
+ * @returns {string}
+ */
+export function ground_layer_cc0_stem(index) {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+        wasm.ground_layer_cc0_stem(retptr, index);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        deferred1_0 = r0;
+        deferred1_1 = r1;
+        return getStringFromWasm0(r0, r1);
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+        wasm.__wbindgen_export3(deferred1_0, deferred1_1, 1);
     }
 }
 
@@ -3348,7 +3703,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_41969(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_44308(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -4476,52 +4831,52 @@ function __wbg_get_imports() {
         }, arguments); },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 23, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1415);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1493);
             return ret;
         },
         __wbindgen_generic_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 3094, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_41967);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 3233, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_44306);
             return ret;
         },
         __wbindgen_generic_0000000000000003: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 24, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1416);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1494);
             return ret;
         },
         __wbindgen_generic_0000000000000004: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("ErrorEvent")], shim_idx: 24, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1416_126);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1494_139);
             return ret;
         },
         __wbindgen_generic_0000000000000005: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUDevice")], shim_idx: 1348, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_32074);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUDevice")], shim_idx: 1487, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_34410);
             return ret;
         },
         __wbindgen_generic_0000000000000006: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 1349, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_32075);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 1488, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_34411);
             return ret;
         },
         __wbindgen_generic_0000000000000007: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 24, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1416_129);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1494_142);
             return ret;
         },
         __wbindgen_generic_0000000000000008: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("any")], shim_idx: 1348, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_32074_130);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("any")], shim_idx: 1487, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_34410_143);
             return ret;
         },
         __wbindgen_generic_0000000000000009: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("undefined")], shim_idx: 1348, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_32074_131);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("undefined")], shim_idx: 1487, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_34410_144);
             return ret;
         },
         __wbindgen_generic_000000000000000a: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 22, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1414);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1492);
             return ret;
         },
         __wbindgen_generic_000000000000000b: function(arg0) {
@@ -4585,38 +4940,38 @@ function __wbg_get_imports() {
 }
 
 const lAudioContext = (typeof AudioContext !== 'undefined' ? AudioContext : (typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : undefined));
-function __wasm_bindgen_func_elem_1414(arg0, arg1) {
-    wasm.__wasm_bindgen_func_elem_1414(arg0, arg1);
+function __wasm_bindgen_func_elem_1492(arg0, arg1) {
+    wasm.__wasm_bindgen_func_elem_1492(arg0, arg1);
 }
 
-function __wasm_bindgen_func_elem_1415(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_1415(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_1493(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_1493(arg0, arg1, arg2);
 }
 
-function __wasm_bindgen_func_elem_1416(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_1416(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_1494(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_1494(arg0, arg1, arg2);
 }
 
-function __wasm_bindgen_func_elem_1416_126(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_1416_126(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_1494_139(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_1494_139(arg0, arg1, arg2);
 }
 
-function __wasm_bindgen_func_elem_32075(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_32075(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_34411(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_34411(arg0, arg1, arg2);
 }
 
-function __wasm_bindgen_func_elem_1416_129(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_1416_129(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_1494_142(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_1494_142(arg0, arg1, arg2);
 }
 
-function __wasm_bindgen_func_elem_41969(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_41969(arg0, arg1, arg2, arg3);
+function __wasm_bindgen_func_elem_44308(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_44308(arg0, arg1, arg2, arg3);
 }
 
-function __wasm_bindgen_func_elem_41967(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_44306(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_41967(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_44306(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -4627,10 +4982,10 @@ function __wasm_bindgen_func_elem_41967(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_32074(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_34410(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_32074(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_34410(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -4641,10 +4996,10 @@ function __wasm_bindgen_func_elem_32074(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_32074_130(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_34410_143(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_32074_130(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_34410_143(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -4655,10 +5010,10 @@ function __wasm_bindgen_func_elem_32074_130(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_32074_131(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_34410_144(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_32074_131(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_34410_144(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -4868,6 +5223,17 @@ function getArrayI32FromWasm0(ptr, len) {
 function getArrayI8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getInt8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+}
+
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_externrefs.get(mem.getUint32(i, true)));
+    }
+    wasm.__wbindgen_export8(ptr, len);
+    return result;
 }
 
 function getArrayJsValueViewFromWasm0(ptr, len) {

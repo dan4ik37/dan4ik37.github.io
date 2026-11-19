@@ -1,0 +1,33 @@
+// ep15-look L2: the CC0 inputs of the material rules (made by M:/d37/claude-tmp/ep15-look/tools/process_cc0.py from
+// M:/d37/d37-assets-src/cc0, LICENSES.md there). Terrain layers replace the code-made texture of that layer (the
+// layer rules — slope, height, snow line, biome, wetness — stay the shader's); tile_m = the set's real size.
+// Object classes are chosen per material by name rules (crates/d37-app/src/game/draw.rs `material_class`).
+(
+    version: 0,
+    terrain: [
+        (layer: "grass", source: "polyhaven/leafy_grass", tile_m: 2.00),
+        (layer: "dry_grass", source: "polyhaven/withered_grass", tile_m: 2.00),
+        (layer: "soil", source: "polyhaven/forest_ground_04", tile_m: 3.15),
+        (layer: "sand", source: "polyhaven/coast_sand_01", tile_m: 15.00),
+        (layer: "gravel", source: "polyhaven/gravel_ground_01", tile_m: 3.00),
+        (layer: "rock", source: "polyhaven/rock_ground", tile_m: 1.50),
+        (layer: "cliff", source: "polyhaven/rock_face", tile_m: 2.38),
+        (layer: "snow", source: "polyhaven/snow_02", tile_m: 2.00),
+        (layer: "seabed", source: "polyhaven/sandy_gravel_02", tile_m: 2.53),
+    ],
+    objects: [
+        (class: "bark", source: "polyhaven/bark_brown_02", tile_m: 1.00),
+        (class: "moss", source: "polyhaven/mossy_rock", tile_m: 3.00),
+        (class: "rock", source: "polyhaven/rock_boulder_dry", tile_m: 1.80),
+        (class: "leaf", source: "polyhaven/forest_leaves_03", tile_m: 2.30),
+        (class: "wood", source: "polyhaven/oak_wood_planks", tile_m: 1.20),
+        (class: "thatch", source: "polyhaven/thatch_roof_angled", tile_m: 0.54),
+        (class: "soil", source: "polyhaven/forest_ground_04", tile_m: 3.15),
+        // ep15-look round 3: alpha-tested cards (ground cover and leaf cards; a crop of a CC0 plant model's texture)
+        (class: "cover_grass", source: "polyhaven/grass_medium_01", tile_m: 1.00),
+        (class: "cover_fern", source: "polyhaven/fern_02", tile_m: 1.00),
+        (class: "cover_clover", source: "polyhaven/shrub_sorrel_01", tile_m: 1.00),
+        (class: "cover_moss", source: "polyhaven/moss_01", tile_m: 1.00),
+        (class: "leaf_card", source: "polyhaven/shrub_01", tile_m: 1.00),
+    ],
+)

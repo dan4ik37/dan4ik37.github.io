@@ -9,9 +9,13 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const engine = path.resolve(process.argv[2] || 'M:/d37/d37-engine');
+// --preview: в папку d37-preview/ (предварительный канал: /d37-preview/ и игры с "engine": { "channel": "preview" }); основная
+// сборка d37/ и таблица ключей d37-config/keys.json при этом не трогаются.
+const PREVIEW = process.argv.includes('--preview');
+const OUT_NAME = PREVIEW ? 'd37-preview' : 'd37';
+const engine = path.resolve(process.argv.slice(2).find((a) => !a.startsWith('--')) || 'M:/d37/d37-engine');
 const dist = path.join(engine, 'dist', 'web');
-const out = path.join(site, 'd37');
+const out = path.join(site, OUT_NAME);
 const die = (m) => { console.error('engine-import: ' + m); process.exit(1); };
 for (const f of ['d37_web.js', 'd37_web_bg.wasm', 'd37-page.js', 'd37-terrain-worker.js', 'index.html', 'LICENSES.txt']) if (!fs.existsSync(path.join(dist, f))) die(`${dist}/${f} нет — сначала pack.cmd в движке`);
 const hostSrc = [path.join(dist, 'engine-host.js'), path.join(engine, 'web', 'engine-host.js')].find((f) => fs.existsSync(f));
@@ -26,12 +30,14 @@ fs.mkdirSync(path.join(out, 'scenes'), { recursive: true });
 const copied = {};
 const copy = (from, rel) => { fs.copyFileSync(from, path.join(out, rel)); copied[rel] = fs.statSync(from).size; };
 for (const f of fs.readdirSync(dist)) if (fs.statSync(path.join(dist, f)).isFile()) copy(path.join(dist, f), f);
-for (const f of fs.readdirSync(path.join(dist, 'scenes'))) copy(path.join(dist, 'scenes', f), 'scenes/' + f);
+// папки пакета (scenes, materials/… — текстуры лежат рядом с wasm, не внутри) — целиком
+const copyDir = (rel) => { fs.mkdirSync(path.join(out, rel), { recursive: true }); for (const f of fs.readdirSync(path.join(dist, rel))) { const r = rel + '/' + f; if (fs.statSync(path.join(dist, r)).isDirectory()) copyDir(r); else copy(path.join(dist, r), r); } };
+for (const f of fs.readdirSync(dist)) if (fs.statSync(path.join(dist, f)).isDirectory()) copyDir(f);
 copy(hostSrc, 'engine-host.js');
 // тестовая страница открывается и как /d37 (без «/» в конце): свои файлы она ищет относительно <base href="/d37/">
 const idx = path.join(out, 'index.html');
 let html = fs.readFileSync(idx, 'utf8');
-if (!/<base href=/.test(html)) { html = html.replace(/(<meta charset="utf-8">\r?\n)/, '$1<base href="/d37/">\n'); fs.writeFileSync(idx, html); }
+if (!/<base href=/.test(html)) { html = html.replace(/(<meta charset="utf-8">\r?\n)/, '$1<base href="/' + OUT_NAME + '/">\n'); fs.writeFileSync(idx, html); }
 const id = crypto.createHash('sha256').update(wasm).update(glue).update(fs.readFileSync(hostSrc)).digest('hex').slice(0, 10);
 const bridge = +((/export const BRIDGE = (\d+)/.exec(fs.readFileSync(hostSrc, 'utf8')) || [])[1] || 0);
 // T-166: таблица ключей настроек этой сборки — d37-config/keys.json (её читает scripts/engine-config-test.cjs) и справочник
@@ -39,7 +45,7 @@ const bridge = +((/export const BRIDGE = (\d+)/.exec(fs.readFileSync(hostSrc, 'u
 // Все игры переходят на новый движок этим одним импортом в d37/ (их файлы в /d37-config/ не трогаются); вернуть одну игру — строка
 // "engine": { "channel": "preview" } или { "build": "<id>" } в её /d37-config/games/<id>.json (docs/D37_CONFIG.md).
 let configBuild = 0;
-if (/export function config_dump_json\b/.test(glue)) {
+if (!PREVIEW && /export function config_dump_json\b/.test(glue)) {
   const { pathToFileURL } = await import('node:url');
   const mod = await import(pathToFileURL(path.join(out, 'd37_web.js')).href);
   await mod.default({ module_or_path: wasm });
@@ -53,4 +59,4 @@ if (/export function config_dump_json\b/.test(glue)) {
 }
 const info = { id, bridge, config_build: configBuild, wasm_raw: wasm.length, made: new Date().toISOString(), files: copied };
 fs.writeFileSync(path.join(out, 'build.json'), JSON.stringify(info, null, 1) + '\n');
-console.log(`engine-import: d37/ ← ${dist} (id ${id}, мост v${bridge}, wasm ${(wasm.length / 1048576).toFixed(2)} МБ, файлов ${Object.keys(copied).length})`);
+console.log(`engine-import: ${OUT_NAME}/ ← ${dist} (id ${id}, мост v${bridge}, wasm ${(wasm.length / 1048576).toFixed(2)} МБ, файлов ${Object.keys(copied).length})`);

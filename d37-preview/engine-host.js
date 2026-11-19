@@ -9,23 +9,75 @@
 //   (default: the root). Esc / F1–F11 are the game's while it is live (F12 stays the browser's); in fullscreen the
 //   Keyboard Lock API keeps Esc from the browser (holding Esc still leaves fullscreen — the browser's rule).
 //   bytes: save() -> Uint8Array (bridge::SaveV1); the page's earlier save goes in as o.save before the world loads.
+//   EP14-config (layered live settings, crates/d37-app/src/config.rs): o.config = {layers: [{name, url} | {name, text}],
+//   build, poll} — the files are fetched in parallel with the wasm compile (revalidated: cache 'no-cache' = ETag, the
+//   last good text kept per build in this browser), checked by the engine's key table, applied before the world
+//   starts (the RULE values are frozen for the world and handed to the world Worker), re-read when the tab comes back
+//   and every o.config.poll ms (LOOK values change live; a RULE change waits for the next start). ?tune=key:value,...
+//   adds a dev layer on top. onMessage({t:'config', report, live}) after each apply; state.config = the report.
+//   EP14-config crash handling: a wasm panic, a dead / silent world Worker or a lost graphics context stop the game
+//   with a short Russian message and «Перезагрузить» over it (o.onReload, default: reload the page), and
+//   onMessage({t:'error', code, msg, crash: {panic, build, config, rules, world, log: [last 20 lines]}}); save() is
+//   empty after a crash (a host never stores a half-dead world over the last good save).
 // It ships with the wasm (same folder, same version). No simulation and no rendering here, no site globals: the page
 // (site-owned js/features/hub.js) talks only to the handle start() returns. Text from the engine is codes and the look
 // text; this file puts strings into the DOM with textContent only.
-import init, { D37Web, ground_layer, bridge_version, last_panic } from './d37_web.js';
+import init, * as wasmApi from './d37_web.js';
+const { D37Web, ground_layer, bridge_version, last_panic } = wasmApi;
 import { finishDigJob, planetJobs, terrainWorkerCount } from './planet-jobs.js';
 
 export const BRIDGE = 1;
 const HERE = (f) => new URL('./' + f, import.meta.url).href;
-// ep13-worker: where the world ticks — 'worker' = in its own thread (web/d37-world-worker.js; the page's thread only
-// draws), '' = on the page's thread as before. o.world or the page address ?world=worker|main choose; this is the
-// build default. Rollback: ''. Any failure to start the Worker falls back to the page's thread by itself.
-const WORLD_DEFAULT = '';
-function worldWanted(o) {
+// Match the standalone page for solo play. Keep the existing default for shared worlds and the wardrobe.
+// o.world or ?world=worker|main override the default. Failure to start the Worker falls back to the page's thread.
+function worldWanted(o, studio) {
   let q = '';
   try { q = new URLSearchParams(location.search).get('world') || ''; } catch (e) { /* no address */ }
-  return (o.world || q || WORLD_DEFAULT) === 'worker';
+  const requested = o.world || q;
+  if (requested === 'worker' || requested === 'main') return requested === 'worker';
+  return !studio && !o.join && (navigator.hardwareConcurrency || 2) >= 4;
 }
+// -- EP14-config: the settings layers --
+// One layer's text: fetched (revalidated with the server: an unchanged file is a 304) with a time limit; on failure
+// the last good text of this build in this browser, else nothing (the engine then starts on the lower layers).
+const CFG_TIMEOUT = 2500;
+async function fetchLayer(l, build) {
+  if (typeof l.text === 'string') return { name: l.name, text: l.text, from: 'inline' };
+  const key = 'd37.cfg.' + (build || '-') + '.' + l.name;
+  let ctl = null, to = 0;
+  try {
+    ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    to = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) { /* done */ } }, CFG_TIMEOUT);
+    const res = await fetch(l.url, { cache: 'no-cache', signal: ctl ? ctl.signal : undefined });
+    if (res.status === 404) return { name: l.name, text: null, from: 'none' };   // no file = no layer (not an error)
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    try { localStorage.setItem(key, text.slice(0, 65536)); } catch (e) { /* storage off */ }
+    return { name: l.name, text, from: 'net' };
+  } catch (e) {
+    let text = null;
+    try { text = localStorage.getItem(key); } catch (er) { /* storage off */ }
+    return { name: l.name, text, from: text != null ? 'cache' : 'error', error: String(e && e.message || e).slice(0, 120) };
+  } finally { clearTimeout(to); }
+}
+// ?tune=key:value,key:value — the dev layer (on top of everything; the page's address only, never stored)
+function tuneLayer() {
+  let q = '';
+  try { q = new URLSearchParams(location.search).get('tune') || ''; } catch (e) { return null; }
+  if (!q) return null;
+  const values = {};
+  for (const kv of q.split(',')) { const m = /^([a-z_]{1,40})[:=](-?[0-9.eE+-]{1,20})$/.exec(kv.trim()); if (m) values[m[1]] = Number(m[2]); }
+  return { name: 'dev', text: JSON.stringify({ format: 1, values }), from: 'url' };
+}
+export async function fetchLayers(cfg) {
+  const list = cfg && Array.isArray(cfg.layers) ? cfg.layers.filter((l) => l && typeof l.name === 'string' && (typeof l.text === 'string' || typeof l.url === 'string')) : [];
+  const got = await Promise.all(list.map((l) => fetchLayer(l, cfg.build)));
+  const dev = tuneLayer();
+  if (dev) got.push(dev);
+  return got;
+}
+export const layersJson = (got) => JSON.stringify(got.filter((l) => l.text != null).map((l) => ({ name: l.name, text: l.text })));
+
 const TOUCH = () => (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 const HEX = /^[0-9a-f]{6}$/i;
 
@@ -119,22 +171,55 @@ export async function start(o) {
   canvas.setAttribute('tabindex', '0');
   canvas.setAttribute('aria-label', 'Игра D37');
   canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none';
-  const st = { app: null, pool: [], raf: 0, paused: false, dead: false, loaded: false, error: null, frames: 0, fps: 0, backend: '', listeners: [], keys: new Set(), inputOn: true };
+  const st = { app: null, pool: [], raf: 0, paused: false, dead: false, loaded: false, error: null, frames: 0, fps: 0, backend: '', listeners: [], keys: new Set(), inputOn: true, config: null, crash: null, log: [], timers: [] };
+  // the last 20 lines of what happened (a crash report carries them)
+  const log = (line) => { st.log.push(new Date().toISOString().slice(11, 23) + ' ' + String(line).slice(0, 200)); if (st.log.length > 20) st.log.shift(); };
   const on = (t, ev, f, opt) => { t.addEventListener(ev, f, opt); st.listeners.push([t, ev, f, opt]); };
+  // a lost graphics context (WebGL2; a lost WebGPU device fails the next frame) stops the game with the message
+  on(canvas, 'webglcontextlost', (e) => { try { e.preventDefault(); } catch (er) { /* old event */ } fail('context-lost', 'WebGL context lost'); });
 
-  // 1. the wasm (bytes), 2. the device, 3. the world
-  progress('wasm', 0, o.rawSize || 0);
-  const module = await compileWasm(HERE('d37_web_bg.wasm'), o.rawSize || 0, (d, t) => progress('wasm', d, t));
-  await init({ module_or_path: module });
-  if (bridge_version() !== BRIDGE) throw new Error('bridge version ' + bridge_version() + ', the page speaks ' + BRIDGE);
   const sceneName = SCENES.includes(o.scene) ? o.scene : 'planet';
   const studio = sceneName === 'wardrobe';
   // a portrait phone: the wardrobe panel takes the lower 44 % — the studio draws the character in the free part above it
   const place = () => { canvas.style.height = studio && typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches ? '56%' : '100%'; };
   place();
-  const res = await fetch(HERE('scenes/' + sceneName + '.ron'));
-  if (!res.ok) throw new Error('scene: HTTP ' + res.status);
-  const sceneText = await res.text();
+  // Fetch the scene while the WASM is downloading and compiling.
+  progress('wasm', 0, o.rawSize || 0);
+  // EP14-config: the settings files come in parallel with the wasm (they never wait for it, it never waits for them)
+  const tCfg = performance.now();
+  const [module, sceneText, layers] = await Promise.all([
+    compileWasm(HERE('d37_web_bg.wasm'), o.rawSize || 0, (d, t) => progress('wasm', d, t)),
+    fetch(HERE('scenes/' + sceneName + '.ron')).then(res => {
+      if (!res.ok) throw new Error('scene: HTTP ' + res.status);
+      return res.text();
+    }),
+    fetchLayers(o.config).then((l) => { st.cfgFetchMs = Math.round(performance.now() - tCfg); return l; }),
+  ]);
+  await init({ module_or_path: module });
+  try { st.panic0 = last_panic(); } catch (e) { st.panic0 = ''; }
+  if (bridge_version() !== BRIDGE) throw new Error('bridge version ' + bridge_version() + ', the page speaks ' + BRIDGE);
+  // apply the layers before anything starts (an older engine without the key table: the built-in numbers)
+  st.cfgLayers = layers;
+  st.cfgJson = layersJson(layers);
+  const applyConfig = (start) => {
+    if (typeof wasmApi.config_apply !== 'function') return null;
+    let rep = null;
+    try { rep = JSON.parse(wasmApi.config_apply(st.cfgJson, start)); } catch (e) { log('config: ' + String(e).slice(0, 120)); return null; }
+    for (const l of st.cfgLayers) if (l.from === 'error' || l.from === 'cache') rep.layers.push({ name: l.name, ok: l.from === 'cache', skipped: l.from === 'error' ? 'не загрузился: ' + l.error : '', fetch: l.from, warn: [] });
+    st.config = rep;
+    log('config ' + (start ? 'start' : 'live') + ': ' + rep.line);
+    emit({ t: 'config', report: rep, live: !start });
+    return rep;
+  };
+  const t0 = performance.now();
+  applyConfig(true);
+  st.cfgApplyMs = Math.round((performance.now() - t0) * 10) / 10;
+  // the world Worker's own apply: the same RULE hash as this page, or the run is reported (never two rule sets)
+  function checkWorkerConfig(m) {
+    st.workerConfig = m.report || null;
+    const mine = st.config && st.config.rules_hash, theirs = m.report && m.report.rules_hash;
+    if (mine && theirs && mine !== theirs) { log('config: Worker rules ' + theirs + ' != page ' + mine); emit({ t: 'error', code: 'config-mismatch', msg: 'rules page ' + mine + ' worker ' + theirs }); }
+  }
   progress('gpu', 0, 1);
   const fit = () => {
     const dpr = Math.min(window.devicePixelRatio || 1, touch ? 1.5 : 2);
@@ -154,7 +239,7 @@ export async function start(o) {
   progress('gpu', 1, 1);
 
   // Workers: each builds planet chunks / ground layers from the module compiled above
-  const useWorldWorker = worldWanted(o) && typeof Worker !== 'undefined' && typeof app.load_scene_remote === 'function';
+  const useWorldWorker = worldWanted(o, studio) && typeof Worker !== 'undefined' && typeof app.load_scene_remote === 'function';
   const nW = terrainWorkerCount(navigator.hardwareConcurrency || 2, touch, useWorldWorker, o.workers ?? 4);
   for (let i = 0; i < nW && typeof Worker !== 'undefined'; i++) {
     try {
@@ -200,22 +285,28 @@ export async function start(o) {
         const to = setTimeout(() => rej(new Error('no first world frame in 20 s')), 20000);
         w.onmessage = (ev) => {
           const m = ev.data;
-          if (m.type === 'frame') { clearTimeout(to); if (st.app) st.app.world_in(new Uint8Array(m.bytes)); res(); }
+          if (m.type === 'frame') { clearTimeout(to); st.worldAt = performance.now(); if (st.app) st.app.world_in(new Uint8Array(m.bytes)); res(); }
+          else if (m.type === 'config') checkWorkerConfig(m);
           else if (m.type === 'error') { clearTimeout(to); rej(new Error(m.error)); }
         };
         w.onerror = (e) => { clearTimeout(to); try { e.preventDefault(); } catch (er) { /* old event */ } rej(new Error(e.message || 'the world Worker did not load')); };
       });
-      w.postMessage({ type: 'init', scene: sceneText, save: o.save && o.save.length ? o.save : null, module });
+      // EP14-config: the Worker applies the same layers before its world starts (the same RULE values as this page)
+      w.postMessage({ type: 'init', scene: sceneText, save: o.save && o.save.length ? o.save : null, module, config: st.cfgJson });
       app.load_scene_remote(sceneText, st.pool.length > 0);
       initTerrain();
       await ready;
       w.onmessage = (ev) => {
         const m = ev.data;
         if (!st.app || st.dead) return;
-        if (m.type === 'frame') st.app.world_in(new Uint8Array(m.bytes));
+        if (m.type === 'frame') { st.worldAt = performance.now(); st.app.world_in(new Uint8Array(m.bytes)); }
+        else if (m.type === 'alive') st.worldAt = performance.now();
+        else if (m.type === 'pace') st.paceStats = m.stats;   // ep14-perf: the world Worker's pacing line (F3 / tests)
+        else if (m.type === 'config') checkWorkerConfig(m);
         else if (m.type === 'error') fail('world-worker', m.error);
       };
       w.onerror = (e) => fail('world-worker', e.message || 'world Worker error');
+      w.onmessageerror = () => fail('world-worker', 'world Worker message error');
       ww = w;
     } catch (e) {
       // the page's thread runs the world (the save is handed in again: load_scene_remote took it)
@@ -226,6 +317,7 @@ export async function start(o) {
   }
   st.worldWorker = ww;
   st.world = ww ? 'worker' : 'main';
+  log('world: ' + st.world + ' · backend ' + st.backend);
   if (!ww) {
     app.load_scene(sceneText, st.pool.length > 0);
     initTerrain();
@@ -537,16 +629,43 @@ export async function start(o) {
   function fail(code, e) {
     if (st.dead) return;
     st.error = String(e && e.message ? e.message : e).slice(0, 300);
-    let panic = ''; try { panic = last_panic(); } catch (er) { /* the instance is gone */ }
+    // the page's own panic text, only when it is new (one wasm instance serves every start of this page) and the
+    // failure is the page's (a world Worker's error carries its own panic text)
+    let panic = '';
+    if (code !== 'world-worker') { try { panic = last_panic(); } catch (er) { /* the instance is gone */ } if (panic === st.panic0) panic = ''; }
     st.dead = true;
     cancelAnimationFrame(st.raf);
-    emit({ t: 'error', code, msg: (panic || st.error).slice(0, 300) });
+    log('CRASH ' + code + ': ' + (panic || st.error));
+    // the world Worker stops with the page's world (it would keep ticking a world nobody draws)
+    if (st.worldWorker) { try { st.worldWorker.terminate(); } catch (er) { /* gone */ } }
+    const c = st.config || {};
+    st.crash = { code, panic: (panic || st.error).slice(0, 600), build: String(o.build || (o.config && o.config.build) || ''), config: c.hash || '', rules: c.rules_hash || '', world: st.world || '', backend: st.backend || '', log: st.log.slice(-20) };
+    showCrash(code);
+    emit({ t: 'error', code, msg: (panic || st.error).slice(0, 300), crash: st.crash });
+  }
+  // the message over the stopped game: short, Russian, one button (text through textContent only)
+  function showCrash(code) {
+    if (st.disposed || o.crashUi === false) return;
+    const box = add(el('div', 'd37h-crash'));
+    box.setAttribute('role', 'alert');
+    box.style.cssText = 'position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;background:rgba(8,10,16,.82);color:#fff;font:15px/1.4 system-ui,sans-serif;text-align:center';
+    const lost = code === 'context-lost';
+    box.appendChild(el('div', '', lost ? 'Видеокарта сбросила картинку' : 'Игра остановилась из-за ошибки')).style.cssText = 'font-weight:700;font-size:19px';
+    box.appendChild(el('div', '', lost ? 'Так бывает, если не хватает памяти. Мир сохранён до ошибки — перезагрузи, и продолжим.' : 'Мы уже получили отчёт. Мир сохранён до ошибки — перезагрузи, и продолжим.')).style.cssText = 'max-width:420px;opacity:.85';
+    const b = el('button', 'd37h-reload', 'Перезагрузить');
+    b.type = 'button';
+    b.style.cssText = 'font:inherit;font-weight:700;padding:12px 22px;border-radius:12px;border:0;background:#ffb347;color:#1a1206;cursor:pointer;min-height:48px';
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); try { if (typeof o.onReload === 'function') o.onReload(); else location.reload(); } catch (er) { location.reload(); } });
+    box.appendChild(b);
+    try { if (document.pointerLockElement) document.exitPointerLock(); } catch (er) { /* not locked */ }
   }
   let dispatchPlanetJobs;
   function frame(now) {
     st.raf = 0;
     if (st.dead || st.paused || !st.app) return;
     const a = st.app;
+    // a world Worker that died without a word (killed for memory): no frame for o.worldTimeoutMs while the game runs
+    if (ww && st.worldAt && now - st.worldAt > (o.worldTimeoutMs || 20000) && document.visibilityState !== 'hidden') { fail('world-worker', 'no world frame for ' + Math.round((now - st.worldAt) / 1000) + ' s'); return; }
     if (fit()) a.resize(canvas.width, canvas.height);
     let idle = st.pool.filter((s) => s.ready && !s.busy && !s.dead);
     try {
@@ -564,6 +683,7 @@ export async function start(o) {
         const jobs = a.take_jobs(idle.length);
         for (let i = 0; i * 4 < jobs.length; i++) { idle[i].busy = true; idle[i].w.postMessage({ type: 'job', cx: jobs[i * 4], cz: jobs[i * 4 + 1], lo: jobs[i * 4 + 2] >>> 0, hi: jobs[i * 4 + 3] >>> 0 }); }
       }
+      if (st.debugPanic) { st.debugPanic = false; wasmApi.debug_panic('page'); }
       a.frame(now);
       st.frames++;
       // ep13-worker: this frame's action state and commands to the world's thread
@@ -575,6 +695,7 @@ export async function start(o) {
           if (m.t === 'loaded') { st.loaded = true; try { const p = JSON.parse(a.planet_stats()); if (planet && p.alt < 100) levelLook(-12); } catch (e) { /* numbers only */ } spawnOnce(); }
           if (m.t === 'event' && m.code === 'landed') levelLook(-12);
           if (m.t === 'wardrobe') syncPanel(m.on);
+          if (m.t !== 'look_changed') log('engine: ' + m.t + (m.code ? ' ' + m.code : '') + (m.why ? ' ' + m.why : ''));
           // the body changed (a click, G, the page's saved look): the panel shows that body's parts
           if (m.t === 'look_changed' && m.body) { body = m.body; if (wardrobeShown && m.body !== panelBody) buildPanel(); }
           emit(m);
@@ -627,6 +748,29 @@ export async function start(o) {
   publish();
   st.raf = requestAnimationFrame(frame);
 
+  // EP14-config live: the files again when the tab comes back and every o.config.poll ms (default 5 min); a changed
+  // text is applied at once (LOOK keys; the RULE keys wait for the next world start)
+  let polling = false;
+  async function pollConfig() {
+    if (polling || st.dead || !o.config || typeof wasmApi.config_apply !== 'function') return;
+    polling = true;
+    try {
+      const got = await fetchLayers(o.config);
+      if (st.dead) return;
+      const json = layersJson(got);
+      if (json === st.cfgJson) return;
+      st.cfgLayers = got; st.cfgJson = json;
+      const rep = applyConfig(false);
+      if (ww) ww.postMessage({ type: 'config', config: json });
+      if (rep && rep.rules_pending) log('config: RULE values changed — at the next start');
+    } catch (e) { log('config poll: ' + String(e).slice(0, 100)); } finally { polling = false; }
+  }
+  st.pollConfig = pollConfig;
+  if (o.config && o.config.poll !== 0) {
+    on(document, 'visibilitychange', () => { if (document.visibilityState === 'visible') pollConfig(); });
+    st.timers.push(setInterval(pollConfig, Math.max(30000, +o.config.poll || 300000)));
+  }
+
   const handle = {
     state: st,
     send,
@@ -642,12 +786,18 @@ export async function start(o) {
     shots() { return st.shots.slice(); },
     // W9 keys: the game's pause menu (the page opens it e.g. when its own sheet closes)
     pauseMenu(on) { if (game && st.app && !st.dead) { try { st.app.game_pause(!!on); if (on) unlock(); publish(); } catch (e) { /* gone */ } } },
-    resume() { if (!st.paused || st.dead) return; st.paused = false; if (ww) ww.postMessage({ type: 'resume' }); try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
+    // tests: force a crash — 'page' (a panic in the page's wasm), 'worker' (a panic in the world Worker), 'kill' (the
+    // Worker terminated without a word: the watchdog notices)
+    debugCrash(kind) { if (kind === 'page') st.debugPanic = true; else if (kind === 'worker' && ww) ww.postMessage({ type: 'debug_panic' }); else if (kind === 'kill' && ww) { try { ww.terminate(); } catch (e) { /* gone */ } } },
+    config() { return st.config; },
+    resume() { if (!st.paused || st.dead) return; st.paused = false; st.worldAt = performance.now(); if (ww) ww.postMessage({ type: 'resume' }); try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
     // everything this start made goes away: the frame loop, listeners, Workers, the GPU device (free), the DOM
     dispose() {
       if (st.disposed) return;
       st.disposed = true; st.dead = true;
       cancelAnimationFrame(st.raf); st.raf = 0;
+      for (const t of st.timers) clearInterval(t);
+      st.timers.length = 0;
       unlock();
       if (kb) { try { kb.unlock(); } catch (e) { /* not locked */ } }
       for (const [t, ev, f, opt] of st.listeners) t.removeEventListener(ev, f, opt);
