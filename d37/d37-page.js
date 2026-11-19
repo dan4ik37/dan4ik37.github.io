@@ -14,8 +14,13 @@
 // level instead (WebAudio, asked only on that click). Views: F6 / F7 / F8 or X — 3D, from the side, from above (2D views of the same world).
 // The admin / test menu: ` or F10 (or ⚙), ?admin=1 shows it at load; its buttons run `app.admin(<command>)`.
 // The wardrobe menu: B (or «Гардероб» in the admin menu) — body, colours per slot, the microphone; kept in this browser.
-import init, { D37Web, ground_layer, wasm_memory_bytes } from './d37_web.js';
+// EP14-config: ?cfg=<url>,<url> settings layers (lowest first; the site's are /d37-config/engine.json and
+// /d37-config/games/<id>.json), ?tune=key:value,… a dev layer on top; fetched in parallel with the wasm, applied
+// before the world starts (the world Worker gets the same layers), the HUD shows the hashes (crates/d37-app/src/config.rs).
+import init, * as api from './d37_web.js';
 import { finishDigJob, planetJobs, terrainWorkerCount } from './planet-jobs.js';
+import { fetchLayers, layersJson } from './engine-host.js';
+const { D37Web, ground_layer, wasm_memory_bytes } = api;
 
 const q = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);
@@ -48,8 +53,13 @@ const WORLD_DEFAULT = (navigator.hardwareConcurrency || 2) >= 4 ? 'worker' : '';
 async function main() {
   // one compile of the module; the world Worker gets it (no second download or compile)
   let module = null;
+  const cfgUrls = (q.get('cfg') || '').split(',').map((u) => u.trim()).filter(Boolean).slice(0, 4);
+  const tCfg = performance.now();
+  const layersP = fetchLayers({ layers: cfgUrls.map((u, i) => ({ name: 'cfg' + i, url: new URL(u, location.href).href })) }).then((l) => { state.cfgFetchMs = Math.round(performance.now() - tCfg); return l; });
   try { module = await WebAssembly.compileStreaming(fetch(new URL('./d37_web_bg.wasm', import.meta.url))); } catch (e) { module = null; }
   await init({ module_or_path: module || new URL('./d37_web_bg.wasm', import.meta.url) });
+  const cfgJson = layersJson(await layersP);
+  if (typeof api.config_apply === 'function') { try { state.config = JSON.parse(api.config_apply(cfgJson, true)); } catch (e) { console.warn('d37 config', e); } }
   const sceneUrl = q.get('scene') || new URL('./scenes/creative.ron', import.meta.url).href;
   const res = await fetch(sceneUrl);
   if (!res.ok) throw new Error('сцена ' + sceneUrl + ': HTTP ' + res.status);
@@ -131,12 +141,13 @@ async function main() {
         w.onmessage = (ev) => {
           const m = ev.data;
           if (m.type === 'frame') { clearTimeout(to); app.world_in(new Uint8Array(m.bytes)); res(); }
+          else if (m.type === 'config') state.workerConfig = m.report;
           else if (m.type === 'error') { clearTimeout(to); rej(new Error(m.error)); }
         };
         w.onerror = (e) => { clearTimeout(to); try { e.preventDefault(); } catch (er) { /* old event */ } rej(new Error(e.message || 'the world Worker did not load')); };
       });
       const profile = q.get('world_profile') === '1';
-      w.postMessage({ type: 'init', scene: sceneText, save: null, module, profile, slow: +(q.get('world_slow') || 1) });
+      w.postMessage({ type: 'init', scene: sceneText, save: null, module, profile, slow: +(q.get('world_slow') || 1), config: cfgJson });
       app.load_scene_remote(sceneText, pool.length > 0);
       initTerrain();
       await ready;
@@ -145,6 +156,7 @@ async function main() {
         const m = ev.data;
         if (m.type === 'frame') app.world_in(new Uint8Array(m.bytes));
         else if (m.type === 'profile') state.worldProfile = m.report;
+        else if (m.type === 'pace') state.paceStats = m.stats;   // ep14-perf: the world Worker's pacing line (F3)
         else if (m.type === 'error') fail('world Worker: ' + m.error);
       };
       w.onerror = (e) => fail('world Worker: ' + (e.message || 'error'));
@@ -644,6 +656,7 @@ async function main() {
       if (state.lastAdmin && /budgets on/.test(state.lastAdmin)) { state.budgets = true; hud.style.display = 'block'; }
       if (state.lastAdmin && /budgets off/.test(state.lastAdmin)) { state.budgets = false; }
       let text = state.backend + '\n' + state.fps.toFixed(0) + ' кадров/с · тик ' + s.tick + ' · пропущено ' + s.dropped_ticks + '\n';
+      if (state.paceStats) text += 'мир (поток): ' + state.paceStats + '\n';
       if (planet) {
         const p = JSON.parse(app.planet_stats());
         state.planet = p;
@@ -659,7 +672,7 @@ async function main() {
         const mem = performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(0) + ' МБ JS' : 'память: нет данных';
         text += '\nбюджеты: ' + state.fps.toFixed(0) + ' кадров/с (' + (1000 / Math.max(state.fps, 1)).toFixed(1) + ' мс; 16.7) · треуг. ' + (s.triangles / 1000).toFixed(0) + ' тыс. · draws ' + s.draws + ' · ' + mem;
       }
-      hud.textContent = text + '\nпотоков: ' + pool.length;
+      hud.textContent = text + '\nпотоков: ' + pool.length + (state.config ? '\n' + state.config.line : '');
     }
     requestAnimationFrame(frame);
   }
