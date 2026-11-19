@@ -28,11 +28,6 @@
         (class: "cover_fern", source: "polyhaven/fern_02", tile_m: 1.00),
         (class: "cover_clover", source: "polyhaven/shrub_sorrel_01", tile_m: 1.00),
         (class: "cover_moss", source: "polyhaven/moss_01", tile_m: 1.00),
-        // ep18 picture item 2: the crown cards COMPOSED from single leaf scans of polyhaven/shrub_04 laid along drawn
-        // twigs by a fixed seed (scripts/compose_leaf_cards.py); the needle sprays are drawn strokes in the scans' colours
-        (class: "leaf_card", source: "polyhaven/shrub_04", tile_m: 1.00),
-        (class: "leaf_card_small", source: "polyhaven/shrub_04", tile_m: 1.00),
-        (class: "leaf_card_needle", source: "polyhaven/shrub_04", tile_m: 1.00),
-        (class: "leaf_card_frond", source: "polyhaven/shrub_04", tile_m: 1.00),
+        (class: "leaf_card", source: "polyhaven/shrub_01", tile_m: 1.00),
     ],
 )
