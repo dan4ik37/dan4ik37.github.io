@@ -2023,6 +2023,16 @@
    "f": "js/features/community2.js",
    "fn": "setHtml",
    "k": "markup:text",
+   "c": "html-helper",
+   "n": "T-169: X.chanExtraHtml собирает поля канала через e() (как раньше, теперь с условием для голосовых сайта)",
+   "xs": [
+    "sv || !X.chanExtraHtml ? '' : X.chanExtraHtml(c, S)"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "setHtml",
+   "k": "markup:text",
    "c": "num-db",
    "n": "задержка канала и число жалоб",
    "xs": [

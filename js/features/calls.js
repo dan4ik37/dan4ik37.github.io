@@ -140,6 +140,15 @@
 
   // ═══ Микрофон ═══
   let fakeFreq = 0;
+  // T-169: сильный шумодав (ns2.js, флаг NS2_ON — выключен) — если включён в «🎛 Проверка»; не вышло — обычный микрофон
+  async function ns2(raw){
+    if (!window.D37NS2?.on || !P.set.ns2) return raw;
+    const w = await window.D37NS2.wrap(raw);
+    if (!w) return raw;
+    const s = w.stream; s._raw = raw; s._ns2 = w;
+    const st0 = s._stop; s._stop = () => { try { st0?.(); } catch (er) {} w.stop(); raw.getTracks().forEach(t => t.stop()); };
+    return s;
+  }
   async function getMic(){
     if (fakeFreq) {   // для проверки без микрофона: тон с «паузами речи» (D37Calls._test.fakeMic(440))
       const ctx = P.audioCtx(), o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain(), dst = ctx.createMediaStreamDestination();
@@ -149,7 +158,7 @@
       return s;
     }
     if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no'), { name: window.isSecureContext ? 'NotSupportedError' : 'SecurityError' });
-    try { return await navigator.mediaDevices.getUserMedia({ audio: micC(), video: false }); }
+    try { return ns2(await navigator.mediaDevices.getUserMedia({ audio: micC(), video: false })); }
     catch (er) {   // выбранного микрофона больше нет — берём любой
       if (P.set.micId && (er?.name === 'NotFoundError' || er?.name === 'OverconstrainedError')) return navigator.mediaDevices.getUserMedia({ audio: Object.assign(micC(), { deviceId: undefined }), video: false });
       throw er;
@@ -701,6 +710,7 @@
     for (const p of R.peers.values()) if (p.audio) p.audio.muted = R.deaf;
     applyMic(R); R.send({ t: 'st', mute: R.mute, deaf: R.deaf }); R.changed(); pill();
   };
+  const VSWITCH = true;   // T-169: переход между голосовыми без вопроса; откат — false
   C.voiceLeave = () => C.leave();
   C.hangupAll = () => C.leave();
   const localBlocked = uid => { try { return (JSON.parse(localStorage.getItem('d37_blocks_local') || '[]') || []).includes(uid); } catch (er) { return false; } };
@@ -711,8 +721,11 @@
     if (u9()) return { err: kidMsg('u9voice') };   // до 9 — голосовых нет (сервер не даст пропуск и сам: cv_pass)
     if (S && S.state !== 'ended') {
       if (S.kind === 'voice' && S.spec.kind === spec.kind && String(S.spec.channel) === String(spec.channel)) return { ok: true };
-      if (await P.ask('Ты уже разговариваешь. Выйти и зайти в этот канал?', [{ k: 'yes', t: '🔊 Перейти' }]) !== 'yes') return { err: 'busy' };
+      // T-169: из голосового в голосовой — сразу, без вопроса (сервер сам уберёт из прежнего «кто внутри»); из звонка — спросить
+      if (!(VSWITCH && S.kind === 'voice') && await P.ask('Ты уже разговариваешь. Выйти и зайти в этот канал?', [{ k: 'yes', t: '🔊 Перейти' }]) !== 'yes') return { err: 'busy' };
+      const was = S.kind === 'voice' ? S.title : '';
       C.leave(); await new Promise(r => setTimeout(r, 300));
+      if (was) P.toast?.('🔊 Переходим: ' + (spec.name || spec.title || 'голосовой'), true);
     }
     const keys = await myKeys();
     const pr = await P.rpc('cv_pass', { p_channel: spec.channel, p_pub: keys.pub });
@@ -878,6 +891,7 @@
     box.hidden = false;
     box.innerHTML = `${ppl.length ? `<div class="vc-in">${ppl.slice(0, 12).map(x => `<span>${P.avatar(P.prof(x.uid) || null, x.nick, 22)} ${e(x.nick)}</span>`).join('')}</div>` : '<small class="ph-dim">Внутри пока никого — зайди первым.</small>'}
       ${ppl.length >= max ? `<div class="vc-note bad">👥 Канал заполнен (${max} из ${max}).</div>` : ''}
+      ${!d.can_set && spec.kind === 'official' && ['admin', 'moderator'].includes(typeof currentRole !== 'undefined' ? currentRole : '') && window.D37DS?.sv?.missing ? '<small class="ph-dim">👥 Лимит голосового канала сайта можно будет менять после обновления базы (часть 16).</small>' : ''}
       ${d.can_set ? `<label class="vc-lim">👥 Лимит канала <select data-v="lim">${[0, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 25].filter(n => n <= cap).map(n => `<option value="${n}"${+d.limit === n ? ' selected' : ''}>${n ? n : 'без своего (' + cap + ')'}</option>`).join('')}</select></label><small class="ph-dim">Больше ${cap} — не даёт сайт: звук идёт «каждый с каждым», с бо́льшим числом людей связь ненадёжна.</small>` : ''}`;
     box.querySelector('[data-v="lim"]')?.addEventListener('change', async ev => {
       const rr = await P.rpc('cm_voice_limit_set', { p_channel: spec.channel, p_limit: +ev.target.value });
@@ -964,9 +978,10 @@
 
   // ═══ 🎛 Проверка микрофона, звука и камеры (T-167, DEVCHECK). Ничего не записывается и не уходит с устройства ═══
   C.deviceCheck = el => {
-    let mic = null, cam = null, an = null, raf = 0, toneStop = null, dead = false;
+    let mic = null, cam = null, an = null, raf = 0, toneStop = null, dead = false, nsw = null, ab = null;   // nsw — сильный шумодав (ns2.js), ab — «послушать себя»
     const camAllowed = () => { const g = window.D37Age?.group?.(); return g === 'teen' || g === 'teen16' || g === 'adult'; };
-    const stopMic = () => { cancelAnimationFrame(raf); try { an?.src.disconnect(); } catch (er) {} an = null; mic?.getTracks().forEach(t => t.stop()); mic = null; };
+    const abStop = () => { if (ab) { ab.pause(); ab.srcObject = null; ab = null; } };
+    const stopMic = () => { cancelAnimationFrame(raf); abStop(); try { an?.src.disconnect(); } catch (er) {} an = null; nsw?.stop(); nsw = null; mic?.getTracks().forEach(t => t.stop()); mic = null; };
     const stopCam = () => { cam?.getTracks().forEach(t => t.stop()); cam = null; };
     const opt = (list, cur, none) => list.length ? list.map((d, i) => `<option value="${e(d.deviceId)}"${d.deviceId === cur ? ' selected' : ''}>${e(d.label || none + ' ' + (i + 1))}</option>`).join('') : `<option value="">${none} — по умолчанию</option>`;
     async function draw(){
@@ -979,7 +994,10 @@
         <div class="dc-sec"><b>🎙 Микрофон</b><select data-dc="micId" aria-label="Микрофон">${opt(mics, P.set.micId, 'Микрофон')}</select>
           <div class="dc-meter" aria-label="Уровень микрофона"><i></i></div><small class="dc-mnote ph-dim">${mic ? 'Скажи что-нибудь — полоска должна прыгать.' : ''}</small>
           <div class="dc-row"><button type="button" class="ph-btn" data-dc-a="mic">${mic ? '⏹ Остановить' : '🎙 Проверить микрофон'}</button></div>
-          <div class="dc-row">${sw('ns', 'Шумоподавление')}${sw('ec', 'Убирать эхо')}${sw('agc', 'Автогромкость')}</div></div>
+          <div class="dc-row">${sw('ns', 'Шумоподавление')}${sw('ec', 'Убирать эхо')}${sw('agc', 'Автогромкость')}</div>
+          ${window.D37NS2?.on ? `<div class="dc-row"><label class="dc-sw"><input type="checkbox" data-dc-sw="ns2"${P.set.ns2 ? ' checked' : ''}> 🧠 Сильный шумодав (проба)</label></div>
+          <small class="ph-dim">Убирает шум вентилятора, клавиатуры, улицы — прямо на этом устройстве, звук никуда не уходит. Задержка ~13 мс.</small>
+          ${mic && nsw ? `<div class="dc-row"><button type="button" class="ph-btn" data-dc-a="ab" data-ab="raw">🎧 Послушать: обычный</button><button type="button" class="ph-btn" data-dc-a="ab" data-ab="ns">🎧 Послушать: с шумодавом</button><button type="button" class="ph-btn" data-dc-a="ab" data-ab="">⏹</button></div><small class="ph-dim">Надень наушники — иначе будет эхо.</small>` : ''}` : ''}</div>
         <div class="dc-sec"><b>🔊 Звук</b>${sinkOk ? `<select data-dc="spkId" aria-label="Куда выводить звук">${opt(spks, P.set.spkId, 'Динамик')}</select>` : '<small class="ph-dim">Этот браузер выбирает динамик сам (настройки телефона / системы).</small>'}
           <div class="dc-row"><button type="button" class="ph-btn" data-dc-a="tone">🔔 Проверить звук</button></div></div>
         <div class="dc-sec"><b>📷 Камера</b>${CAM_ON && camAllowed() ? `<select data-dc="camId" aria-label="Камера">${opt(cams, P.set.camId, 'Камера')}</select>
@@ -1001,7 +1019,8 @@
       stopMic();
       try { mic = await navigator.mediaDevices.getUserMedia({ audio: micC(), video: false }); } catch (er) { err(micErr(er)); draw(); return; }
       if (dead) { stopMic(); return; }
-      an = analyser(mic); err(''); draw();
+      if (window.D37NS2?.on && P.set.ns2) { nsw = await window.D37NS2.wrap(mic); if (!nsw) err('🧠 Сильный шумодав не запустился в этом браузере — работает обычный.'); }
+      an = analyser(nsw ? nsw.stream : mic); if (nsw) err(''); else if (!(window.D37NS2?.on && P.set.ns2)) err(''); draw();
     }
     async function startCam(){
       stopCam();
@@ -1025,11 +1044,15 @@
       if (k === 'mic') { if (mic) { stopMic(); draw(); } else startMic(); }
       else if (k === 'cam') { if (cam) { stopCam(); draw(); } else startCam(); }
       else if (k === 'tone') tone();
+      else if (k === 'ab') {   // T-169: A/B — слышишь себя через выбранный динамик (только на этом устройстве)
+        abStop(); const which = b.dataset.ab; if (!which || !mic) return;
+        ab = new Audio(); ab.srcObject = which === 'ns' && nsw ? nsw.stream : mic; setSink(ab); ab.volume = voiceVol(); ab.play().catch(() => {});
+      }
     });
     el.addEventListener('change', ev => {
       const s = ev.target.closest('[data-dc]'), w = ev.target.closest('[data-dc-sw]');
       if (s) { P.set[s.dataset.dc] = s.value || ''; P.saveSet(); if (s.dataset.dc === 'micId' && mic) startMic(); if (s.dataset.dc === 'camId' && cam) startCam(); }
-      if (w) { P.set[w.dataset.dcSw] = w.checked; P.saveSet(); if (mic) startMic(); }
+      if (w) { P.set[w.dataset.dcSw] = w.checked; P.saveSet(); if (mic) startMic(); if (w.dataset.dcSw === 'ns2') S?.room && P.toast?.('🧠 Заработает со следующего входа в разговор', true); }
     });
     draw();
     return () => { dead = true; stopMic(); stopCam(); toneStop?.(); };

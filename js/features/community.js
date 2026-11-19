@@ -181,12 +181,33 @@
   }
 
   // ═══ Сервер: официальный или сообщество ═══
+  // T-169: голосовые каналы сервера сайта (ч. 16 community.sql). Нет части — как раньше: один «Голосовой» (номер 0). Откат: SV_ON = false
+  const SV_ON = true, SV = { at: 0, list: null, can: false, cap: 6, missing: false, p: null };
+  const svKey = id => +id ? 'voice' + (+id) : 'voice';   // адрес канала: 0 → 'voice' (старые ссылки), -1 → 'voice-1'
+  function svLoad(force){
+    if (!SV_ON || SV.missing) return Promise.resolve(SV);
+    if (SV.p) return SV.p;
+    if (!force && SV.list && Date.now() - SV.at < 30000) return Promise.resolve(SV);
+    SV.p = P.rpc('site_voice_list').then(r => {
+      SV.p = null;
+      if (r.missing) { SV.missing = true; return SV; }
+      if (r.data?.ok) { const was = JSON.stringify(SV.list); SV.list = r.data.channels || []; SV.can = !!r.data.can; SV.cap = +r.data.cap || 6; SV.at = Date.now(); if (was !== JSON.stringify(SV.list)) setTimeout(() => refreshSide(), 0); }
+      return SV;
+    });
+    return SV.p;
+  }
+  DS.sv = SV; DS.svLoad = svLoad; DS.svKey = svKey;
   async function server(id, fresh){
     if (id === OFF_ID) {
+      if (SV_ON && !SV.list && !SV.missing) await Promise.race([svLoad(), new Promise(r => setTimeout(r, 1500))]);
+      else if (SV_ON) svLoad(fresh);
       const C = window.D37Chat;
       const info = C?.info?.(), staff = info?.staff || (typeof currentRole !== 'undefined' && ['admin', 'moderator', 'helper'].includes(currentRole) ? currentRole : null);
       let chans = (C?.channels?.() || []).map(c => ({ ...c }));
       if (!C?.hasNew?.()) chans = [chans[0], ...PLANNED.map(([id, name, kind]) => ({ id, name, kind: kind || 'text', soon: true })), chans.find(c => c.kind === 'twitch')].filter(Boolean);
+      // T-169: голосовые каналы сайта — из site_voice_list (ч. 16): «Общий» (номер 0, прежний «Голосовой»), «Игра», «Тихий»…
+      if (SV_ON && C?.hasNew?.() && SV.list?.length) chans = chans.filter(c => c.kind !== 'voice').concat(SV.list.map(v => ({ id: svKey(v.id), sv: +v.id, name: v.name, kind: 'voice', user_limit: +v.limit || 0, n: +v.n || 0, max: +v.max || 0 })));
+      else chans.forEach(c => { if (c.kind === 'voice') c.sv = 0; });
       const o = { ok: true, id: OFF_ID, official: true, name: 'Денчик37', icon: '<img src="/icon-192.png" alt="">', about: 'Официальный сервер сайта: общий чат, игры, мемы и голосовой', channels: chans, cats: C?.info?.()?.cats || [], staff, role: null };
       return C?.hasNew?.() && DS.x?.withExtra ? DS.x.withExtra(o, fresh) : o;   // T-162: значки, возраст каналов, правила (community2.js)
     }
@@ -223,7 +244,7 @@
       const ic = c.emoji ? e(c.emoji) : c.kind === 'voice' ? '🔊' : c.kind === 'twitch' ? '📺' : '#';   // T-162: свой значок канала
       if (c.soon) return `<span class="ds-ch soon" title="Канал появится, когда сайт обновится"><i>${ic}</i><span>${e(c.name)}</span><small>скоро</small></span>`;
       const ment = srv.official ? window.D37Chat.mentions[c.id] || 0 : 0;
-      const voiceIn = c.kind === 'voice' ? `<div class="ds-vppl" data-vch="${e(srv.official ? 'o' : c.id)}"></div>` : '';
+      const voiceIn = c.kind === 'voice' ? `<div class="ds-vppl" data-vch="${e(srv.official ? 'o' + (+c.sv || 0) : c.id)}"></div>` : '';
       return `<a class="ds-ch${String(selCh) === String(c.id) ? ' on' : ''}${muted(c) ? ' muted' : ''}${c.kind !== 'voice' && c.kind !== 'twitch' && unread(c) ? ' unread' : ''}" href="${link(mode, srv.id, c.id)}"><i>${ic}</i><span>${e(c.name)}</span>${c.min_age ? `<small class="ds-age" title="Канал с ${+c.min_age} лет">${+c.min_age}+</small>` : ''}${c.slow ? '<small title="Медленный режим">🐢</small>' : ''}${!srv.official && PW.get(srv.id)?.m?.has(c.id) ? `<small title="Канал с паролем">${PW.get(srv.id).m.get(c.id) ? '🔓' : '🔒'}</small>` : ''}${c.mods_only ? '<small title="Пишут только модераторы">📢</small>' : ''}${muted(c) ? '<small title="Заглушён">🔕</small>' : ''}${mng && c.kind !== 'twitch' ? `<b class="ds4-chg" data-ds4="chset" data-mode="${mode}" data-srv="${srv.official ? 'o' : e(srv.id)}" data-ch="${e(c.id)}" title="Настройки канала">⚙</b>` : ''}${ment ? `<em class="ds-ment">${ment}</em>` : ''}</a>${voiceIn}`;
     };
     const text = ch.filter(c => c.kind !== 'voice'), voice = ch.filter(c => c.kind === 'voice');
@@ -291,7 +312,7 @@
     root.querySelectorAll('.ds-vppl').forEach(b => {
       const v = window.D37Calls?.voiceInfo?.();
       const key = b.dataset.vch;
-      const here = v && (key === 'o' ? v.kind === 'official' : String(v.channel) === key);
+      const here = v && (key[0] === 'o' ? v.kind === 'official' && String(+v.channel || 0) === key.slice(1) : v.kind !== 'official' && String(v.channel) === key);   // T-169: несколько голосовых сайта
       b.innerHTML = here ? v.people.map(p => `<span class="${p.speaking ? 'spk' : ''}">${P.avatar(P.prof(p.uid) || null, p.nick, 18)}${e(p.nick)}${p.mute ? ' 🔇' : ''}</span>`).join('') : '';
     });
   }
@@ -450,7 +471,8 @@
 
   // ═══ T-167 🔒 Канал с паролем (community.sql ч. 15: cm_chan_pw_state / cm_chan_pw_try / cm_chan_pw_set). Решает сервер: без пароля
   //  сообщения канала не читаются (RLS) и не пишутся (триггер). Нет ч. 15 — значков и окна нет. Откат: PW_ON = false.
-  const PW_ON = true, PW = new Map();   // id сообщества → { at, m: Map(id канала → открыт ли мне) }
+  const PW_ON = true, PW = new Map();
+  DS.pwDrop = id => PW.delete(id);   // T-169: пароль поменяли в карточке канала — перечитать замки   // id сообщества → { at, m: Map(id канала → открыт ли мне) }
   async function pwState(cid, fresh){
     const c = PW.get(cid);
     if (c && !fresh && Date.now() - c.at < 60e3) return c.m;
@@ -514,7 +536,7 @@
     if (ch.kind === 'voice') {
       dropView();
       host.innerHTML = '<div class="ds-voice"><div class="ds-dim">Загружаем голосовой…</div></div>';
-      P.need('calls').then(() => window.D37Calls.voiceView(host.firstChild, srv.official ? { kind: 'official', channel: 0, title: `${ch.name} · Денчик37`, name: ch.name } : { kind: 'community', channel: ch.id, cid: srv.id, title: `${ch.name} · ${srv.name}`, name: ch.name, topic: ch.topic, member: !!(srv.role || srv.staff) }))
+      P.need('calls').then(() => window.D37Calls.voiceView(host.firstChild, srv.official ? { kind: 'official', channel: +ch.sv || 0, title: `${ch.name} · Денчик37`, name: ch.name } : { kind: 'community', channel: ch.id, cid: srv.id, title: `${ch.name} · ${srv.name}`, name: ch.name, topic: ch.topic, member: !!(srv.role || srv.staff) }))
         .catch(() => { host.firstChild.innerHTML = '<div class="ds-dim">Не загрузилось — проверь интернет</div>'; });
       DS.x?.voiceMore?.(host, srv, ch);   // T-164 ds-fun.js: звуковая панель, сцена, «Играть вместе»
       return;
@@ -537,7 +559,9 @@
     window.D37Chat.viewing = A.key;
     if (srv.official) delete window.D37Chat.mentions[ch.id];
     if (!srv.official) MV.markRead('cc:' + srv.id, srv.lastMax || 0);
-    mv.setAdapter(A);
+    const jp = DS.pendingJump; DS.pendingJump = null;   // T-169: «Перейти к сообщению» из 🛡 Модерации — открыть канал на этом сообщении
+    const sp = mv.setAdapter(A);
+    if (jp != null) Promise.resolve(sp).then(() => mv?.jump?.(jp)).catch(() => {});
     commBadge();
     DS.x?.rulesGate?.(srv);   // T-162: правила и приветствие — новичку один раз
     return mv;

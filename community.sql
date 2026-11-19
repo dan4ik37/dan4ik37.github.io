@@ -6051,3 +6051,228 @@ begin
 end $$;
 revoke all on function public.ds2_info() from public;
 grant execute on function public.ds2_info() to anon, authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+-- ЧАСТЬ 16 (T-169, 19.11.2026): несколько голосовых каналов сервера сайта, лимит голосового сайта, пароль на голосовой
+--   сообщества. Повторный запуск безопасен (if not exists / create or replace / on conflict do nothing). Нужны части 11–15.
+--   Проверка с сервера: rpc ds3_info → {"ok":true,"v":1}; site_voice_list → {"ok":true,"channels":[…]}.
+--   (а) Владелец 19.11: «Количество человек не редактируется» — голосовой канал сайта (номер 0) не был строкой в
+--       community_channels, поэтому cv_who отдавал can_set = false, а cm_voice_limit_set отвечал not_found. Теперь у каналов сайта
+--       своя таблица: 0 — «Общий» (прежний «Голосовой», та же комната), -1, -2 … — новые; управляют admin / moderator.
+--   (б) Пароль на голосовой канал сообщества: тот же chan_pw, сервер не выдаёт пропуск без введённого пароля (это не шифрование).
+--   (в) В одном голосовом за раз: пропуск в новый канал убирает тебя из «кто внутри» прежнего сразу.
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+create table if not exists public.site_voice_channels (
+  id bigint primary key check (id <= 0 and id >= -50),
+  name text not null check (char_length(name) between 1 and 32),
+  position int not null default 0,
+  user_limit int not null default 0 check (user_limit between 0 and 99),
+  created_at timestamptz not null default now()
+);
+alter table public.site_voice_channels enable row level security;
+revoke all on public.site_voice_channels from anon, authenticated;
+insert into public.site_voice_channels (id, name, position) values (0, 'Общий', 0), (-1, 'Игра', 1), (-2, 'Тихий', 2)
+  on conflict (id) do nothing;
+
+create or replace function public.site_voice_can(p_uid uuid default auth.uid()) returns boolean
+language sql stable security definer set search_path = public as $$
+  select p_uid is not null and coalesce(public.chat_staff_role(p_uid), '') in ('admin', 'moderator');
+$$;
+create or replace function public.voice_limit_of(p_channel bigint) returns int
+language plpgsql stable security definer set search_path = public as $$
+declare cap int := public.voice_cap(); lim int;
+begin
+  if coalesce(p_channel, 0) <= 0 then select user_limit into lim from public.site_voice_channels where id = coalesce(p_channel, 0);
+  else select user_limit into lim from public.community_channels where id = p_channel; end if;
+  return case when coalesce(lim, 0) > 0 then least(lim, cap) else cap end;
+end $$;
+
+-- Пропуск в голосовой (как в ч. 15) + каналы сайта с номерами ≤ 0 + пароль голосового сообщества
+create or replace function public.cv_pass(p_channel bigint, p_pub text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare uid uuid := auth.uid(); ch record; s text; exp bigint; body text; p record; v_topic text; v_max int;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_pub is null or length(p_pub) < 40 or length(p_pub) > 200 then return jsonb_build_object('ok', false, 'reason', 'key'); end if;
+  if public.kidsafe_on() and public.age_u9(uid) then return jsonb_build_object('ok', false, 'reason', 'u9'); end if;   -- ч. 5: голос — с 9 лет
+  select k into s from public.comm_secret where id = 1;
+  select nick, role, created_at into p from public.profiles where id = uid;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_channel <= 0 then
+    if p_channel < 0 and not exists (select 1 from public.site_voice_channels where id = p_channel) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    if exists (select 1 from public.banned_nicks b where lower(b.nick) = lower(p.nick)) then return jsonb_build_object('ok', false, 'reason', 'banned'); end if;
+    if exists (select 1 from public.chat_mutes where user_id = uid and until > now()) then return jsonb_build_object('ok', false, 'reason', 'muted'); end if;
+    if public.chat_staff_role(uid) is null and coalesce(p.created_at, now()) > now() - interval '1 day' then return jsonb_build_object('ok', false, 'reason', 'new'); end if;
+    v_topic := 'cv-' || substr(encode(extensions.hmac(case when p_channel = 0 then 'topic:official' else 'topic:site' || p_channel end, s, 'sha256'), 'hex'), 1, 24);
+  else
+    select * into ch from public.community_channels where id = p_channel;
+    if not found or ch.kind <> 'voice' then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    if not exists (select 1 from public.communities where id = ch.community_id and status = 'active') then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    if public.comm_role(ch.community_id, uid) is null and not public.comm_is_staff(uid) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+    if not public.cm_chan_pw_ok(p_channel) then return jsonb_build_object('ok', false, 'reason', 'pw'); end if;   -- ч. 16: пароль
+    v_topic := 'cv-' || substr(encode(extensions.hmac('topic:' || p_channel, s, 'sha256'), 'hex'), 1, 24);
+  end if;
+  perform pg_advisory_xact_lock(hashtext('voice_here:' || p_channel));
+  v_max := public.voice_limit_of(p_channel);
+  if public.voice_count(p_channel, uid) >= v_max then return jsonb_build_object('ok', false, 'reason', 'full', 'max', v_max); end if;
+  delete from public.voice_here where user_id = uid and channel_id <> p_channel;   -- ч. 16: в одном голосовом за раз
+  insert into public.voice_here (channel_id, user_id, nick, seen_at) values (p_channel, uid, coalesce(p.nick, ''), now())
+    on conflict (channel_id, user_id) do update set seen_at = now(), nick = excluded.nick;
+  if random() < 0.05 then delete from public.voice_here where seen_at < now() - interval '1 day'; end if;
+  exp := extract(epoch from now())::bigint + 6 * 3600;
+  body := uid::text || '.' || exp || '.' || p_channel || '.' || encode(extensions.digest(p_pub, 'sha256'), 'hex');
+  return jsonb_build_object('ok', true, 'max', v_max, 'topic', v_topic, 'cam', public.cam_ok(uid),
+    'pass', uid::text || '.' || exp || '.' || encode(extensions.hmac(body, s, 'sha256'), 'hex'));
+end $$;
+
+create or replace function public.cv_check(p_channel bigint, p_pass text, p_pub text)
+returns jsonb language plpgsql stable security definer set search_path = public, extensions as $$
+declare parts text[]; v_uid uuid; exp bigint; s text; body text; cid bigint; p record;
+begin
+  if auth.uid() is null then return null; end if;
+  if p_channel > 0 then
+    select community_id into cid from public.community_channels where id = p_channel and kind = 'voice';
+    if cid is null or (public.comm_role(cid) is null and not public.comm_is_staff()) then return null; end if;
+  elsif p_channel < 0 and not exists (select 1 from public.site_voice_channels where id = p_channel) then return null;
+  end if;
+  parts := string_to_array(coalesce(p_pass, ''), '.');
+  if coalesce(array_length(parts, 1), 0) <> 3 or p_pub is null or length(p_pub) > 200 then return null; end if;
+  begin
+    v_uid := parts[1]::uuid;
+    exp := parts[2]::bigint;
+  exception when others then return null;
+  end;
+  if exp < extract(epoch from now())::bigint then return null; end if;
+  select k into s from public.comm_secret where id = 1;
+  body := parts[1] || '.' || parts[2] || '.' || p_channel || '.' || encode(extensions.digest(p_pub, 'sha256'), 'hex');
+  if encode(extensions.hmac(body, s, 'sha256'), 'hex') <> parts[3] then return null; end if;
+  if not exists (select 1 from public.voice_here where channel_id = p_channel and user_id = v_uid and seen_at > now() - interval '75 seconds') then return null; end if;
+  select id, nick, role into p from public.profiles where id = v_uid;
+  if not found then return null; end if;
+  if p_channel <= 0 then
+    if exists (select 1 from public.banned_nicks b where lower(b.nick) = lower(p.nick)) then return null; end if;
+    return jsonb_build_object('uid', p.id, 'nick', p.nick, 'role', coalesce(p.role, 'user'), 'staff', coalesce(p.role in ('admin', 'moderator', 'helper'), false));
+  end if;
+  if public.comm_banned(cid, v_uid) or (public.comm_role(cid, v_uid) is null and not public.comm_is_staff(v_uid)) then return null; end if;
+  return jsonb_build_object('uid', p.id, 'nick', p.nick, 'role', coalesce(public.comm_role(cid, v_uid), 'guest'),
+    'staff', coalesce(p.role in ('admin', 'moderator'), false));
+end $$;
+
+create or replace function public.cv_who(p_channel bigint)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); cid bigint; ppl jsonb; lim int; v_can boolean;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if coalesce(p_channel, 0) > 0 then
+    select community_id, user_limit into cid, lim from public.community_channels where id = p_channel and kind = 'voice';
+    if cid is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    if public.comm_role(cid, uid) is null and not public.comm_is_staff(uid) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+    v_can := public.chan_can_manage(cid, uid);
+  else
+    select user_limit into lim from public.site_voice_channels where id = coalesce(p_channel, 0);
+    if not found and coalesce(p_channel, 0) < 0 then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    v_can := public.site_voice_can(uid);
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('uid', v.user_id, 'nick', v.nick) order by v.seen_at), '[]'::jsonb) into ppl
+    from (select * from public.voice_here where channel_id = coalesce(p_channel, 0) and seen_at > now() - interval '75 seconds' limit 50) v;
+  return jsonb_build_object('ok', true, 'max', public.voice_limit_of(coalesce(p_channel, 0)), 'cap', public.voice_cap(),
+    'limit', coalesce(lim, 0), 'people', ppl, 'can_set', coalesce(v_can, false));
+end $$;
+
+create or replace function public.cm_voice_limit_set(p_channel bigint, p_limit int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare cid bigint;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_limit is null or p_limit < 0 or p_limit > 99 then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if coalesce(p_channel, 0) <= 0 then
+    if not public.site_voice_can(auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'perm'); end if;
+    update public.site_voice_channels set user_limit = p_limit where id = coalesce(p_channel, 0);
+    if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  else
+    select community_id into cid from public.community_channels where id = p_channel and kind = 'voice';
+    if cid is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    if not public.chan_can_manage(cid, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'perm'); end if;
+    update public.community_channels set user_limit = p_limit where id = p_channel;
+  end if;
+  return jsonb_build_object('ok', true, 'limit', p_limit, 'max', public.voice_limit_of(p_channel), 'cap', public.voice_cap());
+end $$;
+
+-- Голосовые каналы сайта: список (всем — названия, лимит и сколько внутри), создать / переименовать / порядок / лимит, удалить
+create or replace function public.site_voice_list()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('ok', true, 'can', public.site_voice_can(auth.uid()), 'cap', public.voice_cap(),
+    'channels', coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'position', c.position, 'limit', c.user_limit,
+        'max', public.voice_limit_of(c.id), 'n', public.voice_count(c.id, null)) order by c.position, c.id desc)
+      from public.site_voice_channels c), '[]'::jsonb));
+$$;
+create or replace function public.site_voice_save(p_id bigint, p_name text, p_position int, p_limit int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_name text := btrim(coalesce(p_name, '')); v_id bigint := p_id;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.site_voice_can(auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'perm'); end if;
+  if char_length(v_name) < 1 or char_length(v_name) > 32 then return jsonb_build_object('ok', false, 'reason', 'name'); end if;
+  if public.comm_bad(v_name) or public.comm_has_link(v_name) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if coalesce(p_limit, 0) < 0 or coalesce(p_limit, 0) > 99 then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if v_id is null then
+    if (select count(*) from public.site_voice_channels) >= 10 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
+    select least(coalesce(min(id), 0), 0) - 1 into v_id from public.site_voice_channels;
+    if v_id < -50 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
+    insert into public.site_voice_channels (id, name, position, user_limit)
+      values (v_id, v_name, coalesce(p_position, (select coalesce(max(position), 0) + 1 from public.site_voice_channels)), coalesce(p_limit, 0));
+  else
+    update public.site_voice_channels set name = v_name, position = coalesce(p_position, position), user_limit = coalesce(p_limit, user_limit) where id = v_id;
+    if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  end if;
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+create or replace function public.site_voice_delete(p_id bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not public.site_voice_can(auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'perm'); end if;
+  if coalesce(p_id, 0) = 0 then return jsonb_build_object('ok', false, 'reason', 'last'); end if;   -- «Общий» остаётся всегда
+  delete from public.site_voice_channels where id = p_id;
+  delete from public.voice_here where channel_id = p_id;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Пароль: теперь и на голосовой канал сообщества (как на текстовый)
+create or replace function public.cm_chan_pw_set(p_ch bigint, p_pw text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare ch record; v text := coalesce(p_pw, '');
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select * into ch from public.community_channels where id = p_ch;
+  if not found or ch.kind not in ('text', 'voice') then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if not public.chan_can_manage(ch.community_id, auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'perm'); end if;
+  delete from public.chan_pw_ok where channel_id = p_ch;
+  if v = '' then
+    delete from public.chan_pw where channel_id = p_ch;
+    return jsonb_build_object('ok', true, 'locked', false);
+  end if;
+  if char_length(v) < 4 or char_length(v) > 64 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+  insert into public.chan_pw (channel_id, hash, set_by) values (p_ch, extensions.crypt(v, extensions.gen_salt('bf', 8)), auth.uid())
+    on conflict (channel_id) do update set hash = excluded.hash, set_by = excluded.set_by, set_at = now();
+  return jsonb_build_object('ok', true, 'locked', true);
+end $$;
+
+create or replace function public.ds3_info()
+returns jsonb language sql stable as $$ select jsonb_build_object('ok', true, 'v', 1) $$;
+
+revoke all on function public.site_voice_can(uuid) from public, anon, authenticated;
+revoke all on function public.voice_limit_of(bigint) from public, anon, authenticated;
+revoke all on function public.site_voice_list() from public;
+grant execute on function public.site_voice_list() to anon, authenticated;
+do $$
+declare f text;
+begin
+  foreach f in array array['cv_pass(bigint,text)', 'cv_check(bigint,text,text)', 'cv_who(bigint)', 'cm_voice_limit_set(bigint,integer)',
+    'site_voice_save(bigint,text,integer,integer)', 'site_voice_delete(bigint)', 'cm_chan_pw_set(bigint,text)'] loop
+    execute 'revoke all on function public.' || f || ' from public, anon';
+    execute 'grant execute on function public.' || f || ' to authenticated';
+  end loop;
+end $$;
+revoke all on function public.ds3_info() from public;
+grant execute on function public.ds3_info() to anon, authenticated;

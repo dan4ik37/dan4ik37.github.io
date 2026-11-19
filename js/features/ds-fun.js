@@ -356,7 +356,7 @@
     V = V || { k: skey(srv) + ':' + ch.id, srv, ch, el, hands: new Map(), lastSnd: new Map(), stage: null, invites: [] };
     voiceDraw();
   };
-  const inVoice = () => { const v = window.D37Calls?.voiceInfo?.(); if (!v || !V) return false; return V.srv.official ? v.kind === 'official' : String(v.channel) === String(V.ch.id); };
+  const inVoice = () => { const v = window.D37Calls?.voiceInfo?.(); if (!v || !V) return false; return V.srv.official ? v.kind === 'official' && String(+v.channel || 0) === String(+V.ch.sv || 0) : String(v.channel) === String(V.ch.id); };   // T-169: несколько голосовых сайта
   function voiceDrop(){ if (V?.bc) { try { V.bc.unsubscribe(); } catch (er) {} } V = null; }
   function bcOn(){
     if (!V || V.bc || typeof sbClient === 'undefined' || !sbClient?.channel) return;
