@@ -137,6 +137,22 @@ select.ds-in{width:auto}
 .ds-rep p{margin:6px 0;color:var(--c-t3);word-wrap:break-word}
 .ds-rep small{color:var(--muted)}
 .ds-voice{height:100%;overflow-y:auto}
+/* T-168: раздел — как приложение (community.js APP_LAYOUT ставит body.ds-appl и меряет --ds-nav / --ds-bar): без заголовка страницы,
+   окно чата на всю высоту между шапкой сайта и нижним меню, шире на больших экранах; одна прокрутка — внутри колонок */
+body.ds-appl[data-route="chat"] #chat>.sec-title{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;margin:0;padding:0}
+body.ds-appl[data-route="chat"] #chat>.divider{display:none}
+body.ds-appl[data-route="chat"] #chat{max-width:1720px;padding:calc(var(--ds-nav,62px) + 8px) 12px 8px!important}
+body.ds-appl[data-route="chat"] #chat .chat-wrap.ds-wrap{height:calc(100dvh - var(--ds-nav,62px) - var(--ds-bar,0px) - 16px);min-height:420px;max-height:none}
+body.ds-appl[data-route="chat"] #perfToggle{display:none!important}   /* язычок «Слабое» лежал поверх колонки участников */
+@media (min-width:769px){body.ds-appl[data-route="chat"] .ds-rail{padding-bottom:88px}}   /* кнопка доната внизу слева не закрывает серверы */
+body.ds-appl[data-route="chat"] .ds{grid-template-columns:72px 256px minmax(0,1fr) 248px}
+body.ds-appl[data-route="chat"] .ds.m-hide{grid-template-columns:72px 256px minmax(0,1fr) 0}
+@media (max-width:1180px){body.ds-appl[data-route="chat"] .ds,body.ds-appl[data-route="chat"] .ds.m-hide{grid-template-columns:72px 256px minmax(0,1fr)}}
+@media (max-width:860px){body.ds-appl[data-route="chat"] .ds,body.ds-appl[data-route="chat"] .ds.m-hide{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:768px){
+  body.ds-appl[data-route="chat"] #chat{padding:calc(var(--ds-nav,54px) + 4px) max(4px,env(safe-area-inset-right)) 0 max(4px,env(safe-area-inset-left))!important}
+  body.ds-appl[data-route="chat"] #chat .chat-wrap.ds-wrap{height:calc(100dvh - var(--ds-nav,54px) - var(--ds-bar,58px) - 8px);min-height:360px;border-radius:12px}
+}
 /* полный экран (кнопка ⛶) */
 body.chat-full #chat .chat-wrap.ds-wrap{max-height:none}
 /* широкий экран без колонки участников */

@@ -342,8 +342,9 @@
     let html = '';
     if (tab === 'online' || tab === 'all') {
       const L = tab === 'online' ? F.friends.filter(f => stOk(f.s) !== 'offline') : F.friends;
-      html = `<div class="ds-mg">${tab === 'online' ? 'В сети' : 'Все друзья'} — ${L.length}</div>` + (L.length ? L.map(f => frow(f, { b: fb }, stOk(f.s))).join('')
-        : `<div class="ds-dim">${tab === 'online' ? 'Сейчас никого из друзей нет в сети.' : 'Пока нет друзей. Найди их во вкладке «＋ Добавить», в чате или в мире.'}</div>`);
+      html = `<div class="ds-mg">${tab === 'online' ? 'Друзья в сети' : 'Все друзья'} — ${L.length}</div>` + (L.length ? L.map(f => frow(f, { b: fb }, stOk(f.s))).join('')
+        : `<div class="ppl-empty"><span>${tab === 'online' ? (F.friends.length ? 'Сейчас никого из друзей нет в сети.' : 'Пока нет друзей — добавь первого по нику.') : 'Пока нет друзей. Добавь по нику или нажми на ник в чате → «➕ В друзья».'}</span><a class="ds-btn ds-sm" href="${special(mode, 'friends/add')}">＋ Добавить друга</a>${tab === 'online' && F.friends.length ? `<a class="ds-btn ghost ds-sm" href="${special(mode, 'friends/all')}">Все друзья — ${F.friends.length}</a>` : ''}</div>`);   // T-168: пустой экран — со следующим шагом
+      if (!(DS()?.mine?.() || []).length) html += `<div class="ppl-empty"><span>🏰 Своих серверов пока нет. Создай свой — для друзей, игры или стрима — или найди готовый.</span><a class="ds-btn ds-sm" href="${special(mode, DS()?.x?.special?.guide ? 'guide' : 'new')}">＋ Создать сервер</a><a class="ds-btn ghost ds-sm" href="${special(mode, 'find')}">🧭 Найти сервер</a></div>`;
     } else if (tab === 'pending') {
       html = `<div class="ds-mg">Входящие — ${F.incoming.length}</div>` + (F.incoming.map(f => frow(f, { sub: 'хочет дружить · ' + e(P.ago ? P.ago(f.at) : ''), b: [['acc', '✅ Принять', 'ok'], ['dec', '✕ Отклонить', 'bad']] })).join('') || '<div class="ds-dim">Нет заявок</div>')
         + `<div class="ds-mg">Отправленные — ${F.outgoing.length}</div>` + (F.outgoing.map(f => frow(f, { sub: 'ждёт ответа', b: [['cancel', '✕ Отменить заявку', 'bad']] })).join('') || '<div class="ds-dim">Нет отправленных</div>');

@@ -172,3 +172,18 @@
   msgview.js DRAFTS (per-channel drafts, d37_drafts, 30 channels / 14 days).
 - Tests: scripts/t167-test.cjs (node), scripts/ds2-sql-test.mjs (PGlite — not run locally, no PGlite on this PC),
   scripts/t167-e2e.cjs (two headless Chrome with fake devices, live Supabase Realtime).
+
+## T-168 (19.11.2026, branch t168-ds3) — bugs, explanations, app layout (English, short)
+- «в сети» is one number everywhere: chat.js chatOnline().total = people without duplicate tabs + guests (was: presence keys = tabs);
+  the home «Сейчас на сайте» uses it too. Site members column title «Сейчас на сайте — N», friends tab «Друзья в сети — N»; the 👥 chip
+  on a community = its online members (was: stale site number).
+- js/features/ds-help.js (MODS.ds, css/ds-help.css; flag HELP_ON): first-visit welcome over the feed (d37_ds_hi; replaces the one-line tip),
+  #/chat/help «что здесь есть» (❔ in the channel header), #/chat/guide — create a community in 5 steps (name → icon → channel template
+  «друзья» / «игра» / «стример» → invite link → roles «Модератор» / «Активный»), same RPCs as the old form (cm_create, cm_channel_save,
+  cm_role_save; the server still decides everything, kids rules unchanged); «＋» in the rail opens the guide (old form: #/chat/new);
+  long-press on an icon button (phone) shows its name; Esc closes the 📌 / 🔍 panel.
+- community.js: APP_LAYOUT (body.ds-appl; no page heading, the app fills the window between #nav and #bottomTabbar, measured into
+  --ds-nav / --ds-bar; wider columns; #perfToggle hidden on /chat), LAST_CH (plain /chat reopens the last text channel, d37_ds_last),
+  members column hidden state remembered (d37_ds_mhide), a fresh channel link waits for the channel list (was: fell back to #общий).
+- Empty states with a next step: friends, no own servers, 🧭 with no open servers, empty channel.
+- No SQL. Test: scripts/t168-e2e.cjs (headless Chrome, desktop + phone, faked login, writes stubbed).
