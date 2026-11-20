@@ -203,7 +203,7 @@ setTimeout(() => { console.log('  ✗ зависло — больше 12 мин�
           sbClient.from = t => ({ update: v => ({ eq: async () => { sent = v; return { error: null }; } }), select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) });
           document.getElementById('profileNickInput').value = '🔥🔥'; await saveProfileNick(); const e1 = document.getElementById('profileNickError').textContent;
           document.getElementById('profileNickInput').value = 'dan4ik37🔥'; sent = sent; const s1 = sent; sent = null; await saveProfileNick(); const e2 = document.getElementById('profileNickError').textContent;
-          sbClient.from = from0; currentRole = role0; return { s1, e1, sent2: sent, e2 }; })()`);
+          sbClient.from = from0; currentRole = role0; document.getElementById('profileNickError').textContent = ''; return { s1, e1, sent2: sent, e2 }; })()`);
         ok(save.s1?.nick === '🔥🔥' && !save.e1 && !save.sent2 && /команды/.test(save.e2), 'профиль: «🔥🔥» сохраняется; «dan4ik37🔥» — отказ до сервера', save);
         // лента: @упоминание и ник — текстом
         const rich = await B.ev(`(async () => { await D37Phone.need('mv'); const r = MsgView.rich('привет @🔥🔥 и @Вася!', '🔥🔥'); return r.html; })()`);
