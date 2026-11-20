@@ -31,6 +31,9 @@
     return URL_RE.test(s) ? s : '';
   }
   const httpOf = s => s.replace(/^ws(s?):\/\//i, 'http$1://');
+  // T-175: нет сервера игр — комнаты прямым соединением браузеров (js/features/join-p2p.js, флаг JOIN_P2P); сервер задан — на нём
+  const P2P = () => { try { return !server() && root.D37JoinP2P && root.D37JoinP2P.on() ? root.D37JoinP2P : null; } catch (e) { return null; } };
+  const avail = () => !!server() || !!P2P();
   // игры с комнатами (сейчас одна): иконка, название, сколько людей можно
   const GAMES = { klet2: { title: 'Клеточки', icon: '🟢', max: 16 } };
   const gameOk = g => Object.prototype.hasOwnProperty.call(GAMES, g);
@@ -57,21 +60,23 @@
   }
   // строка списка сервера → проверенный объект (сервер свой, но поля всё равно не доверяем)
   function row(x){
-    if (!x || typeof x !== 'object' || !gameOk(String(x.game)) || !ID_RE.test(String(x.id || ''))) return null;
+    if (!x || typeof x !== 'object' || !gameOk(String(x.game)) || !(ID_RE.test(String(x.id || '')) || (x.p2p && CODE_RE.test(String(x.code || ''))))) return null;
     const code = String(x.code || '').toUpperCase();
     const max = num(x.max, 64) || GAMES[x.game].max;
-    return { game: String(x.game), id: String(x.id), code: CODE_RE.test(code) ? code : '', vis: VIS[x.vis] ? String(x.vis) : 'open', players: num(x.players, 999), max,
+    return { game: String(x.game), id: ID_RE.test(String(x.id || '')) ? String(x.id) : '', code: CODE_RE.test(code) ? code : '', vis: VIS[x.vis] ? String(x.vis) : 'open', players: num(x.players, 999), max,
       mode: String(x.mode || '').replace(/[^a-z0-9_]/gi, '').slice(0, 16), map: String(x.map || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 16),
-      name: clean(x.name || ''), ages: ['all', 'kids', 'adults'].includes(x.ages) ? x.ages : 'all', region: String(x.region || '').replace(/[^a-z0-9-]/gi, '').slice(0, 16), full: !!x.full || num(x.players, 999) >= max };
+      name: clean(x.name || '').slice(0, 24), ages: ['all', 'kids', 'adults'].includes(x.ages) ? x.ages : 'all', region: String(x.region || '').replace(/[^a-z0-9-]/gi, '').slice(0, 16), full: !!x.full || num(x.players, 999) >= max };
   }
   // список комнат: null — сервер недоступен
   async function list(game){
+    if (P2P()) { const l = await P2P().list(game); return l ? l.map(row).filter(Boolean) : null; }
     const s = server(); if (!s) return null;
     const d = await getJson(httpOf(s) + '/sessions' + (game ? '?game=' + encodeURIComponent(game) : ''));
     if (!Array.isArray(d)) return null;
     return d.slice(0, 200).map(row).filter(Boolean);
   }
   async function quick(game){
+    if (P2P() && gameOk(game)) return P2P().quick(game);
     const s = server(); if (!s || !gameOk(game)) return null;
     const d = await getJson(httpOf(s) + '/quick?game=' + encodeURIComponent(game));
     return d && ID_RE.test(String(d.id || '')) ? { id: String(d.id), fresh: !!d.new, players: num(d.players, 999) } : null;
@@ -87,12 +92,12 @@
       const g = await H.resolveGame('klet2');
       const id = String(g && g.build && g.build.id || '');
       if (!/^[0-9a-f]{6,16}$/.test(id)) return false;
-      try { const c = JSON.parse(localStorage.getItem('d37_join_bridge') || 'null'); if (c && c.id === id && c.base === g.base) return !!c.ok; } catch (e) {}
+      try { const c = JSON.parse(localStorage.getItem('d37_join_bridge') || 'null'); if (c && c.id === id && c.base === g.base && !!c.p2p === !!P2P()) return !!c.ok; } catch (e) {}
       // тот же адрес, что берёт hub.js при запуске игры (?v=<сборка>&k=3) — файл ляжет в кэш и второй раз не скачается
       let t = '';
       try { const r = await fetch(g.base + 'engine-host.js?v=' + id + '&k=3'); t = r.ok ? await r.text() : ''; } catch (e) { return false; }
-      const ok = /\blobby\s*:\s*\{/.test(t) && /join_session/.test(t);
-      try { localStorage.setItem('d37_join_bridge', JSON.stringify({ id, base: g.base, ok })); } catch (e) {}
+      const ok = /\blobby\s*:\s*\{/.test(t) && /join_session/.test(t) && (!P2P() || (/\bnet\s*:\s*\{/.test(t) && /p2p_start/.test(t)));
+      try { localStorage.setItem('d37_join_bridge', JSON.stringify({ id, base: g.base, ok, p2p: !!P2P() })); } catch (e) {}
       return ok;
     })().catch(() => false);
     bridgeP.then(ok => { st.bridge = ok; });
@@ -137,6 +142,7 @@
     const big = !was || was.session !== next.session || was.vis !== next.vis || was.joinable !== next.joinable || was.game !== next.game;
     actChanged(big);
     if (!was || was.session !== next.session) partyTrack();
+    try { if (P2P()) P2P().presence(next); } catch (e) {}
     paintGame();
   }
   // занятие сменилось — телефону (он сам решает, когда отправить в «кто онлайн» и друзьям); только число игроков — не чаще раза в 30 с
@@ -193,7 +199,7 @@
   // можно ли зайти к человеку с таким занятием (для смотрящего): включено, есть сервер и мост, комната не полная
   function joinTarget(a){
     const d = a && a.d;
-    if (!ON() || !d || !gameOk(d.g) || !CODE_RE.test(d.c) || !(d.n < d.m) || !server() || st.bridge === false) return null;
+    if (!ON() || !d || !gameOk(d.g) || !CODE_RE.test(d.c) || !(d.n < d.m) || !avail() || st.bridge === false) return null;
     const href = '/hub/play/' + d.g + '/' + d.c;
     return { d37: true, href, hash: href.slice(1), label: '▶ Присоединиться', game: d.g, code: d.c };
   }
@@ -220,16 +226,29 @@
     if (!t) return;
     st.entered = st.gen;
     const url = server();
+    if (!url && P2P()) { p2pEnter(h, t); return; }
     if (!url) { gameToast('Сервер игр недоступен — попробуй позже. Пока играешь с ботами'); return; }
     if (!h.lobby || typeof h.lobby.join !== 'function') { gameToast('Комнаты появятся с новой версией игры — пока играешь с ботами'); return; }
     const rj = ss.get('d37join_rj');
     try {
-      if (rj && rj.key && ((t.id && rj.id === t.id) || (t.code && rj.code === t.code))) h.lobby.rejoinKey(rj.key >>> 0);
+      if (rj && rj.key && ((t.id && rj.id === t.id) || (t.code && rj.code === t.code))) h.lobby.rejoinKey(rj.key >>> 0); else h.lobby.rejoinKey(freshKey());
       if (t.id) h.lobby.join(url, t.game, t.id, ''); else h.lobby.joinCode(url, t.code, '');
     } catch (e) { report('join', e && e.message); gameToast('Не получилось войти в комнату — играешь с ботами'); return; }
     clearInterval(st.poll);
     st.poll = setInterval(pollState, 1500);
   }
+  // T-175: вход без сервера игр — хозяин (создал эту комнату в этой вкладке) или к хозяину по коду
+  function p2pEnter(h, t){
+    const pend = ss.get('d37join_host'), rj = ss.get('d37join_rj');
+    const host = !!(pend && t.code && pend.code === t.code);
+    try { if (rj && rj.key && t.code && rj.code === t.code) h.lobby.rejoinKey(rj.key >>> 0); else h.lobby.rejoinKey(freshKey()); } catch (e) {}
+    const meta = host ? { name: pend.name || defName(), vis: pend.vis, max: pend.max, ages: pend.ages } : null;
+    P2P().enter(h, { game: t.game, code: t.code }, { host, meta, toast: gameToast }).catch(e => { report('p2p', e && e.message); gameToast('Не получилось войти в комнату — играешь с ботами'); });
+    clearInterval(st.poll);
+    st.poll = setInterval(pollState, 1500);
+  }
+  // свой ключ возврата у каждой вкладки (у движка он из зерна мира — у всех страниц одинаковый: вернувшийся занимал чужое место)
+  function freshKey(){ const b = new Uint32Array(1); try { crypto.getRandomValues(b); } catch (e) { b[0] = Math.random() * 4294967295; } return (b[0] | 1) >>> 0; }
   function pollState(){
     const h = st.h;
     if (!h || !h.lobby) { clearInterval(st.poll); st.poll = 0; return; }
@@ -250,16 +269,18 @@
   // создатель комнаты: название, кто может войти, сколько людей — когда сервер сделал его хозяином
   function hostApply(s){
     const t = st.target, pend = ss.get('d37join_host');
-    if (!t || !pend || !t.id || pend.id !== t.id || s.host !== s.me || !st.h) return;
+    if (!t || !pend || !((t.id && pend.id === t.id) || (t.code && pend.code === t.code)) || s.host !== s.me || !st.h) return;
     ss.set('d37join_host', null);
     try {
       st.h.lobby.meta(t.game, pend.vis, t.game, '-', pend.ages, pend.name);
       if (pend.max) st.h.lobby.limit(t.game, pend.max);
       st.meta = { vis: pend.vis, ages: pend.ages, name: pend.name };
+      if (P2P()) P2P().meta({ vis: pend.vis, ages: pend.ages, name: pend.name, max: pend.max });
     } catch (e) { report('meta', e && e.message); }
   }
   function rejoinNow(){
     const h = st.h, t = st.target, url = server(), rj = ss.get('d37join_rj');
+    if (h && t && !url && P2P() && t.code) { P2P().leave(); p2pEnter(h, t); st.offAt = Date.now(); gameToast('Возвращаемся в комнату…'); return; }
     if (!h || !t || !url) return;
     try {
       if (rj && rj.key) h.lobby.rejoinKey(rj.key >>> 0);
@@ -272,6 +293,7 @@
     clearInterval(st.poll); st.poll = 0;
     // вышел сам («← На сайт», другой раздел) — из комнаты насовсем, «Вернуться в игру» не предлагаем; перезагрузка и обрыв сюда не попадают
     if (st.h && st.target) { try { st.h.lobby && st.h.lobby.leave(st.target.game); } catch (e) {} ss.set('d37join_rj', null); }
+    try { root.D37JoinP2P && root.D37JoinP2P.leave(); } catch (e) {}
     st.h = null; st.target = null; st.online = false; st.gameBox = null; st.last = null;
     if (st.cur) { st.cur = null; actChanged(true); partyTrack(); }
   }
@@ -356,7 +378,7 @@
         if (host && !hostBox.childElementCount) {
           hostBox.append(el('b', 'jn-lbl', 'Ты хозяин комнаты'));
           hostBox.append(el('small', 'jn-muted', 'Кто может войти'), seg('Кто может войти', [['open', '🌍 Все'], ['friends', '👥 Друзья'], ['code', '🔒 По коду']], cc.vis, v => hostMeta({ vis: v })));
-          hostBox.append(el('small', 'jn-muted', 'Сколько игроков'), seg('Сколько игроков', [4, 8, 12, 16].map(n => [String(n), String(n)]), String(cc.max), v => { try { st.h.lobby.limit(c.game, +v); } catch (e) {} }));
+          hostBox.append(el('small', 'jn-muted', 'Сколько игроков'), seg('Сколько игроков', [4, 8, 12, 16].map(n => [String(n), String(n)]), String(cc.max), v => { try { st.h.lobby.limit(c.game, +v); if (P2P()) P2P().meta({ max: +v }); } catch (e) {} }));
         }
         hostBox.hidden = !host;
       };
@@ -367,7 +389,7 @@
     const t = st.target; if (!t || !st.h) return;
     const m = Object.assign({ vis: (st.cur && st.cur.vis) || 'open', ages: 'all', name: '' }, st.meta || {}, patch);
     st.meta = m;
-    try { st.h.lobby.meta(t.game, m.vis, t.game, '-', m.ages, m.name || defName()); } catch (e) {}
+    try { st.h.lobby.meta(t.game, m.vis, t.game, '-', m.ages, m.name || defName()); if (P2P()) P2P().meta({ vis: m.vis, ages: m.ages, name: m.name || defName() }); } catch (e) {}
   }
   const defName = () => 'Комната ' + String(prof() && prof().nick || 'игрока').slice(0, 20);
   async function copy(text, ok){
@@ -463,11 +485,13 @@
       e.preventDefault();
       const v = inp.value.trim().toUpperCase();
       if (!CODE_RE.test(v)) { toast('Код — 6 знаков: буквы и цифры (без O, I, L, 0, 1)'); inp.focus(); return; }
-      if (!server()) { toast('Сервер игр недоступен — попробуй позже'); return; }
+      if (!avail()) { toast('Сервер игр недоступен — попробуй позже'); return; }
       go('/hub/play/' + (f.game || 'klet2') + '/' + v);
     });
     acts.append(qb, cb, form);
     sec.appendChild(acts);
+    // T-175: прямое соединение без сервера-посредника — только с друзьями (правило адреса), говорим честно
+    const relayNote = el('div', 'jn-note'); relayNote.hidden = true; sec.appendChild(relayNote);
     const filt = el('div', 'jn-filt');
     const gsel = el('select', 'jn-gsel'); gsel.setAttribute('aria-label', 'Игра');
     gsel.appendChild(new Option('Все игры', ''));
@@ -491,11 +515,14 @@
       if (!sec.isConnected) { clearInterval(timer); return; }
       if (busy) return; busy = true;
       try {
-        if (!server()) { rows = null; offline(true); state('Сервер игр недоступен — попробуй позже.', 'jn-off'); return; }
+        if (!avail()) { rows = null; offline(true); state('Сервер игр недоступен — попробуй позже.', 'jn-off'); return; }
+        const p2p = P2P();
+        relayNote.hidden = !p2p || p2p.relayOk();
+        relayNote.textContent = p2p ? '🕶 ' + p2p.RELAY_NOTE + ' (взаимные друзья 18+, у которых не скрыт адрес).' : '';
         const [l, friends] = await Promise.all([list(f.game), friendsIn()]);
         if (!sec.isConnected) return;
         fr = friends;
-        if (!l) { rows = null; offline(true); state('Сервер игр недоступен — попробуй позже.', 'jn-off'); return; }
+        if (!l) { rows = null; offline(true); state(p2p ? 'Нет связи с сайтом — комнаты не видны. Попробуй позже.' : 'Сервер игр недоступен — попробуй позже.', 'jn-off'); return; }
         offline(false);
         rows = l;
         l.forEach(r => { if (r.code) st.idByCode.set(r.code, r.id); });
@@ -562,16 +589,20 @@
     return out;
   }
   async function quickPlay(game, b){
-    if (!server()) { toast('Сервер игр недоступен — попробуй позже'); return; }
+    if (!avail()) { toast('Сервер игр недоступен — попробуй позже'); return; }
     if (b) b.disabled = true;
     const q = await quick(game);
     if (b) b.disabled = false;
-    if (!q) { toast('Сервер игр недоступен — попробуй позже'); return; }
+    if (!q) { toast(P2P() ? 'Нет связи с сайтом — попробуй позже' : 'Сервер игр недоступен — попробуй позже'); return; }
+    if (q.code) {   // T-175: без сервера — в комнату по коду; новой комнаты хозяин — я
+      if (q.fresh) ss.set('d37join_host', { code: q.code, vis: 'open', max: 8, ages: 'all', name: defName(), t: Date.now() });
+      go('/hub/play/' + game + '/' + q.code); return;
+    }
     go('/hub/play/' + game + '/s-' + q.id);
   }
   const newId = () => { const A = 'abcdefghijkmnpqrstuvwxyz23456789', b = new Uint8Array(8); try { crypto.getRandomValues(b); } catch (e) { for (let i = 0; i < 8; i++) b[i] = Math.random() * 256 | 0; } return Array.from(b, x => A[x % A.length]).join(''); };
   function createSheet(game){
-    if (!server()) { toast('Сервер игр недоступен — попробуй позже'); return; }
+    if (!avail()) { toast('Сервер игр недоступен — попробуй позже'); return; }
     const G = GAMES[game];
     const o = { vis: 'open', max: 8, ages: 'all' };
     sheet(null, '＋ Новая комната', (box, close) => {
@@ -583,10 +614,16 @@
       box.append(el('small', 'jn-muted', 'Сколько игроков'), seg('Сколько игроков', [4, 8, 12, 16].map(n => [String(n), String(n)]), String(o.max), v => { o.max = +v; }));
       box.append(el('small', 'jn-muted', 'Возраст'), seg('Возраст', [['all', 'Для всех'], ['kids', 'Только до 18']], o.ages, v => { o.ages = v; }));
       const go1 = btn('hub-btn jn-mk', '▶ Создать и играть', () => {
-        const id = newId();
-        const nm = (String(name.value || '').replace(/[\u0000-\u001f\u007f;]/g, ' ').trim() || defName()).slice(0, 24);
-        ss.set('d37join_host', { id, vis: o.vis, max: o.max, ages: o.ages, name: nm, t: Date.now() });
+        // название — свободный текст (24 знака) через тот же фильтр слов, что и сообщения чата (D37Phone.clean)
+        const nm = clean(String(name.value || '').replace(/[\u0000-\u001f\u007f;]/g, ' ').trim() || defName()).slice(0, 24);
         close();
+        if (P2P()) {   // T-175: без сервера игр — комната с кодом в этой вкладке, хозяин — я
+          const code = P2P().newCode();
+          ss.set('d37join_host', { code, vis: o.vis, max: o.max, ages: o.ages, name: nm, t: Date.now() });
+          go('/hub/play/' + game + '/' + code); return;
+        }
+        const id = newId();
+        ss.set('d37join_host', { id, vis: o.vis, max: o.max, ages: o.ages, name: nm, t: Date.now() });
         go('/hub/play/' + game + '/s-' + id);
       });
       box.appendChild(go1);
@@ -716,7 +753,7 @@
     host.appendChild(b);
   }
   function decorate(rootEl){
-    if (!ON() || !rootEl || !server() || st.bridge === false) return;
+    if (!ON() || !rootEl || !avail() || st.bridge === false) return;
     let stale = false;
     for (const n of decNodes(rootEl)) { const id = decId(n); if (!id) continue; const c = decCache.get(id); if (c) decApply(n, c); if (!c || Date.now() - c.at > 20000) stale = true; }
     if (!stale) return;
@@ -742,7 +779,7 @@
     const host = doc.getElementById('profileContent'); if (!host) return;
     host.querySelector('.jn-pjoin')?.remove();
     const param = typeof currentRouteParam === 'function' ? currentRouteParam() : null, u = me();
-    if (!param || !/^[0-9a-f-]{36}$/.test(param) || (u && u.id === param) || !server()) return;
+    if (!param || !/^[0-9a-f-]{36}$/.test(param) || (u && u.id === param) || !avail()) return;
     const p = P(); if (!p || !p.friendStatus) return;
     if (!(await bridge())) return;
     const sts = await p.friendStatus([param]).catch(() => null);
@@ -761,12 +798,12 @@
     if (!wrapPhone()) setTimeout(wrapPhone, 1500);
     const pp = ss.get('d37join_party');
     if (pp && PARTY_RE.test(pp.id || '')) setTimeout(() => partyJoin(pp.id, !!pp.lead), 1200);
-    if (ON() && server()) setTimeout(() => bridge(), 4000);   // для кнопок «Присоединиться» (без адреса сервера — ничего не качаем)
+    if (ON() && avail()) setTimeout(() => bridge(), 4000);   // для кнопок «Присоединиться» (без адреса сервера — ничего не качаем)
     root.addEventListener('d37:route', () => setTimeout(profileJoin, 900));
     root.addEventListener('load', () => setTimeout(profileJoin, 1800));
   }
   if (doc) { if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', init); else init(); }
 
-  root.D37Join = { ON, GAMES, server, list, quick, bridge, lobby, setTarget, loaded, closed, onMode, joinError, mountGame, decorate, profileJoin, partyJoin, partyLeave,
+  root.D37Join = { ON, GAMES, server, avail, list, quick, bridge, lobby, setTarget, loaded, closed, onMode, joinError, mountGame, decorate, profileJoin, partyJoin, partyLeave,
     parseTarget, joinTarget, who, inviteLink, roomSheet, inviteSheet, createSheet, get state(){ return st; } };
 })();
