@@ -19,7 +19,7 @@
   const root = typeof window !== 'undefined' ? window : globalThis;
   if (root.D37Join) return;
   const doc = root.document;
-  const ON = () => { try { return typeof JOIN_ON !== 'undefined' && !!JOIN_ON; } catch (e) { return false; } };
+  const ON = () => { try { if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && localStorage.getItem('d37_join_on') === '1') return true; } catch (e) {} try { return typeof JOIN_ON !== 'undefined' && !!JOIN_ON; } catch (e) { return false; } };   // localhost: тест включает сам (d37_join_on)
   const DEV = (() => { try { return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname); } catch (e) { return false; } })();
   const URL_RE = /^wss?:\/\/[a-z0-9.\-]+(?::\d{1,5})?(?:\/[a-z0-9_\-/]*)?$/i;
   // адрес сервера игр: JOIN_SERVER из config.js; на своём компьютере (localhost) тест может подставить свой — localStorage d37_join_server
