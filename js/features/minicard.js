@@ -37,7 +37,7 @@
     const KM = k => (window.D37Age?.kidMsg ? window.D37Age.kidMsg(k) : '🔒 Недоступно');
     if (s.uid) acts.push({ k: 'profile', t: s.self ? '👤 Мой профиль' : '👤 Профиль', href: '#/profile/' + s.uid, cls: 'pri' });
     // 📍 К нему — в его сервер мира или комнату игры; ребёнку со взрослым / без возраста — нельзя (как дружба)
-    if (s.join && !s.self && !s.kp) acts.push({ k: 'join', t: s.join.label });
+    if (s.join && !s.self && !s.kp) acts.push({ k: 'join', t: s.join.label });   // T-174: через возрастную границу «Присоединиться» к конкретному человеку не показываем — до решения владельца (общий список комнат доступен всем)
     if (s.uid && s.logged && !s.self) {
       const kid = k => { notes.push(KM(k)); return { k: '', t: '🔒 ' + (s.status === 'friends' ? 'Только дружба' : 'Нельзя'), dis: true }; };
       if (s.status === 'friends') {

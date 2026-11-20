@@ -143,6 +143,7 @@ async function renderFriendsPanel(){
         <button onclick="removeFriendship('${f.id}')" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:.4rem .6rem;font-size:.72rem;cursor:pointer">✕</button>
       </div>`;
     }).join('') : '<div style="color:var(--muted);font-size:.78rem">Пока нет друзей — найди кого-нибудь через мини-профиль в чате или на странице профиля</div>';
+    window.D37Join?.decorate?.(listEl);   // T-174: «▶ Присоединиться», если друг в комнате и к нему можно
   } catch(e) {
     listEl.innerHTML = '<div style="color:var(--accent);font-size:.78rem">Ошибка загрузки</div>';
   }

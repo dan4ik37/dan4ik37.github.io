@@ -553,7 +553,7 @@ function onlineMeta(){
     if (t) meta.v = t.key;
     // ребёнок до 13 (безопасность детей) — «чем занят» и код комнаты всем не рассылаем: друзьям — через friends_online (сервер)
     if ((currentProfile?.profile_visibility || 'all') === 'all' && window.D37Phone?.activity && !(window.D37Age?.kid?.() && window.D37Age?.kidsafe?.())) {
-      const a = window.D37Phone.actCode(window.D37Phone.activity());
+      const a = window.D37Phone.actCode(window.D37Phone.activity(), 'pub');   // 'pub' — для всех: комната «только друзья» сюда не идёт (T-174, join.js)
       if (a) meta.a = a.slice(0, 160);
     }
   }

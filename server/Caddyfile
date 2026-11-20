@@ -20,8 +20,18 @@ https://{$RT_HOST} {
 		}
 	}
 	header -Server
-	reverse_proxy 127.0.0.1:8787 {
-		# on a config reload keep open WebSockets for 5 minutes instead of cutting all games at once
-		stream_close_delay 5m
+	# T-174: the D37 game server (d37-server, systemd, port 7377 on this machine) behind the same certificate:
+	# wss://RT_HOST/d37/<session> and https://RT_HOST/d37/sessions — the prefix is cut, the server sees /<session>, /sessions.
+	# The site's JOIN_SERVER (js/core/config.js) is then 'wss://RT_HOST/d37'. Nothing on 7377 → 502 here; rt is untouched.
+	handle_path /d37/* {
+		reverse_proxy 127.0.0.1:7377 {
+			stream_close_delay 5m
+		}
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8787 {
+			# on a config reload keep open WebSockets for 5 minutes instead of cutting all games at once
+			stream_close_delay 5m
+		}
 	}
 }
