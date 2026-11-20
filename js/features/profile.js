@@ -314,7 +314,7 @@ async function renderProfilePage(viewUserId){
   document.getElementById('profileBanner').classList.toggle('profile-banner-empty', !profile.banner_url);
   const avatarEl = document.getElementById('profileAvatarImg');
   if (profile.avatar_url) { avatarEl.style.backgroundImage = `url('${safeImgUrl(profile.avatar_url)}')`; avatarEl.textContent=''; }
-  else { avatarEl.style.backgroundImage=''; avatarEl.textContent = (profile.nick||'?').substring(0,2).toUpperCase(); }
+  else { avatarEl.style.backgroundImage=''; const lt = (profile.nick||'').replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g, ''); avatarEl.textContent = lt ? lt.substring(0,2).toUpperCase() : (window.D37Nick?.initial(profile.nick) || '?'); }
   applyProfileGlow(avatarEl, profile);
   if (typeof applyLevelFrame === 'function') applyLevelFrame(avatarEl, targetId);
   if (typeof renderProfileTitle === 'function') renderProfileTitle(targetId);
@@ -979,15 +979,33 @@ function toggleNickEdit(show){
   document.getElementById('profileNickEditWrap').style.display = show ? 'flex' : 'none';
   document.getElementById('profileNickError').textContent = '';
   if (show) document.getElementById('profileNickInput').value = document.getElementById('profileNick').textContent;
+  if (show) nickLockNote();
+}
+// T-177: ник сменил админ «на время» / «навсегда» — сказать сразу, а не после «Сохранить» (community.sql ч. 17: nick_my_lock).
+// Без ч. 17 функции нет — молча ничего (сервер и так не держит замков).
+async function nickLockNote(){
+  const errEl = document.getElementById('profileNickError');
+  try {
+    if (!window.D37Phone?.rpc || typeof currentUser === 'undefined' || !currentUser) return;
+    const r = await D37Phone.rpc('nick_my_lock');
+    const d = r?.data; if (!d?.locked) return;
+    const when = d.until ? new Date(d.until).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
+    errEl.textContent = d.forever ? '🔒 Ник поставил админ навсегда — сменить его может только админ.' + (d.reason ? ' Причина: ' + d.reason : '')
+      : '🔒 Ник поставил админ — свой сможешь выбрать после ' + when + '.' + (d.reason ? ' Причина: ' + d.reason : '');
+  } catch (e) {}
 }
 
 async function saveProfileNick(){
   const errEl = document.getElementById('profileNickError');
-  const nick = document.getElementById('profileNickInput').value.trim();
+  let nick = document.getElementById('profileNickInput').value.trim();
   errEl.textContent = '';
-  if (!nick) { errEl.textContent = 'Ник не может быть пустым'; return; }
-  if (nick.length > 24) { errEl.textContent = 'Максимум 24 символа'; return; }
-  if (window.D37Donor?.reserved(nick)) { errEl.textContent = 'Такой ник занят системой (так подписаны анонимные донаты и гости) — выбери другой'; return; }
+  // T-177: смайлики в нике можно (js/core/nick.js); без nick.js — старая проверка
+  if (window.D37Nick) { const c = D37Nick.check(nick); if (!c.ok) { errEl.textContent = c.err; return; } nick = c.nick; }
+  else {
+    if (!nick) { errEl.textContent = 'Ник не может быть пустым'; return; }
+    if (nick.length > 24) { errEl.textContent = 'Максимум 24 символа'; return; }
+    if (window.D37Donor?.reserved(nick)) { errEl.textContent = 'Такой ник занят системой (так подписаны анонимные донаты и гости) — выбери другой'; return; }
+  }
 
   try {
     // Ник больше не участвует в матчинге доната (см. vip-donate-login.sql)

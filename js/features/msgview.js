@@ -145,7 +145,7 @@
       }
       if (EXT_RE.test(w)) return '<span class="mv-dim">[ссылка]</span>';
       let c = P.clean(w);
-      if (/^@[\p{L}0-9_.-]{2,24}[.,!?:;)]*$/u.test(c)) {
+      if (/^@[\p{L}0-9_.\-\p{Extended_Pictographic}‍️⃣\u{1F3FB}-\u{1F3FF}]{2,64}[.,!?:;)]*$/u.test(c)) {   // T-177: @ник из смайликов тоже
         const nick = c.slice(1).replace(/[.,!?:;)]+$/, ''), tail = c.slice(1 + nick.length);
         return `<b class="mv-at${myNick && nick.toLowerCase() === String(myNick).toLowerCase() ? ' me' : ''}">@${e(nick)}</b>${e(tail)}`;
       }
@@ -701,7 +701,7 @@
 
     // ── @упоминания: подсказка ников ──
     let acList = [], acI = 0, acT = 0;
-    function acCtx(){ const pos = input.selectionStart, m = input.value.slice(0, pos).match(/(?:^|\s)@([\p{L}0-9_.-]{1,24})$/u); return m ? { q: m[1], start: pos - m[1].length } : null; }
+    function acCtx(){ const pos = input.selectionStart, m = input.value.slice(0, pos).match(/(?:^|\s)@([\p{L}0-9_.\-\p{Extended_Pictographic}‍️\u{1F3FB}-\u{1F3FF}]{1,64})$/u); /* T-177: и смайлики */ return m ? { q: m[1], start: pos - m[1].length } : null; }
     function acCheck(){
       clearTimeout(acT);
       const c = acCtx(); if (!c || !V.A?.members) { closeAc(); return; }

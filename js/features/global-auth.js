@@ -198,9 +198,13 @@ async function doGlobalRegister() {
   errEl.textContent = '';
 
   if (!nick) { errEl.textContent = 'Придумай ник'; return; }
-  if (nick.length > 24) { errEl.textContent = 'Ник слишком длинный (макс. 24 символа)'; return; }
-  // «Аноним», «гость», «без имени»… — заняты системой (premium.sql: так подписаны анонимные донаты и гости)
-  if (window.D37Donor?.reserved(nick)) { errEl.textContent = 'Такой ник занят системой (так подписаны анонимные донаты и гости) — придумай другой'; return; }
+  // T-177: смайлики в нике можно — одна проверка js/core/nick.js (длина в видимых символах, невидимые знаки, «под команду сайта»)
+  if (window.D37Nick) { const c = D37Nick.check(nick, { self: false }); if (!c.ok) { errEl.textContent = c.err; return; } }
+  else {
+    if (nick.length > 24) { errEl.textContent = 'Ник слишком длинный (макс. 24 символа)'; return; }
+    // «Аноним», «гость», «без имени»… — заняты системой (premium.sql: так подписаны анонимные донаты и гости)
+    if (window.D37Donor?.reserved(nick)) { errEl.textContent = 'Такой ник занят системой (так подписаны анонимные донаты и гости) — придумай другой'; return; }
+  }
   if (!email || !pass) { errEl.textContent = 'Введи email и пароль'; return; }
   if (pass.length < 6) { errEl.textContent = 'Пароль минимум 6 символов'; return; }
   if (pass !== pass2) { errEl.textContent = 'Пароли не совпадают'; return; }

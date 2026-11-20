@@ -221,7 +221,8 @@
   };
   P.avatar = (p, nick, size = 36) => {
     const n = (p?.nick || nick || '?'), rgb = P.rgb(p);
-    const ini = esc((n.replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g, '') || '?').slice(0, 2).toUpperCase());
+    const lt = n.replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g, '');   // T-177: ник из смайликов — первый смайлик целиком, не «?»
+    const ini = esc(lt ? lt.slice(0, 2).toUpperCase() : (window.D37Nick?.initial?.(n) || '?'));
     const url = p?.avatar_url && typeof safeImgUrl === 'function' ? safeImgUrl(p.avatar_url) : '';
     const bg = url ? `url('${url}') center/cover` : rgb ? `linear-gradient(135deg,rgb(${rgb}),rgba(${rgb},.55))` : `hsl(${hashHue(n)} 55% 42%)`;
     return `<span class="ph-ava" style="width:${size}px;height:${size}px;background:${bg};font-size:${Math.round(size * .36)}px">${url ? '' : ini}</span>`;

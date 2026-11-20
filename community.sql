@@ -6276,3 +6276,280 @@ begin
 end $$;
 revoke all on function public.ds3_info() from public;
 grant execute on function public.ds3_info() to anon, authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+-- ЧАСТЬ 17 (T-177, 20.11.2026): ники из смайликов, смена / сброс ника админом. Повторный запуск безопасен (if not exists /
+--   create or replace / on conflict). От части 16 не зависит: можно выполнить до неё, после неё или без неё. Нужны части 1–11.
+--   Проверка с сервера: rpc nick17_info → {"ok":true,"v":1}.
+--   (а) Владелец 20.11: «ники из смайликов система считает анонимными и не даёт сделать ник из смайликов». Причины: premium.sql
+--       donor_name_reserved считает ник без букв и цифр «анонимным» (ключ ''), а server-hardening.sql profile_nick_sanitize вырезал
+--       всё, кроме букв, цифр, пробела и _ . - (смайлики тоже). Теперь в нике можно смайлики (эмодзи) — отдельно или с буквами; длина —
+--       в видимых символах (2–24); нельзя невидимые / управляющие символы, только пробелы и знаки, мат (по буквам), «Аноним» и т. п.
+--       (если есть буквы), ник «под команду сайта» (в том числе похожими буквами). То же проверяет сайт (js/core/nick.js).
+--       Сообщения, голоса в опросах, реакции и @упоминания тоже понимают смайлики (в их функциях меняется только класс символов).
+--   (б) Владелец 20.11: «должна быть смена ника админом, на время или навсегда» + уточнение: «после смены ник должен сбрасываться,
+--       чтобы его не было». Админ: nick_admin_set (новый ник, причина, на 1 ч / 1 день / 7 / 30 дней или навсегда) и nick_admin_reset
+--       («Игрок» + цифры, сразу можно выбрать свой). Старый ник «сгорает» для этого игрока (nick_retired; сравнение по «скелету»:
+--       регистр, похожие буквы, знаки — не спасают). На время — сам сменить нельзя, после срока ник НЕ возвращается, просто снова
+--       можно выбрать свой; навсегда — только админ. Игроку — 🔔 с причиной; в 📜 журнал модерации — запись. Права — только admin.
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+-- 17.1 Класс разрешённых символов: буквы (рус / лат), цифры, пробел, _ . - и смайлики (те же диапазоны — js/core/nick.js EMO)
+create or replace function public.nick_emo() returns text language sql immutable as $$
+  select '©®‼⁉™ℹ↔-↪⌚-⏿Ⓜ▪-➿⤴⤵⬅-⭕〰〽㊗㊙\U0001F000-\U0001FAFF'
+$$;
+-- Очистка: NFC, всё лишнее (невидимое, управляющее, другие алфавиты) — вон, «склейка» ZWJ — только между смайликами, без двойных пробелов
+create or replace function public.nick_clean(t text) returns text language sql immutable as $$
+  select left(btrim(
+    regexp_replace(
+    regexp_replace(
+    regexp_replace(
+    regexp_replace(
+    regexp_replace(
+      regexp_replace(normalize(coalesce(t, ''), NFC), '[^A-Za-zА-Яа-яЁё0-9_. ' || public.nick_emo() || '‍️⃣-]', '', 'g'),
+      '(^|[A-Za-zА-Яа-яЁё0-9_. -])‍+', '\1', 'g'),
+      '‍+($|[A-Za-zА-Яа-яЁё0-9_. -])', '\1', 'g'),
+      '(^|[A-Za-zА-Яа-яЁё_. -])️+', '\1', 'g'),
+      '(^|[^0-9️])⃣+', '\1', 'g'),
+      ' {2,}', ' ', 'g')), 64)
+$$;
+-- Видимая длина (примерно как на сайте): «склеенные» смайлики — один символ, оттенки кожи и FE0F не считаются
+create or replace function public.nick_vis_len(t text) returns int language sql immutable as $$
+  select char_length(regexp_replace(regexp_replace(coalesce(t, ''), '‍.', '', 'g'), '[️⃣\U0001F3FB-\U0001F3FF]', '', 'g'))
+$$;
+-- «Скелет» для сравнения похожих: регистр, русские буквы-двойники → латиница, 0 → o, 1 / i / | / ! → l, без пробелов, знаков и смайликов
+create or replace function public.nick_skel(t text) returns text language sql immutable as $$
+  select regexp_replace(
+    translate(lower(translate(normalize(coalesce(t, ''), NFKC), 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯІЇ', 'абвгдеёжзийклмнопрстуфхцчшщъыьэюяії')),
+      'ёаеорсхукмнвтії01i|!', 'eaeopcxykmhbtllollll'),
+    '[^a-zа-я0-9]', '', 'g')
+$$;
+-- Ключ «сгоревшего» ника: скелет; ник из одних смайликов — сам очищенный ник без пробелов
+create or replace function public.nick_rkey(t text) returns text language sql immutable as $$
+  select case when public.nick_skel(t) <> '' then public.nick_skel(t) else replace(lower(public.nick_clean(t)), ' ', '') end
+$$;
+
+-- 17.2 Замки и «сгоревшие» ники (закрыты от прямого доступа — только функции ниже)
+create table if not exists public.nick_lock (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  until timestamptz,                         -- null — навсегда
+  reason text not null default '',
+  by_id uuid,
+  set_at timestamptz not null default now()
+);
+alter table public.nick_lock enable row level security;
+revoke all on public.nick_lock from anon, authenticated;
+create table if not exists public.nick_retired (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  key text not null,
+  nick text not null default '',
+  by_id uuid,
+  at timestamptz not null default now(),
+  primary key (user_id, key)
+);
+alter table public.nick_retired enable row level security;
+revoke all on public.nick_retired from anon, authenticated;
+
+-- 17.3 Что не так с ником (null — всё хорошо). p_admin — ставит админ: без замка и «сгоревших» (их видит только сам человек и админ)
+create or replace function public.nick_problem(p_nick text, p_uid uuid, p_admin boolean default false)
+returns text language plpgsql stable security definer set search_path = public as $$
+declare v text := public.nick_clean(p_nick); n int; sk text; l record; my_role text; own boolean;
+begin
+  if p_admin and auth.uid() is not null and not public.is_admin_user(auth.uid()) then p_admin := false; end if;
+  own := p_uid is not null and (auth.uid() is null or auth.uid() = p_uid);
+  if own and not p_admin then
+    select * into l from public.nick_lock where user_id = p_uid and (until is null or until > now());
+    if found then
+      return case when l.until is null then 'Ник поставил админ навсегда — сменить его может только админ'
+        else 'Ник поставил админ — свой сможешь выбрать после ' || to_char(l.until at time zone 'UTC', 'DD.MM.YYYY HH24:MI') || ' (UTC)' end;
+    end if;
+  end if;
+  n := public.nick_vis_len(v);
+  if n < 2 or n > 24 then return 'Ник: от 2 до 24 символов (смайлик — один символ)'; end if;
+  if v !~ '[^ _.-]' then return 'Ник не может быть только из пробелов и знаков'; end if;
+  if public.donor_name_key(v) <> '' and public.donor_name_reserved(v) then return 'Такой ник занят системой (так подписаны анонимные донаты и гости) — выбери другой'; end if;
+  if public.comm_bad(v) or public.comm_bad(regexp_replace(v, '[^A-Za-zА-Яа-яЁё0-9]', '', 'g')) then return 'Без мата, пожалуйста'; end if;
+  sk := public.nick_skel(v);
+  select role into my_role from public.profiles where id = p_uid;
+  if sk <> '' and coalesce(my_role, '') <> 'admin' then
+    -- ник создателя (и его написания) — нельзя даже частью; ник любого из команды — нельзя один в один (похожими буквами тоже)
+    if exists (select 1 from unnest(array['dan4ik37', 'денчик37', 'данчик37', 'denchik37']) s where position(public.nick_skel(s) in sk) > 0)
+       or exists (select 1 from public.profiles p where p.role in ('admin', 'moderator', 'helper') and p.id is distinct from p_uid and public.nick_skel(p.nick) = sk) then
+      return 'Ник похож на ник команды сайта — выбери другой';
+    end if;
+  end if;
+  if own and not p_admin and exists (select 1 from public.nick_retired r where r.user_id = p_uid and r.key = public.nick_rkey(v)) then
+    return 'Этот ник убрал админ — выбери другой';
+  end if;
+  return null;
+end $$;
+
+-- 17.4 Триггер ника профиля (тот же a1_profile_nick_sanitize — раньше триггера уникальности и a2): смайлики можно, проверки — выше
+create or replace function public.profile_nick_sanitize()
+returns trigger language plpgsql as $$
+declare v text; p text;
+begin
+  if new.nick is null then return new; end if;
+  if TG_OP = 'UPDATE' and new.nick is not distinct from old.nick then return new; end if;
+  v := public.nick_clean(new.nick);
+  if public.is_client_session() then
+    p := public.nick_problem(v, new.id, false);
+    if p is not null then
+      if TG_OP = 'UPDATE' then raise exception '%', p using errcode = '23514'; end if;
+      v := 'user' || substr(replace(new.id::text, '-', ''), 1, 6);   -- при регистрации не роняем создание аккаунта
+    end if;
+  elsif public.nick_vis_len(v) < 2 then
+    v := 'user' || substr(replace(new.id::text, '-', ''), 1, 6);
+  end if;
+  new.nick := v;
+  return new;
+end $$;
+drop trigger if exists a1_profile_nick_sanitize on public.profiles;
+create trigger a1_profile_nick_sanitize before insert or update of nick on public.profiles
+  for each row execute function public.profile_nick_sanitize();
+
+-- «Аноним», «гость»… (premium.sql): ник без букв и цифр (из смайликов) больше не считается «анонимным»; логин для доната — как был
+create or replace function public.profile_reserved_names()
+returns trigger language plpgsql as $$
+declare v_nick boolean := true; v_login boolean := true;
+begin
+  if tg_op = 'UPDATE' then
+    v_nick := new.nick is distinct from old.nick;
+    v_login := new.donate_login is distinct from old.donate_login;
+  end if;
+  if v_nick and new.nick is not null and public.donor_name_key(new.nick) <> '' and public.donor_name_reserved(new.nick) then
+    if tg_op = 'UPDATE' and public.is_client_session() then
+      raise exception 'Ник «%» занят системой: так подписаны анонимные донаты и гости — выбери другой', new.nick using errcode = '23514';
+    end if;
+    new.nick := 'user' || substr(replace(new.id::text, '-', ''), 1, 6);
+  end if;
+  if v_login and new.donate_login is not null and public.donor_name_reserved(new.donate_login) then
+    if public.is_client_session() then
+      raise exception 'Логин для доната «%» нельзя: так DonationAlerts подписывает анонимные донаты — придумай свой', new.donate_login using errcode = '23514';
+    end if;
+    if tg_op = 'UPDATE' then new.donate_login := old.donate_login; else new.donate_login := null; end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists a2_profile_reserved_names on public.profiles;
+create trigger a2_profile_reserved_names before insert or update of nick, donate_login on public.profiles
+  for each row execute function public.profile_reserved_names();
+
+-- 17.5 Смайлики в нике сообщения, голоса в опросе, реакции (гость) и в @упоминаниях: в уже выполненных функциях меняется ТОЛЬКО класс
+--      символов (сами функции не переписываются вручную — берём их текущий текст с сервера). Функции, где старого класса нет, не трогаем.
+do $$
+declare f record; d text;
+  old_san text := '[^A-Za-zА-Яа-яЁё0-9_. -]';
+  new_san text := '[^A-Za-zА-Яа-яЁё0-9_. ' || public.nick_emo() || '‍️⃣-]';
+  old_at text := '@([A-Za-zА-Яа-яЁё0-9_.-]{2,24})';
+  new_at text := '@([A-Za-zА-Яа-яЁё0-9_.' || public.nick_emo() || '‍️⃣-]{2,64})';
+begin
+  for f in select p.oid, p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.prokind = 'f' and p.proname <> 'profile_nick_sanitize'
+             and (position(old_san in p.prosrc) > 0 or position(old_at in p.prosrc) > 0) loop
+    d := pg_get_functiondef(f.oid);
+    d := replace(d, old_san || ''', '''', ''g'')), 24)', new_san || ''', '''', ''g'')), 64)');
+    d := replace(d, old_san, new_san);
+    d := replace(d, old_at, new_at);
+    begin
+      execute d;
+    exception when others then
+      raise warning 'ч. 17: не обновилась функция % (%): %', f.proname, f.oid, sqlerrm;
+    end;
+  end loop;
+end $$;
+
+-- 17.6 Админ меняет ник игроку: новый ник, причина, срок (минуты: 60 / 1440 / 10080 / 43200; 0 — навсегда)
+create or replace function public.nick_admin_apply(p_user uuid, p_new text, p_reason text, p_until timestamptz, p_lock boolean, p_action text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_old text;
+begin
+  select nick into v_old from public.profiles where id = p_user;
+  if v_old is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if lower(v_old) = lower(p_new) then return jsonb_build_object('ok', false, 'reason', 'same'); end if;
+  -- старый ник «сгорает» для этого игрока; новый (если админ возвращает прежний) — снова можно
+  insert into public.nick_retired (user_id, key, nick, by_id) values (p_user, public.nick_rkey(v_old), v_old, auth.uid())
+    on conflict (user_id, key) do update set at = now(), by_id = excluded.by_id, nick = excluded.nick;
+  delete from public.nick_retired where user_id = p_user and key = public.nick_rkey(p_new);
+  if p_lock then
+    insert into public.nick_lock (user_id, until, reason, by_id) values (p_user, p_until, p_reason, auth.uid())
+      on conflict (user_id) do update set until = excluded.until, reason = excluded.reason, by_id = excluded.by_id, set_at = now();
+  else
+    delete from public.nick_lock where user_id = p_user;
+  end if;
+  -- бан ника не теряется вместе со сменой ника
+  if exists (select 1 from public.banned_nicks b where lower(b.nick) = lower(v_old)) and not exists (select 1 from public.banned_nicks b where lower(b.nick) = lower(p_new)) then
+    insert into public.banned_nicks (nick, banned_by) values (p_new, auth.uid());
+  end if;
+  update public.profiles set nick = p_new where id = p_user;
+  perform public.comm_log(null, auth.uid(), p_user, v_old, p_action, p_reason,
+    left(v_old || ' → ' || p_new || case when not p_lock then '' when p_until is null then ' · навсегда' else ' · до ' || to_char(p_until at time zone 'UTC', 'DD.MM HH24:MI') || ' UTC' end, 300), '');
+  return jsonb_build_object('ok', true, 'old', v_old, 'nick', p_new, 'until', p_until, 'forever', p_lock and p_until is null);
+end $$;
+revoke all on function public.nick_admin_apply(uuid, text, text, timestamptz, boolean, text) from public, anon, authenticated;
+
+create or replace function public.nick_admin_set(p_user uuid, p_nick text, p_reason text, p_minutes int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v text := public.nick_clean(p_nick); v_reason text := left(btrim(coalesce(p_reason, '')), 200); p text; r jsonb; v_until timestamptz; term text;
+begin
+  if not public.is_admin_user(auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'admin_only'); end if;
+  if p_user is null or p_user = auth.uid() then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if public.mod_is_owner(p_user) then return jsonb_build_object('ok', false, 'reason', 'creator'); end if;
+  if coalesce(p_minutes, -1) not in (0, 60, 1440, 10080, 43200) then return jsonb_build_object('ok', false, 'reason', 'minutes'); end if;
+  if v_reason = '' then return jsonb_build_object('ok', false, 'reason', 'reason_req'); end if;
+  if public.comm_bad(v_reason) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  p := public.nick_problem(v, p_user, true);
+  if p is not null then return jsonb_build_object('ok', false, 'reason', 'nick', 'msg', p); end if;
+  v_until := case when p_minutes > 0 then now() + make_interval(mins => p_minutes) end;
+  perform set_config('d37.reason', v_reason, true);
+  r := public.nick_admin_apply(p_user, v, v_reason, v_until, true, 'nick_set');
+  if not coalesce((r->>'ok')::boolean, false) then return r; end if;
+  term := case p_minutes when 60 then '1 час' when 1440 then '1 день' when 10080 then '7 дней' when 43200 then '30 дней' else '' end;
+  perform public.notify(p_user, 'nick_admin', auth.uid(), '✏️ Админ сменил твой ник на «' || v || '»',
+    'Причина: ' || v_reason || '. ' || case when p_minutes = 0 then 'Сменить его сам ты не сможешь — только админ.' else 'Свой ник сможешь выбрать через ' || term || '. Старый ник больше нельзя.' end,
+    '/profile', null);
+  return r;
+end $$;
+
+create or replace function public.nick_admin_reset(p_user uuid, p_reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v text; v_reason text := left(btrim(coalesce(p_reason, '')), 200); r jsonb; i int := 0;
+begin
+  if not public.is_admin_user(auth.uid()) then return jsonb_build_object('ok', false, 'reason', 'admin_only'); end if;
+  if p_user is null or p_user = auth.uid() then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if public.mod_is_owner(p_user) then return jsonb_build_object('ok', false, 'reason', 'creator'); end if;
+  if v_reason = '' then return jsonb_build_object('ok', false, 'reason', 'reason_req'); end if;
+  if public.comm_bad(v_reason) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  loop
+    v := 'Игрок' || lpad((floor(random() * 1000000))::int::text, 6, '0'); i := i + 1;
+    exit when i > 8 or not exists (select 1 from public.profiles where lower(nick) = lower(v));
+  end loop;
+  perform set_config('d37.reason', v_reason, true);
+  r := public.nick_admin_apply(p_user, v, v_reason, null, false, 'nick_reset');
+  if not coalesce((r->>'ok')::boolean, false) then return r; end if;
+  perform public.notify(p_user, 'nick_admin', auth.uid(), '♻️ Админ сбросил твой ник',
+    'Причина: ' || v_reason || '. Старый ник больше нельзя — придумай новый в профиле (сейчас: «' || v || '»).', '/profile', null);
+  return r;
+end $$;
+
+-- Свой замок (профиль: сказать сразу, почему ник не меняется)
+create or replace function public.nick_my_lock()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce((select jsonb_build_object('locked', true, 'until', l.until, 'forever', l.until is null, 'reason', l.reason)
+    from public.nick_lock l where l.user_id = auth.uid() and (l.until is null or l.until > now())), '{"locked":false}'::jsonb)
+$$;
+create or replace function public.nick17_info()
+returns jsonb language sql stable as $$ select jsonb_build_object('ok', true, 'v', 1) $$;
+
+revoke all on function public.nick_problem(text, uuid, boolean) from public, anon;
+grant execute on function public.nick_problem(text, uuid, boolean) to authenticated;   -- нужна триггеру ника (он работает от имени игрока)
+do $$
+declare f text;
+begin
+  foreach f in array array['nick_admin_set(uuid,text,text,integer)', 'nick_admin_reset(uuid,text)', 'nick_my_lock()'] loop
+    execute 'revoke all on function public.' || f || ' from public, anon';
+    execute 'grant execute on function public.' || f || ' to authenticated';
+  end loop;
+end $$;
+revoke all on function public.nick17_info() from public;
+grant execute on function public.nick17_info() to anon, authenticated;
