@@ -39,7 +39,8 @@
   const RSN = { creator: 'на создателя сайта жаловаться нельзя', self: 'на себя жаловаться нельзя', closed: 'жалобу уже закрыли', state: 'неверный статус',
     rights: 'нет прав', staff: 'только админ и модераторы сайта', not_found: 'не найдено', bad: 'без мата, пожалуйста', len: 'заметка — до 500 символов',
     rate: 'слишком часто — попробуй позже', slow: 'неверная задержка', minutes: 'такой срок нельзя', guest: 'у гостя нет уведомлений — только тайм-аут',
-    member: 'его уже нет в сообществе', action: 'неизвестное действие', auth: 'нужно войти', scope: 'неверный раздел', data: 'неверные данные' };
+    member: 'его уже нет в сообществе', action: 'неизвестное действие', auth: 'нужно войти', scope: 'неверный раздел', data: 'неверные данные',
+    admin_only: 'только админ сайта', reason_req: 'нужна причина', same: 'это и есть его ник', nick: 'такой ник нельзя' };
   if (DS._test?.REASON) Object.assign(DS._test.REASON, { creator: RSN.creator });   // ответы сервера в ленте сообществ (community.js)
   const why = r => (r?.missing ? 'появится, когда сайт обновится' : r?.error ? P.err(r.error) : RSN[r?.data?.reason] || (DS.why ? DS.why(r) : 'не получилось'));
 
@@ -241,6 +242,40 @@
     toast(r.data?.ok ? `${T[0]}: ${nick} — готово` : '⚠️ ' + why(r), !!r.data?.ok);
     return !!r.data?.ok;
   }
+  // ═══ T-177: ✏️ Сменить ник / ♻️ Сбросить ник — только админ сайта (сервер: community.sql ч. 17 nick_admin_set / nick_admin_reset).
+  //   Старый ник ему больше нельзя; «на время» — сам не сменит до конца срока (потом выберет свой); «навсегда» — только админ.
+  //   Без ч. 17 — понятная строка, ничего не ломается. Откат — NICK_ADM = false.
+  const NICK_ADM = true;
+  const NDUR = [[60, '1 час'], [1440, '1 день'], [10080, '7 дней'], [43200, '30 дней'], [0, 'навсегда']];
+  const NREASONS = ['Оскорбительный ник', 'Мат в нике', 'Под команду сайта', 'Реклама в нике', 'Личные данные'];
+  const isAdmin = () => siteRole() === 'admin' || (typeof currentRole !== 'undefined' && currentRole === 'admin');
+  async function nickAdmin(uid, nick, reset){
+    if (!NICK_ADM || !isAdmin()) { toast('⚠️ Менять ник другим может только админ сайта'); return false; }
+    const T = reset ? '♻️ Сбросить ник' : '✏️ Сменить ник';
+    const v = await X.sheet(`${T} <b>${e(nick || 'игрок')}</b>`,
+      `${reset ? '<p class="ds-dim">Ник станет «Игрок» + цифры. Старый ник ему больше нельзя (и похожие на него). Свой новый ник он может выбрать сразу.</p>'
+        : `<label class="ds-lbl">Новый ник — буквы, цифры, смайлики<input class="ds-in" data-f="nick" maxlength="64" placeholder="Например: Тихоня🙂" autocomplete="off"></label>
+           <div class="ds4-opts">${NDUR.map(([m, t], i) => `<button type="button" class="ds4-opt${i === 1 ? ' on' : ''}" data-pick="${e(m)}">${e(t)}</button>`).join('')}</div>
+           <p class="ds-dim">На время — сам сменить не сможет, пока срок не выйдет; потом ник останется, но он сможет выбрать свой (кроме старого). Навсегда — менять может только админ.</p>`}
+       <div class="ds4-chips">${NREASONS.map(t => `<button type="button" class="ds4-chip" data-chip="${e(t)}">${e(t)}</button>`).join('')}</div>
+       <label class="ds-lbl">Причина — увидит он в 🔔 и команда в журнале<input class="ds-in" data-f="reason" maxlength="200" placeholder="Например: оскорбительный ник"></label>
+       <button type="button" class="ds4-wide ds4-go bad" data-v="go">${T}</button>`,
+      w => ({ nick: w.querySelector('[data-f="nick"]')?.value.trim() || '', min: +(w.querySelector('.ds4-opt.on')?.dataset.pick ?? 1440), reason: w.querySelector('[data-f="reason"]').value.trim() }));
+    if (!v) return false;
+    if (!v.reason) { toast('⚠️ Напиши причину — он увидит её в 🔔'); return false; }
+    let nn = v.nick;
+    if (!reset) {
+      const c = window.D37Nick ? D37Nick.check(nn, { self: false }) : { ok: !!nn, nick: nn, err: 'Пустой ник' };
+      if (!c.ok) { toast('⚠️ ' + c.err); return false; }
+      nn = c.nick;
+    }
+    const r = reset ? await RPC('nick_admin_reset', { p_user: uid, p_reason: v.reason }) : await RPC('nick_admin_set', { p_user: uid, p_nick: nn, p_reason: v.reason, p_minutes: v.min });
+    if (r.missing) { toast('🛠️ Смена ника заработает после обновления базы (community.sql, часть 17)'); return false; }
+    const d = r.data;
+    toast(d?.ok ? (reset ? `♻️ Ник сброшен: «${d.nick}»` : `✏️ Ник: «${d.old}» → «${d.nick}»${d.forever ? ' (навсегда)' : ''}`) : '⚠️ ' + (d?.msg || why(r)), !!d?.ok);
+    if (d?.ok) { try { P.dropProf?.(uid); } catch (er) {} }
+    return !!d?.ok;
+  }
   async function undo(cid, uid, nick, act){
     const r = act === 'unban' ? (cid == null ? await RPC('mod_site_ban', { p_user: uid, p_on: false, p_reason: '' }) : await RPC('cm_unban', { p_community: cid, p_user: uid }))
       : cid == null ? await RPC('chat_mod', { p_user: uid || null, p_nick: nick || '', p_action: 'unmute', p_minutes: 0, p_reason: '' })
@@ -298,7 +333,8 @@
       if (!r.data?.ok) { body.innerHTML = `<p class="ds-dim">⚠️ ${e(why(r))}</p>`; return; }
       const d = r.data, me = uid === P.me(), can = d.can !== false && !me && !ADMINS.has(uid);
       const acts = can ? [['warn', '⚠️ Предупредить'], ['mute', '⏳ Тайм-аут'], ['unmute', '🔊 Снять тайм-аут']]
-        .concat(site ? (R.mod ? [['siteban', '🔨 Бан ника'], ['unban', '✅ Разбан']] : []) : [['kick', '👢 Выгнать'], ['ban', '⛔ Забанить'], ['unban', '✅ Разбан']]) : [];
+        .concat(site ? (R.mod ? [['siteban', '🔨 Бан ника'], ['unban', '✅ Разбан']] : []) : [['kick', '👢 Выгнать'], ['ban', '⛔ Забанить'], ['unban', '✅ Разбан']])
+        .concat(site && NICK_ADM && isAdmin() ? [['nickset', '✏️ Сменить ник'], ['nickreset', '♻️ Сбросить ник']] : []) : [];
       body.innerHTML = `${me ? '<p class="ds-dim">Это ты 🙂</p>' : !can ? '<p class="ds-dim">🛡 Это команда или создатель — наказывать может только создатель сайта.</p>' : ''}
         ${acts.length ? `<div class="dm-cacts">${acts.map(([k, t]) => `<button type="button" class="ds-btn ${['kick', 'ban', 'siteban'].includes(k) ? 'bad' : 'ghost'} ds-sm" data-ca="${k}">${t}</button>`).join('')}</div>` : ''}
         ${me ? '' : `<h4>📝 Заметки команды <small class="ds-dim">— он их не видит</small></h4>
@@ -317,7 +353,8 @@
         if (r.data?.ok) draw(); else toast('⚠️ ' + why(r));
         return;
       }
-      const ok = a === 'unmute' || a === 'unban' ? await undo(cid, uid, nick, a) : await punish(cid, uid, nick, a);
+      const ok = a === 'nickset' || a === 'nickreset' ? await nickAdmin(uid, nick, a === 'nickreset')
+        : a === 'unmute' || a === 'unban' ? await undo(cid, uid, nick, a) : await punish(cid, uid, nick, a);
       if (ok) { draw(); after?.(); }
     };
     body.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.matches('[data-note]')) { ev.preventDefault(); body.querySelector('[data-ca="note"]')?.click(); } });
@@ -330,7 +367,8 @@
     report_work: '🙋 взял(а) жалобу на', report_done: '✅ закрыл(а) жалобу (нарушение) на', report_rejected: '❌ отклонил(а) жалобу на',
     raid_on: '🛡 включил(а) защиту от рейда', raid_off: '🛡 выключил(а) защиту от рейда', modcfg: '🚫 изменил(а) слова и 🐢 новичкам',
     cat_add: '📁 создал(а) категорию', cat_delete: '📁 удалил(а) категорию', chan_add: '＋ создал(а) канал', chan_edit: '⚙️ изменил(а) канал',
-    chan_archive: '🗄 убрал(а) в архив канал', chan_unarchive: '🗄 вернул(а) из архива канал', chan_delete: '🗑 удалил(а) канал', automod_cfg: '🤖 изменил(а) автомодерацию' };
+    chan_archive: '🗄 убрал(а) в архив канал', chan_unarchive: '🗄 вернул(а) из архива канал', chan_delete: '🗑 удалил(а) канал', automod_cfg: '🤖 изменил(а) автомодерацию',
+    nick_set: '✏️ сменил(а) ник', nick_reset: '♻️ сбросил(а) ник' };
   function logRow(x){
     return `<div class="ds4-li"><small>${e(dt(x.at))}</small><div>${x.action === 'automod' ? '<b>🤖 Автомодерация</b>' : `<b>${e(x.actor_nick || '—')}</b>`} ${e(ACT[x.action] || x.action)}${x.target_nick ? ` <b>${e(x.target_nick)}</b>` : ''}${x.reason ? ` · <i>«${e(x.reason)}»</i>` : ''}${x.detail ? ` <span class="ds-dim">· ${e(clean(x.detail))}</span>` : ''}</div></div>`;
   }
@@ -426,5 +464,8 @@
   // ═══ Подключение: «🛡» (…/reports) и «⚙️» (…/settings) открывают центр ═══
   X.sub.reports = { title: '🛡 Модерация', render: (el, mode, srv, rest) => hub(el, mode, srv, rest) };
   X.sub.settings = { title: '🛡 Модерация · ⚙️', render: (el, mode, srv, rest) => hub(el, mode, srv, rest, 'settings') };
-  window.D37Mod = { hub, rights, noReport: MV.noReport, _test: { SECT, rights, ACT, ALIAS } };
+  // T-177: карточка модерации человека и смена ника — из мини-карточки и профиля (одни и те же действия везде)
+  const offSrv = () => ({ official: true, id: DS.OFF_ID, staff: siteRole(), name: 'Денчик37' });
+  const member = (uid, nick) => memberCard('page', offSrv(), uid, nick);
+  window.D37Mod = { hub, rights, noReport: MV.noReport, member, nickAdmin, isAdmin, _test: { SECT, rights, ACT, ALIAS, NDUR } };
 })();

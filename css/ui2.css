@@ -136,6 +136,16 @@
 .d37m-ask p{font-size:.78rem;line-height:1.45;margin:0 0 8px}
 .d37m-ask div{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 @media (pointer:coarse){.d37m-btn{min-height:44px}.d37m-x{width:40px;height:40px}}
+/* T-177: полный список действий по группам; недоступное — приглушённо с причиной; «⋯» на странице профиля — без шапки */
+.d37m-acts.full{display:flex;flex-direction:column;gap:10px}
+.d37m-grp{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.d37m-grp[data-g="mod"]{padding-top:8px;border-top:1px solid var(--line)}
+.d37m-btn.mute{flex-direction:column;gap:1px;opacity:.75;background:transparent;border-style:dashed}
+.d37m-btn.mute small{font-size:.62rem;font-weight:600;color:var(--muted);line-height:1.3}
+.d37m.pmenu .d37m-ban,.d37m.pmenu .d37m-top,.d37m.pmenu .d37m-bio,.d37m.pmenu .d37m-games,.d37m.pmenu .d37m-status{display:none}
+.d37m.pmenu .d37m-body{padding-top:14px}
+.d37m.sheet .d37m-card{max-height:min(88vh,calc(100dvh - 24px));overflow-y:auto;overscroll-behavior:contain}
+.d37m.pop .d37m-card{max-height:calc(100vh - 24px);overflow-y:auto}
 :root[data-theme="light"] .d37m-vip{color:color-mix(in srgb,rgb(var(--vc)) 55%,#000)}
 :root[data-theme="light"] .d37m.sheet .d37m-card::before{background:rgba(255,255,255,.8);box-shadow:0 0 0 1px rgba(23,25,50,.12)}
 

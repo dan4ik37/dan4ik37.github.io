@@ -59,7 +59,70 @@
     const lock = s.hidden && !s.self ? (s.vis === 'friends' ? '🔒 Профиль видят только друзья' : '🔒 Пользователь скрыл профиль') : '';
     return { acts, notes, mods: s.self ? [] : (s.mods || []), lock };
   }
-  M._test = { decide, PROFILE_HREF };
+  // ═══ T-177: ОДИН полный список действий над человеком (владелец 20.11: «слишком мало функций… должны быть ВСЕ функции»).
+  // Почему было мало: карточку собирала decide() — «Написать / Позвонить / Позвать» только другу, «Пожаловаться» только из ленты
+  // (крючок report()), модерация — только мут / бан общего чата (адаптер чата); предупреждение, снять мут, разбан, заметки, история,
+  // смена ника жили только в 🛡 центре модерации. Теперь — одна чистая функция actions(): группы «Общение / Игра / Отношения / Модерация»,
+  // у каждого пункта своё правило; если ожидаемый пункт нельзя — он виден приглушённым С ПРИЧИНОЙ (а не пропадает молча).
+  // Ту же карточку открывает «⋯» на странице профиля (там — без шапки: страница и так про этого человека). Откат — FULL = false.
+  // s (как decide) + staff — моя роль на сайте ('admin' | 'moderator' | 'helper' | null), tstaff — роль его, canMod — есть ли 🛡 центр.
+  const FULL = true;
+  function actions(s){
+    const KM = k => (window.D37Age?.kidMsg ? window.D37Age.kidMsg(k) : '🔒 Недоступно');
+    const G = { talk: [], game: [], rel: [], mod: [] }, notes = [];
+    const row = (g, k, t, o = {}) => G[g].push(Object.assign({ k, t }, o));
+    const off = (g, t, why) => G[g].push({ k: '', t, dis: true, why });
+    const lock = s.hidden && !s.self ? (s.vis === 'friends' ? '🔒 Профиль видят только друзья' : '🔒 Пользователь скрыл профиль') : '';
+    if (s.guest && !s.uid) {   // гость чата (без аккаунта): только жалоба на сообщение и модерация
+      if (s.canReport && s.logged) row('rel', 'report', '🚩 Пожаловаться', { cls: 'warn' });
+      (s.mods || []).forEach(([k, t]) => row('mod', 'mod:' + k, t, { cls: 'warn' }));
+      return { groups: pack(G), notes, lock: '' };
+    }
+    if (s.uid && !s.pmenu) row('rel', 'profile', s.self ? '👤 Мой профиль' : '👤 Профиль', { href: '#/profile/' + s.uid, cls: 'pri' });
+    if (s.uid) { row('rel', 'copy-link', '🔗 Ссылка на профиль'); if (!s.self) row('rel', 'copy-nick', '📋 Скопировать ник'); }
+    if (s.self) return { groups: pack(G), notes, lock: '' };
+    // ── Игра: «▶ Присоединиться» (T-174 / T-175), «📍 Позвать» ──
+    if (s.join) { if (s.kp) off('game', s.join.label, KM('agefriend')); else row('game', 'join', s.join.label); }
+    if (!s.uid) return { groups: pack(G), notes, lock };
+    if (!s.logged) { notes.push('Войди, чтобы дружить, писать и звонить'); return { groups: pack(G), notes, lock }; }
+    const fr = s.status === 'friends', known = s.status != null;
+    // ── Общение ──
+    const onlyFr = 'только другу — сначала добавь в друзья';
+    if (fr && !s.kb) { row('talk', 'dm', '✉ Написать'); row('talk', 'call', '📞 Позвонить'); if (MINI_T141) row('game', 'inv', '📍 Позвать в игру'); }
+    else if (known) {
+      const why = s.kb ? KM(s.kb) : onlyFr;
+      off('talk', '✉ Написать', why); off('talk', '📞 Позвонить', why); if (MINI_T141) off('game', '📍 Позвать в игру', why);
+    }
+    row('talk', 'mention', '@ Упомянуть в чате');
+    // ── Отношения ──
+    if (s.status === 'friends') row('rel', 'friend-del', '➖ Убрать из друзей');
+    else if (s.status === 'pending_received') { if (s.kp) off('rel', '➕ В друзья', KM('agefriend')); else row('rel', 'friend-acc', '✅ Принять в друзья', { cls: 'ok' }); }
+    else if (s.status === 'pending_sent') off('rel', '⏳ Заявка отправлена', 'ждём ответа');
+    else if (s.status === 'none') {
+      if (s.kp) off('rel', '➕ В друзья', KM('agefriend'));
+      else if (s.accepts === false) off('rel', '➕ В друзья', 'не принимает заявки');
+      else if (s.why) off('rel', '➕ В друзья', s.why);
+      else row('rel', 'friend-add', '➕ В друзья', { cls: 'ok' });
+    }
+    (s.extra || []).forEach((x, i) => { if (x && x.t) row('game', 'x' + i, String(x.t).slice(0, 40)); });
+    row('rel', 'block', s.blocked ? '✅ Разблокировать' : '🚫 Заблокировать', { cls: s.blocked ? '' : 'warn' });
+    if (s.canReport) row('rel', 'report', '🚩 Пожаловаться', { cls: 'warn' });
+    else off('rel', '🚩 Пожаловаться', 'жалоба — на сообщение: «⋯» у его сообщения в чате');
+    // ── Модерация (права решает сервер; здесь — показ по роли) ──
+    if (s.staff) {
+      if (s.tstaff && s.staff !== 'admin') off('mod', '🛡 Наказать', 'это команда сайта — наказывать может только создатель');
+      else if (s.tstaff === 'admin') off('mod', '🛡 Наказать', 'это создатель сайта');
+      else {
+        (s.mods || []).forEach(([k, t]) => row('mod', 'mod:' + k, t, { cls: 'warn' }));
+        if (s.canMod) row('mod', 'modcard', '🛡 Ещё: предупредить, снять мут, бан / разбан, заметки, история');
+        if (s.staff === 'admin') { row('mod', 'nickset', '✏️ Сменить ник', { cls: 'warn' }); row('mod', 'nickreset', '♻️ Сбросить ник', { cls: 'warn' }); }
+      }
+    }
+    return { groups: pack(G), notes, lock };
+  }
+  const GT = { talk: 'Общение', game: 'Игра', rel: 'Отношения', mod: 'Модерация' };
+  const pack = G => Object.keys(GT).filter(g => G[g].length).map(g => ({ id: g, title: GT[g], rows: G[g] }));
+  M._test = { decide, actions, PROFILE_HREF };
 
   // ═══ Данные (кэш на визит: профиль — 60 с, дружба — 15 с, персонаж и его картинка — до перезагрузки) ═══
   const PC = new Map(), FC = new Map(), LOOK = new Map(), IMG = new Map();
@@ -164,6 +227,10 @@
       return Promise.resolve();
     }
   };
+  // открыта ли сейчас страница профиля этого человека (тогда карточка поверх неё не нужна — только меню «⋯»)
+  function onProfileOf(uid){
+    try { const m = PROFILE_HREF.exec(location.pathname) || PROFILE_HREF.exec(location.hash || ''); return !!m && m[1].toLowerCase() === String(uid).toLowerCase(); } catch (er) { return false; }
+  }
   function openCard(uid, o){
     uid = uid && UUID.test(String(uid)) ? String(uid) : null;
     const guest = !uid;
@@ -176,6 +243,8 @@
     try { const fs = document.fullscreenElement, host = fs && fs !== document.documentElement && fs !== document.body && fs.tagName !== 'IFRAME' && fs.tagName !== 'VIDEO' ? fs : document.body; if (root.parentElement !== host) host.appendChild(root); } catch (er) {}
     open = { id, uid, nick: String(o.nick || '').slice(0, 40), anchor: o.anchor || null, actions: o.actions || null, guest, self, sheet, ret: document.activeElement,
       extra: Array.isArray(o.extra) ? o.extra.filter(x => x && typeof x.run === 'function').slice(0, 4) : [] };
+    open.pmenu = FULL && !!uid && onProfileOf(uid);   // T-177: «⋯» на странице его же профиля — только действия, без шапки
+    root.classList.toggle('pmenu', open.pmenu);
     root.classList.toggle('sheet', sheet);
     root.classList.toggle('pop', !sheet);
     const pcache = uid ? (PC.get(uid)?.p || P()?.prof?.(uid) || null) : null;
@@ -229,7 +298,7 @@
     if (status === 'none' && !kp && p?.accepts_friend_requests !== false && typeof friendBlockReason === 'function') why = await friendBlockReason().catch(() => null);
     if (!live()) return;
     const join = act && P()?.actJoin ? P().actJoin(act) : null;
-    paintActs({ status, kb, kp, why, join, act, accepts: p?.accepts_friend_requests, hidden: !!p?.profile_hidden, vis: p?.profile_visibility });
+    paintActs({ status, kb, kp, why, join, act, accepts: p?.accepts_friend_requests, hidden: !!p?.profile_hidden, vis: p?.profile_visibility, trole: p?.role || null });
     place();
     const look = await pLook; if (!live()) return;
     paintChar(look);
@@ -306,11 +375,28 @@
     o.lastX = x;
     let mods = [];
     try { mods = o.actions?.mods ? o.actions.mods(o.uid, o.nick) || [] : staffMods(o.uid); } catch (er) { mods = []; }
-    const d = decide({ uid: o.uid, self: o.self, logged, guest: o.guest, status: x.status ?? null, accepts: x.accepts, why: x.why, kb: x.kb, kp: x.kp,
-      join: x.join, blocked: !!o.uid && !!window.MsgView?.blocked?.has?.(o.uid), canReport: !!o.actions?.report, mods, hidden: x.hidden, vis: x.vis, extra: o.extra });
+    const S0 = { uid: o.uid, self: o.self, logged, guest: o.guest, status: x.status ?? null, accepts: x.accepts, why: x.why, kb: x.kb, kp: x.kp,
+      join: x.join, blocked: !!o.uid && !!window.MsgView?.blocked?.has?.(o.uid), canReport: !!o.actions?.report, mods, hidden: x.hidden, vis: x.vis, extra: o.extra };
     o.act = x.act || null;
     // пока не знаем дружбу — кнопки дружбы не показываем (без «прыжка» кнопок: место держит заглушка)
     const pending = logged && !o.self && o.uid && x.status == null;
+    if (FULL) {
+      const staff = logged && typeof currentRole !== 'undefined' && ['admin', 'moderator', 'helper'].includes(currentRole) ? currentRole : null;
+      const tr = x.trole || (PC.get(o.uid)?.p?.role) || null;
+      const d = actions(Object.assign(S0, { staff, tstaff: ['admin', 'moderator', 'helper'].includes(tr) ? tr : null, canMod: !!staff, pmenu: !!o.pmenu }));
+      const btn = a => a.href ? `<a class="d37m-btn ${a.cls || ''}" href="${e(a.href)}" data-nomini="1" data-mk="go">${e(a.t)}</a>`
+        : a.dis ? `<button type="button" class="d37m-btn mute" disabled title="${e(a.why || '')}"><span>${e(a.t)}</span>${a.why ? `<small>${e(a.why)}</small>` : ''}</button>`
+        : a.k.startsWith('mod:') ? `<button type="button" class="d37m-btn ${a.cls || ''}" data-mod="${e(a.k.slice(4))}">${e(a.t)}</button>`
+        : `<button type="button" class="d37m-btn ${a.cls || ''}" data-mk="${e(a.k)}">${e(a.t)}</button>`;
+      const acts = q('.d37m-acts'); acts.classList.toggle('full', true);
+      acts.innerHTML = d.groups.map(g => `<div class="d37m-grp" data-g="${e(g.id)}"><div class="d37m-msep">${e(g.title)}</div>${g.rows.map(btn).join('')}</div>`).join('')
+        + (pending ? '<span class="d37m-btn ghost" aria-hidden="true">…</span>' : '');
+      q('.d37m-notes').innerHTML = d.notes.map(t => `<div class="d37m-note">${e(t)}</div>`).join('')
+        + (o.uid && !logged ? '<button type="button" class="d37m-btn wide d37m-login" data-mk="login">🔑 Войти</button>' : '');
+      const mb0 = q('.d37m-mods'); mb0.hidden = true; mb0.innerHTML = '';
+      return;
+    }
+    const d = decide(S0);
     q('.d37m-acts').innerHTML = d.acts.map(a => a.href ? `<a class="d37m-btn ${a.cls || ''}" href="${e(a.href)}" data-nomini="1" data-mk="go">${e(a.t)}</a>`
       : `<button type="button" class="d37m-btn ${a.cls || ''}" data-mk="${e(a.k)}"${a.dis ? ' disabled' : ''}>${e(a.t)}</button>`).join('')
       + (pending ? '<span class="d37m-btn ghost" aria-hidden="true">…</span>' : '');
@@ -382,7 +468,35 @@
     if (k === 'dm') { close(); if (P()?.open) P().open('msgs/' + uid); else if (typeof openDmWith === 'function') openDmWith(uid, nick); return; }
     if (k === 'call') { close(); await P()?.need?.('calls'); window.D37Calls?.call(uid, nick); return; }
     if (k === 'inv') { close(); try { await P()?.need?.('apps'); } catch (er) {} if (P()?.invite) P().invite(uid, nick); return; }
-    if (/^xd$/.test(k || '')) { const x = o.extra?.[+k.slice(1)]; close(); try { x?.run(uid, nick); } catch (er) { console.error(er); } return; }
+    if (/^x\d$/.test(k || '')) { const x = o.extra?.[+k.slice(1)]; close(); try { x?.run(uid, nick); } catch (er) { console.error(er); } return; }
+    // ── T-177: новые пункты полного списка ──
+    if (k === 'copy-nick' || k === 'copy-link') {
+      const txt = k === 'copy-nick' ? nick : location.origin + '/profile/' + uid;
+      let okc = false; try { await navigator.clipboard.writeText(txt); okc = true; } catch (er) {}
+      note(okc ? (k === 'copy-nick' ? '📋 Ник скопирован' : '🔗 Ссылка скопирована') : '⚠️ Браузер не дал скопировать', !okc);
+      return;
+    }
+    if (k === 'mention') {   // в открытое поле чата; нет чата на экране — открыть чат и вписать туда
+      const put = () => { const ta = [...document.querySelectorAll('textarea.mv-in')].find(x => x.offsetParent); if (!ta) return false;
+        const at = '@' + nick + ' ', v = ta.value; ta.value = v + (v && !/\s$/.test(v) ? ' ' : '') + at; ta.dispatchEvent(new Event('input', { bubbles: true })); try { ta.focus(); } catch (er) {} return true; };
+      close();
+      if (!put()) { if (window.D37Route?.go) D37Route.go('/chat'); else location.hash = '#/chat'; let i = 0; const t = setInterval(() => { if (put() || ++i > 30) clearInterval(t); }, 200); }
+      return;
+    }
+    if (k === 'friend-del') {
+      if (!(await askHere(`Убрать ${nick} из друзей?`, '➖ Убрать'))) return;
+      try { await sbClient.from('friendships').delete().or(`and(requester_id.eq.${me()},addressee_id.eq.${uid}),and(requester_id.eq.${uid},addressee_id.eq.${me()})`); dropFriend(uid); note('➖ Больше не друзья', false); if (open?.id === o.id) paintActs({ ...(o.lastX || {}), status: await friendOf(uid) }); }
+      catch (er) { note('⚠️ Не получилось'); }
+      return;
+    }
+    if (k === 'modcard' || k === 'nickset' || k === 'nickreset') {
+      close();
+      try { await P()?.need?.('ds'); } catch (er) {}
+      const Mo = window.D37Mod;
+      if (!Mo) { alert('🛡 Модерация не загрузилась — открой 🛡 в чате'); return; }
+      if (k === 'modcard') Mo.member?.(uid, nick); else Mo.nickAdmin?.(uid, nick, k === 'nickreset');
+      return;
+    }
     if (k === 'report') { const f = o.actions?.report; close(); f?.(); return; }
     if (k === 'friend-add' || k === 'friend-acc') {
       t.disabled = true;
@@ -494,6 +608,8 @@
     let uid = el.dataset?.miniUid || '';
     if (!uid && el.tagName === 'A' && uiV2() && (!el.target || el.target === '_self')) { const m = PROFILE_HREF.exec(el.getAttribute('href') || ''); uid = m ? m[1] : ''; }
     if (!UUID.test(uid)) return;
+    // T-177: на странице профиля этого же человека его ник / аватар карточку не открывают — только «⋯» (меню действий страницы)
+    if (FULL && onProfileOf(uid) && !el.classList.contains('pf-more')) { if (el.tagName === 'A') ev.preventDefault(); return; }
     ev.preventDefault();
     M.open(uid, { nick: el.dataset.miniNick || (el.textContent || '').trim().slice(0, 24), anchor: el });
   });
