@@ -17,7 +17,8 @@
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   if (root.D37JoinP2P) return;
-  const ON = () => { try { return typeof JOIN_P2P === 'undefined' ? true : !!JOIN_P2P; } catch (e) { return true; } };
+  // localhost: тест комнат на сервере игр (t174-e2e) выключает этот путь сам — d37_join_p2p = '0'
+  const ON = () => { try { if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && localStorage.getItem('d37_join_p2p') === '0') return false; } catch (e) {} try { return typeof JOIN_P2P === 'undefined' ? true : !!JOIN_P2P; } catch (e) { return true; } };
   const GAMES = { klet2: 1 };
   const gameOk = g => Object.prototype.hasOwnProperty.call(GAMES, g);
   const CODE_RE = /^[A-HJKMNP-Z2-9]{6}$/;

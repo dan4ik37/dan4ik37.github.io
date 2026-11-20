@@ -4,6 +4,7 @@
 //  в списке и заходит; B выходит и заходит по коду; по ссылке-приглашению; перезагрузка — B возвращается на то же место (ключ возврата);
 //  код занятия: «d:» по настройке «Кто может ко мне присоединиться»; «▶ Присоединиться» у друга (присутствие подделано в странице);
 //  группа «Идём вместе» (канал подделан); «сервер игр недоступен»; без моста движка раздел прячется; телефон без прокрутки вбок.
+// Только комнаты на сервере игр: путь без сервера (T-175, прямое соединение) выключен — d37_join_p2p = 0; его проверяет t175-e2e.
 // В базу ничего не пишется (вход не делаем; друзья и их занятие — подмена в странице).
 // Запуск из корня сайта: node scripts/t174-e2e.cjs   (CHROME=…, PYTHON=…, D37_SERVER=<d37-server.exe>, BASE=<уже запущенный сайт>)
 const fs = require('fs'), os = require('os'), path = require('path'), net = require('net'), { spawn } = require('child_process');
@@ -55,7 +56,7 @@ async function chrome({ phone, theme, server }){
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
   } else await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
   // возраст спрошен (окошко не мешает), тема, графика «простая» (WebGL2 в headless), адрес своего сервера игр (только на localhost)
-  const L = { d37_join_on: '1', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_theme: theme, d37_age: JSON.stringify({ y: new Date().getFullYear() - 15, s: 'g', fa: Date.now() - 40 * 864e5 }), d37_hub_gfx: 'gl', d37_join_server: server };
+  const L = { d37_join_on: '1', d37_join_p2p: '0', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_theme: theme, d37_age: JSON.stringify({ y: new Date().getFullYear() - 15, s: 'g', fa: Date.now() - 40 * 864e5 }), d37_hub_gfx: 'gl', d37_join_server: server };
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{if(!localStorage.getItem('t174')){localStorage.setItem('t174','1');${Object.entries(L).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}}}catch(e){}` });
   const until = async (expr, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { try { if (await ev(expr)) return true; } catch (e) {} await sleep(200); } return false; };
   const shot = async name => { fs.mkdirSync(SHOTS, { recursive: true }); const r = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(SHOTS, name), Buffer.from(r.data, 'base64')); console.log('    картинка ' + path.join(SHOTS, name)); };
