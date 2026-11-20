@@ -795,7 +795,7 @@
       const C = window.D37Calls, on = C?.hideIp ? C.hideIp() : (P.set.hide === 'on' || ((P.set.hide || 'auto') === 'auto' && window.D37Age?.group?.() !== 'adult'));
       const relay = Array.isArray(window.D37_TURN) && window.D37_TURN.length;
       return (on ? 'Сейчас скрыт: собеседник видит только адрес нашего сервера-посредника.' : 'Сейчас не скрыт: звук идёт напрямую, собеседник может узнать твой адрес в сети.')
-        + (on && !relay ? ' Сервер-посредник ещё не ответил — звонок подождёт его.' : '') + ' «Авто» — скрывать, пока возраст 18+ не подтверждён.';
+        + (on && !relay ? ' Сервер-посредник ещё не ответил — звонок подождёт его.' : '') + ' «Авто» — скрывать, пока возраст 18+ не подтверждён' + (typeof currentRole !== 'undefined' && currentRole === 'admin' ? ' (админу «Авто» скрывает всегда).' : '.');
     };
     const localBlocks = () => { try { return JSON.parse(localStorage.getItem('d37_blocks_local') || '[]') || []; } catch (e) { return []; } };
     SS.addTab({ id: 'phone', icon: '📱', title: 'Телефон', order: 60, ctx: ['engine', 'game', 'site'], render(body){

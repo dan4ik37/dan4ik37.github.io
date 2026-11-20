@@ -20,7 +20,12 @@
   // P.set.hide: 'auto' (по умолчанию: включено в детском мире — всем, кроме надёжно подтверждённых 18+) | 'on' | 'off'. Откат — HIDE_IP = false.
   const HIDE_IP = true;
   const kidsRealm = () => { const A = window.D37Age; return !A?.group || A.group() !== 'adult'; };
-  C.hideIp = () => HIDE_IP && (P.set.hide === 'on' || ((P.set.hide || 'auto') === 'auto' && kidsRealm()));
+  // T-177: админ сайта — как в комнатах игр (join-p2p.js p2pPolicy): скрыт по умолчанию ('auto'), пока сам не выберет «Не скрывать» ('off').
+  // Обычным 18+ — без изменений. Откат — ADMIN_HIDE = false.
+  const ADMIN_HIDE = true;
+  const isAdmin = () => { try { return typeof currentRole !== 'undefined' && currentRole === 'admin'; } catch (er) { return false; } };
+  C.hideAuto = () => kidsRealm() || (ADMIN_HIDE && isAdmin());
+  C.hideIp = () => HIDE_IP && (P.set.hide === 'on' || ((P.set.hide || 'auto') === 'auto' && C.hideAuto()));
   const turnList = () => (Array.isArray(window.D37_TURN) ? window.D37_TURN : []).filter(s => [].concat(s?.urls || []).some(u => /^turns?:/i.test(String(u))));
   C.relayOk = () => turnList().length > 0;
   // T-167: TURN Cloudflare Realtime через наш сервер (/api/turn-cred). Выключено, пока владелец не задаст ключи в Vercel — тогда сервер
@@ -223,7 +228,7 @@
     else { try { sbClient.removeChannel(R.ch); } catch (er) {} }
     if (R.stream && R.ownStream) { R.stream.getTracks().forEach(t => t.stop()); R.stream._stop?.(); }
     if (R.camTrack) { try { R.camTrack.stop(); } catch (er) {} R.camTrack = null; }
-    for (const v of R.vids.values()) { v.srcObject = null; v.remove(); }
+    for (const k of [...R.vids.keys()]) dropVids(R, k);
     R.vids.clear();
   }
   async function sync(R){
@@ -409,7 +414,7 @@
   }
   function dropPeer(R, p){
     clearTimeout(p.timer); clearTimeout(p.iceT); clearTimeout(p.discT);
-    const v = R.vids?.get(p.key); if (v) { v.srcObject = null; v.remove(); R.vids.delete(p.key); }
+    if (R.vids) dropVids(R, p.key);
     try { p.pc.close(); } catch (er) {}
     if (p.audio) { p.audio.srcObject = null; p.audio.remove(); }
     try { p.an?.src.disconnect(); } catch (er) {}
@@ -818,8 +823,9 @@
   const TURN_NOTE0 = '📡 Не получилось соединиться. Так бывает в мобильном интернете и за строгим роутером, когда сервер-посредник (TURN) недоступен. Попробуйте оба через Wi-Fi или другой интернет.';
   const TURN_NOTE_FN = () => C.hideIp() && !C.relayOk() ? RELAY_NOTE : TURN_NOTE0;
   // строка «🕶 адрес скрыт / виден» — честно, как соединяемся сейчас
-  const privHtml = () => !HIDE_IP ? '' : C.hideIp() ? (C.relayOk() ? '<div class="vc-note vc-priv">🕶 Твой адрес скрыт — звук идёт через сервер-посредник.</div>' : `<div class="vc-note bad">${RELAY_NOTE}</div>`)
-    : '<div class="vc-note vc-priv dim">🌐 Звук напрямую — собеседник может узнать твой адрес в сети. Скрыть — ⚙️ → 📱 Телефон.</div>';
+  // T-177: текст — по настоящему состоянию: скрыт (и почему), посредник недоступен, напрямую (сам выключил / «Авто» для 18+)
+  const privHtml = () => !HIDE_IP ? '' : C.hideIp() ? (C.relayOk() ? `<div class="vc-note vc-priv">🕶 Твой адрес скрыт — звук идёт через сервер-посредник${P.set.hide === 'on' ? '' : isAdmin() && ADMIN_HIDE && !kidsRealm() ? ' (админу — по умолчанию)' : ''}.</div>` : `<div class="vc-note bad">${RELAY_NOTE}</div>`)
+    : `<div class="vc-note vc-priv dim">🌐 Звук напрямую — собеседник может узнать твой адрес в сети${P.set.hide === 'off' ? ' (ты выключил «Скрыть мой адрес»)' : ''}. Скрыть — ⚙️ → 📱 Телефон.</div>`;
   function sessionHtml(){
     const ps = people(), R = S.room;
     const bad = S.netWarn || ps.some(p => p.state === 'fail');
@@ -829,7 +835,7 @@
       ${off ? '<div class="vc-note bad">📡 Нет интернета — разговор вернётся сам, как только связь появится.</div>' : ''}
       ${S.kidBlocked ? `<div class="vc-note bad">${e(kidMsg(S.kidBlocked === 'u9' ? 'u9' : 'agecall'))}</div>` : ''}
       ${bad ? `<div class="vc-note bad">${TURN_NOTE_FN()}</div>` : privHtml()}
-      <div class="vc-grid${ps.some(p => p.cam) ? ' vc-vgrid' : ''}">${ps.map(p => `<div class="vc-tile${p.speaking ? ' spk' : ''}${p.state === 'fail' ? ' bad' : ''}${p.cam ? ' vid' : ''}" data-vk="${e(p.key)}"${!p.me && p.uid ? ` data-juid="${e(p.uid)}"` : ''}${!p.me && UVOL && p.uid ? ` data-vu="${e(p.uid)}" role="button" title="Громкость ${e(p.nick)}"` : ''}>${p.cam ? '<span class="vc-vid"></span>' : P.avatar(P.prof(p.uid) || null, p.nick, 64)}<b>${e(p.nick)}${p.me ? ' (ты)' : ''}</b><small>${tileState(p)}</small><span class="vc-ic">${p.deaf ? '🔈' : p.mute ? '🔇' : ''}${!p.me && uvOf(p.uid) < 1 ? '🔉' : ''}</span></div>`).join('')}</div>
+      ${gridHtml(ps)}
       <div class="vc-ctrl">
         <button type="button" data-v="mute" class="${R?.mute ? 'on' : ''}">${R?.mute ? '🔇 Микрофон выкл' : '🎙 Микрофон'}</button>
         <button type="button" data-v="deaf" class="${R?.deaf ? 'on' : ''}">${R?.deaf ? '🔈 Звук выкл' : '🎧 Звук'}</button>
@@ -842,21 +848,73 @@
         <button type="button" class="end" data-v="leave">📞 Выйти</button>
       </div></div>`;
   }
+  // T-177: плитку с камерой можно увеличить (нажми — большая, остальные полоской; ещё раз — назад), ⛶ на весь экран, 📌 закрепить,
+  // двойное нажатие — на весь экран, Esc — назад. S.focus — ключ увеличенного, S.pin — держать, даже если камеру выключили. Откат — ZOOM = false.
+  const ZOOM = true;
+  function focusKey(ps){
+    if (!ZOOM || !S?.focus) return null;
+    const p = ps.find(x => x.key === S.focus);
+    if (!p || (!p.cam && !S.pin)) { S.focus = null; S.pin = false; return null; }
+    return p.key;
+  }
+  function tileHtml(p, fx){
+    const vol = !p.me && UVOL && p.uid, zoom = ZOOM && p.cam;
+    const attrs = `data-vk="${e(p.key)}"${!p.me && p.uid ? ` data-juid="${e(p.uid)}"` : ''}${zoom || fx ? ` data-vf="1" role="button" title="${fx ? 'Нажми — вернуть как было' : 'Нажми — увеличить'}"` : vol ? ` data-vu="${e(p.uid)}" role="button" title="Громкость ${e(p.nick)}"` : ''}`;
+    const tb = fx ? `<span class="vc-tb"><button type="button" data-vt="fs" title="На весь экран" aria-label="На весь экран">⛶</button><button type="button" data-vt="pin" class="${S.pin ? 'on' : ''}" title="${S.pin ? 'Открепить' : 'Закрепить'}" aria-label="${S.pin ? 'Открепить' : 'Закрепить'}" aria-pressed="${!!S.pin}">📌</button>${vol ? `<button type="button" data-vt="vol" data-u="${e(p.uid)}" title="Громкость" aria-label="Громкость">🔉</button>` : ''}<button type="button" data-vt="x" title="Уменьшить (Esc)" aria-label="Уменьшить">✕</button></span>` : '';
+    return `<div class="vc-tile${p.speaking ? ' spk' : ''}${p.state === 'fail' ? ' bad' : ''}${p.cam ? ' vid' : ''}${fx ? ' fx' : ''}" ${attrs}>${p.cam ? '<span class="vc-vid"></span>' : P.avatar(P.prof(p.uid) || null, p.nick, fx ? 96 : 64)}<b>${e(p.nick)}${p.me ? ' (ты)' : ''}</b><small>${tileState(p)}</small><span class="vc-ic">${p.deaf ? '🔈' : p.mute ? '🔇' : ''}${!p.me && uvOf(p.uid) < 1 ? '🔉' : ''}</span>${tb}</div>`;
+  }
+  function gridHtml(ps){
+    const fk = focusKey(ps), vg = ps.some(p => p.cam) ? ' vc-vgrid' : '';
+    if (!fk) return `<div class="vc-grid${vg}">${ps.map(p => tileHtml(p, false)).join('')}</div>`;
+    return `<div class="vc-grid vc-focus${vg}"><div class="vc-big">${tileHtml(ps.find(p => p.key === fk), true)}</div><div class="vc-strip">${ps.filter(p => p.key !== fk).map(p => tileHtml(p, false)).join('')}</div></div>`;
+  }
+  const redraw = () => { if (S?.room) S.room.changed(); else render(); };
+  C.focus = (k, pin) => { if (!S) return; S.focus = k || null; if (pin !== undefined) S.pin = !!pin; if (!k) S.pin = false; redraw(); };
+  function fullView(host){
+    if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
+    const big = host.querySelector('.vc-big video');
+    host.classList.toggle('vc-fsh', true);
+    const off = () => { if (document.fullscreenElement !== host) { host.classList.toggle('vc-fsh', false); document.removeEventListener('fullscreenchange', off); } };
+    document.addEventListener('fullscreenchange', off);
+    if (host.requestFullscreen) host.requestFullscreen().catch(() => { off(); big?.webkitEnterFullscreen?.(); });
+    else big?.webkitEnterFullscreen?.();   // iPhone: только сам <video>
+  }
+  if (ZOOM) document.addEventListener('keydown', ev => {
+    if (ev.key !== 'Escape' || !S?.focus || document.fullscreenElement) return;
+    if (ev.target?.closest?.('input,textarea,[contenteditable]')) return;
+    C.focus(null);
+  });
   // подпись под плиткой: как идёт связь (честно)
   const tileState = p => p.state === 'fail' ? '⚠️ нет прямой связи' : p.state === 'reconnect' ? '🔄 переподключаем…' : p.state === 'connecting' ? 'соединяем…'
     : p.speaking ? 'говорит' : !p.me && p.route === 'relay' ? 'через посредник' : ' ';
-  // видео — одни и те же элементы <video> переносятся в новую плитку (экран перерисовывается часто — без мигания)
+  // видео — одни и те же элементы <video> переносятся в новую плитку (экран перерисовывается часто — без мигания).
+  // T-177 (чёрная камера в окне телефона): раньше на человека был ОДИН <video> на все экраны — его забирал последний перерисованный
+  // экран (чат), а плитка в телефоне оставалась пустой и чёрной. Теперь у каждого экрана (el) свой <video> на того же человека:
+  // один и тот же поток (MediaStream) показывают несколько элементов. R.vids: ключ → Set всех его <video> (для очистки).
+  function dropVids(R, k){
+    const set = R.vids.get(k); if (!set) return;
+    for (const v of set) { try { v.pause(); } catch (er) {} v.srcObject = null; v.remove(); v._host?._vids?.delete(k); }
+    R.vids.delete(k);
+  }
   function attachVideos(el){
     const R = S?.room; if (!R) return;
+    if (!el._vids || el._vidsRoom !== R) { el._vids = new Map(); el._vidsRoom = R; }
     el.querySelectorAll('.vc-tile.vid[data-vk]').forEach(t => {
       const k = t.dataset.vk, me = k === R.myKey, p = me ? null : R.peers.get(k);
       const src = me ? (R.camTrack ? (R.camPrev = R.camPrev?.getTracks()[0] === R.camTrack ? R.camPrev : new MediaStream([R.camTrack])) : null) : p?.vstream;
       if (!src) return;
-      let v = R.vids.get(k);
-      if (!v) { v = document.createElement('video'); v.autoplay = true; v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); if (me) v.className = 'me'; R.vids.set(k, v); }
-      if (v.srcObject !== src) { v.srcObject = src; v.play().catch(() => {}); }
+      let v = el._vids.get(k);
+      if (!v) {
+        v = document.createElement('video'); v.autoplay = true; v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); if (me) v.className = 'me';
+        v._host = el; el._vids.set(k, v);
+        if (!R.vids.has(k)) R.vids.set(k, new Set()); R.vids.get(k).add(v);
+      }
+      if (v.srcObject !== src) v.srcObject = src;
       t.querySelector('.vc-vid')?.appendChild(v);
+      if (v.paused) v.play().catch(() => {});   // элемент, вынутый из страницы при перерисовке, браузер ставит на паузу
     });
+    // экраны, которых больше нет на странице, — отдать их <video>
+    for (const set of R.vids.values()) for (const v of [...set]) if (v._host && !v._host.isConnected) { v.srcObject = null; v.remove(); set.delete(v); v._host._vids?.clear(); }
   }
   // камера вкл / выкл (только если сервер разрешил — R.camOk)
   C.camToggle = async () => {
@@ -910,6 +968,29 @@
     attachVideos(el);
     window.D37Join?.decorate?.(el);   // T-174: «▶ Присоединиться» на плитке собеседника, который в комнате игры
     el.querySelectorAll('[data-vu]').forEach(t => t.addEventListener('click', () => volSheet(t.dataset.vu)));
+    if (ZOOM) el.querySelectorAll('[data-vf]').forEach(t => {
+      let clickT = 0;
+      const k = t.dataset.vk;
+      t.addEventListener('click', ev => {
+        const b = ev.target.closest('[data-vt]');
+        if (b) {
+          ev.stopPropagation();
+          const a = b.dataset.vt;
+          if (a === 'fs') fullView(el); else if (a === 'pin') C.focus(k, !S?.pin); else if (a === 'vol') volSheet(b.dataset.u);
+          else if (a === 'x') { if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); C.focus(null); }
+          return;
+        }
+        if (ev.target.closest('a,button,.jn-btn')) return;
+        clearTimeout(clickT);   // одно нажатие — увеличить / вернуть; двойное — на весь экран
+        clickT = setTimeout(() => C.focus(S?.focus === k ? null : k), 230);
+      });
+      t.addEventListener('dblclick', ev => {
+        if (ev.target.closest('[data-vt]')) return;
+        clearTimeout(clickT); ev.preventDefault();
+        if (S?.focus !== k) C.focus(k);
+        setTimeout(() => fullView(el), 90);
+      });
+    });
     el.querySelectorAll('[data-v]').forEach(b => {
       const k = b.dataset.v;
       if (k === 'ptt') {
@@ -987,9 +1068,58 @@
   // ═══ 🎛 Проверка микрофона, звука и камеры (T-167, DEVCHECK). Ничего не записывается и не уходит с устройства ═══
   C.deviceCheck = el => {
     let mic = null, cam = null, an = null, raf = 0, toneStop = null, dead = false, nsw = null, ab = null;   // nsw — сильный шумодав (ns2.js), ab — «послушать себя»
+    // T-177 (владелец 20.11: «при проверке не слышно звука самого микрофона»): раньше «Проверить микрофон» давал только полоску, а
+    // «послушать себя» был лишь при включённом сильном шумодаве (NS2, флаг выключен) — себя не слышно было никогда. Теперь: нажал
+    // «Проверить микрофон» → 3 с записи → сразу слышишь себя (через выбранный динамик, с шумодавом, если он включён); плюс
+    // «🎧 Слышать себя» — вживую, пока включено (в наушниках). Всё выключается при «⏹», уходе с экрана и закрытии. Откат — HEAR_ME = false.
+    const HEAR_ME = true;
+    let rec = null, recUrl = '', recA = null, recT = 0, recSt = '';   // recSt: '' | 'rec' | 'play'
+    const recStop = () => {
+      clearTimeout(recT); recT = 0;
+      if (rec) { try { rec.ondataavailable = null; rec.onstop = null; if (rec.state !== 'inactive') rec.stop(); } catch (er) {} rec = null; }
+      if (recA) { try { recA.pause(); } catch (er) {} recA.src = ''; recA = null; }
+      if (recUrl) { URL.revokeObjectURL(recUrl); recUrl = ''; }
+      recSt = '';
+    };
     const camAllowed = () => { const g = window.D37Age?.group?.(); return g === 'teen' || g === 'teen16' || g === 'adult'; };
     const abStop = () => { if (ab) { ab.pause(); ab.srcObject = null; ab = null; } };
-    const stopMic = () => { cancelAnimationFrame(raf); abStop(); try { an?.src.disconnect(); } catch (er) {} an = null; nsw?.stop(); nsw = null; mic?.getTracks().forEach(t => t.stop()); mic = null; };
+    const stopMic = () => { cancelAnimationFrame(raf); abStop(); recStop(); try { an?.src.disconnect(); } catch (er) {} an = null; nsw?.stop(); nsw = null; mic?.getTracks().forEach(t => t.stop()); mic = null; };
+    const heard = () => (nsw ? nsw.stream : mic);   // что слышат собеседники: с шумодавом, если он включён
+    function recMe(){
+      if (!HEAR_ME || !mic || typeof MediaRecorder === 'undefined') return;
+      recStop();
+      let r; try { r = new MediaRecorder(heard()); } catch (er) { return; }
+      const parts = []; rec = r; recSt = 'rec'; paintHear();
+      r.ondataavailable = ev => { if (ev.data?.size) parts.push(ev.data); };
+      r.onstop = () => {
+        if (rec !== r || dead) return;
+        rec = null;
+        const blob = new Blob(parts, { type: r.mimeType || 'audio/webm' });
+        if (!blob.size) { recSt = ''; paintHear(); return; }
+        recUrl = URL.createObjectURL(blob);
+        recA = new Audio(recUrl); setSink(recA); recA.volume = voiceVol();
+        recA.onended = () => { recSt = ''; paintHear(); };
+        recSt = 'play'; paintHear();
+        recA.play().catch(() => { recSt = ''; paintHear(); });
+      };
+      r.start();
+      recT = setTimeout(() => { try { if (r.state !== 'inactive') r.stop(); } catch (er) {} }, 3000);
+    }
+    function monitor(on){
+      abStop();
+      if (on && mic) { ab = new Audio(); ab.srcObject = heard(); setSink(ab); ab.volume = voiceVol(); ab.play().catch(() => {}); }
+      paintHear();
+    }
+    // кнопки «слышать себя» — без перерисовки всего экрана (полоска уровня не мигает)
+    function paintHear(){
+      const box = el.querySelector('.dc-hear'); if (!box) return;
+      box.hidden = !mic;
+      const m = box.querySelector('[data-dc-a="mon"]'), r = box.querySelector('[data-dc-a="rec"]'), s = box.querySelector('.dc-hst');
+      if (m) { m.textContent = ab ? '⏹ Не слышать себя' : '🎧 Слышать себя'; m.classList.toggle('on', !!ab); m.setAttribute('aria-pressed', String(!!ab)); }
+      if (r) { r.textContent = recSt === 'rec' ? '⏺ Говори… (3 с)' : recSt === 'play' ? '🔊 Слушаешь себя…' : '🔁 Записать 3 с и послушать'; r.disabled = recSt === 'rec'; }
+      if (s) s.textContent = recSt === 'rec' ? 'Скажи что-нибудь — через 3 секунды услышишь себя.' : recSt === 'play' ? 'Так тебя слышат собеседники.' : ab ? 'Ты слышишь себя вживую. Без наушников будет эхо.' : '';
+    }
+    C._dc = () => ({ mic: !!mic, monitor: !!ab && !ab.paused, rec: recSt, recPlaying: !!recA && !recA.paused, level: an ? level(an) : 0, nsw: !!nsw });   // для t177-e2e
     const stopCam = () => { cam?.getTracks().forEach(t => t.stop()); cam = null; };
     const opt = (list, cur, none) => list.length ? list.map((d, i) => `<option value="${e(d.deviceId)}"${d.deviceId === cur ? ' selected' : ''}>${e(d.label || none + ' ' + (i + 1))}</option>`).join('') : `<option value="">${none} — по умолчанию</option>`;
     async function draw(){
@@ -998,10 +1128,11 @@
       const mics = devs.filter(d => d.kind === 'audioinput' && d.deviceId), cams = devs.filter(d => d.kind === 'videoinput' && d.deviceId), spks = devs.filter(d => d.kind === 'audiooutput' && d.deviceId);
       const sw = (k, t) => `<label class="dc-sw"><input type="checkbox" data-dc-sw="${k}"${P.set[k] !== false ? ' checked' : ''}> ${t}</label>`;
       el.innerHTML = P.head('🎛 Проверка') + `<div class="ph-body dc">
-        <p class="ph-dim">Проверь, что тебя слышно и видно, до входа в голосовой. Ничего не записывается и не уходит с этого устройства.</p>
+        <p class="ph-dim">Проверь, что тебя слышно и видно, до входа в голосовой. Ничего не уходит с этого устройства: проба голоса (3 с) звучит только у тебя и сразу стирается.</p>
         <div class="dc-sec"><b>🎙 Микрофон</b><select data-dc="micId" aria-label="Микрофон">${opt(mics, P.set.micId, 'Микрофон')}</select>
           <div class="dc-meter" aria-label="Уровень микрофона"><i></i></div><small class="dc-mnote ph-dim">${mic ? 'Скажи что-нибудь — полоска должна прыгать.' : ''}</small>
           <div class="dc-row"><button type="button" class="ph-btn" data-dc-a="mic">${mic ? '⏹ Остановить' : '🎙 Проверить микрофон'}</button></div>
+          ${HEAR_ME ? `<div class="dc-hear"${mic ? '' : ' hidden'}><div class="dc-row"><button type="button" class="ph-btn" data-dc-a="rec">🔁 Записать 3 с и послушать</button><button type="button" class="ph-btn" data-dc-a="mon" aria-pressed="false">🎧 Слышать себя</button></div><small class="dc-hst ph-dim" aria-live="polite"></small></div>` : ''}
           <div class="dc-row">${sw('ns', 'Шумоподавление')}${sw('ec', 'Убирать эхо')}${sw('agc', 'Автогромкость')}</div>
           ${window.D37NS2?.on ? `<div class="dc-row"><label class="dc-sw"><input type="checkbox" data-dc-sw="ns2"${P.set.ns2 ? ' checked' : ''}> 🧠 Сильный шумодав (проба)</label></div>
           <small class="ph-dim">Убирает шум вентилятора, клавиатуры, улицы — прямо на этом устройстве, звук никуда не уходит. Задержка ~13 мс.</small>
@@ -1016,6 +1147,7 @@
       </div>`;
       if (cam) { const v = el.querySelector('.dc-cam video'); v.srcObject = cam; v.play().catch(() => {}); }
       if (mic) meter();
+      paintHear();
     }
     const err = t => { const b = el.querySelector('.dc-err'); if (b) { b.hidden = !t; b.textContent = t || ''; } };
     function meter(){
@@ -1023,12 +1155,13 @@
       const tick = () => { if (dead || !an) return; if (i) i.style.width = Math.min(100, level(an) * 900) + '%'; raf = requestAnimationFrame(tick); };
       tick();
     }
-    async function startMic(){
+    async function startMic(auto){
       stopMic();
       try { mic = await navigator.mediaDevices.getUserMedia({ audio: micC(), video: false }); } catch (er) { err(micErr(er)); draw(); return; }
       if (dead) { stopMic(); return; }
       if (window.D37NS2?.on && P.set.ns2) { nsw = await window.D37NS2.wrap(mic); if (!nsw) err('🧠 Сильный шумодав не запустился в этом браузере — работает обычный.'); }
-      an = analyser(nsw ? nsw.stream : mic); if (nsw) err(''); else if (!(window.D37NS2?.on && P.set.ns2)) err(''); draw();
+      an = analyser(nsw ? nsw.stream : mic); if (nsw) err(''); else if (!(window.D37NS2?.on && P.set.ns2)) err(''); await draw();
+      if (auto && !dead && mic) recMe();   // сразу: 3 с записи → слышишь себя
     }
     async function startCam(){
       stopCam();
@@ -1049,7 +1182,9 @@
     el.addEventListener('click', ev => {
       const b = ev.target.closest('[data-dc-a]'); if (!b) return;
       const k = b.dataset.dcA;
-      if (k === 'mic') { if (mic) { stopMic(); draw(); } else startMic(); }
+      if (k === 'mic') { if (mic) { stopMic(); draw(); } else startMic(true); }
+      else if (k === 'rec') recMe();
+      else if (k === 'mon') monitor(!ab);
       else if (k === 'cam') { if (cam) { stopCam(); draw(); } else startCam(); }
       else if (k === 'tone') tone();
       else if (k === 'ab') {   // T-169: A/B — слышишь себя через выбранный динамик (только на этом устройстве)
