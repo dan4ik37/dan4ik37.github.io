@@ -136,6 +136,12 @@
   // T-141: те же подписи и настройки ICE — для передачи файлов (js/features/files.js): один код подписи на звонки и файлы
   C.sig = { myKeys, importPub, sign, verifySig };
   C.iceConfig = async () => { await ensureRelay(); return C.hideIp() ? { iceServers: turnList(), iceTransportPolicy: 'relay', relay: true, ok: C.relayOk() } : { iceServers: ICE(), relay: false, ok: true }; };
+  // T-175: ICE для одной пары в комнатах игр без сервера (js/features/join-p2p.js): relay — только через TURN (адрес скрыт); ok — есть ли TURN
+  C.iceFor = async relay => {
+    await ensureRelay();
+    if (relay && !C.relayOk()) { try { window.D37RT?.prefetchTurn?.(); window.D37RT?.ice?.(); } catch (er) {} for (let i = 0; i < 20 && !C.relayOk(); i++) await new Promise(r => setTimeout(r, 200)); }
+    return relay ? { iceServers: turnList(), iceTransportPolicy: 'relay', relay: true, ok: C.relayOk() } : { iceServers: ICE(), relay: false, ok: true };
+  };
   C.inCall = C.inCall || (() => false);
 
   // ═══ Микрофон ═══
