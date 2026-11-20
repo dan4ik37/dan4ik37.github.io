@@ -678,6 +678,26 @@ export async function start(o) {
     try { if (document.pointerLockElement) document.exitPointerLock(); } catch (er) { /* not locked */ }
   }
   let dispatchPlanetJobs;
+  // NET_JOIN §6 P2P: {ev:'send', link, b: base64 of [u32 len][frame]…} → handle.net.onSend(link, frame) per frame;
+  // other events (role, connect, drop, closed) → handle.net.onEvent(ev)
+  function p2pLine(d) {
+    if (d.ev === 'send') {
+      if (typeof st.p2pSend !== 'function') return;
+      let bin = '';
+      try { bin = atob(String(d.b || '')); } catch (e) { return; }
+      const b = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+      const v = new DataView(b.buffer);
+      for (let o = 0; o + 4 <= b.length;) {
+        const n = v.getUint32(o, true); o += 4;
+        if (o + n > b.length) break;
+        try { st.p2pSend(d.link >>> 0, b.slice(o, o + n)); } catch (e) { console.warn('d37 host: p2p send', e); }
+        o += n;
+      }
+      return;
+    }
+    try { if (typeof st.p2pEvent === 'function') st.p2pEvent(d); } catch (e) { console.warn('d37 host: p2p event', e); }
+  }
   function frame(now) {
     st.raf = 0;
     if (st.dead || st.paused || !st.app) return;
@@ -710,6 +730,8 @@ export async function start(o) {
       const out = a.host_out();
       if (out) {
         for (const m of JSON.parse(out)) {
+          // NET_JOIN §6 P2P: the engine's room frames for the page's data channels, its events (never logged per frame)
+          if (m.t === 'mode' && m.data && m.data.kind === 'p2p') { p2pLine(m.data); continue; }
           if (m.t === 'loaded') { st.loaded = true; try { const p = JSON.parse(a.planet_stats()); if (planet && p.alt < 100) levelLook(-12); } catch (e) { /* numbers only */ } spawnOnce(); }
           if (m.t === 'event' && m.code === 'landed') levelLook(-12);
           if (m.t === 'wardrobe') syncPanel(m.on);
@@ -831,6 +853,25 @@ export async function start(o) {
       state() { try { const s = st.app && st.app.mode_state(); return s ? JSON.parse(s) : null; } catch (e) { return null; } },
       rejoinKey(k) { try { st.app && st.app.set_rejoin_key(k >>> 0); } catch (e) { /* older build */ } },
       leave(game) { if (game) run('game ' + game + ' quit'); try { st.app && st.app.leave(); } catch (e) { /* gone */ } },
+    },
+    // NET_JOIN §6 P2P (d37-core/spec/NET_JOIN.md): a session with NO game server. The page owns the WebRTC data channels
+    // (ordered, reliable) and its signalling; the engine orders the room on the host's page and follows it elsewhere.
+    // tag = this page's random id; link = the page's number for one remote page (a data channel). onSend(fn(link,
+    // bytes)) — send these bytes on that link as one message; onEvent(fn(ev)) — {ev:'role', role:'host'} (this page
+    // hosts now: a migration), {ev:'connect', tag, peer} (the room's new host: open a channel to it), {ev:'drop'},
+    // {ev:'closed', why}. state() — {role, me, host, hostTag, code, people, migrations, desync} (null without a room).
+    net: {
+      ok() { return !!(st.app && typeof st.app.p2p_start === 'function'); },
+      host(game, code, nick, tag) { if (!st.app || st.dead) return false; st.app.p2p_start(String(game), String(code), String(nick || ''), String(tag), ''); return true; },
+      join(game, code, nick, tag, hostTag) { if (!st.app || st.dead) return false; st.app.p2p_start(String(game), String(code), String(nick || ''), String(tag), String(hostTag)); return true; },
+      peerJoined(link, tag) { try { st.app && st.app.p2p_link_up(link >>> 0, String(tag)); } catch (e) { /* gone */ } },
+      peerLeft(link) { try { st.app && st.app.p2p_link_down(link >>> 0); } catch (e) { /* gone */ } },
+      deliver(link, bytes) { try { st.app && st.app.p2p_deliver(link >>> 0, bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)); } catch (e) { /* gone */ } },
+      failed(tag) { try { st.app && st.app.p2p_failed(String(tag)); } catch (e) { /* gone */ } },
+      onSend(fn) { st.p2pSend = fn; },
+      onEvent(fn) { st.p2pEvent = fn; },
+      state() { const s = handle.lobby.state(); return s && s.p2p ? s.p2p : null; },
+      leave(game) { handle.lobby.leave(game); },
     },
     resume() { if (!st.paused || st.dead) return; st.paused = false; st.worldAt = performance.now(); if (ww) ww.postMessage({ type: 'resume' }); try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
     // everything this start made goes away: the frame loop, listeners, Workers, the GPU device (free), the DOM

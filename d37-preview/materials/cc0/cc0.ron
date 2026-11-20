@@ -34,5 +34,13 @@
         (class: "leaf_card_small", source: "polyhaven/shrub_04", tile_m: 1.00),
         (class: "leaf_card_needle", source: "polyhaven/shrub_04", tile_m: 1.00),
         (class: "leaf_card_frond", source: "polyhaven/shrub_04", tile_m: 1.00),
+        // ep24 picture: the trees' impostor cards, drawn by code (scripts/make_tree_impostors.py; no third-party input)
+        (class: "tree_imp_conifer", source: "code/make_tree_impostors", tile_m: 1.00),
+        (class: "tree_imp_conifer_top", source: "code/make_tree_impostors", tile_m: 1.00),
+        (class: "tree_imp_broad", source: "code/make_tree_impostors", tile_m: 1.00),
+        (class: "tree_imp_broad_top", source: "code/make_tree_impostors", tile_m: 1.00),
+        (class: "tree_imp_stand_conifer", source: "code/make_tree_impostors", tile_m: 1.00),
+        (class: "tree_imp_stand_broad", source: "code/make_tree_impostors", tile_m: 1.00),
+        (class: "tree_imp_stand_top", source: "code/make_tree_impostors", tile_m: 1.00),
     ],
 )
