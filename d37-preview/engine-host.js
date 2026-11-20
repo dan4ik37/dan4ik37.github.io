@@ -434,6 +434,13 @@ export async function start(o) {
   let say = () => {};
   let shotWanted = false;
   st.shots = [];
+  // R-LATE-1120-01: the profiler's КОПИРОВАТЬ: the «ЗАМЕР» report to the clipboard (local only, nothing is sent)
+  function copyReport() {
+    let text = '';
+    try { text = String(st.app.prof_report()); } catch (e) { return; }
+    const fallback = () => { try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } catch (e) { /* no clipboard */ } };
+    try { navigator.clipboard.writeText(text).catch(fallback); } catch (e) { fallback(); }
+  }
   function acts() {
     if (!game) return;
     for (let i = 0; i < 8; i++) {
@@ -443,6 +450,7 @@ export async function start(o) {
       if (a === 'camera') { third = !third; st.app.set_third_person(third); }
       else if (a === 'fullscreen') toggleFull();
       else if (a === 'shot') shotWanted = true;
+      else if (a === 'copy') copyReport();
       else if (a === 'exit') { unlock(); emit({ t: 'exit' }); }
     }
   }

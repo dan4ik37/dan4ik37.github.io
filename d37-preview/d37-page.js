@@ -472,6 +472,14 @@ async function main() {
   }
   state.shots = [];
   state.shotWanted = false;
+  // R-LATE-1120-01: the profiler's КОПИРОВАТЬ: the «ЗАМЕР» report to the clipboard (local only, nothing is sent)
+  function copyReport(eng) {
+    let text = '';
+    try { text = String(eng.prof_report()); } catch (e) { return; }
+    const fallback = () => { try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } catch (e) { /* no clipboard */ } };
+    try { navigator.clipboard.writeText(text).catch(fallback); } catch (e) { fallback(); }
+    state.copiedReport = text;
+  }
   function gameActs() {
     for (let i = 0; i < 8; i++) {
       const a = app.game_act();
@@ -480,6 +488,7 @@ async function main() {
       if (a === 'camera') { third = !third; app.set_third_person(third); }
       else if (a === 'fullscreen') toggleFull();
       else if (a === 'shot') state.shotWanted = true;
+      else if (a === 'copy') copyReport(app);
       else if (a === 'exit') { unlockMouse(); state.exited = true; if (q.get('stay') !== '1') location.href = '/'; }
     }
   }
