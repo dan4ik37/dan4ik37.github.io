@@ -110,7 +110,8 @@ function renderMessageText(escapedText){
   // @упоминания — текст уже экранирован esc()'ом ДО вызова этой функции,
   // regex работает по уже безопасной строке и оборачивает только в свои
   // же теги, новой дыры для инъекции нет (тот же принцип, что у эмодзи выше).
-  out = out.replace(/@([a-zA-Zа-яА-Я0-9_]{1,24})/g, (m, nick) =>
+  // T-177: и ник из смайликов (\p{Extended_Pictographic}); кавычек и < > в классе нет — атрибут остаётся безопасным
+  out = out.replace(/@([a-zA-Zа-яА-ЯёЁ0-9_\p{Extended_Pictographic}‍️\u{1F3FB}-\u{1F3FF}]{1,64})/gu, (m, nick) =>
     `<span class="chat-mention" data-mention-nick="${nick}">@${nick}</span>`
   );
   return out;

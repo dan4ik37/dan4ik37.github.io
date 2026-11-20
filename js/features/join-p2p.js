@@ -32,7 +32,7 @@
   const newCode = () => rnd(6, 'ABCDEFGHJKMNPQRSTUVWXYZ23456789');
   const report = (where, msg) => { try { root.d37Err && root.d37Err('p2p:' + where, new Error(String(msg || '').slice(0, 200))); } catch (e) {} };
   const num = (v, max) => { const n = Math.floor(+v); return Number.isFinite(n) && n >= 0 ? Math.min(n, max) : 0; };
-  const cleanName = t => { const s = String(t == null ? '' : t).replace(/_/g, ' ').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 24); try { return root.D37Phone?.clean ? root.D37Phone.clean(s) : s; } catch (e) { return s; } };
+  const cleanName = t => { const s0 = String(t == null ? '' : t).replace(/_/g, ' ').replace(/[\u0000-\u001f\u007f]/g, ''); /* T-177: ник из смайликов — режем по символам, не по половинкам */ const s = Array.from(s0).slice(0, 32).join(''); try { return root.D37Phone?.clean ? root.D37Phone.clean(s) : s; } catch (e) { return s; } };
 
   // ═══ Правило адреса: 'direct' | 'relay' (одна чистая функция; таблица всех сочетаний — в t175-e2e) ═══
   // me / peer: { adult, hide, admin, hideSet ('on' | 'off' | 'auto'), friend } — friend у peer: он мой взаимный друг (мой список друзей).

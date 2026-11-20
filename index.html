@@ -1727,7 +1727,7 @@ body.low .donation-alert-icon{animation:none}
           <button id="profileNickEditBtn" class="pf-link" onclick="toggleNickEdit(true)" style="display:none">✎ Сменить ник</button>
         </div>
         <div id="profileNickEditWrap" style="display:none;margin-top:.4rem;gap:.4rem;max-width:260px">
-          <input id="profileNickInput" maxlength="24" aria-label="Новый ник" style="flex:1;background:rgba(var(--fg-rgb),.06);border:1.5px solid var(--border);border-radius:8px;padding:.4rem .6rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem;outline:none">
+          <input id="profileNickInput" maxlength="64" aria-label="Новый ник" style="flex:1;background:rgba(var(--fg-rgb),.06);border:1.5px solid var(--border);border-radius:8px;padding:.4rem .6rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem;outline:none">
           <button onclick="saveProfileNick()" aria-label="Сохранить ник" style="padding:.4rem .7rem;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.75rem;cursor:pointer">✓</button>
           <button onclick="toggleNickEdit(false)" aria-label="Отмена" style="padding:.4rem .7rem;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:.75rem;cursor:pointer">✕</button>
         </div>
@@ -2534,7 +2534,7 @@ body.low .donation-alert-icon{animation:none}
           </div>
         </div>
         <div id="gauthRegisterFields" style="display:none">
-          <input class="auth-inp" type="text" id="gauthRegNick" aria-label="Ник в чате" placeholder="Ник в чате" autocomplete="nickname" maxlength="24">
+          <input class="auth-inp" type="text" id="gauthRegNick" aria-label="Ник в чате" placeholder="Ник в чате" autocomplete="nickname" maxlength="64">
           <input class="auth-inp" type="email" id="gauthRegEmail" aria-label="Email" placeholder="Email" autocomplete="email">
           <input class="auth-inp" type="password" id="gauthRegPassword" aria-label="Пароль" placeholder="Пароль (мин. 6 символов)" autocomplete="new-password">
           <input class="auth-inp" type="password" id="gauthRegPassword2" aria-label="Повтори пароль" placeholder="Повтори пароль" autocomplete="new-password" onkeydown="if(event.key==='Enter')doGlobalRegister()">
@@ -2736,6 +2736,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/core/ref.js"></script>
 <script src="js/core/coins.js"></script>
 <script src="js/core/premium.js"></script>
+<script src="js/core/nick.js"></script>
 <script src="js/core/avatar.js"></script>
 <script src="js/core/surprise.js"></script>
 <script src="js/core/fullscreen.js"></script>

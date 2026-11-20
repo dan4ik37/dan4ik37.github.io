@@ -3132,6 +3132,16 @@
    ]
   },
   {
+   "f": "js/features/join.js",
+   "fn": "go",
+   "k": "sink:href [location]",
+   "c": "regex",
+   "n": "T-174: адреса только свои — '/hub/play/<игра из GAMES>/<код по CODE_RE или s-<id по ID_RE>>', '/hub/lobby…', '/hub/party/<id по PARTY_RE>'; запасной путь, если нет роутера",
+   "xs": [
+    "href"
+   ]
+  },
+  {
    "f": "js/features/leaderboard.js",
    "fn": "lbLogin",
    "k": "sink:href [window.location]",
@@ -3247,12 +3257,42 @@
   },
   {
    "f": "js/features/minicard.js",
+   "fn": "btn",
+   "k": "markup:attr",
+   "c": "enum",
+   "n": "T-177 actions(): класс кнопки — pri/ok/warn/пусто; href — только '#/profile/' + uid (uid проверен UUID в openCard)",
+   "xs": [
+    "a.cls || ''"
+   ]
+  },
+  {
+   "f": "js/features/minicard.js",
+   "fn": "btn",
+   "k": "markup:url",
+   "c": "enum",
+   "n": "T-177 actions(): класс кнопки — pri/ok/warn/пусто; href — только '#/profile/' + uid (uid проверен UUID в openCard)",
+   "xs": [
+    "e(a.href)"
+   ]
+  },
+  {
+   "f": "js/features/minicard.js",
    "fn": "paintChar",
    "k": "sink:src [img]",
    "c": "self-made",
    "n": "картинка персонажа: D37Char.img → canvas.toDataURL; кэш IMG хранит только его результаты",
    "xs": [
     "src"
+   ]
+  },
+  {
+   "f": "js/features/minicard.js",
+   "fn": "paintHead",
+   "k": "sink:innerHTML",
+   "c": "enum",
+   "n": "T-177 actions(): класс кнопки — pri/ok/warn/пусто; href — только '#/profile/' + uid (uid проверен UUID в openCard)",
+   "xs": [
+    "p?.role && typeof ROLE_BADGE_HTML !== 'undefined' ? (ROLE_BADGE_HTML[p"
    ]
   },
   {
@@ -3333,6 +3373,16 @@
    "n": "e(i.about) внутри; members — число",
    "xs": [
     "i ? `${i.members} ${P.plural(i.members, 'участник', 'участника', 'учас"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "cardHtml",
+   "k": "markup:url",
+   "c": "regex",
+   "n": "T-174: карточка приглашения в комнату — c.g и c.code из cardOf по регулярке (/hub/play/[a-z0-9]{2,16}/[A-HJKMNP-Z2-9]{6}) и игра есть в D37Join.GAMES",
+   "xs": [
+    "e(c.code)"
    ]
   },
   {
@@ -8154,26 +8204,6 @@
    "n": "адреса библиотек jsDelivr и Worker-ы, которые выдаёт сама библиотека потоков",
    "xs": [
     "t.workerUrl"
-   ]
-  },
-  {
-   "f": "js/features/join.js",
-   "fn": "go",
-   "k": "sink:href [location]",
-   "c": "regex",
-   "n": "T-174: адреса только свои — '/hub/play/<игра из GAMES>/<код по CODE_RE или s-<id по ID_RE>>', '/hub/lobby…', '/hub/party/<id по PARTY_RE>'; запасной путь, если нет роутера",
-   "xs": [
-    "href"
-   ]
-  },
-  {
-   "f": "js/features/msgview.js",
-   "fn": "cardHtml",
-   "k": "markup:url",
-   "c": "regex",
-   "n": "T-174: карточка приглашения в комнату — c.g и c.code из cardOf по регулярке (/hub/play/[a-z0-9]{2,16}/[A-HJKMNP-Z2-9]{6}) и игра есть в D37Join.GAMES",
-   "xs": [
-    "e(c.code)"
    ]
   }
  ]

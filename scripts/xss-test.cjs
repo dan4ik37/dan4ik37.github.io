@@ -308,6 +308,16 @@ function selfCheck(){
     // реакции: findEmojiDef отдаёт {char: значение_из_базы} для незнакомых — раньше вставлялось как есть
     for (const p of PAYLOADS) noDanger(run('renderEmoji')(run('findEmojiDef')(p)), 'renderEmoji: чужое «эмодзи» из базы не становится разметкой');
     ok(run('renderEmoji')(run('findEmojiDef')('👍')) === '👍' && /<img src="https:\/\/x\.supabase\.co/.test(run('renderEmoji')(run('findEmojiDef')(':dan:'))), 'renderEmoji: обычные и свои эмодзи — как были');
+    // T-177: ники из смайликов — тоже чужой текст: аватар, ник, упоминание в ленте — без разметки; js/core/nick.js не пускает < > " ' и невидимое
+    vm.runInContext(src('js/core/nick.js'), sb, { filename: 'nick.js' });
+    const N = run('D37Nick');
+    for (const nk of ['🔥🔥', '👨‍👩‍👧 семья', '🐱<img src=x onerror=alert(1)>', '❤️"><svg onload=alert(1)>', "🔥' onmouseover='x", '🔥‮🔥']) {
+      const html = P.avatar({ nick: nk, role: 'user' }, nk, 36) + P.nick({ nick: nk, role: 'user' }, nk) + MV.rich('привет @' + nk + ' как дела', 'я').html;
+      ok(danger(html).length === 0, 'ник из смайликов: аватар, ник и @упоминание — текстом', { nk, html: html.slice(0, 200) });
+    }
+    ok(N.check('🔥🔥').ok && N.check('🐱 Вася').ok && !N.check('🐱<b>').ok && !N.check('🔥"🔥').ok && !N.check("🔥'🔥").ok && !N.check('🔥‮🔥').ok && !N.check('a​b').ok,
+      'D37Nick.check: смайлики можно; кавычки, < >, невидимые и знаки направления — нельзя');
+    ok(P.avatar(null, '🔥🔥', 20).includes('🔥') && !P.avatar(null, '🔥🔥', 20).includes('?'), 'аватар ника из смайликов — первый смайлик, не «?»');
   }
 
   // ═══ 5. Серверные страницы с подменённым Supabase ═══
