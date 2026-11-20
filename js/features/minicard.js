@@ -313,7 +313,8 @@
     if (window.d37NickFx?.markEl && open.uid) { try { d37NickFx.markEl(q('.d37m-nick'), open.uid); } catch (er) {} }
     const ava = q('.d37m-ava'), url = p?.avatar_url && typeof safeImgUrl === 'function' ? safeImgUrl(p.avatar_url) : '';
     ava.style.backgroundImage = url ? `url("${url}")` : '';
-    ava.textContent = url ? '' : (String(nick).replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g, '') || '?').slice(0, 2).toUpperCase();
+    const lt = String(nick).replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g, '');   // T-177: ник из смайликов — первый смайлик, не «?»
+    ava.textContent = url ? '' : lt ? lt.slice(0, 2).toUpperCase() : (window.D37Nick?.initial?.(nick) || '?');
     if (first) { ava.className = 'd37m-ava'; ava.removeAttribute('data-ss'); }
     if (p && typeof applyProfileGlow === 'function' && !first) applyProfileGlow(ava, p);
     const ban = q('.d37m-ban'), burl = p?.banner_url && typeof safeImgUrl === 'function' ? safeImgUrl(p.banner_url) : '';
