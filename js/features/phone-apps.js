@@ -203,7 +203,7 @@
         if (!alive) return;
         const on = f.list.filter(id => st.has(id)), off = f.list.filter(id => !st.has(id));
         const row = id => {
-          const p = P.prof(id) || {}, s = st.get(id), k = kb.get(id), j = s && k !== 'age' ? P.actJoin(s.a) : null, x = k ? ` ph-off" title="${e(kidMsg(k))}` : '';
+          const p = P.prof(id) || {}, s = st.get(id), k = kb.get(id), j = s ? ((t => t && (k !== 'age' || t.d37) ? t : null)(P.actJoin(s.a))) : null, x = k ? ` ph-off" title="${e(kidMsg(k))}` : '';
           return `<div class="ph-item">${P.avatar(p, p.nick, 42)}${s ? '<i class="ph-dot"></i>' : ''}<span><b>${e(p.nick || 'друг')}</b><small>${s ? e(P.actText(s.a)) : 'не в сети'}</small>${k === 'age' ? '<small class="ph-kid">🔒 Только дружба: писать и звонить нельзя</small>' : ''}${j ? `<button type="button" class="ph-chip" data-j="${e(id)}" style="margin-top:5px;align-self:flex-start">${e(j.label)}</button>` : ''}</span>
             <span class="ph-ibtns"><button type="button" class="ph-ib${x}" data-dm="${e(id)}" aria-label="Написать">✉</button><button type="button" class="ph-ib${x}" data-game="${e(id)}" aria-label="Позвать в игру">🎮</button><button type="button" class="ph-ib call${x}" data-call="${e(id)}" aria-label="Позвонить">📞</button></span></div>`;
         };

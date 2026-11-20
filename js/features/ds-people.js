@@ -561,7 +561,7 @@
       try { if (!a.g && !a.w && !a.s && /^#\/hub\/(play|war|creative)/.test(window.D37Route?.hash?.() || '')) { a.g = 'hub'; delete a.v; delete a.ch; } } catch (er) {}
       return a;
     };
-    P.actText = a => (a && a.g === 'hub' && !a.w && !a.s ? '🪐 Играет в D37' + (a.c ? ' · 📞 в звонке' : '') : ot(a));
+    P.actText = a => (a && a.g === 'hub' && !a.w && !a.s && !a.d ? '🪐 Играет в D37' + (a.c ? ' · 📞 в звонке' : '') : ot(a));
   }
 
   // ═══ Регистрация в DS.x (community.js / community2.js) ═══

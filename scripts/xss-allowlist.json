@@ -8155,6 +8155,26 @@
    "xs": [
     "t.workerUrl"
    ]
+  },
+  {
+   "f": "js/features/join.js",
+   "fn": "go",
+   "k": "sink:href [location]",
+   "c": "regex",
+   "n": "T-174: адреса только свои — '/hub/play/<игра из GAMES>/<код по CODE_RE или s-<id по ID_RE>>', '/hub/lobby…', '/hub/party/<id по PARTY_RE>'; запасной путь, если нет роутера",
+   "xs": [
+    "href"
+   ]
+  },
+  {
+   "f": "js/features/msgview.js",
+   "fn": "cardHtml",
+   "k": "markup:url",
+   "c": "regex",
+   "n": "T-174: карточка приглашения в комнату — c.g и c.code из cardOf по регулярке (/hub/play/[a-z0-9]{2,16}/[A-HJKMNP-Z2-9]{6}) и игра есть в D37Join.GAMES",
+   "xs": [
+    "e(c.code)"
+   ]
   }
  ]
 }

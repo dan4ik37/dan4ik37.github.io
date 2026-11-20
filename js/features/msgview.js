@@ -105,6 +105,7 @@
     if ((m = /^#\/phone\/call\/([a-z0-9]{8,16})$/.exec(path))) return { t: 'call', code: m[1] };
     if ((m = /^#\/chat\/ev\/(\d{1,12})\/?$/.exec(path))) return { t: 'event', id: +m[1] };
     if (/^#\/chat\/twitch\/?$/.test(path)) return { t: 'live' };
+    if ((m = /^#\/hub\/play\/([a-z0-9]{2,16})\/([A-HJKMNP-Z2-9]{6})\/?$/.exec(path)) && window.D37Join?.GAMES?.[m[1]]) return { t: 'd37s', g: m[1], code: m[2] };   // T-174: приглашение в комнату игры движка
     return null;
   };
   const gameOf = id => (typeof GAMES !== 'undefined' && GAMES.find(g => g.id === id)) || null;
@@ -116,6 +117,7 @@
     if (card?.t === 'call') return '📞 звонок';
     if (card?.t === 'event') return '📅 событие';
     if (card?.t === 'live') return '🔴 эфир';
+    if (card?.t === 'd37s') { const G = window.D37Join.GAMES[card.g]; return `${G.icon} ${G.title} · комната`; }
     return '🔗 ' + path.replace(/^#?\//, '').slice(0, 32);
   }
   const hrefOf = path => path.startsWith('#') ? path : path;
@@ -173,6 +175,7 @@
     if (c.t === 'call') return `<div class="mv-card mv-call" style="--gc:#16a34a"><i>📞</i><span><b>Голосовой звонок</b><small>Разговор напрямую — до 6 друзей</small></span><a class="mv-cbtn" href="#/phone/call/${e(c.code)}">Войти</a></div>`;
     if (c.t === 'live') return `<div class="mv-card mv-live" style="--gc:#9147ff"><i>🔴</i><span><b>Денчик в эфире на Twitch</b><small>Стрим идёт — смотри прямо в чате</small></span>${window.D37Player ? '<button type="button" class="mv-cbtn" data-play="tw">▶ Здесь</button>' : `<a class="mv-cbtn" href="https://www.twitch.tv/${typeof TWITCH !== 'undefined' ? e(TWITCH) : 'dan4ik37'}" target="_blank" rel="noopener">▶ Смотреть</a>`}</div>`;
     if (c.t === 'event') return MV.evCardHtml(c.id);
+    if (c.t === 'd37s') { const G = window.D37Join?.GAMES?.[c.g]; if (!G) return ''; return `<div class="mv-card mv-game mv-room" style="--gc:#16a34a"><i>${e(G.icon)}</i><span><b>Зовёт в «${e(G.title)}»</b><small>Комната ${e(c.code)} · заходи — играем вместе</small></span><a class="mv-cbtn" href="/hub/play/${e(c.g)}/${e(c.code)}">▶ Войти</a></div>`; }
     if (c.t === 'invite') { const i = invCache.get(c.code); return `<div class="mv-card mv-inv" data-inv="${e(c.code)}"><i>${e(i?.icon || '🏰')}</i><span><b>${i ? e(i.name) : 'Приглашение в сообщество'}</b><small>${i ? `${i.members} ${P.plural(i.members, 'участник', 'участника', 'участников')}${i.about ? ' · ' + e(i.about.slice(0, 60)) : ''}` : 'Сообщество на сайте dan4ik37'}</small></span><a class="mv-cbtn" href="#/c/${e(c.code)}">Вступить</a></div>`; }
     return '';
   };

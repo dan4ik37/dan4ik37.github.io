@@ -823,7 +823,7 @@
       ${off ? '<div class="vc-note bad">📡 Нет интернета — разговор вернётся сам, как только связь появится.</div>' : ''}
       ${S.kidBlocked ? `<div class="vc-note bad">${e(kidMsg(S.kidBlocked === 'u9' ? 'u9' : 'agecall'))}</div>` : ''}
       ${bad ? `<div class="vc-note bad">${TURN_NOTE_FN()}</div>` : privHtml()}
-      <div class="vc-grid${ps.some(p => p.cam) ? ' vc-vgrid' : ''}">${ps.map(p => `<div class="vc-tile${p.speaking ? ' spk' : ''}${p.state === 'fail' ? ' bad' : ''}${p.cam ? ' vid' : ''}" data-vk="${e(p.key)}"${!p.me && UVOL && p.uid ? ` data-vu="${e(p.uid)}" role="button" title="Громкость ${e(p.nick)}"` : ''}>${p.cam ? '<span class="vc-vid"></span>' : P.avatar(P.prof(p.uid) || null, p.nick, 64)}<b>${e(p.nick)}${p.me ? ' (ты)' : ''}</b><small>${tileState(p)}</small><span class="vc-ic">${p.deaf ? '🔈' : p.mute ? '🔇' : ''}${!p.me && uvOf(p.uid) < 1 ? '🔉' : ''}</span></div>`).join('')}</div>
+      <div class="vc-grid${ps.some(p => p.cam) ? ' vc-vgrid' : ''}">${ps.map(p => `<div class="vc-tile${p.speaking ? ' spk' : ''}${p.state === 'fail' ? ' bad' : ''}${p.cam ? ' vid' : ''}" data-vk="${e(p.key)}"${!p.me && p.uid ? ` data-juid="${e(p.uid)}"` : ''}${!p.me && UVOL && p.uid ? ` data-vu="${e(p.uid)}" role="button" title="Громкость ${e(p.nick)}"` : ''}>${p.cam ? '<span class="vc-vid"></span>' : P.avatar(P.prof(p.uid) || null, p.nick, 64)}<b>${e(p.nick)}${p.me ? ' (ты)' : ''}</b><small>${tileState(p)}</small><span class="vc-ic">${p.deaf ? '🔈' : p.mute ? '🔇' : ''}${!p.me && uvOf(p.uid) < 1 ? '🔉' : ''}</span></div>`).join('')}</div>
       <div class="vc-ctrl">
         <button type="button" data-v="mute" class="${R?.mute ? 'on' : ''}">${R?.mute ? '🔇 Микрофон выкл' : '🎙 Микрофон'}</button>
         <button type="button" data-v="deaf" class="${R?.deaf ? 'on' : ''}">${R?.deaf ? '🔈 Звук выкл' : '🎧 Звук'}</button>
@@ -889,10 +889,11 @@
     const d = r.data, ppl = Array.isArray(d.people) ? d.people : [], max = +d.max || MAX, cap = +d.cap || MAX;
     el.querySelector('.vc-cap').textContent = `${ppl.length} из ${max} · ${C.hideIp() ? '🕶 адрес скрыт' : 'звук напрямую между браузерами'}`;
     box.hidden = false;
-    box.innerHTML = `${ppl.length ? `<div class="vc-in">${ppl.slice(0, 12).map(x => `<span>${P.avatar(P.prof(x.uid) || null, x.nick, 22)} ${e(x.nick)}</span>`).join('')}</div>` : '<small class="ph-dim">Внутри пока никого — зайди первым.</small>'}
+    box.innerHTML = `${ppl.length ? `<div class="vc-in">${ppl.slice(0, 12).map(x => `<span class="jn-juser"${x.uid ? ` data-juid="${e(x.uid)}"` : ''}>${P.avatar(P.prof(x.uid) || null, x.nick, 22)} ${e(x.nick)}</span>`).join('')}</div>` : '<small class="ph-dim">Внутри пока никого — зайди первым.</small>'}
       ${ppl.length >= max ? `<div class="vc-note bad">👥 Канал заполнен (${max} из ${max}).</div>` : ''}
       ${!d.can_set && spec.kind === 'official' && ['admin', 'moderator'].includes(typeof currentRole !== 'undefined' ? currentRole : '') && window.D37DS?.sv?.missing ? '<small class="ph-dim">👥 Лимит голосового канала сайта можно будет менять после обновления базы (часть 16).</small>' : ''}
       ${d.can_set ? `<label class="vc-lim">👥 Лимит канала <select data-v="lim">${[0, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 25].filter(n => n <= cap).map(n => `<option value="${n}"${+d.limit === n ? ' selected' : ''}>${n ? n : 'без своего (' + cap + ')'}</option>`).join('')}</select></label><small class="ph-dim">Больше ${cap} — не даёт сайт: звук идёт «каждый с каждым», с бо́льшим числом людей связь ненадёжна.</small>` : ''}`;
+    window.D37Join?.decorate?.(box);   // T-174: «▶ Присоединиться» у того, кто в комнате игры
     box.querySelector('[data-v="lim"]')?.addEventListener('change', async ev => {
       const rr = await P.rpc('cm_voice_limit_set', { p_channel: spec.channel, p_limit: +ev.target.value });
       P.toast(rr.data?.ok ? '✅ Лимит сохранён' : '⚠️ Не получилось', !!rr.data?.ok);
@@ -901,6 +902,7 @@
   }
   function wireSession(el){
     attachVideos(el);
+    window.D37Join?.decorate?.(el);   // T-174: «▶ Присоединиться» на плитке собеседника, который в комнате игры
     el.querySelectorAll('[data-vu]').forEach(t => t.addEventListener('click', () => volSheet(t.dataset.vu)));
     el.querySelectorAll('[data-v]').forEach(b => {
       const k = b.dataset.v;
