@@ -228,6 +228,7 @@ body.hub-on .bottom-tabbar,body.hub-on #donateFab,body.hub-on #scrollTop,body.hu
   .hub-menu .hub-big{order:1;min-height:190px}
   .hub-menu .hc-me{order:2}
   .hub-menu .hc-sec[data-row="people"]{order:3;margin:4px 0 0}
+  .hub-menu .jn{order:3;margin:4px 0 0}   /* T-174: комнаты — под «Играть» и строкой игр игроков */
   .hub-menu .hub-tile:not(.hub-big){order:4}
   .hub-menu .hub-note{order:5}
   .hub-menu .hub-lead{display:none}
@@ -241,4 +242,78 @@ body.hub-on .bottom-tabbar,body.hub-on #donateFab,body.hub-on #scrollTop,body.hu
   .hc-more{display:inline}
   .hc-me:not(.open) .hc-worlds,.hc-me:not(.open) .hc-fr,.hc-me:not(.open) .hc-acts{display:none}
   .hc-me.open{align-items:flex-start}
+}
+/* ═══ T-174: комнаты игр движка (js/features/join.js): список, быстрая игра, код, группа, «Присоединиться», в игре — 👥 ═══ */
+.jn{margin:18px 0 6px;padding:16px;border-radius:20px;background:var(--card);border:1px solid var(--line);color:var(--text);display:flex;flex-direction:column;gap:12px}
+.jn[hidden]{display:none}
+.jn-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.jn-h{font:900 19px/1.15 'Montserrat',system-ui,sans-serif;color:var(--text-hi);margin:0;flex:1 1 auto}
+.jn-reg{font-size:12.5px;color:var(--muted)}
+.jn-all,.jn-more{font:700 13px/1 'Montserrat',system-ui,sans-serif;color:var(--accent-t);text-decoration:none}
+.jn-more{display:block;text-align:center;padding:10px}
+.jn-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.jn-codef{display:flex;gap:6px;flex:1 1 220px;min-width:0}
+.jn-codei,.jn-name-in,.jn-gsel{font:700 15px/1.2 'Montserrat',system-ui,sans-serif;padding:10px 12px;border-radius:12px;border:1px solid var(--line-hi);background:rgba(var(--fg-rgb),.05);color:var(--text-hi);min-width:0}
+.jn-codei{flex:1 1 auto;letter-spacing:.18em;text-transform:uppercase;width:8ch}
+.jn-codei::placeholder{letter-spacing:normal;text-transform:none;color:var(--muted);font-weight:600}
+.jn-gsel{font-size:13.5px;padding:8px 10px}
+.jn-gsel option{color:#111}
+.jn-filt{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.jn-chip{font:700 12.5px/1 'Montserrat',system-ui,sans-serif;padding:8px 11px;border-radius:999px;border:1px solid var(--line-hi);background:rgba(var(--fg-rgb),.05);color:var(--text);cursor:pointer}
+.jn-chip.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.jn-rf{margin-left:auto}
+.jn-list{display:flex;flex-direction:column;gap:6px;min-height:62px}
+.jn-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:rgba(var(--fg-rgb),.04);border:1px solid var(--line);min-width:0}
+.jn-rowb{font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%}
+.jn-ic{font-size:24px;line-height:1;flex:0 0 auto}
+.jn-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto}
+.jn-name{color:var(--text-hi);font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jn-sub,.jn-muted{color:var(--muted);font-size:12.5px}
+.jn-fr{color:var(--accent-t);font-size:12.5px;font-weight:700}
+.jn-n{font:800 13.5px/1 'Montserrat',system-ui,sans-serif;color:var(--text-hi);white-space:nowrap}
+.jn-go{padding:9px 14px}
+.jn .hub-btn:disabled,.jn-row .hub-btn:disabled{opacity:.45;cursor:default}
+.jn-fullrow{opacity:.7}
+.jn-empty{padding:14px 12px;border-radius:14px;background:rgba(var(--fg-rgb),.03);color:var(--muted);font-size:14px;line-height:1.45;text-align:center}
+.jn-off{color:var(--text)}
+.jn-off::before{content:'📡 '}
+.jn-back{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-radius:14px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);font-size:13.5px}
+.jn-back[hidden]{display:none}
+.jn-back>span{flex:1 1 200px}
+.jn-party{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.jn-lbl{color:var(--text-hi);font-size:14.5px}
+.jn-pmem{display:flex;flex-wrap:wrap;gap:6px}
+.jn-pm{font-size:13px;padding:6px 10px;border-radius:999px;background:rgba(var(--fg-rgb),.06)}
+.jn-pm.lead{font-weight:800}
+.jn-seg{display:flex;flex-wrap:wrap;gap:6px}
+.jn-seg button{font:700 13px/1 'Montserrat',system-ui,sans-serif;padding:9px 12px;border-radius:12px;border:1px solid var(--line-hi);background:rgba(var(--fg-rgb),.05);color:var(--text);cursor:pointer}
+.jn-seg button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.jn-field{display:flex;flex-direction:column;gap:4px}
+.jn-code{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.jn-codel{color:var(--muted);font-size:13px}
+.jn-codev{font:900 26px/1 'Montserrat',system-ui,sans-serif;letter-spacing:.16em;color:var(--text-hi)}
+.jn-link{font-size:12.5px;word-break:break-all;padding:8px 10px;border-radius:10px;background:rgba(var(--fg-rgb),.05);color:var(--muted)}
+.jn-hostbox{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:14px;background:rgba(var(--fg-rgb),.04)}
+.jn-hostbox[hidden]{display:none}
+.jn-jbtn{font:800 12px/1 'Montserrat',system-ui,sans-serif;padding:7px 10px;border-radius:999px;border:0;cursor:pointer;color:#fff;background:#16a34a;white-space:nowrap;flex:0 0 auto}
+.vc-tile .jn-jbtn{position:relative;z-index:2;margin-top:4px}
+.jn-juser{display:inline-flex;align-items:center;gap:6px}
+.jn-pjoin{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;margin:0 0 12px;border-radius:16px;background:var(--card);border:1px solid rgba(34,197,94,.4);color:var(--text)}
+.jn-pjoin .jn-main{font-weight:700;color:var(--text-hi)}
+.jn-backm{align-self:flex-start;color:var(--text);background:rgba(var(--fg-rgb),.06);border:1px solid var(--line-hi)}
+.hub-lobby .hub-head{display:flex;flex-direction:column;gap:6px}
+/* в игре: 👥 рядом с ⏸ (тот же размер, полупрозрачный), обрыв связи — узкая полоса сверху */
+.jn-gbtn{position:absolute;z-index:7;top:calc(8px + env(safe-area-inset-top));right:calc(50px + env(safe-area-inset-right));width:34px;height:34px;
+  border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(10,14,22,.45);color:#fff;font-size:15px;line-height:1;cursor:pointer;opacity:.7}
+.jn-gbtn[hidden]{display:none}
+.jn-gbtn:hover,.jn-gbtn:focus-visible{opacity:1}
+.jn-drop{position:absolute;z-index:8;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:8px 10px 8px 14px;
+  border-radius:14px;background:rgba(10,14,22,.82);color:#fff;font-size:13.5px;max-width:calc(100% - 120px)}
+.jn-dropb{font:800 13px/1 'Montserrat',system-ui,sans-serif;padding:8px 12px;border-radius:10px;border:0;background:#16a34a;color:#fff;cursor:pointer}
+@media (max-width:480px){
+  .jn{padding:14px 12px;border-radius:18px}
+  .jn-acts>.hub-btn{flex:1 1 calc(50% - 8px);justify-content:center}
+  .jn-codef{flex:1 1 100%}
+  .jn-row{gap:8px;padding:9px 10px}
+  .jn-go{padding:9px 11px}
 }
