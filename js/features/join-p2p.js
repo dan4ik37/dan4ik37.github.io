@@ -67,7 +67,9 @@
     try { if (C() && C().iceFor) return await C().iceFor(relay); } catch (e) { report('ice', e && e.message); }
     return { iceServers: [], iceTransportPolicy: relay ? 'relay' : 'all', relay, ok: !relay };
   }
-  const relayOk = () => { try { if (root.__d37P2PRelayOk) return !!root.__d37P2PRelayOk(); return !!(C() && C().relayOk && C().relayOk()); } catch (e) { return false; } };
+  // есть ли TURN: calls.js (если загружен) или то, что уже выдал свой сервер (D37RT, window.D37_TURN) — без calls.js тоже честно
+  const hasTurn = l => Array.isArray(l) && l.some(x => [].concat(x && x.urls || []).some(u => /^turns?:/i.test(String(u))));
+  const relayOk = () => { try { if (root.__d37P2PRelayOk) return !!root.__d37P2PRelayOk(); if (C() && C().relayOk && C().relayOk()) return true; return hasTurn(root.D37_TURN) || hasTurn(root.D37RT && root.D37RT.ice ? root.D37RT.ice() : null); } catch (e) { return false; } };
 
   // ═══ Каналы Realtime (тест подставляет свой: __d37P2PChannel) ═══
   function channel(name, key){

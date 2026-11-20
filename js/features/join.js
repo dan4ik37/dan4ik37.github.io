@@ -231,7 +231,7 @@
     if (!h.lobby || typeof h.lobby.join !== 'function') { gameToast('Комнаты появятся с новой версией игры — пока играешь с ботами'); return; }
     const rj = ss.get('d37join_rj');
     try {
-      if (rj && rj.key && ((t.id && rj.id === t.id) || (t.code && rj.code === t.code))) h.lobby.rejoinKey(rj.key >>> 0);
+      if (rj && rj.key && ((t.id && rj.id === t.id) || (t.code && rj.code === t.code))) h.lobby.rejoinKey(rj.key >>> 0); else h.lobby.rejoinKey(freshKey());
       if (t.id) h.lobby.join(url, t.game, t.id, ''); else h.lobby.joinCode(url, t.code, '');
     } catch (e) { report('join', e && e.message); gameToast('Не получилось войти в комнату — играешь с ботами'); return; }
     clearInterval(st.poll);
@@ -241,12 +241,14 @@
   function p2pEnter(h, t){
     const pend = ss.get('d37join_host'), rj = ss.get('d37join_rj');
     const host = !!(pend && t.code && pend.code === t.code);
-    try { if (rj && rj.key && t.code && rj.code === t.code) h.lobby.rejoinKey(rj.key >>> 0); } catch (e) {}
+    try { if (rj && rj.key && t.code && rj.code === t.code) h.lobby.rejoinKey(rj.key >>> 0); else h.lobby.rejoinKey(freshKey()); } catch (e) {}
     const meta = host ? { name: pend.name || defName(), vis: pend.vis, max: pend.max, ages: pend.ages } : null;
     P2P().enter(h, { game: t.game, code: t.code }, { host, meta, toast: gameToast }).catch(e => { report('p2p', e && e.message); gameToast('Не получилось войти в комнату — играешь с ботами'); });
     clearInterval(st.poll);
     st.poll = setInterval(pollState, 1500);
   }
+  // свой ключ возврата у каждой вкладки (у движка он из зерна мира — у всех страниц одинаковый: вернувшийся занимал чужое место)
+  function freshKey(){ const b = new Uint32Array(1); try { crypto.getRandomValues(b); } catch (e) { b[0] = Math.random() * 4294967295; } return (b[0] | 1) >>> 0; }
   function pollState(){
     const h = st.h;
     if (!h || !h.lobby) { clearInterval(st.poll); st.poll = 0; return; }
