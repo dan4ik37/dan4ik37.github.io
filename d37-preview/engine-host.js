@@ -153,7 +153,9 @@ async function compileWasm(url, rawSize, onBytes) {
 //      w11 kit-port: arena: 'klet' (`game klet play`: «Клеточки» as an engine mode in the player's world).
 //      W8 hub: newWorld: bool (`game progress new`: a cell at the tide pool), skipTribe: bool (`game progress skip tribe`),
 //      spawn: 'last' | 'home' | 'orbit' (where a saved world starts: as saved / `game place goto home_valley` / `travel orbit`),
-//      W11 net-shards: join: {url, code} («Играть вместе»: the shared world with that join code on our d37-server) }
+//      W11 net-shards: join: {url, code} («Играть вместе»: the shared world with that join code on our d37-server),
+//      NET_JOIN: arena: 'klet2' (the engine's «Клеточки»), joinSession: {url, game, id} (straight into a game session;
+//      the handle's `lobby` lists / quick-plays / hosts sessions) }
 // The 'wardrobe' scene is a studio: the panel is open from the start, no walking (the keys and the left half of a phone
 // turn the camera round the character instead), no jump / orbit / 👕 buttons; «Готово» is sent to the page as
 // {t:'wardrobe', on:false} as always (the site goes back where it came from).
@@ -751,8 +753,13 @@ export async function start(o) {
     const cmds = o.newWorld || fresh ? ['game progress new'] : o.skipTribe ? ['game progress skip tribe'] : o.spawn === 'orbit' ? ['travel orbit'] : o.spawn === 'home' ? ['game place goto home_valley'] : [];
     // w11 kit-port: an old site game as an engine mode, started in the player's world (only known modes; the realm
     // comes from the bridge session: an adult arena only for a verified adult)
+    if (o.arena === 'klet2') cmds.push('game klet2 play');
     if (o.arena === 'klet') cmds.push(o.session && o.session.realm === 'adult' && o.session.band === 'adult' ? 'game klet play adult' : 'game klet play');
     for (const c of cmds) { const r = run(c); if (typeof r === 'string' && /^отказ|error|no such/i.test(r)) emit({ t: 'error', code: 'spawn', msg: (c + ': ' + r).slice(0, 200) }); }
+    // NET_JOIN: straight into a game session (a lobby pick, an invite link ?game=klet2&s=<id>, quick play)
+    if (o.joinSession && o.joinSession.url && o.joinSession.game && o.joinSession.id && typeof st.app.join_session === 'function') {
+      try { st.app.join_session(String(o.joinSession.url), String(o.joinSession.game), String(o.joinSession.id), ''); emit({ t: 'event', code: 'net_join' }); } catch (e) { emit({ t: 'error', code: 'join', msg: String(e && e.message || e).slice(0, 200) }); }
+    }
     // W11 net-shards: «Играть вместе» — the shared world by its code; an older engine build without join_code plays alone
     if (o.join && o.join.url && o.join.code) {
       try {
@@ -806,6 +813,25 @@ export async function start(o) {
     // Worker terminated without a word: the watchdog notices)
     debugCrash(kind) { if (kind === 'page') st.debugPanic = true; else if (kind === 'worker' && ww) ww.postMessage({ type: 'debug_panic' }); else if (kind === 'kill' && ww) { try { ww.terminate(); } catch (e) { /* gone */ } } },
     config() { return st.config; },
+    // NET_JOIN (d37-core/spec/NET_JOIN.md): sessions of the game modes on our d37-server. server = 'ws://host:7377'
+    // (or wss:// behind the TLS proxy); the HTTP list is the same host. The engine emits {t:'mode', data:{kind:
+    // 'presence'|'meta', …}} messages: presence = where the player is / can friends join; meta = records,
+    // achievements, XP, season goals (the site's server decides any coins).
+    lobby: {
+      httpOf(server) { return String(server).replace(/^ws(s?):\/\//, 'http$1://').replace(/\/+$/, ''); },
+      async list(server, game) { const r = await fetch(handle.lobby.httpOf(server) + '/sessions' + (game ? '?game=' + encodeURIComponent(game) : ''), { cache: 'no-store' }); return r.json(); },
+      async quick(server, game) { const r = await fetch(handle.lobby.httpOf(server) + '/quick?game=' + encodeURIComponent(game), { cache: 'no-store' }); return r.json(); },
+      join(server, game, id, nick) { if (!st.app || st.dead) return false; st.app.join_session(String(server), String(game), String(id), String(nick || '')); return true; },
+      joinCode(server, code, nick) { if (!st.app || st.dead) return false; st.app.join_code(String(server), String(code), String(nick || '')); return true; },
+      async quickPlay(server, game, nick) { const q = await handle.lobby.quick(server, game); handle.lobby.join(server, game, q.id, nick); return q; },
+      // host powers (the server takes them from the session's host only): meta(vis, mode, map, ages, name), limit(n), kick(peer)
+      meta(game, vis, mode, map, ages, name) { return run('game ' + game + ' lobby meta ' + [vis || 'open', mode || game, map || '-', ages || 'all', String(name || '').replace(/[;\s]+/g, '_')].join(' ')); },
+      limit(game, n) { return run('game ' + game + ' lobby limit ' + (n | 0)); },
+      kick(game, peer) { return run('game ' + game + ' kick ' + (peer | 0)); },
+      state() { try { const s = st.app && st.app.mode_state(); return s ? JSON.parse(s) : null; } catch (e) { return null; } },
+      rejoinKey(k) { try { st.app && st.app.set_rejoin_key(k >>> 0); } catch (e) { /* older build */ } },
+      leave(game) { if (game) run('game ' + game + ' quit'); try { st.app && st.app.leave(); } catch (e) { /* gone */ } },
+    },
     resume() { if (!st.paused || st.dead) return; st.paused = false; st.worldAt = performance.now(); if (ww) ww.postMessage({ type: 'resume' }); try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
     // everything this start made goes away: the frame loop, listeners, Workers, the GPU device (free), the DOM
     dispose() {
