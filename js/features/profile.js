@@ -466,6 +466,7 @@ async function renderProfilePage(viewUserId){
   const isOwn = targetId === currentUser?.id;
   pf2Layout();
   pf2Reset(isOwn);
+  window.D37Follow?.reset?.();   // кнопка «Слежу», число подписчиков и лента прошлого профиля — убрать сразу, до запросов
   if (pfwOn()) { pfwAuto = true; pfwTab('over'); pfwSync(); pfwActivity(targetId, isOwn); }
 
   let profile, loadErr = null;

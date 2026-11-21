@@ -282,8 +282,14 @@
        ${act === 'ban' ? '<label class="ds-chk"><input type="checkbox" data-f="purge"> Удалить его сообщения за сутки</label>' : ''}
        <p class="ds-dim">Тайм-аут держит сервер: писать не получится, пока срок не выйдет.</p>
        <button type="button" class="ds4-wide ds4-go ${T[1]}" data-v="go">${T[0]}</button>`,
-      w => ({ min: (OWN_DUR && X.durOf ? X.durOf(w) : 0) || +(w.querySelector('.ds4-opt.on')?.dataset.pick ?? 60), reason: w.querySelector('[data-f="reason"]').value.trim(), purge: !!w.querySelector('[data-f="purge"]')?.checked }));
+      w => {
+        // срок: свой (если вписан верно) или выбранный готовый. Вписано непонятное (0, −5, 0,5) или ничего не выбрано — НЕ подставляем
+        // час молча, а отказываем с объяснением (иначе «бан навсегда» превращался в бан на час)
+        const own = OWN_DUR && X.durOf ? X.durOf(w) : 0, raw = String(w.querySelector('[data-f="own"]')?.value ?? '').trim(), pk = w.querySelector('.ds4-opt.on')?.dataset.pick;
+        return { min: own > 0 ? own : pk != null ? +pk : (durs ? NaN : 60), badOwn: !!raw && !(own > 0), reason: w.querySelector('[data-f="reason"]').value.trim(), purge: !!w.querySelector('[data-f="purge"]')?.checked };
+      });
     if (!v) return false;
+    if (durs && (v.badOwn || !Number.isFinite(v.min))) { toast('⚠️ Срок не понятен: выбери готовый или впиши целое число больше нуля'); return false; }
     if (maxMin && v.min > maxMin) { toast(`⚠️ Тайм-аут — не дольше ${durText(maxMin)}`); return false; }
     const r = act === 'siteban' ? await RPC('mod_site_ban', { p_user: uid, p_on: true, p_reason: v.reason })
       : site ? await RPC('chat_mod', { p_user: uid || null, p_nick: nick || '', p_action: act, p_minutes: v.min, p_reason: v.reason })
@@ -332,6 +338,8 @@
   const ROLE18 = [['user', '👤 Без роли'], ['helper', '🔰 Хелпер'], ['moderator', '🛡 Модератор']];
   async function roleSet(uid, nick, cur){
     if (!isAdmin()) { toast('⚠️ Роли выдаёт только админ сайта'); return false; }
+    // роль — свежая с сервера (в памяти страницы её может не быть или она старая: тогда «снять роль» выглядело как «уже без роли»)
+    try { if (typeof sbProfiles === 'function') { const q = await (await sbProfiles()).select('role').eq('id', uid).limit(1); if (!q.error && q.data && q.data[0]) cur = q.data[0].role; } } catch (er) {}
     const now = ['helper', 'moderator'].includes(cur) ? cur : 'user';
     const v = await X.sheet(`🎭 Роль в команде: <b>${e(nick || 'игрок')}</b>`,
       `${optsHtml(ROLE18, now)}
@@ -340,8 +348,7 @@
        <button type="button" class="ds4-wide ds4-go" data-v="go">🎭 Сохранить роль</button>`,
       w => ({ role: w.querySelector('.ds4-opt.on')?.dataset.pick || now, reason: w.querySelector('[data-f="reason"]').value.trim() }));
     if (!v) return false;
-    if (v.role === now) { toast('У него уже эта роль'); return false; }
-    const r = await RPC('mod_role_set', { p_user: uid, p_role: v.role, p_reason: v.reason });
+    const r = await RPC('mod_role_set', { p_user: uid, p_role: v.role, p_reason: v.reason });   // «та же роль» решает сервер (same_role), не память страницы
     if (r.missing) { toast(SOON18); return false; }
     toast(r.data?.ok ? `🎭 ${nick}: ${(ROLE18.find(x => x[0] === v.role) || ['', v.role])[1]}` : '⚠️ ' + why(r), !!r.data?.ok);
     if (r.data?.ok) { try { P.dropProf?.(uid); window.D37Mini?._t?.PC?.delete?.(uid); } catch (er) {} }

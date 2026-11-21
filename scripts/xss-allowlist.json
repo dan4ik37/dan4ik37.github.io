@@ -8277,6 +8277,16 @@
    "xs": [
     "safeHref(m.rules)"
    ]
+  },
+  {
+   "f": "js/features/modepage.js",
+   "fn": "page",
+   "k": "sink:href [pic]",
+   "c": "url-checked",
+   "n": "T-171: картинка игры — та же ссылка, что «▶ Играть»; адрес проходит safeHref() — только «/…» или «#/…» своего сайта",
+   "xs": [
+    "safeHref(m.play)"
+   ]
   }
  ]
 }

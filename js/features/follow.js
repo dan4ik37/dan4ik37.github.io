@@ -117,12 +117,19 @@
 
   // ═══ Профиль: кнопка «Следить» и число подписчиков в шапке; на своём — вкладка «🔔 Подписки» ═══
   const h = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
-  let seq = 0;
+  let seq = 0, feedSeq = 0;
+  // Профиль начал открываться (profile.js зовёт сразу, до своих запросов): убрать кнопку, число и ленту прошлого человека —
+  // иначе, пока грузится новый профиль, на экране кнопка «✓ Слежу» прошлого, и нажатие отписало бы от него
+  F.reset = () => {
+    seq++; feedSeq++;
+    document.getElementById('profileAddFriendWrap')?.querySelectorAll('.fol-btn, .fol-bell').forEach(x => x.remove());
+    const folEl = document.getElementById('pfwFol'); if (folEl) { folEl.hidden = true; folEl.textContent = ''; }
+    const feed = document.getElementById('pfwFeed'); if (feed) { feed.hidden = true; feed.textContent = ''; }
+  };
   F.profile = async (uid, isOwn, o = {}) => {
-    const id = ++seq, live = () => id === seq && (typeof profileViewedId === 'undefined' || profileViewedId === uid);
+    F.reset();
+    const id = seq, live = () => id === seq && (typeof profileViewedId === 'undefined' || profileViewedId === uid);
     const folEl = document.getElementById('pfwFol'), wrap = document.getElementById('profileAddFriendWrap');
-    wrap?.querySelectorAll('.fol-btn, .fol-bell').forEach(x => x.remove());
-    if (folEl) { folEl.hidden = true; folEl.textContent = ''; }
     const feedBox = feedCard();
     if (feedBox) { feedBox.hidden = true; feedBox.textContent = ''; }
     const info = await F.info(uid, true);
@@ -156,6 +163,7 @@
         paint();
         if (more) more.before(btn, bell); else wrap.append(btn, bell);
         btn.onclick = async () => {
+          if (!live()) return;   // кнопка от прошлого профиля — не действует
           btn.disabled = true;
           const r = await F.set(uid, !info.on);
           btn.disabled = false;
@@ -166,6 +174,7 @@
           if (typeof xpToast === 'function') xpToast(r.on ? '🔔 Следишь — новое увидишь в своём профиле, вкладка «Подписки»' : '🔕 Больше не следишь');
         };
         bell.onclick = async () => {
+          if (!live()) return;
           bell.disabled = true;
           const r = await F.set(uid, true, !info.notify);
           bell.disabled = false;
@@ -185,13 +194,14 @@
     return el;
   }
   async function renderFeed(box, live){
+    const token = ++feedSeq;   // два быстрых нажатия «✕» запускают две перерисовки — дорисовывает только последняя
     box.textContent = '';
     box.append(h('div', 'pf-kicker fol-k', '🔔 Новое у тех, за кем ты следишь'));
     const list = h('div', 'fol-feed'); list.append(h('div', 'fol-dim', 'Загружаем…'));
     box.append(list);
     box.hidden = false;
     const [feed, who] = await Promise.all([F.feed(), F.list()]);
-    if (!live()) return;
+    if (!live() || token !== feedSeq) return;
     list.textContent = '';
     if (!who.length) list.append(h('div', 'pfw-empty', 'Ты пока ни за кем не следишь. Открой профиль игрока или автора игры и нажми «🔔 Следить» — его новые статьи и игры появятся здесь.'));
     else if (!feed.length) list.append(h('div', 'pfw-empty', 'Пока ничего нового. Когда те, за кем ты следишь, выложат статью или игру — она появится здесь.'));

@@ -322,7 +322,7 @@ body.hub-on .bottom-tabbar,body.hub-on #donateFab,body.hub-on #scrollTop,body.hu
 
 /* ═══ T-171: страница режима / игры /hub/mode/<id> (js/features/modepage.js) и «ⓘ» на карточках. Откат — MODE_PAGE = false ═══ */
 .hub.wrap.md{max-width:min(1500px,100%);padding:0 clamp(12px,2.4vw,36px) 48px}
-.md-back{display:inline-block;margin:6px 0 16px}
+.md-back{display:inline-flex;align-items:center;min-height:44px;margin:6px 0 16px;color:var(--text);border-color:var(--line-hi)}   /* на странице, а не на тёмной карточке: цвет текста темы (в светлой белое не видно) */
 .md-dim{color:var(--muted);font-size:15px;line-height:1.5;margin:0}
 .md-hero{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:center;margin-bottom:22px}
 @media (min-width:900px){.md-hero{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:32px}}

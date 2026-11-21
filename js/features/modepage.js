@@ -31,6 +31,7 @@
     'e-klet': { tile: 'klet', join: 'klet2', rules: '/games/kletochki' },
   };
   M.href = id => '/hub/mode/' + encodeURIComponent(id);
+  const ageMax = () => { let g = 'unknown'; try { g = window.D37Age ? window.D37Age.group() : 'unknown'; } catch (e) {} return g === 'teen16' || g === 'adult' ? 16 : 12; };
 
   // ═══ Что за режим ═══
   async function resolve(id){
@@ -46,13 +47,17 @@
       const table = ug[1] === 'ugc' ? 'ugc_games' : 'unity_games', gid = ug[2];
       try {
         const cols = 'id,title,icon,descr,author,plays,likes,updated_at,status' + (table === 'ugc_games' ? ',kind' : '');
-        const { data } = await sb().from(table).select(cols).eq('id', gid).eq('status', 'public').limit(1);
-        const g = data && data[0]; if (!g) return null;
+        // метка возраста игры игрока — то же правило, что в каталоге «Игры игроков» (hub-catalog.js): до 16 лет и без возраста — до 12+
+        let res = await sb().from(table).select(cols + ',age_rating').eq('id', gid).eq('status', 'public').limit(1);
+        if (res.error) res = await sb().from(table).select(cols).eq('id', gid).eq('status', 'public').limit(1);   // старая база без колонки метки
+        const g = res.data && res.data[0]; if (!g) return null;
+        const rate = g.age_rating == null ? null : +g.age_rating;
+        if (rate != null && rate > ageMax()) return { id, kind: 'age', age: rate + '+' };   // не по возрасту: ни названия, ни описания
         let nick = 'игрок';
         try { if (typeof sbProfiles === 'function') { const r = await (await sbProfiles()).select('nick').eq('id', g.author).limit(1); nick = (r.data && r.data[0] && r.data[0].nick) || nick; } } catch (e) {}
         const play = table === 'unity_games' ? '#/games/unity/play/' + encodeURIComponent(g.id) : (g.kind === 'place' ? '#/games/studio3d/play/' : '#/games/studio/play/') + encodeURIComponent(g.id);
         return { id, kind: 'player', title: String(g.title || 'Игра').slice(0, 60), icon: String(g.icon || '🎮').slice(0, 16), desc: String(g.descr || '').slice(0, 300), play, join: '', rules: '',
-          age: '', img: '', lead: 'Игра игрока', author: g.author, nick: String(nick).slice(0, 40), plays: +g.plays || 0, likes: +g.likes || 0, at: g.updated_at };
+          age: rate != null && rate >= 0 ? rate + '+' : '', img: '', lead: 'Игра игрока', author: g.author, nick: String(nick).slice(0, 40), plays: +g.plays || 0, likes: +g.likes || 0, at: g.updated_at };
       } catch (e) { return null; }
     }
     const g = typeof GAMES !== 'undefined' ? GAMES.find(x => x.id === id) : null;
@@ -98,10 +103,17 @@
       const a = el('a', 'md-play', '🎮 Все игры'); a.href = '/play'; wrap.append(a);
       return;
     }
+    if (m.kind === 'age') {   // игра игрока с меткой старше, чем можно этому человеку: без названия и описания
+      wrap.append(el('h1', 'hub-h1', 'Эта игра — для тех, кто старше'), el('p', 'hub-lead', `У игры метка ${m.age}. Тебе доступны игры с меткой помладше — их много в каталоге.`));
+      const a = el('a', 'md-play', '🎮 Все игры'); a.href = '/play'; wrap.append(a);
+      return;
+    }
     try { document.title = m.title + ' — играть онлайн | Dan4ik37'; } catch (e) {}
     // ── верх: картинка + название, возраст, описание, «Играть» ──
     const hero = el('section', 'md-hero');
-    const pic = el('div', 'md-pic'); if (m.color) pic.style.setProperty('--gc', m.color);
+    // картинка — та же ссылка, что и «▶ Играть» (на картинке игры сайта кнопка «Играть» нарисована — нажатие по ней должно работать)
+    const pic = el('a', 'md-pic'); pic.href = safeHref(m.play); pic.dataset.nomini = '1'; pic.setAttribute('aria-label', 'Играть: ' + m.title);
+    if (m.color) pic.style.setProperty('--gc', m.color);
     const big = el('span', 'md-pic-ic', m.icon); pic.append(big);
     if (m.img) { const im = new Image(); im.alt = 'Картинка игры «' + m.title + '»'; im.decoding = 'async'; im.loading = 'eager'; im.onload = () => { pic.classList.add('has'); }; im.onerror = () => im.remove(); im.src = m.img; pic.append(im); }
     const info = el('div', 'md-info');

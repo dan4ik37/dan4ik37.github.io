@@ -260,8 +260,8 @@ html.pfw .pf-kicker{font-size:.8rem;letter-spacing:.1em}
 html.pfw .pf-link{font-size:.84rem}
 html.pfw .ach-summary{font-size:.82rem}
 html.pfw #profileBioText{font-size:1.02rem!important;line-height:1.65!important}
-html.pfw #profileContent [style*="font-size:.6"]{font-size:.8rem!important}
-html.pfw #profileContent [style*="font-size:.7"]{font-size:.86rem!important}
+html.pfw #profileContent :is([style*="font-size:.6"],[style*="font-size: 0.6"],[style*="font-size:0.6"]){font-size:.8rem!important}
+html.pfw #profileContent :is([style*="font-size:.7"],[style*="font-size: 0.7"],[style*="font-size:0.7"]){font-size:.86rem!important}   /* «0.72rem» — так браузер переписывает style, когда скрипт меняет в нём что-то ещё */
 html.pfw .pf2-q{min-height:76px}
 html.pfw .pf2-q b{font-size:1.6rem}
 html.pfw .pf2-q span{font-size:.8rem}
@@ -269,10 +269,19 @@ html.pfw .pf2-lv b{font-size:.84rem}
 html.pfw .pf2-lv small{font-size:.84rem}
 html.pfw .pf-stats .psc-i{font-size:1.3rem}
 html.pfw .pf-stats .psc-v{font-size:1rem}
-html.pfw .pf-stats .psc-l{font-size:.72rem;letter-spacing:.3px}
+html.pfw .pf-stats .psc-l{font-size:.8rem;letter-spacing:.3px}
 html.pfw .pf2-sh span{font-size:2rem}
 html.pfw .pf2-sh b{font-size:.8rem}
-html.pfw .pf2-sh small{font-size:.72rem}
+html.pfw .pf2-sh small{font-size:.8rem}
+/* строки «Игры на сайте», значок роли и титул у ника — тоже не мельче 12 px (проверка 21.11) */
+html.pfw #profileContent .pgs-txt b{font-size:.95rem}
+html.pfw #profileContent .pgs-txt small{font-size:.82rem}
+html.pfw #profileContent .pgs-empty{font-size:.9rem}
+html.pfw #profileContent .role-badge{font-size:.76rem;padding:.16rem .5rem}
+html.pfw #profileContent .nick-title{font-size:.8rem}
+html.pfw #profileContent :is(.ach-title,.ach-xp){font-size:.76rem}
+html.pfw #profileContent :is(.ach-toggle,.pf-ovbtn,.pf-ava-del,.pf-upload-help,.pf-upload-help summary,.rf-small,.dl-copy,.pf-admin-hint,.pv-note){font-size:.8rem}
+:root[data-theme="light"].pfw #profileContent .role-badge.admin{color:#b00028;background:rgba(255,45,85,.14)}
 html.pfw .pf2-fr small{font-size:.74rem}
 html.pfw .pf-fnote{font-size:.9rem}
 html.pfw #profileContent :is(.xp-lvl span,.xp-today,.xp-week-t,.xp-chip,.xp-rule small){font-size:.82rem}
@@ -295,13 +304,13 @@ html.pfw .pfw-pane>*{margin-top:0!important}
 .pfw-empty{padding:1.4rem 1rem;border-radius:16px;border:1px dashed var(--line-hi);color:var(--muted);font-size:.95rem;text-align:center}
 .pfw-empty[hidden]{display:none}
 /* карточки внутри вкладок используют ширину: ачивки и игры — больше в ряд */
-html.pfw .pfw-pane .ach-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}
+html.pfw .pfw-pane .ach-grid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}
 html.pfw .pfw-pane .pf2-show-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
 @media (max-width:640px){
   html.pfw #profile-page{padding-top:4.6rem}
   html.pfw .pf-hrow>#profileAddFriendWrap{width:100%;margin:.6rem 0 0!important;padding:0;justify-content:flex-start}
   html.pfw .pf2-q b{font-size:1.3rem}
-  html.pfw .pf2-q span{font-size:.72rem}
+  html.pfw .pf2-q span{font-size:.78rem}
   html.pfw .pf2-lv small{display:block;font-size:.76rem;white-space:normal}
   html.pfw .pf2-lv{flex-wrap:wrap}
   .pfw-tab{flex:0 0 auto;padding:.5rem .9rem;font-size:.9rem}

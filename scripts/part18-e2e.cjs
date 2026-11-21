@@ -120,6 +120,10 @@ const SHEET_GO = (o = {}) => `(async () => { const w = [...document.querySelecto
   ${o.own ? `const i = w.querySelector('[data-f="own"]'); i.value = '${o.own[0]}'; i.dispatchEvent(new Event('input', { bubbles: true })); w.querySelector('[data-f="ownu"]').value = '${o.own[1]}';` : ''}
   ${o.reason != null ? `w.querySelector('[data-f="reason"]').value = ${JSON.stringify(o.reason)};` : ''}
   w.querySelector('.ds4-go').click(); await new Promise(r => setTimeout(r, 350)); return 'ok'; })()`;
+// надписи мельче 12 px в профиле (с учётом увеличения): [класс, размер, текст]
+const SMALL = `(() => { const box = document.getElementById('profileContent'), z = parseFloat(getComputedStyle(box).zoom) || 1, out = []; const w = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) { const t = n.textContent.trim(); if (!t) continue; const el = n.parentElement; if (!el || !el.offsetParent) continue; const r = el.getBoundingClientRect(); if (!r.width || !r.height) continue;
+    const fs = parseFloat(getComputedStyle(el).fontSize) * z; if (fs && fs < 11.95) out.push([String(el.className || el.id || el.tagName).slice(0, 30), +fs.toFixed(1), t.slice(0, 20)]); } return out; })()`;
 const LAST = name => `(() => { const r = [...(window.__rpc || [])].reverse().find(x => x[0] === '${name}'); return r ? r[1] : null; })()`;
 
 setTimeout(() => { console.log('  ✗ зависло — больше 20 минут'); process.exit(2); }, 20 * 60e3).unref();
@@ -238,6 +242,14 @@ setTimeout(() => { console.log('  ✗ зависло — больше 20 мин�
         await B.ev(SHEET_GO({ pick: 'helper', reason: 'помогает' }));
         r = await B.ev(LAST('mod_role_set'));
         ok(r && r.p_user === OTHER && r.p_role === 'helper', T + 'вызов mod_role_set: хелпер', r);
+        // роль читается с сервера, а не из памяти страницы: у хелпера, которого страница «не знает», снять роль можно
+        await B.ev(`(() => { window.__sbp = window.sbProfiles; window.sbProfiles = async () => ({ select: () => ({ eq: () => ({ limit: async () => ({ data: [{ role: 'helper' }], error: null }) }) }) }); __rpc.length = 0; D37Mod.roleSet('${OTHER}', 'Вася', undefined); })()`);
+        await B.until(`!!document.querySelector('.ds4-sh .ds4-opt.on')`, 8000);
+        const pre = await B.ev(`document.querySelector('.ds4-sh .ds4-opt.on')?.dataset.pick`);
+        await B.ev(SHEET_GO({ pick: 'user', reason: '' }));
+        r = await B.ev(LAST('mod_role_set'));
+        await B.ev(`window.sbProfiles = window.__sbp, typeof D37Phone.dropProf`);
+        ok(pre === 'helper' && r && r.p_role === 'user' && await B.ev(`typeof D37Phone.dropProf`) === 'function', T + 'роль: текущая взята с сервера (выбран «Хелпер»), «Без роли» уходит на сервер; P.dropProf есть', { pre, r });
         // жалоба на человека
         await B.ev(CARD(OTHER, 'Вася')); await B.ev(`document.querySelector('.d37m [data-mk="ureport"]').click(), 1`);
         await B.until(`!!document.querySelector('.ds4-sh')`, 8000);
@@ -281,6 +293,18 @@ setTimeout(() => { console.log('  ✗ зависло — больше 20 мин�
         await B.until(`document.querySelectorAll('.ds4-sh').length >= 2`, 8000);
         await B.ev(SHEET_GO({ own: ['9', '1440'], reason: '' }));
         ok(await B.ev(`__rpc.filter(x => x[0] === 'chat_mod').length`) === before, T + 'свой срок 9 дней — отказ на сайте (не дольше 7 дней), вызова нет');
+        // непонятный свой срок (0) — отказ с объяснением, а не час молча; очистил поле — готовый срок возвращается
+        await B.ev(`document.querySelector('.dm-cacts [data-ca="mute"]').click(), 1`);
+        await B.until(`document.querySelectorAll('.ds4-sh').length >= 2`, 8000);
+        await B.ev(SHEET_GO({ own: ['0', '60'], reason: '' }));
+        ok(await B.ev(`__rpc.filter(x => x[0] === 'chat_mod').length`) === before, T + 'свой срок «0» — отказ, вызова нет (раньше молча ставился час)');
+        await B.ev(`document.querySelector('.dm-cacts [data-ca="mute"]').click(), 1`);
+        await B.until(`document.querySelectorAll('.ds4-sh').length >= 2`, 8000);
+        const back = await B.ev(`(() => { const w = [...document.querySelectorAll('.ds4-sh')].pop(), i = w.querySelector('[data-f="own"]'); const was = w.querySelector('.ds4-opt.on')?.dataset.pick; i.value = '5'; i.dispatchEvent(new Event('input', { bubbles: true })); const off = !w.querySelector('.ds4-opt.on');
+          i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); return { was, off, now: w.querySelector('.ds4-opt.on')?.dataset.pick }; })()`);
+        await B.ev(SHEET_GO({ reason: 'флуд' }));
+        r = await B.ev(LAST('chat_mod'));
+        ok(back.off && back.now === back.was && r && r.p_minutes === +back.was, T + `вписал и стёр свой срок — готовый срок вернулся (${back.was} мин) и ушёл на сервер`, { back, r });
         await B.ev(`[...document.querySelectorAll('.ds4-sh')].forEach(x => x.remove()), 1`);
         // 🛡 центр: жалобы на людей
         if (prof === 'desk') {
@@ -341,6 +365,11 @@ setTimeout(() => { console.log('  ✗ зависло — больше 20 мин�
           ok(m.sw <= m.vw + 2 && m.about.w >= m.vw * 0.85 && m.right.w >= m.vw * 0.85 && m.right.t > m.about.t, T + 'телефон: одна колонка на всю ширину, вбок не едет', m);
           ok(Math.min(m.f.q, m.f.kick, m.f.psc) >= 11.5 && m.f.tab >= 14, T + `телефон: подписи не меньше 11,5 px (${m.f.q.toFixed(1)} / ${m.f.kick.toFixed(1)} / ${m.f.psc.toFixed(1)})`, m.f);
         }
+        // ни одной надписи мельче 12 px (с учётом увеличения) — на каждой вкладке, разделы развёрнуты
+        const small = await B.ev(`(async () => { const out = []; for (const t of [...document.querySelectorAll('.pfw-tab')].filter(t => !t.hidden).map(t => t.dataset.pfw)) { pfwAuto = false; pfwTab(t); await new Promise(r => setTimeout(r, 250)); out.push(...(${SMALL})); } pfwAuto = true; pfwSync(); return out; })()`);
+        ok(small.length === 0, T + 'чужой профиль: надписей мельче 12 px нет', small.slice(0, 8));
+        const badge = await B.ev(`(() => { const b = document.querySelector('#profileRoleBadge .role-badge'); if (!b) return null; const z = parseFloat(getComputedStyle(document.getElementById('profileContent')).zoom) || 1; return { fs: parseFloat(getComputedStyle(b).fontSize) * z, color: getComputedStyle(b).color }; })()`);
+        ok(badge && badge.fs >= 12 && (prof !== 'phone' || badge.color === 'rgb(176, 0, 40)'), T + `значок роли у ника: ${badge ? badge.fs.toFixed(1) : '?'} px${prof === 'phone' ? ', в светлой теме тёмно-красный' : ''}`, badge);
         ok(m.tabs.length >= 1 && m.tabs.every(t => ['over', 'ach'].includes(t)) && m.sel === m.tabs[0] && m.panes.length === 1 && m.panes[0] === m.sel && m.title === '1px', T + 'чужой профиль: вкладки «Обзор / Ачивки», своих («Друзья», «Моё», «Подписки») нет; выбрана первая; заголовок «Профиль» не занимает экран', m);
         ok(/pf-hrow/.test(m.fw), T + 'кнопки (в друзья / следить / ⋯) — в шапке рядом с ником', m.fw);
         const row = await B.ev(`(() => { const L = [...document.querySelectorAll('#profileAddFriendWrap > *')].filter(x => x.offsetParent); const tops = L.map(x => Math.round(x.getBoundingClientRect().top)); const sb = document.getElementById('profileStatusEditBtn');
@@ -449,6 +478,10 @@ setTimeout(() => { console.log('  ✗ зависло — больше 20 мин�
         await B.ev(`D37Route.go('/chat'), 1`); await sleep(400); await B.ev(`D37Route.go('/profile'), 1`);
         ok(await B.until(`document.querySelectorAll('#pfwFeed .fol-item').length === 3`, 25000), T + 'свой профиль, «Подписки»: в ленте 3 записи');
         const fd = await B.ev(`(() => { const L = [...document.querySelectorAll('#pfwFeed .fol-item')]; return { href: L.map(a => a.getAttribute('href')), t0: L[0].querySelector('b').textContent, script: !!document.querySelector('#pfwFeed script'), i: !!document.querySelector('#pfwFeed .fol-item i, #pfwFeed .fol-pn i'), who: document.querySelector('#pfwFeed .fol-pn')?.textContent, mine: document.getElementById('pfwFol').textContent }; })()`);
+        // две перерисовки подряд (два быстрых «✕») — блок «Слежу за» один; новый профиль начал открываться — кнопка и число прошлого убраны сразу
+        const dbl = await B.ev(`(async () => { D37Follow.profile(currentUser.id, true); D37Follow.profile(currentUser.id, true); await new Promise(r => setTimeout(r, 1200)); const n = document.querySelectorAll('#pfwFeed .fol-ppl').length, items = document.querySelectorAll('#pfwFeed .fol-item').length;
+          const a = !document.getElementById('pfwFol').hidden; D37Follow.reset(); const b = document.getElementById('pfwFol').hidden && document.getElementById('pfwFeed').hidden; D37Follow.profile(currentUser.id, true); await new Promise(r => setTimeout(r, 1000)); return { n, items, a, b }; })()`);
+        ok(dbl.n === 1 && dbl.items === 3 && dbl.a && dbl.b, T + 'лента «Подписки»: при двойной перерисовке блок «Слежу за» один; D37Follow.reset сразу прячет число и ленту', dbl);
         ok(fd.href.join() === '/forum/42,#/games/studio/play/g1,#/games/unity/play/u1' && /<script>/.test(fd.t0) && !fd.script && !fd.i && /Автор<i>/.test(fd.who) && /слежу за 3/.test(fd.mine), T + 'лента: ссылки на статью и игры; чужой текст — как текст; список «за кем слежу»', fd);
         await B.shot(`fol-${prof}-feed`);
       }
@@ -467,6 +500,18 @@ setTimeout(() => { console.log('  ✗ зависло — больше 20 мин�
           const r = { h: document.querySelector('.md-now .md-h2').textContent, users: [...document.querySelectorAll('.md-user')].map(u => u.textContent + '|' + u.dataset.miniUid), b: !!document.querySelector('.md-user b') }; D37Chat.online = real; return r; })()`);
         ok(/играют: 1/.test(ppl.h) && ppl.users.length === 1 && ppl.users[0] === 'Вася<b>|' + OTHER && !ppl.b, T + '«Сейчас играют: 1» — только тот, кто в этой игре; ник — текстом, по нажатию — карточка', ppl);
         await B.shot(`mode-${prof}-chess`);
+        // «← Все игры» видно в теме страницы; картинка — та же ссылка, что «▶ Играть»
+        const hero = await B.ev(`(() => { const b = document.querySelector('.md-back'), p = document.querySelector('.md-pic'), cs = getComputedStyle(b), lum = c => { const m = c.match(/[\\d.]+/g).map(Number); return (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255; };
+          return { tag: p.tagName, href: p.getAttribute('href'), play: document.querySelector('.md-play').getAttribute('href'), h: Math.round(b.getBoundingClientRect().height), lum: lum(cs.color), color: cs.color }; })()`);
+        ok(hero.tag === 'A' && hero.href === hero.play && hero.h >= 44 && (prof === 'phone' ? hero.lum < 0.45 : hero.lum > 0.55), T + `картинка игры — ссылка «Играть»; «← Все игры» видно на фоне страницы (высота ${hero.h} px)`, hero);
+        // игра игрока с меткой 16+: ребёнку — без названия и описания, взрослому — страница с меткой
+        const UGC = kid => `(async () => { const from = sbClient.from; sbClient.from = t => t === 'ugc_games' ? (() => { const r = Promise.resolve({ data: [{ id: 'g16', title: 'Страшилка', icon: '👻', descr: 'Очень страшно', author: '${OTHER}', plays: 3, likes: 1, updated_at: new Date().toISOString(), status: 'public', kind: 'tpl', age_rating: 16 }], error: null }); const c = { select: () => c, eq: () => c, limit: () => c, then: r.then.bind(r) }; return c; })() : from(t);
+          const g = D37Age.group; D37Age.group = () => ${kid ? "'kid'" : "'adult'"}; D37Route.go('/hub'); await new Promise(r => setTimeout(r, 300)); D37Route.go('/hub/mode/ugc-g16'); await new Promise(r => setTimeout(r, 1500));
+          const out = { text: document.getElementById('hub-page').textContent, age: document.querySelector('.md-age')?.textContent || '', play: !!document.querySelector('.md-info .md-play') }; sbClient.from = from; D37Age.group = g; return out; })()`;
+        const kidPg = await B.ev(UGC(true)), adPg = await B.ev(UGC(false));
+        ok(/для тех, кто старше/.test(kidPg.text) && !/Страшилка|Очень страшно/.test(kidPg.text) && !kidPg.play, T + 'игра игрока «16+»: ребёнку — «для тех, кто старше», без названия и описания', kidPg.text.slice(0, 120));
+        ok(/Страшилка/.test(adPg.text) && adPg.age === '16+' && adPg.play, T + 'игра игрока «16+»: взрослому — страница с меткой «16+»', adPg);
+        await B.ev(`D37Route.go('/hub/mode/chess'), 1`); await B.until(`!!document.querySelector('.md-play')`, 15000);
         await B.ev(`D37Route.go('/hub/mode/e-klet'), 1`);
         ok(await B.until(`/Клеточки/.test(document.querySelector('.md-h1')?.textContent || '')`, 20000), T + 'страница режима движка «Клеточки» открылась');
         m = await B.ev(`({ play: document.querySelector('.md-play').getAttribute('href'), rooms: [...document.querySelectorAll('.md-btn, .md-link')].map(b => b.getAttribute('href')).filter(Boolean) })`);
