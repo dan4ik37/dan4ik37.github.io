@@ -683,5 +683,5 @@
 
   // Старое имя (тиммейты, гости профиля и т.п.): openMiniProfile(id, ник, элемент)
   window.openMiniProfile = (uid, nick, anchor) => M.open(uid, { nick, anchor });
-  M._t = { profileOf, PC, FC, decide, p18set: v => { p18v = v; p18p = null; } };
+  M._t = { profileOf, PC, FC, decide, p18set: (v, pin) => { p18v = v; p18p = pin ? Promise.resolve(!!v) : null; p18at = Date.now(); } };   // pin — проверка «как будто части 18 нет»: ответ не спрашивается у сервера
 })();

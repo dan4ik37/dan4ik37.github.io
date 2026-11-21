@@ -106,7 +106,9 @@ const LOGIN = (role, nick, opt = {}) => `(async () => {
   currentUser = { id: O.me || '${ME}' }; currentProfile = { id: currentUser.id, nick: ${JSON.stringify(nick)}, role: '${role}' }; currentRole = '${role}'; try { chatNick = currentProfile.nick; } catch (e) {}
   if (window.D37Age) { D37Age.group = () => O.kid ? 'kid' : 'adult'; D37Age.friendBlock = async () => (O.agePair ? 'age' : null); D37Age.contact = async () => null; }
   window.getFriendshipStatus = async () => O.friend || 'none'; window.friendBlockReason = async () => null;
-  D37Mini._t.p18set(O.p18 === false ? null : true); if (O.p18 === false) { try { sessionStorage.removeItem('d37_p18'); } catch (e) {} }
+  if (O.p18 === 'real') { D37Mini._t.p18set(null); try { sessionStorage.removeItem('d37_p18'); } catch (e) {} }   // как есть на сервере (метка site_config part18)
+  else if (O.p18 === false) { try { sessionStorage.removeItem('d37_p18'); } catch (e) {} D37Mini._t.p18set(false, true); }   // «части 18 нет» — закреплено (на сервере она уже есть)
+  else D37Mini._t.p18set(true);
   D37Follow.drop();
   window.dispatchEvent(new Event('d37:auth')); return 1;
 })()`;
@@ -147,6 +149,47 @@ setTimeout(() => { console.log('  ✗ зависло — больше 20 мин�
         ok(B.errs.length === 0, `[${name}] ${seen + 1} страниц: ошибок в консоли — ${B.errs.length}`, B.errs.slice(0, 6));
       } finally { await B.close(); }
     }
+  }
+  // ═══ (live18) часть 18 на сервере: только по запросу ONLY=live18 (обычно с BASE=https://… — живой сайт). Только чтение: метку
+  //     читает сам сайт, вход подделан, каждая запись подменена; кнопки не нажимаются до отправки. ═══
+  if (ONLY.has('live18')) {
+    const B = await chrome({ w: 1440, h: 900, theme: 'dark' });
+    const T = '[часть 18 на сервере] ';
+    try {
+      await B.send('Page.navigate', { url: site.base + '/' });
+      ok(await B.until(READY, 90000), T + 'сайт загрузился');
+      if (!adminId) adminId = await B.ev(`(async () => { const { data } = await (await sbProfiles()).select('id').eq('role', 'admin').limit(1); return (data && data[0] && data[0].id) || ''; })()`);
+      ok(await B.ev(`D37Mini.p18()`) === true, T + 'сайт сам увидел метку «часть 18 выполнена» (site_config part18)');
+      // гость: в карточке нет ни модерации, ни жалобы; число подписчиков в профиле видно
+      let a = await B.ev(CARD(OTHER, 'Вася'));
+      ok(!a.some(x => ['vkick', 'purge', 'role', 'ureport', 'follow', 'modcard', 'nickset'].includes(x.k)), T + 'гость: в карточке нет модерации, жалобы и «Следить»', a.map(x => x.k + '|' + x.t.slice(0, 24)));
+      await B.ev(`D37Mini.close(), D37Route.go('/profile/${adminId}'), 1`);
+      ok(await B.until(`!document.getElementById('pfwFol')?.hidden && /подписчик/.test(document.getElementById('pfwFol').textContent)`, 25000), T + 'гость: в профиле видно число подписчиков (follow_info с сервера)', await B.ev(`document.getElementById('pfwFol')?.textContent || ''`));
+      await B.ev(`D37Route.go('/'), 1`); await sleep(500);
+      const ROLES = [['user', 'Игрок', ['ureport'], ['vkick', 'purge', 'role', 'modcard', 'nickset']], ['helper', 'Хелпер', ['ureport', 'vkick', 'purge', 'modcard'], ['role', 'nickset']],
+        ['moderator', 'Модер', ['ureport', 'vkick', 'purge', 'modcard'], ['role', 'nickset']], ['admin', 'dan4ik37', ['ureport', 'vkick', 'purge', 'role', 'modcard', 'nickset'], []]];
+      for (const [role, nick, yes, no] of ROLES) {
+        await B.ev(LOGIN(role, nick, { p18: 'real' }));
+        await B.ev(`D37Mini.p18()`);
+        a = await B.ev(CARD(OTHER, 'Вася'));
+        ok(yes.every(k => a.some(x => x.k === k && !x.dis)) && no.every(k => !a.some(x => x.k === k)) && !a.some(x => /часть 18/.test(x.t)), T + `${role}: включено — ${yes.join(', ')}; нет — ${no.join(', ') || '—'}; приглушённых «после обновления базы» не осталось`, a.map(x => x.k + (x.dis ? '(выкл)' : '')));
+        if (role === 'user') {
+          a = await B.ev(CARD(adminId, 'dan4ik37'));
+          ok(!a.some(x => x.k === 'ureport') && a.some(x => /Пожаловаться/.test(x.t) && x.dis && /создателя/.test(x.t)), T + 'игрок: на создателя сайта жалобы нет (приглушено с причиной)', a.filter(x => /Пожал/.test(x.t)));
+        }
+        if (role === 'helper') {
+          await B.ev(`document.querySelector('.d37m [data-mk="vkick"]').click(), 1`);
+          await B.until(`!!document.querySelector('.ds4-sh')`, 15000);
+          const s = await B.ev(SHEET);
+          ok(s && !s.opts.includes('1 день') && s.opts.includes('1 час'), T + 'хелпер: «убрать из голосового» — не дольше часа', s);
+          await B.ev(`[...document.querySelectorAll('.ds4-sh')].forEach(x => x.remove()), 1`);
+        }
+      }
+      const sent = await B.ev(`(window.__rpc || []).filter(x => /^(mod_voice_kick|mod_purge_user|mod_role_set|user_report|mod_user_report_set|follow_set|forum_follow)$/.test(x[0]) || /^WRITE:/.test(x[0])).length`);
+      ok(sent === 0, T + 'за проверку ни одного вызова записи не отправлено (и подменённого тоже)', sent);
+      ok(B.errs.length === 0, T + 'ошибок в консоли — ' + B.errs.length, B.errs.slice(0, 6));
+    } catch (e) { ok(false, T + 'проверка упала: ' + (e.message || e)); }
+    finally { await B.close(); }
   }
   // ═══ остальное — с подделанным входом ═══
   for (const prof of ['desk', 'phone']) {
