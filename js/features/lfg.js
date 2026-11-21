@@ -182,6 +182,7 @@ function toggleStatusEdit(show){
   document.getElementById('profileStatusView').style.display = show ? 'none' : 'block';
   document.getElementById('profileStatusEditWrap').style.display = show ? 'flex' : 'none';
   if (show) document.getElementById('profileStatusInput').value = currentProfile?.status_text || '';
+  window.pfStatusLink?.();   // T-172: пустой статус — ссылка «＋ Добавить статус», а не одинокий карандаш (profile.js)
 }
 async function saveProfileStatus(){
   const status = document.getElementById('profileStatusInput').value.trim().slice(0, 60);

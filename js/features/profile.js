@@ -155,13 +155,149 @@ function pfwTab(id){
   for (const p of box.querySelectorAll('.pfw-pane')) { const off = p.dataset.pane !== id; if (p.hidden !== off) p.hidden = off; }
 }
 // какие вкладки не пустые (карточки показываются и прячутся по мере загрузки) — пустые прячем, с пустой выбранной уходим на первую
+// ═══ T-172, второй проход (владелец 21.11: «профиль громоздкий, нет скрытия нормального удобного») — разделы сворачиваются ═══
+// PROFILE_FOLD (config.js; работает внутри PROFILE_WIDE). Каждая карточка профиля лежит в «разделе»: полоса-заголовок (вся полоса —
+// кнопка: название, стрелка; у свёрнутого — строка «что внутри») и сама карточка. Выбор помнит устройство (localStorage d37_pf_fold;
+// нет хранилища — просто не запоминается). Длинные списки показывают первые N и «Показать все». Одна кнопка «Свернуть всё /
+// Развернуть всё» рядом с вкладками. Карточки (id, обработчики) не меняются — раздел только оборачивает их. Откат — PROFILE_FOLD = false.
+const pffOn = () => { try { return pfwOn() && (typeof PROFILE_FOLD === 'undefined' || !!PROFILE_FOLD); } catch (e) { return false; } };
+// id карточки → [ключ, заголовок, свёрнут по умолчанию, [список, сколько показывать сразу]]
+const PFF = {
+  profileAboutCard: ['about', '📝 О себе', 0],
+  profileGamesCard: ['fav', '🎮 Любимые игры', 0],
+  pf2Showcase: ['show', '🏆 Витрина', 0],
+  profileGameStatsCard: ['games', '🎮 Игры на сайте', 0, ['#profileGameStats', 6]],
+  profileQuestsCard: ['quests', '🏆 Сезон и задания недели', 1],
+  profileXpCard: ['xp', '⭐ Уровень и опыт', 0],
+  profileAchievementsCard: ['ach', '🏆 Ачивки', 0, ['#profileAchievements', 12]],
+  pfwFeed: ['feed', '🔔 Новое у тех, за кем ты следишь', 0],
+  profileFriendsPanel: ['friends', '👥 Друзья и заявки', 0, ['#friendsList', 6]],
+  profileReferralPanel: ['ref', '🔗 Пригласи друзей', 1],
+  profileGuestsPanel: ['guests', '👀 Кто заходил', 1],
+  donateLoginPanel: ['dlogin', '🔑 Логин для доната', 1],
+  profileVipPerksPanel: ['vipperks', '✨ Мой VIP', 1],
+  profileVipPromo: ['vippromo', '💛 Статусы и бонусы', 1],
+  profileThemePanel: ['theme', '🎨 Своя тема оформления', 1],
+  profileStaffVipPanel: ['staffvip', '📊 Шкала VIP', 1],
+  profileStaffPanel: ['staff', '🛡 Мои права в команде', 1],
+  profileAccountSettings: ['account', '⚙️ Аккаунт и приватность', 1],
+};
+const PFF_HINT = { quests: 'сезонный путь и задания на неделю', ref: 'твоя ссылка для друзей', guests: 'кто смотрел твой профиль', vipperks: 'что даёт и сколько до следующего', vippromo: 'как получить',
+  theme: 'цвет сайта — только для тебя', staffvip: 'видно команде', staff: 'что тебе можно', account: 'уведомления, приложение, приватность, способы входа, выход' };
+let pffSt = null;
+function pffState(){
+  if (pffSt) return pffSt;
+  pffSt = { f: {}, m: {} };
+  try { const j = JSON.parse(localStorage.getItem('d37_pf_fold') || 'null'); if (j && j.v === 1) { if (j.f && typeof j.f === 'object') pffSt.f = j.f; if (j.m && typeof j.m === 'object') pffSt.m = j.m; } } catch (e) {}
+  return pffSt;
+}
+function pffSave(){ try { localStorage.setItem('d37_pf_fold', JSON.stringify({ v: 1, f: pffState().f, m: pffState().m })); } catch (e) {} }
+const pffDef = key => { for (const id in PFF) if (PFF[id][0] === key) return PFF[id]; return null; };
+const pffFolded = key => { const v = pffState().f[key]; return typeof v === 'boolean' ? v : !!(pffDef(key) || [])[2]; };
+function pffSet(key, folded, quiet){
+  pffState().f[key] = !!folded; pffSave();
+  if (!quiet) pfwSync();
+}
+function pffWrap(card){
+  const def = PFF[card.id];
+  if (!def || !pffOn()) return card;
+  const sec = document.createElement('section'); sec.className = 'pff'; sec.dataset.fold = def[0];
+  const h = document.createElement('button'); h.type = 'button'; h.className = 'pff-h'; h.setAttribute('aria-controls', card.id); h.id = 'pffH-' + def[0];
+  const t = document.createElement('span'); t.className = 'pff-t'; t.textContent = def[1];
+  const s = document.createElement('span'); s.className = 'pff-s';
+  const c = document.createElement('i'); c.className = 'pff-c'; c.setAttribute('aria-hidden', 'true');
+  h.append(t, s, c);
+  const b = document.createElement('div'); b.className = 'pff-b';
+  b.appendChild(card);
+  sec.append(h, b);
+  h.addEventListener('click', () => pffSet(def[0], !sec.classList.contains('folded')));
+  return sec;
+}
+// одна строка «что внутри» у свёрнутого раздела — из самой карточки (чужой текст — только как текст)
+function pffSummary(key, card){
+  const tx = s => (card.querySelector(s)?.textContent || '').replace(/\s+/g, ' ').trim();
+  const names = (sel, n) => [...card.querySelectorAll(sel)].slice(0, n).map(e => e.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean).join(', ');
+  let r = '';
+  if (key === 'about') r = tx('#profileBioText') || 'пока пусто';
+  else if (key === 'fav') r = names('#profileGamesView span', 4).replace(/🎮\s*/g, '') || 'не указаны';
+  else if (key === 'show') r = names('.pf2-sh b', 3);
+  else if (key === 'games') { const best = names('.pgs-item b', 3); r = [tx('#profileGameStatsSum'), best ? 'лучшие: ' + best : ''].filter(Boolean).join(' · ') || 'ещё не играл'; }
+  else if (key === 'xp') r = [tx('#pxLevel') ? 'уровень ' + tx('#pxLevel') : '', tx('#pxXp'), tx('#pxNext')].filter(Boolean).join(' · ');
+  else if (key === 'ach') r = tx('#profileAchSummary');
+  else if (key === 'feed') { const n = card.querySelectorAll('.fol-item').length, w = card.querySelectorAll('.fol-p').length; r = w ? `новых: ${n} · слежу за ${w}` : 'пока ни за кем не следишь'; }
+  else if (key === 'friends') { const q = card.querySelectorAll('#friendRequestsList > *').length; r = [tx('#friendsLimitNote'), q ? 'заявок: ' + q : ''].filter(Boolean).join(' · '); }
+  else if (key === 'dlogin') r = tx('#donateLoginValue') || 'не задан';
+  else r = PFF_HINT[key] || '';
+  return r.slice(0, 140);
+}
+// длинный список: первые N и кнопка «Показать все (сколько)»; кнопка живёт рядом со списком — перерисовка списка её не стирает
+function pffCut(key, card, cut){
+  const list = card.querySelector(cut[0]); if (!list) return;
+  const n = list.children.length, N = cut[1], more = !!pffState().m[key], need = n > N;
+  list.classList.toggle('pff-cut' + N, need && !more);
+  let b = list.nextElementSibling && list.nextElementSibling.classList.contains('pff-more') ? list.nextElementSibling : null;
+  if (!need) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement('button'); b.type = 'button'; b.className = 'pff-more';
+    b.addEventListener('click', () => { pffState().m[key] = !pffState().m[key]; pffSave(); pfwSync(); });
+    list.after(b);
+  }
+  const txt = more ? 'Свернуть список' : `Показать все (${n})`;
+  if (b.textContent !== txt) b.textContent = txt;
+  if (b.getAttribute('aria-expanded') !== String(more)) b.setAttribute('aria-expanded', String(more));
+}
+function pffApply(box){
+  let anyOpen = false, any = false;
+  for (const sec of box.querySelectorAll('.pff')) {
+    const card = sec.querySelector('.pff-b > *'), key = sec.dataset.fold, def = pffDef(key); if (!card || !def) continue;
+    const vis = !card.hidden && card.style.display !== 'none';
+    if (sec.hidden === vis) sec.hidden = !vis;
+    if (!vis) continue;
+    const folded = pffFolded(key), h = sec.querySelector('.pff-h'), s = sec.querySelector('.pff-s');
+    any = true; if (!folded) anyOpen = true;
+    sec.classList.toggle('folded', folded);
+    if (h.getAttribute('aria-expanded') !== String(!folded)) h.setAttribute('aria-expanded', String(!folded));
+    const sum = folded ? pffSummary(key, card) : '';
+    if (s.textContent !== sum) s.textContent = sum;
+    if (def[3]) pffCut(key, card, def[3]);
+  }
+  const all = box.querySelector('.pfw-all');
+  if (all) {
+    if (all.hidden === any) all.hidden = !any;
+    const txt = anyOpen ? '▾ Свернуть всё' : '▸ Развернуть всё';
+    if (all.textContent !== txt) all.textContent = txt;
+    all.dataset.fold = anyOpen ? '1' : '0';
+  }
+}
+function pffAll(){
+  const box = document.getElementById('profileContent'); if (!box) return;
+  const fold = box.querySelector('.pfw-all')?.dataset.fold === '1';
+  for (const sec of box.querySelectorAll('.pff')) pffState().f[sec.dataset.fold] = fold;
+  pffSave(); pfwSync();
+}
+// «✎» под ником (владелец 21.11: одинокий карандаш): пустой статус — понятная ссылка «＋ Добавить статус» (только хозяину профиля),
+// есть статус — маленький карандаш рядом с ним
+function pfStatusLink(){
+  const v = document.getElementById('profileStatusView'), b = document.getElementById('profileStatusEditBtn'), w = document.getElementById('profileStatusEditWrap');
+  if (!v || !b) return;
+  const own = !!profileViewedId && profileViewedId === currentUser?.id, editing = !!w && w.style.display === 'flex', has = !!v.textContent.trim();
+  b.style.display = own && !editing ? 'inline' : 'none';
+  b.textContent = has ? '✎' : '＋ Добавить статус';
+  b.style.marginLeft = has ? '.4rem' : '0';
+  const tip = has ? 'Изменить статус' : 'Добавить статус — пара слов, чем ты сейчас занят';
+  b.title = tip; b.setAttribute('aria-label', tip);
+  if (!editing) v.style.display = has ? 'inline' : 'none';
+}
+window.pfStatusLink = pfStatusLink;
 function pfwSync(){
   pfwRaf = 0;
   const box = document.getElementById('profileContent'); if (!box) return;
+  if (pffOn()) pffApply(box);
   let first = '', cur = '';
   for (const t of box.querySelectorAll('.pfw-tab')) {
     const pane = box.querySelector(`.pfw-pane[data-pane="${t.dataset.pfw}"]`);
     const vis = !!pane && [...pane.children].some(c => !c.hidden && c.style.display !== 'none' && !c.classList.contains('pfw-empty'));
+    if (t.getAttribute('aria-selected') === 'true' && !vis) pfwAuto = true;   // выбранная вкладка опустела (другой профиль) — снова держим первую
     if (t.hidden === vis) t.hidden = !vis;
     if (vis && !first) first = t.dataset.pfw;
     if (vis && t.getAttribute('aria-selected') === 'true') cur = t.dataset.pfw;
@@ -173,6 +309,7 @@ function pfwSync(){
 function pfwReveal(elOrId, block){
   const el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId; if (!el) return;
   const pane = el.closest?.('.pfw-pane'); if (pane) { pfwAuto = false; pfwTab(pane.dataset.pane); }
+  const sec = el.closest?.('.pff'); if (sec && sec.classList.contains('folded')) pffSet(sec.dataset.fold, false);
   el.scrollIntoView({ behavior: 'smooth', block: block || 'start' });
 }
 window.pfwReveal = pfwReveal;
@@ -189,8 +326,14 @@ function pfwLayout(box, head){
   const about = document.createElement('aside'); about.className = 'pf2-side pfw-about'; about.setAttribute('aria-label', 'О человеке');
   const right = document.createElement('section'); right.className = 'pf2-main pfw-right';
   const nav = document.createElement('div'); nav.className = 'pfw-tabs'; nav.setAttribute('role', 'tablist'); nav.setAttribute('aria-label', 'Разделы профиля');
-  right.appendChild(nav);
-  for (const id of PFW_ABOUT) { const el = document.getElementById(id); if (el) about.appendChild(el); }
+  if (pffOn()) {   // вкладки и «Свернуть всё» — одной полосой
+    const bar = document.createElement('div'); bar.className = 'pfw-bar';
+    const all = document.createElement('button'); all.type = 'button'; all.className = 'pfw-all'; all.textContent = '▾ Свернуть всё'; all.title = 'Свернуть или развернуть все разделы профиля';
+    all.addEventListener('click', pffAll);
+    bar.append(nav, all);
+    right.appendChild(bar);
+  } else right.appendChild(nav);
+  for (const id of PFW_ABOUT) { const el = document.getElementById(id); if (el) about.appendChild(pffWrap(el)); }
   PFW_TABS.forEach(([id, title, cards], i) => {
     const t = document.createElement('button'); t.type = 'button'; t.className = 'pfw-tab'; t.dataset.pfw = id; t.textContent = title;
     t.setAttribute('role', 'tab'); t.setAttribute('aria-selected', String(i === 0)); t.id = 'pfwTab-' + id; t.setAttribute('aria-controls', 'pfwPane-' + id);
@@ -199,7 +342,7 @@ function pfwLayout(box, head){
     for (const cid of cards) {
       let el = document.getElementById(cid);
       if (!el && cid === 'pfwFeed') { el = document.createElement('div'); el.id = 'pfwFeed'; el.className = 'pf-card pf-card-tw'; el.hidden = true; }
-      if (el) pane.appendChild(el);
+      if (el) pane.appendChild(pffWrap(el));
     }
     right.appendChild(pane);
   });
@@ -212,7 +355,7 @@ function pfwLayout(box, head){
   });
   cols.append(about, right);
   (document.getElementById('profileUploadHint') || head).after(cols);
-  new MutationObserver(() => { if (!pfwRaf) pfwRaf = requestAnimationFrame(pfwSync); }).observe(right, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'hidden'] });
+  new MutationObserver(() => { if (!pfwRaf) pfwRaf = requestAnimationFrame(pfwSync); }).observe(cols, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style', 'hidden'] });
   pfwSync();
 }
 // «чем занят»: в сети / играет в … (только то, что человек сам разрешил показывать) и «▶ Присоединиться» — тем же правилам, что
@@ -408,7 +551,8 @@ async function renderProfilePage(viewUserId){
   const hidden = !isOwn && !!profile.profile_hidden;
   renderProfileHiddenNote(profile, hidden);
   document.getElementById('profileAboutCard').style.display = (hidden || (!isOwn && !String(profile.bio || '').trim())) ? 'none' : '';
-  document.getElementById('profileGamesCard').style.display = hidden ? 'none' : '';
+  // чужой профиль без любимых игр — пустую карточку «Игры не указаны» не показываем (как «О себе»)
+  document.getElementById('profileGamesCard').style.display = (hidden || (!isOwn && !(Array.isArray(profile.favorite_games) && profile.favorite_games.length))) ? 'none' : '';
   document.getElementById('profileAchievementsCard').style.display = hidden ? 'none' : '';
   // Статистику на скрытом профиле видит только персонал (служебный просмотр)
   document.getElementById('profileStatsRow').style.display = (hidden && !profile.staff_view) ? 'none' : 'grid';
@@ -446,6 +590,7 @@ async function renderProfilePage(viewUserId){
   document.getElementById('profileNickEditBtn').style.display = isOwn ? 'inline' : 'none';
   document.getElementById('profileBioEditBtn').style.display = isOwn ? 'inline' : 'none';
   document.getElementById('profileStatusEditBtn').style.display = isOwn ? 'inline' : 'none';
+  pfStatusLink();
   document.getElementById('profileGamesEditBtn').style.display = isOwn ? 'inline' : 'none';
   document.getElementById('profileAccountSettings').style.display = isOwn ? 'block' : 'none';
   document.getElementById('profileFriendsPanel').style.display = isOwn ? 'block' : 'none';
@@ -460,10 +605,10 @@ async function renderProfilePage(viewUserId){
     if (profileViewedId !== targetId) return;
     const note = t => `<span class="pf-fnote">${esc(t)}</span>`;
     const buttons = {
-      none: `<button type="button" class="pf-btn pf-btn-tw" onclick="sendFriendRequest('${targetId}')">➕ Добавить в друзья</button>`,
+      none: `<button type="button" class="pf-btn pf-btn-tw" onclick="sendFriendRequest('${targetId}')">➕ В друзья</button>`,
       pending_sent: note('⏳ Заявка отправлена'),
-      pending_received: `<button type="button" class="pf-btn pf-btn-primary" onclick="acceptFriendRequest('${targetId}')">✅ Принять заявку в друзья</button>`,
-      friends: `<button type="button" class="pf-btn pf-btn-ghost" onclick="openDmWith('${targetId}',${jsAttr(profile.nick||'?')})">✉ Написать другу</button>`,
+      pending_received: `<button type="button" class="pf-btn pf-btn-primary" onclick="acceptFriendRequest('${targetId}')">✅ Принять в друзья</button>`,
+      friends: `<button type="button" class="pf-btn pf-btn-ghost" onclick="openDmWith('${targetId}',${jsAttr(profile.nick||'?')})">✉ Написать</button>`,
     };
     if (status === 'none' && profile.accepts_friend_requests === false) {
       buttons.none = note('🚫 Не принимает заявки в друзья');

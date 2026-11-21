@@ -504,6 +504,9 @@
     const w = el('a', 'hub-btn hub-btn3', '👕'); w.href = '/hub/wardrobe'; w.title = 'Гардероб'; w.setAttribute('aria-label', 'Гардероб');
     card.append(p, w);
     if (currentRoute() !== 'profile' || host.querySelector('.hub-pcard')) return;
+    // T-172: в широком профиле карточка игры — в левой колонке «о человеке» (маленькая строка, не отдельный блок на всю ширину)
+    const about = host.querySelector('.pfw-about');
+    if (about) { about.prepend(card); return; }
     const top = $('profileBanner'); let anchor = top; while (anchor && anchor.parentElement && anchor.parentElement !== host) anchor = anchor.parentElement;
     if (anchor && anchor.parentElement === host) anchor.insertAdjacentElement('afterend', card); else host.prepend(card);
   }

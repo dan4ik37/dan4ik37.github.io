@@ -290,7 +290,7 @@ setTimeout(() => { console.log('  ✗ зависло — больше 20 мин�
           return { vw: innerWidth, head: r('.pf-head'), about: r('.pfw-about'), right: r('.pfw-right'), sw: document.documentElement.scrollWidth,
             tabs: [...document.querySelectorAll('.pfw-tab')].filter(t => !t.hidden).map(t => t.dataset.pfw), sel: document.querySelector('.pfw-tab[aria-selected="true"]')?.dataset.pfw,
             panes: [...document.querySelectorAll('.pfw-pane')].filter(p => !p.hidden).map(p => p.dataset.pane), title: getComputedStyle(document.querySelector('#profile-page > .sec-title')).width,
-            f: { nick: fs('.pf-nick'), q: fs('.pf2-q span'), kick: fs('.pf-kicker'), psc: fs('.psc-l'), tab: fs('.pfw-tab') }, fw: document.getElementById('profileAddFriendWrap')?.parentElement?.className || '' }; })()`);
+            f: { nick: fs('.pf-nick'), q: fs('.pf2-q span'), kick: fs('.pff-t') || fs('.pf-kicker'), psc: fs('.psc-l'), tab: fs('.pfw-tab') }, fw: document.getElementById('profileAddFriendWrap')?.parentElement?.className || '' }; })()`);
         if (prof === 'desk') {
           ok(m.head.w >= m.vw * 0.85 && m.about && m.right && m.right.l > m.about.l + m.about.w - 4 && m.right.w > m.about.w * 2, T + `профиль занимает ширину экрана: шапка ${m.head.w} из ${m.vw}, слева «о человеке» ${m.about?.w}, справа вкладки ${m.right?.w}`, m);
           ok(Math.min(m.f.q, m.f.kick, m.f.psc) >= 13 && m.f.nick >= 30 && m.f.tab >= 16, T + `текст крупный: подписи ≥ 13 px (${Math.round(m.f.q)} / ${Math.round(m.f.kick)} / ${Math.round(m.f.psc)}), ник ${Math.round(m.f.nick)}, вкладки ${Math.round(m.f.tab)}`, m.f);
@@ -300,6 +300,9 @@ setTimeout(() => { console.log('  ✗ зависло — больше 20 мин�
         }
         ok(m.tabs.length >= 1 && m.tabs.every(t => ['over', 'ach'].includes(t)) && m.sel === m.tabs[0] && m.panes.length === 1 && m.panes[0] === m.sel && m.title === '1px', T + 'чужой профиль: вкладки «Обзор / Ачивки», своих («Друзья», «Моё», «Подписки») нет; выбрана первая; заголовок «Профиль» не занимает экран', m);
         ok(/pf-hrow/.test(m.fw), T + 'кнопки (в друзья / следить / ⋯) — в шапке рядом с ником', m.fw);
+        const row = await B.ev(`(() => { const L = [...document.querySelectorAll('#profileAddFriendWrap > *')].filter(x => x.offsetParent); const tops = L.map(x => Math.round(x.getBoundingClientRect().top)); const sb = document.getElementById('profileStatusEditBtn');
+          return { n: L.length, spread: Math.max(...tops) - Math.min(...tops), txt: L.map(x => x.textContent.trim()), pencil: !!sb.offsetParent }; })()`);
+        ok(row.n >= 3 && row.spread <= 6 && !row.pencil, T + `кнопки шапки в один ряд (${row.txt.join(' | ')}); у чужого профиля карандаша статуса нет`, row);
         if (m.tabs.includes('ach') && m.tabs.length > 1) {
           await B.ev(`document.querySelector('.pfw-tab[data-pfw="ach"]').click(), 1`); await sleep(300);
           const t2 = await B.ev(`({ sel: document.querySelector('.pfw-tab[aria-selected="true"]').dataset.pfw, vis: !document.getElementById('profileAchievementsCard').closest('.pfw-pane').hidden, over: document.querySelector('.pfw-pane[data-pane="over"]').hidden })`);
@@ -316,8 +319,50 @@ setTimeout(() => { console.log('  ✗ зависло — больше 20 мин�
         const own = await B.ev(`({ tabs: [...document.querySelectorAll('.pfw-tab')].filter(t => !t.hidden).map(t => t.dataset.pfw), feed: !!document.querySelector('#pfwFeed .fol-item'), sw: document.documentElement.scrollWidth, vw: innerWidth })`);
         ok(['feed', 'friends', 'set'].every(t => own.tabs.includes(t)) && own.sw <= own.vw + 2, T + 'свой профиль: есть вкладки «Подписки», «Друзья», «Моё»', own);
         await B.ev(`pfwReveal('profileAccountSettings'), 1`); await sleep(400);
-        ok(await B.ev(`document.querySelector('.pfw-tab[aria-selected="true"]').dataset.pfw === 'set' && !document.getElementById('profileAccountSettings').closest('.pfw-pane').hidden`), T + 'ссылка на карточку из другой вкладки сама открывает нужную вкладку');
+        ok(await B.ev(`document.querySelector('.pfw-tab[aria-selected="true"]').dataset.pfw === 'set' && !document.getElementById('profileAccountSettings').closest('.pfw-pane').hidden && !document.getElementById('profileAccountSettings').closest('.pff').classList.contains('folded')`), T + 'ссылка на карточку из другой вкладки сама открывает нужную вкладку и разворачивает раздел');
         await B.shot(`prof-${prof}-own`);
+        // ── второй проход (PROFILE_FOLD): сворачивание разделов, длинные списки, пустые места, статус ──
+        await B.ev(`(() => { try { localStorage.removeItem('d37_pf_fold'); } catch (e) {} pffSt = null;
+          const box = document.getElementById('profileGameStats'); box.innerHTML = Array.from({ length: 22 }, (_, i) => '<a class="pgs-item" href="/play/chess"><span class="pgs-ic">🎮</span><span class="pgs-txt"><b>Игра ' + (i + 1) + '</b><small>1 игр</small></span></a>').join('');
+          document.getElementById('profileGameStatsSum').textContent = '73 партии · 42 побед'; document.getElementById('profileGameStatsCard').hidden = false;
+          pfwAuto = false; pfwSync(); pfwTab('over'); pfwSync(); })()`);
+        await sleep(500);
+        let f = await B.ev(`(() => { const sec = document.querySelector('.pff[data-fold="games"]'), h = sec.querySelector('.pff-h'), items = [...document.querySelectorAll('#profileGameStats > *')];
+          return { tag: h.tagName, ti: h.tabIndex, exp: h.getAttribute('aria-expanded'), ctl: h.getAttribute('aria-controls'), chev: !!h.querySelector('.pff-c'), hh: Math.round(h.getBoundingClientRect().height), hw: Math.round(h.getBoundingClientRect().width), sw: Math.round(sec.getBoundingClientRect().width),
+            shown: items.filter(x => x.offsetParent).length, more: document.querySelector('#profileGameStats + .pff-more')?.textContent || '', n: document.querySelectorAll('.pff:not([hidden])').length }; })()`);
+        ok(f.tag === 'BUTTON' && f.ti === 0 && f.exp === 'true' && f.ctl === 'profileGameStatsCard' && f.chev && f.hh >= 44 && f.hw >= f.sw - 4, T + `заголовок раздела — кнопка на всю ширину (${f.hw}×${f.hh}), со стрелкой, достижима с клавиатуры`, f);
+        ok(f.shown === 6 && /Показать все \(22\)/.test(f.more), T + '«Игры на сайте»: из 22 видно 6 и кнопка «Показать все (22)»', f);
+        await B.ev(`document.querySelector('#profileGameStats + .pff-more').click(), 1`); await sleep(300);
+        ok(await B.ev(`[...document.querySelectorAll('#profileGameStats > *')].filter(x => x.offsetParent).length === 22 && /Свернуть список/.test(document.querySelector('#profileGameStats + .pff-more').textContent)`), T + '«Показать все» раскрывает список, кнопка становится «Свернуть список»');
+        await B.ev(`document.querySelector('.pff[data-fold="games"] .pff-h').click(), 1`); await sleep(300);
+        f = await B.ev(`(() => { const sec = document.querySelector('.pff[data-fold="games"]'); let st = null; try { st = JSON.parse(localStorage.getItem('d37_pf_fold')); } catch (e) {}
+          return { folded: sec.classList.contains('folded'), exp: sec.querySelector('.pff-h').getAttribute('aria-expanded'), sum: sec.querySelector('.pff-s').textContent, sumVis: !!sec.querySelector('.pff-s').offsetParent, body: !!document.getElementById('profileGameStats').offsetParent, h: Math.round(sec.getBoundingClientRect().height), st }; })()`);
+        ok(f.folded && f.exp === 'false' && !f.body && f.sumVis && /73 партии · 42 побед · лучшие: Игра 1, Игра 2, Игра 3/.test(f.sum) && f.h < 110, T + 'нажал на заголовок — раздел свёрнут в одну строку: «73 партии · 42 побед · лучшие: …»', f);
+        ok(f.st && f.st.v === 1 && f.st.f.games === true && f.st.m.games === true, T + 'выбор запомнен на устройстве (d37_pf_fold)', f.st);
+        await B.ev(`D37Route.go('/chat'), 1`); await sleep(400); await B.ev(`pffSt = null, D37Route.go('/profile'), 1`);
+        await B.until(`document.getElementById('profileNick')?.textContent.length > 0`, 25000); await sleep(2500);
+        ok(await B.ev(`document.querySelector('.pff[data-fold="games"]').classList.contains('folded')`), T + 'вернулся в профиль — раздел остался свёрнутым');
+        // «свернуть всё / развернуть всё»
+        f = await B.ev(`(async () => { const all = document.querySelector('.pfw-all'), vis = () => [...document.querySelectorAll('.pff')].filter(s => !s.hidden); const t0 = all.textContent; all.click(); await new Promise(r => setTimeout(r, 300));
+          const a = vis().every(s => s.classList.contains('folded')), t1 = all.textContent;
+          all.click(); await new Promise(r => setTimeout(r, 300)); const b = vis().every(s => !s.classList.contains('folded')); return { t0, t1, t2: all.textContent, a, b, n: vis().length, tag: all.tagName }; })()`);
+        ok(/Свернуть всё/.test(f.t0) && f.a && /Развернуть всё/.test(f.t1) && f.b && /Свернуть всё/.test(f.t2) && f.tag === 'BUTTON' && f.n >= 5, T + `одна кнопка «Свернуть всё / Развернуть всё» сворачивает и разворачивает все разделы (${f.n})`, f);
+        // хранилище недоступно — сворачивание всё равно работает
+        f = await B.ev(`(async () => { const real = Storage.prototype.setItem; Storage.prototype.setItem = () => { throw new Error('нет хранилища'); }; let err = '';
+          try { document.querySelector('.pff[data-fold="about"] .pff-h').click(); await new Promise(r => setTimeout(r, 250)); } catch (e) { err = String(e); }
+          const folded = document.querySelector('.pff[data-fold="about"]').classList.contains('folded'); Storage.prototype.setItem = real; document.querySelector('.pff[data-fold="about"] .pff-h').click(); await new Promise(r => setTimeout(r, 200)); return { err, folded }; })()`);
+        ok(!f.err && f.folded, T + 'без хранилища браузера разделы сворачиваются (просто не запоминается)', f);
+        // карточка «Планета D37» — по содержимому, в колонке «о человеке»; статус; пустых блоков нет
+        ok(await B.until(`!!document.querySelector('.pfw-about .hub-pcard')`, 8000), T + 'карточка «Планета D37» — в левой колонке');
+        f = await B.ev(`(() => { const r = s => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; }; const pc = r('.pfw-about .hub-pcard'), z = parseFloat(getComputedStyle(document.getElementById('profileContent')).zoom) || 1;
+          const btn = document.getElementById('profileStatusEditBtn'), about = document.querySelector('.pfw-about');
+          const empty = [...document.querySelectorAll('.pff:not([hidden]):not(.folded) .pff-b > *')].filter(c => c.offsetParent && c.getBoundingClientRect().height > 320 * z && c.textContent.trim().length < 40).map(c => c.id);
+          return { pch: Math.round(pc.height / z), st: btn.textContent, stVis: !!btn.offsetParent, view: !!document.getElementById('profileStatusView').offsetParent, pos: getComputedStyle(about).position, empty, sw: document.documentElement.scrollWidth, vw: innerWidth }; })()`);
+        ok(f.pch <= 150 && f.empty.length === 0 && f.sw <= f.vw + 2, T + `карточка «Планета D37» по содержимому (высота ${f.pch} px, была 356), больших пустых блоков нет`, f);
+        ok(/Добавить статус/.test(f.st) && f.stVis && !f.view, T + 'пустой статус: ссылка «＋ Добавить статус» вместо одинокого карандаша', f);
+        if (prof === 'desk') ok(f.pos === 'sticky', T + 'левая колонка едет вместе с прокруткой (под ней нет пустого столба)', f.pos);
+        await B.shot(`prof-${prof}-own-fold`);
+        await B.ev(`(() => { try { localStorage.removeItem('d37_pf_fold'); } catch (e) {} pffSt = null; })()`);
       }
 
       // ── (fol) «Следить» ──

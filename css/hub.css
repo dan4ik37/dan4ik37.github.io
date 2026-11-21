@@ -367,6 +367,12 @@ body.hub-on .bottom-tabbar,body.hub-on #donateFab,body.hub-on #scrollTop,body.hu
 .gm-card .md-dot{right:.7rem;bottom:.7rem;width:32px;height:32px;font-size:16px;background:rgba(var(--fg-rgb),.1);color:var(--text)}
 .gm-card .md-dot:hover{background:rgba(var(--fg-rgb),.22)}
 .hub-playcard .md-dot{top:12px;bottom:auto}   /* внизу карточки «Играть» — панель «Путь» */
+/* T-172: карточка игры в своём профиле. Её класс .hub-pcard совпал с карточкой паузы игры (ниже по файлу: колонка, min-width, тёмный
+   фон) — из-за этого в профиле была огромная пустая плашка с «Играть» внизу. В профиле — снова строка по содержимому. */
+#profileContent .hub-pcard{flex-direction:row;align-items:center;flex-wrap:wrap;gap:10px 12px;min-width:0;max-width:none;margin:0;padding:12px 14px;border-radius:18px;
+  background:radial-gradient(90% 140% at 85% 10%,#3b82f6,transparent 60%),linear-gradient(135deg,#0b1d4a,#0e5a4a)}
+#profileContent .hub-pcard .hub-pcard-tx{flex:1 1 96px}
+#profileContent .hub-pcard .hub-btn{flex:none}
 .hc-card{position:relative}
 .hc-card .md-dot{right:8px;top:8px;bottom:auto;width:32px;height:32px;font-size:16px}
 @media (max-width:640px){

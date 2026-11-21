@@ -234,9 +234,11 @@ html.ui2 #profileContent.pf2-other .pf-stats .profile-stat-card:has(#profileStat
 html.pfw #profile-page{max-width:min(1760px,100%);padding-left:clamp(.8rem,2.4vw,2.6rem);padding-right:clamp(.8rem,2.4vw,2.6rem);padding-top:5.2rem}
 html.pfw #profile-page>.sec-title{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 /* крупнее на больших экранах: всё содержимое профиля разом (текст, значки, отступы) */
-@media (min-width:1500px){html.pfw #profileContent{zoom:1.1}}
-@media (min-width:1850px){html.pfw #profileContent{zoom:1.2}}
-@media (min-width:2400px){html.pfw #profileContent{zoom:1.4}}
+html.pfw{--pfz:1}
+@media (min-width:1500px){html.pfw{--pfz:1.1}}
+@media (min-width:1850px){html.pfw{--pfz:1.2}}
+@media (min-width:2400px){html.pfw{--pfz:1.4}}
+html.pfw #profileContent{zoom:var(--pfz)}
 html.pfw #profileBanner{height:clamp(120px,15vw,240px)!important}
 /* шапка: кнопки дружбы / «Следить» / «⋯» — справа от ника (телефон — под ним) */
 @media (min-width:641px){
@@ -305,6 +307,59 @@ html.pfw .pfw-pane .pf2-show-grid{grid-template-columns:repeat(auto-fill,minmax(
   .pfw-tab{flex:0 0 auto;padding:.5rem .9rem;font-size:.9rem}
 }
 
+/* ───────────── 3c. РАЗДЕЛЫ ПРОФИЛЯ СВОРАЧИВАЮТСЯ (T-172, второй проход; владелец 21.11: «громоздкий, нет скрытия нормального
+   удобного»). html.pff-on — PROFILE_FOLD в js/core/config.js; разметка — profile.js pffWrap. Откат — PROFILE_FOLD = false. ───────────── */
+.pff{min-width:0;border-radius:18px;background:var(--card);border:1px solid var(--line-hi)}
+.pff[hidden]{display:none}
+.pff-h{display:flex;align-items:center;gap:.7rem;width:100%;min-height:52px;padding:.65rem 1.05rem;border:0;border-radius:18px;background:none;color:var(--text-hi);font:800 1rem/1.25 'Montserrat',sans-serif;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pff-h:hover{background:rgba(var(--fg-rgb),.045)}
+.pff-h:focus-visible{outline:2px solid var(--tw);outline-offset:-2px}
+.pff-t{flex:none;max-width:100%}
+.pff-s{display:none;flex:1 1 0;min-width:0;font-size:.86rem;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pff.folded .pff-s{display:block}
+.pff-c{flex:none;margin-left:auto;width:11px;height:11px;border-right:2.5px solid var(--muted);border-bottom:2.5px solid var(--muted);transform:translateY(-3px) rotate(45deg);transition:transform .2s}
+.pff.folded .pff-c{transform:translateX(-3px) rotate(-45deg)}
+.pff-h:hover .pff-c{border-color:var(--text-hi)}
+.pff.folded .pff-b{display:none}
+/* карточка внутри раздела — без своей рамки и тени: рамка одна, у раздела */
+html.pff-on .pff-b>*{margin:0!important;border:0!important;box-shadow:none!important;background:none!important;border-radius:0 0 18px 18px!important;padding-top:.15rem!important}
+html.pff-on .pff-b>.pf-card::before{display:none}
+/* название раздела уже в полосе сверху — внутри карточки его текст не повторяем (кнопки и числа рядом с ним остаются) */
+html.pff-on .pff-b>*>.pf-kicker:first-child,html.pff-on .pff-b>*>div:first-child>.pf-kicker:first-child{font-size:0!important;letter-spacing:0!important;margin-bottom:.3rem!important;min-height:0}
+html.pff-on .pff-b>*>.pf-kicker:first-child>*{font-size:.84rem;letter-spacing:0}
+html.pff-on .pff-b>*>.pf2-kick:first-child>span:first-child{display:none}
+html.pff-on .pff-b>*>.pf2-kick:first-child{justify-content:flex-end}
+/* длинные списки: первые 6 / 12 и «Показать все» */
+.pff-cut6>:nth-child(n+7),.pff-cut12>:nth-child(n+13){display:none!important}
+.pff-more{display:block;width:100%;min-height:44px;margin-top:.7rem;padding:.5rem 1rem;border-radius:12px;border:1px dashed var(--line-hi);background:none;color:var(--text);font:700 .9rem 'Montserrat',sans-serif;cursor:pointer}
+.pff-more:hover{background:rgba(var(--fg-rgb),.05);border-style:solid}
+.pff-more:focus-visible{outline:2px solid var(--tw);outline-offset:2px}
+/* вкладки + «Свернуть всё» одной полосой */
+.pfw-bar{display:flex;gap:.6rem;align-items:stretch;min-width:0}
+.pfw-bar>.pfw-tabs{flex:1 1 auto;min-width:0}
+.pfw-all{flex:none;min-height:44px;padding:0 1rem;border-radius:16px;border:1px solid var(--line-hi);background:var(--card);color:var(--muted);font:700 .86rem 'Montserrat',sans-serif;cursor:pointer;white-space:nowrap}
+.pfw-all:hover{color:var(--text-hi)}
+.pfw-all[hidden]{display:none}
+.pfw-all:focus-visible{outline:2px solid var(--tw);outline-offset:2px}
+/* левая колонка едет вместе с прокруткой — под ней нет пустого столба, пока справа длинный список */
+@media (min-width:1000px){
+  html.pff-on .pfw-about{position:sticky;top:calc(74px / var(--pfz,1));align-self:start;max-height:calc((100vh - 90px) / var(--pfz,1));overflow-y:auto;scrollbar-width:thin;overscroll-behavior:contain}
+}
+/* «＋ Добавить статус» — ссылка, а не одинокий карандаш */
+html.pfw #profileStatusEditBtn{font-size:.9rem}
+@media (max-width:640px){
+  .pff-h{flex-wrap:wrap;gap:.2rem .6rem;min-height:50px;padding:.6rem .9rem}
+  .pff-t{flex:1 1 auto;max-width:calc(100% - 28px)}
+  .pff.folded .pff-s{order:3;flex:1 1 100%}
+  .pfw-bar{flex-direction:column}
+  .pfw-all{align-self:flex-end;min-height:40px}
+  /* кнопки шапки — в один ряд: «В друзья», «Следить», «⋯» */
+  html.pfw .pf-hrow>#profileAddFriendWrap{flex-wrap:nowrap;gap:.4rem}
+  html.pfw .pf-hrow>#profileAddFriendWrap .pf-btn{padding-left:.75rem;padding-right:.75rem;font-size:.86rem;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  html.pfw .pf-hrow>#profileAddFriendWrap .pf-btn:not(.pf-more):not(.fol-bell){flex:1 1 0}
+  html.pfw .pf-hrow>#profileAddFriendWrap :is(.pf-more,.fol-bell){flex:0 0 46px;padding-left:0;padding-right:0}
+  html.pfw .pf-hrow>#profileAddFriendWrap .pf-fnote{flex:1 1 0;min-width:0}
+}
 /* T-170: «Следить» — лента и список во вкладке «🔔 Подписки» профиля (js/features/follow.js) */
 .fol-k{margin:0 0 .7rem}
 .fol-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:.6rem;margin-bottom:1.1rem}

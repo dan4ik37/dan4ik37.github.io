@@ -69,6 +69,11 @@ const FOLLOW_ON = true;
 // справа вкладки вместо простыни блоков. Откат — PROFILE_WIDE = false (раскладка как раньше).
 const PROFILE_WIDE = true;
 if (UI_V2 && PROFILE_WIDE) document.documentElement.classList.add('pfw');
+// T-172, второй проход (владелец 21.11: «громоздкий, нет скрытия нормального удобного»): каждый раздел профиля сворачивается нажатием
+// на заголовок (выбор помнит устройство), у свёрнутого — строка «что внутри», длинные списки — первые 6–12 и «Показать все», кнопка
+// «Свернуть всё / Развернуть всё»; левая колонка едет вместе с прокруткой. Работает внутри PROFILE_WIDE. Откат — PROFILE_FOLD = false.
+const PROFILE_FOLD = true;
+if (UI_V2 && PROFILE_WIDE && PROFILE_FOLD) document.documentElement.classList.add('pff-on');
 // T-171 (владелец 19.11: «страница-комната каждого режима, как в Roblox»): /mode/<игра> — описание, картинки и видео, «Играть», кто
 // играет сейчас, комнаты (js/features/modepage.js). Откат — MODE_PAGE = false (ссылки ведут сразу в игру, как раньше).
 const MODE_PAGE = true;
