@@ -136,11 +136,12 @@
       nowB.textContent = '';
       if (!L.length) { nowB.append(el('p', 'md-dim', 'Прямо сейчас никого не видно — зайди первым. Здесь видно только тех, кто сам показывает, чем занят.')); return; }
       for (const u of L.slice(0, 24)) {
-        const a = el('button', 'md-user', u.nick); a.type = 'button'; a.dataset.miniUid = u.id; a.dataset.miniNick = u.nick; a.dataset.juid = u.id; a.title = 'Открыть карточку игрока';
+        const a = el('button', 'md-user', u.nick); a.type = 'button'; a.dataset.miniUid = u.id; a.dataset.miniNick = u.nick; a.title = 'Открыть карточку игрока';
         nowB.append(a);
       }
       if (L.length > 24) nowB.append(el('span', 'md-dim', `и ещё ${L.length - 24}`));
-      try { window.D37Join?.decorate?.(nowB); } catch (e) {}
+      // «Присоединиться» прямо в этом списке не ставим: рядом с ником нет проверки возраста. Ник открывает карточку — там кнопка есть
+      // только тем, кому можно (правило: адресное «Присоединиться» между детьми и взрослыми скрыто).
     };
     window.addEventListener('d37:online', paintNow);
     paintNow();
