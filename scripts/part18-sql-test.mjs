@@ -67,6 +67,7 @@ create function public.comm_blocked(a uuid, b uuid) returns boolean language sql
 create table public.friendships(requester_id uuid, addressee_id uuid, status text);
 create function public.comm_friends(a uuid, b uuid) returns boolean language sql stable as $$
   select exists (select 1 from public.friendships where status = 'accepted' and ((requester_id = a and addressee_id = b) or (requester_id = b and addressee_id = a))) $$;
+create function public.age_group_of(p_uid uuid) returns text language sql stable as $$ select coalesce((select grp from public.profiles where id = p_uid), 'unknown') $$;
 create function public.kid_pair_ok(a uuid, b uuid) returns boolean language sql stable as $$
   select a is null or b is null or a = b or not ((select grp from public.profiles where id = a) = 'child' and (select grp from public.profiles where id = b) in ('adult', 'unknown'))
     and not ((select grp from public.profiles where id = b) = 'child' and (select grp from public.profiles where id = a) in ('adult', 'unknown')) $$;
@@ -96,8 +97,8 @@ create function public.forum_cap(p_uid uuid) returns int language sql stable as 
 create function public.forum_can_see(p_status text, p_author uuid, p_age int, p_realm text, p_uid uuid) returns boolean language sql stable as $$
   select coalesce((auth.uid() is not null and p_author = auth.uid()) or (p_status = 'published' and p_age <= public.forum_cap(auth.uid()) and p_realm = 'kids'), false) $$;
 create table public.site_config(key text primary key, value text);
-create table public.ugc_games(id text primary key, author uuid, title text, descr text not null default '', icon text not null default '🎮', kind text not null default 'tpl', status text not null default 'draft', updated_at timestamptz not null default now());
-create table public.unity_games(id text primary key, author uuid, title text, descr text not null default '', icon text not null default '🕹️', status text not null default 'draft', updated_at timestamptz not null default now());
+create table public.ugc_games(id text primary key, author uuid, title text, descr text not null default '', icon text not null default '🎮', kind text not null default 'tpl', status text not null default 'draft', age_rating int, updated_at timestamptz not null default now());
+create table public.unity_games(id text primary key, author uuid, title text, descr text not null default '', icon text not null default '🕹️', status text not null default 'draft', age_rating int, updated_at timestamptz not null default now());
 `);
 await db.query(`insert into public.profiles (id, role, nick, grp, privacy_profile) values ($1,'admin','dan4ik37','adult','all'), ($2,'moderator','Модер','adult','all'), ($3,'helper','Хелпер','adult','all'),
   ($4,'user','Вася','adult','all'), ($5,'user','Петя','adult','all'), ($6,'user','Малыш','child','all'), ($7,'user','Хозяин','adult','all'), ($8,'user','Тихий','adult','nobody')`, [A, MOD, HLP, U1, U2, KID, OWN, HID]);
@@ -297,6 +298,16 @@ await db.exec(`update public.ugc_games set status = 'public' where id = 'g3'; up
 c = (await db.query(`select title, body, link from public.notes where kind = 'follow_new' order by link`)).rows;
 ok(c.length === 5 && c.some(x => x.link === '#/games/studio3d/play/g3') && c.some(x => x.link === '#/games/studio/play/g1') && c.some(x => x.link === '#/games/unity/play/u1') && c.filter(x => /^\/forum\/\d+$/.test(x.link)).length === 2,
   '🔔 при публикации позже (3D-мир, статья из черновика) — со ссылкой; правка названия 🔔 не шлёт', c);
+// метка возраста игры: подростку до 16 игра «16+» не видна и 🔔 о ней не приходит; с 16 лет и взрослому — видна
+await db.exec(`insert into public.profiles (id, role, nick, grp) values ('00000000-0000-4000-8000-000000000009', 'user', 'Подросток', 'teen');
+  insert into public.forum_follows (follower, author, notify) values ('00000000-0000-4000-8000-000000000009', '${U2}', true);
+  insert into public.ugc_games (id, author, title, status, kind, age_rating) values ('g16', '${U2}', 'Страшилка', 'public', 'tpl', 16);`);
+r = await rpc(U1, 'public.follow_feed(30)');
+const teen = await rpc('00000000-0000-4000-8000-000000000009', 'public.follow_feed(30)');
+ok(r.list.some(x => x.id === 'g16') && !teen.list.some(x => x.id === 'g16') && teen.list.some(x => x.id === 'g1'), 'игра «16+»: взрослому в ленте видна, подростку до 16 — нет (обычные игры видит)', teen.list.map(x => x.id));
+c = (await db.query(`select user_id from public.notes where kind = 'follow_new' and link = '#/games/studio/play/g16'`)).rows;
+ok(c.length === 1 && c[0].user_id === U1, '🔔 об игре «16+» — только тому, кому её можно показывать', c);
+await db.exec(`delete from public.forum_follows where follower = '00000000-0000-4000-8000-000000000009'; delete from public.notes where link = '#/games/studio/play/g16'; delete from public.ugc_games where id = 'g16';`);
 await db.exec(`insert into public.user_blocks values ('${U2}', '${U1}')`);
 r = await rpc(U1, 'public.follow_feed(30)');
 ok(r.ok === true && r.list.length === 0, 'после блокировки лента пустая', r);
@@ -310,9 +321,9 @@ ok(pubOk, 'ошибка в уведомлениях не ломает публи
 
 // ═══ права: гость (anon) функции модерации вызвать не может ═══
 const acl = (await db.query(`select p.proname, has_function_privilege('anon', p.oid, 'execute') an, has_function_privilege('authenticated', p.oid, 'execute') au from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public' and p.proname in ('mod_voice_kick','cv_ping2','mod_role_set','mod_purge_user','user_report','mod_user_reports','mod_user_report_set','follow_set','follow_list','follow_feed','follow_info','part18_info','follow_why','follow_notify','voice_here_guard')`)).rows;
+  where n.nspname = 'public' and p.proname in ('mod_voice_kick','cv_ping2','mod_role_set','mod_purge_user','user_report','mod_user_reports','mod_user_report_set','follow_set','follow_list','follow_feed','follow_info','part18_info','follow_why','follow_notify','voice_here_guard','follow_game_cap')`)).rows;
 const A1 = Object.fromEntries(acl.map(x => [x.proname, (x.an ? 'a' : '-') + (x.au ? 'u' : '-')]));
-ok(acl.length === 15 && ['mod_voice_kick', 'cv_ping2', 'mod_role_set', 'mod_purge_user', 'user_report', 'mod_user_reports', 'mod_user_report_set', 'follow_set', 'follow_list', 'follow_feed'].every(f => A1[f] === '-u')
+ok(acl.length === 16 && A1.follow_game_cap === '--' && ['mod_voice_kick', 'cv_ping2', 'mod_role_set', 'mod_purge_user', 'user_report', 'mod_user_reports', 'mod_user_report_set', 'follow_set', 'follow_list', 'follow_feed'].every(f => A1[f] === '-u')
   && A1.follow_info === 'au' && A1.part18_info === 'au' && ['follow_why', 'follow_notify', 'voice_here_guard'].every(f => A1[f] === '--'), 'права: гостю — только follow_info и part18_info; служебные закрыты всем', A1);
 const tb = (await db.query(`select has_table_privilege('authenticated', 'public.voice_kicks', 'select') a, has_table_privilege('authenticated', 'public.user_reports', 'select') b`)).rows[0];
 ok(!tb.a && !tb.b, 'таблицы voice_kicks и user_reports закрыты от прямого чтения');

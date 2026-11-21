@@ -6867,9 +6867,10 @@ $$;
 -- Лента: новое у тех, за кем слежу — статьи форума (с правилами возраста форума) и опубликованные игры (студия, игры на Unity)
 create or replace function public.follow_feed(p_limit int default 30)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare uid uuid := auth.uid(); lim int := least(greatest(coalesce(p_limit, 30), 1), 60); res jsonb;
+declare uid uuid := auth.uid(); lim int := least(greatest(coalesce(p_limit, 30), 1), 60); res jsonb; gmax int;
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  gmax := public.follow_game_cap(uid);   -- метка возраста игры: как в каталоге «Игры игроков»
   select coalesce(jsonb_agg(to_jsonb(x) order by x.at desc), '[]'::jsonb) into res from (
     select u.kind, u.id, u.title, u.author, (select nick from public.profiles where id = u.author) as nick, u.at, u.icon, u.descr from (
       select 'thread'::text as kind, t.id::text as id, t.title, t.author_id as author, coalesce(t.published_at, t.created_at) as at, ''::text as icon, left(coalesce(t.excerpt, ''), 160) as descr
@@ -6879,25 +6880,31 @@ begin
       union all
       select case when g.kind = 'place' then 'place' else 'game' end, g.id, g.title, g.author, g.updated_at, g.icon, left(g.descr, 160)
         from public.ugc_games g join public.forum_follows f on f.author = g.author and f.follower = uid
-        where g.status = 'public' and g.updated_at > now() - interval '90 days'
+        where g.status = 'public' and g.updated_at > now() - interval '90 days' and coalesce(g.age_rating, 0) <= gmax
       union all
       select 'unity', g.id, g.title, g.author, g.updated_at, g.icon, left(g.descr, 160)
         from public.unity_games g join public.forum_follows f on f.author = g.author and f.follower = uid
-        where g.status = 'public' and g.updated_at > now() - interval '90 days'
+        where g.status = 'public' and g.updated_at > now() - interval '90 days' and coalesce(g.age_rating, 0) <= gmax
     ) u
     where public.kid_pair_ok(uid, u.author) and not public.comm_blocked(uid, u.author)
     order by u.at desc limit lim) x;
   return jsonb_build_object('ok', true, 'list', res);
 end $$;
 
+-- Какую метку возраста игры можно показывать человеку (как на сайте в «Играх игроков»): с 16 лет — до 16+, остальным — до 12+
+create or replace function public.follow_game_cap(p_uid uuid)
+returns int language sql stable security definer set search_path = public as $$
+  select case when public.age_group_of(p_uid) in ('teen16', 'adult') then 16 else 12 end;
+$$;
 -- 🔔 тем, кто включил колокольчик: «новое у того, за кем следишь». Ошибка здесь никогда не ломает публикацию.
-create or replace function public.follow_notify(p_author uuid, p_title text, p_body text, p_link text, p_key text, p_age int default 0)
+create or replace function public.follow_notify(p_author uuid, p_title text, p_body text, p_link text, p_key text, p_age int default 0, p_game boolean default false)
 returns void language plpgsql security definer set search_path = public as $$
-declare r record;
+declare r record; cap int;
 begin
   begin
     for r in select f.follower from public.forum_follows f where f.author = p_author and f.notify limit 300 loop
-      if public.kid_pair_ok(r.follower, p_author) and not public.comm_blocked(r.follower, p_author) and coalesce(p_age, 0) <= public.forum_cap(r.follower) then
+      if coalesce(p_game, false) then cap := public.follow_game_cap(r.follower); else cap := public.forum_cap(r.follower); end if;
+      if public.kid_pair_ok(r.follower, p_author) and not public.comm_blocked(r.follower, p_author) and coalesce(p_age, 0) <= cap then
         perform public.notify(r.follower, 'follow_new', p_author, p_title, p_body, p_link, 'fol:' || p_key);
       end if;
     end loop;
@@ -6920,7 +6927,7 @@ begin
   if new.status = 'public' and (tg_op = 'INSERT' or old.status is distinct from 'public') then
     perform public.follow_notify(new.author, '🎮 Новая игра', left(coalesce(new.title, ''), 140),
       case when tg_table_name = 'unity_games' then '#/games/unity/play/' when to_jsonb(new)->>'kind' = 'place' then '#/games/studio3d/play/' else '#/games/studio/play/' end || new.id,
-      tg_table_name || ':' || new.id, 0);
+      tg_table_name || ':' || new.id, coalesce((to_jsonb(new)->>'age_rating')::int, 0), true);
   end if;
   return null;
 end $$;
@@ -6944,7 +6951,8 @@ end $$;
 
 revoke all on function public.voice_here_guard() from public, anon, authenticated;
 revoke all on function public.follow_why(uuid, uuid) from public, anon, authenticated;
-revoke all on function public.follow_notify(uuid, text, text, text, text, integer) from public, anon, authenticated;
+revoke all on function public.follow_notify(uuid, text, text, text, text, integer, boolean) from public, anon, authenticated;
+revoke all on function public.follow_game_cap(uuid) from public, anon, authenticated;
 revoke all on function public.follow_on_thread() from public, anon, authenticated;
 revoke all on function public.follow_on_game() from public, anon, authenticated;
 do $$
