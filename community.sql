@@ -6557,7 +6557,7 @@ grant execute on function public.nick17_info() to anon, authenticated;
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 -- ЧАСТЬ 18 (T-177 остатки + T-170, 21.11.2026). Повторный запуск безопасен (if not exists / create or replace / drop trigger if
 --   exists). Нужны части 1–17 и forum.sql «ФОРУМ 2.0» (всё это уже выполнено). Старые функции НЕ переписываются — только новые.
---   Проверка с сервера: rpc part18_info → {"ok":true,"v":1}.
+--   Проверка с сервера: rpc part18_info → {"ok":true,"v":1}; таблица site_config, строка key = 'part18' → value '1'.
 --   (а) Владелец 20.11 (T-177): «слишком мало функций» — модерация из карточки игрока и профиля:
 --       mod_voice_kick — убрать из голосового канала (и не пускать обратно N минут; снять запрет — 0 минут); сам канал узнаёт об этом
 --       по cv_ping2 (раз в 25 с и сразу по сигналу соседей) — выгнанного отключают и он сам, и соседи;
@@ -6932,6 +6932,15 @@ create trigger follow_on_game after insert or update of status on public.unity_g
 -- 18.6 Проверка и права ───────────────────────────────────────────────────────────────────────────────────────────
 create or replace function public.part18_info()
 returns jsonb language sql stable as $$ select jsonb_build_object('ok', true, 'v', 1) $$;
+-- Метка для сайта: «часть 18 выполнена» (обычная строка настроек, читают все). Сайт смотрит её, а не зовёт новые функции вслепую:
+-- пока строки нет, новые кнопки приглушены и в консоли браузера нет ошибок «функция не найдена».
+do $$ begin
+  if to_regclass('public.site_config') is not null then
+    update public.site_config set value = '1' where key = 'part18';
+    if not found then insert into public.site_config (key, value) values ('part18', '1'); end if;
+  end if;
+exception when others then raise warning 'ч. 18: метка site_config part18 не поставлена: %', sqlerrm;
+end $$;
 
 revoke all on function public.voice_here_guard() from public, anon, authenticated;
 revoke all on function public.follow_why(uuid, uuid) from public, anon, authenticated;

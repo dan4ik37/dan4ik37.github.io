@@ -82,3 +82,8 @@ div.dm-mem{cursor:default}
 /* T-169: из жалобы — к файлу и к сообщению */
 .dm-nav{margin:6px 0 2px}
 .dm-fprev{display:block;max-width:100%;max-height:50vh;margin:6px auto 10px;border-radius:10px;object-fit:contain;background:rgba(var(--fg-rgb),.05)}
+
+/* T-177: свой срок наказания (число + минуты / часы / дни) */
+.ds4-ownrow{display:flex;gap:8px;align-items:center}
+.ds4-ownrow input{flex:0 0 110px;min-width:0}
+.ds4-ownrow select{flex:1 1 auto;min-width:0}

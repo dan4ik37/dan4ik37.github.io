@@ -8205,6 +8205,46 @@
    "xs": [
     "t.workerUrl"
    ]
+  },
+  {
+   "f": "js/features/community2.js",
+   "fn": "act",
+   "k": "markup:text",
+   "c": "const",
+   "n": "T-177: X.durField() — готовая разметка поля «свой срок» (константа, без чужого текста)",
+   "xs": [
+    "OWN_DUR ? X.durField() : ''"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "punish",
+   "k": "markup:text",
+   "c": "const",
+   "n": "T-177: X.durField() — готовая разметка поля «свой срок» (константа, без чужого текста)",
+   "xs": [
+    "OWN_DUR && X.durField ? X.durField() : ''"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "urepRow",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "plural(+x.n, 'жалоба', 'жалобы', 'жалоб')"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "drawUsers",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "plural(L.length, 'человек', 'человека', 'человек')"
+   ]
   }
  ]
 }

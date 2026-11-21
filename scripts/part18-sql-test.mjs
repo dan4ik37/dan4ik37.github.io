@@ -95,6 +95,7 @@ create table public.forum_follows(follower uuid not null, author uuid not null, 
 create function public.forum_cap(p_uid uuid) returns int language sql stable as $$ select case when (select grp from public.profiles where id = p_uid) = 'child' then 6 else 16 end $$;
 create function public.forum_can_see(p_status text, p_author uuid, p_age int, p_realm text, p_uid uuid) returns boolean language sql stable as $$
   select coalesce((auth.uid() is not null and p_author = auth.uid()) or (p_status = 'published' and p_age <= public.forum_cap(auth.uid()) and p_realm = 'kids'), false) $$;
+create table public.site_config(key text primary key, value text);
 create table public.ugc_games(id text primary key, author uuid, title text, descr text not null default '', icon text not null default '🎮', kind text not null default 'tpl', status text not null default 'draft', updated_at timestamptz not null default now());
 create table public.unity_games(id text primary key, author uuid, title text, descr text not null default '', icon text not null default '🕹️', status text not null default 'draft', updated_at timestamptz not null default now());
 `);
@@ -113,6 +114,8 @@ const enter = async (u, ch) => { await as(u); try { await db.query('select publi
 
 // ═══ info ═══
 r0: { const i = await rpc(null, 'public.part18_info()'); ok(i.ok === true && i.v === 1 && Object.keys(i).length === 2, 'part18_info → {"ok":true,"v":1}', i); }
+
+ok((await one(`select value from public.site_config where key = 'part18'`))?.value === '1' && (await one(`select count(*)::int c from public.site_config`)).c === 1, 'метка для сайта: site_config part18 = 1 (одна строка и после второго запуска)');
 
 // ═══ 18.1 убрать из голосового ═══
 ok(await enter(U1, 0) === 'ok' && await enter(U2, 0) === 'ok' && await enter(MOD, 0) === 'ok', 'трое вошли в голосовой сайта');

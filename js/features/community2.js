@@ -448,24 +448,33 @@
         if (ev.target === w) return done(null);
         const chip = ev.target.closest('[data-chip]'), pk = ev.target.closest('[data-pick]');
         if (chip) { const i = w.querySelector('[data-f="reason"]'); if (i) { i.value = chip.dataset.chip; i.focus(); } return; }
-        if (pk) { pk.parentElement.querySelectorAll('[data-pick]').forEach(x => x.classList.toggle('on', x === pk)); return; }
+        if (pk) { pk.parentElement.querySelectorAll('[data-pick]').forEach(x => x.classList.toggle('on', x === pk)); const own = pk.parentElement.nextElementSibling?.querySelector?.('[data-f="own"]'); if (own) own.value = ''; return; }
         const b = ev.target.closest('[data-v]'); if (!b) return;
         done(b.dataset.v ? (collect ? collect(w, b.dataset.v) : b.dataset.v) : null);
       });
       w.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.matches('input')) { ev.preventDefault(); w.querySelector('.ds4-go')?.click(); } });
+      // T-177: вписали свой срок — готовые сроки над ним гаснут (понятно, что возьмётся своё число)
+      w.addEventListener('input', ev => { if (ev.target.matches('[data-f="own"]')) ev.target.closest('.ds4-own')?.previousElementSibling?.querySelectorAll?.('[data-pick]').forEach(x => x.classList.toggle('on', false)); });
       document.addEventListener('keydown', key, true);
       document.body.appendChild(w);
       setTimeout(() => (w.querySelector('input') || w.querySelector('.ds4-box button'))?.focus?.(), 30);
     });
   }
   X.sheet = sheet;
+  // T-177: свой срок наказания — число и единица (минуты / часы / дни). Ставится сразу после готовых сроков (.ds4-opts).
+  X.durField = () => `<label class="ds-lbl ds4-own">Или свой срок<span class="ds4-ownrow"><input class="ds-in" data-f="own" type="number" min="1" max="999" step="1" inputmode="numeric" placeholder="число" aria-label="Свой срок: число"><select class="ds-in" data-f="ownu" aria-label="Свой срок: минуты, часы или дни"><option value="1">минут</option><option value="60">часов</option><option value="1440">дней</option></select></span></label>`;
+  X.durOf = w => { const n = Math.floor(+(w.querySelector('[data-f="own"]')?.value || 0)), u = +(w.querySelector('[data-f="ownu"]')?.value || 1); return n > 0 && [1, 60, 1440].includes(u) ? n * u : 0; };
+  X.durText = m => { m = Math.max(0, Math.round(+m || 0)); const pl = (n, a, b, c) => (P.plural ? P.plural(n, a, b, c) : c);
+    if (m && m % 1440 === 0) { const d = m / 1440; return d === 7 ? '1 неделя' : `${d} ${pl(d, 'день', 'дня', 'дней')}`; }
+    if (m && m % 60 === 0) { const h = m / 60; return `${h} ${pl(h, 'час', 'часа', 'часов')}`; }
+    return `${m} мин`; };
   const REASONS = ['Спам', 'Флуд', 'Мат', 'Оскорбления', 'Реклама', 'Не по теме', 'Личные данные'];
   const DUR = [[5, '5 минут'], [60, '1 час'], [1440, '1 день'], [10080, '1 неделя']];
   const picks = (list, on) => `<div class="ds4-opts">${list.map(([v, t]) => `<button type="button" class="ds4-opt${String(v) === String(on) ? ' on' : ''}" data-pick="${e(v)}">${e(t)}</button>`).join('')}</div>`;
   const askReason = (title, btn, extra = '', notify = false) => sheet(title, `${extra}<div class="ds4-chips">${REASONS.map(t => `<button type="button" class="ds4-chip" data-chip="${e(t)}">${e(t)}</button>`).join('')}</div>
     <label class="ds-lbl">Причина — видна в журнале${notify ? ' и ему в 🔔' : ''}<input class="ds-in" data-f="reason" maxlength="200" placeholder="Например: спам ссылками"></label>
     <button type="button" class="ds4-wide ds4-go ${btn.cls ?? 'bad'}" data-v="go">${btn.t}</button>`,
-    w => ({ reason: w.querySelector('[data-f="reason"]').value.trim(), pick: [...w.querySelectorAll('.ds4-opts')].map(o => o.querySelector('.on')?.dataset.pick), purge: !!w.querySelector('[data-f="purge"]')?.checked }));
+    w => ({ reason: w.querySelector('[data-f="reason"]').value.trim(), pick: [...w.querySelectorAll('.ds4-opts')].map(o => o.querySelector('.on')?.dataset.pick), purge: !!w.querySelector('[data-f="purge"]')?.checked, own: X.durOf(w) }));
 
   // ═══ 🔔 Уведомления сервера: все / только @упоминания / ничего; заглушить сервер или канал (без точек «новое» и без @everyone) ═══
   const NP = LS('d37_ds_notif', {});
@@ -565,11 +574,15 @@
       }
       if (k === 'timeout') {
         const d = off && staffRole() === 'helper' ? DUR.slice(0, 2) : DUR;
-        const a = await askReason(`⏳ Тайм-аут для ${who}`, { t: '⏳ Заглушить' }, '<p class="ds-dim">Сколько не сможет писать:</p>' + picks(d, 60));
+        // T-177: свой срок — любое число минут / часов / дней (сервер: до 7 дней, хелпер сайта — до часа). Откат — OWN_DUR = false
+        const OWN_DUR = typeof MOD18 === 'undefined' || !!MOD18, maxMin = off && staffRole() === 'helper' ? 60 : 10080;
+        const a = await askReason(`⏳ Тайм-аут для ${who}`, { t: '⏳ Заглушить' }, '<p class="ds-dim">Сколько не сможет писать:</p>' + picks(d, 60) + (OWN_DUR ? X.durField() : ''));
         if (!a) return { ok: false };
-        const min = +(a.pick[0] || 60), r = await P.rpc(fn, args(uid, nick, 'mute', min, a.reason));
+        const min = (OWN_DUR && a.own) || +(a.pick[0] || 60);
+        if (min > maxMin) return { ok: false, msg: `⚠️ Тайм-аут — не дольше ${X.durText(maxMin)}` };
+        const r = await P.rpc(fn, args(uid, nick, 'mute', min, a.reason));
         if (r.missing) return A0.mod('mute' + min, mm);   // старый сервер — без причины
-        return res(r, `⏳ ${nick} заглушён: ${(DUR.find(x => x[0] === min) || [0, min + ' мин'])[1]}`);
+        return res(r, `⏳ ${nick} заглушён: ${(DUR.find(x => x[0] === min) || [0, X.durText(min)])[1]}`);
       }
       if (k === 'delr' && m) {
         const a = await askReason('🗑 Удалить сообщение', { t: '🗑 Удалить' });

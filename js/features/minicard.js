@@ -28,6 +28,27 @@
   const P = () => window.D37Phone || null;
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const MINI_T141 = true;
+  // T-177 остатки / T-170: выполнена ли на сервере ч. 18 community.sql — по строке site_config 'part18' (её ставит сама ч. 18).
+  // Это обычный запрос таблицы: «строки нет» — ответ 200 и пустой список, без красной строки 404 в консоли (вызов функции, которой
+  // нет на сервере, дал бы 404 на каждом заходе). Узнали «да» — помним до закрытия вкладки; «нет» — спросим снова через 10 минут.
+  const M18 = (() => { try { return typeof MOD18 === 'undefined' || !!MOD18; } catch (er) { return true; } })();
+  let p18v = null, p18p = null, p18at = 0;
+  M.p18 = () => {
+    if (p18v === true) return Promise.resolve(true);
+    if (p18p && Date.now() - p18at < 10 * 60e3) return p18p;
+    try { if (sessionStorage.getItem('d37_p18') === '1') { p18v = true; return Promise.resolve(true); } } catch (er) {}
+    if (typeof sbClient === 'undefined' || !sbClient) return Promise.resolve(false);
+    p18at = Date.now();
+    p18p = (async () => {
+      let v = false;
+      try { const { data } = await sbClient.from('site_config').select('value').eq('key', 'part18').maybeSingle(); v = !!data && String(data.value) !== '0'; } catch (er) { v = false; }
+      p18v = v;
+      if (v) { try { sessionStorage.setItem('d37_p18', '1'); } catch (er) {} }
+      return v;
+    })();
+    return p18p;
+  };
+  M.p18now = () => p18v === true;
 
   // ═══ Что показать: чистая функция (тест — scripts/ui-test.cjs) ═══
   // s: { uid, self, logged, guest, status: 'none'|'pending_sent'|'pending_received'|'friends'|null, accepts, why, kb, kp, join, blocked,
@@ -105,18 +126,38 @@
       else row('rel', 'friend-add', '➕ В друзья', { cls: 'ok' });
     }
     (s.extra || []).forEach((x, i) => { if (x && x.t) row('game', 'x' + i, String(x.t).slice(0, 40)); });
+    // ── T-170: «Следить» — видеть его новые статьи и игры в ленте; правила возраста — как у дружбы ──
+    if (s.fol) {
+      if (s.kp) off('rel', '🔔 Следить', KM('agefriend'));
+      else if (s.fol.on) row('rel', 'follow', '🔕 Не следить');
+      else if (s.fol.why) off('rel', '🔔 Следить', s.fol.why);
+      else row('rel', 'follow', '🔔 Следить');
+    }
     row('rel', 'block', s.blocked ? '✅ Разблокировать' : '🚫 Заблокировать', { cls: s.blocked ? '' : 'warn' });
-    if (s.canReport) row('rel', 'report', '🚩 Пожаловаться', { cls: 'warn' });
-    else off('rel', '🚩 Пожаловаться', 'жалоба — на сообщение: «⋯» у его сообщения в чате');
+    // ── Жалоба: на сообщение (крючок ленты) и на человека — ник, аватар, поведение (T-177, community.sql ч. 18) ──
+    if (s.canReport) row('rel', 'report', s.m18 && s.p18 && s.tstaff !== 'admin' ? '🚩 Пожаловаться на сообщение' : '🚩 Пожаловаться', { cls: 'warn' });
+    if (s.m18 && s.tstaff === 'admin') { if (!s.canReport) off('rel', '🚩 Пожаловаться', 'на создателя сайта жаловаться нельзя'); }
+    else if (s.m18 && s.p18) row('rel', 'ureport', s.canReport ? '🚩 Пожаловаться на человека' : '🚩 Пожаловаться', { cls: 'warn' });
+    else if (!s.canReport) off('rel', '🚩 Пожаловаться', s.m18 ? 'пока — на сообщение: «⋯» у его сообщения в чате; на человека — скоро' : 'жалоба — на сообщение: «⋯» у его сообщения в чате');
     // ── Модерация (права решает сервер; здесь — показ по роли) ──
     if (s.staff) {
       if (s.tstaff && s.staff !== 'admin') off('mod', '🛡 Наказать', 'это команда сайта — наказывать может только создатель');
       else if (s.tstaff === 'admin') off('mod', '🛡 Наказать', 'это создатель сайта');
       else {
         (s.mods || []).forEach(([k, t]) => row('mod', 'mod:' + k, t, { cls: 'warn' }));
+        // T-177 остатки (ч. 18): из голосового, последние сообщения во всех каналах, роль в команде. Нет ч. 18 — видно, но приглушено.
+        if (s.m18 && s.p18) {
+          row('mod', 'vkick', '🔇 Убрать из голосового…', { cls: 'warn' });
+          row('mod', 'purge', '🧹 Удалить последние сообщения (все каналы)…', { cls: 'warn' });
+          if (s.staff === 'admin') row('mod', 'role', '🎭 Роль в команде…', { cls: 'warn' });
+        } else if (s.m18) off('mod', '🔇 Из голосового · 🧹 сообщения' + (s.staff === 'admin' ? ' · 🎭 роль' : ''), 'заработает после обновления базы (часть 18)');
         if (s.canMod) row('mod', 'modcard', '🛡 Ещё: предупредить, снять мут, бан / разбан, заметки, история');
         if (s.staff === 'admin') { row('mod', 'nickset', '✏️ Сменить ник', { cls: 'warn' }); row('mod', 'nickreset', '♻️ Сбросить ник', { cls: 'warn' }); }
       }
+    } else if ((s.mods || []).length) {
+      // не команда сайта, но модератор этого сообщества (права проверила лента и проверит сервер): его действия — тоже в списке
+      s.mods.forEach(([k, t]) => row('mod', 'mod:' + k, t, { cls: 'warn' }));
+      if (s.m18 && s.p18) row('mod', 'vkick', '🔇 Убрать из голосового…', { cls: 'warn' });
     }
     return { groups: pack(G), notes, lock };
   }
@@ -252,6 +293,8 @@
     paintActs({ status: null });
     card.querySelectorAll('.ppl-c').forEach(x => x.remove());   // ds-people: блок прошлого человека
     q('.d37m-ask').hidden = true;
+    // ч. 18 на сервере? Узнали позже, чем нарисовали кнопки, — перерисовать (один раз за вкладку)
+    if (M18 && !M.p18now() && me()) M.p18().then(v => { if (v && open?.id === id) { paintActs(open.lastX || { status: null }); place(); } });
     if (root.hidden) {   // появление — анимацией CSS (.in) с первого кадра, без принудительного пересчёта раскладки
       root.classList.add('in');
       root.hidden = false;
@@ -278,6 +321,7 @@
     const pKp = logged && !self && A?.friendBlock ? A.friendBlock(uid).catch(() => null) : null;
     const pOn = P()?.friendStatus ? P().friendStatus([uid]).catch(() => null) : null;
     const pLook = lookOf(uid, self).catch(() => null);
+    const pFol = logged && !self && window.D37Follow?.info ? D37Follow.info(uid).catch(() => null) : null;   // T-170
     const p = await pP; if (!live()) return;
     if (p) paintHead(p, false);
     else if (!PC.get(uid)) { q('.d37m-lock').hidden = false; q('.d37m-lock').textContent = '📡 Не удалось загрузить профиль'; }
@@ -300,6 +344,7 @@
     const join = act && P()?.actJoin ? P().actJoin(act) : null;
     paintActs({ status, kb, kp, why, join, act, accepts: p?.accepts_friend_requests, hidden: !!p?.profile_hidden, vis: p?.profile_visibility, trole: p?.role || null });
     place();
+    if (pFol) pFol.then(f => { if (f && live()) { paintActs({ ...(open.lastX || {}), fol: f }); place(); } });
     const look = await pLook; if (!live()) return;
     paintChar(look);
     place();
@@ -377,7 +422,8 @@
     let mods = [];
     try { mods = o.actions?.mods ? o.actions.mods(o.uid, o.nick) || [] : staffMods(o.uid); } catch (er) { mods = []; }
     const S0 = { uid: o.uid, self: o.self, logged, guest: o.guest, status: x.status ?? null, accepts: x.accepts, why: x.why, kb: x.kb, kp: x.kp,
-      join: x.join, blocked: !!o.uid && !!window.MsgView?.blocked?.has?.(o.uid), canReport: !!o.actions?.report, mods, hidden: x.hidden, vis: x.vis, extra: o.extra };
+      join: x.join, blocked: !!o.uid && !!window.MsgView?.blocked?.has?.(o.uid), canReport: !!o.actions?.report, mods, hidden: x.hidden, vis: x.vis, extra: o.extra,
+      m18: M18, p18: M18 && M.p18now(), fol: x.fol || null };
     o.act = x.act || null;
     // пока не знаем дружбу — кнопки дружбы не показываем (без «прыжка» кнопок: место держит заглушка)
     const pending = logged && !o.self && o.uid && x.status == null;
@@ -499,6 +545,26 @@
       return;
     }
     if (k === 'report') { const f = o.actions?.report; close(); f?.(); return; }
+    // ── T-177 остатки (ч. 18): жалоба на человека, из голосового, последние сообщения, роль — окна живут в 🛡 центре (ds-mod.js) ──
+    if (k === 'ureport' || k === 'vkick' || k === 'purge' || k === 'role') {
+      const trole = o.lastX?.trole || null;
+      close();
+      try { await P()?.need?.('ds'); } catch (er) {}
+      const Mo = window.D37Mod;
+      if (!Mo?.act18) { alert('Не загрузилось — обнови страницу и попробуй ещё раз'); return; }
+      Mo.act18(k, uid, nick, { role: trole });
+      return;
+    }
+    if (k === 'follow') {   // T-170
+      const F = window.D37Follow; if (!F) return;
+      t.disabled = true;
+      const on = !o.lastX?.fol?.on, r = await F.set(uid, on);
+      if (open?.id !== o.id) return;
+      t.disabled = false;
+      if (r.ok) { note(on ? '🔔 Следишь — новое увидишь в профиле, вкладка «Подписки»' : '🔕 Больше не следишь', false); paintActs({ ...(o.lastX || {}), fol: { ...(o.lastX?.fol || {}), on, why: null } }); place(); }
+      else note('⚠️ ' + (r.msg || 'Не получилось'));
+      return;
+    }
     if (k === 'friend-add' || k === 'friend-acc') {
       t.disabled = true;
       const r = k === 'friend-add' ? (typeof sendFriendRequest === 'function' ? await sendFriendRequest(uid, { quiet: true }) : null)
@@ -617,5 +683,5 @@
 
   // Старое имя (тиммейты, гости профиля и т.п.): openMiniProfile(id, ник, элемент)
   window.openMiniProfile = (uid, nick, anchor) => M.open(uid, { nick, anchor });
-  M._t = { profileOf, PC, FC, decide };
+  M._t = { profileOf, PC, FC, decide, p18set: v => { p18v = v; p18p = null; } };
 })();

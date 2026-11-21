@@ -119,7 +119,7 @@
     if ((d.t === 'offer' || d.t === 'answer') && !(d.sdp && typeof d.sdp.sdp === 'string' && d.sdp.sdp.length < 30000 && ['offer', 'answer'].includes(d.sdp.type))) return false;
     if (d.t === 'ice' && !(Array.isArray(d.c) && d.c.length <= 40 && d.c.every(c => c && typeof c.candidate === 'string' && c.candidate.length < 600))) return false;
     if (d.sid !== undefined && !(typeof d.sid === 'string' && d.sid.length <= 16)) return false;
-    return ['offer', 'answer', 'ice', 'hi', 'st', 'bye', 'decline'].includes(d.t);
+    return ['offer', 'answer', 'ice', 'hi', 'st', 'bye', 'decline', 'kk'].includes(d.t);
   }
   // Говорит ли: включается сразу (громче порога 60 мс), выключается не сразу (тише 0,4 с) — без мигания
   function vad(st, level, dt){
@@ -251,7 +251,8 @@
         sync(R);
       });
     }
-    const list = [...seen.values()].map(m => ({ key: m.k, at: m.at, ok: m.k === R.myKey || R.verified.get(m.k) === true }));
+    // T-177: кого модератор убрал из канала (cv_ping2 → R.banned) — для нас его в комнате нет, даже если его вкладка ещё «внутри»
+    const list = [...seen.values()].filter(m => m.k === R.myKey || !R.banned?.has(m.uid)).map(m => ({ key: m.k, at: m.at, ok: m.k === R.myKey || R.verified.get(m.k) === true }));
     const me = seen.get(R.myKey);
     if (!me) { R.changed(); return; }
     const pl = plan(list, R.myKey, R.opt.max || MAX);
@@ -409,7 +410,8 @@
       const p = R.peers.get(from); if (m) { m.mute = !!d.mute; m.deaf = !!d.deaf; m.cam = !!d.cam; }
       if (p) { p.mute = !!d.mute; p.deaf = !!d.deaf; p.cam = !!d.cam; }
       R.changed();
-    } else if (d.t === 'decline') R.opt.onDecline?.(R, m);
+    } else if (d.t === 'kk') R.opt.onKk?.(R);   // T-177: «кого-то убрали из канала» — спросить сервер сейчас, а не через 25 с
+    else if (d.t === 'decline') R.opt.onDecline?.(R, m);
     else if (d.t === 'bye') { const p = R.peers.get(from); if (p) { dropPeer(R, p); R.peers.delete(from); } }
   }
   function dropPeer(R, p){
@@ -722,6 +724,9 @@
     applyMic(R); R.send({ t: 'st', mute: R.mute, deaf: R.deaf }); R.changed(); pill();
   };
   const VSWITCH = true;   // T-169: переход между голосовыми без вопроса; откат — false
+  // T-177: «🔇 Убрать из голосового» (ч. 18). После действия модератора: сказать комнате «спросите сервер» и спросить самому.
+  const KICK18 = typeof MOD18 === 'undefined' || !!MOD18;
+  C.kickHint = () => { try { if (S?.kind === 'voice' && S.room) { S.room.send({ t: 'kk' }); S.ping18?.(); } } catch (er) {} };
   C.voiceLeave = () => C.leave();
   C.hangupAll = () => C.leave();
   const localBlocked = uid => { try { return (JSON.parse(localStorage.getItem('d37_blocks_local') || '[]') || []).includes(uid); } catch (er) { return false; } };
@@ -740,6 +745,9 @@
     }
     const keys = await myKeys();
     const pr = await P.rpc('cv_pass', { p_channel: spec.channel, p_pub: keys.pub });
+    // T-177: модератор убрал из этого канала (community.sql ч. 18: voice_here_guard) — сервер не пускает, пока срок не вышел
+    const kk = /voice_kicked:(\d+)/.exec(pr.error?.message || '');
+    if (kk) return { err: `🔇 Модератор убрал тебя из этого канала. Зайти снова можно через ${+kk[1]} мин.` };
     if (pr.error) return { err: pr.missing ? 'soon' : P.err(pr.error) };
     if (!pr.data?.ok) return { err: { member: 'Сначала вступи в сообщество', banned: 'Тебя забанили', muted: 'Тебя заглушили в чате', new: 'Голосовой канал сайта — для аккаунтов старше суток', not_found: 'Канал не найден', u9: kidMsg('u9voice'), full: `👥 Канал заполнен (${+pr.data?.max || MAX} из ${+pr.data?.max || MAX}) — подожди, пока кто-нибудь выйдет.` }[pr.data?.reason] || 'Не получилось' };
     const code = 'v' + spec.channel;
@@ -749,12 +757,40 @@
     S.passOk = true;
     const r = await startRoom({ topic: pr.data.topic, max: pr.data.max || MAX, pass: pr.data.pass, cam: CAM_ON && pr.data.cam === true,
       verify: async m => { if (typeof m.pass !== 'string') return null; const { data } = await P.rpc('cv_check', { p_channel: ch, p_pass: m.pass, p_pub: m.pub }); return data && data.uid === m.uid ? { uid: data.uid, nick: data.nick } : null; },
+      onKk: () => { if (S?.kind === 'voice' && S.ping18) { clearTimeout(S.kkT); S.kkT = setTimeout(() => S?.ping18?.(), 400); } },
       onFull: () => { if (S?.kind === 'voice') { S.full = true; render(); } } });
     if (!S || S.kind !== 'voice' || S.topic !== pr.data.topic) { if (r.R) closeRoom(r.R, false); return { err: 'busy' }; }
     if (r.err) { S.reason = 'mic'; S.err = r.err; setState('failed'); return { err: r.err }; }
     S.room = r.R; S.t0 = Date.now(); S.state = 'live'; armConnect();
     // ч. 15: «я ещё тут» раз в 25 с (сервер считает людей для лимита; без ч. 15 — функции нет, P.rpc запомнит)
-    if (VLIMIT && pr.data.max !== undefined) { const s = S; s.pingT = setInterval(() => { if (S === s && s.state === 'live') P.rpc('cv_ping', { p_channel: ch }); else clearInterval(s.pingT); }, 25000); }
+    if (VLIMIT && pr.data.max !== undefined) {
+      const s = S;
+      // T-177 (ч. 18): cv_ping2 — «я ещё тут» + «не убрал ли меня модератор» + кого убрали из канала (их отключаем у себя).
+      // Без ч. 18 (или KICK18 = false) — старый cv_ping, как раньше.
+      let p18 = false;
+      if (KICK18) (window.D37Mini?.p18?.() || Promise.resolve(false)).then(v => { p18 = !!v; });
+      const ping = async () => {
+        if (S !== s || s.state !== 'live') { clearInterval(s.pingT); return; }
+        const r = await P.rpc(p18 ? 'cv_ping2' : 'cv_ping', { p_channel: ch });
+        if (!p18 || !r.data || S !== s) return;
+        if (r.data.kicked) {
+          const left = r.data.until ? Math.max(1, Math.ceil((Date.parse(r.data.until) - Date.now()) / 60000)) : 0;
+          const txt = `🔇 Модератор убрал тебя из голосового${r.data.reason ? ' — ' + String(r.data.reason).slice(0, 120) : ''}.${left ? ` Зайти снова можно через ${left} мин.` : ''}`;
+          s.reason = 'kicked'; C.leave();
+          try { if (typeof xpToast === 'function') xpToast(txt); else P.toast(txt, false); } catch (er) {}
+          return;
+        }
+        const out = new Set(Array.isArray(r.data.out) ? r.data.out : []), R = s.room;
+        if (!R || R.closed) return;
+        const had = R.banned?.size || 0; R.banned = out;
+        if (out.size || had) {
+          for (const [key, p] of [...R.peers]) { const m = R.members.get(key); if (m && out.has(m.uid)) { dropPeer(R, p); R.peers.delete(key); } }
+          sync(R);
+        }
+      };
+      s.ping18 = ping;
+      s.pingT = setInterval(ping, 25000);
+    }
     P.sfx('join'); render(); pill(); window.dispatchEvent(new Event('d37:voice'));
     return { ok: true, code };
   };

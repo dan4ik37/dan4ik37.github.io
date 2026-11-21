@@ -26,7 +26,7 @@
 
   // стили центра — отдельный файл (css/ds-mod.css), чтобы не мешать соседним правкам ds.css
   if (!document.querySelector('link[data-dsmod]')) {
-    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'css/ds-mod.css?v=2'; l.dataset.dsmod = '1'; document.head.appendChild(l);
+    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'css/ds-mod.css?v=3'; l.dataset.dsmod = '1'; document.head.appendChild(l);
   }
 
   // ═══ Кто создатель сайта (role = 'admin' в profiles_public): на него — без «🚩 Пожаловаться» ═══
@@ -40,7 +40,8 @@
     rights: 'нет прав', staff: 'только админ и модераторы сайта', not_found: 'не найдено', bad: 'без мата, пожалуйста', len: 'заметка — до 500 символов',
     rate: 'слишком часто — попробуй позже', slow: 'неверная задержка', minutes: 'такой срок нельзя', guest: 'у гостя нет уведомлений — только тайм-аут',
     member: 'его уже нет в сообществе', action: 'неизвестное действие', auth: 'нужно войти', scope: 'неверный раздел', data: 'неверные данные',
-    admin_only: 'только админ сайта', reason_req: 'нужна причина', same: 'это и есть его ник', nick: 'такой ник нельзя' };
+    admin_only: 'только админ сайта', reason_req: 'нужна причина', same: 'это и есть его ник', nick: 'такой ник нельзя',
+    not_in_voice: 'он сейчас не в голосовом канале', not_kicked: 'запрета нет — снимать нечего', role: 'такой роли нет', same_role: 'у него уже эта роль' };
   if (DS._test?.REASON) Object.assign(DS._test.REASON, { creator: RSN.creator });   // ответы сервера в ленте сообществ (community.js)
   const why = r => (r?.missing ? 'появится, когда сайт обновится' : r?.error ? P.err(r.error) : RSN[r?.data?.reason] || (DS.why ? DS.why(r) : 'не получилось'));
 
@@ -157,8 +158,33 @@
     const site = srv.official && R.mod;
     let scope = 'here', state = 'open', kind = onlyFiles ? 'file' : null;
     (sub || []).forEach(x => { if (x === 'all' && site) scope = 'all'; else if (x === 'owner' && R.owner) scope = 'owner'; else if (STF.some(s => s[0] === x)) state = x; else if (x === 'msg' && !onlyFiles) kind = 'msg'; });
+    // T-177 остатки (ч. 18): жалобы на людей (ник, аватар, поведение) — отдельный список команды сайта
+    const p18 = M18 && srv.official && !onlyFiles ? await P18() : false;
+    const KN = { nick: 'ник', avatar: 'аватар', profile: 'профиль', behavior: 'поведение', voice: 'в голосовом', game: 'в игре', other: 'другое' };
+    const chips0 = () => {
+      const chip = (v, t, on, attr) => `<button type="button" class="dm-chip${on ? ' on' : ''}" data-${attr}="${e(v)}">${t}</button>`;
+      return `<div class="dm-chips">${STF.map(([v, t]) => chip(v, t, state === v, 'st')).join('')}${chip('', 'Всё', false, 'kd') + chip('msg', '💬 Сообщения', false, 'kd') + chip('file', '📎 Файлы', false, 'kd') + chip('user', '👤 Люди', true, 'kd')}</div>`;
+    };
+    const urepRow = x => {
+      const s = ST[x.state] || ST.new, open = x.state === 'new' || x.state === 'work';
+      const kinds = String(x.kinds || '').split(',').map(k => KN[k]).filter(Boolean).join(', ');
+      return `<div class="ds-rep dm-rep" data-uk="1" data-uid="${e(x.target || '')}" data-nick="${e(x.nick || '')}">
+        <div class="dm-rh"><span class="dm-st dm-st-${e(x.state)}">${s[0]} ${s[1]}</span><b>${e(x.nick || '—')}</b><small>👤 жалоба на человека${kinds ? ' · ' + e(kinds) : ''} · ${+x.n} ${plural(+x.n, 'жалоба', 'жалобы', 'жалоб')}${x.to_owner ? ' · 👑 на команду' : ''} · ${e(ago(x.at))}</small></div>
+        <div class="dm-why">🚩 ${e(x.reasons || '')}</div>
+        ${x.by_nick ? `<div class="ds-dim dm-by">${x.state === 'work' ? '🙋 Взял(а)' : 'Решил(а)'}: <b>${e(x.by_nick)}</b>${x.by_at ? ' · ' + e(ago(x.by_at)) : ''}</div>` : ''}
+        ${open ? `<div class="ds-row ds4-acts">${x.state === 'new' ? '<button type="button" class="ds-btn ghost ds-sm" data-ua="work">🙋 В работу</button>' : ''}<button type="button" class="ds-btn bad ds-sm" data-ua="done">✅ Нарушение…</button><button type="button" class="ds-btn ghost ds-sm" data-ua="rejected">❌ Отклонить…</button><button type="button" class="ds-btn ghost ds-sm" data-ua="card">👤 Карточка и наказания</button></div>` : ''}</div>`;
+    };
+    const drawUsers = async () => {
+      const r = await RPC('mod_user_reports', { p_state: state });
+      if (!box.isConnected) return;
+      if (!r.data?.ok) { box.innerHTML = chips0() + `<p class="ds-dim">⚠️ ${e(r.missing ? 'появится после обновления базы (часть 18)' : why(r))}</p>`; return; }
+      const L = r.data.list || [];
+      box.innerHTML = chips0() + `<p class="ds-dim">👤 Жалобы на людей — на ник, аватар, профиль и поведение. Тот, на кого жалуются, их не видит и не узнаёт, кто пожаловался.</p>
+        <h4>${L.length} ${plural(L.length, 'человек', 'человека', 'человек')}</h4>${L.map(urepRow).join('') || '<div class="ds-dim dm-empty">Жалоб нет 🎉</div>'}`;
+    };
     const draw = async () => {
       box.innerHTML = '<div class="ds-dim">Загружаем…</div>';
+      if (kind === 'user' && p18) return drawUsers();
       const r = await RPC('mod_reports', { p_cid: cidOf(srv), p_scope: scope, p_state: state, p_kind: kind });
       if (!box.isConnected) return;
       if (r.missing) return legacy(box, mode, srv, onlyFiles ? 'files' : scope === 'all' ? 'all' : '');
@@ -166,7 +192,7 @@
       const L = r.data.list || [];
       const chip = (v, t, on, attr) => `<button type="button" class="dm-chip${on ? ' on' : ''}" data-${attr}="${e(v)}">${t}</button>`;
       box.innerHTML = `<div class="dm-chips">${(site ? [['here', '🏠 Сервер сайта'], ['all', '🏰 Все сообщества']] : [['here', srv.official ? '🏠 Сервер сайта' : '🏠 Это сообщество']]).concat(R.owner ? [['owner', '👑 На команду']] : []).map(([v, t]) => chip(v, t, scope === v, 'sc')).join('')}</div>
-        <div class="dm-chips">${STF.map(([v, t]) => chip(v, t, state === v, 'st')).join('')}${onlyFiles ? '' : chip('', 'Всё', !kind, 'kd') + chip('msg', '💬 Сообщения', kind === 'msg', 'kd') + chip('file', '📎 Файлы', kind === 'file', 'kd')}</div>
+        <div class="dm-chips">${STF.map(([v, t]) => chip(v, t, state === v, 'st')).join('')}${onlyFiles ? '' : chip('', 'Всё', !kind, 'kd') + chip('msg', '💬 Сообщения', kind === 'msg', 'kd') + chip('file', '📎 Файлы', kind === 'file', 'kd') + (p18 ? chip('user', '👤 Люди', false, 'kd') : '')}</div>
         ${scope === 'owner' ? '<p class="ds-dim">👑 Жалобы на модераторов и хелперов сайта и на команды сообществ видит только создатель сайта — тот, на кого жалуются, их не видит.</p>' : ''}
         <h4>${L.length} ${plural(L.length, 'жалоба', 'жалобы', 'жалоб')}</h4>${L.map(repRow).join('') || '<div class="ds-dim dm-empty">Жалоб нет 🎉</div>'}`;
     };
@@ -192,6 +218,26 @@
       if (sc) { scope = sc.dataset.sc; return draw(); }
       if (st) { state = st.dataset.st; return draw(); }
       if (kd) { kind = kd.dataset.kd || null; return draw(); }
+      const ub = ev.target.closest('[data-ua]');
+      if (ub) {   // жалоба на человека (ч. 18)
+        const it = ub.closest('[data-uk]'), uid = it.dataset.uid, nick = it.dataset.nick, a = ub.dataset.ua;
+        if (a === 'card') return memberCard(mode, srv, uid, nick, draw);
+        let note = '';
+        if (a !== 'work') {
+          const v = await X.sheet(a === 'done' ? `✅ Нарушение: <b>${e(nick || 'игрок')}</b>` : `❌ Нарушений нет: <b>${e(nick || 'игрок')}</b>`,
+            `<p class="ds-dim">${a === 'done' ? 'Само наказание (предупредить, сменить ник, тайм-аут, бан) — в «👤 Карточка и наказания». Здесь жалоба закрывается.' : 'Жалоба закроется без действий.'} Тем, кто жаловался, придёт 🔔 «Жалобу рассмотрели» (без имени модератора).</p>
+             <label class="ds-lbl">Заметка — видна команде в 📜 журнале<input class="ds-in" data-f="reason" maxlength="200" placeholder="${a === 'done' ? 'Например: сменили ник' : 'Например: ник обычный'}"></label>
+             <button type="button" class="ds4-wide ds4-go ${a === 'done' ? 'bad' : ''}" data-v="go">${a === 'done' ? '✅ Готово' : '❌ Отклонить'}</button>`,
+            w => ({ note: w.querySelector('[data-f="reason"]').value.trim() }));
+          if (!v) return;
+          note = v.note;
+        }
+        ub.disabled = true;
+        const r = await RPC('mod_user_report_set', { p_user: uid, p_state: a, p_note: note });
+        if (!r.data?.ok) { ub.disabled = false; toast('⚠️ ' + why(r)); return; }
+        toast(a === 'work' ? '🙋 Жалоба у тебя в работе' : a === 'done' ? '✅ Готово — жалобщикам придёт «рассмотрено»' : '❌ Отклонено', true);
+        return draw();
+      }
       const b = ev.target.closest('[data-ra]'); if (!b) return;
       const it = b.closest('[data-key]'), k = it.dataset.k, key = +it.dataset.key, a = b.dataset.ra;
       const cid = it.dataset.cid ? +it.dataset.cid : cidOf(srv);
@@ -227,21 +273,106 @@
     const site = cid == null;
     const T = { warn: ['⚠️ Предупредить', ''], mute: ['⏳ Тайм-аут', 'ghost'], kick: ['👢 Выгнать', 'bad'], ban: ['⛔ Забанить', 'bad'], siteban: ['🔨 Бан ника', 'bad'] }[act];
     const durs = act === 'mute' ? DUR : act === 'ban' ? DUR.concat([[0, 'навсегда']]) : null;
+    // T-177: свой срок (любое число минут / часов / дней). Сервер и раньше принимал любые минуты: тайм-аут — до 7 дней, хелпер сайта — до часа
+    const maxMin = act === 'mute' ? (site && siteRole() === 'helper' ? 60 : 10080) : 0;
     const v = await X.sheet(`${T[0]} <b>${e(nick || 'игрок')}</b>`,
-      `${durs ? `<div class="ds4-opts">${durs.map(([m, t], i) => `<button type="button" class="ds4-opt${i === (act === 'ban' ? durs.length - 1 : 1) ? ' on' : ''}" data-pick="${e(m)}">${e(t)}</button>`).join('')}</div>` : ''}
+      `${durs ? `<div class="ds4-opts">${durs.map(([m, t], i) => `<button type="button" class="ds4-opt${i === (act === 'ban' ? durs.length - 1 : 1) ? ' on' : ''}" data-pick="${e(m)}">${e(t)}</button>`).join('')}</div>${OWN_DUR && X.durField ? X.durField() : ''}` : ''}
        <div class="ds4-chips">${REASONS.map(t => `<button type="button" class="ds4-chip" data-chip="${e(t)}">${e(t)}</button>`).join('')}</div>
        <label class="ds-lbl">Причина — видна в журнале${act === 'siteban' ? '' : ' и ему в 🔔'}<input class="ds-in" data-f="reason" maxlength="200" placeholder="Например: спам ссылками"></label>
        ${act === 'ban' ? '<label class="ds-chk"><input type="checkbox" data-f="purge"> Удалить его сообщения за сутки</label>' : ''}
        <p class="ds-dim">Тайм-аут держит сервер: писать не получится, пока срок не выйдет.</p>
        <button type="button" class="ds4-wide ds4-go ${T[1]}" data-v="go">${T[0]}</button>`,
-      w => ({ min: +(w.querySelector('.ds4-opt.on')?.dataset.pick || 60), reason: w.querySelector('[data-f="reason"]').value.trim(), purge: !!w.querySelector('[data-f="purge"]')?.checked }));
+      w => ({ min: (OWN_DUR && X.durOf ? X.durOf(w) : 0) || +(w.querySelector('.ds4-opt.on')?.dataset.pick ?? 60), reason: w.querySelector('[data-f="reason"]').value.trim(), purge: !!w.querySelector('[data-f="purge"]')?.checked }));
     if (!v) return false;
+    if (maxMin && v.min > maxMin) { toast(`⚠️ Тайм-аут — не дольше ${durText(maxMin)}`); return false; }
     const r = act === 'siteban' ? await RPC('mod_site_ban', { p_user: uid, p_on: true, p_reason: v.reason })
       : site ? await RPC('chat_mod', { p_user: uid || null, p_nick: nick || '', p_action: act, p_minutes: v.min, p_reason: v.reason })
       : await RPC('cm_mod', { p_community: cid, p_user: uid, p_action: act, p_minutes: v.min, p_reason: v.reason, p_purge: v.purge });
     toast(r.data?.ok ? `${T[0]}: ${nick} — готово` : '⚠️ ' + why(r), !!r.data?.ok);
     return !!r.data?.ok;
   }
+  // ═══ T-177 остатки (community.sql ч. 18): «🔇 Убрать из голосового», «🧹 Удалить последние сообщения» (все каналы), «🎭 Роль в команде»
+  //   (только админ), «🚩 Пожаловаться на человека» (любой вошедший). Одни и те же окна — из мини-карточки, «⋯» профиля и карточки
+  //   человека в 🛡 центре. Права решает сервер. Нет ч. 18 — понятная строка «после обновления базы». Откат — MOD18 = false (config.js).
+  const M18 = typeof MOD18 === 'undefined' || !!MOD18, OWN_DUR = M18;
+  const P18 = () => (M18 && window.D37Mini?.p18 ? window.D37Mini.p18() : Promise.resolve(false));
+  const SOON18 = '🛠️ Заработает после обновления базы (community.sql, часть 18)';
+  const durText = m => (X.durText ? X.durText(m) : m + ' мин');
+  const chipsHtml = list => `<div class="ds4-chips">${list.map(t => `<button type="button" class="ds4-chip" data-chip="${e(t)}">${e(t)}</button>`).join('')}</div>`;
+  const optsHtml = (list, on) => `<div class="ds4-opts">${list.map(([v, t]) => `<button type="button" class="ds4-opt${String(v) === String(on) ? ' on' : ''}" data-pick="${e(v)}">${e(t)}</button>`).join('')}</div>`;
+  async function voiceKick(uid, nick){
+    const helper = siteRole() === 'helper';
+    const L = [[1, '1 мин'], [10, '10 мин'], [60, '1 час']].concat(helper ? [] : [[1440, '1 день']]).concat([[0, '↩ Вернуть (снять запрет)']]);
+    const v = await X.sheet(`🔇 Убрать из голосового: <b>${e(nick || 'игрок')}</b>`,
+      `<p class="ds-dim">Его отключит от голосового канала, и зайти обратно он не сможет, пока срок не выйдет. Ему придёт 🔔 с причиной.</p>
+       ${optsHtml(L, 10)}${chipsHtml(['Шумит', 'Оскорбляет', 'Включает музыку', 'Мешает разговору', 'Мат'])}
+       <label class="ds-lbl">Причина — видна в журнале и ему в 🔔<input class="ds-in" data-f="reason" maxlength="200" placeholder="Например: шумит и не выключает микрофон"></label>
+       <button type="button" class="ds4-wide ds4-go bad" data-v="go">🔇 Готово</button>`,
+      w => ({ min: +(w.querySelector('.ds4-opt.on')?.dataset.pick ?? 10), reason: w.querySelector('[data-f="reason"]').value.trim() }));
+    if (!v) return false;
+    const r = await RPC('mod_voice_kick', { p_user: uid, p_channel: null, p_minutes: v.min, p_reason: v.reason });
+    if (r.missing) { toast(SOON18); return false; }
+    toast(r.data?.ok ? (v.min ? `🔇 ${nick}: убран из голосового на ${durText(v.min)}` : `↩ ${nick}: запрет снят — может зайти`) : '⚠️ ' + why(r), !!r.data?.ok);
+    if (r.data?.ok) { try { window.D37Calls?.kickHint?.(); } catch (er) {} }
+    return !!r.data?.ok;
+  }
+  async function purgeUser(uid, nick, cid){
+    const v = await X.sheet(`🧹 Удалить последние сообщения: <b>${e(nick || 'игрок')}</b>`,
+      `<p class="ds-dim">Сколько последних сообщений убрать — сразу во всех каналах ${cid == null ? 'сервера сайта' : 'этого сообщества'}. Вернуть их нельзя.</p>
+       ${optsHtml([[10, '10'], [25, '25'], [50, '50'], [100, '100']], 25)}${chipsHtml(REASONS)}
+       <label class="ds-lbl">Причина — видна в журнале<input class="ds-in" data-f="reason" maxlength="200" placeholder="Например: спам ссылками"></label>
+       <button type="button" class="ds4-wide ds4-go bad" data-v="go">🧹 Удалить</button>`,
+      w => ({ n: +(w.querySelector('.ds4-opt.on')?.dataset.pick ?? 25), reason: w.querySelector('[data-f="reason"]').value.trim() }));
+    if (!v) return false;
+    const r = await RPC('mod_purge_user', { p_cid: cid ?? null, p_user: uid, p_n: v.n, p_reason: v.reason });
+    if (r.missing) { toast(SOON18); return false; }
+    toast(r.data?.ok ? `🧹 ${nick}: удалено сообщений — ${+r.data.n || 0}` : '⚠️ ' + why(r), !!r.data?.ok);
+    return !!r.data?.ok;
+  }
+  const ROLE18 = [['user', '👤 Без роли'], ['helper', '🔰 Хелпер'], ['moderator', '🛡 Модератор']];
+  async function roleSet(uid, nick, cur){
+    if (!isAdmin()) { toast('⚠️ Роли выдаёт только админ сайта'); return false; }
+    const now = ['helper', 'moderator'].includes(cur) ? cur : 'user';
+    const v = await X.sheet(`🎭 Роль в команде: <b>${e(nick || 'игрок')}</b>`,
+      `${optsHtml(ROLE18, now)}
+       <p class="ds-dim">🔰 Хелпер — жалобы, тайм-аут до часа, заметки, защита от рейда. 🛡 Модератор — ещё каналы, удаление, баны ников, журнал, файлы. «Без роли» — снять роль. Ему придёт 🔔, в журнал — запись.</p>
+       <label class="ds-lbl">Заметка — увидит он в 🔔 и команда в журнале<input class="ds-in" data-f="reason" maxlength="200" placeholder="Например: помогает новичкам в чате"></label>
+       <button type="button" class="ds4-wide ds4-go" data-v="go">🎭 Сохранить роль</button>`,
+      w => ({ role: w.querySelector('.ds4-opt.on')?.dataset.pick || now, reason: w.querySelector('[data-f="reason"]').value.trim() }));
+    if (!v) return false;
+    if (v.role === now) { toast('У него уже эта роль'); return false; }
+    const r = await RPC('mod_role_set', { p_user: uid, p_role: v.role, p_reason: v.reason });
+    if (r.missing) { toast(SOON18); return false; }
+    toast(r.data?.ok ? `🎭 ${nick}: ${(ROLE18.find(x => x[0] === v.role) || ['', v.role])[1]}` : '⚠️ ' + why(r), !!r.data?.ok);
+    if (r.data?.ok) { try { P.dropProf?.(uid); window.D37Mini?._t?.PC?.delete?.(uid); } catch (er) {} }
+    return !!r.data?.ok;
+  }
+  const UKIND = [['nick', 'Ник'], ['avatar', 'Аватар'], ['profile', 'Профиль'], ['behavior', 'Поведение'], ['voice', 'В голосовом'], ['game', 'В игре'], ['other', 'Другое']];
+  async function reportUser(uid, nick, place){
+    if (!P.me()) { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); return false; }
+    if (uid === P.me()) { toast('⚠️ ' + RSN.self); return false; }
+    if (ADMINS.has(uid)) { toast('⚠️ ' + RSN.creator); return false; }
+    const v = await X.sheet(`🚩 Пожаловаться: <b>${e(nick || 'игрок')}</b>`,
+      `<p class="ds-dim">На что жалоба?</p>${optsHtml(UKIND, 'behavior')}
+       ${chipsHtml(['Оскорбительный ник', 'Плохая картинка', 'Оскорбляет', 'Мешает играть', 'Спам', 'Выдаёт себя за другого'])}
+       <label class="ds-lbl">Что случилось — пару слов<input class="ds-in" data-f="reason" maxlength="300" placeholder="Например: оскорбляет в голосовом канале"></label>
+       <p class="ds-dim">Жалобу увидит только команда сайта. Он не узнает, кто пожаловался. На плохое сообщение быстрее жаловаться через «⋯» у самого сообщения.</p>
+       <button type="button" class="ds4-wide ds4-go bad" data-v="go">🚩 Отправить</button>`,
+      w => ({ kind: w.querySelector('.ds4-opt.on')?.dataset.pick || 'other', reason: w.querySelector('[data-f="reason"]').value.trim() }));
+    if (!v) return false;
+    if (v.reason.length < 3) { toast('⚠️ Напиши пару слов — что случилось'); return false; }
+    const r = await RPC('user_report', { p_user: uid, p_kind: v.kind, p_reason: v.reason, p_place: String(place || 'card').slice(0, 40) });
+    if (r.missing) { toast(SOON18); return false; }
+    toast(r.data?.ok ? (r.data.again ? '🚩 Твоя жалоба на него уже у команды сайта' : '🚩 Жалоба отправлена — команда сайта посмотрит') : '⚠️ ' + why(r), !!r.data?.ok);
+    return !!r.data?.ok;
+  }
+  // одна дверь для мини-карточки и профиля: k — ureport | vkick | purge | role
+  async function act18(k, uid, nick, o = {}){
+    if (!uid) return false;
+    if (!(await P18())) { toast(SOON18); return false; }
+    return k === 'ureport' ? reportUser(uid, nick, o.place) : k === 'vkick' ? voiceKick(uid, nick) : k === 'purge' ? purgeUser(uid, nick, o.cid ?? null) : k === 'role' ? roleSet(uid, nick, o.role) : false;
+  }
+
   // ═══ T-177: ✏️ Сменить ник / ♻️ Сбросить ник — только админ сайта (сервер: community.sql ч. 17 nick_admin_set / nick_admin_reset).
   //   Старый ник ему больше нельзя; «на время» — сам не сменит до конца срока (потом выберет свой); «навсегда» — только админ.
   //   Без ч. 17 — понятная строка, ничего не ломается. Откат — NICK_ADM = false.
@@ -326,6 +457,7 @@
     const cid = cidOf(srv), site = cid == null, R = rights(srv);
     const o = overlay(`<div class="ds4-t">👤 <b>${e(nick || 'игрок')}</b></div><div class="dm-cbody"><div class="ds-dim">Загружаем…</div></div><button type="button" class="ds4-wide ghost" data-cx>Закрыть</button>`);
     const body = o.box.querySelector('.dm-cbody');
+    const p18 = await P18();
     const draw = async () => {
       const r = await RPC('mod_member', { p_cid: cid, p_user: uid });
       if (!body.isConnected) return;
@@ -334,6 +466,8 @@
       const d = r.data, me = uid === P.me(), can = d.can !== false && !me && !ADMINS.has(uid);
       const acts = can ? [['warn', '⚠️ Предупредить'], ['mute', '⏳ Тайм-аут'], ['unmute', '🔊 Снять тайм-аут']]
         .concat(site ? (R.mod ? [['siteban', '🔨 Бан ника'], ['unban', '✅ Разбан']] : []) : [['kick', '👢 Выгнать'], ['ban', '⛔ Забанить'], ['unban', '✅ Разбан']])
+        .concat(p18 ? [['vkick', '🔇 Из голосового'], ['purge', '🧹 Последние сообщения']] : [])
+        .concat(p18 && site && isAdmin() ? [['role', '🎭 Роль']] : [])
         .concat(site && NICK_ADM && isAdmin() ? [['nickset', '✏️ Сменить ник'], ['nickreset', '♻️ Сбросить ник']] : []) : [];
       body.innerHTML = `${me ? '<p class="ds-dim">Это ты 🙂</p>' : !can ? '<p class="ds-dim">🛡 Это команда или создатель — наказывать может только создатель сайта.</p>' : ''}
         ${acts.length ? `<div class="dm-cacts">${acts.map(([k, t]) => `<button type="button" class="ds-btn ${['kick', 'ban', 'siteban'].includes(k) ? 'bad' : 'ghost'} ds-sm" data-ca="${k}">${t}</button>`).join('')}</div>` : ''}
@@ -353,7 +487,8 @@
         if (r.data?.ok) draw(); else toast('⚠️ ' + why(r));
         return;
       }
-      const ok = a === 'nickset' || a === 'nickreset' ? await nickAdmin(uid, nick, a === 'nickreset')
+      const ok = a === 'vkick' ? await voiceKick(uid, nick) : a === 'purge' ? await purgeUser(uid, nick, cid) : a === 'role' ? await roleSet(uid, nick, P.prof?.(uid)?.role)
+        : a === 'nickset' || a === 'nickreset' ? await nickAdmin(uid, nick, a === 'nickreset')
         : a === 'unmute' || a === 'unban' ? await undo(cid, uid, nick, a) : await punish(cid, uid, nick, a);
       if (ok) { draw(); after?.(); }
     };
@@ -368,7 +503,8 @@
     raid_on: '🛡 включил(а) защиту от рейда', raid_off: '🛡 выключил(а) защиту от рейда', modcfg: '🚫 изменил(а) слова и 🐢 новичкам',
     cat_add: '📁 создал(а) категорию', cat_delete: '📁 удалил(а) категорию', chan_add: '＋ создал(а) канал', chan_edit: '⚙️ изменил(а) канал',
     chan_archive: '🗄 убрал(а) в архив канал', chan_unarchive: '🗄 вернул(а) из архива канал', chan_delete: '🗑 удалил(а) канал', automod_cfg: '🤖 изменил(а) автомодерацию',
-    nick_set: '✏️ сменил(а) ник', nick_reset: '♻️ сбросил(а) ник' };
+    nick_set: '✏️ сменил(а) ник', nick_reset: '♻️ сбросил(а) ник',
+    vkick: '🔇 убрал(а) из голосового', vunkick: '↩ вернул(а) в голосовой', role_set: '🎭 сменил(а) роль' };
   function logRow(x){
     return `<div class="ds4-li"><small>${e(dt(x.at))}</small><div>${x.action === 'automod' ? '<b>🤖 Автомодерация</b>' : `<b>${e(x.actor_nick || '—')}</b>`} ${e(ACT[x.action] || x.action)}${x.target_nick ? ` <b>${e(x.target_nick)}</b>` : ''}${x.reason ? ` · <i>«${e(x.reason)}»</i>` : ''}${x.detail ? ` <span class="ds-dim">· ${e(clean(x.detail))}</span>` : ''}</div></div>`;
   }
@@ -467,5 +603,5 @@
   // T-177: карточка модерации человека и смена ника — из мини-карточки и профиля (одни и те же действия везде)
   const offSrv = () => ({ official: true, id: DS.OFF_ID, staff: siteRole(), name: 'Денчик37' });
   const member = (uid, nick) => memberCard('page', offSrv(), uid, nick);
-  window.D37Mod = { hub, rights, noReport: MV.noReport, member, nickAdmin, isAdmin, _test: { SECT, rights, ACT, ALIAS, NDUR } };
+  window.D37Mod = { hub, rights, noReport: MV.noReport, member, nickAdmin, isAdmin, act18, voiceKick, purgeUser, roleSet, reportUser, _test: { SECT, rights, ACT, ALIAS, NDUR, UKIND, ROLE18 } };
 })();
