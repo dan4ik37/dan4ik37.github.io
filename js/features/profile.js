@@ -135,9 +135,113 @@ async function renderProfileChar(uid, isOwn){
 const PF2_MAIN = ['profileHiddenNote', 'profileAboutCard', 'profileGamesCard', 'pf2Showcase', 'profileGameStatsCard', 'profileAchievementsCard', 'profileXpCard', 'profileQuestsCard'];
 const PF2_SIDE = ['profileFriendsPanel', 'profileStatsRow', 'profileReferralPanel', 'profileGuestsPanel', 'donateLoginPanel', 'profileVipPerksPanel', 'profileVipPromo', 'profileThemePanel', 'profileStaffVipPanel', 'profileStaffPanel', 'profileAdminPanel', 'profileAccountSettings'];
 const pf2On = () => document.documentElement.classList.contains('ui2');
+// ═══ T-172: профиль на ширину экрана (владелец 19.11: «узкая колонка посреди пустого экрана, мелкий текст, длинная простыня») ═══
+// PROFILE_WIDE (config.js) → html.pfw. Шапка — кто это, чем занят, кнопки (в друзья / следить / ⋯); слева «о человеке» (о себе,
+// любимые игры, числа); справа — вкладки вместо простыни блоков. Карточки те же (id и обработчики не меняются), вкладка без
+// видимых карточек прячется сама. Стили — css/ui2.css §3b. Откат — PROFILE_WIDE = false (раскладка pf2Layout, как раньше).
+const pfwOn = () => document.documentElement.classList.contains('pfw');
+const PFW_ABOUT = ['profileHiddenNote', 'profileAboutCard', 'profileGamesCard', 'profileStatsRow'];
+const PFW_TABS = [
+  ['over', '🏠 Обзор', ['pf2Showcase', 'profileGameStatsCard', 'profileQuestsCard']],
+  ['ach', '🏆 Ачивки и уровень', ['profileXpCard', 'profileAchievementsCard']],
+  ['feed', '🔔 Подписки', ['pfwFeed']],   // T-170: лента тех, за кем слежу (js/features/follow.js) — только свой профиль
+  ['friends', '👥 Друзья', ['profileFriendsPanel', 'profileReferralPanel', 'profileGuestsPanel']],
+  ['set', '⚙️ Моё', ['donateLoginPanel', 'profileVipPerksPanel', 'profileVipPromo', 'profileThemePanel', 'profileStaffVipPanel', 'profileStaffPanel', 'profileAdminPanel', 'profileAccountSettings']],
+];
+let pfwRaf = 0, pfwAuto = true;   // pfwAuto — человек сам вкладку ещё не выбирал: держим первую непустую (карточки догружаются)
+function pfwTab(id){
+  const box = document.getElementById('profileContent'); if (!box) return;
+  for (const t of box.querySelectorAll('.pfw-tab')) { const on = t.dataset.pfw === id; if (t.getAttribute('aria-selected') !== String(on)) t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; }
+  for (const p of box.querySelectorAll('.pfw-pane')) { const off = p.dataset.pane !== id; if (p.hidden !== off) p.hidden = off; }
+}
+// какие вкладки не пустые (карточки показываются и прячутся по мере загрузки) — пустые прячем, с пустой выбранной уходим на первую
+function pfwSync(){
+  pfwRaf = 0;
+  const box = document.getElementById('profileContent'); if (!box) return;
+  let first = '', cur = '';
+  for (const t of box.querySelectorAll('.pfw-tab')) {
+    const pane = box.querySelector(`.pfw-pane[data-pane="${t.dataset.pfw}"]`);
+    const vis = !!pane && [...pane.children].some(c => !c.hidden && c.style.display !== 'none' && !c.classList.contains('pfw-empty'));
+    if (t.hidden === vis) t.hidden = !vis;
+    if (vis && !first) first = t.dataset.pfw;
+    if (vis && t.getAttribute('aria-selected') === 'true') cur = t.dataset.pfw;
+  }
+  if (first && (!cur || (pfwAuto && cur !== first))) pfwTab(first);
+  const nav = box.querySelector('.pfw-tabs'); if (nav && nav.hidden !== !first) nav.hidden = !first;
+}
+// показать карточку, даже если она на другой вкладке (например «🔑 Логин для доната» со страницы /vip, «все ачивки →»)
+function pfwReveal(elOrId, block){
+  const el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId; if (!el) return;
+  const pane = el.closest?.('.pfw-pane'); if (pane) { pfwAuto = false; pfwTab(pane.dataset.pane); }
+  el.scrollIntoView({ behavior: 'smooth', block: block || 'start' });
+}
+window.pfwReveal = pfwReveal;
+function pfwLayout(box, head){
+  const hrow = head?.querySelector('.pf-hrow'), fw = document.getElementById('profileAddFriendWrap'), info = head?.querySelector('.pf-info');
+  if (hrow && fw) hrow.appendChild(fw);
+  if (info && !document.getElementById('pfwAct')) {   // «чем занят» и подписчики — под статусом
+    const st = info.querySelector('.pf-statusline');
+    const act = document.createElement('div'); act.id = 'pfwAct'; act.className = 'pfw-act'; act.hidden = true;
+    const fol = document.createElement('div'); fol.id = 'pfwFol'; fol.className = 'pfw-fol'; fol.hidden = true;
+    (st || info.lastElementChild).after(act, fol);
+  }
+  const cols = document.createElement('div'); cols.className = 'pf2-cols pfw-cols';
+  const about = document.createElement('aside'); about.className = 'pf2-side pfw-about'; about.setAttribute('aria-label', 'О человеке');
+  const right = document.createElement('section'); right.className = 'pf2-main pfw-right';
+  const nav = document.createElement('div'); nav.className = 'pfw-tabs'; nav.setAttribute('role', 'tablist'); nav.setAttribute('aria-label', 'Разделы профиля');
+  right.appendChild(nav);
+  for (const id of PFW_ABOUT) { const el = document.getElementById(id); if (el) about.appendChild(el); }
+  PFW_TABS.forEach(([id, title, cards], i) => {
+    const t = document.createElement('button'); t.type = 'button'; t.className = 'pfw-tab'; t.dataset.pfw = id; t.textContent = title;
+    t.setAttribute('role', 'tab'); t.setAttribute('aria-selected', String(i === 0)); t.id = 'pfwTab-' + id; t.setAttribute('aria-controls', 'pfwPane-' + id);
+    nav.appendChild(t);
+    const pane = document.createElement('div'); pane.className = 'pfw-pane'; pane.dataset.pane = id; pane.id = 'pfwPane-' + id; pane.setAttribute('role', 'tabpanel'); pane.setAttribute('aria-labelledby', t.id); pane.hidden = i !== 0;
+    for (const cid of cards) {
+      let el = document.getElementById(cid);
+      if (!el && cid === 'pfwFeed') { el = document.createElement('div'); el.id = 'pfwFeed'; el.className = 'pf-card pf-card-tw'; el.hidden = true; }
+      if (el) pane.appendChild(el);
+    }
+    right.appendChild(pane);
+  });
+  nav.addEventListener('click', ev => { const t = ev.target.closest('.pfw-tab'); if (t) { pfwAuto = false; pfwTab(t.dataset.pfw); } });
+  nav.addEventListener('keydown', ev => {   // стрелки — между вкладками (как у обычных вкладок)
+    if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+    const L = [...nav.querySelectorAll('.pfw-tab:not([hidden])')], i = L.indexOf(document.activeElement); if (i < 0) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const n = L[(i + (ev.key === 'ArrowRight' ? 1 : L.length - 1)) % L.length]; pfwAuto = false; pfwTab(n.dataset.pfw); n.focus();
+  });
+  cols.append(about, right);
+  (document.getElementById('profileUploadHint') || head).after(cols);
+  new MutationObserver(() => { if (!pfwRaf) pfwRaf = requestAnimationFrame(pfwSync); }).observe(right, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'hidden'] });
+  pfwSync();
+}
+// «чем занят»: в сети / играет в … (только то, что человек сам разрешил показывать) и «▶ Присоединиться» — тем же правилам, что
+// мини-карточка: через возрастную границу кнопки нет (T-174), гостю — тоже
+async function pfwActivity(uid, isOwn){
+  const el = document.getElementById('pfwAct'); if (!el) return;
+  el.hidden = true; el.textContent = '';
+  const P = window.D37Phone;
+  if (isOwn || !currentUser || !P?.friendStatus) return;
+  let st = null, kp = null;
+  try { const m = await P.friendStatus([uid]); st = m?.get?.(uid) || null; } catch (e) {}
+  if (profileViewedId !== uid || !st?.online) return;
+  const act = st.a || null, join = act && P.actJoin ? P.actJoin(act) : null;
+  if (join) { try { kp = await window.D37Age?.friendBlock?.(uid); } catch (e) { kp = true; } }
+  if (profileViewedId !== uid) return;
+  const dot = document.createElement('i'), txt = document.createElement('span');
+  txt.textContent = (act && P.actText ? P.actText(act) : '') || 'В сети';
+  el.append(dot, txt);
+  if (join && !kp) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'pf-btn pf-btn-primary'; b.textContent = join.label.replace(/^📍\s*/, '▶ ');
+    b.onclick = () => P.goJoin?.(uid, act);
+    el.appendChild(b);
+  }
+  el.hidden = false;
+}
 function pf2Layout(){
   const box = document.getElementById('profileContent');
   if (!pf2On() || !box || box.querySelector(':scope > .pf2-cols')) return;
+  if (pfwOn()) return pfwLayout(box, box.querySelector('.pf-head'));
   const head = box.querySelector('.pf-head'), fw = document.getElementById('profileAddFriendWrap');
   if (head && fw) head.appendChild(fw);
   const cols = document.createElement('div'); cols.className = 'pf2-cols';
@@ -219,6 +323,7 @@ async function renderProfilePage(viewUserId){
   const isOwn = targetId === currentUser?.id;
   pf2Layout();
   pf2Reset(isOwn);
+  if (pfwOn()) { pfwAuto = true; pfwTab('over'); pfwSync(); pfwActivity(targetId, isOwn); }
 
   let profile, loadErr = null;
   try {
@@ -329,7 +434,7 @@ async function renderProfilePage(viewUserId){
   document.querySelector('#profileContent .pf-head')?.classList.toggle('pf2-hid', hidden);
   if (isOwn) renderPrivacySettings(profile);
   if (isOwn && window.D37Login) window.D37Login.renderMethods().then(() => {   // «Способы входа»
-    if (focusLogins) { const el = document.getElementById('profileLogins'); if (el && !el.hidden) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (focusLogins) { const el = document.getElementById('profileLogins'); if (el && !el.hidden) pfwReveal(el, 'center'); }
   }).catch(e => console.warn('способы входа:', e));
 
   // Редактирование — только на своём профиле
@@ -378,6 +483,8 @@ async function renderProfilePage(viewUserId){
   } else {
     addFriendWrap.style.display = 'none';
   }
+  // T-170: «🔔 Следить», число подписчиков; на своём профиле — лента «Подписки» (js/features/follow.js)
+  if (window.D37Follow) D37Follow.profile(targetId, isOwn, { hidden: !isOwn && !!profile.profile_hidden });
   document.getElementById('profileVipPromo').style.display = (isOwn && !canUseAnimatedAvatar(profile.role, profile)) ? 'block' : 'none';
   const themePanel = document.getElementById('profileThemePanel');
   if (themePanel) {
@@ -402,7 +509,7 @@ async function renderProfilePage(viewUserId){
   if (focusVip && isOwn) setTimeout(() => {
     const blocks = ['donateLoginPanel', 'profileVipPromo'].map(id => document.getElementById(id)).filter(el => el && el.style.display !== 'none');
     if (!blocks.length) return;
-    blocks[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    pfwReveal(blocks[0]);
     blocks.forEach(el => { el.classList.add('pf-focus'); setTimeout(() => el.classList.remove('pf-focus'), 2600); });
   }, 350);
 }

@@ -228,6 +228,103 @@ html.ui2 #profileContent.pf2-other .pf-stats .profile-stat-card:has(#profileStat
 }
 @media (max-width:380px){html.ui2 .pf2-quick{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+/* ───────────── 3b. ПРОФИЛЬ НА ШИРИНУ ЭКРАНА (T-172, владелец 19.11: «узкая колонка посреди пустого экрана, мелкий текст,
+   длинная простыня блоков»). html.pfw — PROFILE_WIDE в js/core/config.js; раскладка — profile.js pfwLayout: шапка (кто это, чем
+   занят, кнопки), слева «о человеке», справа вкладки вместо простыни. Откат — PROFILE_WIDE = false. ───────────── */
+html.pfw #profile-page{max-width:min(1760px,100%);padding-left:clamp(.8rem,2.4vw,2.6rem);padding-right:clamp(.8rem,2.4vw,2.6rem);padding-top:5.2rem}
+html.pfw #profile-page>.sec-title{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* крупнее на больших экранах: всё содержимое профиля разом (текст, значки, отступы) */
+@media (min-width:1500px){html.pfw #profileContent{zoom:1.1}}
+@media (min-width:1850px){html.pfw #profileContent{zoom:1.2}}
+@media (min-width:2400px){html.pfw #profileContent{zoom:1.4}}
+html.pfw #profileBanner{height:clamp(120px,15vw,240px)!important}
+/* шапка: кнопки дружбы / «Следить» / «⋯» — справа от ника (телефон — под ним) */
+@media (min-width:641px){
+  html.pfw .pf-hrow{flex-wrap:wrap;align-items:flex-end}
+  html.pfw .pf-info{flex:1 1 320px}
+  html.pfw .pf-hrow>#profileAddFriendWrap{flex:0 1 auto;margin:0 0 .35rem auto!important;padding:0;justify-content:flex-end;align-items:center}
+}
+html.pfw .pf-nick{font-size:clamp(1.45rem,2.3vw,2.1rem)}
+html.pfw .pf-status{font-size:.95rem}
+.pfw-act{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-top:.45rem;font-size:.92rem;font-weight:600;color:var(--text)}
+.pfw-act[hidden]{display:none}
+.pfw-act i{flex:none;width:10px;height:10px;border-radius:50%;background:#35d07f;box-shadow:0 0 0 3px rgba(53,208,127,.2)}
+.pfw-act .pf-btn{padding:.4rem .9rem;font-size:.82rem;border-radius:999px}
+.pfw-fol{display:inline-flex;align-items:center;gap:.4rem;font-size:.86rem;font-weight:600;color:var(--muted)}
+.pfw-fol[hidden]{display:none}
+.pfw-fol b{color:var(--text-hi)}
+/* размеры текста: подписи и основной текст заметно крупнее (было 9–11 px) */
+html.pfw .pf-kicker{font-size:.8rem;letter-spacing:.1em}
+html.pfw .pf-link{font-size:.84rem}
+html.pfw .ach-summary{font-size:.82rem}
+html.pfw #profileBioText{font-size:1.02rem!important;line-height:1.65!important}
+html.pfw #profileContent [style*="font-size:.6"]{font-size:.8rem!important}
+html.pfw #profileContent [style*="font-size:.7"]{font-size:.86rem!important}
+html.pfw .pf2-q{min-height:76px}
+html.pfw .pf2-q b{font-size:1.6rem}
+html.pfw .pf2-q span{font-size:.8rem}
+html.pfw .pf2-lv b{font-size:.84rem}
+html.pfw .pf2-lv small{font-size:.84rem}
+html.pfw .pf-stats .psc-i{font-size:1.3rem}
+html.pfw .pf-stats .psc-v{font-size:1rem}
+html.pfw .pf-stats .psc-l{font-size:.72rem;letter-spacing:.3px}
+html.pfw .pf2-sh span{font-size:2rem}
+html.pfw .pf2-sh b{font-size:.8rem}
+html.pfw .pf2-sh small{font-size:.72rem}
+html.pfw .pf2-fr small{font-size:.74rem}
+html.pfw .pf-fnote{font-size:.9rem}
+html.pfw #profileContent :is(.xp-lvl span,.xp-today,.xp-week-t,.xp-chip,.xp-rule small){font-size:.82rem}
+html.pfw #profileContent :is(.xp-bar-top,.xp-help summary,.xp-rule b){font-size:.9rem}
+/* колонки: слева «о человеке» (фиксированной ширины), справа вкладки на всё остальное */
+html.pfw .pfw-cols{grid-template-columns:minmax(0,1fr)}
+@media (min-width:1000px){html.pfw .pfw-cols{grid-template-columns:minmax(300px,380px) minmax(0,1fr);align-items:start}}
+html.pfw .pfw-about{position:static}
+html.pfw .pfw-right{min-width:0}
+.pfw-tabs{display:flex;gap:.4rem;overflow-x:auto;scrollbar-width:none;padding:.3rem;border-radius:16px;background:var(--card);border:1px solid var(--line-hi)}
+.pfw-tabs::-webkit-scrollbar{display:none}
+.pfw-tab{flex:1 0 auto;min-height:44px;padding:.55rem 1.1rem;border:0;border-radius:12px;background:none;color:var(--muted);font:700 .95rem 'Montserrat',sans-serif;cursor:pointer;white-space:nowrap;transition:background .2s,color .2s}
+.pfw-tab:hover{color:var(--text-hi);background:rgba(var(--fg-rgb),.05)}
+.pfw-tab[aria-selected="true"]{color:var(--on-accent,#fff);background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.pfw-tab[hidden]{display:none}
+.pfw-tab:focus-visible{outline:2px solid var(--tw);outline-offset:2px}
+.pfw-pane{display:flex;flex-direction:column;gap:1rem;min-width:0}
+.pfw-pane[hidden]{display:none}
+html.pfw .pfw-pane>*{margin-top:0!important}
+.pfw-empty{padding:1.4rem 1rem;border-radius:16px;border:1px dashed var(--line-hi);color:var(--muted);font-size:.95rem;text-align:center}
+.pfw-empty[hidden]{display:none}
+/* карточки внутри вкладок используют ширину: ачивки и игры — больше в ряд */
+html.pfw .pfw-pane .ach-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}
+html.pfw .pfw-pane .pf2-show-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+@media (max-width:640px){
+  html.pfw #profile-page{padding-top:4.6rem}
+  html.pfw .pf-hrow>#profileAddFriendWrap{width:100%;margin:.6rem 0 0!important;padding:0;justify-content:flex-start}
+  html.pfw .pf2-q b{font-size:1.3rem}
+  html.pfw .pf2-q span{font-size:.72rem}
+  html.pfw .pf2-lv small{display:block;font-size:.76rem;white-space:normal}
+  html.pfw .pf2-lv{flex-wrap:wrap}
+  .pfw-tab{flex:0 0 auto;padding:.5rem .9rem;font-size:.9rem}
+}
+
+/* T-170: «Следить» — лента и список во вкладке «🔔 Подписки» профиля (js/features/follow.js) */
+.fol-k{margin:0 0 .7rem}
+.fol-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:.6rem;margin-bottom:1.1rem}
+.fol-feed>.pfw-empty,.fol-feed>.fol-dim{grid-column:1/-1}
+.fol-dim{color:var(--muted);font-size:.9rem}
+.fol-item{display:flex;gap:.75rem;align-items:flex-start;min-height:64px;padding:.75rem .85rem;border-radius:14px;background:rgba(var(--fg-rgb),.04);border:1px solid var(--line);color:var(--text);text-decoration:none;transition:border-color .2s,transform .2s}
+.fol-item:hover,.fol-item:focus-visible{border-color:var(--tw);transform:translateY(-1px)}
+.fol-ic{flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:rgba(var(--fg-rgb),.06);font-size:1.45rem}
+.fol-body{display:flex;flex-direction:column;gap:.15rem;min-width:0}
+.fol-body b{font-size:.98rem;color:var(--text-hi);overflow-wrap:anywhere}
+.fol-body small{font-size:.8rem;color:var(--muted)}
+.fol-d{font-size:.86rem;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fol-ppl{display:flex;flex-wrap:wrap;gap:.45rem}
+.fol-p{display:inline-flex;align-items:center;gap:.15rem;padding:.15rem .2rem .15rem .75rem;border-radius:999px;background:rgba(var(--fg-rgb),.05);border:1px solid var(--line)}
+.fol-pn{color:var(--text);font-size:.9rem;font-weight:600;text-decoration:none;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fol-px{width:36px;height:36px;border:0;border-radius:50%;background:none;color:var(--muted);cursor:pointer;font-size:.8rem}
+.fol-px:hover{color:var(--accent);background:rgba(var(--fg-rgb),.07)}
+.fol-bell{min-width:46px;padding-left:.7rem;padding-right:.7rem}
+.fol-bell[hidden]{display:none}
+
 /* ═══ §4 Телефон 360–412 px (UI_V2): шапка не тесная — язык компактнее (≤ 380 px — без глобуса, «RU ▾»), логотип чуть меньше ═══ */
 @media (max-width:420px){html.ui2 .lang-btn{padding:.4rem .6rem;gap:.25rem;letter-spacing:.4px}}
 @media (max-width:380px){html.ui2 .lang-btn svg{display:none}html.ui2 .nav-logo{font-size:1.55rem;letter-spacing:.1em}}

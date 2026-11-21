@@ -2734,7 +2734,8 @@
    "c": "html-helper",
    "n": "D37Age.badge: число + esc(title)",
    "xs": [
-    "window.D37Age ? D37Age.badge(g.age, { title: g.ageWhy || 'Без ограниче"
+    "window.D37Age ? D37Age.badge(g.age, { title: g.ageWhy || 'Без ограниче",
+    "window.D37Mode && !g.href ? D37Mode.dotHtml(g.id) : ''"
    ]
   },
   {
@@ -8244,6 +8245,37 @@
    "n": "P.plural — одна из трёх своих строк",
    "xs": [
     "plural(L.length, 'человек', 'человека', 'человек')"
+   ]
+  },
+  {
+   "f": "js/features/modepage.js",
+   "fn": "page",
+   "k": "sink:src [im]",
+   "c": "const",
+   "n": "T-171: картинка игры сайта — 'img/games/' + id из таблицы GAMES (константа); снимки — из таблицы MEDIA в этом файле, ещё и по шаблону ^img/…",
+   "xs": [
+    "m.img",
+    "s"
+   ]
+  },
+  {
+   "f": "js/features/modepage.js",
+   "fn": "page",
+   "k": "sink:href [play]",
+   "c": "url-checked",
+   "n": "T-171: адрес проходит safeHref() — только «/…» или «#/…» своего сайта, без схем и кавычек; для игр игроков id — через encodeURIComponent",
+   "xs": [
+    "safeHref(m.play)"
+   ]
+  },
+  {
+   "f": "js/features/modepage.js",
+   "fn": "page",
+   "k": "sink:href [r]",
+   "c": "url-checked",
+   "n": "T-171: адрес проходит safeHref() — только «/…» или «#/…» своего сайта",
+   "xs": [
+    "safeHref(m.rules)"
    ]
   }
  ]

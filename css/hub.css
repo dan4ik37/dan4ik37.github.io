@@ -319,3 +319,57 @@ body.hub-on .bottom-tabbar,body.hub-on #donateFab,body.hub-on #scrollTop,body.hu
   .jn-row{gap:8px;padding:9px 10px}
   .jn-go{padding:9px 11px}
 }
+
+/* ═══ T-171: страница режима / игры /hub/mode/<id> (js/features/modepage.js) и «ⓘ» на карточках. Откат — MODE_PAGE = false ═══ */
+.hub.wrap.md{max-width:min(1500px,100%);padding:0 clamp(12px,2.4vw,36px) 48px}
+.md-back{display:inline-block;margin:6px 0 16px}
+.md-dim{color:var(--muted);font-size:15px;line-height:1.5;margin:0}
+.md-hero{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:center;margin-bottom:22px}
+@media (min-width:900px){.md-hero{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:32px}}
+.md-pic{--gc:var(--accent);position:relative;display:grid;place-items:center;aspect-ratio:16/9;border-radius:24px;overflow:hidden;background:linear-gradient(135deg,color-mix(in srgb,var(--gc) 70%,#000),color-mix(in srgb,var(--gc) 25%,#0b0b14));border:1px solid var(--line-hi);box-shadow:var(--sh-2)}
+.md-pic-ic{font-size:clamp(64px,12vw,140px);line-height:1;filter:drop-shadow(0 8px 24px rgba(0,0,0,.35))}
+.md-pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.md-pic.has .md-pic-ic{display:none}
+.md-info{min-width:0}
+.md-kick{font:800 13px/1 'Montserrat',system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.md-h1{font:900 clamp(30px,4.6vw,56px)/1.06 'Montserrat',system-ui,sans-serif;letter-spacing:-.02em;color:var(--text-hi);margin:0 0 12px;overflow-wrap:anywhere}
+.md-age{display:inline-block;vertical-align:middle;font:800 14px/1 'Montserrat',system-ui,sans-serif;font-style:normal;padding:6px 9px;border-radius:9px;background:rgba(var(--fg-rgb),.1);color:var(--text);letter-spacing:0}
+.md-desc{font-size:clamp(16px,1.25vw,19px);line-height:1.6;color:var(--text);margin:0 0 18px;max-width:70ch}
+.md-why{font-size:14px;color:var(--muted);margin:14px 0 0;line-height:1.5}
+.md-acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.md-play{display:inline-flex;align-items:center;justify-content:center;min-height:56px;padding:0 34px;border-radius:16px;font:900 20px/1 'Montserrat',system-ui,sans-serif;color:#fff;text-decoration:none;background:linear-gradient(135deg,#22c55e,#0ea5a3);box-shadow:0 14px 34px -14px rgba(34,197,94,.75);transition:transform .15s}
+.md-play:hover{transform:translateY(-2px)}
+.md-play:focus-visible,.md-btn:focus-visible,.md-user:focus-visible,.md-dot:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.md-btn{display:inline-flex;align-items:center;min-height:48px;padding:0 18px;border-radius:14px;border:1.5px solid var(--line-hi);background:rgba(var(--fg-rgb),.05);color:var(--text);font:700 15px/1 'Montserrat',system-ui,sans-serif;text-decoration:none;cursor:pointer}
+.md-btn:hover{background:rgba(var(--fg-rgb),.1)}
+.md-btn[hidden]{display:none}
+.md-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px;align-items:start}
+.md-card{padding:18px;border-radius:20px;background:var(--card);border:1px solid var(--line-hi);min-width:0}
+.md-h2{font:800 19px/1.2 'Montserrat',system-ui,sans-serif;color:var(--text-hi);margin:0 0 12px}
+.md-people{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.md-user{min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line-hi);background:rgba(var(--fg-rgb),.05);color:var(--text);font:600 14.5px/1 'Montserrat',system-ui,sans-serif;cursor:pointer}
+.md-user:hover{border-color:var(--tw)}
+.md-link{display:inline-block;margin-top:12px;font:700 15px/1.3 'Montserrat',system-ui,sans-serif;color:var(--tw-t,var(--tw));text-decoration:none}
+.md-link:hover{text-decoration:underline}
+.md-lobby:empty{display:none}
+.md-toplist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.md-topi{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 10px;border-radius:12px;background:rgba(var(--fg-rgb),.04);font-size:15px}
+.md-topp{text-align:center;font-weight:800}
+.md-topn{color:var(--text);font-weight:700;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.md-tops{font-weight:800;color:var(--text-hi)}
+.md-media{margin-top:16px}
+.md-shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
+.md-shot,.md-video,.md-frame{width:100%;aspect-ratio:16/9;border-radius:14px;border:0;object-fit:cover;background:#000 center/cover no-repeat}
+.md-video{color:#fff;font:800 17px/1 'Montserrat',system-ui,sans-serif;cursor:pointer;text-shadow:0 2px 10px #000}
+/* «ⓘ» — на карточке игры и на плитке режима: страница игры (сама карточка по-прежнему сразу открывает игру) */
+.md-dot{position:absolute;right:10px;bottom:10px;z-index:3;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.42);color:#fff;font:700 18px/1 system-ui,sans-serif;cursor:pointer;backdrop-filter:blur(6px);transition:background .15s,transform .15s}
+.md-dot:hover{background:rgba(0,0,0,.7);transform:scale(1.08)}
+.gm-card .md-dot{right:.7rem;bottom:.7rem;width:32px;height:32px;font-size:16px;background:rgba(var(--fg-rgb),.1);color:var(--text)}
+.gm-card .md-dot:hover{background:rgba(var(--fg-rgb),.22)}
+.hc-card{position:relative}
+.hc-card .md-dot{right:8px;top:8px;bottom:auto;width:32px;height:32px;font-size:16px}
+@media (max-width:640px){
+  .md-play{flex:1 1 100%;min-height:58px}
+  .md-btn{flex:1 1 auto;justify-content:center}
+  .md-card{padding:14px;border-radius:16px}
+}

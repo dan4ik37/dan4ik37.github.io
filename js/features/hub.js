@@ -307,8 +307,10 @@
     const CAT = root.D37HubCat;   // T-163: «кто ты в игре» и строка «Игры игроков» (js/features/hub-catalog.js)
     if (CAT) { CAT.me(wrap); CAT.row(wrap); } else account(wrap);   // строка игр — сразу под плашкой, её видно без прокрутки на ПК
     const grid = el('div', 'hub-grid');
+    // T-171: «ⓘ» на плитке режима — его страница (описание, кто играет, комнаты); js/features/modepage.js, откат — MODE_PAGE = false
+    const MODE_OF = { creative: 'e-creative', world: 'world', studio: 'studio3d', klet: 'e-klet' }, MD = root.D37Mode && root.D37Mode.on() ? root.D37Mode : null;
     for (const t of TILES) {
-      if (t.id === 'play') { grid.appendChild(playCard(t)); continue; }
+      if (t.id === 'play') { const pc = playCard(t); if (MD) pc.appendChild(MD.dot('e-play')); grid.appendChild(pc); continue; }
       const a = el(t.href ? 'a' : 'button', 'hub-tile ' + t.cls + (t.big ? ' hub-big' : ''));
       if (t.href) a.href = t.href; else a.type = 'button';
       a.dataset.tile = t.id;
@@ -318,6 +320,7 @@
       tx.appendChild(el('span', 'hub-ts', t.sub));
       a.appendChild(tx);
       if (t.age) a.appendChild(el('i', 'hub-age', t.age));
+      if (MD && MODE_OF[t.id]) a.appendChild(MD.dot(MODE_OF[t.id]));
       if (t.act === 'invite') a.addEventListener('click', invite);
       if (t.act === 'howto') a.addEventListener('click', howto);
       if (t.act === 'gfx') { a.querySelector('.hub-ts').textContent = gfxNow().label + ' · ' + gfxNow().sub; a.addEventListener('click', () => gfxPick(a)); }
@@ -819,6 +822,8 @@
     // T-174: /hub/lobby[/игра] — все комнаты; /hub/party/<id> — группа «Идём вместе»
     if (ON() && (p === 'lobby' || p === 'party') && J()) { if (st.active) close('menu'); lobbyPage(p === 'lobby' ? parts[1] : '', p === 'party' ? parts[1] : ''); return; }
     if (ON() && p === 'games' && root.D37HubCat) { if (st.active) close('menu'); D37HubCat.page($('hub-page')); return; }
+    // T-171: /hub/mode/<id> — страница режима / игры (js/features/modepage.js)
+    if (ON() && p === 'mode' && root.D37Mode) { if (st.active) close('menu'); D37Mode.page($('hub-page'), parts[1] || ''); return; }
     renderMenu();
     // из игры в меню: мир сохраняется при выходе — «▶ Продолжить» и «Сохранение» перерисовать, когда запишется
     if (st.active) close('menu').then(() => { if (!st.active && typeof currentRoute === 'function' && currentRoute() === 'hub') renderMenu(); });

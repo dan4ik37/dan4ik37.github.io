@@ -68,6 +68,7 @@ const FOLLOW_ON = true;
 // T-172 (владелец 19.11: «узкая колонка посреди пустого экрана, мелкий текст»): профиль на ширину экрана — шапка, слева «о человеке»,
 // справа вкладки вместо простыни блоков. Откат — PROFILE_WIDE = false (раскладка как раньше).
 const PROFILE_WIDE = true;
+if (UI_V2 && PROFILE_WIDE) document.documentElement.classList.add('pfw');
 // T-171 (владелец 19.11: «страница-комната каждого режима, как в Roblox»): /mode/<игра> — описание, картинки и видео, «Играть», кто
 // играет сейчас, комнаты (js/features/modepage.js). Откат — MODE_PAGE = false (ссылки ведут сразу в игру, как раньше).
 const MODE_PAGE = true;

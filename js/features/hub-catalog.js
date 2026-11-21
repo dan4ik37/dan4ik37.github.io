@@ -85,6 +85,8 @@
     a.appendChild(el('span', 'hc-by', own ? 'от Денчика · ' + g.tag : (KIND[g.kind] || 'Игра') + ' · ' + g.by));
     if (!own) a.appendChild(el('span', 'hc-st', '▶ ' + num(g.plays) + '  ♥ ' + num(g.likes)));
     a.appendChild(el('span', 'hc-play', 'Играть'));
+    // T-171: «ⓘ» — страница игры игрока (автор, «Следить», сколько играют)
+    if (!own && root.D37Mode && root.D37Mode.on() && (g.kind === 'unity' || KIND[g.kind])) a.appendChild(root.D37Mode.dot((g.kind === 'unity' ? 'unity-' : 'ugc-') + g.id));
     return a;
   }
   // цвет обложки из id (у игр игроков нет картинок — значок на своём цвете)

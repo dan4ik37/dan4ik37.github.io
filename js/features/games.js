@@ -245,6 +245,7 @@ function renderGamesHub(){
       <span class="gm-title">${esc(g.title)}</span>
       <span class="gm-desc">${esc(g.desc)}</span>
       <span class="gm-foot"><span class="gm-play">Играть →</span>${rec}</span>
+      ${window.D37Mode && !g.href ? D37Mode.dotHtml(g.id) : ''}
     </a>`;
   }).join('');
   window.D37AdPlaces?.feed(grid, { place: 'feed_games', every: 10, max: 2 });   // карточка «Реклама» после каждой 10-й (ad-places.js)

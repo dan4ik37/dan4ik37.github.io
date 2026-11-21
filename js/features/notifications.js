@@ -13,7 +13,8 @@ const NOTIF_ICON = {
   level_up: '⬆️', level_reward: '🎁', season: '🏆', advent: '⛄',   // сезонный путь, новогоднее задание (games-more.sql)
   ref_join: '🎉', ref_reward: '🎁', ref_hold: '⏳', ref_bonus: '💎',   // 👥 приглашения (referrals2.sql)
   raid: '⚔️',   // набеги: «на тебя напали» / «отбился» (raids.sql)
-  cm_event: '📅', cm_mention: '@', cm_reply: '↩️', cm_report: '🚩', cm_mod: '🛡', cm_boost: '🚀'   // сообщества (community.sql, community.sql)
+  cm_event: '📅', cm_mention: '@', cm_reply: '↩️', cm_report: '🚩', cm_mod: '🛡', cm_boost: '🚀',   // сообщества (community.sql, community.sql)
+  follow_new: '🔔', report_done: '✅', nick_admin: '✏️'   // «следить» (T-170, ч. 18), «жалобу рассмотрели» (ч. 11), ник сменил админ (ч. 17)
 };
 let notifItems = [];
 let notifUnread = 0;

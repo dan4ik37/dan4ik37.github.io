@@ -1813,7 +1813,7 @@ body.low .donation-alert-icon{animation:none}
 
     <!-- Профиль 2.0: витрина — лучшие полученные ачивки (renderShowcase в profile.js по ответу renderAchievements); без UI_V2 не видна -->
     <div id="pf2Showcase" class="pf-card pf-card-tw pf2-show" hidden>
-      <div class="pf-kicker pf2-kick"><span>🏆 Витрина</span><button type="button" class="pf-link" onclick="document.getElementById('profileAchievementsCard')?.scrollIntoView({behavior:'smooth',block:'start'})">все ачивки →</button></div>
+      <div class="pf-kicker pf2-kick"><span>🏆 Витрина</span><button type="button" class="pf-link" onclick="pfwReveal('profileAchievementsCard')">все ачивки →</button></div>
       <div class="pf2-show-grid" id="pf2ShowGrid"></div>
     </div>
 
@@ -2767,6 +2767,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/friends.js"></script>
 <script src="js/features/lfg.js"></script>
 <script src="js/features/minicard.js"></script>
+<script src="js/features/follow.js"></script>
 <script src="js/features/twitch.js"></script>
 <script src="js/features/soundboard.js"></script>
 <script src="js/features/easter-egg.js"></script>
@@ -2793,6 +2794,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/phone.js"></script>
 <script src="js/features/games.js"></script>
 <script src="js/features/shop.js"></script>
+<script src="js/features/modepage.js"></script>
 <script src="js/features/hub-catalog.js"></script>
 <script src="js/features/hub.js"></script>
 <script src="js/features/join-p2p.js"></script>
