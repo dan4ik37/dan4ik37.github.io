@@ -6553,3 +6553,402 @@ begin
 end $$;
 revoke all on function public.nick17_info() from public;
 grant execute on function public.nick17_info() to anon, authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+-- ЧАСТЬ 18 (T-177 остатки + T-170, 21.11.2026). Повторный запуск безопасен (if not exists / create or replace / drop trigger if
+--   exists). Нужны части 1–17 и forum.sql «ФОРУМ 2.0» (всё это уже выполнено). Старые функции НЕ переписываются — только новые.
+--   Проверка с сервера: rpc part18_info → {"ok":true,"v":1}.
+--   (а) Владелец 20.11 (T-177): «слишком мало функций» — модерация из карточки игрока и профиля:
+--       mod_voice_kick — убрать из голосового канала (и не пускать обратно N минут; снять запрет — 0 минут); сам канал узнаёт об этом
+--       по cv_ping2 (раз в 25 с и сразу по сигналу соседей) — выгнанного отключают и он сам, и соседи;
+--       mod_role_set — выдать / снять роль команды сайта (хелпер, модератор) — только админ; админа так не назначить и не снять;
+--       mod_purge_user — удалить последние сообщения человека во всех каналах сервера сайта или сообщества (до 100);
+--       user_report / mod_user_reports / mod_user_report_set — жалоба на человека (не на сообщение): ник, аватар, профиль, поведение.
+--       Свой срок тайм-аута SQL не требует: chat_mod / cm_mod уже принимают любые минуты (до 7 дней; хелпер сайта — до часа).
+--   (б) Владелец 19.11 (T-170): «следить» за человеком или автором игр. Таблица та же, что у подписок форума (forum_follows) —
+--       одна подписка на человека на весь сайт; follow_set — с правилами как у друзей (возраст, блокировка, скрытый профиль),
+--       follow_info — число подписчиков и «слежу ли я», follow_list — за кем слежу, follow_feed — лента: статьи форума и игры этих
+--       людей; 🔔 о новом — только если человек сам включил колокольчик у подписки (по умолчанию выключен).
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+-- 18.1 Убрать из голосового канала ────────────────────────────────────────────────────────────────────────────────
+create table if not exists public.voice_kicks (
+  channel_id bigint not null,                 -- как voice_here: ≤ 0 — каналы сайта, > 0 — канал сообщества
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  until timestamptz not null,
+  by_id uuid,
+  reason text not null default '' check (char_length(reason) <= 200),
+  at timestamptz not null default now(),
+  primary key (channel_id, user_id)
+);
+create index if not exists idx_voice_kicks_until on public.voice_kicks (until);
+alter table public.voice_kicks enable row level security;
+revoke all on public.voice_kicks from anon, authenticated;
+
+-- Вход в «кто внутри» (его делает cv_pass) — не для выгнанного, пока срок не вышел. cv_pass при этом отвечает ошибкой
+-- «voice_kicked:<минут осталось>» — сайт показывает её по-русски. Остальных вход не касается.
+create or replace function public.voice_here_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare u timestamptz;
+begin
+  select k.until into u from public.voice_kicks k where k.channel_id = new.channel_id and k.user_id = new.user_id and k.until > now();
+  if found then
+    raise exception 'voice_kicked:%', greatest(1, ceil(extract(epoch from (u - now())) / 60)::int) using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+drop trigger if exists voice_here_guard on public.voice_here;
+create trigger voice_here_guard before insert on public.voice_here for each row execute function public.voice_here_guard();
+
+-- p_channel null — из всех голосовых, где он сейчас сидит и где у меня есть право; p_minutes: 1…1440 — убрать и не пускать столько
+-- минут, 0 — снять запрет (вернуть). Сайт: админ, модератор, хелпер (хелпер — до часа; команду трогает только админ; создателя — никто).
+-- Сообщество: те же права, что у тайм-аута (comm_can_mod).
+create or replace function public.mod_voice_kick(p_user uuid, p_channel bigint default null, p_minutes int default 10, p_reason text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); sr text; v_reason text := left(btrim(coalesce(p_reason, '')), 200); v_min int := coalesce(p_minutes, 10);
+  r record; cid bigint; k int := 0; seen int := 0; okc boolean;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_user is null or p_user = me then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if public.mod_is_owner(p_user) then return jsonb_build_object('ok', false, 'reason', 'creator'); end if;
+  sr := public.chat_staff_role(me);
+  if v_min < 0 or v_min > 1440 or (sr = 'helper' and v_min > 60) then return jsonb_build_object('ok', false, 'reason', 'minutes'); end if;
+  if public.comm_bad(v_reason) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if (select count(*) from public.comm_modlog where actor_id = me and action = 'vkick' and created_at > now() - interval '1 hour') >= 60 then
+    return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  if v_min = 0 then
+    -- снять запрет: там, где у меня есть право
+    for r in select channel_id from public.voice_kicks where user_id = p_user and until > now() and (p_channel is null or channel_id = p_channel) loop
+      seen := seen + 1;
+      if r.channel_id <= 0 then okc := sr is not null and (public.chat_staff_role(p_user) is null or sr = 'admin'); cid := null;
+      else select community_id into cid from public.community_channels where id = r.channel_id; okc := cid is not null and public.comm_can_mod(cid, me, p_user); end if;
+      if okc then
+        delete from public.voice_kicks where channel_id = r.channel_id and user_id = p_user;
+        perform public.comm_log(cid, me, p_user, null, 'vunkick', v_reason, '', r.channel_id::text);
+        k := k + 1;
+      end if;
+    end loop;
+    if k = 0 then return jsonb_build_object('ok', false, 'reason', case when seen > 0 then 'rights' else 'not_kicked' end); end if;
+    return jsonb_build_object('ok', true, 'n', k, 'undone', true);
+  end if;
+  for r in select channel_id from public.voice_here where user_id = p_user and seen_at > now() - interval '75 seconds' and (p_channel is null or channel_id = p_channel) loop
+    seen := seen + 1;
+    if r.channel_id <= 0 then okc := sr is not null and (public.chat_staff_role(p_user) is null or sr = 'admin'); cid := null;
+    else select community_id into cid from public.community_channels where id = r.channel_id; okc := cid is not null and public.comm_can_mod(cid, me, p_user); end if;
+    if okc then
+      delete from public.voice_here where channel_id = r.channel_id and user_id = p_user;
+      insert into public.voice_kicks (channel_id, user_id, until, by_id, reason) values (r.channel_id, p_user, now() + make_interval(mins => v_min), me, v_reason)
+        on conflict (channel_id, user_id) do update set until = excluded.until, by_id = excluded.by_id, reason = excluded.reason, at = now();
+      perform public.comm_log(cid, me, p_user, null, 'vkick', v_reason, v_min || ' мин', r.channel_id::text);
+      k := k + 1;
+    end if;
+  end loop;
+  if k = 0 then return jsonb_build_object('ok', false, 'reason', case when seen > 0 then 'rights' else 'not_in_voice' end); end if;
+  if random() < 0.1 then delete from public.voice_kicks where until < now() - interval '1 day'; end if;
+  perform public.comm_notify(p_user, 'cm_mod', me, '🔇 Тебя убрали из голосового канала',
+    coalesce(nullif(v_reason, '') || '. ', '') || 'Зайти снова можно через ' || v_min || ' мин.', '#/chat', 'vkick:' || p_user || ':' || public.comm_bucket(1));
+  return jsonb_build_object('ok', true, 'n', k, 'minutes', v_min);
+end $$;
+
+-- «Я ещё тут» + «не выгнали ли меня» + кого выгнали из этого канала (соседи отключают их у себя). Старый cv_ping остаётся как был.
+create or replace function public.cv_ping2(p_channel bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); here boolean; ku timestamptz; kr text;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  update public.voice_here set seen_at = now() where channel_id = p_channel and user_id = uid;
+  here := found;
+  select until, reason into ku, kr from public.voice_kicks where channel_id = p_channel and user_id = uid and until > now();
+  return jsonb_build_object('ok', here, 'kicked', ku is not null, 'until', ku, 'reason', coalesce(kr, ''),
+    'out', case when here then (select coalesce(jsonb_agg(k.user_id), '[]'::jsonb) from public.voice_kicks k where k.channel_id = p_channel and k.until > now()) else '[]'::jsonb end);
+end $$;
+
+-- 18.2 Роль команды сайта из карточки: только админ; 'user' — снять роль ───────────────────────────────────────────
+create or replace function public.mod_role_set(p_user uuid, p_role text, p_reason text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); v_reason text := left(btrim(coalesce(p_reason, '')), 200); v_old text; v_nick text;
+begin
+  if me is null or not public.is_admin_user(me) then return jsonb_build_object('ok', false, 'reason', 'admin_only'); end if;
+  if p_user is null or p_user = me then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if coalesce(p_role, '') not in ('user', 'helper', 'moderator') then return jsonb_build_object('ok', false, 'reason', 'role'); end if;
+  select coalesce(role, 'user'), nick into v_old, v_nick from public.profiles where id = p_user;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if v_old = 'admin' then return jsonb_build_object('ok', false, 'reason', 'creator'); end if;
+  if v_old = p_role then return jsonb_build_object('ok', false, 'reason', 'same_role'); end if;
+  if public.comm_bad(v_reason) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  update public.profiles set role = p_role where id = p_user;
+  perform public.comm_log(null, me, p_user, v_nick, 'role_set', v_reason, v_old || ' → ' || p_role, '');
+  perform public.notify(p_user, 'cm_mod', me,
+    case p_role when 'moderator' then '🛡 Ты теперь модератор сайта' when 'helper' then '🔰 Ты теперь хелпер сайта' else 'Роль в команде сайта снята' end,
+    coalesce(nullif(v_reason, ''), case when p_role = 'user' then 'Спасибо за помощь!' else 'Добро пожаловать в команду!' end), '/profile', null);
+  return jsonb_build_object('ok', true, 'old', v_old, 'role', p_role);
+end $$;
+
+-- 18.3 Удалить последние сообщения человека во ВСЕХ текстовых каналах: p_cid null — сервер сайта, иначе сообщество ─────
+create or replace function public.mod_purge_user(p_cid bigint, p_user uuid, p_n int default 25, p_reason text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); sr text; k int := 0; v_n int := least(greatest(coalesce(p_n, 25), 1), 100); v_reason text := left(btrim(coalesce(p_reason, '')), 200);
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_user is null or p_user = me then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if public.mod_is_owner(p_user) then return jsonb_build_object('ok', false, 'reason', 'creator'); end if;
+  if public.comm_bad(v_reason) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  perform set_config('d37.reason', v_reason, true);
+  if p_cid is null then
+    sr := public.chat_staff_role(me);
+    if sr is null then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+    if public.chat_staff_role(p_user) is not null and sr <> 'admin' then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+    perform set_config('d37.nolog', '1', true);
+    with x as (select id from public.messages where user_id = p_user and not coalesce(deleted, false) order by id desc limit v_n)
+    update public.messages set deleted = true where id in (select id from x);
+    get diagnostics k = row_count;
+    perform set_config('d37.nolog', '', true);
+  else
+    if not public.comm_can_mod(p_cid, me, p_user) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+    perform set_config('d37.nolog', '1', true);
+    with x as (select m.id from public.community_messages m join public.community_channels c on c.id = m.channel_id
+      where c.community_id = p_cid and m.user_id = p_user and not m.deleted order by m.id desc limit v_n)
+    update public.community_messages set deleted = true, hidden = false, text = '', reactions = '{}'::jsonb where id in (select id from x);
+    get diagnostics k = row_count;
+    perform set_config('d37.nolog', '', true);
+  end if;
+  perform public.comm_log(p_cid, me, p_user, null, 'purge', v_reason, k || ' сообщ. · все каналы', '');
+  return jsonb_build_object('ok', true, 'n', k);
+end $$;
+
+-- 18.4 Жалоба на человека (ник, аватар, профиль, поведение в игре или голосовом) ────────────────────────────────────
+create table if not exists public.user_reports (
+  id bigint generated always as identity primary key,
+  target_id uuid not null references public.profiles(id) on delete cascade,
+  reporter_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null default 'other' check (kind in ('nick', 'avatar', 'profile', 'behavior', 'voice', 'game', 'other')),
+  reason text not null check (char_length(reason) between 3 and 300),
+  place text not null default '' check (char_length(place) <= 40),
+  to_owner boolean not null default false,      -- на команду сайта: видит только создатель
+  state text not null default 'new' check (state in ('new', 'work', 'done', 'rejected')),
+  by_id uuid,
+  by_at timestamptz,
+  note text not null default '' check (char_length(note) <= 200),
+  created_at timestamptz not null default now()
+);
+create unique index if not exists user_report_once on public.user_reports (target_id, reporter_id) where state in ('new', 'work');
+create index if not exists idx_user_reports_open on public.user_reports (created_at desc) where state in ('new', 'work');
+create index if not exists idx_user_reports_reporter on public.user_reports (reporter_id, created_at desc);
+alter table public.user_reports enable row level security;
+revoke all on public.user_reports from anon, authenticated;
+
+create or replace function public.user_report(p_user uuid, p_kind text, p_reason text, p_place text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); v_reason text := left(btrim(coalesce(p_reason, '')), 300); g text; staff boolean; ins int; n int; r record;
+  v_kind text := case when p_kind in ('nick', 'avatar', 'profile', 'behavior', 'voice', 'game') then p_kind else 'other' end; v_nick text;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_user is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  g := public.mod_report_guard(uid, p_user);
+  if g is not null then return jsonb_build_object('ok', false, 'reason', g); end if;
+  select nick into v_nick from public.profiles where id = p_user;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if char_length(v_reason) < 3 then return jsonb_build_object('ok', false, 'reason', 'reason_req'); end if;
+  if (select count(*) from public.user_reports where reporter_id = uid and created_at > now() - interval '1 hour') >= 10 then
+    return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  staff := public.mod_target_staff(null, p_user);
+  insert into public.user_reports (target_id, reporter_id, kind, reason, place, to_owner)
+    values (p_user, uid, v_kind, v_reason, left(coalesce(p_place, ''), 40), staff) on conflict do nothing;
+  get diagnostics ins = row_count;
+  if ins = 0 then return jsonb_build_object('ok', true, 'again', true); end if;
+  select count(*) into n from public.user_reports where target_id = p_user and state in ('new', 'work');
+  if n = 1 then
+    for r in select id from public.profiles where (case when staff then role = 'admin' else role in ('admin', 'moderator') end) and id is distinct from p_user limit 20 loop
+      perform public.comm_notify(r.id, 'cm_report', null, case when staff then '🚩 Жалоба на человека из команды' else '🚩 Жалоба на человека' end,
+        left(coalesce(v_nick, '') || ': ' || v_reason, 140), '#/chat/reports/reports', 'urep:' || p_user);
+    end loop;
+  end if;
+  return jsonb_build_object('ok', true, 'to_owner', staff);
+end $$;
+
+-- Список для команды сайта: по человеку (все открытые жалобы на него — одной строкой). На команду — только создателю; тот, на кого
+-- жалуются, свою строку не видит. p_state: open (new + work) | new | work | done | rejected
+create or replace function public.mod_user_reports(p_state text default 'open')
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me uuid := auth.uid(); sr text := public.chat_staff_role(auth.uid());
+begin
+  if sr is null then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+  return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(to_jsonb(x) order by x.at desc), '[]'::jsonb) from (
+    select u.target_id as target, (select nick from public.profiles where id = u.target_id) as nick, count(*)::int as n,
+      case when bool_or(u.state = 'new') then 'new' when bool_or(u.state = 'work') then 'work' when bool_or(u.state = 'done') then 'done' else 'rejected' end as state,
+      string_agg(distinct u.kind, ',') as kinds, left(string_agg(u.reason, ' · ' order by u.id desc), 600) as reasons,
+      max(u.created_at) as at, bool_or(u.to_owner) as to_owner,
+      (select nick from public.profiles where id = (array_agg(u.by_id order by u.by_at desc nulls last))[1]) as by_nick, max(u.by_at) as by_at
+    from public.user_reports u
+    where u.target_id is distinct from me and (not u.to_owner or sr = 'admin')
+      and case coalesce(p_state, 'open') when 'open' then u.state in ('new', 'work') else u.state = p_state end
+      and (coalesce(p_state, 'open') in ('open', 'new', 'work') or u.created_at > now() - interval '60 days')
+    group by u.target_id order by max(u.created_at) desc limit 100) x));
+end $$;
+
+-- Сменить статус всех открытых жалоб на человека: work — «взял», done — «нарушение», rejected — «нарушений нет»
+create or replace function public.mod_user_report_set(p_user uuid, p_state text, p_note text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); sr text := public.chat_staff_role(auth.uid()); v_note text := left(btrim(coalesce(p_note, '')), 200); r record; k int := 0;
+begin
+  if sr is null then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+  if p_user is null or p_user = me then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if coalesce(p_state, '') not in ('work', 'done', 'rejected') then return jsonb_build_object('ok', false, 'reason', 'state'); end if;
+  if public.comm_bad(v_note) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  for r in select id, reporter_id from public.user_reports where target_id = p_user and state in ('new', 'work') and (not to_owner or sr = 'admin') loop
+    update public.user_reports set state = p_state, by_id = me, by_at = now(), note = v_note where id = r.id;
+    if p_state <> 'work' then perform public.mod_done_notice(r.reporter_id, p_state, 'user:' || r.id); end if;
+    k := k + 1;
+  end loop;
+  if k = 0 then return jsonb_build_object('ok', false, 'reason', 'closed'); end if;
+  perform public.comm_log(null, me, p_user, null, 'report_' || p_state, v_note, 'жалоба на человека', '');
+  return jsonb_build_object('ok', true, 'n', k);
+end $$;
+
+-- 18.5 «Следить» (T-170) ──────────────────────────────────────────────────────────────────────────────────────────
+alter table public.forum_follows add column if not exists notify boolean not null default false;
+
+-- Почему нельзя следить (null — можно): правила как у друзей — возраст, блокировка, скрытый профиль
+create or replace function public.follow_why(p_me uuid, p_user uuid)
+returns text language plpgsql stable security definer set search_path = public as $$
+begin
+  if p_me is null then return 'auth'; end if;
+  if p_user is null or p_user = p_me then return 'own'; end if;
+  if not exists (select 1 from public.profiles where id = p_user) then return 'not_found'; end if;
+  if public.comm_blocked(p_me, p_user) then return 'blocked'; end if;
+  if not public.kid_pair_ok(p_me, p_user) then return 'age'; end if;
+  if not public.ds_vis(p_me, p_user) then return 'hidden'; end if;
+  return null;
+end $$;
+
+create or replace function public.follow_set(p_user uuid, p_on boolean, p_notify boolean default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); w text; v_n boolean;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if not coalesce(p_on, true) then
+    delete from public.forum_follows where follower = uid and author = p_user;
+    return jsonb_build_object('ok', true, 'follow', false, 'followers', (select count(*)::int from public.forum_follows where author = p_user));
+  end if;
+  w := public.follow_why(uid, p_user);
+  if w is not null then return jsonb_build_object('ok', false, 'reason', w); end if;
+  if not exists (select 1 from public.forum_follows where follower = uid and author = p_user)
+     and (select count(*) from public.forum_follows where follower = uid) >= 500 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
+  insert into public.forum_follows (follower, author, notify) values (uid, p_user, coalesce(p_notify, false))
+    on conflict (follower, author) do update set notify = coalesce(p_notify, public.forum_follows.notify)
+    returning notify into v_n;
+  return jsonb_build_object('ok', true, 'follow', true, 'notify', v_n, 'followers', (select count(*)::int from public.forum_follows where author = p_user));
+end $$;
+
+-- Число подписчиков (скрытый профиль — без числа) и «слежу ли я»; гостю — только число
+create or replace function public.follow_info(p_user uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); w text; v_f boolean := false; v_n boolean := false;
+begin
+  if p_user is null or not exists (select 1 from public.profiles where id = p_user) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if uid is not null and uid <> p_user then
+    w := public.follow_why(uid, p_user);
+    select true, notify into v_f, v_n from public.forum_follows where follower = uid and author = p_user;
+  end if;
+  return jsonb_build_object('ok', true,
+    'followers', case when uid = p_user or public.ds_vis(uid, p_user) then (select count(*)::int from public.forum_follows where author = p_user) end,
+    'following', coalesce(v_f, false), 'notify', coalesce(v_n, false), 'can', uid is not null and uid <> p_user and w is null, 'why', w,
+    'mine', case when uid = p_user then (select count(*)::int from public.forum_follows where follower = uid) end);
+end $$;
+
+-- За кем я слежу (последние 200)
+create or replace function public.follow_list()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('ok', auth.uid() is not null, 'list', coalesce((select jsonb_agg(jsonb_build_object('id', x.author, 'nick', x.nick, 'notify', x.notify, 'at', x.created_at) order by x.created_at desc)
+    from (select f.author, p.nick, f.notify, f.created_at from public.forum_follows f join public.profiles p on p.id = f.author
+      where f.follower = auth.uid() order by f.created_at desc limit 200) x), '[]'::jsonb));
+$$;
+
+-- Лента: новое у тех, за кем слежу — статьи форума (с правилами возраста форума) и опубликованные игры (студия, игры на Unity)
+create or replace function public.follow_feed(p_limit int default 30)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); lim int := least(greatest(coalesce(p_limit, 30), 1), 60); res jsonb;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select coalesce(jsonb_agg(to_jsonb(x) order by x.at desc), '[]'::jsonb) into res from (
+    select u.kind, u.id, u.title, u.author, (select nick from public.profiles where id = u.author) as nick, u.at, u.icon, u.descr from (
+      select 'thread'::text as kind, t.id::text as id, t.title, t.author_id as author, coalesce(t.published_at, t.created_at) as at, ''::text as icon, left(coalesce(t.excerpt, ''), 160) as descr
+        from public.forum_threads t join public.forum_follows f on f.author = t.author_id and f.follower = uid
+        where t.status = 'published' and public.forum_can_see(t.status, t.author_id, t.age_min, t.realm, uid)
+          and coalesce(t.published_at, t.created_at) > now() - interval '90 days'
+      union all
+      select case when g.kind = 'place' then 'place' else 'game' end, g.id, g.title, g.author, g.updated_at, g.icon, left(g.descr, 160)
+        from public.ugc_games g join public.forum_follows f on f.author = g.author and f.follower = uid
+        where g.status = 'public' and g.updated_at > now() - interval '90 days'
+      union all
+      select 'unity', g.id, g.title, g.author, g.updated_at, g.icon, left(g.descr, 160)
+        from public.unity_games g join public.forum_follows f on f.author = g.author and f.follower = uid
+        where g.status = 'public' and g.updated_at > now() - interval '90 days'
+    ) u
+    where public.kid_pair_ok(uid, u.author) and not public.comm_blocked(uid, u.author)
+    order by u.at desc limit lim) x;
+  return jsonb_build_object('ok', true, 'list', res);
+end $$;
+
+-- 🔔 тем, кто включил колокольчик: «новое у того, за кем следишь». Ошибка здесь никогда не ломает публикацию.
+create or replace function public.follow_notify(p_author uuid, p_title text, p_body text, p_link text, p_key text, p_age int default 0)
+returns void language plpgsql security definer set search_path = public as $$
+declare r record;
+begin
+  begin
+    for r in select f.follower from public.forum_follows f where f.author = p_author and f.notify limit 300 loop
+      if public.kid_pair_ok(r.follower, p_author) and not public.comm_blocked(r.follower, p_author) and coalesce(p_age, 0) <= public.forum_cap(r.follower) then
+        perform public.notify(r.follower, 'follow_new', p_author, p_title, p_body, p_link, 'fol:' || p_key);
+      end if;
+    end loop;
+  exception when others then null;
+  end;
+end $$;
+create or replace function public.follow_on_thread()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'published' and coalesce(new.realm, 'kids') = 'kids' and (tg_op = 'INSERT' or old.status is distinct from 'published') then
+    perform public.follow_notify(new.author_id, '📰 Новая статья', left(coalesce(new.title, ''), 140), '/forum/' || new.id, 'th:' || new.id, new.age_min);
+  end if;
+  return null;
+end $$;
+drop trigger if exists follow_on_thread on public.forum_threads;
+create trigger follow_on_thread after insert or update of status on public.forum_threads for each row execute function public.follow_on_thread();
+create or replace function public.follow_on_game()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'public' and (tg_op = 'INSERT' or old.status is distinct from 'public') then
+    perform public.follow_notify(new.author, '🎮 Новая игра', left(coalesce(new.title, ''), 140),
+      case when tg_table_name = 'unity_games' then '#/games/unity/play/' when to_jsonb(new)->>'kind' = 'place' then '#/games/studio3d/play/' else '#/games/studio/play/' end || new.id,
+      tg_table_name || ':' || new.id, 0);
+  end if;
+  return null;
+end $$;
+drop trigger if exists follow_on_game on public.ugc_games;
+create trigger follow_on_game after insert or update of status on public.ugc_games for each row execute function public.follow_on_game();
+drop trigger if exists follow_on_game on public.unity_games;
+create trigger follow_on_game after insert or update of status on public.unity_games for each row execute function public.follow_on_game();
+
+-- 18.6 Проверка и права ───────────────────────────────────────────────────────────────────────────────────────────
+create or replace function public.part18_info()
+returns jsonb language sql stable as $$ select jsonb_build_object('ok', true, 'v', 1) $$;
+
+revoke all on function public.voice_here_guard() from public, anon, authenticated;
+revoke all on function public.follow_why(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.follow_notify(uuid, text, text, text, text, integer) from public, anon, authenticated;
+revoke all on function public.follow_on_thread() from public, anon, authenticated;
+revoke all on function public.follow_on_game() from public, anon, authenticated;
+do $$
+declare f text;
+begin
+  foreach f in array array['mod_voice_kick(uuid,bigint,integer,text)', 'cv_ping2(bigint)', 'mod_role_set(uuid,text,text)', 'mod_purge_user(bigint,uuid,integer,text)',
+    'user_report(uuid,text,text,text)', 'mod_user_reports(text)', 'mod_user_report_set(uuid,text,text)',
+    'follow_set(uuid,boolean,boolean)', 'follow_list()', 'follow_feed(integer)'] loop
+    execute 'revoke all on function public.' || f || ' from public, anon';
+    execute 'grant execute on function public.' || f || ' to authenticated';
+  end loop;
+end $$;
+revoke all on function public.follow_info(uuid) from public;
+grant execute on function public.follow_info(uuid) to anon, authenticated;
+revoke all on function public.part18_info() from public;
+grant execute on function public.part18_info() to anon, authenticated;
