@@ -47,7 +47,7 @@
       return data;
     } catch (e) { return null; }
   }
-  const LIGHT = 'id,title,icon,descr,kind,tpl,status,plays,likes,created_at,updated_at,author,profiles(nick)';
+  const LIGHT = 'id,title,icon,descr,kind,tpl,status,plays,likes,created_at,updated_at,author,profiles!ugc_games_author_fkey(nick)';
   // Возрастная метка игры (age.sql: age_rating — выбирает автор, меняет модератор; js/core/age.js → D37Age.ugc). Колонку
   // спрашиваем, только когда она уже есть на сервере — иначе запрос списка сломался бы
   const AU = () => window.D37Age?.ugc || null;
@@ -525,7 +525,7 @@ let last = performance.now();
     const st = S;
     root.innerHTML = '<div class="st"><div class="st-empty">Загружаем игру…</div></div>';
     let g = null;
-    const L = await light('id,title,icon,descr,kind,tpl,data,html,status,plays,likes,author,created_at,profiles(nick)');
+    const L = await light('id,title,icon,descr,kind,tpl,data,html,status,plays,likes,author,created_at,profiles!ugc_games_author_fkey(nick)');
     const row = await select(q => q.select(L).eq('id', id).maybeSingle());
     if (S !== st) return;
     if (row?.kind === 'place') { if (window.D37Route) D37Route.go('#/games/studio3d/play/' + id, { replace: true }); else location.replace('#/games/studio3d/play/' + id); return; }   // 3D-мир — в «Студии 3D»

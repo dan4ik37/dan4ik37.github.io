@@ -880,7 +880,7 @@ Players.PlayerAdded.Connect(player => {
     const fail = t => { const L = document.createElement('div'); L.className = 's3-loading'; L.innerHTML = t; ed.box.appendChild(L); };
     if (!c) { fail('Не получилось открыть мир — обнови страницу'); return; }
     let row = null;
-    try { ({ data: row } = await c.from('ugc_games').select('id,title,icon,descr,kind,data,status,author,plays,likes,profiles(nick)').eq('id', id).maybeSingle()); } catch (e) {}
+    try { ({ data: row } = await c.from('ugc_games').select('id,title,icon,descr,kind,data,status,author,plays,likes,profiles!ugc_games_author_fkey(nick)').eq('id', id).maybeSingle()); } catch (e) {}
     if (ED !== ed) return;
     if (!row || row.kind !== 'place' || !Array.isArray(row.data?.objects)) { fail('Мир не найден или скрыт автором.<br><a href="#/games/studio">Другие миры и игры</a>'); return; }
     // Возраст (js/core/age.js): чужой мир не по возрасту — «обложка» вместо мира (метка age_rating — отдельно: до age.sql колонки нет)

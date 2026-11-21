@@ -495,7 +495,7 @@
       return data;
     } catch (e) { return null; }
   }
-  const LIGHT = 'id,title,icon,descr,url,origin,aspect,players,status,plays,likes,created_at,updated_at,author,profiles(nick)';
+  const LIGHT = 'id,title,icon,descr,url,origin,aspect,players,status,plays,likes,created_at,updated_at,author,profiles!unity_games_author_fkey(nick)';
   // Возрастная метка игры (age.sql: age_rating — выбирает автор, меняет модератор; js/core/age.js → D37Age.ugc). Колонку
   // спрашиваем, только когда она уже есть на сервере — иначе запрос списка сломался бы
   const AU = () => window.D37Age?.ugc || null;

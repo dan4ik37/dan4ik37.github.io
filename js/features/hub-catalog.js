@@ -60,9 +60,9 @@
         } catch (e) {}
       };
       await Promise.all([
-        pull('ugc_games', 'id,title,icon,kind,plays,likes,created_at,updated_at,age_rating,profiles(nick)', g => (KIND[g.kind] ? g.kind : 'tpl'),
+        pull('ugc_games', 'id,title,icon,kind,plays,likes,created_at,updated_at,age_rating,profiles!ugc_games_author_fkey(nick)', g => (KIND[g.kind] ? g.kind : 'tpl'),
           g => g.kind === 'place' ? '#/games/studio3d/play/' + encodeURIComponent(g.id) : '#/games/studio/play/' + encodeURIComponent(g.id)),
-        pull('unity_games', 'id,title,icon,plays,likes,created_at,updated_at,profiles(nick)', () => 'unity', g => '#/games/unity/play/' + encodeURIComponent(g.id)),
+        pull('unity_games', 'id,title,icon,plays,likes,created_at,updated_at,profiles!unity_games_author_fkey(nick)', () => 'unity', g => '#/games/unity/play/' + encodeURIComponent(g.id)),
       ]);
       const max = ageMax();
       cache = out.filter(g => g.title.length >= 2 && (g.age == null || g.age <= max));
