@@ -6948,6 +6948,15 @@ do $$ begin
   end if;
 exception when others then raise warning 'ч. 18: метка site_config part18 не поставлена: %', sqlerrm;
 end $$;
+-- Метку должны видеть все, и гости тоже. Сегодня гость видит в site_config только строку schedule: если на таблице включена защита
+-- строк, без этого правила сайт не увидит метку и новые кнопки останутся «скоро». Правило открывает на чтение одну эту строку.
+do $$ begin
+  if to_regclass('public.site_config') is not null then
+    drop policy if exists site_config_part18_read on public.site_config;
+    create policy site_config_part18_read on public.site_config for select to anon, authenticated using (key = 'part18');
+  end if;
+exception when others then raise warning 'ч. 18: правило чтения метки part18 не создано: %', sqlerrm;
+end $$;
 
 revoke all on function public.voice_here_guard() from public, anon, authenticated;
 revoke all on function public.follow_why(uuid, uuid) from public, anon, authenticated;
