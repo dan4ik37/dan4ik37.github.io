@@ -332,10 +332,17 @@ async function playUntilLoaded(C, label){
             const want = await C.ev(ENGINE_LOOK);
             for (let i = 0; i < 50 && !(FAKE.prefs && FAKE.prefs.d37body === 'boy'); i++) await sleep(200);
             ok(FAKE.prefs && FAKE.prefs.d37body === 'boy' && FAKE.prefs.d37look === want.text, 'образ ушёл в аккаунт (prefs_set)', FAKE.prefs && { body: FAKE.prefs.d37body, look: FAKE.prefs.d37look });
+            // 21.11: раньше здесь ждали версию 1 — будто сохранение при выходе первое. Но движок сам просит сохранить мир раньше (save_ready →
+            // saveWorld), и первое такое сохранение сразу идёт в облако (по замыслу: «не чаще раза в 25 с, при выходе — сразу»). Поэтому
+            // проверяем само сохранение при выходе: оно одно (ровно одна новая запись в облаке, не две) и версия выросла ровно на 1.
+            await C.until(`!D37Hub._st.saveBusy`, 10000);
+            const commits = () => FAKE.calls.filter(c => c === 'cloud_commit').length;
+            const n0 = commits(), v0 = FAKE.row ? FAKE.row.ver : 0;
             await C.ev(`(D37Hub._st.lastCloud = 0, true)`);
             const saved = await C.ev(`D37Hub.saveWorld('exit')`);
-            for (let i = 0; i < 50 && !FAKE.row; i++) await sleep(200);
-            ok(saved && FAKE.row && FAKE.row.ver === 1 && FAKE.calls.includes('upload'), 'мир ушёл в облако (cloud_begin → файл → cloud_commit)', { row: FAKE.row, calls: FAKE.calls.slice(-6) });
+            for (let i = 0; i < 50 && commits() === n0; i++) await sleep(200);
+            await sleep(600);   // второй записи быть не должно
+            ok(saved && FAKE.row && commits() === n0 + 1 && FAKE.row.ver === v0 + 1 && FAKE.calls.includes('upload'), 'мир ушёл в облако при выходе — одной записью (cloud_begin → файл → cloud_commit), версия +1', { row: FAKE.row, n0, v0, calls: FAKE.calls.slice(-6) });
             // браузер очищен (другое устройство): вход → образ из аккаунта, мир из облака
             await C.ev(GO('/profile'));
             ok(await C.until(`!!document.querySelector('#profileContent .hub-pcard')`, 8000), 'свой профиль: карточка «Планета D37» (Играть, Гардероб)');

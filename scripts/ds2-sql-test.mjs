@@ -134,6 +134,7 @@ await as(KID); let tr = await q(`select public.cm_chan_pw_try(71, 'nope') r`); t
 tr = await q(`select public.cm_chan_pw_try(71, 'tajna1') r`); t(tr.ok === true, 'right password');
 r = await asApp(KID, `select channel_id from community_messages order by id`); t(r.rows.length === 2, 'after password: reads');
 await as(KID); let st = await q(`select public.cm_chan_pw_state(7) r`); t(st.length === 1 && st[0].id === 71 && st[0].ok === true, 'state: locked + open for me', st);
+await db.exec(`delete from community_members where community_id = 7 and user_id = '${OUT}'`);   // выше («joins under cap») OUT вступил — здесь он снова посторонний
 await as(OUT); t((await q(`select public.cm_chan_pw_try(71, 'tajna1') r`)).reason === 'member', 'outsider cannot try');
 await as(T14); for (let i = 0; i < 5; i++) await q(`select public.cm_chan_pw_try(71, 'x${i}') r`);
 t((await q(`select public.cm_chan_pw_try(71, 'tajna1') r`)).reason === 'rate', 'attempt limit 5 / 15 min');

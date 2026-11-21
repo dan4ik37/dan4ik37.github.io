@@ -588,11 +588,15 @@ ok(R.hostOf('https://www.YouTube.com/@x') === 'youtube.com', 'домен для 
     // Правила для рекламодателей /ads-terms
     res = await run({ page: 'adsterms' });
     const tb = res.body || '';
-    ok(res.code === 200 && /Правила рекламы на сайте/.test(tb) && /показать юристу/.test(tb), '/ads-terms: страница, пометка «шаблон — показать юристу»');
+    // 05.11 владелец убрал со страницы строку «шаблон — показать юристу» (DRAFT_NOTE = false), и пока нет реквизитов продавца, страница
+    // noindex (DRAFT_NOINDEX): проверяем, что страница следует этим выключателям, а не прежнему виду
+    const SL = await import(pathToFileURL(path.join(tmp, 'api/_lib/seller.js')).href), LG = await import(pathToFileURL(path.join(tmp, 'api/_lib/routes/legal.js')).href);
+    const wantNote = !SL.sellerReady() && !!LG.DRAFT_NOTE, wantNoindex = !SL.sellerReady() && LG.DRAFT_NOINDEX.includes('ads-terms');
+    ok(res.code === 200 && /Правила рекламы на сайте/.test(tb) && /показать юристу/.test(tb) === wantNote, '/ads-terms: страница; строка «шаблон — показать юристу» — по выключателю DRAFT_NOTE');
     ok(/38-ФЗ/.test(tb) && /erid/.test(tb) && /ОРД/.test(tb) && /Казахстан/.test(tb) && /партнёрский материал/.test(tb), '/ads-terms: маркировка — Россия (erid, ОРД) и Казахстан');
     ok(/азартные игры/.test(tb) && /вейпы/.test(tb) && /криптовалюты/.test(tb) && /ты выиграл/.test(tb), '/ads-terms: запрещённые темы');
     ok(/0\+, 6\+, 12\+, 16\+ или 18\+/.test(tb) && /до 13 лет — только 0\+ и 6\+/.test(tb), '/ads-terms: возрастные метки');
-    ok(/Возврат неизрасходованного бюджета/.test(tb) && new RegExp(`Минимальный бюджет — ${D.DEF.min_budget}`).test(tb) && /noindex/.test(tb) === false && !/adsbygoogle\.js/.test(tb), '/ads-terms: возврат, цены из правил, без рекламы');
+    ok(/Возврат неизрасходованного бюджета/.test(tb) && new RegExp(`Минимальный бюджет — ${D.DEF.min_budget}`).test(tb) && /<meta name="robots" content="noindex">/.test(tb) === wantNoindex && !/adsbygoogle\.js/.test(tb), '/ads-terms: возврат, цены из правил, без рекламы; noindex — пока нет реквизитов продавца (DRAFT_NOINDEX)');
     const rk = await run({ page: 'reklama' });
     ok(rk.code === 200 && /Разместить рекламу самостоятельно/.test(rk.body) && /href="\/(#\/)?adv"/.test(rk.body) && /href="\/ads-terms"/.test(rk.body), '/reklama: блок «Разместить рекламу самостоятельно» → кабинет и правила');
     globalThis.fetch = realFetch; globalThis.setTimeout = fakeST; globalThis.clearTimeout = fakeCT;

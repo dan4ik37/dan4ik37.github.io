@@ -265,9 +265,9 @@ function fakeIDB(){
   ok(/photo:\s*\['photo-page'\]/.test(router) && /route==='photo'\) window\.D37Apps\?\.open/.test(router), 'роутер: раздел photo и запуск редактора');
   ok(vj.rewrites.some(r => r.source === '/photo' && r.destination === '/index.html') && vj.rewrites.some(r => r.source === '/photo/:path+'), 'vercel.json: /photo → index.html');
   ok(vj.rewrites.some(r => r.source === '/tools/photo' && r.destination === '/api/pages?page=photo'), 'vercel.json: /tools/photo → серверная страница');
-  ok(/\|photo\)/.test(sw) && /fabric@\\d\+/.test(sw), 'sw.js: /photo без сети, fabric.js в кэше');
+  ok(/\|photo[|)]/.test(sw) && /fabric@\\d\+/.test(sw), 'sw.js: /photo без сети, fabric.js в кэше');   // после photo в списке разделов появился hub («|photo|hub)»)
   ok(/id="photo-page"/.test(idx) && /js\/apps\/apps\.js/.test(idx) && /href="\/tools\/photo"/.test(idx), 'index.html: раздел, загрузчик, ссылка в подвале');
-  ok(idx.indexOf('js/apps/apps.js') < idx.indexOf('routerStart()'), 'загрузчик подключён до старта роутера');
+  ok(idx.indexOf('js/apps/apps.js') > 0 && idx.indexOf('js/apps/apps.js') < idx.indexOf('<script>routerStart()</script>'), 'загрузчик подключён до старта роутера');   // сам вызов, а не слово routerStart() в комментарии в начале файла
   ok(/id: 'photo',\s+age: '0\+'/.test(games) && /photo: \[0, ''\]/.test(read('api/_lib/age.js')), 'карточка «Фоторедактор» 0+ и метка возраста');
   ok(/\/tools\/photo/.test(read('js/ui/hotkeys.js')) && /D37Photo\?\.active/.test(read('js/ui/hotkeys.js')), 'поиск по сайту и клавиши сайта не мешают редактору');
   ok(/\/tools\/photo/.test(read('api/sitemap.js')) && /\/tools\/photo/.test(read('api/_lib/page.js')) && /photo/.test(read('api/pages.js')), 'карта сайта, подвал серверных страниц, api/pages.js');

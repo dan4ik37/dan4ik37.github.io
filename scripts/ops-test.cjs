@@ -58,7 +58,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     ok(/name: Site tests \(Windows, Node 24\)/.test(wf) && /persist-credentials: false/.test(wf), 'workflow: имя задания «Site tests (Windows, Node 24)» (его выбирают в Vercel Deployment Checks) и без сохранения токена');
     // каждая проверка в scripts/ — в списке ci-run.cjs или в явном списке «нарочно не здесь» (иначе новую проверку забудут)
     const ci = read('scripts/ci-run.cjs');
-    const inManifest = new Set([...ci.matchAll(/\{ f: '([^']+)'/g)].map(m => m[1]));
+    // имена — только из кода: 21.11 три проверки (pay, referral, economy) оказались внутри комментария и не запускались, а эта сверка их «видела»
+    const ciCode = ci.split('\n').map(l => l.replace(/\s\/\/.*$/, '')).join('\n');
+    const inManifest = new Set([...ciCode.matchAll(/\{ f: '([^']+)'/g)].map(m => m[1]));
     const NOT_IN_CI = {   // нужны своя среда, долгие или медленные — запускаются руками
       't174-e2e.cjs': 'три Chrome (ПК и телефон) и свой сервер игр d37-server на 127.0.0.1: комната из интерфейса, список, код, ссылка, возврат после перезагрузки, «Присоединиться», группа, «сервер недоступен»',
       't167-e2e.cjs': 'два Chrome с ненастоящими камерой и микрофоном, настоящий Supabase Realtime: проверка устройств, звонок, камера, перезапуск ICE',
