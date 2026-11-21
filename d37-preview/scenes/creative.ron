@@ -31,6 +31,10 @@
             "shore_water": (lat: 29, lon: 80.03, altitude: 2.5, yaw_deg: 75, pitch_deg: -7, time: 1930, fov_y_deg: 70),
             // ep22 picture: the owner's taiga spot of 20.11 (his panel: МЕСТО 51976 86886 -42268), scenarios/look_taiga.ron
             "owner_taiga": (lat: 52.366, lon: 39.119, altitude: 1.7, yaw_deg: 0, pitch_deg: -8, time: 1930, fov_y_deg: 70),
+            // ep31 picture: the same spot from the air (scenarios/look_fill.ron: the far forest must read as forest)
+            "taiga_300": (lat: 52.366, lon: 39.119, altitude: 300, yaw_deg: 200, pitch_deg: -28, time: 1930, fov_y_deg: 70),
+            "taiga_1500": (lat: 52.366, lon: 39.119, altitude: 1500, yaw_deg: 200, pitch_deg: -22, time: 1930, fov_y_deg: 70),
+            "taiga_6000": (lat: 52.366, lon: 39.119, altitude: 6000, yaw_deg: 200, pitch_deg: -25, time: 1930, fov_y_deg: 70),
         },
     ),
     // w11 creative: the game layer in creative mode (no guided start: the palette is in the pockets)

@@ -557,7 +557,7 @@ async function main() {
   // the third-person zoom: the mouse wheel (as the site's «Мир Денчика»)
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   addEventListener('mousemove', (e) => {
-    if (game && (app.game_menu_open() || cellMouse)) { const [x, y] = toCanvas(e); app.game_pointer(x, y, 1, 1); return; }
+    if (game && (app.game_menu_open() || cellMouse || cellMode)) { const [x, y] = toCanvas(e); app.game_pointer(x, y, 1, 1); return; } // ep32: in a mode the cursor steers with no button held
     if (document.pointerLockElement === canvas || drag) app.add_look(e.movementX, e.movementY);
   });
 

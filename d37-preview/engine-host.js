@@ -531,7 +531,7 @@ export async function start(o) {
   on(canvas, 'wheel', (e) => { e.preventDefault(); st.app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   on(window, 'mousemove', (e) => {
     if (!live()) return;
-    if (menuOpen() || (cellMode && hudMouse)) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 1, 1); return; }
+    if (menuOpen() || cellMode) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 1, 1); return; } // ep32: in a mode the cursor steers with no button held
     if (document.pointerLockElement === canvas || drag) st.app.add_look(e.movementX, e.movementY);
   });
 
@@ -776,6 +776,7 @@ export async function start(o) {
     // w11 kit-port: an old site game as an engine mode, started in the player's world (only known modes; the realm
     // comes from the bridge session: an adult arena only for a verified adult)
     if (o.arena === 'klet2') cmds.push('game klet2 play');
+    if (o.arena === 'hole2') cmds.push('game hole2 play');
     if (o.arena === 'klet') cmds.push(o.session && o.session.realm === 'adult' && o.session.band === 'adult' ? 'game klet play adult' : 'game klet play');
     for (const c of cmds) { const r = run(c); if (typeof r === 'string' && /^отказ|error|no such/i.test(r)) emit({ t: 'error', code: 'spawn', msg: (c + ': ' + r).slice(0, 200) }); }
     // NET_JOIN: straight into a game session (a lobby pick, an invite link ?game=klet2&s=<id>, quick play)
