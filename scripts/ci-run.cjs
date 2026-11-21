@@ -75,7 +75,11 @@ const TESTS = [
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
   { f: 'forum-e2e.cjs', args: ['phone', '20'], needs: 'pglite', e2e: true, t: 600 }, { f: 'forum-e2e.cjs', args: ['phone', '5', 'legacy'], needs: 'pglite', e2e: true, t: 400 },   // T-157: форум 2.0 и старый форум (FORUM2 = false)
-  { f: 'mod-e2e.cjs', e2e: true, t: 400 }, { f: 'part18-e2e.cjs', e2e: true, t: 900 }, { f: 't177-e2e.cjs', e2e: true, t: 800 }, { f: 'ds-fun-e2e.cjs', e2e: true, t: 400 },   // T-164: 🛡 центр модерации, фишки сервера
+  { f: 'mod-e2e.cjs', e2e: true, t: 400 }, { f: 'part18-e2e.cjs', e2e: true, t: 900 },
+  // 21.11: были вне списка (ops-test их считал забытыми); каждая прогнана — зелёная. Вход подделан, запись подменена, в базу ничего не уходит
+  { f: 't162-e2e.cjs', e2e: true, t: 400 }, { f: 't168-e2e.cjs', e2e: true, t: 500 }, { f: 't169-e2e.cjs', e2e: true, t: 600 },   // чат и «Дискорд»: правка сообщений, раскладка, голосовые сайта
+  { f: 'hub-e2e.cjs', e2e: true, t: 900 }, { f: 'hub-path-e2e.cjs', e2e: true, t: 400 }, { f: 'hub-keys-e2e.cjs', e2e: true, t: 400 },   // платформа /hub: игра движка в сайте, «Путь», клавиши игры
+  { f: 't177-e2e.cjs', e2e: true, t: 800 }, { f: 'ds-fun-e2e.cjs', e2e: true, t: 400 },   // T-164: 🛡 центр модерации, фишки сервера
   { f: 'war-hud-e2e.cjs', e2e: true, t: 600 },   // боевая зона: панель оружия отвечает (телефон, планшет, ПК)
   { f: 'trees-e2e.cjs', args: ['studio', 'ci'], e2e: true, t: 600 },   // T-022b: деревья пород в «Студии 3D» — все породы ставятся (замеры, снимки, 10 мин игры — режимы вручную)
   { f: 'waves-e2e.cjs', args: ['look'], e2e: true, t: 600 },   // волны (T-022c): видеокарта = JS, шейдеры собрались, катер качается

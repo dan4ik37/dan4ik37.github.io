@@ -72,7 +72,7 @@ const CARD = `(() => { const m = document.querySelector('#mvt .mv-m[data-id="101
   const B = await chrome();
   try {
     await B.send('Page.navigate', { url: site.base + '/' });
-    ok(await B.until(READY, 30000), 'сайт загрузился');
+    ok(await B.until(READY, 90000), 'сайт загрузился');   // 90 с, как в соседних проверках: 30 с не хватало на холодную загрузку под нагрузкой
     ok(await B.ev(SETUP), 'лента с поддельным каналом и сообщением «видео + текст»');
     ok(await B.until(`!!document.querySelector('#mvt [data-f="open"]')`, 10000), 'карточка видео: файл на устройстве, есть «▶ Открыть»');
     let c = await B.ev(CARD); ok(c?.card && c.thumb, 'до правки: карточка видео с превью', c);

@@ -363,7 +363,7 @@ Scripts listed by games but missing on disk: none.
 
 ## 3. RPC and SQL
 
-52 SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), 858 functions, 352 names called from js/ or api/ (`.rpc('x')`, any `*rpc*('x')` wrapper such as rpc / sbRpc / rpcOk / pushRpc, or `/rpc/x`).
+52 SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), 860 functions, 352 names called from js/ or api/ (`.rpc('x')`, any `*rpc*('x')` wrapper such as rpc / sbRpc / rpcOk / pushRpc, or `/rpc/x`).
 
 | SQL file | Functions | Tables created |
 |---|---|---|
@@ -376,7 +376,7 @@ Scripts listed by games but missing on disk: none.
 | chat-stickers.sql | 0 | — |
 | city.sql | 29 | cities, city_bank, city_cfg, city_contrib, city_days, city_ledger, city_marks, city_people |
 | coins.sql | 19 | coin_log, coin_wallet |
-| community.sql | 294 | bot_posts, cf_ext_media, chan_cats, chan_pw, chan_pw_ok, chan_pw_try, chat_channels, chat_mutes, chat_reports, chat_settings, comm_boost_log, comm_boosts, comm_event_rsvp, comm_events, comm_fun, comm_media, comm_member_roles, comm_modlog, comm_notif_prefs, comm_online, comm_roles, comm_sb_last, comm_secret, comm_stage, comm_xp, communities, community_bans, community_channels, community_members, community_messages, community_reactions, community_reports, ds_nicks, ds_people, dsm_edits, dsm_follows, dsm_forums, dsm_poll_votes, dsm_polls, dsm_posts, file_block, file_day, file_reports, gdm_groups, gdm_members, gdm_messages, mod_cfg, mod_notes, nick_lock, nick_retired, site_voice_channels, user_blocks, user_ignores, user_reports, voice_here, voice_kicks |
+| community.sql | 297 | bot_posts, cf_ext_media, chan_cats, chan_pw, chan_pw_ok, chan_pw_try, chat_channels, chat_mutes, chat_reports, chat_settings, comm_boost_log, comm_boosts, comm_event_rsvp, comm_events, comm_fun, comm_media, comm_member_roles, comm_modlog, comm_notif_prefs, comm_online, comm_roles, comm_sb_last, comm_secret, comm_stage, comm_xp, communities, community_bans, community_channels, community_members, community_messages, community_reactions, community_reports, ds_nicks, ds_people, dsm_edits, dsm_follows, dsm_forums, dsm_poll_votes, dsm_polls, dsm_posts, file_block, file_day, file_reports, gdm_groups, gdm_members, gdm_messages, mod_cfg, mod_notes, nick_lock, nick_retired, site_voice_channels, user_blocks, user_ignores, user_reports, voice_here, voice_kicks |
 | economy.sql | 23 | — |
 | evo.sql | 22 | evo_cfg, evo_days, evo_lineage |
 | fix-banner-bucket-v2.sql | 0 | — |
@@ -921,7 +921,7 @@ Scripts listed by games but missing on disk: none.
 | forum_comments | forum.sql | js/features/forum2.js |
 | forum_delete | forum.sql | js/features/forum2.js |
 | forum_feed | forum.sql | js/features/follow.js, js/features/forum2.js |
-| forum_follow | forum.sql | js/features/follow.js, js/features/forum2.js |
+| forum_follow | community.sql, forum.sql | js/features/follow.js, js/features/forum2.js |
 | forum_get | forum.sql | js/features/forum2.js |
 | forum_https | forum.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | forum_is_mod | forum.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -1004,6 +1004,7 @@ Scripts listed by games but missing on disk: none.
 | mod_note_add | community.sql | js/features/ds-mod.js |
 | mod_note_del | community.sql | js/features/ds-mod.js |
 | mod_overview | community.sql | js/features/ds-mod.js |
+| mod_peer_ok | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | mod_purge_user | community.sql | js/features/ds-mod.js |
 | mod_raid | community.sql | js/features/ds-mod.js |
 | mod_report_guard | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -1049,6 +1050,7 @@ Scripts listed by games but missing on disk: none.
 | ops_secs_left | ops.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ops_today | ops.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | part18_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| part18b_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | perk_tier_of | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | pin_own_message | chat-pin-balance.sql, chat-pin.sql, premium.sql, vip-balance.sql | js/features/chat.js |
 | poll_votes_before_insert | polls-reactions-secure.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -1285,7 +1287,7 @@ Called but not defined in any root .sql (built-in, removed, or a typo — check)
 
 ## 4. Tests
 
-scripts/ci-run.cjs runs 150 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take M:\d37\claude-tmp\HEAVY.lock first (M:\d37\d37-core\spec\HEAVY_LOCK.md).
+scripts/ci-run.cjs runs 159 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take M:\d37\claude-tmp\HEAVY.lock first (M:\d37\d37-core\spec\HEAVY_LOCK.md).
 
 | CI entry | Flags |
 |---|---|
@@ -1310,6 +1312,9 @@ scripts/ci-run.cjs runs 150 entries (= GitHub Actions on push; `--e2e` adds the 
 | ads-test.cjs | — |
 | ad-direct-test.cjs | — |
 | video-test.cjs | — |
+| pay-test.cjs | — |
+| referral-test.cjs | — |
+| economy-test.cjs | — |
 | community-test.cjs | — |
 | wt-sim-test.cjs | — |
 | files-test.cjs | — |
@@ -1419,6 +1424,12 @@ scripts/ci-run.cjs runs 150 entries (= GitHub Actions on push; `--e2e` adds the 
 | forum-e2e.cjs | args phone 5 legacy, needs pglite, e2e, t 400 s |
 | mod-e2e.cjs | e2e, t 400 s |
 | part18-e2e.cjs | e2e, t 900 s |
+| t162-e2e.cjs | e2e, t 400 s |
+| t168-e2e.cjs | e2e, t 500 s |
+| t169-e2e.cjs | e2e, t 600 s |
+| hub-e2e.cjs | e2e, t 900 s |
+| hub-path-e2e.cjs | e2e, t 400 s |
+| hub-keys-e2e.cjs | e2e, t 400 s |
 | t177-e2e.cjs | e2e, t 800 s |
 | ds-fun-e2e.cjs | e2e, t 400 s |
 | war-hud-e2e.cjs | e2e, t 600 s |
@@ -1440,4 +1451,4 @@ scripts/ci-run.cjs runs 150 entries (= GitHub Actions on push; `--e2e` adds the 
 | t145-e2e.cjs | args pc terra, e2e, t 900 s |
 | t145-e2e.cjs | args pc kubomir, e2e, t 900 s |
 
-Test / e2e / perf scripts NOT in the CI list (37; run by hand when their area changes): ailod-bench.cjs, ailod-e2e.cjs, anim-e2e.cjs, arcade-e2e.cjs, climate-e2e.cjs, economy-sim.cjs, economy-test.cjs, hub-e2e.cjs, hub-keys-e2e.cjs, hub-path-e2e.cjs, hud2-e2e.cjs, iogames-e2e.cjs, iogames-online-e2e.cjs, kubomir-coop-e2e.cjs, kubomir-e2e.cjs, kubomir-look-e2e.cjs, kubomir-qol-e2e.cjs, make-raid-sim.mjs, pay-test.cjs, planet-perf.cjs, podzem-fire-e2e.cjs, podzem-sim.cjs, podzem-support-e2e.cjs, raid-e2e.cjs, referral-test.cjs, room-net-e2e.cjs, studio-fire-e2e.cjs, t141-e2e.cjs, t160-e2e.cjs, t162-e2e.cjs, t165-e2e.cjs, t167-e2e.cjs, t168-e2e.cjs, t169-e2e.cjs, t174-e2e.cjs, t175-e2e.cjs, world-perf.cjs.
+Test / e2e / perf scripts NOT in the CI list (28; run by hand when their area changes): ailod-bench.cjs, ailod-e2e.cjs, anim-e2e.cjs, arcade-e2e.cjs, climate-e2e.cjs, economy-sim.cjs, hud2-e2e.cjs, iogames-e2e.cjs, iogames-online-e2e.cjs, kubomir-coop-e2e.cjs, kubomir-e2e.cjs, kubomir-look-e2e.cjs, kubomir-qol-e2e.cjs, make-raid-sim.mjs, planet-perf.cjs, podzem-fire-e2e.cjs, podzem-sim.cjs, podzem-support-e2e.cjs, raid-e2e.cjs, room-net-e2e.cjs, studio-fire-e2e.cjs, t141-e2e.cjs, t160-e2e.cjs, t165-e2e.cjs, t167-e2e.cjs, t174-e2e.cjs, t175-e2e.cjs, world-perf.cjs.
