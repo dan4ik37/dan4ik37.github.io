@@ -5,7 +5,7 @@ shared board: M:\d37\d37-core\spec\BOARD.md; site board: docs/TASKS.md.
 
 ## 1. Routes
 
-SPA sections: js/ui/router.js `PAGES` (21); service-worker shell: sw.js `SPA_PATH`; rewrites: vercel.json (83); server pages: api/pages.js `ROUTES`.
+SPA sections: js/ui/router.js `PAGES` (21); service-worker shell: sw.js `SPA_PATH`; rewrites: vercel.json (85); server pages: api/pages.js `ROUTES`.
 
 | Section id | URL | Page blocks | sw.js shell | vercel.json rewrite |
 |---|---|---|---|---|
@@ -31,7 +31,7 @@ SPA sections: js/ui/router.js `PAGES` (21); service-worker shell: sw.js `SPA_PAT
 | ai3d | /tools/3d | ai3d-page | yes | /tools/3d → /index.html; /tools/3d/:path+ → /index.html |
 | hub | /hub | hub-page | yes | /hub → /index.html; /hub/:path+ → /index.html |
 
-Server pages (api/pages.js ROUTES, 36; one Vercel function serves them all):
+Server pages (api/pages.js ROUTES, 38; one Vercel function serves them all):
 
 | Key | Module |
 |---|---|
@@ -40,6 +40,7 @@ Server pages (api/pages.js ROUTES, 36; one Vercel function serves them all):
 | contacts | api/_lib/routes/legal.js |
 | cps | api/_lib/routes/cps.js |
 | diag | api/_lib/routes/diag.js |
+| extcheck | ? |
 | feed | api/_lib/routes/feed.js |
 | fonts | api/_lib/routes/fonts.js |
 | forum | api/_lib/routes/forum.js |
@@ -65,6 +66,7 @@ Server pages (api/pages.js ROUTES, 36; one Vercel function serves them all):
 | terms | api/_lib/routes/legal.js |
 | top | api/_lib/routes/top.js |
 | topic | api/_lib/routes/topic.js |
+| turncred | ? |
 | typing | api/_lib/routes/typing.js |
 | ugc | api/_lib/routes/ugc.js |
 | videos | api/_lib/routes/videos.js |
@@ -112,59 +114,61 @@ Vercel rewrites (vercel.json, in file order — order matters):
 | 34 | /c/:code | /api/pages?page=invite&code=:code |
 | 35 | /r/:code | /api/pages?page=r&code=:code |
 | 36 | /go/:id | /api/pages?page=go&id=:id |
-| 37 | /api/geo | /api/pages?page=geo |
-| 38 | /ads-terms | /api/pages?page=adsterms |
-| 39 | /auth/:p/start | /api/pages?page=oauth&a=start&p=:p |
-| 40 | /auth/:p/callback | /api/pages?page=oauth&a=callback&p=:p |
-| 41 | /api/oauth | /api/pages?page=oauth |
-| 42 | /games | /api/game |
-| 43 | /games/:id | /api/game?id=:id |
-| 44 | /forum | /api/pages?page=forum |
-| 45 | /forum/edit/:id | /api/pages?page=forum&spa=edit&id=:id |
-| 46 | /forum/u/:id | /api/pages?page=forum&spa=u&id=:id |
-| 47 | /forum/t/:tag | /api/pages?page=forum&tag=:tag |
-| 48 | /api/forum-ping | /api/pages?page=forumping |
-| 49 | /forum/:id | /api/pages?page=forum&id=:id |
-| 50 | /ideas | /api/pages?page=ideas |
-| 51 | /ideas/:id | /api/pages?page=ideas&id=:id |
-| 52 | /sitemap.xml | /api/sitemap |
-| 53 | /sitemap-videos.xml | /api/sitemap?part=videos |
-| 54 | /sitemap-pages.xml | /api/sitemap?part=pages |
-| 55 | /privacy | /privacy.html |
-| 56 | /play | /index.html |
-| 57 | /play/:path+ | /index.html |
-| 58 | /chat | /index.html |
-| 59 | /chat/:path+ | /index.html |
-| 60 | /profile | /index.html |
-| 61 | /profile/:path+ | /index.html |
-| 62 | /phone | /index.html |
-| 63 | /phone/:path+ | /index.html |
-| 64 | /shorts | /index.html |
-| 65 | /shorts/:path+ | /index.html |
-| 66 | /invite | /index.html |
-| 67 | /invite/:path+ | /index.html |
-| 68 | /adv | /index.html |
-| 69 | /adv/:path+ | /index.html |
-| 70 | /donate | /index.html |
-| 71 | /poll | /index.html |
-| 72 | /soundboard | /index.html |
-| 73 | /clicker | /index.html |
-| 74 | /lfg | /index.html |
-| 75 | /ads | /index.html |
-| 76 | /app | /index.html |
-| 77 | /photo | /index.html |
-| 78 | /photo/:path+ | /index.html |
-| 79 | /hub | /index.html |
-| 80 | /hub/:path+ | /index.html |
-| 81 | /tools/3d | /index.html |
-| 82 | /tools/3d/:path+ | /index.html |
-| 83 | /shop/:path+ | /index.html |
+| 37 | /api/turn-cred | /api/pages?page=turncred |
+| 38 | /api/ext-check | /api/pages?page=extcheck |
+| 39 | /api/geo | /api/pages?page=geo |
+| 40 | /ads-terms | /api/pages?page=adsterms |
+| 41 | /auth/:p/start | /api/pages?page=oauth&a=start&p=:p |
+| 42 | /auth/:p/callback | /api/pages?page=oauth&a=callback&p=:p |
+| 43 | /api/oauth | /api/pages?page=oauth |
+| 44 | /games | /api/game |
+| 45 | /games/:id | /api/game?id=:id |
+| 46 | /forum | /api/pages?page=forum |
+| 47 | /forum/edit/:id | /api/pages?page=forum&spa=edit&id=:id |
+| 48 | /forum/u/:id | /api/pages?page=forum&spa=u&id=:id |
+| 49 | /forum/t/:tag | /api/pages?page=forum&tag=:tag |
+| 50 | /api/forum-ping | /api/pages?page=forumping |
+| 51 | /forum/:id | /api/pages?page=forum&id=:id |
+| 52 | /ideas | /api/pages?page=ideas |
+| 53 | /ideas/:id | /api/pages?page=ideas&id=:id |
+| 54 | /sitemap.xml | /api/sitemap |
+| 55 | /sitemap-videos.xml | /api/sitemap?part=videos |
+| 56 | /sitemap-pages.xml | /api/sitemap?part=pages |
+| 57 | /privacy | /privacy.html |
+| 58 | /play | /index.html |
+| 59 | /play/:path+ | /index.html |
+| 60 | /chat | /index.html |
+| 61 | /chat/:path+ | /index.html |
+| 62 | /profile | /index.html |
+| 63 | /profile/:path+ | /index.html |
+| 64 | /phone | /index.html |
+| 65 | /phone/:path+ | /index.html |
+| 66 | /shorts | /index.html |
+| 67 | /shorts/:path+ | /index.html |
+| 68 | /invite | /index.html |
+| 69 | /invite/:path+ | /index.html |
+| 70 | /adv | /index.html |
+| 71 | /adv/:path+ | /index.html |
+| 72 | /donate | /index.html |
+| 73 | /poll | /index.html |
+| 74 | /soundboard | /index.html |
+| 75 | /clicker | /index.html |
+| 76 | /lfg | /index.html |
+| 77 | /ads | /index.html |
+| 78 | /app | /index.html |
+| 79 | /photo | /index.html |
+| 80 | /photo/:path+ | /index.html |
+| 81 | /hub | /index.html |
+| 82 | /hub/:path+ | /index.html |
+| 83 | /tools/3d | /index.html |
+| 84 | /tools/3d/:path+ | /index.html |
+| 85 | /shop/:path+ | /index.html |
 
 Serverless functions (api/*.js outside _lib; Vercel Hobby limit 12): 10 — api/auth.js, api/donations.js, api/game.js, api/pages.js, api/pay.js, api/push-check.js, api/sitemap.js, api/socket-token.js, api/video.js, api/vip-sync.js.
 
 ## 2. Games
 
-js/features/games.js: 87 rows, GAMES_VER '180' (bump on any game / engine file change; merge rule: skill d37-merge). Lists: T145_ROWS 2, GAMES 84, GAMES_HIDDEN 1.
+js/features/games.js: 87 rows, GAMES_VER '183' (bump on any game / engine file change; merge rule: skill d37-merge). Lists: T145_ROWS 2, GAMES 84, GAMES_HIDDEN 1.
 
 | Game | List | Age | Title | Scripts | Own scripts (not js/engine, js/core) |
 |---|---|---|---|---|---|
@@ -359,7 +363,7 @@ Scripts listed by games but missing on disk: none.
 
 ## 3. RPC and SQL
 
-52 SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), 798 functions, 324 names called from js/ or api/ (`.rpc('x')`, any `*rpc*('x')` wrapper such as rpc / sbRpc / rpcOk / pushRpc, or `/rpc/x`).
+52 SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), 858 functions, 352 names called from js/ or api/ (`.rpc('x')`, any `*rpc*('x')` wrapper such as rpc / sbRpc / rpcOk / pushRpc, or `/rpc/x`).
 
 | SQL file | Functions | Tables created |
 |---|---|---|
@@ -372,7 +376,7 @@ Scripts listed by games but missing on disk: none.
 | chat-stickers.sql | 0 | — |
 | city.sql | 29 | cities, city_bank, city_cfg, city_contrib, city_days, city_ledger, city_marks, city_people |
 | coins.sql | 19 | coin_log, coin_wallet |
-| community.sql | 232 | bot_posts, chan_cats, chat_channels, chat_mutes, chat_reports, chat_settings, comm_boost_log, comm_boosts, comm_event_rsvp, comm_events, comm_fun, comm_media, comm_member_roles, comm_modlog, comm_notif_prefs, comm_online, comm_roles, comm_sb_last, comm_secret, comm_stage, comm_xp, communities, community_bans, community_channels, community_members, community_messages, community_reactions, community_reports, ds_nicks, ds_people, dsm_edits, dsm_follows, dsm_forums, dsm_poll_votes, dsm_polls, dsm_posts, file_block, file_day, file_reports, gdm_groups, gdm_members, gdm_messages, mod_cfg, mod_notes, user_blocks, user_ignores |
+| community.sql | 294 | bot_posts, cf_ext_media, chan_cats, chan_pw, chan_pw_ok, chan_pw_try, chat_channels, chat_mutes, chat_reports, chat_settings, comm_boost_log, comm_boosts, comm_event_rsvp, comm_events, comm_fun, comm_media, comm_member_roles, comm_modlog, comm_notif_prefs, comm_online, comm_roles, comm_sb_last, comm_secret, comm_stage, comm_xp, communities, community_bans, community_channels, community_members, community_messages, community_reactions, community_reports, ds_nicks, ds_people, dsm_edits, dsm_follows, dsm_forums, dsm_poll_votes, dsm_polls, dsm_posts, file_block, file_day, file_reports, gdm_groups, gdm_members, gdm_messages, mod_cfg, mod_notes, nick_lock, nick_retired, site_voice_channels, user_blocks, user_ignores, user_reports, voice_here, voice_kicks |
 | economy.sql | 23 | — |
 | evo.sql | 22 | evo_cfg, evo_days, evo_lineage |
 | fix-banner-bucket-v2.sql | 0 | — |
@@ -554,9 +558,19 @@ Scripts listed by games but missing on disk: none.
 | bot_post | community.sql | api/push-check.js |
 | call_check | community.sql | js/features/calls.js |
 | call_pass | community.sql | js/features/calls.js |
+| cam_me | community.sql | js/features/calls.js |
+| cam_ok | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | can_be_invisible | premium.sql, progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | can_send_friend_requests | premium.sql, progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | cf_can_see | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cf_ext_add | community.sql | js/features/ds-fun.js |
+| cf_ext_hosts_set | community.sql | js/features/ds-fun.js |
+| cf_ext_list | community.sql | js/features/ds-fun.js |
+| cf_ext_off | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cf_ext_queue | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cf_ext_review | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cf_ext_todo | community.sql | api/_lib/routes/ds2.js |
+| cf_ext_verified | community.sql | api/_lib/routes/ds2.js |
 | cf_level | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | cf_levels_top | community.sql | js/features/ds-fun.js |
 | cf_media_add | community.sql | js/features/ds-fun.js |
@@ -576,6 +590,7 @@ Scripts listed by games but missing on disk: none.
 | chan_age_guard | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | chan_age_ok | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | chan_can_manage | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| chan_pw_guard | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | char_looks | coins.sql | js/core/avatar.js |
 | char_save | coins.sql | js/core/coins.js |
 | chat_automod | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -658,10 +673,14 @@ Scripts listed by games but missing on disk: none.
 | cm_catalog | community.sql | js/features/community2.js |
 | cm_chan_age_ok | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | cm_chan_extra | community.sql | js/features/community2.js |
+| cm_chan_pw_ok | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cm_chan_pw_set | community.sql | js/features/community.js, js/features/community2.js |
+| cm_chan_pw_state | community.sql | js/features/community.js |
+| cm_chan_pw_try | community.sql | js/features/community.js |
 | cm_chan_set | community.sql | js/features/community2.js |
 | cm_channel_delete | community.sql | js/features/community.js |
-| cm_channel_save | community.sql | js/features/community.js, js/features/community2.js |
-| cm_create | community.sql | js/features/community.js |
+| cm_channel_save | community.sql | js/features/community.js, js/features/community2.js, js/features/ds-help.js |
+| cm_create | community.sql | js/features/community.js, js/features/ds-help.js |
 | cm_delete | community.sql | js/features/community.js |
 | cm_delete_msg | community.sql | js/features/community.js |
 | cm_edit | community.sql | js/features/community.js |
@@ -694,7 +713,7 @@ Scripts listed by games but missing on disk: none.
 | cm_reports | community.sql | js/features/community.js, js/features/community2.js |
 | cm_role_assign | community.sql | js/features/community2.js |
 | cm_role_delete | community.sql | js/features/community2.js |
-| cm_role_save | community.sql | js/features/community2.js |
+| cm_role_save | community.sql | js/features/community2.js, js/features/ds-help.js |
 | cm_roles | community.sql | js/features/community2.js |
 | cm_send | community.sql | js/features/community.js |
 | cm_server_get | community.sql | js/features/community2.js |
@@ -704,6 +723,7 @@ Scripts listed by games but missing on disk: none.
 | cm_staff_status | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | cm_unban | community.sql | js/features/community.js, js/features/ds-mod.js |
 | cm_update | community.sql | js/features/community.js |
+| cm_voice_limit_set | community.sql | js/features/calls.js, js/features/community2.js |
 | coin_add | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | coin_gems_item | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | coin_level_item | coins.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -763,7 +783,11 @@ Scripts listed by games but missing on disk: none.
 | credit_donation | premium.sql, server-hardening.sql | api/vip-sync.js, js/features/profile.js |
 | current_streak | streaks-achievements.sql | js/features/achievements.js |
 | cv_check | community.sql | js/features/calls.js |
+| cv_leave | community.sql | js/features/calls.js |
 | cv_pass | community.sql | js/features/calls.js |
+| cv_ping | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cv_ping2 | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| cv_who | community.sql | js/features/calls.js, js/features/community2.js |
 | d37_lev | vip-claims.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | d37_norm_name | vip-claims.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | daily_quest | games.sql | js/features/games.js |
@@ -794,6 +818,8 @@ Scripts listed by games but missing on disk: none.
 | donor_rule | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | donor_status | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | donor_sum | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ds2_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ds3_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ds_act_of | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ds_card | community.sql | js/features/ds-people.js |
 | ds_custom_of | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -859,6 +885,7 @@ Scripts listed by games but missing on disk: none.
 | evo_stat_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | evo_state | evo.sql | js/games/evo.js |
 | evo_task_ok_ | evo.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| ext_on | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | file_att_check | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | file_att_guard | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | file_block_set | community.sql | js/features/community2.js |
@@ -869,6 +896,15 @@ Scripts listed by games but missing on disk: none.
 | file_reports_list | community.sql | js/features/community2.js |
 | file_type_ok | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | finish_vip_sync | server-hardening.sql | api/vip-sync.js |
+| follow_feed | community.sql | js/features/follow.js |
+| follow_game_cap | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| follow_info | community.sql | js/features/follow.js |
+| follow_list | community.sql | js/features/follow.js |
+| follow_notify | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| follow_on_game | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| follow_on_thread | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| follow_set | community.sql | js/features/follow.js |
+| follow_why | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | forum2_posts_after | forum.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | forum2_posts_guard | forum.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | forum2_threads_guard | forum.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -884,8 +920,8 @@ Scripts listed by games but missing on disk: none.
 | forum_comment_edit | forum.sql | js/features/forum2.js |
 | forum_comments | forum.sql | js/features/forum2.js |
 | forum_delete | forum.sql | js/features/forum2.js |
-| forum_feed | forum.sql | js/features/forum2.js |
-| forum_follow | forum.sql | js/features/forum2.js |
+| forum_feed | forum.sql | js/features/follow.js, js/features/forum2.js |
+| forum_follow | forum.sql | js/features/follow.js, js/features/forum2.js |
 | forum_get | forum.sql | js/features/forum2.js |
 | forum_https | forum.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | forum_is_mod | forum.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -918,7 +954,7 @@ Scripts listed by games but missing on disk: none.
 | game_family | economy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | game_result | economy.sql, games.sql | js/features/games.js, js/games/mir-war.js |
 | game_score_cap | games-more.sql, games.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
-| game_top | games.sql | js/features/games.js |
+| game_top | games.sql | js/features/games.js, js/features/modepage.js |
 | game_top_week | games.sql | js/features/games.js |
 | game_win_xp | games-more.sql, games.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | game_xp_award | economy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -968,20 +1004,36 @@ Scripts listed by games but missing on disk: none.
 | mod_note_add | community.sql | js/features/ds-mod.js |
 | mod_note_del | community.sql | js/features/ds-mod.js |
 | mod_overview | community.sql | js/features/ds-mod.js |
+| mod_purge_user | community.sql | js/features/ds-mod.js |
 | mod_raid | community.sql | js/features/ds-mod.js |
 | mod_report_guard | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | mod_report_set | community.sql | js/features/ds-mod.js |
 | mod_report_stamp | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | mod_reports | community.sql | js/features/ds-mod.js |
+| mod_role_set | community.sql | js/features/ds-mod.js |
 | mod_site_ban | community.sql | js/features/ds-mod.js |
 | mod_target_staff | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| mod_user_report_set | community.sql | js/features/ds-mod.js |
+| mod_user_reports | community.sql | js/features/ds-mod.js |
+| mod_voice_kick | community.sql | js/features/ds-mod.js |
 | msg_attach | community.sql | js/features/files.js |
 | my_achievements | economy.sql, progression.sql, streaks-achievements.sql | js/features/achievements.js |
 | my_age_group | age.sql | js/core/age.js |
 | my_friend_status | progression.sql | js/features/profile.js |
+| nick17_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| nick_admin_apply | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| nick_admin_reset | community.sql | js/features/ds-mod.js |
+| nick_admin_set | community.sql | js/features/ds-mod.js |
+| nick_clean | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| nick_emo | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | nick_extras | progression.sql | js/features/xp.js |
 | nick_fx | economy.sql | js/features/secrets.js |
 | nick_fx_users | economy.sql, secrets.sql | js/features/secrets.js |
+| nick_my_lock | community.sql | js/features/profile.js |
+| nick_problem | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| nick_rkey | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| nick_skel | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| nick_vis_len | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | notif_on_forum_post | notifications.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | notif_on_friendship | notifications.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | notif_on_idea | notifications.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -996,6 +1048,7 @@ Scripts listed by games but missing on disk: none.
 | ops_inc | ops.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ops_secs_left | ops.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | ops_today | ops.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| part18_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | perk_tier_of | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | pin_own_message | chat-pin-balance.sql, chat-pin.sql, premium.sql, vip-balance.sql | js/features/chat.js |
 | poll_votes_before_insert | polls-reactions-secure.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -1032,8 +1085,8 @@ Scripts listed by games but missing on disk: none.
 | premium_state | premium.sql | js/core/premium.js |
 | prevent_referred_by_tamper | referrals.sql, referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | prevent_self_role_escalation | registration.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
-| profile_nick_sanitize | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
-| profile_reserved_names | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| profile_nick_sanitize | community.sql, server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| profile_reserved_names | community.sql, premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | protect_profile_columns | server-hardening.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | protect_thread_moderation_fields | forum.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | push_set_words | push-words.sql | js/features/push-pwa.js |
@@ -1133,7 +1186,13 @@ Scripts listed by games but missing on disk: none.
 | secret_found | economy.sql, secrets.sql | js/features/secrets.js |
 | secret_status | secrets.sql | js/features/secrets.js |
 | set_title | progression.sql | js/features/achievements.js, js/features/games.js |
+| site_cfg_int | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| site_cfg_text | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | site_creator_id | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| site_voice_can | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| site_voice_delete | community.sql | js/features/community2.js |
+| site_voice_list | community.sql | js/features/community.js |
+| site_voice_save | community.sql | js/features/community2.js |
 | sync_level | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | top_referrers | referrals.sql, referrals2.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | top_xp_week | xp.sql | js/features/xp.js |
@@ -1163,12 +1222,17 @@ Scripts listed by games but missing on disk: none.
 | unpin_message | chat-pin.sql | js/features/chat.js |
 | user_block | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | user_level | progression.sql | js/core/coins.js, js/features/achievements.js |
+| user_report | community.sql | js/features/ds-mod.js |
 | user_unblock | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | viewer_role | privacy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | vip_days_label | economy.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | vip_effective_until | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | vip_tier_of | progression.sql, vip-balance.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | vip_tier_rank | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| voice_cap | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| voice_count | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| voice_here_guard | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| voice_limit_of | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | war_act | bases.sql | js/games/mir-base.js, js/games/raid.js |
 | war_age_ok | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | war_barracks_lv | bases.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -1221,7 +1285,7 @@ Called but not defined in any root .sql (built-in, removed, or a typo — check)
 
 ## 4. Tests
 
-scripts/ci-run.cjs runs 142 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take M:\d37\claude-tmp\HEAVY.lock first (M:\d37\d37-core\spec\HEAVY_LOCK.md).
+scripts/ci-run.cjs runs 150 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take M:\d37\claude-tmp\HEAVY.lock first (M:\d37\d37-core\spec\HEAVY_LOCK.md).
 
 | CI entry | Flags |
 |---|---|
@@ -1251,10 +1315,15 @@ scripts/ci-run.cjs runs 142 entries (= GitHub Actions on push; `--e2e` adds the 
 | files-test.cjs | — |
 | files-sql-test.mjs | needs pglite, t 120 s |
 | chat-settings-sql-test.mjs | needs pglite, t 120 s |
+| ds3-sql-test.mjs | needs pglite, t 120 s |
+| part18-sql-test.mjs | needs pglite, t 180 s |
+| t177-sql-test.cjs | needs pglite, t 180 s |
 | mod-sql-test.mjs | needs pglite, t 120 s |
 | ds-msg-sql-test.mjs | needs pglite, t 120 s |
 | people-sql-test.mjs | needs pglite, t 120 s |
 | ds-fun-sql-test.mjs | needs pglite, t 120 s |
+| ds2-sql-test.mjs | needs pglite, t 120 s |
+| t167-test.cjs | — |
 | forum-test.cjs | — |
 | news-test.mjs | — |
 | forum-sql-test.mjs | needs pglite, t 180 s |
@@ -1277,6 +1346,7 @@ scripts/ci-run.cjs runs 142 entries (= GitHub Actions on push; `--e2e` adds the 
 | net-test.cjs | — |
 | studio-net-test.cjs | — |
 | engine-test.cjs | — |
+| engine-config-test.cjs | t 120 s |
 | physics-test.cjs | soft rapier |
 | tiles-test.cjs | — |
 | mirplay-test.cjs | — |
@@ -1348,6 +1418,8 @@ scripts/ci-run.cjs runs 142 entries (= GitHub Actions on push; `--e2e` adds the 
 | forum-e2e.cjs | args phone 20, needs pglite, e2e, t 600 s |
 | forum-e2e.cjs | args phone 5 legacy, needs pglite, e2e, t 400 s |
 | mod-e2e.cjs | e2e, t 400 s |
+| part18-e2e.cjs | e2e, t 900 s |
+| t177-e2e.cjs | e2e, t 800 s |
 | ds-fun-e2e.cjs | e2e, t 400 s |
 | war-hud-e2e.cjs | e2e, t 600 s |
 | trees-e2e.cjs | args studio ci, e2e, t 600 s |
@@ -1368,4 +1440,4 @@ scripts/ci-run.cjs runs 142 entries (= GitHub Actions on push; `--e2e` adds the 
 | t145-e2e.cjs | args pc terra, e2e, t 900 s |
 | t145-e2e.cjs | args pc kubomir, e2e, t 900 s |
 
-Test / e2e / perf scripts NOT in the CI list (31; run by hand when their area changes): ailod-bench.cjs, ailod-e2e.cjs, anim-e2e.cjs, arcade-e2e.cjs, climate-e2e.cjs, economy-sim.cjs, economy-test.cjs, hub-e2e.cjs, hub-keys-e2e.cjs, hub-path-e2e.cjs, hud2-e2e.cjs, iogames-e2e.cjs, iogames-online-e2e.cjs, kubomir-coop-e2e.cjs, kubomir-e2e.cjs, kubomir-look-e2e.cjs, kubomir-qol-e2e.cjs, make-raid-sim.mjs, pay-test.cjs, planet-perf.cjs, podzem-fire-e2e.cjs, podzem-sim.cjs, podzem-support-e2e.cjs, raid-e2e.cjs, referral-test.cjs, room-net-e2e.cjs, studio-fire-e2e.cjs, t141-e2e.cjs, t160-e2e.cjs, t162-e2e.cjs, world-perf.cjs.
+Test / e2e / perf scripts NOT in the CI list (37; run by hand when their area changes): ailod-bench.cjs, ailod-e2e.cjs, anim-e2e.cjs, arcade-e2e.cjs, climate-e2e.cjs, economy-sim.cjs, economy-test.cjs, hub-e2e.cjs, hub-keys-e2e.cjs, hub-path-e2e.cjs, hud2-e2e.cjs, iogames-e2e.cjs, iogames-online-e2e.cjs, kubomir-coop-e2e.cjs, kubomir-e2e.cjs, kubomir-look-e2e.cjs, kubomir-qol-e2e.cjs, make-raid-sim.mjs, pay-test.cjs, planet-perf.cjs, podzem-fire-e2e.cjs, podzem-sim.cjs, podzem-support-e2e.cjs, raid-e2e.cjs, referral-test.cjs, room-net-e2e.cjs, studio-fire-e2e.cjs, t141-e2e.cjs, t160-e2e.cjs, t162-e2e.cjs, t165-e2e.cjs, t167-e2e.cjs, t168-e2e.cjs, t169-e2e.cjs, t174-e2e.cjs, t175-e2e.cjs, world-perf.cjs.
