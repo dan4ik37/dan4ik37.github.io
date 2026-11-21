@@ -348,7 +348,7 @@
       const fl = h('button', { class: 'f2-act' + (a.follow ? ' on' : ''), text: a.follow ? '✓ Ты подписан' : '👤 Подписаться на автора' });
       fl.addEventListener('click', async () => {
         if (!u) return openAuth();
-        try { const r = await rpc('forum_follow', { p_author: a.author_id, p_on: !a.follow }); if (!r.ok) return toast(B().reason(r.reason)); a.follow = r.follow; fl.textContent = a.follow ? '✓ Ты подписан' : '👤 Подписаться на автора'; fl.classList.toggle('on', a.follow); }
+        try { const r = await rpc('forum_follow', { p_author: a.author_id, p_on: !a.follow }); if (!r.ok) return toast((window.D37Follow?._test?.WHY?.() || {})[r.reason] || B().reason(r.reason));   /* community.sql ч. 18б: те же правила, что у «Следить» (возраст, блокировка, скрытый профиль) */ a.follow = r.follow; fl.textContent = a.follow ? '✓ Ты подписан' : '👤 Подписаться на автора'; fl.classList.toggle('on', a.follow); }
         catch (e) { toast(human(e)); }
       });
       bar.append(fl);

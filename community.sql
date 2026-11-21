@@ -6978,3 +6978,168 @@ revoke all on function public.follow_info(uuid) from public;
 grant execute on function public.follow_info(uuid) to anon, authenticated;
 revoke all on function public.part18_info() from public;
 grant execute on function public.part18_info() to anon, authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+-- ЧАСТЬ 18б (21.11.2026, по итогам проверки части 18). Маленькая; повторный запуск безопасен (create or replace / drop policy if
+--   exists). Нужна часть 18. Сайт работает и без неё — она закрывает три лазейки на сервере.
+--   Проверка с сервера: rpc part18b_info → {"ok":true,"v":1}; таблица site_config, строка key = 'part18b' → value '1' (видна гостю).
+--   (1) «Подписаться на автора» в статье форума (forum_follow, forum.sql) писала в ту же таблицу подписок, что и «Следить», но без
+--       правил возраста, блокировки и скрытого профиля. Теперь forum_follow — это follow_set (ответ того же вида: ok / follow /
+--       reason). Уже лежащие подписки, которые не проходят по возрасту или блокировке, удаляются.
+--   (2) Жалобы на человека, который ПОЗЖЕ вошёл в команду сайта, оставались видны хелперам и модераторам и закрывались ими.
+--       Теперь смотрим его роль сейчас: жалобы на команду видит и закрывает только создатель.
+--   (3) В сообществе модератор сайта мог чистить сообщения и убирать из голосового другого человека из команды сайта.
+--       Теперь команду сайта в сообществе трогают только админ сайта и владелец этого сообщества (как на сервере сайта).
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+-- 18б.1 Подписка из статьи форума — по тем же правилам, что «Следить»
+create or replace function public.forum_follow(p_author uuid, p_on boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  return public.follow_set(p_author, p_on, null);
+end $$;
+delete from public.forum_follows f where public.follow_why(f.follower, f.author) in ('age', 'blocked');
+
+-- 18б.2 Жалобы на человека из команды сайта (по его роли СЕЙЧАС) — только создателю
+create or replace function public.mod_user_reports(p_state text default 'open')
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me uuid := auth.uid(); sr text := public.chat_staff_role(auth.uid());
+begin
+  if sr is null then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+  return jsonb_build_object('ok', true, 'list', (select coalesce(jsonb_agg(to_jsonb(x) order by x.at desc), '[]'::jsonb) from (
+    select u.target_id as target, (select nick from public.profiles where id = u.target_id) as nick, count(*)::int as n,
+      case when bool_or(u.state = 'new') then 'new' when bool_or(u.state = 'work') then 'work' when bool_or(u.state = 'done') then 'done' else 'rejected' end as state,
+      string_agg(distinct u.kind, ',') as kinds, left(string_agg(u.reason, ' · ' order by u.id desc), 600) as reasons,
+      max(u.created_at) as at, (bool_or(u.to_owner) or public.chat_staff_role(u.target_id) is not null) as to_owner,
+      (select nick from public.profiles where id = (array_agg(u.by_id order by u.by_at desc nulls last))[1]) as by_nick, max(u.by_at) as by_at
+    from public.user_reports u
+    where u.target_id is distinct from me and (not (u.to_owner or public.chat_staff_role(u.target_id) is not null) or sr = 'admin')   -- 18б: роль человека — СЕЙЧАС
+      and case coalesce(p_state, 'open') when 'open' then u.state in ('new', 'work') else u.state = p_state end
+      and (coalesce(p_state, 'open') in ('open', 'new', 'work') or u.created_at > now() - interval '60 days')
+    group by u.target_id order by max(u.created_at) desc limit 100) x));
+end $$;
+
+create or replace function public.mod_user_report_set(p_user uuid, p_state text, p_note text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); sr text := public.chat_staff_role(auth.uid()); v_note text := left(btrim(coalesce(p_note, '')), 200); r record; k int := 0;
+begin
+  if sr is null then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+  if p_user is null or p_user = me then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if coalesce(p_state, '') not in ('work', 'done', 'rejected') then return jsonb_build_object('ok', false, 'reason', 'state'); end if;
+  if public.comm_bad(v_note) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  for r in select id, reporter_id from public.user_reports where target_id = p_user and state in ('new', 'work')
+      and (not (to_owner or public.chat_staff_role(p_user) is not null) or sr = 'admin') loop   -- 18б: роль человека — СЕЙЧАС
+    update public.user_reports set state = p_state, by_id = me, by_at = now(), note = v_note where id = r.id;
+    if p_state <> 'work' then perform public.mod_done_notice(r.reporter_id, p_state, 'user:' || r.id); end if;
+    k := k + 1;
+  end loop;
+  if k = 0 then return jsonb_build_object('ok', false, 'reason', 'closed'); end if;
+  perform public.comm_log(null, me, p_user, null, 'report_' || p_state, v_note, 'жалоба на человека', '');
+  return jsonb_build_object('ok', true, 'n', k);
+end $$;
+
+-- 18б.3 Команду сайта в сообществе трогают только админ сайта и владелец сообщества
+create or replace function public.mod_peer_ok(p_cid bigint, p_me uuid, p_user uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.chat_staff_role(p_user) is null or public.is_admin_user(p_me)
+    or coalesce((select role from public.community_members where community_id = p_cid and user_id = p_me), '') = 'owner';
+$$;
+revoke all on function public.mod_peer_ok(bigint, uuid, uuid) from public, anon, authenticated;
+
+create or replace function public.mod_purge_user(p_cid bigint, p_user uuid, p_n int default 25, p_reason text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); sr text; k int := 0; v_n int := least(greatest(coalesce(p_n, 25), 1), 100); v_reason text := left(btrim(coalesce(p_reason, '')), 200);
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_user is null or p_user = me then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if public.mod_is_owner(p_user) then return jsonb_build_object('ok', false, 'reason', 'creator'); end if;
+  if public.comm_bad(v_reason) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  perform set_config('d37.reason', v_reason, true);
+  if p_cid is null then
+    sr := public.chat_staff_role(me);
+    if sr is null then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+    if public.chat_staff_role(p_user) is not null and sr <> 'admin' then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+    perform set_config('d37.nolog', '1', true);
+    with x as (select id from public.messages where user_id = p_user and not coalesce(deleted, false) order by id desc limit v_n)
+    update public.messages set deleted = true where id in (select id from x);
+    get diagnostics k = row_count;
+    perform set_config('d37.nolog', '', true);
+  else
+    if not public.comm_can_mod(p_cid, me, p_user) or not public.mod_peer_ok(p_cid, me, p_user) then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;   -- 18б
+    perform set_config('d37.nolog', '1', true);
+    with x as (select m.id from public.community_messages m join public.community_channels c on c.id = m.channel_id
+      where c.community_id = p_cid and m.user_id = p_user and not m.deleted order by m.id desc limit v_n)
+    update public.community_messages set deleted = true, hidden = false, text = '', reactions = '{}'::jsonb where id in (select id from x);
+    get diagnostics k = row_count;
+    perform set_config('d37.nolog', '', true);
+  end if;
+  perform public.comm_log(p_cid, me, p_user, null, 'purge', v_reason, k || ' сообщ. · все каналы', '');
+  return jsonb_build_object('ok', true, 'n', k);
+end $$;
+
+create or replace function public.mod_voice_kick(p_user uuid, p_channel bigint default null, p_minutes int default 10, p_reason text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); sr text; v_reason text := left(btrim(coalesce(p_reason, '')), 200); v_min int := coalesce(p_minutes, 10);
+  r record; cid bigint; k int := 0; seen int := 0; okc boolean;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_user is null or p_user = me then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  if public.mod_is_owner(p_user) then return jsonb_build_object('ok', false, 'reason', 'creator'); end if;
+  sr := public.chat_staff_role(me);
+  if v_min < 0 or v_min > 1440 or (sr = 'helper' and v_min > 60) then return jsonb_build_object('ok', false, 'reason', 'minutes'); end if;
+  if public.comm_bad(v_reason) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if (select count(*) from public.comm_modlog where actor_id = me and action = 'vkick' and created_at > now() - interval '1 hour') >= 60 then
+    return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  if v_min = 0 then
+    -- снять запрет: там, где у меня есть право
+    for r in select channel_id from public.voice_kicks where user_id = p_user and until > now() and (p_channel is null or channel_id = p_channel) loop
+      seen := seen + 1;
+      if r.channel_id <= 0 then okc := sr is not null and (public.chat_staff_role(p_user) is null or sr = 'admin'); cid := null;
+      else select community_id into cid from public.community_channels where id = r.channel_id; okc := cid is not null and public.comm_can_mod(cid, me, p_user) and public.mod_peer_ok(cid, me, p_user); end if;   -- 18б
+      if okc then
+        delete from public.voice_kicks where channel_id = r.channel_id and user_id = p_user;
+        perform public.comm_log(cid, me, p_user, null, 'vunkick', v_reason, '', r.channel_id::text);
+        k := k + 1;
+      end if;
+    end loop;
+    if k = 0 then return jsonb_build_object('ok', false, 'reason', case when seen > 0 then 'rights' else 'not_kicked' end); end if;
+    return jsonb_build_object('ok', true, 'n', k, 'undone', true);
+  end if;
+  for r in select channel_id from public.voice_here where user_id = p_user and seen_at > now() - interval '75 seconds' and (p_channel is null or channel_id = p_channel) loop
+    seen := seen + 1;
+    if r.channel_id <= 0 then okc := sr is not null and (public.chat_staff_role(p_user) is null or sr = 'admin'); cid := null;
+    else select community_id into cid from public.community_channels where id = r.channel_id; okc := cid is not null and public.comm_can_mod(cid, me, p_user) and public.mod_peer_ok(cid, me, p_user); end if;   -- 18б
+    if okc then
+      delete from public.voice_here where channel_id = r.channel_id and user_id = p_user;
+      insert into public.voice_kicks (channel_id, user_id, until, by_id, reason) values (r.channel_id, p_user, now() + make_interval(mins => v_min), me, v_reason)
+        on conflict (channel_id, user_id) do update set until = excluded.until, by_id = excluded.by_id, reason = excluded.reason, at = now();
+      perform public.comm_log(cid, me, p_user, null, 'vkick', v_reason, v_min || ' мин', r.channel_id::text);
+      k := k + 1;
+    end if;
+  end loop;
+  if k = 0 then return jsonb_build_object('ok', false, 'reason', case when seen > 0 then 'rights' else 'not_in_voice' end); end if;
+  if random() < 0.1 then delete from public.voice_kicks where until < now() - interval '1 day'; end if;
+  perform public.comm_notify(p_user, 'cm_mod', me, '🔇 Тебя убрали из голосового канала',
+    coalesce(nullif(v_reason, '') || '. ', '') || 'Зайти снова можно через ' || v_min || ' мин.', '#/chat', 'vkick:' || p_user || ':' || public.comm_bucket(1));
+  return jsonb_build_object('ok', true, 'n', k, 'minutes', v_min);
+end $$;
+
+-- 18б.4 Проверка и метка для сайта (как у части 18: строку видят и гости)
+create or replace function public.part18b_info()
+returns jsonb language sql stable as $$ select jsonb_build_object('ok', true, 'v', 1) $$;
+revoke all on function public.part18b_info() from public;
+grant execute on function public.part18b_info() to anon, authenticated;
+do $$ begin
+  if to_regclass('public.site_config') is not null then
+    update public.site_config set value = '1' where key = 'part18b';
+    if not found then insert into public.site_config (key, value) values ('part18b', '1'); end if;
+  end if;
+exception when others then raise warning 'ч. 18б: метка site_config part18b не поставлена: %', sqlerrm;
+end $$;
+do $$ begin
+  if to_regclass('public.site_config') is not null then
+    drop policy if exists site_config_part18b_read on public.site_config;
+    create policy site_config_part18b_read on public.site_config for select to anon, authenticated using (key = 'part18b');
+  end if;
+exception when others then raise warning 'ч. 18б: правило чтения метки part18b не создано: %', sqlerrm;
+end $$;

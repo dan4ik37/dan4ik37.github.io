@@ -31,8 +31,19 @@ if (!PGlite) {
 const ALL = fs.readFileSync(path.join(SITE, 'community.sql'), 'utf8').replace(/\r\n/g, '\n');
 const k0 = ALL.indexOf('\n-- ЧАСТЬ 18 ');
 if (k0 < 0) { console.log('FAIL part 18 not found'); process.exit(1); }
-const k1 = ALL.indexOf('\n-- ЧАСТЬ 19 ', k0);
-const PART = ALL.slice(k0, k1 > 0 ? k1 : undefined);
+// часть 18б идёт следом отдельным блоком: сначала проверяется часть 18 как она применена на сервере, в конце — «до 18б дефект есть,
+// после 18б — нет» (три лазейки из проверки 21.11)
+const kb = ALL.indexOf('\n-- ЧАСТЬ 18б ', k0);
+if (kb < 0) { console.log('FAIL part 18б not found'); process.exit(1); }
+const kbTop = ALL.lastIndexOf('\n-- ═', kb);
+const k1 = ALL.indexOf('\n-- ЧАСТЬ 19 ', kb);
+const PART = ALL.slice(k0, kbTop);
+const PART_B = ALL.slice(kbTop, k1 > 0 ? ALL.lastIndexOf('\n-- ═', k1) : undefined);
+// forum_follow — как в уже выполненном forum.sql (без правил возраста): её переопределяет часть 18б
+const FORUM = fs.readFileSync(path.join(SITE, 'forum.sql'), 'utf8').replace(/\r\n/g, '\n');
+const ff0 = FORUM.indexOf('create or replace function public.forum_follow('), ff1 = FORUM.indexOf('end $$;', ff0);
+if (ff0 < 0 || ff1 < 0) { console.log('FAIL forum_follow not found in forum.sql'); process.exit(1); }
+const FORUM_FOLLOW = FORUM.slice(ff0, ff1 + 7);
 
 let n = 0, fails = 0;
 const ok = (c, m, x) => { n++; if (!c) fails++; console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c && x !== undefined ? ' ' + JSON.stringify(x).slice(0, 500) : '')); };
@@ -105,6 +116,7 @@ await db.query(`insert into public.profiles (id, role, nick, grp, privacy_profil
 await db.exec(`insert into public.communities values (7, 'Клуб'); insert into public.community_members values (7, '${OWN}', 'owner'), (7, '${U1}', 'member'), (7, '${U2}', 'member');
   insert into public.community_channels values (70, 7, 'общий', 'text'), (71, 7, 'флуд', 'text'), (72, 7, 'Голос', 'voice');`);
 
+await db.exec(FORUM_FOLLOW);
 try { await db.exec(PART); ok(true, 'часть 18 выполнилась'); } catch (e) { ok(false, 'часть 18 выполнилась', String(e.message || e)); console.log(e); process.exit(1); }
 try { await db.exec(PART); ok(true, 'часть 18 выполнилась второй раз (повторный запуск безопасен)'); } catch (e) { ok(false, 'повторный запуск', String(e.message || e)); }
 
@@ -327,6 +339,106 @@ ok(acl.length === 16 && A1.follow_game_cap === '--' && ['mod_voice_kick', 'cv_pi
   && A1.follow_info === 'au' && A1.part18_info === 'au' && ['follow_why', 'follow_notify', 'voice_here_guard'].every(f => A1[f] === '--'), 'права: гостю — только follow_info и part18_info; служебные закрыты всем', A1);
 const tb = (await db.query(`select has_table_privilege('authenticated', 'public.voice_kicks', 'select') a, has_table_privilege('authenticated', 'public.user_reports', 'select') b`)).rows[0];
 ok(!tb.a && !tb.b, 'таблицы voice_kicks и user_reports закрыты от прямого чтения');
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// ЧАСТЬ 18б: «до» — дефект воспроизводится на части 18, «после» — закрыт. Свои люди, чтобы не зависеть от проверок выше.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+const B_KID = '00000000-0000-4000-8000-0000000000b1', B_AD = '00000000-0000-4000-8000-0000000000b2', B_AD2 = '00000000-0000-4000-8000-0000000000b3', B_HID = '00000000-0000-4000-8000-0000000000b4',
+  B_BAD = '00000000-0000-4000-8000-0000000000b5', B_REP = '00000000-0000-4000-8000-0000000000b6', B_MOD2 = '00000000-0000-4000-8000-0000000000b7', B_MEM = '00000000-0000-4000-8000-0000000000b8';
+await db.query(`insert into public.profiles (id, role, nick, grp, privacy_profile) values ($1,'user','Кроха','child','all'), ($2,'user','Автор','adult','all'), ($3,'user','Читатель','adult','all'), ($4,'user','Скрытый','adult','nobody'),
+  ($5,'user','Нарушитель','adult','all'), ($6,'user','Жалобщик','adult','all'), ($7,'moderator','Модер2','adult','all'), ($8,'user','Участник','adult','all')`, [B_KID, B_AD, B_AD2, B_HID, B_BAD, B_REP, B_MOD2, B_MEM]);
+await db.exec(`delete from public.user_blocks; insert into public.community_members values (7, '${B_MOD2}', 'member'), (7, '${B_MEM}', 'member') on conflict do nothing;`);
+const msgs = async () => { await db.exec(`insert into public.community_messages (channel_id, user_id, text) select 70, '${B_MOD2}', 'сообщение ' || g from generate_series(1, 4) g; insert into public.community_messages (channel_id, user_id, text) select 71, '${B_MEM}', 'сообщение ' || g from generate_series(1, 4) g;`); };
+const liveMsgs = async u => (await one(`select count(*)::int c from public.community_messages where user_id = $1 and not deleted`, [u])).c;
+const reported = async u => { const x = await rpc(u, 'public.mod_user_reports($1)', ['open']); return (x.list || []).filter(r => r.target === B_BAD); };
+
+// ── ДО 18б: три дефекта есть ──
+r = await rpc(B_KID, 'public.forum_follow($1, true)', [B_AD]);
+const before1 = r.ok === true && (await one(`select count(*)::int c from public.forum_follows where follower = $1 and author = $2`, [B_KID, B_AD])).c === 1;
+await db.exec(`insert into public.user_blocks values ('${B_AD}', '${B_AD2}')`);
+r = await rpc(B_AD2, 'public.forum_follow($1, true)', [B_AD]);
+const before1b = r.ok === true;
+await db.exec(`delete from public.user_blocks`);
+await rpc(B_AD2, 'public.forum_follow($1, true)', [B_MEM]);   // обычная подписка взрослый → взрослый: должна пережить 18б
+ok(before1 && before1b, 'ДО 18б (дефект 1): forum_follow пускает ребёнка следить за взрослым и заблокированного — за тем, кто его заблокировал');
+r = await rpc(B_REP, 'public.user_report($1, $2, $3, $4)', [B_BAD, 'behavior', 'грубит в чате', 'card']);
+await db.query(`update public.profiles set role = 'moderator' where id = $1`, [B_BAD]);   // позже его взяли в команду
+const before2 = (await reported(HLP)).length === 1 && (await reported(MOD)).length === 1;
+ok(r.ok === true && r.to_owner === false && before2, 'ДО 18б (дефект 2): жалобу на человека, который потом стал модератором, видят хелпер и модератор');
+await msgs();
+r = await rpc(MOD, 'public.mod_purge_user(7, $1, 10, $2)', [B_MOD2, '']);
+await enter(B_MOD2, 72);
+const k0b = await rpc(MOD, 'public.mod_voice_kick($1, 72, 5, $2)', [B_MOD2, '']);
+ok(r.ok === true && r.n === 4 && k0b.ok === true, 'ДО 18б (дефект 3): модератор сайта в сообществе чистит сообщения и убирает из голосового другого модератора сайта', { r, k0b });
+await db.exec(`delete from public.voice_kicks; delete from public.voice_here; delete from public.community_messages where user_id in ('${B_MOD2}', '${B_MEM}');`);
+
+// ── часть 18б ──
+try { await db.exec(PART_B); ok(true, 'часть 18б выполнилась'); } catch (e) { ok(false, 'часть 18б выполнилась', String(e.message || e)); console.log(e); process.exit(1); }
+try { await db.exec(PART_B); ok(true, 'часть 18б выполнилась второй раз (повторный запуск безопасен)'); } catch (e) { ok(false, 'часть 18б: повторный запуск', String(e.message || e)); }
+{ const i = await rpc(null, 'public.part18b_info()'); ok(i.ok === true && i.v === 1 && Object.keys(i).length === 2, 'part18b_info → {"ok":true,"v":1}', i); }
+ok((await one(`select value from public.site_config where key = 'part18b'`))?.value === '1' && (await one(`select count(*)::int c from public.site_config where key = 'part18b'`)).c === 1
+  && (await one(`select count(*)::int c from pg_policies where tablename = 'site_config' and policyname = 'site_config_part18b_read'`)).c === 1, 'метка site_config part18b = 1 и правило чтения этой строки (одно и после второго запуска)');
+
+// ── ПОСЛЕ 18б (1): подписка из статьи форума — по правилам «Следить» ──
+c = (await db.query(`select follower, author from public.forum_follows where follower in ($1, $2) order by author`, [B_KID, B_AD2])).rows;
+ok(!c.some(x => x.follower === B_KID) && c.some(x => x.follower === B_AD2 && x.author === B_AD) && c.some(x => x.follower === B_AD2 && x.author === B_MEM),
+  'ПОСЛЕ 18б: подписка ребёнка на взрослого удалена; обычные подписки на месте (блокировку уже сняли — та подписка осталась)', c);
+r = await rpc(B_KID, 'public.forum_follow($1, true)', [B_AD]);
+ok(r.ok === false && r.reason === 'age', 'ПОСЛЕ 18б: ребёнок → взрослый через forum_follow — отказ «age»', r);
+r = await rpc(B_AD, 'public.forum_follow($1, true)', [B_KID]);
+ok(r.ok === false && r.reason === 'age', 'ПОСЛЕ 18б: взрослый → ребёнок — отказ «age»', r);
+await db.exec(`insert into public.user_blocks values ('${B_AD}', '${B_REP}')`);
+r = await rpc(B_REP, 'public.forum_follow($1, true)', [B_AD]);
+ok(r.ok === false && r.reason === 'blocked', 'ПОСЛЕ 18б: заблокированный — отказ «blocked»', r);
+r = await rpc(B_AD2, 'public.forum_follow($1, true)', [B_HID]);
+ok(r.ok === false && r.reason === 'hidden', 'ПОСЛЕ 18б: скрытый профиль — отказ «hidden»', r);
+r = await rpc(B_MEM, 'public.forum_follow($1, true)', [B_AD]);
+ok(r.ok === true && r.follow === true, 'ПОСЛЕ 18б: обычная подписка из статьи работает, ответ того же вида (ok, follow)', r);
+r = await rpc(B_MEM, 'public.forum_follow($1, false)', [B_AD]);
+ok(r.ok === true && r.follow === false, 'ПОСЛЕ 18б: отписка работает', r);
+r = await rpc(null, 'public.forum_follow($1, true)', [B_AD]);
+ok(r.ok === false && r.reason === 'auth', 'ПОСЛЕ 18б: гость — «auth»', r);
+r = await rpc(B_AD, 'public.forum_follow($1, true)', [B_AD]);
+ok(r.ok === false && r.reason === 'own', 'ПОСЛЕ 18б: на себя — «own» (как раньше)', r);
+await db.exec(`insert into public.forum_follows (follower, author) values ('${B_REP}', '${B_AD}') on conflict do nothing`);   // подписка, которая не проходит по блокировке
+await db.exec(PART_B);
+ok((await one(`select count(*)::int c from public.forum_follows where follower = $1 and author = $2`, [B_REP, B_AD])).c === 0, 'ПОСЛЕ 18б: уже лежащая подписка через блокировку удаляется при запуске части');
+await db.exec(`delete from public.user_blocks`);
+
+// ── ПОСЛЕ 18б (2): жалобы на человека из команды — по его роли сейчас ──
+ok((await reported(HLP)).length === 0 && (await reported(MOD)).length === 0, 'ПОСЛЕ 18б: жалобу на нового модератора хелпер и модератор больше не видят');
+r = await rpc(HLP, 'public.mod_user_report_set($1, $2, $3)', [B_BAD, 'rejected', '']);
+ok(r.ok === false && r.reason === 'closed', 'ПОСЛЕ 18б: хелпер закрыть её не может', r);
+r = await rpc(MOD, 'public.mod_user_report_set($1, $2, $3)', [B_BAD, 'done', '']);
+ok(r.ok === false && r.reason === 'closed', 'ПОСЛЕ 18б: модератор — тоже', r);
+c = await reported(A);
+ok(c.length === 1 && c[0].to_owner === true && c[0].state === 'new', 'ПОСЛЕ 18б: создатель видит её с пометкой «на команду», статус не тронут', c);
+r = await rpc(A, 'public.mod_user_report_set($1, $2, $3)', [B_BAD, 'work', '']);
+ok(r.ok === true && r.n === 1, 'ПОСЛЕ 18б: создатель берёт её в работу', r);
+await db.query(`update public.profiles set role = 'user' where id = $1`, [B_BAD]);   // роль сняли — снова обычная жалоба
+ok((await reported(HLP)).length === 1, 'ПОСЛЕ 18б: роль сняли — жалоба снова видна команде (решает роль сейчас)');
+
+// ── ПОСЛЕ 18б (3): команду сайта в сообществе трогают только админ и владелец сообщества ──
+await msgs();
+r = await rpc(MOD, 'public.mod_purge_user(7, $1, 10, $2)', [B_MOD2, '']);
+ok(r.ok === false && r.reason === 'rights' && await liveMsgs(B_MOD2) === 4, 'ПОСЛЕ 18б: модератор сайта не чистит сообщения другого модератора сайта в сообществе', r);
+await enter(B_MOD2, 72); await enter(B_MEM, 72);
+r = await rpc(MOD, 'public.mod_voice_kick($1, 72, 5, $2)', [B_MOD2, '']);
+ok(r.ok === false && r.reason === 'rights' && (await one(`select count(*)::int c from public.voice_here where user_id = $1`, [B_MOD2])).c === 1, 'ПОСЛЕ 18б: и не убирает его из голосового', r);
+r = await rpc(MOD, 'public.mod_purge_user(7, $1, 10, $2)', [B_MEM, '']);
+ok(r.ok === true && r.n === 4, 'ПОСЛЕ 18б: обычного участника модератор сайта чистит, как раньше', r);
+r = await rpc(MOD, 'public.mod_voice_kick($1, 72, 5, $2)', [B_MEM, '']);
+ok(r.ok === true && r.n === 1, 'ПОСЛЕ 18б: и убирает из голосового, как раньше', r);
+r = await rpc(OWN, 'public.mod_voice_kick($1, 72, 5, $2)', [B_MOD2, '']);
+ok(r.ok === true && r.n === 1, 'ПОСЛЕ 18б: владелец сообщества убирает модератора сайта из своего голосового', r);
+r = await rpc(MOD, 'public.mod_voice_kick($1, 72, 0, $2)', [B_MOD2, '']);
+ok(r.ok === false && r.reason === 'rights', 'ПОСЛЕ 18б: снять чужой запрет с человека из команды модератор сайта тоже не может', r);
+r = await rpc(A, 'public.mod_purge_user(7, $1, 10, $2)', [B_MOD2, '']);
+ok(r.ok === true && r.n === 4, 'ПОСЛЕ 18б: админ сайта — может', r);
+const aclB = (await db.query(`select p.proname, has_function_privilege('anon', p.oid, 'execute') an, has_function_privilege('authenticated', p.oid, 'execute') au from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname in ('mod_peer_ok','part18b_info','mod_purge_user','mod_voice_kick','mod_user_reports','mod_user_report_set')`)).rows;
+const AB = Object.fromEntries(aclB.map(x => [x.proname, (x.an ? 'a' : '-') + (x.au ? 'u' : '-')]));
+ok(AB.mod_peer_ok === '--' && AB.part18b_info === 'au' && ['mod_purge_user', 'mod_voice_kick', 'mod_user_reports', 'mod_user_report_set'].every(f => AB[f] === '-u'), 'права после 18б: переопределённые функции — как были (гостю закрыты), служебная закрыта всем', AB);
 
 console.log(`\n${fails ? 'FAIL' : 'OK'} part18-sql-test: ${n - fails}/${n}`);
 process.exit(fails ? 1 : 0);
