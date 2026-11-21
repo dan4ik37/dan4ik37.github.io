@@ -366,6 +366,7 @@ body.hub-on .bottom-tabbar,body.hub-on #donateFab,body.hub-on #scrollTop,body.hu
 .md-dot:hover{background:rgba(0,0,0,.7);transform:scale(1.08)}
 .gm-card .md-dot{right:.7rem;bottom:.7rem;width:32px;height:32px;font-size:16px;background:rgba(var(--fg-rgb),.1);color:var(--text)}
 .gm-card .md-dot:hover{background:rgba(var(--fg-rgb),.22)}
+.hub-playcard .md-dot{top:12px;bottom:auto}   /* внизу карточки «Играть» — панель «Путь» */
 .hc-card{position:relative}
 .hc-card .md-dot{right:8px;top:8px;bottom:auto;width:32px;height:32px;font-size:16px}
 @media (max-width:640px){

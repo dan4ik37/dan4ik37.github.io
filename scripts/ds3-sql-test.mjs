@@ -29,6 +29,8 @@ if (!PGlite) {
 let sql = fs.readFileSync(path.join(SITE, 'community.sql'), 'utf8'); const k0 = sql.indexOf('-- ═══ часть 15 (ds2)');
 if (k0 < 0) { console.log('FAIL part 15 not found'); process.exit(1); }
 sql = sql.slice(k0);
+// части 17+ (ники, модерация из карточки, «следить») проверяют свои тесты (t177-sql-test, part18-sql-test) — сюда только ч. 15–16
+{ const k17 = sql.indexOf('\n-- ЧАСТЬ 17 '); if (k17 > 0) sql = sql.slice(0, sql.lastIndexOf('\n-- ═', k17)); }
 const db = new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role; create role app; create schema auth; create schema extensions;
 create table cur(u uuid, r text); insert into cur values (null, 'anon');

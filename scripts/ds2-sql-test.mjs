@@ -30,6 +30,8 @@ if (!PGlite) {
 let sql = fs.readFileSync(path.join(SITE, 'community.sql'), 'utf8'); const k0 = sql.indexOf('-- ═══ часть 15 (ds2)');
 if (k0 < 0) { console.log('FAIL part 15 not found'); process.exit(1); }
 sql = sql.slice(k0);
+// только ч. 15: часть 16 (её проверяет ds3-sql-test) меняет поведение — пароль на голосовой канал; части 17+ — t177-sql-test, part18-sql-test
+{ const k17 = sql.indexOf('\n-- ЧАСТЬ 16 '); if (k17 > 0) sql = sql.slice(0, sql.lastIndexOf('\n-- ═', k17)); }
 const db = new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role; create role app; create schema auth; create schema extensions;
 create table cur(u uuid, r text); insert into cur values (null, 'anon');
