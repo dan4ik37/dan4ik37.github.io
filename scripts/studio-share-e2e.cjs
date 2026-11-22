@@ -97,6 +97,8 @@ function fake(net, rq){
   if (f === 'ugc_arena_publish') {
     const r = db.rows.find(x => x.id === body.p_id); if (!r) return [200, { ok: false, reason: 'not_found' }];
     if (!r.age_ok) return [200, { ok: false, reason: 'age' }];
+    const same = JSON.stringify(r.data);
+    if (db.rows.some(o => o !== r && o.author !== r.author && ['link', 'public'].includes(o.status) && JSON.stringify(o.data) === same)) return [200, { ok: false, reason: 'clone' }];
     if (r.paid) { r.status = 'public'; return [200, { ok: true, status: 'public', charged: 0 }]; }
     if (db.coins < 500) return [200, { ok: false, reason: 'coins', coins: db.coins, price: 500 }];
     db.coins -= 500; db.charges++; r.paid = true; r.status = 'public'; r.unchecked = true;
@@ -156,6 +158,25 @@ async function walk(port){
     await sleep(2500);
     await B.shot('share-play');
     ok(net.db.plays >= 1, 'запуск засчитан (ugc_play)');
+    const noTake = `![...document.querySelectorAll('.sa-pp-a .sa-btn')].some(b => /мотивам|файл|копи/i.test(b.textContent)) && !document.querySelector('.sa-pp-src')`;
+    ok(await B.ev(noTake), 'своя страница арены: нет «По мотивам» и «Сохранить в файл»');
+    // чужая выложенная арена с тем же файлом: страница без кнопок «взять файл»; выложить свой клон — отказ
+    const foe = { ...row, id: 'arfoe0000', author: '00000000-0000-4000-8000-0000000000f0', paid: true, profiles: { nick: 'Чужой' } };
+    net.db.rows.push(foe);
+    await B.ev(`D37Route.go('#/games/studio/arena/play/${foe.id}'); 1`);
+    ok(await B.until(`location.href.includes('${foe.id}') && document.querySelectorAll('.sa-pp-a .sa-btn').length > 0`, 30000), 'чужая арена: страница открылась');
+    ok(await B.ev(noTake), 'чужая арена: нет «По мотивам», «Сохранить в файл», копии текста');
+    ok(!net.calls.some(c => /remix/.test(c)), 'никаких вызовов «по мотивам»');
+    row.paid = false; row.status = 'draft'; const coins0 = net.db.coins;
+    await B.ev(`D37Route.go('#/games/studio/arena/edit/${row.id}'); 1`);
+    ok(await B.until(`!!document.querySelector('[data-spub]')`, 60000), 'своя арена снова в редакторе');
+    await B.ev(click('[data-spub]'));
+    ok(await B.until(`/уже выложен другим автором/.test(${shareSt})`, 15000), 'клон чужой арены — «Такой режим уже выложен другим автором…»', await B.ev(shareSt));
+    ok(net.db.coins === coins0, 'за отказ «клон» монеты не списаны');
+    net.db.rows.splice(net.db.rows.indexOf(foe), 1);
+    net.db.rows.push({ ...row, id: 'arown0000', status: 'public', paid: true });   // своя же копия выложена — не мешает
+    await B.ev(click('[data-spub]'));
+    ok(await B.until(`/Выложено/.test(${shareSt})`, 15000), 'копия своей же арены — выкладывается', await B.ev(shareSt));
     net.p19 = false;
     await B.ev(`${st}.setP19(null); D37Route.go('#/games/studio/arena/demo'); 1`);
     ok(await B.until(`/после обновления базы/.test(${shareSt})`, 60000), 'без части 19: «после обновления базы»', await B.ev(shareSt));

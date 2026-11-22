@@ -81,7 +81,6 @@ await slow();
 const FILE = { format: 1, kind: 'arena', engine_min: 1, arena: { kernel: 'free' }, rules: [], objects: [], laws: [], texts: { t1: 'Привет' } };
 ok((await rpc(null, 'ugc_arena_save', ['', 'Гость', '', '⚡', JSON.stringify(FILE), 12])).reason === 'auth', 'гость не сохраняет');
 ok((await rpc(null, 'ugc_arena_publish', ['x'])).reason === 'auth', 'гость не выкладывает');
-ok((await rpc(null, 'ugc_arena_remix', ['x'])).reason === 'auth', 'гость не делает по мотивам');
 ok((await rpc(A, 'ugc_arena_save', ['', 'Плохо', '', '⚡', JSON.stringify({ ...FILE, texts: { t1: 'ну бля' } }), 12])).reason === 'words', 'фильтр слов — текст внутри файла');
 ok((await rpc(A, 'ugc_arena_save', ['', 'Иди на example.com', '', '⚡', JSON.stringify(FILE), 12])).reason === 'words', 'фильтр ссылок — название');
 ok((await rpc(A, 'ugc_arena_save', ['', 'Большая', '', '⚡', JSON.stringify({ ...FILE, texts: { t1: 'я'.repeat(40000) } }), 12])).reason === 'data', 'больше 64 КБ — отказ');
@@ -118,22 +117,23 @@ ok(!pb.ok && pb.reason === 'coins' && pb.coins === 499 && pb.price === 500, 'н�
 ok((await db.query(`select coins from public.coin_wallet where user_id = $1`, [B])).rows[0].coins === 499, 'монеты не тронуты');
 ok((await db.query(`select status from public.ugc_games where id = $1`, [sb.id])).rows[0].status === 'draft', 'статус не тронут');
 
-// по мотивам
+// копирования нет; клон чужой выложенной арены не выкладывается, своя копия — можно
+ok(!/ugc_arena_remix/.test((await db.query(`select string_agg(proname, ',') s from pg_proc`)).rows[0].s), 'функции «по мотивам» нет');
 await slow();
-const rx = await rpc(B, 'ugc_arena_remix', [id]);
-ok(rx.ok, 'по мотивам: копия в черновики', rx);
-row = (await db.query(`select author, src_id, status, kind from public.ugc_games where id = $1`, [rx.id])).rows[0];
-ok(row.author === B && row.src_id === id && row.status === 'draft' && row.kind === 'arena', 'источник указан, черновик автора', row);
-ok((await rpc(B, 'ugc_arena_remix', [old.id])).reason !== undefined && !(await rpc(B, 'ugc_arena_remix', [sb.id])).ok, 'черновик чужой / не арену — нельзя');
+const pubData = JSON.stringify((await db.query(`select data from public.ugc_games where id = $1`, [id])).rows[0].data);
 await db.exec(`update public.coin_wallet set coins = 900 where user_id = '${B}'`);
-await rpc(B, 'ugc_arena_save', [rx.id, 'Ремикс', '', '⚡', JSON.stringify((await db.query(`select data from public.ugc_games where id = $1`, [id])).rows[0].data), 12]);
-const pr = await rpc(B, 'ugc_arena_publish', [rx.id]);
-ok(!pr.ok && pr.reason === 'same', 'точная копия — выложить нельзя', pr);
-ok((await db.query(`select coins from public.coin_wallet where user_id = $1`, [B])).rows[0].coins === 900, 'за отказ «копия» монеты не списаны');
+const cl = await rpc(B, 'ugc_arena_save', ['', 'Клон', '', '⚡', pubData, 12]);
+const pr = await rpc(B, 'ugc_arena_publish', [cl.id]);
+ok(!pr.ok && pr.reason === 'clone', 'клон чужой выложенной арены — отказ', pr);
+ok((await db.query(`select coins from public.coin_wallet where user_id = $1`, [B])).rows[0].coins === 900, 'за отказ «клон» монеты не списаны');
 await slow();
-await rpc(B, 'ugc_arena_save', [rx.id, 'Ремикс', '', '⚡', JSON.stringify({ ...FILE, texts: { t1: 'Моё' } }), 12]);
-const pr2 = await rpc(B, 'ugc_arena_publish', [rx.id]);
-ok(pr2.ok && pr2.charged === 500, 'изменённый ремикс выложен', pr2);
+await rpc(B, 'ugc_arena_save', [cl.id, 'Своя', '', '⚡', JSON.stringify({ ...FILE, texts: { t1: 'Моё' } }), 12]);
+const pr2 = await rpc(B, 'ugc_arena_publish', [cl.id]);
+ok(pr2.ok && pr2.charged === 500, 'свой другой режим выложен', pr2);
+await slow();
+const own = await rpc(A, 'ugc_arena_save', ['', 'Моя копия', '', '⚡', pubData, 12]);
+const po = await rpc(A, 'ugc_arena_publish', [own.id]);
+ok(po.ok && po.charged === 500, 'копия своей же арены — можно', po);
 
 // жалобы → автоскрытие
 for (const r of [R1, R2]) await rpc(r, 'ugc_report', [id, 'x']);
@@ -144,7 +144,6 @@ ok(row.held && row.status === 'review', '3 жалобы — скрыта до м
 ok((await rpc(A, 'ugc_arena_publish', [id])).reason === 'held', 'автор не выложит скрытую сам');
 await rpc(A, 'ugc_status', [id, 'link']);
 ok((await db.query(`select status from public.ugc_games where id = $1`, [id])).rows[0].status === 'review', 'и «по ссылке» сам не вернёт');
-ok((await rpc(R1, 'ugc_arena_remix', [id])).reason === 'not_found', 'скрытую по мотивам не взять');
 await db.query('update cur set u = $1', [R1]);
 await db.exec('grant usage on schema auth to authenticated; grant select on cur to authenticated; grant execute on function auth.uid() to authenticated; set role authenticated');
 const vis = (await db.query(`select count(*)::int c from public.ugc_games where id = '${id}'`)).rows[0].c;

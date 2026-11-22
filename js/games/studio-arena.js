@@ -258,9 +258,9 @@
     try { return JSON.parse(m.blocks_check(String(text))); } catch (e) { return { ok: false, error: 'проверка не ответила', warnings: [] }; }
   }
 
-  // ═══ Сайт: сохранить, ссылка, «Выложить за 500 🪙», по мотивам (T-176 S3, флаг STUDIO_SHARE) ═══
+  // ═══ Сайт: сохранить, ссылка, «Выложить за 500 🪙» (T-176 S3, флаг STUDIO_SHARE) ═══
   // Общий путь игр игроков: таблица ugc_games (вид 'arena', data — файл режима), функции community.sql ч. 19 (ugc_arena_save /
-  // ugc_arena_publish / ugc_arena_remix) и старые ugc_status / ugc_play / ugc_like / ugc_report (ugc.sql). Пока ч. 19 нет на сервере
+  // ugc_arena_publish) и старые ugc_status / ugc_play / ugc_like / ugc_report (ugc.sql). Пока ч. 19 нет на сервере
   // (строка site_config 'part19'), кнопки пишут «после обновления базы» и ничего не зовут. Цена — с сервера (ugc_arena_rule), без
   // ответа — 500 (число владельца, EDITOR_ONE §13).
   const shareOn = () => typeof STUDIO_SHARE !== 'undefined' && !!STUDIO_SHARE;
@@ -283,7 +283,7 @@
   }
   const WHY = { auth: 'Войди на сайт', title: 'Название — от 2 до 60 знаков', data: 'Файл режима не принят (больше 64 КБ или не файл режима)', words: 'В тексте режима есть запрещённые слова или ссылки — поправь',
     age: 'Выбери, для какого возраста режим', age_mod: 'Метку поставил модератор — ниже её не опустить', limit: 'Уже 30 игр — удали старую', too_fast: 'Слишком часто — подожди пару секунд',
-    not_found: 'Не найдено', banned: 'Модератор убрал этот режим', held: 'Режим скрыт жалобами — ждёт модератора', same: 'Это точная копия режима — поменяй что-нибудь, тогда можно выложить',
+    not_found: 'Не найдено', banned: 'Модератор убрал этот режим', held: 'Режим скрыт жалобами — ждёт модератора', clone: 'Такой режим уже выложен другим автором — сделай свой, не похожий',
     kind: 'Это не арена', off: 'Выкладывать сейчас нельзя', offline: 'Нет связи с сайтом', error: 'Сайт не ответил — попробуй ещё раз' };
   const why = r => (r && r.reason === 'coins' ? `Не хватает монет: нужно ${r.price ?? price} 🪙, у тебя ${r.coins ?? 0} 🪙` : WHY[r?.reason] || WHY.error);
   const linkOf = id => location.origin + '/#/games/studio/arena/play/' + encodeURIComponent(id);
@@ -361,7 +361,7 @@
   const COLS = 'id,title,icon,descr,kind,data,status,plays,likes,author,created_at';
   async function loadRow(id){
     if (!SB() || !/^[a-z0-9]{4,24}$/.test(id)) return null;
-    for (const cols of [COLS + ',age_rating,age_ok,unchecked,src_id,src_title,profiles!ugc_games_author_fkey(nick)', COLS]) {
+    for (const cols of [COLS + ',age_rating,age_ok,unchecked,profiles!ugc_games_author_fkey(nick)', COLS]) {
       try { const { data, error } = await SB().from('ugc_games').select(cols).eq('id', id).maybeSingle(); if (!error) return data || null; } catch (e) { return null; }
     }
     return null;
@@ -372,7 +372,7 @@
     root.innerHTML = `<div class="sa sa-pp"><div class="sa-top"><a class="sa-btn ghost" href="#/games/studio" aria-label="Назад в студию">←</a><b class="sa-pp-t">Загружаем…</b><span class="sa-badge">⚡ Наш движок</span></div>
       <div class="sa-pp-meta"></div><div class="sa-play"><div class="sa-stage"></div><div class="sa-cover"><b>⚡ Арена игрока</b><small class="sa-pp-cs"></small><button type="button" class="sa-btn sa-pp-go" hidden>▶ Играть</button></div></div>
       <div class="sa-status" role="status" aria-live="polite"><span class="sa-st">Загружаем…</span></div>
-      <div class="sa-files sa-pp-a"></div><p class="sa-descr-t"></p><p class="sa-note sa-pp-src" hidden></p>
+      <div class="sa-files sa-pp-a"></div><p class="sa-descr-t"></p>
       <p class="sa-note">Это режим игрока. Никогда не вводи в играх пароли и личные данные.</p></div>`;
     const q = s => root.querySelector(s);
     const status = (t, k) => { const e = q('.sa-st'); if (!e) return; e.textContent = t; q('.sa-status').className = 'sa-status sa-' + (k || 'ok'); };
@@ -386,20 +386,14 @@
       if (g.unchecked !== false) { const u = document.createElement('span'); u.className = 'sa-unchecked'; u.textContent = '⚠ не проверено модератором'; meta.appendChild(u); }
       const by = document.createElement('small'); by.textContent = ` от ${String(g.profiles?.nick || 'игрока').slice(0, 40)} · 👁 ${+g.plays || 0} · ❤️ ${+g.likes || 0}`; meta.appendChild(by);
       q('.sa-descr-t').textContent = String(g.descr || '').slice(0, 300);
-      if (g.src_id) { const s = q('.sa-pp-src'); s.hidden = false; s.append('По мотивам: '); const a = document.createElement('a'); a.href = '#/games/studio/arena/play/' + encodeURIComponent(String(g.src_id)); a.textContent = String(g.src_title || 'другого режима').slice(0, 60); s.appendChild(a); }
       const acts = q('.sa-pp-a');
       const btn = (t, f, cls = 'ghost') => { const b = document.createElement('button'); b.type = 'button'; b.className = 'sa-btn ' + cls; b.textContent = t; b.addEventListener('click', f); acts.appendChild(b); return b; };
       if (mine) { const a = document.createElement('a'); a.className = 'sa-btn ghost'; a.href = '#/games/studio/arena/edit/' + encodeURIComponent(g.id); a.textContent = '✏️ Изменить'; acts.appendChild(a); }
       btn('❤️', async () => { const r = await rpc('ugc_like', { p_id: g.id }); status(r?.ok ? (r.liked ? '❤️ Понравилось' : 'Лайк убран') : '⚠ ' + why(r), r?.ok ? 'ok' : 'warn'); });
       btn('🔗 Ссылка', async () => { try { await navigator.clipboard?.writeText(linkOf(g.id)); } catch (e) {} status('🔗 Ссылка: ' + linkOf(g.id)); });
       if (!mine) btn('⚠️ Пожаловаться', async () => { const w = prompt('Что не так с этим режимом?'); if (w == null) return; const r = await rpc('ugc_report', { p_id: g.id, p_reason: String(w).slice(0, 200) }); status(r?.ok ? 'Жалоба отправлена — модератор посмотрит.' : '⚠ ' + why(r), r?.ok ? 'ok' : 'warn'); });
-      btn('🎨 Сделать по мотивам', async () => {
-        if (!me()) { status('Войди на сайт, чтобы сделать свой режим по мотивам.', 'warn'); return; }
-        if (!await part19()) { status('«По мотивам» заработает после обновления базы сайта.', 'warn'); return; }
-        const r = await rpc('ugc_arena_remix', { p_src: g.id });
-        if (!r?.ok) { status('⚠ ' + why(r), 'warn'); return; }
-        location.hash = '#/games/studio/arena/edit/' + r.id;
-      });
+      // чужую арену не копируют (владелец 22.11): здесь нет «Сохранить в файл» / копии текста — только играть. Это правило
+      // интерфейса, не защита: браузер получает файл, чтобы движок его запустил
       if (staff()) btn('🛡️ Модерация', () => { location.hash = '#/games/studio/mod'; });
       // возраст: чужой режим не по возрасту — обложка вместо игры (как у игр игроков, js/core/age.js)
       const AU = window.D37Age?.ugc;
@@ -432,7 +426,7 @@
     if (S !== st) return;
     const say = t => { const e = root.querySelector('.sa-st'); if (e) e.textContent = t; };
     if (!me()) { say('Войди на сайт, чтобы изменить свой режим.'); return; }
-    if (!g || g.kind !== 'arena' || g.author !== me().id) { say('Режим не найден или он не твой. Открой его страницу и нажми «Сделать по мотивам».'); return; }
+    if (!g || g.kind !== 'arena' || g.author !== me().id) { say('Режим не найден или он не твой. Чужой режим изменить нельзя — сделай свой.'); return; }
     const was = projects().find(p => p.srv === g.id);
     const pid = was ? was.id : newId();
     saveProject(pid, g.title, textOf(g.data || {}), { srv: g.id, status: g.status, age: g.age_ok === false ? null : g.age_rating ?? null, descr: g.descr || '', paid: g.status === 'public' });

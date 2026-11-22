@@ -7146,7 +7146,8 @@ end $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 -- ЧАСТЬ 19 (T-176 S3, 22.11.2026): «Арена» студии — сохранить на сайте, ссылка для друзей, «Выложить за 500 🪙» без
---   модерации (решение владельца, EDITOR_ONE §13: «А там посмотрим как по ценам» — 500 его число), «Сделать по мотивам».
+--   модерации (решение владельца, EDITOR_ONE §13: «А там посмотрим как по ценам» — 500 его число). Копировать чужую арену нельзя
+--   (владелец 22.11): свой режим делают сами; выложить точную копию чужой выложенной / по ссылке арены — отказ 'clone'.
 --   Повторный запуск безопасен (if not exists / create or replace / drop … if exists). Нужны: ugc.sql, coins.sql, age.sql,
 --   части 1–18 этого файла (comm_bad / comm_has_link — фильтр слов). Старые виды игр (tpl / html / place) и старые функции
 --   ugc_save / ugc_status / ugc_review / ugc_play / ugc_like / ugc_report НЕ переписываются.
@@ -7166,8 +7167,6 @@ alter table public.ugc_games add column if not exists paid_at timestamptz;      
 alter table public.ugc_games add column if not exists unchecked boolean not null default false;   -- выложено без модератора: «не проверено»
 alter table public.ugc_games add column if not exists held boolean not null default false;        -- скрыто жалобами до модератора
 alter table public.ugc_games add column if not exists age_ok boolean not null default false;      -- автор сам выбрал метку возраста
-alter table public.ugc_games add column if not exists src_id text;                       -- «по мотивам»: откуда
-alter table public.ugc_games add column if not exists src_title text;
 
 -- 19.2 Правила (числа и выключатели). price — число владельца; hide — порог жалоб из ugc.sql (3); bytes — предел файла движка
 create table if not exists public.ugc_arena_rules (key text primary key, value int not null);
@@ -7234,7 +7233,7 @@ grant execute on function public.ugc_arena_save(text, text, text, text, jsonb, i
 --      Уже платил за эту арену — просто снова в каталог, без списания. Скрыта жалобами — ждёт модератора.
 create or replace function public.ugc_arena_publish(p_id text)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); g public.ugc_games%rowtype; w public.coin_wallet%rowtype; price int := public.ugc_arena_rule('price'); src jsonb;
+declare uid uuid := auth.uid(); g public.ugc_games%rowtype; w public.coin_wallet%rowtype; price int := public.ugc_arena_rule('price');
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   select * into g from public.ugc_games where id = p_id for update;
@@ -7244,9 +7243,10 @@ begin
   if g.held then return jsonb_build_object('ok', false, 'reason', 'held'); end if;
   if coalesce(public.ugc_arena_rule('age'), 1) <> 0 and not g.age_ok then return jsonb_build_object('ok', false, 'reason', 'age'); end if;
   if public.ugc_arena_words_bad(g.title, g.descr, g.data) then return jsonb_build_object('ok', false, 'reason', 'words'); end if;
-  if g.src_id is not null then
-    select data into src from public.ugc_games where id = g.src_id;
-    if src is not null and src = g.data then return jsonb_build_object('ok', false, 'reason', 'same'); end if;   -- «по мотивам», не копия
+  -- не клон: точная копия файла чужой выложенной / по ссылке арены не выкладывается (своя же копия — можно)
+  if exists (select 1 from public.ugc_games o where o.kind = 'arena' and o.author <> uid and o.status in ('link', 'public')
+             and o.data = g.data) then
+    return jsonb_build_object('ok', false, 'reason', 'clone');
   end if;
   if g.paid_at is not null then
     update public.ugc_games set status = 'public', unchecked = true, updated_at = now() where id = g.id;
@@ -7264,26 +7264,8 @@ end $$;
 revoke all on function public.ugc_arena_publish(text) from public, anon;
 grant execute on function public.ugc_arena_publish(text) to authenticated;
 
--- 19.6 «Сделать по мотивам»: копия выложенной (или по ссылке) арены в черновики, источник указан
-create or replace function public.ugc_arena_remix(p_src text)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); s public.ugc_games%rowtype; new_id text;
-begin
-  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
-  select * into s from public.ugc_games where id = p_src;
-  if not found or s.status not in ('link', 'public') or s.held then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
-  if s.kind <> 'arena' then return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
-  if (select count(*) from public.ugc_games where author = uid) >= 30 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
-  if exists (select 1 from public.ugc_games where author = uid and created_at > now() - interval '20 seconds') then
-    return jsonb_build_object('ok', false, 'reason', 'too_fast');
-  end if;
-  new_id := public.ugc_new_id();
-  insert into public.ugc_games (id, author, title, descr, icon, kind, data, status, age_rating, age_ok, src_id, src_title)
-    values (new_id, uid, left(s.title, 60), s.descr, s.icon, 'arena', s.data, 'draft', s.age_rating, false, s.id, s.title);
-  return jsonb_build_object('ok', true, 'id', new_id, 'status', 'draft');
-end $$;
-revoke all on function public.ugc_arena_remix(text) from public, anon;
-grant execute on function public.ugc_arena_remix(text) to authenticated;
+-- 19.6 Копирования чужой арены нет (владелец 22.11). Строка ниже — на случай, если старый черновик части уже запускали
+drop function if exists public.ugc_arena_remix(text);
 
 -- 19.7 Автоскрытие арены после жалоб (ugc_report считает жалобы): уходит отовсюду, кроме автора и модераторов, пока модератор не
 --      посмотрит. Модератор вернул в каталог (ugc_review 'public' обнуляет жалобы) — скрытие снято
