@@ -35,7 +35,7 @@
   const P2P = () => { try { return !server() && root.D37JoinP2P && root.D37JoinP2P.on() ? root.D37JoinP2P : null; } catch (e) { return null; } };
   const avail = () => !!server() || !!P2P();
   // игры с комнатами (сейчас одна): иконка, название, сколько людей можно
-  const GAMES = { klet2: { title: 'Клеточки', icon: '🟢', max: 16 } };
+  const GAMES = { klet2: { title: 'Клеточки', icon: '🟢', max: 16 }, hole2: { title: 'Чёрная дыра 2', icon: '🕳️', max: 8 } };   // hole2: max — MAXO движка (sys/hole2/rules.rs)
   const gameOk = g => Object.prototype.hasOwnProperty.call(GAMES, g);
   const CODE_RE = /^[A-HJKMNP-Z2-9]{6}$/;          // как CODE_ALPHABET сервера: без I, L, O, 0, 1
   const ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
