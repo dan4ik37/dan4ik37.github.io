@@ -64,7 +64,7 @@
   const ageCol = async () => !!(await AU()?.col('ugc_games'));
   const light = async (base = LIGHT) => base + ((await ageCol()) ? ',age_rating' : '');
   const ageB = g => g?.age_rating != null && window.D37Age ? D37Age.badge(g.age_rating, { title: AU().WHY }) : '';
-  const playHref = g => g.kind === 'place' ? `#/games/studio3d/play/${esc(g.id)}` : `#/games/studio/play/${esc(g.id)}`;
+  const playHref = g => g.kind === 'place' ? `#/games/studio3d/play/${esc(g.id)}` : g.kind === 'arena' ? `#/games/studio/arena/play/${esc(g.id)}` : `#/games/studio/play/${esc(g.id)}`;   // arena — только на нашем движке (T-176 S3)
 
   // ── Персонаж игрока для игр (D37.player в песочнице): 2D-проекция своего 3D-персонажа сбоку — один атлас (data URL) +
   //    таблица кадров (js/core/char2d.js). Стиль — как задумано шаблоном (sprite в STUDIO_TPL, «Раннер» — 16-бит), свой код —
@@ -202,7 +202,7 @@
       const [si, sn] = STATUS[g.status] || STATUS.draft;
       return `<div class="st-row"><span class="st-row-ic">${esc(g.icon || '🎮')}</span>
         <div class="st-row-b"><b>${esc(g.title || 'Без названия')}${ageB(g)}</b><small><span class="st-chip st-${esc(g.status)}">${si} ${sn}</span>${g.srv ? ` · 👁 ${num(g.plays)} · ❤️ ${num(g.likes)}` : g.local ? ' · только в этом браузере' : ''}</small></div>
-        <span class="st-row-a"><a class="st-btn" href="${playHref(g)}">▶</a><a class="st-btn ghost" href="${g.kind === 'place' ? '#/games/studio3d' : `#/games/studio/edit/${esc(g.id)}`}">✏️</a></span></div>`;
+        <span class="st-row-a"><a class="st-btn" href="${playHref(g)}">▶</a><a class="st-btn ghost" href="${g.kind === 'place' ? '#/games/studio3d' : g.kind === 'arena' ? `#/games/studio/arena/edit/${esc(g.id)}` : `#/games/studio/edit/${esc(g.id)}`}">✏️</a></span></div>`;
     }).join('')}</div>`;
   }
   async function catalog(sort){
@@ -244,6 +244,7 @@
         const L = await light('id,title,icon,descr,kind,tpl,data,html,status,plays,likes,author');
         const row = await select(q => q.select(L).eq('id', o.id).maybeSingle());
         if (S !== st) return;
+        if (row?.kind === 'arena') { go('arena/edit/' + o.id); return; }   // T-176 S3: арену правит только редактор арены
         if (row) { if (authed() && row.author !== currentUser.id && !isStaff()) { go('play/' + o.id); return; } g = { ...row, srv: true }; }
       }
       if (!g) { root.innerHTML = '<div class="st-empty">Игра не найдена. <a href="#/games/studio">В студию</a></div>'; return; }
@@ -547,6 +548,7 @@ let last = performance.now();
     const L = await light('id,title,icon,descr,kind,tpl,data,html,status,plays,likes,author,created_at,profiles!ugc_games_author_fkey(nick)');
     const row = await select(q => q.select(L).eq('id', id).maybeSingle());
     if (S !== st) return;
+    if (row?.kind === 'arena') { const h = '#/games/studio/arena/play/' + id; if (window.D37Route) D37Route.go(h, { replace: true }); else location.replace(h); return; }   // T-176 S3: арена — никогда не в песочнице страниц-игр
     if (row?.kind === 'place') { if (window.D37Route) D37Route.go('#/games/studio3d/play/' + id, { replace: true }); else location.replace('#/games/studio3d/play/' + id); return; }   // 3D-мир — в «Студии 3D»
     if (row) g = { ...row, srv: true };
     else if (drafts()[id]) g = { ...drafts()[id], status: 'draft', local: true };
@@ -683,7 +685,7 @@ let last = performance.now();
     if (!rows.length) { box.innerHTML = '<div class="st-empty">Очередь пуста 🎉</div>'; return; }
     const ageOk = await ageCol();
     box.innerHTML = rows.map(g => `<div class="st-row" data-id="${esc(g.id)}"><span class="st-row-ic">${esc(g.icon || '🎮')}</span>
-      <div class="st-row-b"><b>${esc(g.title)}${ageB(g)}</b><small>👤 <a href="#/profile/${esc(g.author)}" target="_blank">${esc(g.profiles?.nick || '')}</a> · ${(STATUS[g.status] || STATUS.draft).join(' ')} · ${g.kind === 'tpl' ? 'шаблон ' + esc(g.tpl) : g.kind === 'place' ? '🧱 3D-мир (модели в нём — проверка в «Студии 3D» → 🛡)' : 'свой код'}${g.reports ? ` · ⚠️ жалоб: ${g.reports}` : ''}</small><small>${esc(g.descr || '')}</small>
+      <div class="st-row-b"><b>${esc(g.title)}${ageB(g)}</b><small>👤 <a href="#/profile/${esc(g.author)}" target="_blank">${esc(g.profiles?.nick || '')}</a> · ${(STATUS[g.status] || STATUS.draft).join(' ')} · ${g.kind === 'tpl' ? 'шаблон ' + esc(g.tpl) : g.kind === 'place' ? '🧱 3D-мир (модели в нём — проверка в «Студии 3D» → 🛡)' : g.kind === 'arena' ? '⚡ арена (не проверено)' : 'свой код'}${g.reports ? ` · ⚠️ жалоб: ${g.reports}` : ''}</small><small>${esc(g.descr || '')}</small>
         ${ageOk && AU() ? `<label class="age-rate-l">🎂 Метка ${AU().select(g.age_rating, { staff: true, attr: 'data-age-rate' })}</label>` : ''}</div>
       <span class="st-row-a"><a class="st-btn ghost" href="${playHref(g)}" target="_blank">▶</a>
         <button type="button" class="st-btn" data-mod="public">✅ В каталог</button><button type="button" class="st-btn ghost" data-mod="link">🔗 Только ссылка</button><button type="button" class="st-btn ghost danger" data-mod="banned">⛔</button></span></div>`).join('');

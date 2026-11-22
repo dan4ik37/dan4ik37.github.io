@@ -29,6 +29,7 @@
     'e-play': { tile: 'play', join: '', rules: '' },
     'e-creative': { tile: 'creative', join: '', rules: '' },
     'e-klet': { tile: 'klet', join: 'klet2', rules: '/games/kletochki' },
+    'e-hole2': { tile: 'hole2', join: 'hole2', rules: '/games/hole', img: 'img/games/hole.png' },   // T-176 S3: «Чёрная дыра 2» движка, комнаты — как у klet2
   };
   M.href = id => '/hub/mode/' + encodeURIComponent(id);
   const ageMax = () => { let g = 'unknown'; try { g = window.D37Age ? window.D37Age.group() : 'unknown'; } catch (e) {} return g === 'teen16' || g === 'adult' ? 16 : 12; };
@@ -39,7 +40,7 @@
     if (!ID_RE.test(id)) return null;
     if (ENGINE[id]) {
       const t = (window.D37Hub?.TILES || []).find(x => x.id === ENGINE[id].tile); if (!t) return null;
-      return { id, kind: 'engine', title: t.title, icon: t.icon, desc: t.sub, play: t.href, join: ENGINE[id].join, rules: ENGINE[id].rules, age: t.age || '', img: '', lead: 'Режим нового движка D37' };
+      return { id, kind: 'engine', title: t.title, icon: t.icon, desc: t.sub, play: t.href, join: ENGINE[id].join, rules: ENGINE[id].rules, age: t.age || '', img: ENGINE[id].img || '', lead: 'Режим нового движка D37' };
     }
     const ug = /^(ugc|unity)-(.{1,36})$/.exec(id);
     if (ug) {
@@ -55,9 +56,9 @@
         if (rate != null && rate > ageMax()) return { id, kind: 'age', age: rate + '+' };   // не по возрасту: ни названия, ни описания
         let nick = 'игрок';
         try { if (typeof sbProfiles === 'function') { const r = await (await sbProfiles()).select('nick').eq('id', g.author).limit(1); nick = (r.data && r.data[0] && r.data[0].nick) || nick; } } catch (e) {}
-        const play = table === 'unity_games' ? '#/games/unity/play/' + encodeURIComponent(g.id) : (g.kind === 'place' ? '#/games/studio3d/play/' : '#/games/studio/play/') + encodeURIComponent(g.id);
+        const play = table === 'unity_games' ? '#/games/unity/play/' + encodeURIComponent(g.id) : (g.kind === 'place' ? '#/games/studio3d/play/' : g.kind === 'arena' ? '#/games/studio/arena/play/' : '#/games/studio/play/') + encodeURIComponent(g.id);
         return { id, kind: 'player', title: String(g.title || 'Игра').slice(0, 60), icon: String(g.icon || '🎮').slice(0, 16), desc: String(g.descr || '').slice(0, 300), play, join: '', rules: '',
-          age: rate != null && rate >= 0 ? rate + '+' : '', img: '', lead: 'Игра игрока', author: g.author, nick: String(nick).slice(0, 40), plays: +g.plays || 0, likes: +g.likes || 0, at: g.updated_at };
+          age: rate != null && rate >= 0 ? rate + '+' : '', img: '', lead: g.kind === 'arena' ? '⚡ Арена игрока · не проверено модератором' : 'Игра игрока', author: g.author, nick: String(nick).slice(0, 40), plays: +g.plays || 0, likes: +g.likes || 0, at: g.updated_at };
       } catch (e) { return null; }
     }
     const g = typeof GAMES !== 'undefined' ? GAMES.find(x => x.id === id) : null;

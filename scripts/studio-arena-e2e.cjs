@@ -51,7 +51,7 @@ async function chrome(net){
     const rq = d.params.request, u = rq.url, rid = d.params.requestId;
     const reply = (code, body, type = 'application/json') => send('Fetch.fulfillRequest', { requestId: rid, responseCode: code, responseHeaders: [{ name: 'Content-Type', value: type }, { name: 'Access-Control-Allow-Origin', value: '*' }, { name: 'Access-Control-Allow-Headers', value: '*' }, { name: 'Access-Control-Allow-Methods', value: '*' }, { name: 'Content-Range', value: '0-0/0' }], body: Buffer.from(body).toString('base64') }).catch(() => {});
     if (/js\/core\/config\.js/.test(u)) {
-      const body = fs.readFileSync(path.join(SITE, 'js/core/config.js'), 'utf8').replace(/^const STUDIO_ONE = (true|false);/m, 'const STUDIO_ONE = true;').replace(/^const STUDIO_ARENA = (true|false);/m, `const STUDIO_ARENA = ${net.flag !== false};`);
+      const body = fs.readFileSync(path.join(SITE, 'js/core/config.js'), 'utf8').replace(/^const STUDIO_ONE = (true|false);/m, 'const STUDIO_ONE = true;').replace(/^const STUDIO_ARENA = (true|false);/m, `const STUDIO_ARENA = ${net.flag !== false};`).replace(/^const STUDIO_SHARE = (true|false);/m, 'const STUDIO_SHARE = false;');   // S2 как было; «На сайт» — studio-share-e2e
       return reply(200, body, 'text/javascript; charset=utf-8');
     }
     if (rq.method === 'OPTIONS') return reply(204, '');

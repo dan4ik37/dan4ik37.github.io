@@ -84,3 +84,16 @@
   .sa-right{flex:1 1 45%;max-height:calc(100vh - 120px);overflow:auto;padding-right:4px}
   .sa-play{aspect-ratio:16/10}
 }
+/* T-176 S3: «На сайт» (сохранить / ссылка / выложить) и страница выложенной арены */
+.sa-share{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding:10px;border-radius:12px;background:rgba(var(--fg-rgb),.05)}
+.sa-share-h{font:800 .9rem 'Montserrat',sans-serif}
+.sa-btn.gold{background:#f59e0b;color:#1a1200}
+.sa-bad-t{color:#ef4444}
+.sa-share-st{overflow-wrap:anywhere}
+.sa-pp{max-width:1100px;margin:0 auto}
+.sa-pp-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0;color:var(--muted)}
+.sa-unchecked{display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.18);color:#b45309;font:800 .74rem 'Montserrat',sans-serif}
+.sa-pp-a{margin:8px 0}
+.sa-descr-t{margin:6px 0;overflow-wrap:anywhere}
+@media (prefers-color-scheme: dark){.sa-unchecked{color:#fbbf24}}
+.sa-age-b{font:800 .74rem 'Montserrat',sans-serif;font-style:normal;padding:2px 7px;border-radius:999px;background:rgba(var(--fg-rgb),.1)}

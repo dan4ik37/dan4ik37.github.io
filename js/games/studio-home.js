@@ -15,9 +15,9 @@
   const PIC = id => `img/studio/modes/${id}.webp`;
   const ver = () => (typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const playOf = g => (g.kind === 'place' ? `#/games/studio3d/play/${esc(g.id)}` : `#/games/studio/play/${esc(g.id)}`);   // как playHref в studio.js
+  const playOf = g => (g.kind === 'place' ? `#/games/studio3d/play/${esc(g.id)}` : g.kind === 'arena' ? `#/games/studio/arena/play/${esc(g.id)}` : `#/games/studio/play/${esc(g.id)}`);   // как playHref в studio.js
   const ageOf = g => (g?.age_rating != null && window.D37Age?.badge ? window.D37Age.badge(+g.age_rating, { title: 'Метка возраста игры' }) : '');
-  const KIND = { place: '🧱 3D-мир', tpl: '🎮 Игра', html: '💻 Свой код' };
+  const KIND = { place: '🧱 3D-мир', tpl: '🎮 Игра', html: '💻 Свой код', arena: '⚡ Арена' };
   // T-176 S2: «⚡ Арена на нашем движке» (js/games/studio-arena.js) — только при флаге STUDIO_ARENA и загруженном редакторе
   const arenaOn = () => typeof STUDIO_ARENA !== 'undefined' && !!STUDIO_ARENA && !!window.D37StudioArena;
   const arenaCard = () => `<div class="so-arena"><span class="so-arena-ic" aria-hidden="true">⚡</span><b>Арена на нашем движке</b>
@@ -59,14 +59,14 @@
     }
     const st = (C?.STATUS || {})[g.status] || (C?.STATUS || {}).draft || ['📝', 'Черновик'];
     const kind = KIND[g.kind] || KIND.html;
-    const edit = g.kind === 'place' ? '#/games/studio3d' : `#/games/studio/edit/${esc(g.id)}`;
+    const edit = g.kind === 'place' ? '#/games/studio3d' : g.kind === 'arena' ? `#/games/studio/arena/edit/${esc(g.id)}` : `#/games/studio/edit/${esc(g.id)}`;
     const play = playOf(g);
     return `<div class="so-row"><span class="so-row-ic" aria-hidden="true">${esc(g.icon || '🎮')}</span><div class="so-row-b"><b>${esc(g.title || 'Без названия')}${ageOf(g)}</b>
       <small>${kind} · <span class="so-chip so-${esc(g.status || 'draft')}">${esc(st[0])} ${esc(st[1])}</span>${g.src === 'srv' ? ` · 👁 ${esc(C?.num ? C.num(g.plays) : +g.plays || 0)} · ❤️ ${esc(C?.num ? C.num(g.likes) : +g.likes || 0)}` : ' · только в этом браузере'}</small></div>
       <span class="so-row-a"><a class="so-btn" href="${play}" title="Играть">▶</a><a class="so-btn ghost" href="${edit}" title="Изменить">✏️</a></span></div>`;
   }
   function catCard(g, C){
-    return `<a class="so-card" href="${playOf(g)}"><span class="so-card-ic" aria-hidden="true">${esc(g.icon || '🎮')}</span><b>${esc(g.title)}${ageOf(g)}</b>${g.kind === 'place' ? '<small class="so-card-3d">🧱 3D-мир</small>' : ''}
+    return `<a class="so-card" href="${playOf(g)}"><span class="so-card-ic" aria-hidden="true">${esc(g.icon || '🎮')}</span><b>${esc(g.title)}${ageOf(g)}</b>${g.kind === 'place' ? '<small class="so-card-3d">🧱 3D-мир</small>' : g.kind === 'arena' ? '<small class="so-card-3d">⚡ Арена · не проверено</small>' : ''}
       <small>👤 ${esc(g.profiles?.nick || 'Игрок')}${g.author ? `<span class="lv-badge" data-lv-uid="${esc(g.author)}"></span>` : ''}</small><small>👁 ${esc(C?.num ? C.num(g.plays) : +g.plays || 0)} · ❤️ ${esc(C?.num ? C.num(g.likes) : +g.likes || 0)}</small></a>`;
   }
   const stateHtml = (kind, text, retry) => `<div class="so-state so-${kind}" role="${kind === 'err' ? 'alert' : 'status'}">${kind === 'load' ? '<span class="so-spin" aria-hidden="true"></span>' : ''}<span>${esc(text)}</span>${retry ? `<button type="button" class="so-btn ghost" data-retry="${esc(retry)}">Повторить</button>` : ''}</div>`;
@@ -125,7 +125,7 @@
       ...srv.map(g => ({ ...g, src: 'srv' })),
       ...Object.values(C.drafts()).filter(d => d && d.id && !ids.has(d.id)).map(d => ({ ...d, status: 'draft', src: 'draft' })),
       ...localWorlds().map(w => ({ ...w, src: 'world' })),
-      ...arenaProjects().map(a => ({ ...a, src: 'arena' })),
+      ...arenaProjects().filter(a => !a.srv || !ids.has(a.srv)).map(a => ({ ...a, src: 'arena' })),   // выложенная на сайт — одной строкой (с сайта)
     ].sort((a, b) => t(b) - t(a));
     const warn = err ? stateHtml('err', uid ? 'Игры с сайта не загрузились. ' + errText(err) : errText(err), 'mine') : '';
     if (!list.length) { box.innerHTML = warn || stateHtml('empty', uid ? 'Пока пусто — выбери режим или шаблон выше 🙂' : 'Пока пусто — выбери режим или шаблон выше 🙂 Войди, чтобы видеть и игры, выложенные на сайт.'); return; }
