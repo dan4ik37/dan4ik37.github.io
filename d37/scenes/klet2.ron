@@ -1,0 +1,23 @@
+// ep18-modes: «Клеточки» AS ON THE SITE (game klet2, built on game::basics) — a mode declared as a scene: the home valley's
+// game layer without hints, and `start` opens the arena on the first tick (it floats over the valley and fills the view).
+// The site's /d37-config/games/klet2.json points here ("scene": "klet2").
+(
+    version: 0,
+    name: "klet2",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "home",
+        at: (29.0, 80.36),
+        altitude: 0,
+        yaw_deg: 250,
+        pitch_deg: -8,
+        // noon: the arena's colours under a high sun
+        time: 1800,
+        views: {},
+    ),
+    game: (spawn: Home, hints: false, radius: 72, forest: 0.5),
+    start: ["game klet2 play"],
+)
