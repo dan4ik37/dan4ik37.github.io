@@ -84,3 +84,12 @@
   .so-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
   .so-hero h2{font-size:1.5rem}
 }
+
+/* T-176 S2: карточка «⚡ Арена на нашем движке» — первая в ряду «Создать режим» (js/games/studio-home.js, флаг STUDIO_ARENA) */
+.so-arena{display:flex;flex-direction:column;gap:6px;min-width:0;padding:12px;border-radius:14px;border:1px solid rgba(250,204,21,.55);background:linear-gradient(135deg,rgba(250,204,21,.18),rgba(139,92,246,.16));grid-column:1/-1}
+.so-arena b{font:800 .95rem 'Montserrat',sans-serif;color:var(--text-hi)}
+.so-arena small{color:rgba(var(--text-rgb),.78);font:500 .78rem/1.4 'Montserrat',sans-serif}
+.so-arena-ic{font-size:1.6rem;line-height:1}
+.so-arena-a{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.so-arena-a .so-btn{flex:1;min-height:44px}
+@media (min-width:1000px){.so-arena{grid-column:auto}}

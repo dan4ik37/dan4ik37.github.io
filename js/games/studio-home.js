@@ -18,6 +18,12 @@
   const playOf = g => (g.kind === 'place' ? `#/games/studio3d/play/${esc(g.id)}` : `#/games/studio/play/${esc(g.id)}`);   // как playHref в studio.js
   const ageOf = g => (g?.age_rating != null && window.D37Age?.badge ? window.D37Age.badge(+g.age_rating, { title: 'Метка возраста игры' }) : '');
   const KIND = { place: '🧱 3D-мир', tpl: '🎮 Игра', html: '💻 Свой код' };
+  // T-176 S2: «⚡ Арена на нашем движке» (js/games/studio-arena.js) — только при флаге STUDIO_ARENA и загруженном редакторе
+  const arenaOn = () => typeof STUDIO_ARENA !== 'undefined' && !!STUDIO_ARENA && !!window.D37StudioArena;
+  const arenaCard = () => `<div class="so-arena"><span class="so-arena-ic" aria-hidden="true">⚡</span><b>Арена на нашем движке</b>
+      <small>Собери свой режим из блоков и правил «когда → то» и сразу играй — на телефоне тоже.</small>
+      <span class="so-arena-a"><a class="so-btn" href="#/games/studio/arena/new" data-arena="new">С нуля</a><a class="so-btn ghost" href="#/games/studio/arena/demo" data-arena="demo">Из примера</a></span></div>`;
+  const arenaProjects = () => { try { return arenaOn() ? window.D37StudioArena.projects() : []; } catch (e) { return []; } };
 
   function css(){
     if (typeof document === 'undefined' || document.getElementById('studio-one-css')) return;
@@ -41,6 +47,11 @@
   const createTile = (href, icon, name, line, cls = '') => `<a class="so-tile${cls}" href="${esc(href)}"><span class="so-tile-ic" aria-hidden="true">${esc(icon)}</span><span><b>${esc(name)}</b><small>${esc(line)}</small></span></a>`;
   // одна строка «Мои проекты»: g — { src: 'srv' | 'draft' | 'world', … }
   function rowHtml(g, C){
+    if (g.src === 'arena') {
+      const href = `#/games/studio/arena/open/${esc(g.id)}`;
+      return `<div class="so-row"><span class="so-row-ic" aria-hidden="true">⚡</span><div class="so-row-b"><b>${esc(g.name || 'Моя арена')}</b><small>⚡ Арена · только в этом браузере</small></div>
+        <span class="so-row-a"><a class="so-btn" href="${href}">Открыть</a></span></div>`;
+    }
     if (g.src === 'world') {
       const href = `#/games/studio3d/open/${esc(g.id)}`;
       return `<div class="so-row"><span class="so-row-ic" aria-hidden="true">🧱</span><div class="so-row-b"><b>${esc(g.name || 'Мой мир')}</b><small>${KIND.place} · только в этом браузере${g.n ? ` · ${esc(g.n)} объектов` : ''}</small></div>
@@ -66,7 +77,7 @@
     return `<div class="so">
       <div class="so-hero"><h2>🛠️ Студия</h2><p>Сделай свой режим, игру или 3D-мир и позови друзей по ссылке. Начни с готового режима — он уже играется.</p></div>
       <section class="so-sec" aria-labelledby="so-h-modes"><h3 class="so-h" id="so-h-modes">🎮 Создать режим <small>готовая карта и правила — поменяй и играй</small></h3>
-        <div class="so-modes">${blanks().map(modeCard).join('') || stateHtml('err', 'Режимы не загрузились — обнови страницу.')}</div>
+        <div class="so-modes">${arenaOn() ? arenaCard() : ''}${blanks().map(modeCard).join('') || stateHtml('err', 'Режимы не загрузились — обнови страницу.')}</div>
         <p class="so-note">Режимы — в 3D. Если телефон не тянет 3D, ниже есть игры без 3D: шаблоны и «Свой код».</p></section>
       <section class="so-sec" aria-labelledby="so-h-new"><h3 class="so-h" id="so-h-new">✨ Создать</h3>
         <div class="so-tiles">${createTile('#/games/studio3d/new/grass', '🧱', '3D-мир', 'Пустой мир с травой: строй из деталей, деревьев и фонарей, оживляй скриптами.', ' so-tile-3d')}
@@ -114,6 +125,7 @@
       ...srv.map(g => ({ ...g, src: 'srv' })),
       ...Object.values(C.drafts()).filter(d => d && d.id && !ids.has(d.id)).map(d => ({ ...d, status: 'draft', src: 'draft' })),
       ...localWorlds().map(w => ({ ...w, src: 'world' })),
+      ...arenaProjects().map(a => ({ ...a, src: 'arena' })),
     ].sort((a, b) => t(b) - t(a));
     const warn = err ? stateHtml('err', uid ? 'Игры с сайта не загрузились. ' + errText(err) : errText(err), 'mine') : '';
     if (!list.length) { box.innerHTML = warn || stateHtml('empty', uid ? 'Пока пусто — выбери режим или шаблон выше 🙂' : 'Пока пусто — выбери режим или шаблон выше 🙂 Войди, чтобы видеть и игры, выложенные на сайт.'); return; }

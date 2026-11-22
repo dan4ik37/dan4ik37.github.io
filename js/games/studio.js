@@ -145,6 +145,7 @@
     else if (a === 'edit' && b) editor({ id: b });
     else if (a === 'play' && b) play(b);
     else if (a === 'mod') moderation();
+    else if (a === 'arena' && typeof STUDIO_ARENA !== 'undefined' && STUDIO_ARENA && window.D37StudioArena) { S = { screen: 'arena', sb: { destroy: () => window.D37StudioArena.unmount() } }; window.D37StudioArena.mount(root, String(param).split('/').slice(1).join('/'), api); }   // T-176 S2: «Арена» на нашем движке
     else home();
   }
   function stopScreen(){

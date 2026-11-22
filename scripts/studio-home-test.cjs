@@ -105,8 +105,8 @@ function fakeEl(){
   ok(!!m, 'config.js: флаг STUDIO_ONE одной строкой (откат — false)');
   const games = src('js/features/games.js');
   const studioLine = games.split('\n').find(l => /\{ id: 'studio',/.test(l)) || '';
-  ok(/scripts: \['js\/games\/studio-tpl\.js', \.\.\.\(typeof STUDIO_ONE !== 'undefined' && STUDIO_ONE \? \['js\/games\/studio-blanks\.js', 'js\/games\/studio-home\.js'\] : \[\]\), 'js\/games\/studio\.js'\]/.test(studioLine),
-    'games.js: при STUDIO_ONE = false у «Студии игр» те же два файла, что раньше; при true — ещё список карточек и главная');
+  ok(/scripts: \['js\/games\/studio-tpl\.js', \.\.\.\(typeof STUDIO_ONE !== 'undefined' && STUDIO_ONE \? \['js\/games\/studio-blanks\.js', 'js\/games\/studio-home\.js'\] : \[\]\), \.\.\.\(typeof STUDIO_ARENA !== 'undefined' && STUDIO_ARENA \? \['js\/games\/studio-arena\.js'\] : \[\]\), 'js\/games\/studio\.js'\]/.test(studioLine),
+    'games.js: при STUDIO_ONE = false у «Студии игр» те же два файла, что раньше; при true — ещё список карточек и главная (и «Арена» только при STUDIO_ARENA)');
   const hub = src('js/features/hub.js');
   ok(/id: 'studio',[^\n]*href: STUDIO_ONE_ON \? '\/play\/studio' : '\/play\/studio3d'/.test(hub), 'плитка «Студия» в /hub: с флагом — главная студии, без — «Студия 3D», как раньше');
 
