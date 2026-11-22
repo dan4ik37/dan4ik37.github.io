@@ -53,7 +53,7 @@
   `#/games/studio/arena/edit/<id>` pulls an own arena from the site into a browser project (meta `srv`).
 - Safeguards (switch rows in `ugc_arena_rules`, value 0): `words` (comm_bad + comm_has_link on title, description, every string of the
   file), `age`, `hide` (3 reports → held, invisible to others, author cannot bring it back; moderator «public» clears it and «не проверено»).
-- «Вдвоём» for an arena — still «скоро» (needs the room to carry the file: hash + text within room message limits).
+- «Вдвоём» for an arena (ep39, 22.11) = THE COMMON ROOMS, no arena-only path: the arena page and the editor call `D37Join.lobby(box, { game: 'umode', map, codeOnly, before })` — the same block klet2 has on its mode page (list, «＋ Создать комнату», code, quick play). `before` puts the arena file into `sessionStorage d37_umode_file`; `/hub/play/umode/<code>` hands it to the engine (`modeText`); a joiner without the file gets it FROM THE ROOM (engine `room::MODE_DATA_V1`: the snapshot carries a mode descriptor — opts + data hash + the file, checked by the same checker; a tampered / oversized / other file = a clean refusal in Russian). Draft / link arena: rooms by code only (no list, no quick play); published: also in the list (filtered by `map` = arena id). Age: room ages exactly as klet2; an arena rated above 12+ gets no rooms block (a room link would skip the age cover).
 - Tests: `scripts/part19-sql-test.mjs` (CI, PGlite), `scripts/studio-share-e2e.cjs` (CI `--e2e`, fake DB in the test, no real writes).
 
-Дальше: «Вдвоём» для арены (файл в комнату), S1b (облако 3D-миров, один формат, «хранитель» в scene.js), S1c (редактор игр-страниц: отмена, номера строк, общий «Выложить»).
+Дальше: S1b (облако 3D-миров, один формат, «хранитель» в scene.js), S1c (редактор игр-страниц: отмена, номера строк, общий «Выложить»).

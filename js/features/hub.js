@@ -99,8 +99,10 @@
   const SLOT = { play: WORLD, creative: 'creative', planet: 'creative' };   // у творческого мира своё сохранение (и в облаке — мир 'creative')
   const SAVES = m => !!SLOT[m];
   const slot = () => SLOT[st.mode] || WORLD;
-  const SPAWNS = { home: 1, orbit: 1, new: 1, tribe: 1, klet: 1, klet2: 1, hole2: 1 };   // hole2 — «Чёрная дыра 2» движка с комнатами, как klet2 (T-176 S3)
-  const ROOMS = { klet2: 1, hole2: 1 };   // режимы с комнатами (js/features/join.js GAMES)   // klet — «Клеточки» в движке (w11), мир игрока не меняется; klet2 — они же с комнатами (T-174)
+  const SPAWNS = { home: 1, orbit: 1, new: 1, tribe: 1, klet: 1, klet2: 1, hole2: 1, umode: 1 };   // hole2 — «Чёрная дыра 2» движка с комнатами, как klet2 (T-176 S3)
+  // ep39: файл арены, который страница арены положила перед переходом в комнату (эта вкладка, не старше 30 минут)
+  const arenaText = () => { try { const a = JSON.parse(sessionStorage.getItem('d37_umode_file') || 'null'); return a && typeof a.text === 'string' && a.text.length <= 65536 && Date.now() - (+a.t || 0) < 1800000 ? a.text : undefined; } catch (e) { return undefined; } };
+  const ROOMS = { klet2: 1, hole2: 1, umode: 1 };   // umode — арены игроков (ep39: та же комната, файл арены движок раздаёт сам)   // режимы с комнатами (js/features/join.js GAMES)   // klet — «Клеточки» в движке (w11), мир игрока не меняется; klet2 — они же с комнатами (T-174)
   const J = () => root.D37Join && root.D37Join.ON() ? root.D37Join : null;   // T-174: комнаты, вход по коду и ссылке, «к другу» (js/features/join.js)
   // W11 «Играть вместе»: общий мир на нашем сервере миров (движок: crates/d37-server, deploy/oracle). /hub/play?join=<КОД>
   // (и /play/d37?join=<КОД>) открывает мир с этим кодом. NET_URL — адрес сервера (wss://…: сайт на https); '' — сервер ещё
@@ -548,7 +550,7 @@
     const bar = el('div', 'hub-bar');
     const back = el('button', 'hub-back', '← На сайт'); back.type = 'button';
     back.addEventListener('click', () => leave(mode));
-    const title = el('b', 'hub-title', mode === 'wardrobe' ? '👕 Гардероб' : cre ? '🪐 Творческий режим' : st.opt === 'klet2' ? '🟢 Клеточки' : st.opt === 'hole2' ? '🕳️ Чёрная дыра 2' : '🌍 Мой мир D37');
+    const title = el('b', 'hub-title', mode === 'wardrobe' ? '👕 Гардероб' : cre ? '🪐 Творческий режим' : st.opt === 'klet2' ? '🟢 Клеточки' : st.opt === 'hole2' ? '🕳️ Чёрная дыра 2' : st.opt === 'umode' ? '🏟️ Арена' : '🌍 Мой мир D37');
     const stat = el('span', 'hub-stat', '');
     const full = el('button', 'hub-full', '⛶'); full.type = 'button'; full.title = 'На весь экран'; full.setAttribute('aria-label', 'На весь экран');
     full.addEventListener('click', () => toggleFull(box));
@@ -716,7 +718,8 @@
         root: ui.stage, scene: MODES[mode] || 'valley', rawSize: +(info && info.wasm_raw) || 0, gl: st.gl || g === 'gl',
         quality: g === 'max' || g === 'mid' || g === 'low' ? g : touchDev() ? 'low' : '', session: sessionMsg(), look, save: save && save.bytes, wardrobe: mode === 'wardrobe',
         newWorld: opt === 'new', skipTribe: opt === 'tribe', spawn: opt === 'home' || opt === 'orbit' ? opt : 'last', arena: opt === 'klet' ? 'klet' : ROOMS[opt] ? opt : '',
-        world: ROOMS[opt] ? 'main' : undefined,   // T-174: комната — мир в потоке страницы, как у общих миров движка (ключ возврата set_rejoin_key доходит до мира)
+        world: ROOMS[opt] ? 'main' : undefined,
+          modeText: opt === 'umode' ? arenaText() : undefined,   // ep39: файл арены со страницы арены (кто без него — получит из комнаты)   // T-174: комната — мир в потоке страницы, как у общих миров движка (ключ возврата set_rejoin_key доходит до мира)
         join: jc && NET_URL ? { url: NET_URL, code: jc } : null,   // W11 «Играть вместе»
         onProgress: progress, onMessage: onMsg, fullscreenEl: ui.box,   // F11 игры — на весь экран вместе с полосой сайта
         // T-166: слои настроек (общий файл → файл игры → строка site_config по флагу; ?tune= движок добавит сам), перечитываются при

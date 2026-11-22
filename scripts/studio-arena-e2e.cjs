@@ -134,7 +134,8 @@ async function walk(port, view, theme){
     await B.ev(`document.querySelector('[data-open]').click(); 1`);
     await B.ev(`(() => { const f = ${T}.state().file; const c = JSON.parse(JSON.stringify(f)); c.rules[0].len_s = 45; document.querySelector('.sa-io-t').value = JSON.stringify(c); document.querySelector('[data-io-ok]').click(); return 1; })()`);
     ok(await B.until(`${T}.state()?.file?.rules?.[0]?.len_s === 45 && document.querySelector('.sa-form [data-path="rules[0].len_s"]').value === '45' && ${T}.state()?.report?.ok`, 5000), `${tag}: «Открыть из файла» — форма из открытого текста`);
-    ok(await B.ev(`[...document.querySelectorAll('.sa-files button[disabled]')].every(b => /скоро/.test(b.textContent)) && document.querySelectorAll('.sa-files button[disabled]').length === 2`), `${tag}: «Выложить» и «Вдвоём» честно «скоро»`);
+    // ep39: «Вдвоём — скоро» больше нет — на его месте общий блок комнат (D37Join, игра umode); «Выложить — скоро» только без флага
+    ok(await B.ev(`[...document.querySelectorAll('.sa-files button[disabled]')].every(b => /Выложить — скоро/.test(b.textContent)) && !/Вдвоём — скоро/.test(document.querySelector('.sa').textContent) && !!document.querySelector('.sa-rooms')`), `${tag}: «Вдвоём — скоро» заменён общим блоком комнат`);
     if (view === 'phone') ok(await B.ev(`(() => { const p = document.querySelector('.sa-play').getBoundingClientRect(), f = document.querySelector('.sa-form').getBoundingClientRect(); return p.bottom <= f.top + 1 && document.documentElement.scrollWidth <= 391; })()`), `${tag}: телефон — игра сверху, форма ниже, без сдвига вбок`);
     else ok(await B.ev(`(() => { const p = document.querySelector('.sa-play').getBoundingClientRect(), f = document.querySelector('.sa-right').getBoundingClientRect(); return f.left >= p.right - 1; })()`), `${tag}: ПК — игра и форма рядом`);
     // ■ Стоп

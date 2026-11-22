@@ -10,6 +10,8 @@
 // местом формы, на которое указывает путь («laws[3].do[1].n: …»). Любой текст файла и движка — только textContent / esc().
 // Проекты — в этом браузере (d37_arena_index, d37_arena_<id>); «Сохранить в файл» / «Открыть из файла» — текстом. Выложить и «Вдвоём»
 // — «скоро» (нужен сервер). Стили — css/studio-arena.css.
+// ep39: «Вдвоём» = ОБЩИЕ комнаты движка (D37Join, игра umode) — тот же блок, что у klet2 на странице режима; файл арены
+// движок сам раздаёт всем вошедшим (MODE_DATA_V1) — своего «вдвоём для арен» нет.
 (() => {
   const BASE = '/d37-preview/';
   const IDX = 'd37_arena_index', KEY = id => 'd37_arena_' + id;
@@ -221,7 +223,7 @@
         </div>
         <div class="sa-right"><div class="sa-form"></div>
           <div class="sa-files"><button type="button" class="sa-btn ghost" data-save="1">💾 Сохранить в файл</button><button type="button" class="sa-btn ghost" data-open="1">📂 Открыть из файла</button>
-            ${shareOn() ? '' : '<button type="button" class="sa-btn ghost" disabled title="Скоро">🌍 Выложить — скоро</button>'}<button type="button" class="sa-btn ghost" disabled title="Скоро">👥 Вдвоём — скоро</button></div>
+            ${shareOn() ? '' : '<button type="button" class="sa-btn ghost" disabled title="Скоро">🌍 Выложить — скоро</button>'}</div><div class="sa-rooms"></div>
           ${shareOn() ? shareHtml() : '<p class="sa-note">Проект хранится только в этом браузере. Чтобы не потерять — «Сохранить в файл».</p>'}
           <div class="sa-limwrap"></div>
           <div class="sa-io" hidden><textarea class="sa-io-t" rows="10" spellcheck="false" aria-label="Текст файла режима"></textarea>
@@ -366,13 +368,24 @@
     }
     return null;
   }
+  // ep39: комнаты арены — ТОТ ЖЕ блок, что у klet2 на странице режима (D37Join.lobby), игра umode. Перед входом файл арены
+  // кладётся вкладке (sessionStorage) — его берёт /hub/play/umode/… и отдаёт движку; у кого файла нет, тот получит его из
+  // комнаты. Черновик / по ссылке — комнаты только по коду; выложенная — и в списке. Метка старше 12+ — без комнат (по
+  // ссылке на комнату обложку возраста не обойти).
+  function roomsBind(box, o){
+    if (!box || !window.D37Join?.lobby) return;
+    box.textContent = '';
+    if (o.age != null && +o.age > 12) { const p = document.createElement('p'); p.className = 'sa-note'; p.textContent = '👥 Комнаты — для арен с меткой 6+ и 12+.'; box.appendChild(p); return; }
+    const map = String(o.map || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+    try { window.D37Join.lobby(box, { game: 'umode', map, codeOnly: !!o.codeOnly, before: () => { try { sessionStorage.setItem('d37_umode_file', JSON.stringify({ text: String(o.text()), t: Date.now() })); } catch (e) {} } }); } catch (e) {}
+  }
   function playPage(root, id, api){
     const st = S = { root, api, id, h: null, dead: false, play: true };
     const alive = () => S === st && !st.dead;
     root.innerHTML = `<div class="sa sa-pp"><div class="sa-top"><a class="sa-btn ghost" href="#/games/studio" aria-label="Назад в студию">←</a><b class="sa-pp-t">Загружаем…</b><span class="sa-badge">⚡ Наш движок</span></div>
       <div class="sa-pp-meta"></div><div class="sa-play"><div class="sa-stage"></div><div class="sa-cover"><b>⚡ Арена игрока</b><small class="sa-pp-cs"></small><button type="button" class="sa-btn sa-pp-go" hidden>▶ Играть</button></div></div>
       <div class="sa-status" role="status" aria-live="polite"><span class="sa-st">Загружаем…</span></div>
-      <div class="sa-files sa-pp-a"></div><p class="sa-descr-t"></p>
+      <div class="sa-files sa-pp-a"></div><div class="sa-rooms"></div><p class="sa-descr-t"></p>
       <p class="sa-note">Это режим игрока. Никогда не вводи в играх пароли и личные данные.</p></div>`;
     const q = s => root.querySelector(s);
     const status = (t, k) => { const e = q('.sa-st'); if (!e) return; e.textContent = t; q('.sa-status').className = 'sa-status sa-' + (k || 'ok'); };
@@ -405,6 +418,7 @@
       if (!r.ok) { q('.sa-pp-cs').textContent = 'Движок не принял этот файл.'; status('⚠ Файл режима не прошёл проверку движка: ' + String(r.error || ''), 'err'); return; }
       q('.sa-pp-cs').textContent = `Правил ${+r.laws || 0} · зон ${+r.zones || 0} · предметов ${+r.pickups || 0}`;
       status('✓ Файл проверен движком. Нажми «Играть».');
+      roomsBind(q('.sa-rooms'), { map: g.id, codeOnly: g.status !== 'public', age: g.age_rating, text: () => text });
       const go = q('.sa-pp-go'); go.hidden = false;
       go.addEventListener('click', async () => {
         go.disabled = true; status('Запускаем движок… (первый раз — дольше)');
@@ -466,6 +480,8 @@
       if (mode !== 'open') history.replaceState(null, '', '#/games/studio/arena/open/' + st.id);
       draw(); changed(true);
       if (shareOn()) shareBind(st, q);
+      const m = projects().find(p => p.id === st.id) || {};
+      roomsBind(q('.sa-rooms'), { map: m.srv || st.id, codeOnly: m.status !== 'public', age: m.age, text: () => textOf(st.file) });
     }).catch(e => { if (alive()) status('Блоки движка не загрузились — проверь интернет и обнови страницу.', 'err'); });
 
     function status(text, kind){ const el = q('.sa-st'); if (!el) return; el.textContent = text; q('.sa-status').className = 'sa-status sa-' + (kind || 'ok'); }

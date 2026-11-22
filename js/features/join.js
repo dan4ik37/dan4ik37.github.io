@@ -35,7 +35,7 @@
   const P2P = () => { try { return !server() && root.D37JoinP2P && root.D37JoinP2P.on() ? root.D37JoinP2P : null; } catch (e) { return null; } };
   const avail = () => !!server() || !!P2P();
   // игры с комнатами (сейчас одна): иконка, название, сколько людей можно
-  const GAMES = { klet2: { title: 'Клеточки', icon: '🟢', max: 16 }, hole2: { title: 'Чёрная дыра 2', icon: '🕳️', max: 8 } };   // hole2: max — MAXO движка (sys/hole2/rules.rs)
+  const GAMES = { klet2: { title: 'Клеточки', icon: '🟢', max: 16 }, hole2: { title: 'Чёрная дыра 2', icon: '🕳️', max: 8 }, umode: { title: 'Арена', icon: '🏟️', max: 8 } };   // umode: любая арена (режим из файла) — та же комната, файл арены движок раздаёт входящим сам (ep39 MODE_DATA_V1); max — MAX_PLAYERS движка   // hole2: max — MAXO движка (sys/hole2/rules.rs)
   const gameOk = g => Object.prototype.hasOwnProperty.call(GAMES, g);
   const CODE_RE = /^[A-HJKMNP-Z2-9]{6}$/;          // как CODE_ALPHABET сервера: без I, L, O, 0, 1
   const ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -272,9 +272,9 @@
     if (!t || !pend || !((t.id && pend.id === t.id) || (t.code && pend.code === t.code)) || s.host !== s.me || !st.h) return;
     ss.set('d37join_host', null);
     try {
-      st.h.lobby.meta(t.game, pend.vis, t.game, '-', pend.ages, pend.name);
+      st.h.lobby.meta(t.game, pend.vis, t.game, mapOk(pend.map) || '-', pend.ages, pend.name);
       if (pend.max) st.h.lobby.limit(t.game, pend.max);
-      st.meta = { vis: pend.vis, ages: pend.ages, name: pend.name };
+      st.meta = { vis: pend.vis, ages: pend.ages, name: pend.name, map: mapOk(pend.map) };
       if (P2P()) P2P().meta({ vis: pend.vis, ages: pend.ages, name: pend.name, max: pend.max });
     } catch (e) { report('meta', e && e.message); }
   }
@@ -389,7 +389,7 @@
     const t = st.target; if (!t || !st.h) return;
     const m = Object.assign({ vis: (st.cur && st.cur.vis) || 'open', ages: 'all', name: '' }, st.meta || {}, patch);
     st.meta = m;
-    try { st.h.lobby.meta(t.game, m.vis, t.game, '-', m.ages, m.name || defName()); if (P2P()) P2P().meta({ vis: m.vis, ages: m.ages, name: m.name || defName() }); } catch (e) {}
+    try { st.h.lobby.meta(t.game, m.vis, t.game, mapOk(m.map) || '-', m.ages, m.name || defName()); if (P2P()) P2P().meta({ vis: m.vis, ages: m.ages, name: m.name || defName() }); } catch (e) {}
   }
   const defName = () => 'Комната ' + String(prof() && prof().nick || 'игрока').slice(0, 20);
   async function copy(text, ok){
@@ -454,7 +454,8 @@
   }
 
   // ═══ Список комнат: в меню /hub (коротко) и /hub/lobby[/игра] (целиком) ═══
-  // o: { game, full }
+  // o: { game, full, map (только комнаты этой карты — арена), codeOnly (черновик / по ссылке: только по коду), before() — перед переходом в комнату }
+  const mapOk = m => (typeof m === 'string' && /^[a-z0-9_-]{1,16}$/.test(m)) ? m : '';
   function lobby(host, o){
     o = o || {};
     const sec = el('section', 'jn' + (o.full ? ' jn-full' : ''));
@@ -466,6 +467,8 @@
   }
   function build(sec, o){
     const f = { game: gameOk(o.game) ? o.game : '', room: false, friends: false };
+    const x = { map: mapOk(o.map), codeOnly: !!o.codeOnly, before: typeof o.before === 'function' ? o.before : null };
+    const pre = () => { try { x.before && x.before(); } catch (e) {} };
     const head = el('div', 'jn-head');
     head.append(el('h2', 'jn-h', o.full ? '🟢 Открытые комнаты' : '👥 Играть с людьми'));
     const reg = el('span', 'jn-reg', '');
@@ -474,8 +477,9 @@
     sec.appendChild(head);
     const back = el('div', 'jn-back'); back.hidden = true; sec.appendChild(back);
     const acts = el('div', 'jn-acts');
-    const qb = btn('hub-btn jn-quick', '⚡ Быстрая игра', () => quickPlay(f.game || 'klet2', qb));
-    const cb = btn('hub-btn hub-btn3 jn-create', '＋ Создать комнату', () => createSheet(f.game || 'klet2'));
+    const qb = btn('hub-btn jn-quick', '⚡ Быстрая игра', () => { pre(); quickPlay(f.game || 'klet2', qb, x); });
+    const cb = btn('hub-btn hub-btn3 jn-create', '＋ Создать комнату', () => createSheet(f.game || 'klet2', x));
+    if (x.codeOnly) qb.hidden = true;   // черновик / по ссылке: в общие комнаты не попадает
     const form = el('form', 'jn-codef');
     const inp = el('input', 'jn-codei'); inp.type = 'text'; inp.maxLength = 6; inp.placeholder = 'Код комнаты'; inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('aria-label', 'Код комнаты из 6 знаков'); inp.setAttribute('autocapitalize', 'characters');
     const ib = el('button', 'hub-btn hub-btn3', 'Войти'); ib.type = 'submit';
@@ -486,7 +490,7 @@
       const v = inp.value.trim().toUpperCase();
       if (!CODE_RE.test(v)) { toast('Код — 6 знаков: буквы и цифры (без O, I, L, 0, 1)'); inp.focus(); return; }
       if (!avail()) { toast('Сервер игр недоступен — попробуй позже'); return; }
-      go('/hub/play/' + (f.game || 'klet2') + '/' + v);
+      pre(); go('/hub/play/' + (f.game || 'klet2') + '/' + v);
     });
     acts.append(qb, cb, form);
     sec.appendChild(acts);
@@ -538,22 +542,23 @@
       // комнаты друзей, которых нет в общем списке (только для друзей / открытые, но ещё не попали) — с замком
       const all = rows.slice();
       for (const [code, x] of fr) if (!all.some(r => r.code === code) && (!f.game || x.g === f.game)) all.push({ game: x.g, id: '', code, vis: x.v === 'o' ? 'open' : 'friends', players: x.n, max: x.m, mode: '', map: '', name: 'Комната ' + x.nicks[0], region: '', full: x.n >= x.m, friendsOnly: x.v !== 'o' });
-      let show = all.filter(r => (!f.room || !r.full) && (!f.friends || fr.has(r.code)));
+      let show = all.filter(r => (!f.room || !r.full) && (!f.friends || fr.has(r.code)) && (!x.map || !r.map || r.map === '-' || r.map === x.map));
+      if (x.codeOnly) show = [];   // черновик / по ссылке: списка нет, только код
       show.sort((a, b) => (fr.has(b.code) ? 1 : 0) - (fr.has(a.code) ? 1 : 0) || b.players - a.players);
       const limit = o.full ? 100 : 5;
       box.textContent = '';
       if (!show.length) {
-        state(all.length ? 'Под фильтр ничего не подошло — сними галочки.' : 'Пока никто не играет. Нажми «Быстрая игра» — комната создастся сама, а боты поиграют с тобой, пока не придут люди.');
+        state(x.codeOnly ? 'Арена ещё не выложена — комнаты только по коду: создай комнату и дай другу код.' : all.length ? 'Под фильтр ничего не подошло — сними галочки.' : 'Пока никто не играет. Нажми «Быстрая игра» — комната создастся сама, а боты поиграют с тобой, пока не придут люди.');
         return;
       }
-      for (const r of show.slice(0, limit)) box.appendChild(rowEl(r, fr.get(r.code)));
+      for (const r of show.slice(0, limit)) box.appendChild(rowEl(r, fr.get(r.code), pre));
       if (!o.full && show.length > limit) { const a = el('a', 'jn-more', 'Ещё ' + (show.length - limit) + ' →'); a.href = '/hub/lobby' + (f.game ? '/' + f.game : ''); box.appendChild(a); }
     }
     refresh();
     timer = setInterval(() => { if (!sec.isConnected) { clearInterval(timer); return; } if (!doc.hidden) refresh(); }, 10000);
     sec._refresh = refresh;
   }
-  function rowEl(r, friend){
+  function rowEl(r, friend, pre){
     const G = GAMES[r.game];
     const d = el('div', 'jn-row' + (r.full ? ' jn-fullrow' : ''));
     d.dataset.code = r.code; d.dataset.id = r.id;
@@ -565,7 +570,7 @@
     if (friend) m.appendChild(el('small', 'jn-fr', '👥 ' + friend.nicks.slice(0, 2).join(', ') + (friend.nicks.length > 2 ? ' и ещё ' + (friend.nicks.length - 2) : '') + ' внутри'));
     d.appendChild(m);
     d.appendChild(el('span', 'jn-n', r.players + ' / ' + r.max));
-    const b = btn('hub-btn jn-go', r.full ? 'Полная' : 'Войти', () => go('/hub/play/' + r.game + '/' + (r.id ? 's-' + r.id : r.code)));
+    const b = btn('hub-btn jn-go', r.full ? 'Полная' : 'Войти', () => { if (pre) pre(); go('/hub/play/' + r.game + '/' + (r.id ? 's-' + r.id : r.code)); });
     b.disabled = r.full;
     if (!r.id && !r.code) b.disabled = true;
     d.appendChild(b);
@@ -588,42 +593,44 @@
     } catch (e) {}
     return out;
   }
-  async function quickPlay(game, b){
+  async function quickPlay(game, b, x){
     if (!avail()) { toast('Сервер игр недоступен — попробуй позже'); return; }
     if (b) b.disabled = true;
     const q = await quick(game);
     if (b) b.disabled = false;
     if (!q) { toast(P2P() ? 'Нет связи с сайтом — попробуй позже' : 'Сервер игр недоступен — попробуй позже'); return; }
     if (q.code) {   // T-175: без сервера — в комнату по коду; новой комнаты хозяин — я
-      if (q.fresh) ss.set('d37join_host', { code: q.code, vis: 'open', max: 8, ages: 'all', name: defName(), t: Date.now() });
+      if (q.fresh) ss.set('d37join_host', { code: q.code, vis: 'open', max: 8, ages: 'all', name: defName(), map: mapOk(x && x.map), t: Date.now() });
       go('/hub/play/' + game + '/' + q.code); return;
     }
     go('/hub/play/' + game + '/s-' + q.id);
   }
   const newId = () => { const A = 'abcdefghijkmnpqrstuvwxyz23456789', b = new Uint8Array(8); try { crypto.getRandomValues(b); } catch (e) { for (let i = 0; i < 8; i++) b[i] = Math.random() * 256 | 0; } return Array.from(b, x => A[x % A.length]).join(''); };
-  function createSheet(game){
+  function createSheet(game, x){
     if (!avail()) { toast('Сервер игр недоступен — попробуй позже'); return; }
     const G = GAMES[game];
-    const o = { vis: 'open', max: 8, ages: 'all' };
+    x = x || {};
+    const o = { vis: x.codeOnly ? 'code' : 'open', max: 8, ages: 'all' };
     sheet(null, '＋ Новая комната', (box, close) => {
       box.appendChild(el('p', 'hub-sheet-p jn-muted', G.icon + ' ' + G.title + ' · пока людей мало, с тобой играют боты'));
       const nl = el('label', 'jn-field'); nl.appendChild(el('small', 'jn-muted', 'Название'));
       const name = el('input', 'jn-name-in'); name.type = 'text'; name.maxLength = 24; name.placeholder = defName(); name.autocomplete = 'off';
       nl.appendChild(name); box.appendChild(nl);
-      box.append(el('small', 'jn-muted', 'Кто может войти'), seg('Кто может войти', [['open', '🌍 Все'], ['friends', '👥 Друзья'], ['code', '🔒 По коду']], o.vis, v => { o.vis = v; }));
+      box.append(el('small', 'jn-muted', 'Кто может войти'), seg('Кто может войти', x.codeOnly ? [['code', '🔒 По коду']] : [['open', '🌍 Все'], ['friends', '👥 Друзья'], ['code', '🔒 По коду']], o.vis, v => { o.vis = v; }));
       box.append(el('small', 'jn-muted', 'Сколько игроков'), seg('Сколько игроков', [4, 8, 12, 16].map(n => [String(n), String(n)]), String(o.max), v => { o.max = +v; }));
       box.append(el('small', 'jn-muted', 'Возраст'), seg('Возраст', [['all', 'Для всех'], ['kids', 'Только до 18']], o.ages, v => { o.ages = v; }));
       const go1 = btn('hub-btn jn-mk', '▶ Создать и играть', () => {
         // название — свободный текст (24 знака) через тот же фильтр слов, что и сообщения чата (D37Phone.clean)
         const nm = clean(String(name.value || '').replace(/[\u0000-\u001f\u007f;]/g, ' ').trim() || defName()).slice(0, 24);
         close();
+        if (x.before) { try { x.before(); } catch (e) {} }
         if (P2P()) {   // T-175: без сервера игр — комната с кодом в этой вкладке, хозяин — я
           const code = P2P().newCode();
-          ss.set('d37join_host', { code, vis: o.vis, max: o.max, ages: o.ages, name: nm, t: Date.now() });
+          ss.set('d37join_host', { code, vis: o.vis, max: o.max, ages: o.ages, name: nm, map: mapOk(x.map), t: Date.now() });
           go('/hub/play/' + game + '/' + code); return;
         }
         const id = newId();
-        ss.set('d37join_host', { id, vis: o.vis, max: o.max, ages: o.ages, name: nm, t: Date.now() });
+        ss.set('d37join_host', { id, vis: o.vis, max: o.max, ages: o.ages, name: nm, map: mapOk(x.map), t: Date.now() });
         go('/hub/play/' + game + '/s-' + id);
       });
       box.appendChild(go1);
