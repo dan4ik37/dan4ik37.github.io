@@ -179,7 +179,7 @@ js/features/games.js: 87 rows, GAMES_VER '183' (bump on any game / engine file c
 | chervyachki | GAMES | 6+ | Червячки | 5 | js/games/room.js, js/games/netplay.js, js/games/iokit.js, js/games/chervyachki.js |
 | podzem | GAMES | 12+ | Подземье | 17 | js/games/podzem-core.js, js/games/podzem-gl.js, js/games/podzem-ui.js, js/games/podzem-mods.js, js/games/podzem-support.js, js/games/podzem-fire.js, js/games/podzem.js |
 | raid | GAMES | 12+ | Набеги | 4 | js/games/mir-base.js, js/games/raid-sim.js, js/games/raid.js |
-| studio | GAMES | 6+ | Студия игр | 2 | js/games/studio-tpl.js, js/games/studio.js |
+| studio | GAMES | 6+ | Студия игр | 4 | js/games/studio-tpl.js, undefined, js/games/studio-blanks.js, js/games/studio-home.js |
 | studio3d | GAMES | 6+ | Студия 3D | 57 | js/games/room.js, js/games/netplay.js, js/games/world3d.js, js/games/studio3d.js, js/games/studio3d-gfx.js, js/games/studio3d-ui.js, js/games/studio3d-touch.js, js/games/studio3d-pad.js, js/games/studio3d-tools.js, js/games/studio3d-modes.js, js/games/studio3d-play.js, js/games/studio3d-learn.js, js/games/studio3d-weather.js, js/games/studio3d-support.js, js/games/studio3d-trees.js, js/games/studio3d-fire.js |
 | kubomir | GAMES | 6+ | Кубомир | 72 | js/games/world3d.js, js/games/kubomir-support.js, js/games/kubomir-topple.js, js/games/kubomir-debris.js, js/games/kubomir-fire.js, js/games/kubomir-ents.js, js/games/kubomir-ui.js, js/games/kubomir-mods.js, js/games/kubomir-light.js, js/games/kubomir-input.js, js/games/kubomir-hand.js, js/games/kubomir-mc.js, js/games/kubomir-weather.js, js/games/room.js, js/games/netplay.js, js/games/coop.js, js/games/kubomir-coop.js, js/games/kubomir-x.js, js/games/kubomir-info.js, js/games/kubomir-recipes.js, js/games/kubomir-world.js, js/games/kubomir-map.js, js/games/kubomir-quests.js, js/games/kubomir.js |
 | unity | GAMES | 12+ | Unity-игры | 3 | js/games/room.js, js/games/netplay.js, js/games/unity-host.js |
@@ -359,7 +359,7 @@ Engine files → games that load them (a change here means: bump GAMES_VER, open
 | js/engine/wx-fx.js | 14.3 | kubomir, planet, terra, world |
 | js/engine/wx.js | 56.4 | kubomir, planet, terra, world |
 
-Scripts listed by games but missing on disk: none.
+Scripts listed by games but missing on disk: undefined.
 
 ## 3. RPC and SQL
 
@@ -1287,7 +1287,7 @@ Called but not defined in any root .sql (built-in, removed, or a typo — check)
 
 ## 4. Tests
 
-scripts/ci-run.cjs runs 159 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take M:\d37\claude-tmp\HEAVY.lock first (M:\d37\d37-core\spec\HEAVY_LOCK.md).
+scripts/ci-run.cjs runs 161 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take M:\d37\claude-tmp\HEAVY.lock first (M:\d37\d37-core\spec\HEAVY_LOCK.md).
 
 | CI entry | Flags |
 |---|---|
@@ -1391,6 +1391,7 @@ scripts/ci-run.cjs runs 159 entries (= GitHub Actions on push; `--e2e` adds the 
 | lang-lua-test.cjs | serial |
 | lang-wasm-test.cjs | env D37_SKIP=cpp,rust |
 | studio-support-test.cjs | serial |
+| studio-home-test.cjs | — |
 | voxel-test.cjs | serial, retry 2 |
 | trees-test.cjs | args --fast, retry 1 |
 | arcade-test.cjs | t 480 s |
@@ -1433,6 +1434,7 @@ scripts/ci-run.cjs runs 159 entries (= GitHub Actions on push; `--e2e` adds the 
 | t177-e2e.cjs | e2e, t 800 s |
 | ds-fun-e2e.cjs | e2e, t 400 s |
 | war-hud-e2e.cjs | e2e, t 600 s |
+| studio-home-e2e.cjs | e2e, t 900 s |
 | trees-e2e.cjs | args studio ci, e2e, t 600 s |
 | waves-e2e.cjs | args look, e2e, t 600 s |
 | world-reopen-e2e.cjs | args 20, e2e, t 900 s |
