@@ -279,6 +279,7 @@ Players.PlayerAdded.Connect(player => {
     const pm = mpParam(gapi?.param);
     if (pm.playId) { ED.playId = pm.playId; ED.roomCode = pm.room; box.classList.add('s3-player'); }
     else if (pm.join) { ED.joinCode = pm.join; box.classList.add('s3-player'); }
+    else if (pm.newKind || pm.openId) { ED.newKind = pm.newKind || null; ED.openId = pm.openId || null; }   // T-176: главная студии
     const st = ED;
     const adL = window.D37AdPlaces?.loading({ anchor: q('.s3-loading'), tip: 'studio', ugc: !!(ED.playId || ED.joinCode) });   // реклама на экране загрузки (ad-places.js); чужой мир — без неё
     E.load().then(ok => {
@@ -324,9 +325,16 @@ Players.PlayerAdded.Connect(player => {
       SC.clear(); TR.setEnabled(false);
       const nm = q('.s3-name'); nm.value = 'Мир друга'; nm.readOnly = true;
     } else {
-      const list = store.index();
-      const last = list[0] && store.load(list[0].id);
-      if (last) openPlace(list[0].id, last); else { template(SC, TR, 'grass'); ed.placeId = newId(); q('.s3-name').value = 'Мой мир'; save(true); }
+      // T-176: new/<заготовка> — новый мир из заготовки (неизвестная — мир не создаётся), open/<id> — этот мир из браузера
+      const pick = startPick(ed, id => !!store.load(id));
+      if (pick.new) { template(SC, TR, pick.new); ed.placeId = newId(); q('.s3-name').value = tplName(pick.new); ed.fromBlank = pick.new; save(true); }
+      else if (pick.open) openPlace(pick.open, store.load(pick.open));
+      else {
+        const list = store.index();
+        const last = list[0] && store.load(list[0].id);
+        if (last) openPlace(list[0].id, last); else { template(SC, TR, 'grass'); ed.placeId = newId(); q('.s3-name').value = 'Мой мир'; save(true); }
+        ed.badAddr = pick.bad;
+      }
     }
     q('.s3-staff').hidden = !isStaff();
     SC.on('add', () => markDirty()); SC.on('remove', () => markDirty()); SC.on('change', () => markDirty());
@@ -348,6 +356,17 @@ Players.PlayerAdded.Connect(player => {
     // страж графики (js/engine/post.js): без своих кусков шейдеров / «низкая» — заработает с новым рендерером (студию — перезапустить)
     { const onFb = e => { if (ED === ed && e.detail?.rebuild && e.detail.k !== 'reset') msg('🛡 Графика: на этом устройстве — безопасный режим. Заработает после перезапуска студии', false); }; window.addEventListener('d37:gfxfallback', onFb); ed.offFb = () => window.removeEventListener('d37:gfxfallback', onFb); }
     if (!ed.playId) ext('mount', STUDIO_API);   // в режиме игрока (чужой мир) расширения редактора не нужны
+    // T-176: из «Создать режим» — адрес становится open/<мир> (обновил страницу — тот же мир, а не ещё один), камера на весь мир,
+    // окно «🎮 Режим игры и ракурс» открыто сразу
+    if (ed.fromBlank) {
+      s3Url('#/games/studio3d/open/' + ed.placeId);
+      try {
+        E.s3x?.frameAll?.();
+        if (ed.box.classList.contains('s3-port')) ed.cam.pitch = Math.min(1.4, ed.cam.pitch + .32);   // телефон стоя: окно снизу закрывает середину — мир в верхней половине
+        E.s3x?.openModePanel?.();
+      } catch (e) { console.warn(e); }
+    }
+    else if (ed.badAddr) { s3Url('#/games/studio3d'); msg(ed.newKind ? 'Такой заготовки нет — открыт твой последний мир' : 'Этого мира нет в браузере — открыт последний', false); }
     // закрыли/обновили вкладку — сохраняем сразу, без сжатия ландшафта
     window.addEventListener('pagehide', ed.onHide = () => {
       if (!ed.dirty || ed.playing || !ed.SC) return;
@@ -986,7 +1005,7 @@ Players.PlayerAdded.Connect(player => {
       await window.D37E.models.remove(v); for (const o of ed.SC.all()) if (o.cls === 'Mesh' && o.model === v) ed.SC.set(o, 'model', v, true); msg('Модель удалена');
     }
     else if (k === 'save') save();
-    else if (k === 'new') { if (ed.dirty) await save(true); template(ed.SC, ed.TR, v); ed.placeId = newId(); ed.q('.s3-name').value = { grass: 'Мой мир', empty: 'Пустой мир', obby: 'Моё обби', island: 'Остров', camp: 'Лагерь у костра', winter: 'Зимний лес' }[v] || window.D37E.studioTemplates?.[v]?.name || 'Мой мир'; ed.ground.visible = !ed.TR.enabled; ed.hist = []; ed.fut = []; select(null); renderTree(); await save(true); msg('Новый мир создан', true); }
+    else if (k === 'new') { if (ed.dirty) await save(true); template(ed.SC, ed.TR, v); ed.placeId = newId(); ed.q('.s3-name').value = tplName(v); ed.ground.visible = !ed.TR.enabled; ed.hist = []; ed.fut = []; select(null); renderTree(); await save(true); msg('Новый мир создан', true); }
     else if (k === 'open') { if (ed.dirty) await save(true); const d = store.load(v); if (d) { await openPlace(v, d); msg('Открыт: ' + (d.name || 'мир'), true); } }
     else if (k === 'del') { if (v === ed.placeId) { msg('Сначала открой другой мир', false); return; } if (confirm('Удалить мир из браузера навсегда?')) { store.remove(v); msg('Удалено'); } }
     else if (k === 'export') { const d = await snapshot(); d.models = await packModels(); const blob = new Blob([JSON.stringify(d)], { type: 'application/json' }); const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = (d.name || 'мир').replace(/[^\p{L}\p{N} _-]/gu, '') + '.d37world.json'; a2.click(); setTimeout(() => URL.revokeObjectURL(a2.href), 4000); }
@@ -1833,9 +1852,21 @@ Players.PlayerAdded.Connect(player => {
   const NET_EXTRA = ['touch', 'model', 'fit', 'rate', 'color2', 'look', 'seed', 'act', 'speed', 'radius', 'damage', 'fov', 'team', 'order', 'smat', 'onfire'];   // smat — материал прочности (новый хозяин считает обрушение); onfire — огонь (studio3d-fire.js: гости рисуют пламя; 9 — вечный); предел net.js — 16   // свойства сверх PROPS net.js (fov — камера, team / order — режимы игры)
   const MP_MAX = 8;
   // #/games/studio3d/… : play/<мир>[/<комната>] — выложенный мир (с друзьями), join/<комната> — «Тест вдвоём»
+  // T-176 (главная студии): new/<заготовка> — новый мир из заготовки, open/<id мира в браузере> — открыть этот мир
   function mpParam(param){
     const s = String(param || ''), pm = /^play\/([a-z0-9]{4,16})(?:\/([a-z0-9]{4,12}))?$/i.exec(s), jm = /^join\/([a-z0-9]{4,12})$/i.exec(s);
-    return pm ? { playId: pm[1], room: pm[2] ? pm[2].toLowerCase() : null } : jm ? { join: jm[1].toLowerCase() } : {};
+    const nm = /^new\/([a-z0-9-]{2,24})$/i.exec(s), om = /^open\/([a-z0-9]{4,24})$/i.exec(s);
+    return pm ? { playId: pm[1], room: pm[2] ? pm[2].toLowerCase() : null } : jm ? { join: jm[1].toLowerCase() } : nm ? { newKind: nm[1].toLowerCase() } : om ? { openId: om[1].toLowerCase() } : {};
+  }
+  const WORLD_TPL = ['grass', 'empty', 'obby', 'island', 'camp', 'winter'];   // шаблоны миров (template()); заготовки режимов — studioTemplates
+  const TPL_NAME = { grass: 'Мой мир', empty: 'Пустой мир', obby: 'Моё обби', island: 'Остров', camp: 'Лагерь у костра', winter: 'Зимний лес' };
+  const tplName = v => TPL_NAME[v] || window.D37E.studioTemplates?.[v]?.name || 'Мой мир';
+  const newKindOk = k => typeof k === 'string' && (WORLD_TPL.includes(k) || Object.prototype.hasOwnProperty.call(window.D37E?.studioTemplates || {}, k));
+  // чем начать редактор: { new: заготовка } | { open: id } | { last: true, bad: адрес был, но не подошёл } — неизвестная заготовка мир не создаёт
+  function startPick(o, hasLocal){
+    if (o.newKind && newKindOk(o.newKind)) return { new: o.newKind };
+    if (o.openId && hasLocal(o.openId)) return { open: o.openId };
+    return { last: true, bad: !!(o.newKind || o.openId) };
   }
   const newRoomCode = () => window.GameRoom?.newCode?.() || Array.from({ length: 6 }, () => 'abcdefghjkmnpqrstuvwxyz23456789'[Math.random() * 31 | 0]).join('');
   const mpHash = mp => (mp.kind === 'play' && ED?.playId ? `#/games/studio3d/play/${ED.playId}/${mp.code}` : `#/games/studio3d/join/${mp.code}`);
@@ -2257,7 +2288,7 @@ Players.PlayerAdded.Connect(player => {
     if (ED?.playing) stopPlay();
     if (ED?.dirty) await save(true);
     unmount();
-    location.hash = wasPlayer ? '#/games/studio' : '#/games';
+    location.hash = wasPlayer || (typeof STUDIO_ONE !== 'undefined' && STUDIO_ONE) ? '#/games/studio' : '#/games';   // T-176: из редактора — на главную студии (одна дверь)
   }
   function unmount(){
     const ed = ED; if (!ed) return;
@@ -2389,5 +2420,5 @@ Players.PlayerAdded.Connect(player => {
   }
 
   window.GAME_IMPL = window.GAME_IMPL || {};
-  window.GAME_IMPL.studio3d = { mount, unmount, _test: { EXAMPLES, AI_TASK, state: () => ED, template, generateHills, NET_EXTRA, mpParam, sweepTouch, mpRows, freeLook } };
+  window.GAME_IMPL.studio3d = { mount, unmount, _test: { EXAMPLES, AI_TASK, state: () => ED, template, generateHills, NET_EXTRA, mpParam, sweepTouch, mpRows, freeLook, newKindOk, startPick, tplName, WORLD_TPL } };
 })();

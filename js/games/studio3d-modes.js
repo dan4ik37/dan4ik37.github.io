@@ -6,7 +6,8 @@
 // dist, angle } (D37E.views), age — метка возраста по умолчанию при «📤 Выложить» (бои — 12+, остальное — 6+).
 // Предметы для игры (➕ Деталь → «🎮 Для игры», круговое меню геймпада): 🎥 камера (по виду редактора, с зоной), 🏁 финиш,
 // 🚩 чекпоинт (номер — по порядку), 💰 монетка, 🟩 зона холма, точки команд 🔴🔵🟢🟡, 🟥 зона зомби, 💀 лава, 🦘 батут, ⚡ ускоритель.
-// Заготовки: Файл → «🎮 Режимы игры» (data-m="new:m-…"; studioTemplates в studio3d.js template()).
+// Заготовки: Файл → «🎮 Режимы игры» (data-m="new:m-…"; studioTemplates в studio3d.js template()) и ряд «Создать режим» на главной
+// студии (js/games/studio-home.js; карточки — js/games/studio-blanks.js, собирается из T: node scripts/studio-home-test.cjs --write).
 (() => {
   const E = window.D37E = window.D37E || {};
   const S3X = E.s3x = E.s3x || { surface: true, nextAt: null };
@@ -292,6 +293,7 @@ script.Parent.Touched.Connect((hit, player) => {
     Object.assign(e.cam, { yaw, pitch, x: c.x + Math.sin(yaw) * Math.cos(pitch) * r, y: c.y + Math.sin(pitch) * r, z: c.z + Math.cos(yaw) * Math.cos(pitch) * r });
   }
   S3X.frameAll = frameAll;
+  S3X.openModePanel = () => openPanel();   // T-176: адрес #/games/studio3d/new/<заготовка> сразу открывает окно «🎮 Режим» (studio3d.js)
 
   // ═══ Подключение к студии ═══
   const ICONS ={ check: '🚩', hill: '🟩', zspawn: '🟥', finish: '🏁', coin: '💰' };
