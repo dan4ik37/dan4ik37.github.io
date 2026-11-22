@@ -7143,3 +7143,200 @@ do $$ begin
   end if;
 exception when others then raise warning 'ч. 18б: правило чтения метки part18b не создано: %', sqlerrm;
 end $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+-- ЧАСТЬ 19 (T-176 S3, 22.11.2026): «Арена» студии — сохранить на сайте, ссылка для друзей, «Выложить за 500 🪙» без
+--   модерации (решение владельца, EDITOR_ONE §13: «А там посмотрим как по ценам» — 500 его число), «Сделать по мотивам».
+--   Повторный запуск безопасен (if not exists / create or replace / drop … if exists). Нужны: ugc.sql, coins.sql, age.sql,
+--   части 1–18 этого файла (comm_bad / comm_has_link — фильтр слов). Старые виды игр (tpl / html / place) и старые функции
+--   ugc_save / ugc_status / ugc_review / ugc_play / ugc_like / ugc_report НЕ переписываются.
+--   Сайт работает и без этой части: кнопки арены пишут «после обновления базы» (метка site_config part19).
+--   Проверка с сервера: rpc part19_info → {"ok":true,"v":1}; таблица site_config, строка key = 'part19' → value '1' (видна гостю);
+--   rpc ugc_arena_publish гостем {"p_id":"x"} → {"ok":false,"reason":"auth"}.
+--   Монеты: 500 🪙 списываются с кошелька автора (coin_wallet, обычные монеты сайта) и никому не начисляются — запись в coin_log
+--   (source 'ugc_publish', ref = номер арены). Один раз на арену: правка выложенной арены второй раз не списывает.
+--   Предохранители (каждый выключается строкой в ugc_arena_rules, value = 0): words — фильтр слов на всех текстах режима;
+--   age — метка возраста обязательна; hide — автоскрытие после жалоб (порог — те же 3 жалобы, что в ugc.sql).
+-- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+-- 19.1 Вид 'arena' и новые колонки (у старых строк — значения по умолчанию, ничего не меняется)
+alter table public.ugc_games drop constraint if exists ugc_games_kind;
+alter table public.ugc_games add constraint ugc_games_kind check (kind in ('tpl', 'html', 'place', 'arena'));
+alter table public.ugc_games add column if not exists paid_at timestamptz;              -- когда заплачено за «Выложить» (один раз)
+alter table public.ugc_games add column if not exists unchecked boolean not null default false;   -- выложено без модератора: «не проверено»
+alter table public.ugc_games add column if not exists held boolean not null default false;        -- скрыто жалобами до модератора
+alter table public.ugc_games add column if not exists age_ok boolean not null default false;      -- автор сам выбрал метку возраста
+alter table public.ugc_games add column if not exists src_id text;                       -- «по мотивам»: откуда
+alter table public.ugc_games add column if not exists src_title text;
+
+-- 19.2 Правила (числа и выключатели). price — число владельца; hide — порог жалоб из ugc.sql (3); bytes — предел файла движка
+create table if not exists public.ugc_arena_rules (key text primary key, value int not null);
+insert into public.ugc_arena_rules (key, value) values ('price', 500), ('words', 1), ('age', 1), ('hide', 3), ('bytes', 65536)
+  on conflict (key) do nothing;
+alter table public.ugc_arena_rules enable row level security;
+revoke all on public.ugc_arena_rules from anon, authenticated;
+create or replace function public.ugc_arena_rule(p_key text) returns int
+language sql stable security definer set search_path = public as $$ select value from public.ugc_arena_rules where key = p_key $$;
+revoke all on function public.ugc_arena_rule(text) from public, anon, authenticated;
+grant execute on function public.ugc_arena_rule(text) to anon, authenticated;
+
+-- двойного списания не бывает и на уровне журнала: одна запись 'ugc_publish' на арену и человека
+create unique index if not exists uq_coin_log_ugc_publish on public.coin_log (user_id, ref) where source = 'ugc_publish';
+
+-- 19.3 Все тексты режима (каждая строка файла, название, описание) — через фильтр слов и ссылок сайта (comm_bad / comm_has_link)
+create or replace function public.ugc_arena_words_bad(p_title text, p_descr text, p_data jsonb) returns boolean
+language sql stable set search_path = public as $$
+  select coalesce(public.ugc_arena_rule('words'), 1) <> 0 and (
+    public.comm_bad(p_title) or public.comm_bad(p_descr) or public.comm_has_link(p_title) or public.comm_has_link(p_descr)
+    or exists (select 1 from jsonb_path_query(coalesce(p_data, '{}'::jsonb), 'strict $.**') v
+               where jsonb_typeof(v) = 'string' and (public.comm_bad(v #>> '{}') or public.comm_has_link(v #>> '{}'))));
+$$;
+revoke all on function public.ugc_arena_words_bad(text, text, jsonb) from public, anon, authenticated;
+
+-- 19.4 Сохранить арену (новую — p_id пусто). p_age — метка (0 / 6 / 12 / 16) или null — не трогать. Статус не меняется:
+--      выложенная остаётся выложенной (решение владельца: без модерации; второй раз не платят)
+create or replace function public.ugc_arena_save(p_id text, p_title text, p_descr text, p_icon text, p_data jsonb, p_age int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); g public.ugc_games%rowtype; new_id text;
+  t text := btrim(coalesce(p_title, '')); d text := left(btrim(coalesce(p_descr, '')), 300); ic text := btrim(coalesce(p_icon, ''));
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if char_length(t) < 2 or char_length(t) > 60 then return jsonb_build_object('ok', false, 'reason', 'title'); end if;
+  if ic = '' or char_length(ic) > 16 then ic := '⚡'; end if;
+  if p_data is null or jsonb_typeof(p_data) <> 'object' or jsonb_typeof(p_data -> 'format') is distinct from 'number'
+     or octet_length(p_data::text) > coalesce(public.ugc_arena_rule('bytes'), 65536) then
+    return jsonb_build_object('ok', false, 'reason', 'data');
+  end if;
+  if p_age is not null and p_age not in (0, 6, 12, 16) then return jsonb_build_object('ok', false, 'reason', 'age'); end if;
+  if public.ugc_arena_words_bad(t, d, p_data) then return jsonb_build_object('ok', false, 'reason', 'words'); end if;
+  if coalesce(p_id, '') = '' then
+    if (select count(*) from public.ugc_games where author = uid) >= 30 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
+    if exists (select 1 from public.ugc_games where author = uid and created_at > now() - interval '20 seconds') then
+      return jsonb_build_object('ok', false, 'reason', 'too_fast');
+    end if;
+    new_id := public.ugc_new_id();
+    insert into public.ugc_games (id, author, title, descr, icon, kind, data, status, age_rating, age_ok)
+      values (new_id, uid, t, d, ic, 'arena', p_data, 'draft', coalesce(p_age, 12), p_age is not null);
+    return jsonb_build_object('ok', true, 'id', new_id, 'status', 'draft');
+  end if;
+  select * into g from public.ugc_games where id = p_id for update;
+  if not found or g.author <> uid or g.kind <> 'arena' then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if g.status = 'banned' then return jsonb_build_object('ok', false, 'reason', 'banned'); end if;
+  if p_age is not null and g.age_mod and p_age < g.age_rating then return jsonb_build_object('ok', false, 'reason', 'age_mod', 'age', g.age_rating); end if;
+  update public.ugc_games set title = t, descr = d, icon = ic, data = p_data, updated_at = now(),
+    age_rating = coalesce(p_age, age_rating), age_ok = age_ok or p_age is not null where id = g.id;
+  return jsonb_build_object('ok', true, 'id', g.id, 'status', g.status, 'paid', g.paid_at is not null);
+end $$;
+revoke all on function public.ugc_arena_save(text, text, text, text, jsonb, int) from public, anon;
+grant execute on function public.ugc_arena_save(text, text, text, text, jsonb, int) to authenticated;
+
+-- 19.5 «Выложить за 500 🪙»: монеты и статус — в ОДНОЙ функции (одна транзакция). Не хватает — отказ, ничего не списано.
+--      Уже платил за эту арену — просто снова в каталог, без списания. Скрыта жалобами — ждёт модератора.
+create or replace function public.ugc_arena_publish(p_id text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); g public.ugc_games%rowtype; w public.coin_wallet%rowtype; price int := public.ugc_arena_rule('price'); src jsonb;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select * into g from public.ugc_games where id = p_id for update;
+  if not found or g.author <> uid then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if g.kind <> 'arena' then return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
+  if g.status = 'banned' then return jsonb_build_object('ok', false, 'reason', 'banned'); end if;
+  if g.held then return jsonb_build_object('ok', false, 'reason', 'held'); end if;
+  if coalesce(public.ugc_arena_rule('age'), 1) <> 0 and not g.age_ok then return jsonb_build_object('ok', false, 'reason', 'age'); end if;
+  if public.ugc_arena_words_bad(g.title, g.descr, g.data) then return jsonb_build_object('ok', false, 'reason', 'words'); end if;
+  if g.src_id is not null then
+    select data into src from public.ugc_games where id = g.src_id;
+    if src is not null and src = g.data then return jsonb_build_object('ok', false, 'reason', 'same'); end if;   -- «по мотивам», не копия
+  end if;
+  if g.paid_at is not null then
+    update public.ugc_games set status = 'public', unchecked = true, updated_at = now() where id = g.id;
+    return jsonb_build_object('ok', true, 'status', 'public', 'charged', 0);
+  end if;
+  if price is null or price <= 0 then return jsonb_build_object('ok', false, 'reason', 'off'); end if;
+  insert into public.coin_wallet (user_id) values (uid) on conflict (user_id) do nothing;
+  select * into w from public.coin_wallet where user_id = uid for update;
+  if w.coins < price then return jsonb_build_object('ok', false, 'reason', 'coins', 'coins', w.coins, 'price', price); end if;
+  update public.coin_wallet set coins = coins - price, updated_at = now() where user_id = uid returning * into w;
+  insert into public.coin_log (user_id, amount, source, ref) values (uid, -price, 'ugc_publish', g.id);
+  update public.ugc_games set status = 'public', unchecked = true, paid_at = now(), updated_at = now() where id = g.id;
+  return jsonb_build_object('ok', true, 'status', 'public', 'charged', price, 'coins', w.coins);
+end $$;
+revoke all on function public.ugc_arena_publish(text) from public, anon;
+grant execute on function public.ugc_arena_publish(text) to authenticated;
+
+-- 19.6 «Сделать по мотивам»: копия выложенной (или по ссылке) арены в черновики, источник указан
+create or replace function public.ugc_arena_remix(p_src text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); s public.ugc_games%rowtype; new_id text;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select * into s from public.ugc_games where id = p_src;
+  if not found or s.status not in ('link', 'public') or s.held then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if s.kind <> 'arena' then return jsonb_build_object('ok', false, 'reason', 'kind'); end if;
+  if (select count(*) from public.ugc_games where author = uid) >= 30 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
+  if exists (select 1 from public.ugc_games where author = uid and created_at > now() - interval '20 seconds') then
+    return jsonb_build_object('ok', false, 'reason', 'too_fast');
+  end if;
+  new_id := public.ugc_new_id();
+  insert into public.ugc_games (id, author, title, descr, icon, kind, data, status, age_rating, age_ok, src_id, src_title)
+    values (new_id, uid, left(s.title, 60), s.descr, s.icon, 'arena', s.data, 'draft', s.age_rating, false, s.id, s.title);
+  return jsonb_build_object('ok', true, 'id', new_id, 'status', 'draft');
+end $$;
+revoke all on function public.ugc_arena_remix(text) from public, anon;
+grant execute on function public.ugc_arena_remix(text) to authenticated;
+
+-- 19.7 Автоскрытие арены после жалоб (ugc_report считает жалобы): уходит отовсюду, кроме автора и модераторов, пока модератор не
+--      посмотрит. Модератор вернул в каталог (ugc_review 'public' обнуляет жалобы) — скрытие снято
+create or replace function public.ugc_arena_hold() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.kind = 'arena' then
+    if new.reports = 0 and old.reports > 0 then new.held := false;
+    elsif coalesce(public.ugc_arena_rule('hide'), 3) > 0 and new.reports >= coalesce(public.ugc_arena_rule('hide'), 3) and not new.held then
+      new.held := true;
+      if new.status in ('public', 'link') then new.status := 'review'; end if;
+    end if;
+  end if;
+  return new;
+end $$;
+revoke all on function public.ugc_arena_hold() from public, anon, authenticated;
+drop trigger if exists ugc_arena_hold on public.ugc_games;
+create trigger ugc_arena_hold before update of reports on public.ugc_games for each row execute function public.ugc_arena_hold();
+-- скрытую жалобами арену не читает никто, кроме автора и модераторов (у остальных видов — как было)
+drop policy if exists ugc_games_read on public.ugc_games;
+create policy ugc_games_read on public.ugc_games for select
+  using ((status in ('link', 'review', 'public') and not (kind = 'arena' and held)) or author = auth.uid() or public.ugc_is_staff());
+-- автор не может сам вернуть скрытую жалобами арену «по ссылке» / в каталог через ugc_status — сторож перед ним
+create or replace function public.ugc_arena_status_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.kind = 'arena' and old.held and new.held and new.status in ('link', 'public') and not public.ugc_is_staff() then
+    new.status := old.status;
+  end if;
+  -- модератор сам вернул арену в каталог (ugc_review) — метка «не проверено» снимается
+  if new.kind = 'arena' and new.status = 'public' and new.reviewed_at is distinct from old.reviewed_at then new.unchecked := false; end if;
+  return new;
+end $$;
+revoke all on function public.ugc_arena_status_guard() from public, anon, authenticated;
+drop trigger if exists ugc_arena_status_guard on public.ugc_games;
+create trigger ugc_arena_status_guard before update of status on public.ugc_games for each row execute function public.ugc_arena_status_guard();
+
+-- 19.8 Проверка и метка для сайта (как у частей 18 / 18б: строку видят и гости)
+create or replace function public.part19_info()
+returns jsonb language sql stable as $$ select jsonb_build_object('ok', true, 'v', 1) $$;
+revoke all on function public.part19_info() from public;
+grant execute on function public.part19_info() to anon, authenticated;
+do $$ begin
+  if to_regclass('public.site_config') is not null then
+    update public.site_config set value = '1' where key = 'part19';
+    if not found then insert into public.site_config (key, value) values ('part19', '1'); end if;
+  end if;
+exception when others then raise warning 'ч. 19: метка site_config part19 не поставлена: %', sqlerrm;
+end $$;
+do $$ begin
+  if to_regclass('public.site_config') is not null then
+    drop policy if exists site_config_part19_read on public.site_config;
+    create policy site_config_part19_read on public.site_config for select to anon, authenticated using (key = 'part19');
+  end if;
+exception when others then raise warning 'ч. 19: правило чтения метки part19 не создано: %', sqlerrm;
+end $$;
