@@ -19,7 +19,7 @@
 // before the world starts (the world Worker gets the same layers), the HUD shows the hashes (crates/d37-app/src/config.rs).
 import init, * as api from './d37_web.js';
 import { finishDigJob, planetJobs, terrainWorkerCount } from './planet-jobs.js';
-import { fetchLayers, layersJson } from './engine-host.js';
+import { fetchLayers, layersJson, PAGE_BUILD, wasmBuildOf, reloadForBuild, ENGINE_FILES } from './engine-host.js';
 const { D37Web, ground_layer, wasm_memory_bytes } = api;
 
 const q = new URLSearchParams(location.search);
@@ -57,6 +57,13 @@ async function main() {
   const tCfg = performance.now();
   const layersP = fetchLayers({ layers: cfgUrls.map((u, i) => ({ name: 'cfg' + i, url: new URL(u, location.href).href })) }).then((l) => { state.cfgFetchMs = Math.round(performance.now() - tCfg); return l; });
   try { module = await WebAssembly.compileStreaming(fetch(new URL('./d37_web_bg.wasm', import.meta.url))); } catch (e) { module = null; }
+  // ep38 A2: a page script of one build never runs the wasm / glue of another (a stale cache): refetch and reload once
+  if (PAGE_BUILD) {
+    const wb = module ? wasmBuildOf(module) : '', gb = api.D37_GLUE_BUILD || '';
+    state.build = { page: PAGE_BUILD, wasm: wb, glue: gb };
+    if (wb !== PAGE_BUILD || gb !== PAGE_BUILD) await reloadForBuild((f) => new URL('./' + f, import.meta.url).href, ENGINE_FILES, 'wasm ' + wb + ', glue ' + gb);
+    try { sessionStorage.removeItem('d37.buildreload.' + PAGE_BUILD); } catch (e) { /* storage off */ }
+  }
   await init({ module_or_path: module || new URL('./d37_web_bg.wasm', import.meta.url) });
   const cfgJson = layersJson(await layersP);
   if (typeof api.config_apply === 'function') { try { state.config = JSON.parse(api.config_apply(cfgJson, true)); } catch (e) { console.warn('d37 config', e); } }

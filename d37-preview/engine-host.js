@@ -28,6 +28,27 @@ import { finishDigJob, planetJobs, terrainWorkerCount } from './planet-jobs.js';
 
 export const BRIDGE = 1;
 const HERE = (f) => new URL('./' + f, import.meta.url).href;
+// ep38 A2 switches (one-line rollbacks): the CC0 object images loaded by this page; the build check below.
+const OBJ_TEXTURES = true;
+const BUILD_CHECK = true;
+// ep38 A2: the build this page script belongs to — stamped by scripts/pack.mjs into this file, d37-page.js, d37_web.js
+// (D37_GLUE_BUILD) and the wasm (custom section «d37_build»); '' = an unpacked page (the repo's web/): no check.
+export const PAGE_BUILD = '8e3b20a652';
+export function wasmBuildOf(module) {
+  try { const s = WebAssembly.Module.customSections(module, 'd37_build'); return s.length ? new TextDecoder().decode(s[0]) : ''; } catch (e) { return ''; }
+}
+// A page script of one build with the wasm / glue of another (a stale cache) draws garbage or panics: refetch the
+// engine files past the cache and reload ONCE; a second mismatch is an error, never a loop.
+export async function reloadForBuild(here, files, why) {
+  const key = 'd37.buildreload.' + PAGE_BUILD;
+  let done = false;
+  try { done = sessionStorage.getItem(key) === '1'; sessionStorage.setItem(key, '1'); } catch (e) { done = true; }
+  if (done) throw new Error('build mismatch (' + why + ') after a reload: the page is ' + PAGE_BUILD);
+  await Promise.all(files.map((f) => fetch(here(f), { cache: 'reload' }).catch(() => null)));
+  location.reload();
+  await new Promise(() => {}); // the reload takes the page away
+}
+export const ENGINE_FILES = ['engine-host.js', 'd37-page.js', 'd37_web.js', 'd37_web_bg.wasm', 'd37-world-worker.js', 'd37-terrain-worker.js', 'planet-jobs.js', 'index.html'];
 // Match the standalone page for solo play. Keep the existing default for shared worlds and the wardrobe.
 // o.world or ?world=worker|main override the default. Failure to start the Worker falls back to the page's thread.
 function worldWanted(o, studio) {
@@ -202,6 +223,12 @@ export async function start(o) {
     }),
     fetchLayers(o.config).then((l) => { st.cfgFetchMs = Math.round(performance.now() - tCfg); return l; }),
   ]);
+  if (BUILD_CHECK && PAGE_BUILD) {
+    const wb = wasmBuildOf(module), gb = wasmApi.D37_GLUE_BUILD || '';
+    st.build = { page: PAGE_BUILD, wasm: wb, glue: gb };
+    if (wb !== PAGE_BUILD || gb !== PAGE_BUILD) { log('build mismatch: page ' + PAGE_BUILD + ' wasm ' + wb + ' glue ' + gb); await reloadForBuild(HERE, ENGINE_FILES, 'wasm ' + wb + ', glue ' + gb); }
+    try { sessionStorage.removeItem('d37.buildreload.' + PAGE_BUILD); } catch (e) { /* storage off */ }
+  }
   await init({ module_or_path: module });
   try { st.panic0 = last_panic(); } catch (e) { st.panic0 = ''; }
   if (bridge_version() !== BRIDGE) throw new Error('bridge version ' + bridge_version() + ', the page speaks ' + BRIDGE);
@@ -243,6 +270,19 @@ export async function start(o) {
     st.gpuCullingEnabled = await app.set_gpu_culling(true);
   }
   if (o.quality) { try { app.set_quality(o.quality); } catch (e) { /* keeps mid */ } }
+  // ep38 A2 (R-LATE-1122-05, the site's game drew leaf cards and tufts as flat pale squares): the things' CC0 material
+  // images, as the standalone page loads them — this page never did, so every card kept the 1 x 1 stand-in (no
+  // cut-out). Rollback: OBJ_TEXTURES = false.
+  if (OBJ_TEXTURES && typeof app.object_texture_classes === 'function') {
+    st.objTex = { want: 0, got: 0, failed: [] };
+    app.object_texture_classes().forEach((c, i) => ['albedo', 'surface'].forEach((k, kind) => {
+      st.objTex.want++;
+      fetch(HERE('materials/cc0/obj_' + c + '_' + k + '.png'))
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('HTTP ' + r.status))))
+        .then((b) => { if (st.app !== app) return; app.push_object_texture(i, kind, new Uint8Array(b)); st.objTex.got++; })
+        .catch((e) => { st.objTex.failed.push(c + '_' + k); log('object material ' + c + '_' + k + ': ' + String(e && e.message || e).slice(0, 80)); });
+    }));
+  }
   progress('gpu', 1, 1);
 
   // Workers: each builds planet chunks / ground layers from the module compiled above
