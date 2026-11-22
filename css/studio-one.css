@@ -1,0 +1,86 @@
+/* Главная студии — одна дверь (T-176, js/games/studio-home.js). Сначала телефон (390 px), потом шире. Цвета — токенами темы;
+   студия внутри #gamesStage — «тёмный остров» (index.html), поэтому и в светлой теме сайта здесь тёмные токены. */
+.so{display:flex;flex-direction:column;gap:18px;color:var(--text);font-family:'Montserrat',sans-serif;min-width:0}
+.so-hero{padding:14px 16px;border-radius:16px;background:linear-gradient(135deg,rgba(155,109,255,.24),rgba(255,111,181,.14) 60%,rgba(56,189,248,.12));border:1px solid var(--line)}
+.so-hero h2{margin:0 0 4px;font:900 1.35rem 'Oswald','Montserrat',sans-serif;letter-spacing:.02em;color:var(--text-hi)}
+.so-hero p{margin:0;color:rgba(var(--text-rgb),.82);font:500 .9rem/1.45 'Montserrat',sans-serif;max-width:760px}
+.so-sec{display:flex;flex-direction:column;gap:10px;min-width:0}
+.so-h{margin:0;font:800 1.05rem 'Montserrat',sans-serif;color:var(--text-hi);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.so-h small{font:600 .78rem 'Montserrat',sans-serif;color:var(--muted)}
+.so-note{margin:0;color:var(--muted);font:500 .8rem/1.45 'Montserrat',sans-serif}
+.so-note a{color:var(--accent-t,#a78bfa);font-weight:700}
+
+/* «Создать режим»: карточки с картинкой — телефон две колонки */
+.so-modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.so-mode{display:flex;flex-direction:column;min-width:0;border-radius:14px;overflow:hidden;background:rgba(var(--fg-rgb),.05);border:1px solid var(--line);color:inherit;text-decoration:none;transition:transform .15s,border-color .15s}
+.so-mode:hover,.so-mode:focus-visible{transform:translateY(-2px);border-color:color-mix(in srgb,var(--c) 70%,transparent)}
+.so-mode:focus-visible{outline:2px solid var(--accent,#a78bfa);outline-offset:2px}
+.so-pic{position:relative;display:block;aspect-ratio:16/9;background:linear-gradient(135deg,var(--c),color-mix(in srgb,var(--c) 45%,#0b0b14));overflow:hidden}
+.so-pic-ic{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.4rem}
+.so-pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.so-mode-b{display:flex;flex-direction:column;gap:4px;padding:9px 10px 10px;flex:1;min-width:0}
+.so-mode-b b{font:800 .86rem/1.25 'Montserrat',sans-serif;color:var(--text-hi)}
+.so-mode-b small{color:rgba(var(--text-rgb),.72);font:500 .74rem/1.35 'Montserrat',sans-serif;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex:1}
+.so-mode-f{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:2px}
+.so-age{font-style:normal;font:800 .7rem 'Montserrat',sans-serif;padding:.05rem .4rem;border-radius:6px;background:rgba(var(--fg-rgb),.12)}
+.so-go{color:var(--accent-t,#a78bfa);font:800 .76rem 'Montserrat',sans-serif}
+
+/* «Создать»: плитки */
+.so-tiles{display:grid;grid-template-columns:1fr;gap:8px}
+.so-tile{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:14px;background:rgba(var(--fg-rgb),.05);border:1px solid var(--line);color:inherit;text-decoration:none;min-width:0}
+.so-tile:hover,.so-tile:focus-visible{background:rgba(var(--fg-rgb),.09)}
+.so-tile-ic{font-size:1.7rem;line-height:1;flex:none;width:36px;text-align:center}
+.so-tile>span:last-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.so-tile b{font:800 .9rem 'Montserrat',sans-serif;color:var(--text-hi)}
+.so-tile small{color:var(--muted);font:500 .75rem/1.35 'Montserrat',sans-serif}
+.so-tile-3d{background:linear-gradient(135deg,rgba(245,158,11,.16),rgba(var(--fg-rgb),.04));border-color:rgba(245,158,11,.3)}
+.so-tile-code{background:linear-gradient(135deg,rgba(56,189,248,.14),rgba(34,197,94,.08));border-color:rgba(56,189,248,.25)}
+
+/* «Мои проекты» */
+.so-list{display:flex;flex-direction:column;gap:6px}
+.so-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:13px;background:rgba(var(--fg-rgb),.04);border:1px solid var(--line);min-width:0}
+.so-row-ic{font-size:1.5rem;width:34px;text-align:center;flex:none}
+.so-row-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.so-row-b b{font:800 .9rem 'Montserrat',sans-serif;color:var(--text-hi);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.so-row-b small{color:var(--muted);font:600 .74rem/1.35 'Montserrat',sans-serif}
+.so-row-a{display:flex;gap:6px;flex:none}
+.so-chip{display:inline-block;padding:0 .4rem;border-radius:999px;background:rgba(var(--fg-rgb),.1);color:var(--text);font:700 .7rem 'Montserrat',sans-serif}
+.so-chip.so-public{background:rgba(34,197,94,.2);color:#86efac}
+.so-chip.so-review{background:rgba(250,204,21,.18);color:#fde68a}
+.so-chip.so-link{background:rgba(56,189,248,.18);color:#bae6fd}
+.so-chip.so-banned{background:rgba(239,68,68,.2);color:#fca5a5}
+.so-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:40px;min-width:44px;border:0;border-radius:11px;padding:.45rem .8rem;font:800 .82rem 'Montserrat',sans-serif;cursor:pointer;color:var(--on-accent,#fff);background:var(--accent,#8b5cf6);text-decoration:none;box-sizing:border-box}
+.so-btn:hover{filter:brightness(1.1)}
+.so-btn.ghost{background:rgba(var(--fg-rgb),.09);color:var(--text)}
+
+/* «Игры игроков» */
+.so-sort{display:inline-flex;gap:4px}
+.so-sort button{border:1px solid var(--line-hi);background:transparent;color:var(--text);border-radius:999px;padding:.3rem .75rem;min-height:32px;font:700 .75rem 'Montserrat',sans-serif;cursor:pointer}
+.so-sort button.on{background:var(--text-hi);color:var(--bg)}
+.so-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.so-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 8px;border-radius:14px;background:rgba(var(--fg-rgb),.05);border:1px solid var(--line);color:inherit;text-decoration:none;text-align:center;min-width:0}
+.so-card:hover{background:rgba(var(--fg-rgb),.09)}
+.so-card-ic{font-size:2.2rem;line-height:1.1}
+.so-card b{font:800 .86rem 'Montserrat',sans-serif;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-hi)}
+.so-card small{color:var(--muted);font:600 .72rem 'Montserrat',sans-serif;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* состояния: загрузка, пусто, ошибка */
+.so-state{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;padding:16px;border-radius:13px;background:rgba(var(--fg-rgb),.04);color:var(--muted);font:600 .86rem/1.4 'Montserrat',sans-serif;text-align:center}
+.so-err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fecaca}
+.so-mine .so-err{margin-bottom:6px}
+.so-spin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(var(--fg-rgb),.2);border-top-color:var(--accent,#8b5cf6);animation:so-spin .8s linear infinite}
+@keyframes so-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.so-spin{animation:none}.so-mode{transition:none}}
+.so-rules{color:var(--muted);font:500 .78rem/1.5 'Montserrat',sans-serif;padding:10px 12px;border-radius:12px;background:rgba(var(--fg-rgb),.03)}
+
+/* шире телефона */
+@media (min-width:600px){
+  .so-modes{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .so-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .so-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+}
+@media (min-width:1000px){
+  .so-modes{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .so-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .so-hero h2{font-size:1.5rem}
+}

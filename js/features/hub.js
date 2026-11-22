@@ -31,12 +31,14 @@
   const report = (where, msg) => { try { root.d37Err && root.d37Err('engine:' + where, new Error(String(msg || '').slice(0, 200))); } catch (e) {} };
 
   // ═══ Плитки меню (одна таблица; названия — владельца) ═══
+  // T-176: плитка «Студия» — главная студии («Создать режим», игры, 3D-миры); STUDIO_ONE = false — сразу «Студия 3D», как раньше
+  const STUDIO_ONE_ON = typeof STUDIO_ONE !== 'undefined' && !!STUDIO_ONE;
   const TILES = [
     { id: 'play', big: 1, icon: '🌍', title: 'Играть', sub: 'Твой мир на планете — от клетки до космоса: руби, строй, зови людей в племя. Всё сохраняется', href: '/hub/play', cls: 'hub-t-play' },
     { id: 'wardrobe', icon: '👕', title: 'Гардероб', sub: 'Девочка, мальчик или манекен, цвета каждой части', href: '/hub/wardrobe', cls: 'hub-t-ward' },
     { id: 'creative', icon: '🪐', title: 'Творческий режим', sub: 'Отдельный мир: строй что угодно без материалов, летай над планетой, меняй время и погоду, зови зверей. Без голода и опасностей — своё сохранение', href: '/hub/creative', cls: 'hub-t-planet' },
     { id: 'world', icon: '🌍', title: 'Мир Денчика', sub: 'Город, кафе и столики с играми — онлайн', href: '/play/world', cls: 'hub-t-world', age: '12+' },
-    { id: 'studio', icon: '🧱', title: 'Студия', sub: 'Построй свой 3D-мир со скриптами', href: '/play/studio3d', cls: 'hub-t-studio' },
+    { id: 'studio', icon: '🧱', title: 'Студия', sub: STUDIO_ONE_ON ? 'Создай свой режим, игру или 3D-мир' : 'Построй свой 3D-мир со скриптами', href: STUDIO_ONE_ON ? '/play/studio' : '/play/studio3d', cls: 'hub-t-studio' },
     { id: 'klet', icon: '🟢', title: 'Клеточки', sub: 'Ешь, расти, делись — теперь на движке D37: с ботами, а в комнате — с друзьями', href: '/hub/play/klet', cls: 'hub-t-mini' },   // w11: старая io-игра на Rust (движок: game klet play)
     { id: 'mini', icon: '🎲', title: 'Мини-игры', sub: 'Шахматы, «5 букв», дурак, клеточки и ещё 50 игр', href: '/play', cls: 'hub-t-mini' },
     { id: 'invite', icon: '📍', title: 'Позвать друга', sub: 'Скинь ссылку — играйте на одной планете (скоро вместе)', act: 'invite', cls: 'hub-t-invite' },

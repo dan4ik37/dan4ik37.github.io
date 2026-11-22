@@ -47,6 +47,16 @@
       return data;
     } catch (e) { return null; }
   }
+  // То же, но не прячет отказ (T-176, главная студии с STUDIO_ONE): { rows } или { rows: null, err: 'offline' | 'missing' | текст сервера }
+  async function query(q){
+    if (typeof sbClient === 'undefined' || !sbClient) return { rows: null, err: 'offline' };
+    if (srvMissing) return { rows: null, err: 'missing' };
+    try {
+      const { data, error } = await q(sbClient.from('ugc_games'));
+      if (error) { if (error.code === '42P01' || /does not exist|Could not find/i.test(error.message || '')) srvMissing = true; return { rows: null, err: srvMissing ? 'missing' : String(error.code || error.message || 'error').slice(0, 120) }; }
+      return { rows: data || [], err: null };
+    } catch (e) { return { rows: null, err: String(e?.message || e).slice(0, 120) }; }
+  }
   const LIGHT = 'id,title,icon,descr,kind,tpl,status,plays,likes,created_at,updated_at,author,profiles!ugc_games_author_fkey(nick)';
   // Возрастная метка игры (age.sql: age_rating — выбирает автор, меняет модератор; js/core/age.js → D37Age.ugc). Колонку
   // спрашиваем, только когда она уже есть на сервере — иначе запрос списка сломался бы
@@ -149,6 +159,9 @@
   async function home(){
     S = { screen: 'home' };
     const st = S;
+    // T-176 (EDITOR_ONE S1): одна дверь студии — «Создать режим», «Создать», «Мои проекты», «Игры игроков» (js/games/studio-home.js).
+    // STUDIO_ONE = false (js/core/config.js) — главная как раньше, ниже
+    if (typeof STUDIO_ONE !== 'undefined' && STUDIO_ONE && window.D37StudioHome) { window.D37StudioHome.render(root, homeCore(st)); return; }
     const tpls = TPL().list;
     root.innerHTML = `<div class="st">
       <div class="st-hero"><div><h2>🛠️ Студия игр</h2><p>Сделай свою игру за пару минут: выбери шаблон, поставь своего героя, цвета и правила — и позови друзей играть по ссылке.
@@ -208,6 +221,11 @@
   const cardHtml = g => `<a class="st-card" href="${playHref(g)}"><span class="st-card-ic">${esc(g.icon || '🎮')}</span><b>${esc(g.title)}${ageB(g)}</b>${g.kind === 'place' ? '<small class="st-card-3d">🧱 3D-мир</small>' : ''}
     <small class="st-card-au">👤 ${esc(g.profiles?.nick || 'Игрок')}${g.author ? `<span class="lv-badge" data-lv-uid="${esc(g.author)}"></span>` : ''}</small>
     <small>👁 ${num(g.plays)} · ❤️ ${num(g.likes)}</small></a>`;
+  // Что главной студии (studio-home.js) нужно отсюда: те же запросы, черновики, метки, адреса — без второй копии
+  function homeCore(st){
+    return { esc, num, STATUS, drafts, query, light, ageB, playHref, isStaff, authed, alive: () => S === st && !!root,
+      uid: () => (authed() ? currentUser.id : null), tpls: () => TPL()?.list || [], srvMissing: () => srvMissing };
+  }
 
   // ── Редактор ──
   async function editor(o){

@@ -1774,6 +1774,16 @@
   },
   {
    "f": "js/features/community2.js",
+   "fn": "act",
+   "k": "markup:text",
+   "c": "const",
+   "n": "T-177: X.durField() — готовая разметка поля «свой срок» (константа, без чужого текста)",
+   "xs": [
+    "OWN_DUR ? X.durField() : ''"
+   ]
+  },
+  {
+   "f": "js/features/community2.js",
    "fn": "ccard",
    "k": "markup:style",
    "c": "enum",
@@ -2333,6 +2343,16 @@
   },
   {
    "f": "js/features/ds-mod.js",
+   "fn": "drawUsers",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "plural(L.length, 'человек', 'человека', 'человек')"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
    "fn": "hub",
    "k": "markup:url",
    "c": "url-checked",
@@ -2354,6 +2374,16 @@
   },
   {
    "f": "js/features/ds-mod.js",
+   "fn": "punish",
+   "k": "markup:text",
+   "c": "const",
+   "n": "T-177: X.durField() — готовая разметка поля «свой срок» (константа, без чужого текста)",
+   "xs": [
+    "OWN_DUR && X.durField ? X.durField() : ''"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
    "fn": "repRow",
    "k": "markup:text",
    "c": "const",
@@ -2370,6 +2400,16 @@
    "n": "T-164: плитки обзора — hubLink() (DS.link от id сервера и константы раздела), ещё и esc()",
    "xs": [
     "e(href)"
+   ]
+  },
+  {
+   "f": "js/features/ds-mod.js",
+   "fn": "urepRow",
+   "k": "markup:text",
+   "c": "const",
+   "n": "P.plural — одна из трёх своих строк",
+   "xs": [
+    "plural(+x.n, 'жалоба', 'жалобы', 'жалоб')"
    ]
   },
   {
@@ -3294,6 +3334,47 @@
    "n": "T-177 actions(): класс кнопки — pri/ok/warn/пусто; href — только '#/profile/' + uid (uid проверен UUID в openCard)",
    "xs": [
     "p?.role && typeof ROLE_BADGE_HTML !== 'undefined' ? (ROLE_BADGE_HTML[p"
+   ]
+  },
+  {
+   "f": "js/features/modepage.js",
+   "fn": "page",
+   "k": "sink:href [pic]",
+   "c": "url-checked",
+   "n": "T-171: картинка игры — та же ссылка, что «▶ Играть»; адрес проходит safeHref() — только «/…» или «#/…» своего сайта",
+   "xs": [
+    "safeHref(m.play)"
+   ]
+  },
+  {
+   "f": "js/features/modepage.js",
+   "fn": "page",
+   "k": "sink:href [play]",
+   "c": "url-checked",
+   "n": "T-171: адрес проходит safeHref() — только «/…» или «#/…» своего сайта, без схем и кавычек; для игр игроков id — через encodeURIComponent",
+   "xs": [
+    "safeHref(m.play)"
+   ]
+  },
+  {
+   "f": "js/features/modepage.js",
+   "fn": "page",
+   "k": "sink:href [r]",
+   "c": "url-checked",
+   "n": "T-171: адрес проходит safeHref() — только «/…» или «#/…» своего сайта",
+   "xs": [
+    "safeHref(m.rules)"
+   ]
+  },
+  {
+   "f": "js/features/modepage.js",
+   "fn": "page",
+   "k": "sink:src [im]",
+   "c": "const",
+   "n": "T-171: картинка игры сайта — 'img/games/' + id из таблицы GAMES (константа); снимки — из таблицы MEDIA в этом файле, ещё и по шаблону ^img/…",
+   "xs": [
+    "m.img",
+    "s"
    ]
   },
   {
@@ -7010,6 +7091,36 @@
    ]
   },
   {
+   "f": "js/games/studio-home.js",
+   "fn": "catCard",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge: число + esc(title)",
+   "xs": [
+    "ageOf(g)"
+   ]
+  },
+  {
+   "f": "js/games/studio-home.js",
+   "fn": "modeCard",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge: число + esc(title)",
+   "xs": [
+    "ageMark(b.age)"
+   ]
+  },
+  {
+   "f": "js/games/studio-home.js",
+   "fn": "rowHtml",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.badge: число + esc(title)",
+   "xs": [
+    "ageOf(g)"
+   ]
+  },
+  {
    "f": "js/games/studio.js",
    "fn": "aiPrompt",
    "k": "markup:text",
@@ -8205,87 +8316,6 @@
    "n": "адреса библиотек jsDelivr и Worker-ы, которые выдаёт сама библиотека потоков",
    "xs": [
     "t.workerUrl"
-   ]
-  },
-  {
-   "f": "js/features/community2.js",
-   "fn": "act",
-   "k": "markup:text",
-   "c": "const",
-   "n": "T-177: X.durField() — готовая разметка поля «свой срок» (константа, без чужого текста)",
-   "xs": [
-    "OWN_DUR ? X.durField() : ''"
-   ]
-  },
-  {
-   "f": "js/features/ds-mod.js",
-   "fn": "punish",
-   "k": "markup:text",
-   "c": "const",
-   "n": "T-177: X.durField() — готовая разметка поля «свой срок» (константа, без чужого текста)",
-   "xs": [
-    "OWN_DUR && X.durField ? X.durField() : ''"
-   ]
-  },
-  {
-   "f": "js/features/ds-mod.js",
-   "fn": "urepRow",
-   "k": "markup:text",
-   "c": "const",
-   "n": "P.plural — одна из трёх своих строк",
-   "xs": [
-    "plural(+x.n, 'жалоба', 'жалобы', 'жалоб')"
-   ]
-  },
-  {
-   "f": "js/features/ds-mod.js",
-   "fn": "drawUsers",
-   "k": "markup:text",
-   "c": "const",
-   "n": "P.plural — одна из трёх своих строк",
-   "xs": [
-    "plural(L.length, 'человек', 'человека', 'человек')"
-   ]
-  },
-  {
-   "f": "js/features/modepage.js",
-   "fn": "page",
-   "k": "sink:src [im]",
-   "c": "const",
-   "n": "T-171: картинка игры сайта — 'img/games/' + id из таблицы GAMES (константа); снимки — из таблицы MEDIA в этом файле, ещё и по шаблону ^img/…",
-   "xs": [
-    "m.img",
-    "s"
-   ]
-  },
-  {
-   "f": "js/features/modepage.js",
-   "fn": "page",
-   "k": "sink:href [play]",
-   "c": "url-checked",
-   "n": "T-171: адрес проходит safeHref() — только «/…» или «#/…» своего сайта, без схем и кавычек; для игр игроков id — через encodeURIComponent",
-   "xs": [
-    "safeHref(m.play)"
-   ]
-  },
-  {
-   "f": "js/features/modepage.js",
-   "fn": "page",
-   "k": "sink:href [r]",
-   "c": "url-checked",
-   "n": "T-171: адрес проходит safeHref() — только «/…» или «#/…» своего сайта",
-   "xs": [
-    "safeHref(m.rules)"
-   ]
-  },
-  {
-   "f": "js/features/modepage.js",
-   "fn": "page",
-   "k": "sink:href [pic]",
-   "c": "url-checked",
-   "n": "T-171: картинка игры — та же ссылка, что «▶ Играть»; адрес проходит safeHref() — только «/…» или «#/…» своего сайта",
-   "xs": [
-    "safeHref(m.play)"
    ]
   }
  ]
