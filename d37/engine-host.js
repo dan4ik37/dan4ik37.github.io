@@ -153,7 +153,9 @@ async function compileWasm(url, rawSize, onBytes) {
 //      w11 kit-port: arena: 'klet' (`game klet play`: «Клеточки» as an engine mode in the player's world).
 //      W8 hub: newWorld: bool (`game progress new`: a cell at the tide pool), skipTribe: bool (`game progress skip tribe`),
 //      spawn: 'last' | 'home' | 'orbit' (where a saved world starts: as saved / `game place goto home_valley` / `travel orbit`),
-//      W11 net-shards: join: {url, code} («Играть вместе»: the shared world with that join code on our d37-server) }
+//      W11 net-shards: join: {url, code} («Играть вместе»: the shared world with that join code on our d37-server),
+//      NET_JOIN: arena: 'klet2' (the engine's «Клеточки»), joinSession: {url, game, id} (straight into a game session;
+//      the handle's `lobby` lists / quick-plays / hosts sessions) }
 // The 'wardrobe' scene is a studio: the panel is open from the start, no walking (the keys and the left half of a phone
 // turn the camera round the character instead), no jump / orbit / 👕 buttons; «Готово» is sent to the page as
 // {t:'wardrobe', on:false} as always (the site goes back where it came from).
@@ -434,6 +436,13 @@ export async function start(o) {
   let say = () => {};
   let shotWanted = false;
   st.shots = [];
+  // R-LATE-1120-01: the profiler's КОПИРОВАТЬ: the «ЗАМЕР» report to the clipboard (local only, nothing is sent)
+  function copyReport() {
+    let text = '';
+    try { text = String(st.app.prof_report()); } catch (e) { return; }
+    const fallback = () => { try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } catch (e) { /* no clipboard */ } };
+    try { navigator.clipboard.writeText(text).catch(fallback); } catch (e) { fallback(); }
+  }
   function acts() {
     if (!game) return;
     for (let i = 0; i < 8; i++) {
@@ -443,6 +452,7 @@ export async function start(o) {
       if (a === 'camera') { third = !third; st.app.set_third_person(third); }
       else if (a === 'fullscreen') toggleFull();
       else if (a === 'shot') shotWanted = true;
+      else if (a === 'copy') copyReport();
       else if (a === 'exit') { unlock(); emit({ t: 'exit' }); }
     }
   }
@@ -521,7 +531,7 @@ export async function start(o) {
   on(canvas, 'wheel', (e) => { e.preventDefault(); st.app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   on(window, 'mousemove', (e) => {
     if (!live()) return;
-    if (menuOpen() || (cellMode && hudMouse)) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 1, 1); return; }
+    if (menuOpen() || cellMode) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 1, 1); return; } // ep32: in a mode the cursor steers with no button held
     if (document.pointerLockElement === canvas || drag) st.app.add_look(e.movementX, e.movementY);
   });
 
@@ -668,6 +678,26 @@ export async function start(o) {
     try { if (document.pointerLockElement) document.exitPointerLock(); } catch (er) { /* not locked */ }
   }
   let dispatchPlanetJobs;
+  // NET_JOIN §6 P2P: {ev:'send', link, b: base64 of [u32 len][frame]…} → handle.net.onSend(link, frame) per frame;
+  // other events (role, connect, drop, closed) → handle.net.onEvent(ev)
+  function p2pLine(d) {
+    if (d.ev === 'send') {
+      if (typeof st.p2pSend !== 'function') return;
+      let bin = '';
+      try { bin = atob(String(d.b || '')); } catch (e) { return; }
+      const b = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+      const v = new DataView(b.buffer);
+      for (let o = 0; o + 4 <= b.length;) {
+        const n = v.getUint32(o, true); o += 4;
+        if (o + n > b.length) break;
+        try { st.p2pSend(d.link >>> 0, b.slice(o, o + n)); } catch (e) { console.warn('d37 host: p2p send', e); }
+        o += n;
+      }
+      return;
+    }
+    try { if (typeof st.p2pEvent === 'function') st.p2pEvent(d); } catch (e) { console.warn('d37 host: p2p event', e); }
+  }
   function frame(now) {
     st.raf = 0;
     if (st.dead || st.paused || !st.app) return;
@@ -700,6 +730,8 @@ export async function start(o) {
       const out = a.host_out();
       if (out) {
         for (const m of JSON.parse(out)) {
+          // NET_JOIN §6 P2P: the engine's room frames for the page's data channels, its events (never logged per frame)
+          if (m.t === 'mode' && m.data && m.data.kind === 'p2p') { p2pLine(m.data); continue; }
           if (m.t === 'loaded') { st.loaded = true; try { const p = JSON.parse(a.planet_stats()); if (planet && p.alt < 100) levelLook(-12); } catch (e) { /* numbers only */ } spawnOnce(); }
           if (m.t === 'event' && m.code === 'landed') levelLook(-12);
           if (m.t === 'wardrobe') syncPanel(m.on);
@@ -743,8 +775,14 @@ export async function start(o) {
     const cmds = o.newWorld || fresh ? ['game progress new'] : o.skipTribe ? ['game progress skip tribe'] : o.spawn === 'orbit' ? ['travel orbit'] : o.spawn === 'home' ? ['game place goto home_valley'] : [];
     // w11 kit-port: an old site game as an engine mode, started in the player's world (only known modes; the realm
     // comes from the bridge session: an adult arena only for a verified adult)
+    if (o.arena === 'klet2') cmds.push('game klet2 play');
+    if (o.arena === 'hole2') cmds.push('game hole2 play');
     if (o.arena === 'klet') cmds.push(o.session && o.session.realm === 'adult' && o.session.band === 'adult' ? 'game klet play adult' : 'game klet play');
     for (const c of cmds) { const r = run(c); if (typeof r === 'string' && /^отказ|error|no such/i.test(r)) emit({ t: 'error', code: 'spawn', msg: (c + ': ' + r).slice(0, 200) }); }
+    // NET_JOIN: straight into a game session (a lobby pick, an invite link ?game=klet2&s=<id>, quick play)
+    if (o.joinSession && o.joinSession.url && o.joinSession.game && o.joinSession.id && typeof st.app.join_session === 'function') {
+      try { st.app.join_session(String(o.joinSession.url), String(o.joinSession.game), String(o.joinSession.id), ''); emit({ t: 'event', code: 'net_join' }); } catch (e) { emit({ t: 'error', code: 'join', msg: String(e && e.message || e).slice(0, 200) }); }
+    }
     // W11 net-shards: «Играть вместе» — the shared world by its code; an older engine build without join_code plays alone
     if (o.join && o.join.url && o.join.code) {
       try {
@@ -798,6 +836,44 @@ export async function start(o) {
     // Worker terminated without a word: the watchdog notices)
     debugCrash(kind) { if (kind === 'page') st.debugPanic = true; else if (kind === 'worker' && ww) ww.postMessage({ type: 'debug_panic' }); else if (kind === 'kill' && ww) { try { ww.terminate(); } catch (e) { /* gone */ } } },
     config() { return st.config; },
+    // NET_JOIN (d37-core/spec/NET_JOIN.md): sessions of the game modes on our d37-server. server = 'ws://host:7377'
+    // (or wss:// behind the TLS proxy); the HTTP list is the same host. The engine emits {t:'mode', data:{kind:
+    // 'presence'|'meta', …}} messages: presence = where the player is / can friends join; meta = records,
+    // achievements, XP, season goals (the site's server decides any coins).
+    lobby: {
+      httpOf(server) { return String(server).replace(/^ws(s?):\/\//, 'http$1://').replace(/\/+$/, ''); },
+      async list(server, game) { const r = await fetch(handle.lobby.httpOf(server) + '/sessions' + (game ? '?game=' + encodeURIComponent(game) : ''), { cache: 'no-store' }); return r.json(); },
+      async quick(server, game) { const r = await fetch(handle.lobby.httpOf(server) + '/quick?game=' + encodeURIComponent(game), { cache: 'no-store' }); return r.json(); },
+      join(server, game, id, nick) { if (!st.app || st.dead) return false; st.app.join_session(String(server), String(game), String(id), String(nick || '')); return true; },
+      joinCode(server, code, nick) { if (!st.app || st.dead) return false; st.app.join_code(String(server), String(code), String(nick || '')); return true; },
+      async quickPlay(server, game, nick) { const q = await handle.lobby.quick(server, game); handle.lobby.join(server, game, q.id, nick); return q; },
+      // host powers (the server takes them from the session's host only): meta(vis, mode, map, ages, name), limit(n), kick(peer)
+      meta(game, vis, mode, map, ages, name) { return run('game ' + game + ' lobby meta ' + [vis || 'open', mode || game, map || '-', ages || 'all', String(name || '').replace(/[;\s]+/g, '_')].join(' ')); },
+      limit(game, n) { return run('game ' + game + ' lobby limit ' + (n | 0)); },
+      kick(game, peer) { return run('game ' + game + ' kick ' + (peer | 0)); },
+      state() { try { const s = st.app && st.app.mode_state(); return s ? JSON.parse(s) : null; } catch (e) { return null; } },
+      rejoinKey(k) { try { st.app && st.app.set_rejoin_key(k >>> 0); } catch (e) { /* older build */ } },
+      leave(game) { if (game) run('game ' + game + ' quit'); try { st.app && st.app.leave(); } catch (e) { /* gone */ } },
+    },
+    // NET_JOIN §6 P2P (d37-core/spec/NET_JOIN.md): a session with NO game server. The page owns the WebRTC data channels
+    // (ordered, reliable) and its signalling; the engine orders the room on the host's page and follows it elsewhere.
+    // tag = this page's random id; link = the page's number for one remote page (a data channel). onSend(fn(link,
+    // bytes)) — send these bytes on that link as one message; onEvent(fn(ev)) — {ev:'role', role:'host'} (this page
+    // hosts now: a migration), {ev:'connect', tag, peer} (the room's new host: open a channel to it), {ev:'drop'},
+    // {ev:'closed', why}. state() — {role, me, host, hostTag, code, people, migrations, desync} (null without a room).
+    net: {
+      ok() { return !!(st.app && typeof st.app.p2p_start === 'function'); },
+      host(game, code, nick, tag) { if (!st.app || st.dead) return false; st.app.p2p_start(String(game), String(code), String(nick || ''), String(tag), ''); return true; },
+      join(game, code, nick, tag, hostTag) { if (!st.app || st.dead) return false; st.app.p2p_start(String(game), String(code), String(nick || ''), String(tag), String(hostTag)); return true; },
+      peerJoined(link, tag) { try { st.app && st.app.p2p_link_up(link >>> 0, String(tag)); } catch (e) { /* gone */ } },
+      peerLeft(link) { try { st.app && st.app.p2p_link_down(link >>> 0); } catch (e) { /* gone */ } },
+      deliver(link, bytes) { try { st.app && st.app.p2p_deliver(link >>> 0, bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)); } catch (e) { /* gone */ } },
+      failed(tag) { try { st.app && st.app.p2p_failed(String(tag)); } catch (e) { /* gone */ } },
+      onSend(fn) { st.p2pSend = fn; },
+      onEvent(fn) { st.p2pEvent = fn; },
+      state() { const s = handle.lobby.state(); return s && s.p2p ? s.p2p : null; },
+      leave(game) { handle.lobby.leave(game); },
+    },
     resume() { if (!st.paused || st.dead) return; st.paused = false; st.worldAt = performance.now(); if (ww) ww.postMessage({ type: 'resume' }); try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
     // everything this start made goes away: the frame loop, listeners, Workers, the GPU device (free), the DOM
     dispose() {
