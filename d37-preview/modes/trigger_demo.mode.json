@@ -1,0 +1,96 @@
+{
+  "format": 1,
+  "kind": "arena",
+  "engine_min": 1,
+  "arena": { "kernel": "free" },
+  "rules": [
+    { "b": "round", "len_s": 90, "end_s": 6 },
+    { "b": "field", "half": 1100, "edge": "wall" },
+    { "b": "players", "speed": 380, "radius": 32, "bots": 3 }
+  ],
+  "objects": [
+    { "b": "zone", "id": "center", "x": 0, "y": 0, "r": 260, "look": "gold" },
+    { "b": "zone", "id": "lift", "x": 800, "y": -800, "r": 140, "look": "blue" },
+    { "b": "pickup", "id": "coin", "r": 16, "look": "coin" },
+    { "b": "pickup", "id": "gem", "r": 22, "look": "gem", "life_s": 12 },
+    { "b": "var", "id": "coins_left", "start": 0, "show": true, "label": "left" },
+    { "b": "var", "id": "waves", "start": 0, "show": true, "label": "waves" },
+    { "b": "event", "id": "rush", "title": "rush" }
+  ],
+  "laws": [
+    { "id": "start", "when": { "b": "round_start" }, "do": [
+      { "b": "spawn", "what": "coin", "n": 20 },
+      { "b": "set_var", "var": "coins_left", "value": 20 },
+      { "b": "message", "text": "hello", "secs": 4 }
+    ] },
+    { "id": "coin", "when": { "b": "collected", "what": "coin" }, "do": [
+      { "b": "add_score", "who": "subject", "n": 1 },
+      { "b": "add_var", "var": "coins_left", "n": -1 },
+      { "b": "sound", "sound": "coin", "who": "subject" }
+    ] },
+    { "id": "gem", "when": { "b": "collected", "what": "gem" }, "do": [
+      { "b": "add_score", "who": "subject", "n": 3 },
+      { "b": "add_mass", "who": "subject", "n": 4 },
+      { "b": "sound", "sound": "mode_pop", "who": "subject" }
+    ] },
+    { "id": "wave", "when": { "b": "every", "secs": 15 }, "do": [
+      { "b": "spawn_wave", "what": "coin", "n": 12, "zone": "center", "radius": 420 },
+      { "b": "add_var", "var": "coins_left", "n": 12 },
+      { "b": "add_var", "var": "waves", "n": 1 },
+      { "b": "message", "text": "wave" }
+    ] },
+    { "id": "rush", "cooldown_s": 20, "when": { "b": "zone_enter", "zone": "center", "who": "player" }, "if": [
+      { "b": "event_on", "ev": "rush", "on": false }
+    ], "do": [
+      { "b": "event_start", "ev": "rush", "secs": 8 },
+      { "b": "spawn_wave", "what": "gem", "n": 6, "zone": "center", "radius": 160 },
+      { "b": "message", "text": "rush" },
+      { "b": "sound", "sound": "mode_whoosh" }
+    ] },
+    { "id": "rush_over", "when": { "b": "event_ended", "ev": "rush" }, "do": [
+      { "b": "remove", "what": "gem" },
+      { "b": "message", "text": "rush_over" }
+    ] },
+    { "id": "lift", "when": { "b": "zone_enter", "zone": "lift" }, "do": [
+      { "b": "teleport", "who": "subject", "zone": "center" },
+      { "b": "push", "who": "subject", "dx": -500, "dy": 300 },
+      { "b": "sound", "sound": "door", "who": "subject" }
+    ] },
+    { "id": "empty", "when": { "b": "var_reached", "var": "coins_left", "value": 0 }, "if": [
+      { "b": "chance", "pct": 100 }
+    ], "do": [
+      { "b": "spawn", "what": "coin", "n": 20 },
+      { "b": "set_var", "var": "coins_left", "value": 20 },
+      { "b": "message", "text": "empty" }
+    ] },
+    { "id": "view3d", "when": { "b": "after", "secs": 45 }, "do": [
+      { "b": "set_view", "view": "3d" },
+      { "b": "message", "text": "view3d" }
+    ] },
+    { "id": "view2d", "when": { "b": "after", "secs": 70 }, "do": [
+      { "b": "set_view", "view": "2d" },
+      { "b": "message", "text": "view2d" }
+    ] },
+    { "id": "goal", "once": true, "when": { "b": "score_reached", "value": 50 }, "do": [
+      { "b": "message", "text": "win", "secs": 5 },
+      { "b": "sound", "sound": "craft_done" },
+      { "b": "end_round" }
+    ] },
+    { "id": "end", "when": { "b": "round_end" }, "do": [
+      { "b": "message", "text": "end" }
+    ] }
+  ],
+  "texts": {
+    "hello": "Собирай монеты! 50 очков — победа",
+    "wave": "Волна монет в центре!",
+    "rush": "Золотая лихорадка: кристаллы в центре!",
+    "rush_over": "Лихорадка кончилась",
+    "view3d": "Смотрим в 3D!",
+    "view2d": "Снова сверху",
+    "win": "Есть 50 очков — победа!",
+    "empty": "Монеты кончились — новые!",
+    "end": "Раунд окончен",
+    "left": "Монет на поле",
+    "waves": "Волн"
+  }
+}

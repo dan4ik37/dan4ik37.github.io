@@ -1,0 +1,1756 @@
+{
+  "blocks": [
+    {
+      "cat": "rule",
+      "desc": "Сколько длится раунд и пауза с итогами перед следующим.",
+      "id": "round",
+      "inert_reason": "",
+      "max": 1,
+      "name": "Раунд",
+      "ns": null,
+      "params": [
+        {
+          "default": 120.0,
+          "id": "len_s",
+          "label": "Длина раунда",
+          "max": 1800.0,
+          "min": 10.0,
+          "required": false,
+          "step": 5.0,
+          "type": "number",
+          "unit": "с"
+        },
+        {
+          "default": 8.0,
+          "id": "end_s",
+          "label": "Пауза с итогами",
+          "max": 60.0,
+          "min": 3.0,
+          "required": false,
+          "step": 1.0,
+          "type": "number",
+          "unit": "с"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "rule",
+      "desc": "Размер квадратного поля (от центра до края) и что на краю.",
+      "id": "field",
+      "inert_reason": "",
+      "max": 1,
+      "name": "Поле",
+      "ns": null,
+      "params": [
+        {
+          "default": 1200.0,
+          "id": "half",
+          "label": "Половина поля",
+          "max": 4000.0,
+          "min": 300.0,
+          "required": false,
+          "step": 50.0,
+          "type": "number",
+          "unit": "ед."
+        },
+        {
+          "default": "wall",
+          "id": "edge",
+          "label": "Край",
+          "options": [
+            {
+              "id": "wall",
+              "name": "стена"
+            },
+            {
+              "id": "bounce",
+              "name": "отскок"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "rule",
+      "desc": "Скорость и размер фишек игроков, сколько ботов добавить.",
+      "id": "players",
+      "inert_reason": "",
+      "max": 1,
+      "name": "Игроки",
+      "ns": null,
+      "params": [
+        {
+          "default": 360.0,
+          "id": "speed",
+          "label": "Скорость",
+          "max": 900.0,
+          "min": 50.0,
+          "required": false,
+          "step": 10.0,
+          "type": "number",
+          "unit": "ед./с"
+        },
+        {
+          "default": 34.0,
+          "id": "radius",
+          "label": "Радиус",
+          "max": 120.0,
+          "min": 10.0,
+          "required": false,
+          "step": 1.0,
+          "type": "number",
+          "unit": "ед."
+        },
+        {
+          "default": 3.0,
+          "id": "bots",
+          "label": "Ботов",
+          "max": 15.0,
+          "min": 0.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": ""
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "object",
+      "desc": "Круглая область поля: на вход и выход в неё реагируют правила.",
+      "id": "zone",
+      "inert_reason": "",
+      "max": 32,
+      "name": "Зона",
+      "ns": "zone",
+      "params": [
+        {
+          "default": 0.0,
+          "id": "x",
+          "label": "X центра",
+          "max": 4000.0,
+          "min": -4000.0,
+          "required": false,
+          "step": 10.0,
+          "type": "number",
+          "unit": "ед."
+        },
+        {
+          "default": 0.0,
+          "id": "y",
+          "label": "Y центра",
+          "max": 4000.0,
+          "min": -4000.0,
+          "required": false,
+          "step": 10.0,
+          "type": "number",
+          "unit": "ед."
+        },
+        {
+          "default": 200.0,
+          "id": "r",
+          "label": "Радиус",
+          "max": 2000.0,
+          "min": 20.0,
+          "required": false,
+          "step": 10.0,
+          "type": "number",
+          "unit": "ед."
+        },
+        {
+          "default": "blue",
+          "id": "look",
+          "label": "Цвет",
+          "options": [
+            {
+              "id": "blue",
+              "name": "синяя"
+            },
+            {
+              "id": "green",
+              "name": "зелёная"
+            },
+            {
+              "id": "red",
+              "name": "красная"
+            },
+            {
+              "id": "gold",
+              "name": "золотая"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "object",
+      "desc": "Вид предмета, который правила кладут на поле; игрок подбирает его касанием.",
+      "id": "pickup",
+      "inert_reason": "",
+      "max": 20,
+      "name": "Предмет",
+      "ns": "pickup",
+      "params": [
+        {
+          "default": 18.0,
+          "id": "r",
+          "label": "Радиус",
+          "max": 80.0,
+          "min": 6.0,
+          "required": false,
+          "step": 1.0,
+          "type": "number",
+          "unit": "ед."
+        },
+        {
+          "default": "coin",
+          "id": "look",
+          "label": "Вид",
+          "options": [
+            {
+              "id": "coin",
+              "name": "монета"
+            },
+            {
+              "id": "gem",
+              "name": "кристалл"
+            },
+            {
+              "id": "star",
+              "name": "звезда"
+            },
+            {
+              "id": "food",
+              "name": "еда"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        },
+        {
+          "default": 0.0,
+          "id": "life_s",
+          "label": "Живёт (0 — всегда)",
+          "max": 600.0,
+          "min": 0.0,
+          "required": false,
+          "step": 1.0,
+          "type": "number",
+          "unit": "с"
+        },
+        {
+          "default": true,
+          "id": "collect",
+          "label": "Подбирается касанием",
+          "required": false,
+          "type": "bool"
+        },
+        {
+          "default": true,
+          "id": "bots_like",
+          "label": "Боты идут за ним",
+          "required": false,
+          "type": "bool"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "object",
+      "desc": "Целое число режима (счётчик): правила его меняют и проверяют. В начале раунда — стартовое значение.",
+      "id": "var",
+      "inert_reason": "",
+      "max": 32,
+      "name": "Переменная",
+      "ns": "var",
+      "params": [
+        {
+          "default": 0.0,
+          "id": "start",
+          "label": "Стартовое значение",
+          "max": 1000000.0,
+          "min": -1000000.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": ""
+        },
+        {
+          "default": false,
+          "id": "show",
+          "label": "Показывать игрокам",
+          "required": false,
+          "type": "bool"
+        },
+        {
+          "default": null,
+          "id": "label",
+          "label": "Подпись",
+          "required": false,
+          "type": "text-key"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "object",
+      "desc": "Именованное событие раунда (например «Золотая лихорадка»): правила его включают, выключают и проверяют.",
+      "id": "event",
+      "inert_reason": "",
+      "max": 16,
+      "name": "Событие",
+      "ns": "event",
+      "params": [
+        {
+          "default": null,
+          "id": "title",
+          "label": "Название на экране",
+          "required": false,
+          "type": "text-key"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "law",
+      "desc": "Одно правило: одно «когда», до 4 «если», до 8 «то».",
+      "id": "law",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Правило «когда → то»",
+      "ns": null,
+      "params": [
+        {
+          "default": false,
+          "id": "once",
+          "label": "Только один раз за раунд",
+          "required": false,
+          "type": "bool"
+        },
+        {
+          "default": 0.0,
+          "id": "cooldown_s",
+          "label": "Перезарядка",
+          "max": 600.0,
+          "min": 0.0,
+          "required": false,
+          "step": 0.1,
+          "type": "number",
+          "unit": "с"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Раунд начался (поле уже очищено, игроки на местах).",
+      "id": "round_start",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Начало раунда",
+      "ns": null,
+      "params": [],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Раунд кончился (по времени или действием «Закончить раунд»).",
+      "id": "round_end",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Конец раунда",
+      "ns": null,
+      "params": [],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Один раз, через столько секунд после начала раунда.",
+      "id": "after",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Через время",
+      "ns": null,
+      "params": [
+        {
+          "default": 10.0,
+          "id": "secs",
+          "label": "Через",
+          "max": 1800.0,
+          "min": 0.1,
+          "required": false,
+          "step": 0.1,
+          "type": "number",
+          "unit": "с"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Повторяется во время раунда: первый раз в «Начиная с» (или через N секунд), потом каждые N.",
+      "id": "every",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Каждые N секунд",
+      "ns": null,
+      "params": [
+        {
+          "default": 5.0,
+          "id": "secs",
+          "label": "Каждые",
+          "max": 600.0,
+          "min": 0.2,
+          "required": false,
+          "step": 0.1,
+          "type": "number",
+          "unit": "с"
+        },
+        {
+          "default": 0.0,
+          "id": "from_s",
+          "label": "Начиная с",
+          "max": 1800.0,
+          "min": 0.0,
+          "required": false,
+          "step": 0.1,
+          "type": "number",
+          "unit": "с"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Кто-то вошёл в зону. «Тот, кто вызвал» — вошедший.",
+      "id": "zone_enter",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Вход в зону",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "zone",
+          "label": "Зона",
+          "required": true,
+          "type": "zone-ref"
+        },
+        {
+          "default": "any",
+          "id": "who",
+          "label": "Кто",
+          "options": [
+            {
+              "id": "any",
+              "name": "кто угодно"
+            },
+            {
+              "id": "player",
+              "name": "игрок-человек"
+            },
+            {
+              "id": "bot",
+              "name": "бот"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Кто-то вышел из зоны. «Тот, кто вызвал» — вышедший.",
+      "id": "zone_leave",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Выход из зоны",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "zone",
+          "label": "Зона",
+          "required": true,
+          "type": "zone-ref"
+        },
+        {
+          "default": "any",
+          "id": "who",
+          "label": "Кто",
+          "options": [
+            {
+              "id": "any",
+              "name": "кто угодно"
+            },
+            {
+              "id": "player",
+              "name": "игрок-человек"
+            },
+            {
+              "id": "bot",
+              "name": "бот"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Значение переменной дошло до числа (с любой стороны).",
+      "id": "var_reached",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Переменная дошла до",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "var",
+          "label": "Переменная",
+          "required": true,
+          "type": "var-ref"
+        },
+        {
+          "default": 10.0,
+          "id": "value",
+          "label": "Число",
+          "max": 1000000.0,
+          "min": -1000000.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": ""
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Игрок или бот подобрал предмет (пусто — любой). «Тот, кто вызвал» — подобравший.",
+      "id": "collected",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Предмет подобран",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "what",
+          "label": "Предмет",
+          "required": false,
+          "type": "entity-ref"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Предмет убран действием или истёк его срок (пусто — любой).",
+      "id": "destroyed",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Предмет исчез",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "what",
+          "label": "Предмет",
+          "required": false,
+          "type": "entity-ref"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "У игрока или бота очков стало не меньше числа. «Тот, кто вызвал» — он.",
+      "id": "score_reached",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Очки дошли до",
+      "ns": null,
+      "params": [
+        {
+          "default": 10.0,
+          "id": "value",
+          "label": "Очков",
+          "max": 1000000.0,
+          "min": 1.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": ""
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Масса игрока или бота стала не меньше числа (масса растёт действием «Добавить массу»).",
+      "id": "mass_reached",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Масса дошла до",
+      "ns": null,
+      "params": [
+        {
+          "default": 50.0,
+          "id": "value",
+          "label": "Масса",
+          "max": 1000000.0,
+          "min": 1.0,
+          "required": false,
+          "step": 1.0,
+          "type": "number",
+          "unit": ""
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Именованное событие включилось.",
+      "id": "event_started",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Событие началось",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "ev",
+          "label": "Событие",
+          "required": true,
+          "type": "event-ref"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "event",
+      "desc": "Именованное событие выключилось (действием или по своему времени).",
+      "id": "event_ended",
+      "inert_reason": "",
+      "max": 64,
+      "name": "Событие кончилось",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "ev",
+          "label": "Событие",
+          "required": true,
+          "type": "event-ref"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "check",
+      "desc": "Сравнить переменную с числом в момент срабатывания.",
+      "id": "var_cmp",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Переменная сравнить",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "var",
+          "label": "Переменная",
+          "required": true,
+          "type": "var-ref"
+        },
+        {
+          "default": "ge",
+          "id": "op",
+          "label": "Как",
+          "options": [
+            {
+              "id": "ge",
+              "name": "≥"
+            },
+            {
+              "id": "le",
+              "name": "≤"
+            },
+            {
+              "id": "eq",
+              "name": "="
+            },
+            {
+              "id": "ne",
+              "name": "≠"
+            },
+            {
+              "id": "gt",
+              "name": ">"
+            },
+            {
+              "id": "lt",
+              "name": "<"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        },
+        {
+          "default": 0.0,
+          "id": "value",
+          "label": "Число",
+          "max": 1000000.0,
+          "min": -1000000.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": ""
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "check",
+      "desc": "Именованное событие сейчас включено (или выключено).",
+      "id": "event_on",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Событие идёт",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "ev",
+          "label": "Событие",
+          "required": true,
+          "type": "event-ref"
+        },
+        {
+          "default": true,
+          "id": "on",
+          "label": "Включено",
+          "required": false,
+          "type": "bool"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "check",
+      "desc": "Случайно, с такой вероятностью (у всех игроков комнаты выпадает одинаково).",
+      "id": "chance",
+      "inert_reason": "",
+      "max": 256,
+      "name": "С вероятностью",
+      "ns": null,
+      "params": [
+        {
+          "default": 50.0,
+          "id": "pct",
+          "label": "Вероятность",
+          "max": 100.0,
+          "min": 1.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": "%"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Положить предметы на поле: в случайное место, в зону или рядом с тем, кто вызвал.",
+      "id": "spawn",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Положить предметы",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "what",
+          "label": "Предмет",
+          "required": true,
+          "type": "entity-ref"
+        },
+        {
+          "default": 1.0,
+          "id": "n",
+          "label": "Сколько",
+          "max": 32.0,
+          "min": 1.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": "шт."
+        },
+        {
+          "default": "field",
+          "id": "where",
+          "label": "Где",
+          "options": [
+            {
+              "id": "field",
+              "name": "в случайном месте поля"
+            },
+            {
+              "id": "zone",
+              "name": "в зоне"
+            },
+            {
+              "id": "subject",
+              "name": "рядом с тем, кто вызвал"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        },
+        {
+          "default": null,
+          "id": "zone",
+          "label": "Зона (для «в зоне»)",
+          "required": false,
+          "type": "zone-ref"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Кольцо предметов вокруг центра зоны (или поля).",
+      "id": "spawn_wave",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Волна предметов",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "what",
+          "label": "Предмет",
+          "required": true,
+          "type": "entity-ref"
+        },
+        {
+          "default": 8.0,
+          "id": "n",
+          "label": "Сколько",
+          "max": 32.0,
+          "min": 1.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": "шт."
+        },
+        {
+          "default": null,
+          "id": "zone",
+          "label": "Вокруг зоны",
+          "required": false,
+          "type": "zone-ref"
+        },
+        {
+          "default": 300.0,
+          "id": "radius",
+          "label": "Радиус кольца",
+          "max": 3000.0,
+          "min": 0.0,
+          "required": false,
+          "step": 10.0,
+          "type": "number",
+          "unit": "ед."
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Убрать с поля самые старые предметы (пусто — любые; 0 — все).",
+      "id": "remove",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Убрать предметы",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "what",
+          "label": "Предмет",
+          "required": false,
+          "type": "entity-ref"
+        },
+        {
+          "default": 0.0,
+          "id": "n",
+          "label": "Сколько (0 — все)",
+          "max": 256.0,
+          "min": 0.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": "шт."
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Перенести в центр зоны.",
+      "id": "teleport",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Перенести в зону",
+      "ns": null,
+      "params": [
+        {
+          "default": "subject",
+          "id": "who",
+          "label": "Кого",
+          "options": [
+            {
+              "id": "subject",
+              "name": "тот, кто вызвал"
+            },
+            {
+              "id": "players",
+              "name": "все игроки-люди"
+            },
+            {
+              "id": "all",
+              "name": "все (и боты)"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        },
+        {
+          "default": null,
+          "id": "zone",
+          "label": "Куда",
+          "required": true,
+          "type": "zone-ref"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Дать толчок (затухает сам).",
+      "id": "push",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Толкнуть",
+      "ns": null,
+      "params": [
+        {
+          "default": "subject",
+          "id": "who",
+          "label": "Кого",
+          "options": [
+            {
+              "id": "subject",
+              "name": "тот, кто вызвал"
+            },
+            {
+              "id": "players",
+              "name": "все игроки-люди"
+            },
+            {
+              "id": "all",
+              "name": "все (и боты)"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        },
+        {
+          "default": 0.0,
+          "id": "dx",
+          "label": "По X",
+          "max": 2000.0,
+          "min": -2000.0,
+          "required": false,
+          "step": 10.0,
+          "type": "number",
+          "unit": "ед./с"
+        },
+        {
+          "default": -600.0,
+          "id": "dy",
+          "label": "По Y",
+          "max": 2000.0,
+          "min": -2000.0,
+          "required": false,
+          "step": 10.0,
+          "type": "number",
+          "unit": "ед./с"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Записать в переменную число.",
+      "id": "set_var",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Задать переменную",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "var",
+          "label": "Переменная",
+          "required": true,
+          "type": "var-ref"
+        },
+        {
+          "default": 0.0,
+          "id": "value",
+          "label": "Число",
+          "max": 1000000.0,
+          "min": -1000000.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": ""
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Прибавить число (можно отрицательное).",
+      "id": "add_var",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Прибавить к переменной",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "var",
+          "label": "Переменная",
+          "required": true,
+          "type": "var-ref"
+        },
+        {
+          "default": 1.0,
+          "id": "n",
+          "label": "Сколько",
+          "max": 1000000.0,
+          "min": -1000000.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": ""
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Прибавить очки (можно отрицательные). По очкам считаются места в конце раунда.",
+      "id": "add_score",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Дать очки",
+      "ns": null,
+      "params": [
+        {
+          "default": "subject",
+          "id": "who",
+          "label": "Кому",
+          "options": [
+            {
+              "id": "subject",
+              "name": "тот, кто вызвал"
+            },
+            {
+              "id": "players",
+              "name": "все игроки-люди"
+            },
+            {
+              "id": "all",
+              "name": "все (и боты)"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        },
+        {
+          "default": 1.0,
+          "id": "n",
+          "label": "Сколько",
+          "max": 1000000.0,
+          "min": -1000000.0,
+          "required": false,
+          "step": 1.0,
+          "type": "integer",
+          "unit": ""
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Прибавить массу (фишка растёт; старт — 10).",
+      "id": "add_mass",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Добавить массу",
+      "ns": null,
+      "params": [
+        {
+          "default": "subject",
+          "id": "who",
+          "label": "Кому",
+          "options": [
+            {
+              "id": "subject",
+              "name": "тот, кто вызвал"
+            },
+            {
+              "id": "players",
+              "name": "все игроки-люди"
+            },
+            {
+              "id": "all",
+              "name": "все (и боты)"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        },
+        {
+          "default": 5.0,
+          "id": "n",
+          "label": "Сколько",
+          "max": 10000.0,
+          "min": -10000.0,
+          "required": false,
+          "step": 1.0,
+          "type": "number",
+          "unit": ""
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Включить именованное событие на время (0 — пока не выключат).",
+      "id": "event_start",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Начать событие",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "ev",
+          "label": "Событие",
+          "required": true,
+          "type": "event-ref"
+        },
+        {
+          "default": 0.0,
+          "id": "secs",
+          "label": "На сколько (0 — пока не выключат)",
+          "max": 600.0,
+          "min": 0.0,
+          "required": false,
+          "step": 1.0,
+          "type": "number",
+          "unit": "с"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Выключить именованное событие.",
+      "id": "event_stop",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Закончить событие",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "ev",
+          "label": "Событие",
+          "required": true,
+          "type": "event-ref"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Показать надпись из таблицы texts (движок сам чистит её и обрезает).",
+      "id": "message",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Показать надпись",
+      "ns": null,
+      "params": [
+        {
+          "default": null,
+          "id": "text",
+          "label": "Надпись",
+          "required": true,
+          "type": "text-key"
+        },
+        {
+          "default": "all",
+          "id": "who",
+          "label": "Кому",
+          "options": [
+            {
+              "id": "subject",
+              "name": "тот, кто вызвал"
+            },
+            {
+              "id": "players",
+              "name": "все игроки-люди"
+            },
+            {
+              "id": "all",
+              "name": "все (и боты)"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        },
+        {
+          "default": 3.0,
+          "id": "secs",
+          "label": "Сколько видна",
+          "max": 10.0,
+          "min": 1.0,
+          "required": false,
+          "step": 0.5,
+          "type": "number",
+          "unit": "с"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Проиграть звук движка.",
+      "id": "sound",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Звук",
+      "ns": null,
+      "params": [
+        {
+          "default": "coin",
+          "id": "sound",
+          "label": "Звук",
+          "options": [
+            {
+              "id": "coin",
+              "name": "монетка"
+            },
+            {
+              "id": "ui_click",
+              "name": "щелчок"
+            },
+            {
+              "id": "craft_done",
+              "name": "готово"
+            },
+            {
+              "id": "eat",
+              "name": "ам"
+            },
+            {
+              "id": "cell_blip",
+              "name": "блип"
+            },
+            {
+              "id": "mode_pop",
+              "name": "хлоп"
+            },
+            {
+              "id": "mode_gulp",
+              "name": "глоть"
+            },
+            {
+              "id": "mode_grow",
+              "name": "рост"
+            },
+            {
+              "id": "mode_hit",
+              "name": "удар"
+            },
+            {
+              "id": "mode_whoosh",
+              "name": "вжух"
+            },
+            {
+              "id": "mode_roar",
+              "name": "рёв"
+            },
+            {
+              "id": "door",
+              "name": "дверь"
+            },
+            {
+              "id": "thunder",
+              "name": "гром"
+            },
+            {
+              "id": "debris",
+              "name": "обломки"
+            },
+            {
+              "id": "build_thud",
+              "name": "стук"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        },
+        {
+          "default": "all",
+          "id": "who",
+          "label": "Кому",
+          "options": [
+            {
+              "id": "subject",
+              "name": "тот, кто вызвал"
+            },
+            {
+              "id": "players",
+              "name": "все игроки-люди"
+            },
+            {
+              "id": "all",
+              "name": "все (и боты)"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "Раунд кончается сразу; места — по очкам.",
+      "id": "end_round",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Закончить раунд",
+      "ns": null,
+      "params": [],
+      "since": 1,
+      "state": "live"
+    },
+    {
+      "cat": "action",
+      "desc": "2D (сверху) или 3D (камера из-за спины над тем же полем) — у всех игроков.",
+      "id": "set_view",
+      "inert_reason": "",
+      "max": 256,
+      "name": "Сменить вид",
+      "ns": null,
+      "params": [
+        {
+          "default": "3d",
+          "id": "view",
+          "label": "Вид",
+          "options": [
+            {
+              "id": "2d",
+              "name": "2D — сверху"
+            },
+            {
+              "id": "3d",
+              "name": "3D — из-за спины"
+            }
+          ],
+          "required": false,
+          "type": "choice"
+        }
+      ],
+      "since": 1,
+      "state": "live"
+    }
+  ],
+  "categories": [
+    {
+      "id": "rule",
+      "name": "Настройки режима"
+    },
+    {
+      "id": "object",
+      "name": "Объекты"
+    },
+    {
+      "id": "law",
+      "name": "Правило"
+    },
+    {
+      "id": "event",
+      "name": "Когда"
+    },
+    {
+      "id": "check",
+      "name": "Если"
+    },
+    {
+      "id": "action",
+      "name": "То"
+    }
+  ],
+  "file": {
+    "arena_keys": [
+      "kernel"
+    ],
+    "block_key": "b",
+    "envelope": [
+      "format",
+      "kind",
+      "engine_min",
+      "arena",
+      "rules",
+      "objects",
+      "laws",
+      "texts"
+    ],
+    "format": 1,
+    "id_chars": {
+      "classes": [
+        "A-Z",
+        "a-z",
+        "0-9"
+      ],
+      "max": 24,
+      "punct": "_-"
+    },
+    "id_rule": "[A-Za-z0-9_-], 1..id_chars, unique among objects",
+    "kernels": [
+      "free"
+    ],
+    "kind": "arena",
+    "kinds": [
+      "arena"
+    ],
+    "law": {
+      "do": "action",
+      "do_max": 8,
+      "if": "check",
+      "if_max": 4,
+      "when": "event"
+    },
+    "law_keys": [
+      "id",
+      "when",
+      "if",
+      "do"
+    ],
+    "object_keys": [
+      "b",
+      "id"
+    ],
+    "sections": [
+      {
+        "cat": "rule",
+        "item": "{\"b\": <block id>, <params>} — an unknown rule brick is skipped with a warning",
+        "key": "rules"
+      },
+      {
+        "cat": "object",
+        "item": "{\"b\": <block id>, \"id\": <name>, <params>}",
+        "key": "objects"
+      },
+      {
+        "cat": "law",
+        "item": "{\"id\": <name>?, <law params>, \"when\": <event block>, \"if\": [<check blocks>], \"do\": [<action blocks>]}",
+        "key": "laws"
+      },
+      {
+        "cat": null,
+        "item": "{<key>: <text>} — keys [a-z0-9_], the engine strips control characters and cuts to text_chars",
+        "key": "texts"
+      }
+    ],
+    "text_key_chars": {
+      "classes": [
+        "a-z",
+        "0-9"
+      ],
+      "max": 24,
+      "punct": "_"
+    }
+  },
+  "format": 1,
+  "limits": [
+    {
+      "id": "file_bytes",
+      "label": "Размер файла режима",
+      "owner_pending": true,
+      "unit": "байт",
+      "value": 65536.0
+    },
+    {
+      "id": "laws",
+      "label": "Правил «когда → то»",
+      "owner_pending": true,
+      "unit": "",
+      "value": 64.0
+    },
+    {
+      "id": "ifs_per_law",
+      "label": "Условий «если» в правиле",
+      "owner_pending": true,
+      "unit": "",
+      "value": 4.0
+    },
+    {
+      "id": "acts_per_law",
+      "label": "Действий в правиле",
+      "owner_pending": true,
+      "unit": "",
+      "value": 8.0
+    },
+    {
+      "id": "acts_total",
+      "label": "Действий во всех правилах",
+      "owner_pending": true,
+      "unit": "",
+      "value": 256.0
+    },
+    {
+      "id": "objects",
+      "label": "Объектов",
+      "owner_pending": true,
+      "unit": "",
+      "value": 96.0
+    },
+    {
+      "id": "zones",
+      "label": "Зон",
+      "owner_pending": true,
+      "unit": "",
+      "value": 32.0
+    },
+    {
+      "id": "pickups",
+      "label": "Видов предметов",
+      "owner_pending": true,
+      "unit": "",
+      "value": 20.0
+    },
+    {
+      "id": "vars",
+      "label": "Переменных",
+      "owner_pending": true,
+      "unit": "",
+      "value": 32.0
+    },
+    {
+      "id": "events",
+      "label": "Событий",
+      "owner_pending": true,
+      "unit": "",
+      "value": 16.0
+    },
+    {
+      "id": "texts",
+      "label": "Надписей",
+      "owner_pending": true,
+      "unit": "",
+      "value": 64.0
+    },
+    {
+      "id": "text_chars",
+      "label": "Длина надписи",
+      "owner_pending": true,
+      "unit": "символов",
+      "value": 80.0
+    },
+    {
+      "id": "id_chars",
+      "label": "Длина имени (id)",
+      "owner_pending": false,
+      "unit": "символов",
+      "value": 24.0
+    },
+    {
+      "id": "var_abs",
+      "label": "Предел значения переменной и очков (±)",
+      "owner_pending": true,
+      "unit": "",
+      "value": 1000000.0
+    },
+    {
+      "id": "acts_per_step",
+      "label": "Действий за шаг",
+      "owner_pending": true,
+      "unit": "за шаг",
+      "value": 128.0
+    },
+    {
+      "id": "queue",
+      "label": "Очередь сработавших правил",
+      "owner_pending": true,
+      "unit": "",
+      "value": 256.0
+    },
+    {
+      "id": "chain",
+      "label": "Глубина цепочки (правило вызывает правило)",
+      "owner_pending": true,
+      "unit": "",
+      "value": 4.0
+    },
+    {
+      "id": "haps_per_step",
+      "label": "Происшествий за шаг",
+      "owner_pending": true,
+      "unit": "за шаг",
+      "value": 512.0
+    },
+    {
+      "id": "entities",
+      "label": "Предметов на поле одновременно",
+      "owner_pending": true,
+      "unit": "",
+      "value": 256.0
+    },
+    {
+      "id": "spawn_per_act",
+      "label": "Предметов за одно действие",
+      "owner_pending": true,
+      "unit": "",
+      "value": 32.0
+    },
+    {
+      "id": "players",
+      "label": "Игроков (люди и боты)",
+      "owner_pending": false,
+      "unit": "",
+      "value": 16.0
+    },
+    {
+      "id": "bots",
+      "label": "Ботов",
+      "owner_pending": true,
+      "unit": "",
+      "value": 15.0
+    },
+    {
+      "id": "steps_per_second",
+      "label": "Шагов симуляции в секунду",
+      "owner_pending": false,
+      "unit": "шаг/с",
+      "value": 30.0
+    }
+  ],
+  "made_by": "d37 blocks --json (crates/d37-app/src/game/basics/modekit/reg.rs) — do not edit by hand",
+  "registry": 1,
+  "schema": "d37-blocks",
+  "types": [
+    {
+      "desc": "число с дробью (обрезается до min..max)",
+      "id": "number",
+      "ns": null
+    },
+    {
+      "desc": "целое число (обрезается до min..max)",
+      "id": "integer",
+      "ns": null
+    },
+    {
+      "desc": "да / нет",
+      "id": "bool",
+      "ns": null
+    },
+    {
+      "desc": "один из вариантов options (хранится id варианта)",
+      "id": "choice",
+      "ns": null
+    },
+    {
+      "desc": "id объекта этого же файла, чей блок делает предмет (ns pickup)",
+      "id": "entity-ref",
+      "ns": "pickup"
+    },
+    {
+      "desc": "id объекта этого же файла, чей блок делает зону (ns zone)",
+      "id": "zone-ref",
+      "ns": "zone"
+    },
+    {
+      "desc": "id объекта этого же файла, чей блок делает переменную (ns var)",
+      "id": "var-ref",
+      "ns": "var"
+    },
+    {
+      "desc": "id объекта этого же файла, чей блок делает событие (ns event)",
+      "id": "event-ref",
+      "ns": "event"
+    },
+    {
+      "desc": "ключ из таблицы texts этого же файла (движок сам чистит и обрезает текст)",
+      "id": "text-key",
+      "ns": null
+    }
+  ]
+}

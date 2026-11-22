@@ -777,6 +777,7 @@ export async function start(o) {
     // comes from the bridge session: an adult arena only for a verified adult)
     if (o.arena === 'klet2') cmds.push('game klet2 play');
     if (o.arena === 'hole2') cmds.push('game hole2 play');
+    if (o.arena === 'umode') cmds.push('game umode play'); // ep35: a mode made only of data (assets/modes)
     if (o.arena === 'klet') cmds.push(o.session && o.session.realm === 'adult' && o.session.band === 'adult' ? 'game klet play adult' : 'game klet play');
     for (const c of cmds) { const r = run(c); if (typeof r === 'string' && /^отказ|error|no such/i.test(r)) emit({ t: 'error', code: 'spawn', msg: (c + ': ' + r).slice(0, 200) }); }
     // NET_JOIN: straight into a game session (a lobby pick, an invite link ?game=klet2&s=<id>, quick play)
