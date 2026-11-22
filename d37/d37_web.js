@@ -323,23 +323,6 @@ export class D37Web {
         }
     }
     /**
-     * R-LATE-1120-01: the names of `frame_parts()`, in its order (scripts read the parts by name, never by place).
-     * @returns {string[]}
-     */
-    frame_part_names() {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            wasm.d37web_frame_part_names(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var v1 = getArrayJsValueFromWasm0(r0, r1);
-            wasm.__wbindgen_export3(r0, r1 * 4, 4);
-            return v1;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
      * Where the last frame spent its time (see FRAME_PARTS; tests and the fly-hitch trace read it).
      * @returns {Float64Array}
      */
@@ -570,9 +553,8 @@ export class D37Web {
     }
     /**
      * ep12-fps: the newest GPU pass times in ms ([] when the adapter has no timestamp queries): first the pass
-     * flags of that frame (1 shadows, 2 clouds, 4 overlay, 8 ao, 16 shafts, 32 bloom), then one value per pass in
-     * graph order (shadows when flagged, depth_prepass, opaque, sky, clouds when flagged, ao, shafts, the five bloom
-     * passes when flagged, post, overlay when flagged; d37_render::ALL_PASSES).
+     * flags of that frame (1 shadows, 2 clouds, 4 overlay), then one value per pass in graph order (shadows when
+     * flagged, depth_prepass, opaque, sky, clouds when flagged, post, overlay when flagged).
      * @returns {Float64Array}
      */
     gpu_ms() {
@@ -583,23 +565,6 @@ export class D37Web {
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var v1 = getArrayF64FromWasm0(r0, r1).slice();
             wasm.__wbindgen_export3(r0, r1 * 8, 8);
-            return v1;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * R-LATE-1120-01: the pass names of `gpu_ms()`'s values (after its flags entry), in the same order.
-     * @returns {string[]}
-     */
-    gpu_ms_names() {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            wasm.d37web_gpu_ms_names(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var v1 = getArrayJsValueFromWasm0(r0, r1);
-            wasm.__wbindgen_export3(r0, r1 * 4, 4);
             return v1;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
@@ -774,46 +739,6 @@ export class D37Web {
         }
     }
     /**
-     * NET_JOIN: join (or create) a game session on a d37-server: `url` = the server (`ws://host:7377` or `wss://…`),
-     * `game` = the mode (`klet2`), `id` = the session id (from `GET /sessions`, `GET /quick`, or a new one the page
-     * made). The server's session record then opens the mode in that room by itself (late join: the host's snapshot).
-     * Join by a 6-letter code: `join_code` (the same codes). Realm / band are the bridge session's.
-     * @param {string} url
-     * @param {string} game
-     * @param {string} id
-     * @param {string} nick
-     */
-    join_session(url, game, id, nick) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3;
-            try {
-                ptr0 = passStringToWasm0(url, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-                len0 = WASM_VECTOR_LEN;
-                ptr1 = passStringToWasm0(game, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-                len1 = WASM_VECTOR_LEN;
-                ptr2 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-                len2 = WASM_VECTOR_LEN;
-                ptr3 = passStringToWasm0(nick, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-                len3 = WASM_VECTOR_LEN;
-            } catch (e) {
-                if (ptr3) { wasm.__wbindgen_export3(ptr3, len3 * 1, 1); }
-                if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
-                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
-                throw e;
-            }
-            wasm.d37web_join_session(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            if (r1) {
-                throw takeFromExternrefTable0(r0);
-            }
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
      * W8 net: leave the room.
      */
     leave() {
@@ -931,126 +856,6 @@ export class D37Web {
         wasm.d37web_look_reset(this.__wbg_ptr, skip_first);
     }
     /**
-     * NET_JOIN: the mode's session now as JSON (game, online, me, host, round, people, members, slot, mass, code,
-     * map, hash …), "" when no mode is on — the page's lobby panel and the tests read it.
-     * @returns {string}
-     */
-    mode_state() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            wasm.d37web_mode_state(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export3(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * ep15-look L2: the CC0 object classes the page fetches beside the wasm (`materials/cc0/obj_<class>_albedo.png`
-     * and `_surface.png`), in class order.
-     * @returns {string[]}
-     */
-    object_texture_classes() {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            wasm.d37web_object_texture_classes(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var v1 = getArrayJsValueFromWasm0(r0, r1);
-            wasm.__wbindgen_export3(r0, r1 * 4, 4);
-            return v1;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * NET_JOIN §6 P2P: one data-channel message from `link`.
-     * @param {number} link
-     * @param {Uint8Array | number[]} bytes
-     */
-    p2p_deliver(link, bytes) {
-        const val2 = +link;
-        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export);
-        const len0 = WASM_VECTOR_LEN;
-        wasm.d37web_p2p_deliver(this.__wbg_ptr, val2, ptr0, len0);
-    }
-    /**
-     * NET_JOIN §6 P2P: the page could not reach `tag` (a new host after a migration): the next one is tried.
-     * @param {string} tag
-     */
-    p2p_failed(tag) {
-        const ptr0 = passStringToWasm0(tag, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len0 = WASM_VECTOR_LEN;
-        wasm.d37web_p2p_failed(this.__wbg_ptr, ptr0, len0);
-    }
-    /**
-     * NET_JOIN §6 P2P: the data channel `link` died.
-     * @param {number} link
-     */
-    p2p_link_down(link) {
-        wasm.d37web_p2p_link_down(this.__wbg_ptr, link);
-    }
-    /**
-     * NET_JOIN §6 P2P: the data channel to the page `tag` is open as `link` (the page's number for that page).
-     * @param {number} link
-     * @param {string} tag
-     */
-    p2p_link_up(link, tag) {
-        const val2 = +link;
-        const ptr0 = passStringToWasm0(tag, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len0 = WASM_VECTOR_LEN;
-        wasm.d37web_p2p_link_up(this.__wbg_ptr, val2, ptr0, len0);
-    }
-    /**
-     * NET_JOIN §6 P2P: host (`host_tag` empty) or join the game session `code` with NO game server — the page carries
-     * the room's bytes over its WebRTC data channels (`p2p_link_up` / `p2p_deliver` / `p2p_link_down`; the engine's
-     * frames come back as mode lines `{kind:"p2p",ev:"send",link,b}`). `tag` = this page's random id.
-     * @param {string} game
-     * @param {string} code
-     * @param {string} nick
-     * @param {string} tag
-     * @param {string} host_tag
-     */
-    p2p_start(game, code, nick, tag, host_tag) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4;
-            try {
-                ptr0 = passStringToWasm0(game, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-                len0 = WASM_VECTOR_LEN;
-                ptr1 = passStringToWasm0(code, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-                len1 = WASM_VECTOR_LEN;
-                ptr2 = passStringToWasm0(nick, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-                len2 = WASM_VECTOR_LEN;
-                ptr3 = passStringToWasm0(tag, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-                len3 = WASM_VECTOR_LEN;
-                ptr4 = passStringToWasm0(host_tag, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-                len4 = WASM_VECTOR_LEN;
-            } catch (e) {
-                if (ptr4) { wasm.__wbindgen_export3(ptr4, len4 * 1, 1); }
-                if (ptr3) { wasm.__wbindgen_export3(ptr3, len3 * 1, 1); }
-                if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
-                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
-                throw e;
-            }
-            wasm.d37web_p2p_start(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            if (r1) {
-                throw takeFromExternrefTable0(r0);
-            }
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
      * The planet's numbers for the page: JSON (ask a few times a second). "{}" in a flat scene.
      * @returns {string}
      */
@@ -1060,48 +865,6 @@ export class D37Web {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
             wasm.d37web_planet_stats(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export3(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * R-LATE-1120-01: the last «ЗАМЕР» report (text; "" = none yet). The page copies it to the clipboard on the
-     * panel's КОПИРОВАТЬ; nothing is uploaded or sent anywhere.
-     * @returns {string}
-     */
-    prof_report() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            wasm.d37web_prof_report(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export3(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * R-LATE-1120-01: the registry (every timer and counter this page knows: name, group, unit, budget) and the
-     * profiler panel's numbers when it is open, as one JSON line (ask a few times a second, not every frame).
-     * @returns {string}
-     */
-    prof_stats() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            wasm.d37web_prof_stats(retptr, this.__wbg_ptr);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             deferred1_0 = r0;
@@ -1169,34 +932,6 @@ export class D37Web {
             if (r1) {
                 throw takeFromExternrefTable0(r0);
             }
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * ep15-look L2: one fetched object image (`class` = index in `object_texture_classes`, `kind` 0 albedo / 1
-     * surface); once every class has both, they go to the renderer (the things get their materials). Returns true
-     * then.
-     * @param {number} _class
-     * @param {number} kind
-     * @param {Uint8Array | number[]} png
-     * @returns {boolean}
-     */
-    push_object_texture(_class, kind, png) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            const val2 = +_class;
-            const val3 = +kind;
-            const ptr0 = passArray8ToWasm0(png, wasm.__wbindgen_export);
-            const len0 = WASM_VECTOR_LEN;
-            wasm.d37web_push_object_texture(retptr, this.__wbg_ptr, val2, val3, ptr0, len0);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeFromExternrefTable0(r1);
-            }
-            return r0 !== 0;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -1395,13 +1130,6 @@ export class D37Web {
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
-    }
-    /**
-     * NET_JOIN: the page's own rejoin key (kept in its sessionStorage) so a reloaded page gets its place back.
-     * @param {number} key
-     */
-    set_rejoin_key(key) {
-        wasm.d37web_set_rejoin_key(this.__wbg_ptr, key);
     }
     /**
      * @param {boolean} on
@@ -2528,69 +2256,6 @@ export function ground_layer(index, size) {
         return v1;
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
-    }
-}
-
-/**
- * ep15-look L2: terrain layer `index` from its CC0 set's two PNG files at `size` (the same bytes as `ground_layer`).
- * @param {number} index
- * @param {number} size
- * @param {Uint8Array | number[]} albedo_png
- * @param {Uint8Array | number[]} surface_png
- * @returns {Uint8Array}
- */
-export function ground_layer_cc0(index, size, albedo_png, surface_png) {
-    try {
-        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        const val3 = +index;
-        const val4 = +size;
-        let ptr0, len0, ptr1, len1;
-        try {
-            ptr0 = passArray8ToWasm0(albedo_png, wasm.__wbindgen_export);
-            len0 = WASM_VECTOR_LEN;
-            ptr1 = passArray8ToWasm0(surface_png, wasm.__wbindgen_export);
-            len1 = WASM_VECTOR_LEN;
-        } catch (e) {
-            if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-            if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
-            throw e;
-        }
-        wasm.ground_layer_cc0(retptr, val3, val4, ptr0, len0, ptr1, len1);
-        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-        var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-        var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-        if (r3) {
-            throw takeFromExternrefTable0(r2);
-        }
-        var v5 = getArrayU8FromWasm0(r0, r1).slice();
-        wasm.__wbindgen_export3(r0, r1 * 1, 1);
-        return v5;
-    } finally {
-        wasm.__wbindgen_add_to_stack_pointer(16);
-    }
-}
-
-/**
- * ep15-look L2: the CC0 file stem of terrain layer `index` ("" = the layer is made by code): the Worker fetches
- * `materials/cc0/<stem>_albedo.png` and `_surface.png` beside the page and calls `ground_layer_cc0`.
- * @param {number} index
- * @returns {string}
- */
-export function ground_layer_cc0_stem(index) {
-    let deferred1_0;
-    let deferred1_1;
-    try {
-        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.ground_layer_cc0_stem(retptr, index);
-        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-        deferred1_0 = r0;
-        deferred1_1 = r1;
-        return getStringFromWasm0(r0, r1);
-    } finally {
-        wasm.__wbindgen_add_to_stack_pointer(16);
-        wasm.__wbindgen_export3(deferred1_0, deferred1_1, 1);
     }
 }
 
@@ -3957,7 +3622,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_46415(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_42615(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -5085,52 +4750,52 @@ function __wbg_get_imports() {
         }, arguments); },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 23, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1579);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1473);
             return ret;
         },
         __wbindgen_generic_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 3327, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_46413);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 3151, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_42613);
             return ret;
         },
         __wbindgen_generic_0000000000000003: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 24, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1580);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1474);
             return ret;
         },
         __wbindgen_generic_0000000000000004: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("ErrorEvent")], shim_idx: 24, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1580_155);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1474_139);
             return ret;
         },
         __wbindgen_generic_0000000000000005: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUDevice")], shim_idx: 1581, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_36519);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUDevice")], shim_idx: 1404, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_32717);
             return ret;
         },
         __wbindgen_generic_0000000000000006: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 1582, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_36520);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 1405, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_32718);
             return ret;
         },
         __wbindgen_generic_0000000000000007: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 24, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1580_158);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1474_142);
             return ret;
         },
         __wbindgen_generic_0000000000000008: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("any")], shim_idx: 1581, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_36519_159);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("any")], shim_idx: 1404, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_32717_143);
             return ret;
         },
         __wbindgen_generic_0000000000000009: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("undefined")], shim_idx: 1581, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_36519_160);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("undefined")], shim_idx: 1404, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_32717_144);
             return ret;
         },
         __wbindgen_generic_000000000000000a: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 22, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1578);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1472);
             return ret;
         },
         __wbindgen_generic_000000000000000b: function(arg0) {
@@ -5194,38 +4859,38 @@ function __wbg_get_imports() {
 }
 
 const lAudioContext = (typeof AudioContext !== 'undefined' ? AudioContext : (typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : undefined));
-function __wasm_bindgen_func_elem_1578(arg0, arg1) {
-    wasm.__wasm_bindgen_func_elem_1578(arg0, arg1);
+function __wasm_bindgen_func_elem_1472(arg0, arg1) {
+    wasm.__wasm_bindgen_func_elem_1472(arg0, arg1);
 }
 
-function __wasm_bindgen_func_elem_1579(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_1579(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_1473(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_1473(arg0, arg1, arg2);
 }
 
-function __wasm_bindgen_func_elem_1580(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_1580(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_1474(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_1474(arg0, arg1, arg2);
 }
 
-function __wasm_bindgen_func_elem_1580_155(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_1580_155(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_1474_139(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_1474_139(arg0, arg1, arg2);
 }
 
-function __wasm_bindgen_func_elem_36520(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_36520(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_32718(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_32718(arg0, arg1, arg2);
 }
 
-function __wasm_bindgen_func_elem_1580_158(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_1580_158(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_1474_142(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_1474_142(arg0, arg1, arg2);
 }
 
-function __wasm_bindgen_func_elem_46415(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_46415(arg0, arg1, arg2, arg3);
+function __wasm_bindgen_func_elem_42615(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_42615(arg0, arg1, arg2, arg3);
 }
 
-function __wasm_bindgen_func_elem_46413(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_42613(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_46413(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_42613(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -5236,10 +4901,10 @@ function __wasm_bindgen_func_elem_46413(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_36519(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_32717(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_36519(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_32717(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -5250,10 +4915,10 @@ function __wasm_bindgen_func_elem_36519(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_36519_159(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_32717_143(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_36519_159(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_32717_143(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -5264,10 +4929,10 @@ function __wasm_bindgen_func_elem_36519_159(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_36519_160(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_32717_144(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-        wasm.__wasm_bindgen_func_elem_36519_160(retptr, arg0, arg1, arg2);
+        wasm.__wasm_bindgen_func_elem_32717_144(retptr, arg0, arg1, arg2);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -5477,17 +5142,6 @@ function getArrayI32FromWasm0(ptr, len) {
 function getArrayI8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getInt8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
-}
-
-function getArrayJsValueFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    const mem = getDataViewMemory0();
-    const result = [];
-    for (let i = ptr; i < ptr + 4 * len; i += 4) {
-        result.push(wasm.__wbindgen_externrefs.get(mem.getUint32(i, true)));
-    }
-    wasm.__wbindgen_export8(ptr, len);
-    return result;
 }
 
 function getArrayJsValueViewFromWasm0(ptr, len) {

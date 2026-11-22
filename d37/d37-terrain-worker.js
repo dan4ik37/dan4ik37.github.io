@@ -3,11 +3,10 @@
 // Messages: {type:'init', scene, planet, module?} -> {type:'ready'} (module: a compiled WebAssembly.Module);
 //   {type:'job', cx, cz, lo, hi} -> {type:'done', cx, cz, lo, hi, bytes, ms};
 //   {type:'chunk', lo, hi} -> {type:'chunk', bytes, ms}   (bytes is transferred, not copied);
-//   {type:'ground', index, size} -> {type:'ground', bytes, ms}   (one ground material layer: from its CC0 set's two PNGs
-//   beside the page (materials/cc0/<stem>_albedo.png, _surface.png; ep15-look L2), else made by code);
+//   {type:'ground', index, size} -> {type:'ground', bytes, ms}   (one ground material layer, made by code);
 //   {type:'scatter', w, rows} -> {type:'scatter', w, bytes, ms}   (fly-hitch: one scatter LOD tile; w = the job's
 //   5 words from take_scatter_jobs, rows = scatter_rows(); the builder is made on the first job).
-import init, { ColumnWorker, PlanetWorker, ScatterWorker, ground_layer, ground_layer_cc0, ground_layer_cc0_stem } from './d37_web.js';
+import init, { ColumnWorker, PlanetWorker, ScatterWorker, ground_layer } from './d37_web.js';
 
 let mesher = null, builder = null, scatter = null, sceneText = '';
 const pending = [];
@@ -38,17 +37,9 @@ function run(m) {
     return;
   }
   if (m.type === 'ground') {
-    const send = (b) => {
-      const gb = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
-      postMessage({ type: 'ground', bytes: gb, ms: performance.now() - t0 }, [gb]);
-    };
-    const stem = ground_layer_cc0_stem(m.index);
-    if (!stem) { send(ground_layer(m.index, m.size)); return; }
-    // the CC0 set's files (separate from the wasm); any failure: the layer made by code, as before
-    const get = (k) => fetch(new URL('./materials/cc0/' + stem + '_' + k + '.png', import.meta.url)).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
-    Promise.all([get('albedo'), get('surface')])
-      .then(([a, s2]) => send(ground_layer_cc0(m.index, m.size, new Uint8Array(a), new Uint8Array(s2))))
-      .catch(() => send(ground_layer(m.index, m.size)));
+    const b = ground_layer(m.index, m.size);
+    const gb = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+    postMessage({ type: 'ground', bytes: gb, ms: performance.now() - t0 }, [gb]);
     return;
   }
   const bytes = m.type === 'chunk' ? builder.build(m.lo, m.hi) : mesher.mesh(m.cx, m.cz);

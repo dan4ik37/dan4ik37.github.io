@@ -72,16 +72,6 @@ async function main() {
   }
   if (q.get('q')) { try { app.set_quality(q.get('q')); } catch (e) { fail(e); return; } }
   state.quality = app.quality();
-  // ep15-look L2: the things' CC0 material images, beside the wasm (never inside it); missing files = plain colours
-  if (typeof app.object_texture_classes === 'function') {
-    const cls = app.object_texture_classes();
-    cls.forEach((c, i) => ['albedo', 'surface'].forEach((k, kind) => {
-      fetch(new URL('./materials/cc0/obj_' + c + '_' + k + '.png', import.meta.url))
-        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
-        .then((b) => { try { app.push_object_texture(i, kind, new Uint8Array(b)); } catch (e) { console.warn('object material', c, e); } })
-        .catch(() => {});
-    }));
-  }
   // the player's setting: moving the mouse / finger up looks down (off by default): ?invert_y=1 (or 0), remembered
   // in this browser
   let invY = q.get('invert_y');
@@ -215,10 +205,7 @@ async function main() {
     const k = (c) => keys.has(c);
     let forward = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0);
     const strafe = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
-    // ep28: the auto-walk starts with the full terrain (`state.loaded`, published then), not with the first frame: the
-    // gap between the two varies run to run, and the meadow's walk line meets the sofa at (-77, 31) 5.6 s in, where
-    // the body creeps along its face at 0.13 m/s for 2.5 s (native probe) — a slow load put web-e2e's window there
-    if (q.get('auto') === '1' && state.loaded) forward = 1;
+    if (q.get('auto') === '1') forward = 1;
     let b = 0;
     let sx = strafe, sf = forward;
     if (stick.id !== -1) { sx += stick.sx; sf += stick.sy; if (Math.hypot(stick.sx, stick.sy) > 0.9) b |= BTN.run; }
@@ -475,14 +462,6 @@ async function main() {
   }
   state.shots = [];
   state.shotWanted = false;
-  // R-LATE-1120-01: the profiler's КОПИРОВАТЬ: the «ЗАМЕР» report to the clipboard (local only, nothing is sent)
-  function copyReport(eng) {
-    let text = '';
-    try { text = String(eng.prof_report()); } catch (e) { return; }
-    const fallback = () => { try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } catch (e) { /* no clipboard */ } };
-    try { navigator.clipboard.writeText(text).catch(fallback); } catch (e) { fallback(); }
-    state.copiedReport = text;
-  }
   function gameActs() {
     for (let i = 0; i < 8; i++) {
       const a = app.game_act();
@@ -491,7 +470,6 @@ async function main() {
       if (a === 'camera') { third = !third; app.set_third_person(third); }
       else if (a === 'fullscreen') toggleFull();
       else if (a === 'shot') state.shotWanted = true;
-      else if (a === 'copy') copyReport(app);
       else if (a === 'exit') { unlockMouse(); state.exited = true; if (q.get('stay') !== '1') location.href = '/'; }
     }
   }
@@ -557,7 +535,7 @@ async function main() {
   // the third-person zoom: the mouse wheel (as the site's «Мир Денчика»)
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   addEventListener('mousemove', (e) => {
-    if (game && (app.game_menu_open() || cellMouse || cellMode)) { const [x, y] = toCanvas(e); app.game_pointer(x, y, 1, 1); return; } // ep32: in a mode the cursor steers with no button held
+    if (game && (app.game_menu_open() || cellMouse)) { const [x, y] = toCanvas(e); app.game_pointer(x, y, 1, 1); return; }
     if (document.pointerLockElement === canvas || drag) app.add_look(e.movementX, e.movementY);
   });
 
@@ -668,7 +646,7 @@ async function main() {
       if (state.shotWanted) { state.shotWanted = false; const w = canvas.width, h = canvas.height; canvas.toBlob((b) => { if (b) { state.shots.push({ w, h, size: b.size, blob: b }); if (state.shots.length > 8) state.shots.shift(); hint.textContent = '📸 Снимок сделан (F2)'; } }, 'image/png'); }
       if (game && n === 0) { try { app.game_set_fps(state.fps); } catch (e) { /* numbers only */ } cellSync(); }
       if (state.firstFrameMs === null) { state.firstFrameMs = performance.now(); state.ready = true; }
-      if (!state.loaded && app.loaded()) { state.loaded = true; state.loadedMs = performance.now(); if (q.get('auto') === '1') publish(); }
+      if (!state.loaded && app.loaded()) { state.loaded = true; state.loadedMs = performance.now(); }
     } catch (e) {
       // a surface that had to be configured again is not an error; anything else stops the page
       if (!String(e).includes('reconfigured')) { fail(e); return; }
