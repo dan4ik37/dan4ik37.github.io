@@ -41,4 +41,19 @@
 
 Проверки: `scripts/studio-arena-test.cjs` (CI), `scripts/studio-arena-e2e.cjs` (CI `--e2e`).
 
-Дальше: S2b (выложить арену, «Вдвоём» — файл в комнату), S1b (облако 3D-миров, один формат, «хранитель» в scene.js), S1c (редактор игр-страниц: отмена, номера строк, общий «Выложить»).
+## Step S3 "Arena to the site" (22.11, flag `STUDIO_SHARE` in `js/core/config.js`; rollback — `false`)
+- Reuses the player-games path: `ugc_games`, new kind `arena` (`data` = the mode file, ≤ 64 KB = engine `file_bytes`). Server: community.sql
+  PART 19 (`ugc_arena_save`, `ugc_arena_publish`, `ugc_arena_remix`, `ugc_arena_rules`, triggers `ugc_arena_hold` / `ugc_arena_status_guard`);
+  old `ugc_status` / `ugc_play` / `ugc_like` / `ugc_report` / `ugc_review` are used as is. Site sees the part by `site_config` row `part19`.
+- Editor block «🌍 На сайт»: age select (required to publish), description, «☁️ Сохранить на сайте», «🔗 Ссылка для друзей», «🌍 Выложить за 500 🪙»
+  (owner's number; price read from `ugc_arena_rule('price')`). Coins: taken from the author's `coin_wallet` and not credited to anyone
+  (`coin_log` source `ugc_publish`); once per arena (`paid_at`, unique index), edits never charge again.
+- Play page `#/games/studio/arena/play/<id>`: «⚠ не проверено», age cover, file re-checked by `blocks_check`, «▶ Играть» on our engine,
+  ❤️ / 🔗 / ⚠️ report / «🎨 Сделать по мотивам». `#/games/studio/play/<id>` and `/edit/<id>` of an arena redirect to the arena screens.
+  `#/games/studio/arena/edit/<id>` pulls an own arena from the site into a browser project (meta `srv`).
+- Safeguards (switch rows in `ugc_arena_rules`, value 0): `words` (comm_bad + comm_has_link on title, description, every string of the
+  file), `age`, `hide` (3 reports → held, invisible to others, author cannot bring it back; moderator «public» clears it and «не проверено»).
+- «Вдвоём» for an arena — still «скоро» (needs the room to carry the file: hash + text within room message limits).
+- Tests: `scripts/part19-sql-test.mjs` (CI, PGlite), `scripts/studio-share-e2e.cjs` (CI `--e2e`, fake DB in the test, no real writes).
+
+Дальше: «Вдвоём» для арены (файл в комнату), S1b (облако 3D-миров, один формат, «хранитель» в scene.js), S1c (редактор игр-страниц: отмена, номера строк, общий «Выложить»).
