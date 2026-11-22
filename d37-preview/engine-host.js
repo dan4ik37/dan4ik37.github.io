@@ -155,11 +155,16 @@ async function compileWasm(url, rawSize, onBytes) {
 //      spawn: 'last' | 'home' | 'orbit' (where a saved world starts: as saved / `game place goto home_valley` / `travel orbit`),
 //      W11 net-shards: join: {url, code} («Играть вместе»: the shared world with that join code on our d37-server),
 //      NET_JOIN: arena: 'klet2' (the engine's «Клеточки»), joinSession: {url, game, id} (straight into a game session;
-//      the handle's `lobby` lists / quick-plays / hosts sessions) }
+//      the handle's `lobby` lists / quick-plays / hosts sessions),
+//      ep36 arena editor: scene: 'umode' + modeText: '<a mode file, JSON text>' (a person's own mode, solo; the handle's
+//      checkMode(text) / runMode(text) check it with the engine's checker and restart it at once after an edit) }
 // The 'wardrobe' scene is a studio: the panel is open from the start, no walking (the keys and the left half of a phone
 // turn the camera round the character instead), no jump / orbit / 👕 buttons; «Готово» is sent to the page as
 // {t:'wardrobe', on:false} as always (the site goes back where it came from).
-const SCENES = ['planet', 'planet_ground', 'valley', 'creative', 'wardrobe'];
+const SCENES = ['planet', 'planet_ground', 'valley', 'creative', 'wardrobe', 'umode'];
+// ep36: a mode file as one command word (hex of its UTF-8 bytes: no spaces, no `;`), solo, (re)started at once
+const MODE_CMD = (text) => { let h = ''; for (const b of new TextEncoder().encode(String(text))) h += (b < 16 ? '0' : '') + b.toString(16); return 'game umode file ' + h + '; game umode play mine'; };
+const CHECK = (text) => { try { return JSON.parse(wasmApi.blocks_check(String(text))); } catch (e) { return { ok: false, error: 'проверка не прошла: ' + e }; } };
 export async function start(o) {
   const root = o.root;
   style();
@@ -778,6 +783,7 @@ export async function start(o) {
     if (o.arena === 'klet2') cmds.push('game klet2 play');
     if (o.arena === 'hole2') cmds.push('game hole2 play');
     if (o.arena === 'umode') cmds.push('game umode play'); // ep35: a mode made only of data (assets/modes)
+    if (typeof o.modeText === 'string' && CHECK(o.modeText).ok) cmds.push(MODE_CMD(o.modeText)); // ep36: a person's own file
     if (o.arena === 'klet') cmds.push(o.session && o.session.realm === 'adult' && o.session.band === 'adult' ? 'game klet play adult' : 'game klet play');
     for (const c of cmds) { const r = run(c); if (typeof r === 'string' && /^отказ|error|no such/i.test(r)) emit({ t: 'error', code: 'spawn', msg: (c + ': ' + r).slice(0, 200) }); }
     // NET_JOIN: straight into a game session (a lobby pick, an invite link ?game=klet2&s=<id>, quick play)
@@ -837,6 +843,10 @@ export async function start(o) {
     // Worker terminated without a word: the watchdog notices)
     debugCrash(kind) { if (kind === 'page') st.debugPanic = true; else if (kind === 'worker' && ww) ww.postMessage({ type: 'debug_panic' }); else if (kind === 'kill' && ww) { try { ww.terminate(); } catch (e) { /* gone */ } } },
     config() { return st.config; },
+    // ep36 arena editor: the engine's own checker ({ok, error, warnings, hash, counts}); runMode = check, then the file
+    // goes to the engine and the round restarts with it (solo; no page reload). A refused file is not sent.
+    checkMode(text) { return CHECK(text); },
+    runMode(text) { const r = CHECK(text); if (r.ok && st.app && !st.dead) { const a = run(MODE_CMD(text)); if (typeof a === 'string' && /^отказ/.test(a)) return { ok: false, error: a.slice(0, 300) }; } return r; },
     // NET_JOIN (d37-core/spec/NET_JOIN.md): sessions of the game modes on our d37-server. server = 'ws://host:7377'
     // (or wss:// behind the TLS proxy); the HTTP list is the same host. The engine emits {t:'mode', data:{kind:
     // 'presence'|'meta', …}} messages: presence = where the player is / can friends join; meta = records,
