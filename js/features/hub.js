@@ -604,14 +604,20 @@
     }
     const stage = el('div', 'hub-stage');
     const load = el('div', 'hub-load');
-    const lt = el('div', 'hub-lt', mode === 'wardrobe' ? 'Открываем гардероб' : cre ? 'Летим в творческий мир' : st.opt === 'klet2' ? (st.sub ? 'Идём в комнату' : 'Открываем «Клеточки»') : st.opt === 'hole2' ? (st.sub ? 'Идём в комнату' : 'Открываем «Чёрную дыру 2»') : st.opt === 'new' ? 'Рождается новый мир' : st.opt === 'orbit' ? 'Летим к твоему миру' : 'Идём в твой мир');
+    const cells = st.opt === 'klet2';
+    const hole = st.opt === 'hole2';
+    const room = st.sub && !st.sub.startsWith('v-');
+    const lt = el('div', 'hub-lt', mode === 'wardrobe' ? 'Открываем гардероб' : cre ? 'Летим в творческий мир' : cells || hole ? (room ? 'Идём в комнату' : cells ? 'Открываем «Клеточки»' : 'Открываем «Чёрную дыру 2»') : st.opt === 'new' ? 'Рождается новый мир' : st.opt === 'orbit' ? 'Летим к твоему миру' : 'Идём в твой мир');
     const ph = el('div', 'hub-ph', 'Загружаем движок');
     const barO = el('div', 'hub-pb'), barI = el('i', '');
     barO.appendChild(barI);
     const pct = el('div', 'hub-pct', '0%');
-    const tip = el('div', 'hub-tip', mode === 'wardrobe' ? 'Только персонаж — без мира, поэтому быстро. Образ сохранится сам.' : mode === 'play'
+    const arenaTip = cells
+      ? (touchDev() ? 'Джойстик — движение. Кнопки справа — разделиться и выбросить массу.' : 'WASD — движение, пробел — разделиться, E или ЛКМ — выбросить массу.')
+      : hole ? (touchDev() ? 'Джойстик — движение. Кнопки справа — рывок и бросок спутника.' : 'WASD — движение, пробел — рывок, E или ЛКМ — бросить спутник.') : '';
+    const tip = el('div', 'hub-tip', arenaTip || (mode === 'wardrobe' ? 'Только персонаж — без мира, поэтому быстро. Образ сохранится сам.' : mode === 'play'
       ? (touchDev() ? 'Слева — идти, справа — смотреть. Кнопка ДЕЙСТВИЕ — рубить и брать, СУМКА и РЕМЕСЛО — вещи и крафт.' : 'Нажми на картинку. ЛКМ или E — рубить и брать, Q — сумка, T — ремесло, 1-8 — в руку, ПКМ — поставить.')
-      : touchDev() ? 'Слева на экране — идти, справа — смотреть, 🌍 — с орбиты на землю.' : 'Нажми на картинку, чтобы смотреть мышью. W A S D — идти, O — с орбиты на землю, B — гардероб.');
+      : touchDev() ? 'Слева на экране — идти, справа — смотреть, 🌍 — с орбиты на землю.' : 'Нажми на картинку, чтобы смотреть мышью. W A S D — идти, O — с орбиты на землю, B — гардероб.'));
     const cancel = el('button', 'hub-cancel', 'Отмена'); cancel.type = 'button';
     cancel.addEventListener('click', () => back.click());
     load.append(lt, ph, barO, pct, tip, cancel);
@@ -649,7 +655,7 @@
     const v = p.phase === 'wasm' ? k * 60 : p.phase === 'gpu' ? 60 + k * 10 : 70 + k * 29;
     ui.barI.style.width = v.toFixed(1) + '%';
     ui.pct.textContent = Math.round(v) + '%' + (p.phase === 'wasm' && p.total > 0 ? ' · ' + (p.done / 1048576).toFixed(1) + ' из ' + (p.total / 1048576).toFixed(1) + ' МБ' : '');
-    ui.ph.textContent = PHASES[p.phase] || '…';
+    ui.ph.textContent = p.phase === 'world' && (st.opt === 'klet2' || st.opt === 'hole2' || st.opt === 'umode') ? 'Готовим арену' : PHASES[p.phase] || '…';
   }
   function showError(code, msg){
     if (!ui) return;

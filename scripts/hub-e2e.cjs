@@ -175,7 +175,8 @@ async function playUntilLoaded(C, label){
               const ready = await C.until(`(() => {
                 const h = D37Hub._st.h;
                 const m = h && JSON.parse(h.state.app.mode_state() || 'null');
-                return location.pathname === ${JSON.stringify(route)} && m?.game === ${expected} && m.step >= 30
+                return location.pathname === ${JSON.stringify(route)} && document.querySelector('.hub-play .hub-load')?.hidden
+                  && m?.game === ${expected} && m.step >= 30
                   && (!${expectedMap} || m.map === ${expectedMap});
               })()`, 90000);
               const stats = await C.ev(`(() => {
