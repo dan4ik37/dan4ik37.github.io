@@ -39,7 +39,7 @@
     { id: 'creative', icon: '🪐', title: 'Творческий режим', sub: 'Отдельный мир: строй что угодно без материалов, летай над планетой, меняй время и погоду, зови зверей. Без голода и опасностей — своё сохранение', href: '/hub/creative', cls: 'hub-t-planet' },
     { id: 'world', icon: '🌍', title: 'Мир Денчика', sub: 'Город, кафе и столики с играми — онлайн', href: '/play/world', cls: 'hub-t-world', age: '12+' },
     { id: 'studio', icon: '🧱', title: 'Студия', sub: STUDIO_ONE_ON ? 'Создай свой режим, игру или 3D-мир' : 'Построй свой 3D-мир со скриптами', href: STUDIO_ONE_ON ? '/play/studio' : '/play/studio3d', cls: 'hub-t-studio' },
-    { id: 'klet', icon: '🟢', title: 'Клеточки', sub: 'Ешь, расти, делись — теперь на движке D37: с ботами, а в комнате — с друзьями', href: '/hub/play/klet', cls: 'hub-t-mini' },   // w11: старая io-игра на Rust (движок: game klet play)
+    { id: 'klet', icon: '🟢', title: 'Клеточки', sub: 'Ешь, расти, делись — теперь на движке D37: с ботами, а в комнате — с друзьями', href: '/hub/play/klet2', cls: 'hub-t-mini' },
     { id: 'hole2', icon: '🕳️', title: 'Чёрная дыра 2', sub: 'Глотай всё вокруг и расти — на движке D37: с ботами, а в комнате — с друзьями', href: '/hub/play/hole2', cls: 'hub-t-mini' },   // T-176 S3: движок game hole2 play, комнаты — как у klet2
     { id: 'mini', icon: '🎲', title: 'Мини-игры', sub: 'Шахматы, «5 букв», дурак, клеточки и ещё 50 игр', href: '/play', cls: 'hub-t-mini' },
     { id: 'invite', icon: '📍', title: 'Позвать друга', sub: 'Скинь ссылку — играйте на одной планете (скоро вместе)', act: 'invite', cls: 'hub-t-invite' },
@@ -97,7 +97,7 @@
   // на подставке, без планеты — сцена wardrobe; в игре гардероб по-прежнему B / 👕)
   const MODES = { play: 'valley', creative: 'creative', planet: 'creative', wardrobe: 'wardrobe' };
   const SLOT = { play: WORLD, creative: 'creative', planet: 'creative' };   // у творческого мира своё сохранение (и в облаке — мир 'creative')
-  const SAVES = m => !!SLOT[m];
+  const SAVES = (m, opt) => !!SLOT[m] && !Object.hasOwn(ROOMS, opt);
   const slot = () => SLOT[st.mode] || WORLD;
   const SPAWNS = { home: 1, orbit: 1, new: 1, tribe: 1, klet: 1, klet2: 1, hole2: 1, umode: 1 };   // hole2 — «Чёрная дыра 2» движка с комнатами, как klet2 (T-176 S3)
   // ep39: файл арены, который страница арены положила перед переходом в комнату (эта вкладка, не старше 30 минут)
@@ -151,7 +151,16 @@
       }
     }
     if (!build) { base = BASE(); build = stable; }
-    return { id, text, base, build: build || {}, channel: pin && !note ? 'pin' : channel, pin, note, site };
+    const key = v => typeof v === 'string' && /^[a-z0-9_]{1,32}$/.test(v);
+    const scene = key(pack?.scene) ? pack.scene : '';
+    let variants = [];
+    if (Object.hasOwn(ROOMS, id) && id !== 'umode') {
+      try {
+        const rows = JSON.parse(await getText(CFG_DIR + 'variants/' + id + '.json'));
+        if (Array.isArray(rows)) variants = rows.filter(v => key(v?.id) && key(v.scene) && typeof v.title === 'string').slice(0, 12);
+      } catch (e) { /* основная сцена открывается отдельно */ }
+    }
+    return { id, text, scene, variants, base, build: build || {}, channel: pin && !note ? 'pin' : channel, pin, note, site };
   }
   const JOIN_RE = /^[A-HJKMNP-Z2-9]{6}$/;   // как CODE_ALPHABET сервера: без I, L, O, 0, 1
   const joinCode = () => { try { const c = String(new URLSearchParams(location.search).get('join') || '').trim().toUpperCase(); return JOIN_RE.test(c) ? c : ''; } catch (e) { return ''; } };
@@ -220,7 +229,7 @@
   const playSeconds = () => st.playBase + (st.t0 ? (performance.now() - st.t0) / 1000 : 0);
   async function saveWorld(why){
     const h = st.h;
-    if (!h || !SAVES(st.mode) || st.saveBusy || st.crashed) return false;   // T-166: после вылета последнее хорошее сохранение не трогаем
+    if (!h || !SAVES(st.mode, st.opt) || st.saveBusy || st.crashed) return false;   // T-166: после вылета последнее хорошее сохранение не трогаем
     const bytes = h.save();
     if (!okSave(bytes)) return false;
     st.saveBusy = true;
@@ -685,7 +694,9 @@
       if (old && old.bytes && old.bytes.length && !confirm('Начать новый мир? Твой мир (' + fmtMin(old.gt) + ' в игре) заменится новым при первом сохранении.')) opt = '';
     }
     st.opt = opt; st.sub = sub;
-    if (J()) J().setTarget(ROOMS[opt] ? opt : '', sub);   // T-174: /hub/play/klet2/<КОД> или /s-<id> — в эту комнату, когда мир загрузится
+    const isolated = Object.hasOwn(ROOMS, opt);
+    const variantId = isolated && sub.startsWith('v-') ? sub.slice(2) : '';
+    if (J()) J().setTarget(isolated ? opt : '', variantId ? '' : sub);   // T-174: /hub/play/klet2/<КОД> или /s-<id> — в эту комнату, когда мир загрузится
     const gen = ++st.gen;   // этот запуск; быстро вышли и зашли снова — старый запуск сам сдаётся (два движка сразу не бывает)
     st.active = true; st.mode = mode; st.starting = true; st.events = []; st.errors = []; st.resumed = null;
     document.body.classList.add('hub-on', 'game-on', 'e2-calm');
@@ -696,11 +707,12 @@
     ym('d37_open');
     if (!await canRun3d()) { showError('nogpu'); st.starting = false; return; }
     const game = await resolveGame(gameId(mode, opt));   // T-166: пакет игры и её движок (канал / закреплённая сборка)
+    const entryScene = game.variants.find(v => v.id === variantId)?.scene || game.scene;
     const info = game.build;
     st.game = { id: game.id, channel: game.channel, build: String(info.id || ''), base: game.base, note: game.note, config: '' };
     st.crashed = false;
     const fresh = opt === 'new' || opt === 'tribe';
-    const save = SAVES(mode) && !fresh ? await pickSave() : null;
+    const save = SAVES(mode, opt) && !fresh ? await pickSave() : null;
     if (gen !== st.gen || !st.active || !ui) { if (gen === st.gen) st.starting = false; return; }   // ушли со страницы, пока ждали
     st.playBase = save && +save.gt || 0;
     const jc = mode === 'play' ? joinCode() : '';   // W11: общий мир по коду
@@ -715,12 +727,12 @@
       const look = lookNow(), g = gfxNow().id;
       st.look = look;
       const h = await host.start({
-        root: ui.stage, scene: MODES[mode] || 'valley', rawSize: +(info && info.wasm_raw) || 0, gl: st.gl || g === 'gl',
+        root: ui.stage, scene: entryScene || MODES[mode] || 'valley', rawSize: +(info && info.wasm_raw) || 0, gl: st.gl || g === 'gl',
         quality: g === 'max' || g === 'mid' || g === 'low' ? g : touchDev() ? 'low' : '', session: sessionMsg(), look, save: save && save.bytes, wardrobe: mode === 'wardrobe',
-        newWorld: opt === 'new', skipTribe: opt === 'tribe', spawn: opt === 'home' || opt === 'orbit' ? opt : 'last', arena: opt === 'klet' ? 'klet' : ROOMS[opt] ? opt : '',
+        newWorld: opt === 'new', skipTribe: opt === 'tribe', spawn: opt === 'home' || opt === 'orbit' ? opt : 'last', arena: opt === 'klet' ? 'klet' : isolated && !entryScene ? opt : '',
         world: ROOMS[opt] ? 'main' : undefined,
           modeText: opt === 'umode' ? arenaText() : undefined,   // ep39: файл арены со страницы арены (кто без него — получит из комнаты)   // T-174: комната — мир в потоке страницы, как у общих миров движка (ключ возврата set_rejoin_key доходит до мира)
-        join: jc && NET_URL ? { url: NET_URL, code: jc } : null,   // W11 «Играть вместе»
+        join: !isolated && jc && NET_URL ? { url: NET_URL, code: jc } : null,   // W11 «Играть вместе»
         onProgress: progress, onMessage: onMsg, fullscreenEl: ui.box,   // F11 игры — на весь экран вместе с полосой сайта
         // T-166: слои настроек (общий файл → файл игры → строка site_config по флагу; ?tune= движок добавит сам), перечитываются при
         // возврате во вкладку и раз в 5 минут
@@ -750,7 +762,7 @@
     else if (m.t === 'exit') leave(st.mode);   // пауза игры (Esc) → «НА САЙТ»
     else if (m.t === 'shot') keepShot(m);      // F2 — снимок в галерею
     else if (m.t === 'event') { st.events.push(String(m.code)); if (EVENTS[m.code]) toast(EVENTS[m.code]); }
-    else if (m.t === 'resumed') { st.resumed = m.summary || null; if (m.summary && SAVES(st.mode)) toast(st.mode === 'play' ? (st.opt === 'orbit' ? '🚀 Твой мир внизу — зажми O, чтобы приземлиться' : st.opt === 'home' ? '🏕 Ты дома, в лагере' : '▶ Твой мир: всё, что построил, на месте') : '▶ Продолжаем с того места, где ты был'); }
+    else if (m.t === 'resumed') { st.resumed = m.summary || null; if (m.summary && SAVES(st.mode, st.opt)) toast(st.mode === 'play' ? (st.opt === 'orbit' ? '🚀 Твой мир внизу — зажми O, чтобы приземлиться' : st.opt === 'home' ? '🏕 Ты дома, в лагере' : '▶ Твой мир: всё, что построил, на месте') : '▶ Продолжаем с того места, где ты был'); }
     else if (m.t === 'error' && m.code === 'join') { st.errors.push('join: ' + String(m.msg || '')); report('join', m.msg); if (ROOMS[st.opt] && J()) J().joinError(); else toast('Не получилось войти в общий мир — играешь в своём'); }
     else if (m.t === 'config') { if (st.game && m.report) st.game.config = String(m.report.line || '').slice(0, 160); if (m.report && m.report.warnings && !m.live) report('config', String(m.report.line || '')); }
     else if (m.t === 'error' && m.crash) {
@@ -783,7 +795,7 @@
   async function close(why){
     if (!st.active) return;
     const h = st.h;
-    if (h && SAVES(st.mode)) { try { h.pause(); await saveWorld('exit'); } catch (e) {} }
+    if (h && SAVES(st.mode, st.opt)) { try { h.pause(); await saveWorld('exit'); } catch (e) {} }
     // последний образ — сразу, не ждать 1,5 с
     if (st.lookT) { clearTimeout(st.lookT); st.lookT = 0; const [b, t] = st.lastLook.split('|'); if (b) keepLook(b, t || ''); }
     if (ROOMS[st.opt] && J()) J().closed();   // вышел сам — из комнаты (обрыв и перезагрузка — место держится, см. join.js)
@@ -812,7 +824,7 @@
     const to = mode === 'wardrobe' && prevPath && !/^\/hub\/(play|creative|planet|wardrobe)/.test(prevPath) ? prevPath : '/hub';
     if (root.D37Route) D37Route.go(to); else location.href = to;
   }
-  async function restart(){ const m = st.mode, o = st.opt; await close('restart'); if (m) open(m, o === 'new' || o === 'tribe' ? '' : o); }
+  async function restart(){ const m = st.mode, o = st.opt, sub = st.sub; await close('restart'); if (m) open(m, o === 'new' || o === 'tribe' ? '' : o, sub); }
 
   // Образ поменяли не здесь (вошёл с другого устройства — настройки пришли из аккаунта) — показать его в игре
   function watchSettings(){

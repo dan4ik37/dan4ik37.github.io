@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "id": "umode",
+  "values": {},
+  "title": "Арена игрока",
+  "scene": "umode",
+  "engine": {
+    "channel": "stable"
+  }
+}

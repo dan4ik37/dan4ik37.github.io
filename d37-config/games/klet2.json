@@ -1,9 +1,10 @@
 {
   "format": 1,
   "id": "klet2",
-  "title": "Клеточки — комнаты",
-  "scene": "valley",
-  "engine": { "channel": "preview" },
-  "note": "T-174: «Клеточки» движка (game klet2) с комнатами на сервере игр — список лобби, вход по коду и ссылке, к другу. Мост лобби есть только в preview; без него раздел комнат прячется сам (js/features/join.js).",
+  "title": "Клеточки",
+  "scene": "klet2",
+  "engine": {
+    "channel": "stable"
+  },
   "values": {}
 }

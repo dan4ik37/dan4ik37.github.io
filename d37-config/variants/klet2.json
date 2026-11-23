@@ -1,0 +1,17 @@
+[
+  {
+    "id": "classic",
+    "title": "Классическая карта",
+    "scene": "klet2_classic"
+  },
+  {
+    "id": "reef",
+    "title": "Коралловый риф",
+    "scene": "klet2_reef"
+  },
+  {
+    "id": "practice",
+    "title": "Тренировка без ботов",
+    "scene": "klet2_practice"
+  }
+]

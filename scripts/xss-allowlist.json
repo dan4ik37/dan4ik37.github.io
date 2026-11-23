@@ -3349,6 +3349,16 @@
   {
    "f": "js/features/modepage.js",
    "fn": "page",
+   "k": "sink:href [link]",
+   "c": "url-checked",
+   "n": "Штатный путь режима и id из проверенного манифеста своего сайта. safeHref принимает только локальный адрес.",
+   "xs": [
+    "safeHref(m.play + '/v-' + variant.id)"
+   ]
+  },
+  {
+   "f": "js/features/modepage.js",
+   "fn": "page",
    "k": "sink:href [play]",
    "c": "url-checked",
    "n": "T-171: адрес проходит safeHref() — только «/…» или «#/…» своего сайта, без схем и кавычек; для игр игроков id — через encodeURIComponent",

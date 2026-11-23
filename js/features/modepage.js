@@ -135,6 +135,30 @@
     hero.append(pic, info);
     wrap.append(hero);
 
+    if (m.join) {
+      const choices = el('section', 'md-card md-variants');
+      choices.append(el('h2', 'md-h2', 'Режимы игры'));
+      const row = el('div', 'md-acts');
+      choices.append(row);
+      wrap.append(choices);
+      window.D37Hub.resolveGame(m.join).then(game => {
+        if (!row.isConnected) return;
+        for (const variant of game.variants) {
+          const link = el('a', 'md-btn', variant.title);
+          link.href = safeHref(m.play + '/v-' + variant.id);
+          row.append(link);
+        }
+        if (m.join === 'klet2') {
+          const old = el('a', 'md-btn', 'Старая версия «Клеточек»');
+          old.href = '/hub/play/klet';
+          row.append(old);
+        }
+        const editor = el('a', 'md-btn', 'Свои арены в студии');
+        editor.href = '/play/studio';
+        row.append(editor);
+      }).catch(() => { if (row.isConnected) choices.remove(); });
+    }
+
     const grid = el('div', 'md-grid');
     wrap.append(grid);
     // ── кто играет сейчас ──

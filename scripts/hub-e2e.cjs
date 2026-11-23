@@ -152,6 +152,46 @@ async function playUntilLoaded(C, label){
   try {
     for (const MODE of MODES) {
       console.log(`— ${MODE}`);
+      if (MODE === 'arena') {
+        for (const [width, height, mobile] of [[1920, 1080, false], [390, 844, true]]) {
+          const C = await chrome();
+          try {
+            await C.view(width, height, mobile);
+            await C.send('Page.navigate', { url: site.base + '/hub' });
+            if (!await C.until(READY, 60000)) throw new Error('Страница /hub не загрузилась');
+            if (mobile) await C.ev("localStorage.setItem('d37_hub_gfx','gl')");
+            for (const [route, game, map, click] of [
+              ['/hub/play/klet2', 'klet2', 'Первичный бульон', '[data-tile="klet"]'],
+              ['/hub/play/hole2', 'hole2', null, '[data-tile="hole2"]'],
+              ['/hub/play/klet2/v-reef', 'klet2', 'Коралловый риф', '.md-variants a[href$="/v-reef"]'],
+              ['/hub/play/hole2/v-practice', 'hole2', null, '.md-variants a[href$="/v-practice"]'],
+            ]) {
+              const details = route.includes('/v-') ? '/hub/mode/' + (game === 'klet2' ? 'e-klet' : 'e-hole2') : '/hub';
+              await C.ev(GO(details));
+              const select = JSON.stringify(click);
+              if (!await C.until(`document.querySelector(${select})?.getAttribute('href') === ${JSON.stringify(route)}`, 20000)) throw new Error('Нет ссылки ' + route);
+              await C.ev(`(document.querySelector(${select}).click(), true)`);
+              const expected = JSON.stringify(game), expectedMap = JSON.stringify(map);
+              const ready = await C.until(`(() => {
+                const h = D37Hub._st.h;
+                const m = h && JSON.parse(h.state.app.mode_state() || 'null');
+                return location.pathname === ${JSON.stringify(route)} && m?.game === ${expected} && m.step >= 30
+                  && (!${expectedMap} || m.map === ${expectedMap});
+              })()`, 90000);
+              const stats = await C.ev(`(() => {
+                const h = D37Hub._st.h, s = h?.stats(), m = JSON.parse(h?.state.app.mode_state() || 'null');
+                const p = h && JSON.parse(h.state.app.planet_stats());
+                return { backend: h?.state.backend, fps: h?.state.fps, triangles: s?.triangles, shown: p?.shown,
+                  mode: m?.game, map: m?.map, resumed: !!D37Hub._st.resumed, errors: D37Hub._st.errors };
+              })()`);
+              ok(ready && !stats.resumed && stats.errors.length === 0, `${width}×${height} ${route}`, stats);
+              if (ready && !route.includes('/v-')) await C.shot(`arena-${game}-${width}x${height}.png`);
+              await C.ev(GO('/hub'));
+              await C.until('!D37Hub.active', 20000);
+            }
+          } finally { await C.close(); }
+        }
+      }
       if (MODE === 'guest') {
         const C = await chrome();
         try {
@@ -159,6 +199,7 @@ async function playUntilLoaded(C, label){
           await C.send('Page.navigate', { url: site.base + '/hub' });
           ok(await C.until(READY + ` && document.querySelectorAll('#hub-page .hub-tile').length >= 6`, 60000), 'меню /hub: 6 плиток');
           ok(await C.ev(`document.querySelector('.bt-item[data-route="hub"]') && !document.querySelector('.bt-item[data-route="hub"]').hidden && getComputedStyle(document.getElementById('hub-page')).display !== 'none'`), 'нижнее меню телефона: «Играть» видно, раздел открыт');
+          ok(await C.ev(`document.querySelector('#hub-page [data-tile="klet"]')?.getAttribute('href') === '/hub/play/klet2'`), 'плитка Клеточки открывает новую арену');
           ok(await C.ev(`[...document.querySelectorAll('#hub-page .hub-tile')].map(t => t.dataset.tile).join(',') === 'play,wardrobe,creative,world,studio,klet,hole2,mini,invite,howto,gfx,save,shots'`), 'плитки: Играть, Гардероб, Творческий режим, Мир Денчика, Студия, Клеточки, Чёрная дыра 2, Мини-игры, Позвать друга, Как играть, Графика, Сохранение, Снимки');
           // T-163: «кто ты в игре» и строка «Игры игроков» (игроки ещё ничего не выложили — витрина Денчика и «Сделай первую игру»)
           ok(await C.until(`(() => { const p = document.querySelector('#hub-page [data-tile="play"]').getBoundingClientRect(), m = document.querySelector('.hc-me').getBoundingClientRect(), r = document.querySelector('[data-row="people"]').getBoundingClientRect(); return p.bottom <= innerHeight && p.top < m.top && m.top < r.top && m.height < 90; })()`, 8000), 'телефон: «Играть» на первом экране, под ним плашка в одну строку, потом строка игр', await C.ev(`[...document.querySelectorAll('#hub-page [data-tile="play"], .hc-me, [data-row="people"]')].map(e => Math.round(e.getBoundingClientRect().top) + '/' + Math.round(e.getBoundingClientRect().height))`));
@@ -212,10 +253,18 @@ async function playUntilLoaded(C, label){
             ok(g0 && g0.on === true && g0.ring > 150, 'долина: игровой слой включён, вокруг деревья, камни, ягоды', g0);
             await C.ev(`(D37Hub._st.h.send({ t: 'wardrobe', on: false }), D37Hub._st.h.state.app.admin('game plant tree_broad 1.2'), true)`);
             await sleep(300);
-            await C.ev(`(window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true })), setTimeout(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE', bubbles: true })), 6500), true)`);
+            const chop = () => C.ev(`(window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true })), setTimeout(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE', bubbles: true })), 6500), true)`);
+            await chop();
+            await sleep(9000);
+            const bare = await C.ev(GS);
+            ok(bare.items === g0.items && bare.drops === g0.drops, 'Голыми руками дерево не рубится');
+            await C.ev("D37Hub._st.h.state.app.admin('game give axe_stone 1')");
+            await sleep(300);
+            const equipped = await C.ev(GS);
+            await chop();
             await sleep(9000);
             const g1 = await C.ev(GS);
-            ok(g1 && (g1.items > g0.items || g1.drops > g0.drops), 'E (действие) рубит дерево: брёвна / палки', { before: g0, after: g1 });
+            ok(g1 && (g1.items > equipped.items || g1.drops > equipped.drops), 'E с топором рубит дерево: брёвна / палки', { before: equipped, after: g1 });
             await C.shot('game_chop_pc.png');
             await C.ev(`(D37Hub._st.h.state.app.admin('game give plank 6; game give stick 2; game craft workbench; game place workbench 2.5 1.5 0'), true)`);
             ok(await C.until(`(() => { const g = ${GS}; return g && g.parts === 1 && g.saves > 0; })()`, 8000), 'верстак сделан и поставлен, игра сохранилась сама', await C.ev(GS));
