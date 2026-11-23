@@ -17,6 +17,7 @@
 import init, * as api from './d37_web.js';
 const { WorldWorker, last_panic } = api;
 
+const ACCOUNT_FOR_FRAME_POST_TIME = true;
 let world = null, timer = 0, paused = false, lastPost = 0, lastPace = 0;
 const now = () => performance.timeOrigin + performance.now();
 
@@ -31,11 +32,15 @@ function wake() {
   timer = 0;
   if (!world || paused) return;
   let wait = 16;
+  let scheduleFrom = 0;
   try {
     wait = world.wake(now());
+    scheduleFrom = performance.now();
     const f = world.take_frame();
     if (f) { postMessage({ type: 'frame', bytes: f.buffer }, [f.buffer]); lastPost = performance.now(); }
     else if (performance.now() - lastPost > 2000) { postMessage({ type: 'alive' }); lastPost = performance.now(); }
+    const hitch = world.take_hitch?.();
+    if (hitch) postMessage({ type: 'hitch', data: hitch });
     // ep14-perf's pacing numbers (WorldWorker::pace_stats, one JSON line) about once a second for the F3 numbers; an
     // engine build without the method: nothing
     if (typeof world.pace_stats === 'function' && performance.now() - lastPace > 1000) {
@@ -43,7 +48,8 @@ function wake() {
       try { postMessage({ type: 'pace', stats: String(world.pace_stats()).slice(0, 2000) }); } catch (e) { /* numbers only */ }
     }
   } catch (e) { fail(e); return; }
-  timer = setTimeout(wake, Math.max(0, wait));
+  const elapsed = ACCOUNT_FOR_FRAME_POST_TIME ? performance.now() - scheduleFrom : 0;
+  timer = setTimeout(wake, Math.max(0, wait - elapsed));
 }
 
 onmessage = async (ev) => {
@@ -84,6 +90,7 @@ onmessage = async (ev) => {
     // the page's thread)
     paused = true; clearTimeout(timer); timer = 0;
   } else if (m.type === 'resume') {
+    if (paused) world?.resume_clock?.();
     paused = false; if (!timer) wake();
   } else if (m.type === 'stop') {
     clearTimeout(timer); timer = 0;

@@ -173,6 +173,7 @@ async function main() {
         const m = ev.data;
         if (m.type === 'frame') app.world_in(new Uint8Array(m.bytes));
         else if (m.type === 'profile') state.worldProfile = m.report;
+        else if (m.type === 'hitch') app.world_hitch?.(m.data);
         else if (m.type === 'pace') state.paceStats = m.stats;   // ep14-perf: the world Worker's pacing line (F3)
         else if (m.type === 'error') fail('world Worker: ' + m.error);
       };
@@ -190,6 +191,8 @@ async function main() {
     }
   }
   state.world = ww ? 'worker' : 'main';
+  document.addEventListener('visibilitychange', () => app.reset_frame_clock?.());
+  state.hitchStats = () => app.hitch_stats ? JSON.parse(app.hitch_stats()) : [];
   state.worldStats = () => JSON.parse(app.world_stats());
   state.memBytes = () => wasm_memory_bytes();
   if (!ww) {

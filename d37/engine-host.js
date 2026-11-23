@@ -33,7 +33,7 @@ const OBJ_TEXTURES = true;
 const BUILD_CHECK = true;
 // ep38 A2: the build this page script belongs to — stamped by scripts/pack.mjs into this file, d37-page.js, d37_web.js
 // (D37_GLUE_BUILD) and the wasm (custom section «d37_build»); '' = an unpacked page (the repo's web/): no check.
-export const PAGE_BUILD = '8e3b20a652';
+export const PAGE_BUILD = 'f4b13104ff';
 export function wasmBuildOf(module) {
   try { const s = WebAssembly.Module.customSections(module, 'd37_build'); return s.length ? new TextDecoder().decode(s[0]) : ''; } catch (e) { return ''; }
 }
@@ -182,7 +182,7 @@ async function compileWasm(url, rawSize, onBytes) {
 // The 'wardrobe' scene is a studio: the panel is open from the start, no walking (the keys and the left half of a phone
 // turn the camera round the character instead), no jump / orbit / 👕 buttons; «Готово» is sent to the page as
 // {t:'wardrobe', on:false} as always (the site goes back where it came from).
-const SCENES = ['planet', 'planet_ground', 'valley', 'creative', 'wardrobe', 'umode'];
+const SCENE_ID = /^[a-z0-9_]{1,32}$/;
 // ep36: a mode file as one command word (hex of its UTF-8 bytes: no spaces, no `;`), solo, (re)started at once
 const MODE_CMD = (text) => { let h = ''; for (const b of new TextEncoder().encode(String(text))) h += (b < 16 ? '0' : '') + b.toString(16); return 'game umode file ' + h + '; game umode play mine'; };
 const CHECK = (text) => { try { return JSON.parse(wasmApi.blocks_check(String(text))); } catch (e) { return { ok: false, error: 'проверка не прошла: ' + e }; } };
@@ -206,7 +206,7 @@ export async function start(o) {
   // a lost graphics context (WebGL2; a lost WebGPU device fails the next frame) stops the game with the message
   on(canvas, 'webglcontextlost', (e) => { try { e.preventDefault(); } catch (er) { /* old event */ } fail('context-lost', 'WebGL context lost'); });
 
-  const sceneName = SCENES.includes(o.scene) ? o.scene : 'planet';
+  const sceneName = typeof o.scene === 'string' && SCENE_ID.test(o.scene) ? o.scene : 'planet';
   const studio = sceneName === 'wardrobe';
   // a portrait phone: the wardrobe panel takes the lower 44 % — the studio draws the character in the free part above it
   const place = () => { canvas.style.height = studio && typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches ? '56%' : '100%'; };
@@ -348,6 +348,7 @@ export async function start(o) {
         if (!st.app || st.dead) return;
         if (m.type === 'frame') { st.worldAt = performance.now(); st.app.world_in(new Uint8Array(m.bytes)); }
         else if (m.type === 'alive') st.worldAt = performance.now();
+        else if (m.type === 'hitch') st.app.world_hitch?.(m.data);
         else if (m.type === 'pace') st.paceStats = m.stats;   // ep14-perf: the world Worker's pacing line (F3 / tests)
         else if (m.type === 'config') checkWorkerConfig(m);
         else if (m.type === 'error') fail('world-worker', m.error);
@@ -587,9 +588,10 @@ export async function start(o) {
     b.addEventListener('pointerdown', h(true));
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, h(false));
   };
-  const bWard = button('d37h-ward', '👕', 'Гардероб (B)');
-  if (studio) bWard.style.display = 'none';
-  bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
+  if (touch && !studio) {
+    const bWard = button('d37h-ward', '👕', 'Гардероб');
+    bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
+  }
   // ep11 publish: the creative world has the game layer (creative rules) and still flies back up with one button
   if (planet && (!game || creative)) hold(button('d37h-orbit', '🌍', 'Орбита ↔ земля (O)'), (v) => { orbitHeld = v; });
   if (touch) {
@@ -620,11 +622,11 @@ export async function start(o) {
     on(canvas, 'pointerup', end); on(canvas, 'pointercancel', end);
   }
   const hint = add(el('div', 'd37h-hint', studio ? (touch ? 'Проведи пальцем — повернуть камеру' : 'Тяни мышью — повернуть камеру · колесо — ближе и дальше') : game
-    ? (touch ? 'Слева — идти · справа — смотреть · кнопки: ДЕЙСТВИЕ, СУМКА, РЕМЕСЛО' : 'Нажми на картинку · ЛКМ / E — рубить, брать, ставить · ПКМ — поставить / съесть · 1-8 — в руку · Q — сумка · T — ремесло · R — повернуть')
+    ? (touch ? 'Слева — идти · справа — смотреть' : 'Щелчок — управление · Tab — действия')
     : touch
     ? (planet ? 'Слева — идти / лететь · справа — смотреть · 🌍 — на землю и обратно · 👕 — гардероб' : 'Слева — идти · справа — смотреть')
     : 'Нажми на картинку — мышь смотрит · W A S D — идти · Пробел — прыжок · O — на землю и обратно · B — гардероб · V — вид'));
-  if (game) { hint.style.bottom = 'auto'; hint.style.top = '56px'; }
+  if (game) hint.style.bottom = 'calc(105px + env(safe-area-inset-bottom))';
   setTimeout(() => { hint.style.opacity = '0'; }, 9000);
   let sayT = 0;
   say = (t) => { hint.textContent = t; hint.style.opacity = '1'; clearTimeout(sayT); sayT = setTimeout(() => { hint.style.opacity = '0'; }, 5000); };
@@ -839,6 +841,7 @@ export async function start(o) {
     }
   }
   publish();
+  on(document, 'visibilitychange', () => st.app?.reset_frame_clock?.());
   st.raf = requestAnimationFrame(frame);
 
   // EP14-config live: the files again when the tab comes back and every o.config.poll ms (default 5 min); a changed
@@ -872,6 +875,7 @@ export async function start(o) {
     stats() { try { return st.app ? JSON.parse(st.app.stats()) : null; } catch (e) { return null; } },
     // EP7: the game's numbers (items, parts, saves...; null without a game layer)
     gameStats() { try { return st.app && game ? JSON.parse(st.app.game_stats()) : null; } catch (e) { return null; } },
+    hitchStats() { return st.app?.hitch_stats ? JSON.parse(st.app.hitch_stats()) : []; },
     // a DOM sheet over the world (chat, menu): the keys stop reaching the game
     input(enabled) { st.inputOn = !!enabled; if (!enabled) { keys.clear(); unlock(); } publish(); },
     pause() { if (st.paused || st.dead) return; st.paused = true; if (ww) ww.postMessage({ type: 'pause' }); keys.clear(); publish(); try { st.app && st.app.audio_park(true); } catch (e) { /* no sound */ } cancelAnimationFrame(st.raf); st.raf = 0; unlock(); },
@@ -925,7 +929,7 @@ export async function start(o) {
       state() { const s = handle.lobby.state(); return s && s.p2p ? s.p2p : null; },
       leave(game) { handle.lobby.leave(game); },
     },
-    resume() { if (!st.paused || st.dead) return; st.paused = false; st.worldAt = performance.now(); if (ww) ww.postMessage({ type: 'resume' }); try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
+    resume() { if (!st.paused || st.dead) return; st.paused = false; st.app?.reset_frame_clock?.(); st.worldAt = performance.now(); if (ww) ww.postMessage({ type: 'resume' }); try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
     // everything this start made goes away: the frame loop, listeners, Workers, the GPU device (free), the DOM
     dispose() {
       if (st.disposed) return;
