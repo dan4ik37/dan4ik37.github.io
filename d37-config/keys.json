@@ -861,7 +861,7 @@
       "type": "num"
     },
     {
-      "default": 1.0,
+      "default": 0.0,
       "group": "Скорость",
       "key": "speed_blur",
       "kind": "LOOK",
@@ -883,11 +883,11 @@
       "type": "num"
     },
     {
-      "default": 1.0,
+      "default": 0.0,
       "group": "Скорость",
       "key": "speed_haze",
       "kind": "LOOK",
-      "label": "Быстрый полёт: чуть больше дымки к горизонту (0 — нет)",
+      "label": "Дополнительная дымка при быстром полёте",
       "max": 3.0,
       "min": 0.0,
       "top": false,
