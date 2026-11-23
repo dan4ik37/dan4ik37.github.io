@@ -11,7 +11,7 @@
   },
   {
     "id": "practice",
-    "title": "Тренировка без ботов",
+    "title": "Одиночная игра с ботами",
     "scene": "klet2_practice"
   }
 ]

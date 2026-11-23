@@ -164,6 +164,8 @@ async function playUntilLoaded(C, label){
               ['/hub/play/klet2', 'klet2', 'Первичный бульон', '[data-tile="klet"]'],
               ['/hub/play/hole2', 'hole2', null, '[data-tile="hole2"]'],
               ['/hub/play/klet2/v-reef', 'klet2', 'Коралловый риф', '.md-variants a[href$="/v-reef"]'],
+              ['/hub/play/klet2/v-classic', 'klet2', 'Классика', '.md-variants a[href$="/v-classic"]'],
+              ['/hub/play/klet2/v-practice', 'klet2', 'Первичный бульон', '.md-variants a[href$="/v-practice"]'],
               ['/hub/play/hole2/v-practice', 'hole2', null, '.md-variants a[href$="/v-practice"]'],
             ]) {
               const details = route.includes('/v-') ? '/hub/mode/' + (game === 'klet2' ? 'e-klet' : 'e-hole2') : '/hub';

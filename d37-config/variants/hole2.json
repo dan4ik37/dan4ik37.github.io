@@ -1,7 +1,7 @@
 [
   {
     "id": "practice",
-    "title": "Тренировка без ботов",
+    "title": "Одиночная игра с ботами",
     "scene": "hole2_practice"
   }
 ]
