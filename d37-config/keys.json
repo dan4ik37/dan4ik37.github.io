@@ -476,7 +476,7 @@
       "type": "num"
     },
     {
-      "default": 1.25,
+      "default": 1.12,
       "group": "Тон",
       "key": "contrast",
       "kind": "LOOK",
@@ -487,7 +487,7 @@
       "type": "num"
     },
     {
-      "default": 1.15,
+      "default": 1.03,
       "group": "Тон",
       "key": "saturation",
       "kind": "LOOK",
@@ -553,7 +553,7 @@
       "type": "num"
     },
     {
-      "default": 0.18,
+      "default": 0.08,
       "group": "Тон",
       "key": "vignette",
       "kind": "LOOK",
