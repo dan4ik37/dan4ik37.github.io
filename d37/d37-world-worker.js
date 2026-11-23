@@ -19,12 +19,27 @@ const { WorldWorker, last_panic } = api;
 
 const ACCOUNT_FOR_FRAME_POST_TIME = true;
 let world = null, timer = 0, paused = false, lastPost = 0, lastPace = 0;
+let queued = 0, wakeId = 0;
+const pulse = new MessageChannel();
 const now = () => performance.timeOrigin + performance.now();
+
+pulse.port1.onmessage = ({ data }) => {
+  if (data !== queued) return;
+  queued = 0;
+  wake();
+};
+
+function cancelWake() {
+  clearTimeout(timer);
+  timer = 0;
+  queued = 0;
+}
 
 function fail(e) {
   let p = '';
   try { p = last_panic(); } catch (er) { /* the instance is gone */ }
   postMessage({ type: 'error', error: (p || String(e)).slice(0, 400) });
+  cancelWake();
   world = null;
 }
 
@@ -49,7 +64,14 @@ function wake() {
     }
   } catch (e) { fail(e); return; }
   const elapsed = ACCOUNT_FOR_FRAME_POST_TIME ? performance.now() - scheduleFrom : 0;
-  timer = setTimeout(wake, Math.max(0, wait - elapsed));
+  const delay = wait - elapsed;
+  if (delay > 0) {
+    timer = setTimeout(wake, delay);
+  } else {
+    // Yield to the worker's message queue while avoiding nested zero-delay timer clamping during catch-up.
+    queued = ++wakeId;
+    pulse.port2.postMessage(queued);
+  }
 }
 
 onmessage = async (ev) => {
@@ -73,7 +95,7 @@ onmessage = async (ev) => {
     try {
       world.input(new Uint8Array(m.bytes));
       // a stepped run (tests): tick at once instead of on the clock
-      if (world.stepped()) { clearTimeout(timer); wake(); }
+      if (world.stepped()) { cancelWake(); wake(); }
     } catch (e) { fail(e); }
   } else if (m.type === 'config') {
     // a live change: the LOOK values (pacing numbers) — the RULE values stay the world's
@@ -88,12 +110,12 @@ onmessage = async (ev) => {
   } else if (m.type === 'pause') {
     // the host page paused the game (a sheet over it, the tab): no ticks until it resumes (time is dropped, as on
     // the page's thread)
-    paused = true; clearTimeout(timer); timer = 0;
+    paused = true; cancelWake();
   } else if (m.type === 'resume') {
     if (paused) world?.resume_clock?.();
-    paused = false; if (!timer) wake();
+    paused = false; if (!timer && !queued) wake();
   } else if (m.type === 'stop') {
-    clearTimeout(timer); timer = 0;
+    cancelWake();
     try { world && world.free(); } catch (e) { /* gone */ }
     world = null;
   }
