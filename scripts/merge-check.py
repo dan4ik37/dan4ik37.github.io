@@ -8,8 +8,18 @@ def lists(text):
     for line in text.splitlines():
         m = re.match(r"\s*\{ id: '([^']+)'", line)
         if not m: continue
-        sm = re.search(r"scripts: \[([^\]]*)\]", line)
-        if sm: out[m.group(1)] = re.findall(r"'([^']+)'", sm.group(1))
+        start = re.search(r"scripts:\s*\[", line)
+        if not start: continue
+        # Game rows can spread nested arrays behind a feature flag. Read the full outer array.
+        depth, paths = 1, []
+        for match in re.finditer(r"'(?:\\.|[^'\\])*'|\[|\]", line[start.end():]):
+            token = match.group()
+            if token == "[": depth += 1
+            elif token == "]":
+                depth -= 1
+                if depth == 0: break
+            elif token.startswith("'js/"): paths.append(token[1:-1])
+        out[m.group(1)] = paths
     return out
 main = lists(open('js/features/games.js', encoding='utf-8').read())
 merges = run('git', 'log', '--merges', '--since=2026-10-21', '--format=%H %s', 'main').splitlines()
