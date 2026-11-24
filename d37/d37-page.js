@@ -67,7 +67,8 @@ async function main() {
   await init({ module_or_path: module || new URL('./d37_web_bg.wasm', import.meta.url) });
   const cfgJson = layersJson(await layersP);
   if (typeof api.config_apply === 'function') { try { state.config = JSON.parse(api.config_apply(cfgJson, true)); } catch (e) { console.warn('d37 config', e); } }
-  const sceneUrl = q.get('scene') || new URL('./scenes/creative.ron', import.meta.url).href;
+  const workshop = q.get('workshop') === 'trees';
+  const sceneUrl = q.get('scene') || new URL(workshop ? './scenes/tree_workshop.ron' : './scenes/creative.ron', import.meta.url).href;
   const res = await fetch(sceneUrl);
   if (!res.ok) throw new Error('сцена ' + sceneUrl + ': HTTP ' + res.status);
   const sceneText = await res.text();
@@ -252,6 +253,11 @@ async function main() {
   // every accepted body choice (G and the menu's buttons alike) is where the next G starts from: a menu pick that was
   // not kept sent G on from a stale body (13.11 owner: «нельзя обратно переключиться на другого перса»)
   const run = (cmd) => { try { const r = app.admin(cmd); state.lastAdmin = r; for (const m of cmd.matchAll(/(?:^|;)\s*character\s+(\w+)/g)) if (NEXT_BODY[m[1]]) body = m[1]; state.body = body; if (r.startsWith('shot:')) state.shotNext = r.slice(5); return r; } catch (e) { state.lastAdmin = 'отказ: ' + e; return state.lastAdmin; } };
+  if (workshop) {
+    const { treeWorkshop } = await import('./tree-workshop.js');
+    app.set_game_hud?.(false);
+    if (game) treeWorkshop(run);
+  }
   function onKey(code) {
     if (code === 'KeyG') { body = NEXT_BODY[body] || 'girl'; run('character ' + body); }
     if (code === 'KeyN') { sine = !sine; run(sine ? 'mouth sine' : 'mouth 0'); }
@@ -545,7 +551,7 @@ async function main() {
     for (const id of ['jump', 'orbit']) { const b = document.getElementById(id); if (b) b.style.visibility = on ? 'hidden' : ''; }
     if (on && document.pointerLockElement === canvas) document.exitPointerLock();
   };
-  canvas.addEventListener('click', () => { if (!TOUCH && !cellMode && !(game && app.game_menu_open()) && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging still works */ } } });
+  canvas.addEventListener('click', () => { if (!workshop && !TOUCH && !cellMode && !(game && app.game_menu_open()) && document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* dragging still works */ } } });
   canvas.addEventListener('contextmenu', (e) => { if (game) e.preventDefault(); });
   canvas.addEventListener('mousedown', (e) => {
     if (TOUCH) return;
@@ -583,7 +589,9 @@ async function main() {
   $('full').addEventListener('click', () => {
     toggleFull();
   });
-  hint.textContent = game
+  hint.textContent = workshop
+    ? (TOUCH ? 'Слева — движение · справа — поворот камеры' : 'Зажмите мышь, чтобы повернуть камеру · WASD — движение')
+    : game
     ? (TOUCH ? 'Слева — идти · справа — смотреть · кнопки: ДЕЙСТВИЕ, СУМКА, РЕМЕСЛО' : 'ЛКМ — рубить / брать / ставить · ПКМ — поставить / съесть · 1-8 — в руку · Q — сумка · T — ремесло · R — повернуть · E — действие')
     : TOUCH
     ? (planet ? 'Слева — лететь / идти · справа — смотреть · 🌍 — орбита ↔ земля' : 'Слева — идти (до упора — бег) · справа — смотреть')
