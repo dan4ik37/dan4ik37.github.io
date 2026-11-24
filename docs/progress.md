@@ -780,3 +780,5 @@ vehicle 179, age 214, routes 308; прогон 10 мин (12 баз штаба 5
 - 2026-11-23, hub/D37 arena entry points. The Cell tile now opens klet2, mode pages expose packaged variants, and the shared web host opens the scene declared by each game's package. Arena routes bypass the planet save slot. Existing room routes keep their game IDs and room codes.
 
 - 2026-11-24, D37 canopy stability. Free flight keeps crowns intact, nearby trees hold their detailed geometry, and LOD state survives terrain patch rebases. Replayed the same forest route in WebGPU and WebGL with zero part-count changes within 20 m across 8,839 matched tree samples.
+
+- 2026-11-24, D37 forest generation. Giant foliage follows the surviving branches, and shared tapered meshes form continuous stems and terrain-aware roots. A test forest of 144 giants verifies connected canopies and limits of 37 instances at medium distance and five at long distance. Streamed giants use the same long-distance silhouette and share one visibility anchor per tree. Felled trees keep their branch layout through the fall and break into logs on terrain contact.
