@@ -6037,4 +6037,4 @@ async function __wbg_init_once(module_or_path) {
 
 export { initSync, __wbg_init as default };
 
-export const D37_GLUE_BUILD = '8a24e81937';
+export const D37_GLUE_BUILD = 'be8057b7e7';
