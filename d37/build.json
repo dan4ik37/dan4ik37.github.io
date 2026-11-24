@@ -1,9 +1,9 @@
 {
- "id": "60f01ce8db",
+ "id": "e6008dacec",
  "bridge": 1,
  "config_build": 1,
- "wasm_raw": 19198154,
- "made": "2026-11-24T06:33:26.174Z",
+ "wasm_raw": 19212350,
+ "made": "2026-11-24T07:32:41.590Z",
  "files": {
   "blocks.json": 43322,
   "build-id.txt": 11,
@@ -11,7 +11,7 @@
   "d37-terrain-worker.js": 4102,
   "d37-world-worker.js": 6186,
   "d37_web.js": 256017,
-  "d37_web_bg.wasm": 19198154,
+  "d37_web_bg.wasm": 19212350,
   "engine-host.js": 71173,
   "index.html": 9359,
   "LICENSES.txt": 224,
