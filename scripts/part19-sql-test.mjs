@@ -31,7 +31,8 @@ const rd = f => fs.readFileSync(path.join(SITE, f), 'utf8').replace(/\r\n/g, '\n
 const ALL = rd('community.sql');
 const k0 = ALL.indexOf('\n-- ЧАСТЬ 19 ');
 if (k0 < 0) { console.log('FAIL part 19 not found'); process.exit(1); }
-const PART = ALL.slice(ALL.lastIndexOf('\n-- ═', k0));
+const k20 = ALL.indexOf('\n-- ЧАСТЬ 20 ');   // ч. 20 (❤ на сайте) — своя проверка, scripts/part20-sql-test.mjs
+const PART = ALL.slice(ALL.lastIndexOf('\n-- ═', k0), k20 > 0 ? ALL.lastIndexOf('\n-- ═', k20) : undefined);
 const fn = (src, name) => { const a = src.indexOf('create or replace function public.' + name + '('); const b = src.indexOf('$$;', src.indexOf('$$', a) + 2); if (a < 0 || b < 0) throw new Error('no ' + name); return src.slice(a, b + 3); };
 const WORDS = ['comm_norm', 'comm_bad', 'comm_has_link'].map(x => fn(ALL, x)).join('\n');
 const UGC0 = rd('ugc.sql');
