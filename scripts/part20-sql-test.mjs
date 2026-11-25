@@ -44,6 +44,13 @@ insert into auth.users values ('${A}'), ('${B}');`);
 await db.exec(PART);
 await db.exec(PART);   // второй раз — без ошибок и без дублей
 ok(true, 'ч. 20 выполняется дважды без ошибок');
+// site-like.sql — та же ч. 20 отдельным файлом для владельца (вставить целиком с телефона): должна совпадать с community.sql
+{
+  const f = path.join(SITE, 'site-like.sql');
+  const own = fs.existsSync(f) ? fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n') : '';
+  ok(own.endsWith(PART.slice(1)) && own.length - PART.length < 400, 'site-like.sql = конец community.sql (ч. 20) один в один');
+  await db.exec(own);   // и сам файл выполняется (третий раз — без ошибок)
+}
 const as = async u => db.query(`update cur set u = ${u ? `'${u}'` : 'null'}`);
 const call = async (sql, args = []) => (await db.query(sql, args)).rows[0];
 const like = async (kind, item, on) => (await call(`select public.site_like($1, $2${on === undefined ? '' : ', $3'}) r`, on === undefined ? [kind, item] : [kind, item, on])).r;
