@@ -352,7 +352,7 @@ const cookieOf = res => String(res.headers['set-cookie'] || '').split(';')[0];
   ok(made.every(x => x.d37auth), '3 новых аккаунта с одного адреса — можно');
   ok((await vkLogin(1004, '198.51.100.1')).d37auth_err === 'rate', '4-й с того же адреса — rate');
   ok((await vkLogin(1001, '198.51.100.1')).d37auth, 'войти в созданный — можно');
-  ok(Object.keys(DB.ip).every(k => /^[0-9a-f]{32}$/.test(k)) && !Object.keys(DB.ip).some(k => k.includes('198')), 'в базу уходит отпечаток адреса, не адрес');
+  ok(Object.keys(DB.ip).every(k => /^[0-9a-f]{32}$/.test(k)) && !Object.keys(DB.ip).some(k => k.includes('198.51.100')), 'в базу уходит отпечаток адреса, не адрес');   // было includes('198') — ложный провал в дни, когда в 32 hex-знаках отпечатка случайно есть «198» (25.11: …f198c…)
   DB.bans.add('vk:1005');
   ok((await vkLogin(1005, '198.51.100.9')).d37auth_err === 'banned', 'забаненный VK — banned');
   // гонка: двойной клик — второй запрос создал лишний аккаунт → удаляем его, входим в созданный первым

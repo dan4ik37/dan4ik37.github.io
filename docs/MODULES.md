@@ -168,7 +168,7 @@ Serverless functions (api/*.js outside _lib; Vercel Hobby limit 12): 10 — api/
 
 ## 2. Games
 
-js/features/games.js: 87 rows, GAMES_VER '187' (bump on any game / engine file change; merge rule: skill d37-merge). Lists: T145_ROWS 2, GAMES 84, GAMES_HIDDEN 1.
+js/features/games.js: 87 rows, GAMES_VER '188' (bump on any game / engine file change; merge rule: skill d37-merge). Lists: T145_ROWS 2, GAMES 84, GAMES_HIDDEN 1.
 
 | Game | List | Age | Title | Scripts | Own scripts (not js/engine, js/core) |
 |---|---|---|---|---|---|
@@ -363,7 +363,7 @@ Scripts listed by games but missing on disk: undefined.
 
 ## 3. RPC and SQL
 
-52 SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), 867 functions, 355 names called from js/ or api/ (`.rpc('x')`, any `*rpc*('x')` wrapper such as rpc / sbRpc / rpcOk / pushRpc, or `/rpc/x`).
+52 SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), 871 functions, 357 names called from js/ or api/ (`.rpc('x')`, any `*rpc*('x')` wrapper such as rpc / sbRpc / rpcOk / pushRpc, or `/rpc/x`).
 
 | SQL file | Functions | Tables created |
 |---|---|---|
@@ -376,7 +376,7 @@ Scripts listed by games but missing on disk: undefined.
 | chat-stickers.sql | 0 | — |
 | city.sql | 29 | cities, city_bank, city_cfg, city_contrib, city_days, city_ledger, city_marks, city_people |
 | coins.sql | 19 | coin_log, coin_wallet |
-| community.sql | 304 | bot_posts, cf_ext_media, chan_cats, chan_pw, chan_pw_ok, chan_pw_try, chat_channels, chat_mutes, chat_reports, chat_settings, comm_boost_log, comm_boosts, comm_event_rsvp, comm_events, comm_fun, comm_media, comm_member_roles, comm_modlog, comm_notif_prefs, comm_online, comm_roles, comm_sb_last, comm_secret, comm_stage, comm_xp, communities, community_bans, community_channels, community_members, community_messages, community_reactions, community_reports, ds_nicks, ds_people, dsm_edits, dsm_follows, dsm_forums, dsm_poll_votes, dsm_polls, dsm_posts, file_block, file_day, file_reports, gdm_groups, gdm_members, gdm_messages, mod_cfg, mod_notes, nick_lock, nick_retired, site_voice_channels, ugc_arena_rules, user_blocks, user_ignores, user_reports, voice_here, voice_kicks |
+| community.sql | 308 | bot_posts, cf_ext_media, chan_cats, chan_pw, chan_pw_ok, chan_pw_try, chat_channels, chat_mutes, chat_reports, chat_settings, comm_boost_log, comm_boosts, comm_event_rsvp, comm_events, comm_fun, comm_media, comm_member_roles, comm_modlog, comm_notif_prefs, comm_online, comm_roles, comm_sb_last, comm_secret, comm_stage, comm_xp, communities, community_bans, community_channels, community_members, community_messages, community_reactions, community_reports, ds_nicks, ds_people, dsm_edits, dsm_follows, dsm_forums, dsm_poll_votes, dsm_polls, dsm_posts, file_block, file_day, file_reports, gdm_groups, gdm_members, gdm_messages, mod_cfg, mod_notes, nick_lock, nick_retired, site_likes, site_voice_channels, ugc_arena_rules, user_blocks, user_ignores, user_reports, voice_here, voice_kicks |
 | economy.sql | 23 | — |
 | evo.sql | 22 | evo_cfg, evo_days, evo_lineage |
 | fix-banner-bucket-v2.sql | 0 | — |
@@ -1052,6 +1052,7 @@ Scripts listed by games but missing on disk: undefined.
 | part18_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | part18b_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | part19_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| part20_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | perk_tier_of | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | pin_own_message | chat-pin-balance.sql, chat-pin.sql, premium.sql, vip-balance.sql | js/features/chat.js |
 | poll_votes_before_insert | polls-reactions-secure.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -1192,6 +1193,9 @@ Scripts listed by games but missing on disk: undefined.
 | site_cfg_int | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | site_cfg_text | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | site_creator_id | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| site_like | community.sql | js/features/site-like.js |
+| site_like_info | community.sql | js/features/site-like.js |
+| site_like_item | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | site_voice_can | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | site_voice_delete | community.sql | js/features/community2.js |
 | site_voice_list | community.sql | js/features/community.js |
@@ -1294,7 +1298,7 @@ Called but not defined in any root .sql (built-in, removed, or a typo — check)
 
 ## 4. Tests
 
-scripts/ci-run.cjs runs 165 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take M:\d37\claude-tmp\HEAVY.lock first (M:\d37\d37-core\spec\HEAVY_LOCK.md).
+scripts/ci-run.cjs runs 167 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take M:\d37\claude-tmp\HEAVY.lock first (M:\d37\d37-core\spec\HEAVY_LOCK.md).
 
 | CI entry | Flags |
 |---|---|
@@ -1330,6 +1334,7 @@ scripts/ci-run.cjs runs 165 entries (= GitHub Actions on push; `--e2e` adds the 
 | ds3-sql-test.mjs | needs pglite, t 120 s |
 | part18-sql-test.mjs | needs pglite, t 180 s |
 | part19-sql-test.mjs | needs pglite, t 180 s |
+| part20-sql-test.mjs | needs pglite, t 120 s |
 | t177-sql-test.cjs | needs pglite, t 180 s |
 | mod-sql-test.mjs | needs pglite, t 120 s |
 | ds-msg-sql-test.mjs | needs pglite, t 120 s |
@@ -1434,6 +1439,7 @@ scripts/ci-run.cjs runs 165 entries (= GitHub Actions on push; `--e2e` adds the 
 | forum-e2e.cjs | args phone 5 legacy, needs pglite, e2e, t 400 s |
 | mod-e2e.cjs | e2e, t 400 s |
 | part18-e2e.cjs | e2e, t 900 s |
+| auth-social-e2e.cjs | e2e, t 600 s |
 | t162-e2e.cjs | e2e, t 400 s |
 | t168-e2e.cjs | e2e, t 500 s |
 | t169-e2e.cjs | e2e, t 600 s |

@@ -80,7 +80,12 @@
     if (!(await part20())) { b.hidden = true; return; }
     const item = itemOf(kind);
     if (!item) { b.hidden = true; return; }
-    b.hidden = !!(kind === 'video' && doc.getElementById('mLike')?.hidden);   // ролик не по возрасту — без ❤ (как без «Лайк на YouTube»)
+    if (kind === 'video') b.hidden = !!doc.getElementById('mLike')?.hidden;   // ролик не по возрасту — без ❤ (как без «Лайк на YouTube»)
+    else {   // стрим: ❤ — когда идёт эфир (twitch.js: twLive) или плеер раскрыт; без эфира и закрытым плеером — нечего лайкать
+      const live = typeof twLive !== 'undefined' && twLive === true;
+      b.hidden = !(live || doc.getElementById('autoStreamWrap')?.classList.contains('open'));
+      if (b.hidden) return;
+    }
     b.dataset.slItem = item;
     const st = await info(kind, item);
     if (b.dataset.slItem === item) paint(b, st);
@@ -143,6 +148,10 @@
       // окно ролика открылось / закрылось (класс open у #modal) — без правки старого кода окна
       const m = doc.getElementById('modal');
       if (m && root.MutationObserver) new root.MutationObserver(() => { if (m.classList.contains('open')) refresh('video'); }).observe(m, { attributes: true, attributeFilter: ['class'] });
+      // плеер Twitch раскрыли / эфир начался (twitch.js ставит класс open у #autoStreamWrap) — показать ❤ стрима
+      const tw = doc.getElementById('autoStreamWrap');
+      let twOpen = !!tw?.classList.contains('open');
+      if (tw && root.MutationObserver) new root.MutationObserver(() => { const o = tw.classList.contains('open'); if (o !== twOpen) { twOpen = o; refresh('stream'); } }).observe(tw, { attributes: true, attributeFilter: ['class'] });
     };
     if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
     root.addEventListener('d37:auth', () => { refresh('stream'); if (doc.getElementById('modal')?.classList.contains('open')) refresh('video'); });
