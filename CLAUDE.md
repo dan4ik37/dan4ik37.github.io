@@ -148,6 +148,7 @@ Russian). Read only the area file(s) your task needs — never all of them.
 | agents.md | full agent workflow rules (22.10) |
 | pitfalls.md | full pitfalls history with details |
 | sql-history.md | which SQL was applied when, REST checks per file |
+| auth-setup-RU.md | sign-in with Google and other platforms (AUTH_SOCIAL, 25.11): owner's click-by-click steps, what is live, part 20 (❤ on site) |
 | architecture.md | deploy, local run, how the site works (router, pages, videos, ads, chat, push…), base tables, known tails |
 | seo-ads.md | Search Console, IndexNow, /about, AdSense notes |
 | site.md | PWA, referrals, social login, push, privacy, settings/fullscreen, age & realms, XSS, own game server, mini-card/themes |

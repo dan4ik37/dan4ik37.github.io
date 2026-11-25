@@ -120,7 +120,7 @@
     if (!doc?.head || doc.getElementById('d37SiteLikeCss')) return;
     const s = doc.createElement('style'); s.id = 'd37SiteLikeCss';
     s.textContent = `
-.sl-btn{cursor:pointer;font:inherit}
+.sl-btn{cursor:pointer}
 .sl-btn .sl-h{display:inline-block;transition:transform .15s}
 .sl-btn.on{border-color:rgba(255,45,85,.55)!important;background:rgba(255,45,85,.14)!important;color:var(--text,#fff)}
 .sl-btn.on .sl-h{color:#ff2d55}

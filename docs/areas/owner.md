@@ -50,7 +50,7 @@
 3. По желанию: Bing Webmaster Tools → «Импорт из Google Search Console» (аккаунт заводит сам владелец).
 4. По желанию: факты о себе для /about (имя, с какого года стримит, откуда) — сейчас там только данные канала.
 5. AdSense: сайт на проверке; платёжные данные — когда одобрят.
-6. **Включить «Войти через Google»** — пошагово в `docs/GOOGLE_LOGIN.md` (Google Cloud → OAuth-клиент, Supabase → Providers → Google,
+6. **Включить «Войти через Google»** — по порядку (25.11, всё в одном месте): `docs/areas/auth-setup-RU.md`; подробности — `docs/GOOGLE_LOGIN.md` (Google Cloud → OAuth-клиент, Supabase → Providers → Google,
    URL Configuration). Кнопка в окне входа уже есть и появится сама (`/auth/v1/settings` → external.google). Проверка: там же google: true.
 7. **РСЯ (partner.yandex.ru)**: владелец зарегистрирован (10.10.2026), сайт добавлен — площадка ID 20212815 (dan4ik37.vercel.app),
    но сразу «Отклонено: недостаточно реальных посетителей (менее 100 в неделю)». **Повторная модерация — с 17.10.2026 16:51**
