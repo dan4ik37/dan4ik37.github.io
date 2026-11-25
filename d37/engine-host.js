@@ -33,7 +33,7 @@ const OBJ_TEXTURES = true;
 const BUILD_CHECK = true;
 // ep38 A2: the build this page script belongs to — stamped by scripts/pack.mjs into this file, d37-page.js, d37_web.js
 // (D37_GLUE_BUILD) and the wasm (custom section «d37_build»); '' = an unpacked page (the repo's web/): no check.
-export const PAGE_BUILD = '77e99c0b33';
+export const PAGE_BUILD = '537c57c518';
 export function wasmBuildOf(module) {
   try { const s = WebAssembly.Module.customSections(module, 'd37_build'); return s.length ? new TextDecoder().decode(s[0]) : ''; } catch (e) { return ''; }
 }
