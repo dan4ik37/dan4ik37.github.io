@@ -135,8 +135,9 @@ async function chrome({ w = 1440, h = 900, phone = false, theme = 'dark', S, ua 
   await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable'); await send('Network.enable');
   await send('Page.setDownloadBehavior', { behavior: 'deny' });
   await send('Fetch.enable', { patterns: [{ urlPattern: SB + '/*', requestStage: 'Request' }, ...(S.feed ? [{ urlPattern: '*/api/feed*', requestStage: 'Request' }] : [])] });
-  // realtime Supabase (WebSocket — Fetch его не видит), чужие плееры и реклама — не грузим
-  await send('Network.setBlockedURLs', { urls: ['*supabase.co/realtime*', '*youtube.com/embed*', '*player.twitch.tv*', '*googlesyndication*', '*doubleclick*', '*mc.yandex*', '*yandex.ru/ads*', '*an.yandex*', '*telegram.org*'] });
+  // realtime Supabase (WebSocket — Fetch его не видит), чужие плееры и реклама — не грузим; превью YouTube — тоже (у тестовых роликов
+  // их нет: 404 картинки Chrome пишет в журнал от имени shorts.js / youtube.js, и это выглядело как «нет файла сайта»)
+  await send('Network.setBlockedURLs', { urls: ['*i.ytimg.com*', '*supabase.co/realtime*', '*youtube.com/embed*', '*player.twitch.tv*', '*googlesyndication*', '*doubleclick*', '*mc.yandex*', '*yandex.ru/ads*', '*an.yandex*', '*telegram.org*'] });
   if (ua) await send('Emulation.setUserAgentOverride', { userAgent: ua });
   const size = async (w2, h2, ph) => { await send('Emulation.setDeviceMetricsOverride', { width: w2, height: h2, deviceScaleFactor: ph ? 2 : 1, mobile: !!ph }); await send('Emulation.setTouchEmulationEnabled', { enabled: !!ph, maxTouchPoints: 5 }); };
   await size(w, h, phone);
