@@ -9,7 +9,7 @@
 // потом: тот же раздел, та же прокрутка, тот же ролик с той же секунды → действие доделывается само (обработчик D37Intent.on(kind, fn)
 // регистрирует модуль, который умеет его делать; игры грузятся лениво — ждём обработчик до 25 с). Окно входа открыто «просто так»
 // (кнопка «Войти») — тоже запоминаем место: после входа человек остаётся там же (раньше — всегда свой профиль).
-// Закрыл окно, не войдя, — задуманное забывается (через секунду: переход на Google окно не закрывает). Живёт 30 минут.
+// Закрыл окно, не войдя, — задуманное забывается (через секунду: переход на Google окно не закрывает). Место живёт 30 минут, действие — 10.
 // Ключи браузера — только свои: d37_intent (localStorage: переход на Google и обратно — новая загрузка страницы), d37_welcome_<id>.
 // Откат — AUTH_SOCIAL = false (js/core/config.js): need() просто открывает окно входа, как раньше, ничего не запоминается.
 (() => {
@@ -17,7 +17,7 @@
   if (root.D37Intent) return;
   const doc = root.document;
   const ON = (() => { try { return typeof AUTH_SOCIAL === 'undefined' || !!AUTH_SOCIAL; } catch (e) { return true; } })();
-  const KEY = 'd37_intent', TTL = 30 * 60e3, WAIT_HANDLER = 25e3, NEW_MS = 30 * 60e3;
+  const KEY = 'd37_intent', TTL = 30 * 60e3, ACT_TTL = 10 * 60e3, WAIT_HANDLER = 25e3, NEW_MS = 30 * 60e3;
   const KIND_RE = /^[a-z][a-z0-9_]{0,31}$/, YT_RE = /^[A-Za-z0-9_-]{11}$/;
   const lsGet = k => { try { return root.localStorage ? root.localStorage.getItem(k) : null; } catch (e) { return null; } };
   const lsSet = (k, v) => { try { if (!root.localStorage) return; if (v == null) root.localStorage.removeItem(k); else root.localStorage.setItem(k, String(v)); } catch (e) {} };
@@ -61,6 +61,8 @@
     try {
       const o = JSON.parse(lsGet(KEY) || 'null');
       if (!o || typeof o !== 'object' || Date.now() - (+o.at || 0) > TTL || Date.now() < (+o.at || 0) - 60e3) return null;
+      // ДЕЙСТВИЕ живёт 10 минут (место — 30): на общем устройстве чужое задуманное «Следить» / ❤ не достанется следующему, кто войдёт
+      if (o.kind && Date.now() - (+o.at || 0) > ACT_TTL) { o.kind = null; o.args = null; o.label = ''; }
       return o;
     } catch (e) { return null; }
   }
