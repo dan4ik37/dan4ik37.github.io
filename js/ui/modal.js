@@ -70,7 +70,8 @@ function modalVidSet(s, when){
   const el = document.getElementById('mVs'); if (!el) return;
   el.textContent = (s.views ? ' · 👁 ' + fmt(s.views) : '') + (s.likes ? ' · 👍 ' + fmt(s.likes) : '') + (when ? ' · ' + when : '');
 }
-function openVid(id,title,date,views){
+// start — с какой секунды (вернулся после входа на тот же ролик: js/features/auth-intent.js)
+function openVid(id,title,date,views,start){
   modalVidId = id;
   const pageLink = document.getElementById('mPage'); if (pageLink) pageLink.href = '/v/' + id;
   document.getElementById('mTitle').textContent=title;
@@ -91,7 +92,7 @@ function openVid(id,title,date,views){
   const va = window.D37Age?.video(title), box = document.getElementById('mVid');
   box.classList.remove('age-on');
   if (va) document.getElementById('mMeta').insertAdjacentHTML('afterbegin', D37Age.badge(va.age, { title: va.why }) + ' ');
-  if (va && D37Age.cover(box, va.age, { why: va.why, compact: true, back: closeModal, onOpen: () => openVid(id, title, date, views) })) {
+  if (va && D37Age.cover(box, va.age, { why: va.why, compact: true, back: closeModal, onOpen: () => openVid(id, title, date, views, start) })) {
     if (like) like.hidden = true;   // ролик не по возрасту — и на YouTube за лайком не отправляем
     document.getElementById('modal').classList.add('open'); document.body.style.overflow='hidden';
     trapModalFocus(document.getElementById('modal'));
@@ -99,7 +100,8 @@ function openVid(id,title,date,views){
   }
   if(typeof markVidWatched==='function') markVidWatched(id);
   // enablejsapi+origin — чтобы xp.js видел реальное время воспроизведения (XP за просмотр)
-  document.getElementById('mVid').innerHTML=`<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}" allowfullscreen allow="autoplay;encrypted-media"></iframe>`;
+  const st = Math.floor(+start || 0) > 0 ? '&start=' + Math.min(86400, Math.floor(+start)) : '';
+  document.getElementById('mVid').innerHTML=`<iframe src="https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0&enablejsapi=1${st}&origin=${encodeURIComponent(location.origin)}" allowfullscreen allow="autoplay;encrypted-media"></iframe>`;
   if (typeof xpTrackIframe === 'function') xpTrackIframe(document.querySelector('#mVid iframe'), id, 60);
   document.getElementById('modal').classList.add('open');document.body.style.overflow='hidden';
   trapModalFocus(document.getElementById('modal'));

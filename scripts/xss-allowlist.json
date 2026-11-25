@@ -1441,6 +1441,26 @@
    ]
   },
   {
+   "f": "js/features/auth-intent.js",
+   "fn": "openOutside",
+   "k": "sink:href [root.location]",
+   "c": "url-checked",
+   "n": "адрес — собственный адрес страницы (location.href без #), Android: intent:// в Chrome с тем же адресом; чужого текста нет",
+   "xs": [
+    "'intent://' + u.host + u.pathname + u.search + '#Intent;scheme=https;p"
+   ]
+  },
+  {
+   "f": "js/features/auth-intent.js",
+   "fn": "show",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "D37Age.yearOptions: только числа годов, собранные самим сайтом",
+   "xs": [
+    "A?.yearOptions ? A.yearOptions(null).replace('>Год рождения<', '>Не хо"
+   ]
+  },
+  {
    "f": "js/features/community.js",
    "fn": "draw",
    "k": "markup:text",
@@ -3339,21 +3359,21 @@
   {
    "f": "js/features/modepage.js",
    "fn": "page",
-   "k": "sink:href [pic]",
-   "c": "url-checked",
-   "n": "T-171: картинка игры — та же ссылка, что «▶ Играть»; адрес проходит safeHref() — только «/…» или «#/…» своего сайта",
-   "xs": [
-    "safeHref(m.play)"
-   ]
-  },
-  {
-   "f": "js/features/modepage.js",
-   "fn": "page",
    "k": "sink:href [link]",
    "c": "url-checked",
    "n": "Штатный путь режима и id из проверенного манифеста своего сайта. safeHref принимает только локальный адрес.",
    "xs": [
     "safeHref(m.play + '/v-' + variant.id)"
+   ]
+  },
+  {
+   "f": "js/features/modepage.js",
+   "fn": "page",
+   "k": "sink:href [pic]",
+   "c": "url-checked",
+   "n": "T-171: картинка игры — та же ссылка, что «▶ Играть»; адрес проходит safeHref() — только «/…» или «#/…» своего сайта",
+   "xs": [
+    "safeHref(m.play)"
    ]
   },
   {
