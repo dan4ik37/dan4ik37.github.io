@@ -18,7 +18,10 @@
   const doc = root.document;
   const BUILTIN = ['google', 'discord', 'twitch', 'github'];
   const OWN = ['vk', 'yandex', 'tg'];
-  const ORDER = ['vk', 'tg', 'yandex', 'google', 'discord', 'twitch', 'github'];   // для зрителей из России и Казахстана
+  // AUTH_SOCIAL (владелец 25.11): «Продолжить с Google» первым, дальше то, что есть у зрителей из Казахстана и России; почта — последней
+  const SOCIAL_ON = (() => { try { return typeof AUTH_SOCIAL === 'undefined' || !!AUTH_SOCIAL; } catch (e) { return true; } })();
+  const ORDER = SOCIAL_ON ? ['google', 'vk', 'tg', 'yandex', 'twitch', 'discord', 'github'] : ['vk', 'tg', 'yandex', 'google', 'discord', 'twitch', 'github'];
+  const intentOn = () => !!(SOCIAL_ON && root.D37Intent?.ON && root.D37Intent.pending());   // вход начат с места / действия — вернуть туда
   const NAME = { vk: 'VK ID', tg: 'Telegram', yandex: 'Яндекс ID', google: 'Google', discord: 'Discord', twitch: 'Twitch', github: 'GitHub' };
   const PEND = 'd37_oauth', FAILS = 'd37_login_fails', FRESH = 15 * 60, PEND_TTL = 15 * 60e3;
   const ERR_CODES = ['denied', 'state', 'used', 'expired', 'browser', 'provider', 'banned', 'rate', 'busy', 'taken', 'has', 'reauth', 'off', 'server',
@@ -248,7 +251,7 @@
       // подсунутую ссылку с чужим аккаунтом (даже во время своего незаконченного входа) без неё не примет
       const n = oaNonce();
       setPending({ p, m: mode, uid: opts.uid || null, then: opts.then || null, n });
-      if (mode === 'login') lsSet('d37_after_login', '#/profile');   // как раньше: после входа — свой профиль (chat.js)
+      if (mode === 'login' && !intentOn()) lsSet('d37_after_login', '#/profile');   // как раньше: после входа — свой профиль (chat.js); AUTH_SOCIAL — туда, где был
       const { error } = await sb().auth.signInWithOAuth({ provider: p, options: { redirectTo: root.location.origin + '/?oa=' + n } });
       if (error) { clearPending(); showErr(sbCode(error, 'login'), p, mode); }
       return;
@@ -279,6 +282,7 @@
     if (r.new) signup(p, user.id);
     if (typeof closeGlobalAuth === 'function') { try { closeGlobalAuth(); } catch (e) {} }
     if (pend?.m === 'reauth') { cont = pend.then || null; toast('🔐 Готово — это ты'); return go('#/profile/logins'); }
+    if (intentOn() || root.D37Intent?.busy?.()) { toast(`👋 Вход через ${NAME[p]}`); return root.D37Intent.resume(); }   // AUTH_SOCIAL: на то же место, ник — в D37Welcome
     toast(r.new ? `🎉 Аккаунт создан через ${NAME[p]}! Придумай ник — так тебя увидят в чате и играх` : `👋 Вход через ${NAME[p]}`);
     go(r.new ? '#/profile' : (r.next || '#/profile'));
   }
@@ -352,9 +356,18 @@
     if (!P.list.length) { box.hidden = true; box.innerHTML = ''; return; }
     if (P.list.includes('tg') && P.o.tg?.mode === 'widget') loadTg().catch(() => {});
     const reg = mode === 'register';
+    // AUTH_SOCIAL: «Продолжить с Google» — большой первой кнопкой; во встроенном браузере (Telegram, VK, Instagram, TikTok…) Google не
+    // пускает (ошибка 403 disallowed_useragent) — вместо кнопки подсказка «Открой в браузере»; остальные входы там работают
+    const inApp = SOCIAL_ON && !!root.D37Intent?.inApp?.();
+    const main = SOCIAL_ON && P.list[0] === 'google' ? 'google' : null;
+    const rest = main ? P.list.slice(1) : P.list;
+    const mainHtml = !main ? '' : inApp
+      ? `<div class="lgn-inapp"><b>Вход через Google не работает во встроенном браузере приложения.</b><span>Открой сайт в Chrome или Safari — там Google пустит.</span><button type="button" class="lgn-mini go" data-lgn-outside="1">Открыть в браузере</button></div>`
+      : `<button type="button" class="lgn-btn lgn-google lgn-main" data-lgn-login="google" aria-label="Продолжить с Google"><span class="lgn-ic" aria-hidden="true">${ICON.google}</span><span class="lgn-t">Продолжить с Google</span></button>`;
     box.innerHTML = `<div class="lgn-head">${reg ? '⚡ Регистрация в один клик' : '⚡ Быстрый вход'}</div>
-      <div class="lgn-grid${P.list.length === 1 ? ' one' : ''}">${P.list.map(p => btnHtml(p, reg)).join('')}</div>
-      <p class="lgn-note">${reg ? 'Уже есть аккаунт по почте? Войди как обычно и привяжи сервис в профиле → «Способы входа» — иначе получится второй аккаунт.'
+      ${mainHtml}
+      ${rest.length ? `<div class="lgn-grid${rest.length === 1 ? ' one' : ''}">${rest.map(p => btnHtml(p, reg)).join('')}</div>` : ''}
+      <p class="lgn-note">${reg ? (SOCIAL_ON && P.list.includes('google') ? 'Уже есть аккаунт по почте Gmail? Жми Google — войдёшь в тот же аккаунт. Для других сервисов: войди по почте и привяжи их в профиле → «Способы входа».' : 'Уже есть аккаунт по почте? Войди как обычно и привяжи сервис в профиле → «Способы входа» — иначе получится второй аккаунт.')
         : 'Без пароля. Сайт узнает только имя и аватарку — пароль и переписку сервиса не видит.'}</p>
       <div class="auth-or"><span>или по почте</span></div>`;
     box.hidden = false;
@@ -516,9 +529,10 @@
 
   // ═══ Кнопки (одна делегированная подписка) ═══
   async function onClick(e) {
-    const b = e.target?.closest?.('[data-lgn-login],[data-lgn-link],[data-lgn-unlink],[data-lgn-hide],[data-lgn-reauth],[data-lgn-pass]');
+    const b = e.target?.closest?.('[data-lgn-login],[data-lgn-link],[data-lgn-unlink],[data-lgn-hide],[data-lgn-reauth],[data-lgn-pass],[data-lgn-outside]');
     if (!b) return;
     e.preventDefault();
+    if (b.dataset.lgnOutside) return root.D37Intent?.openOutside?.();
     if (b.dataset.lgnLogin) return start(b.dataset.lgnLogin);
     if (b.dataset.lgnLink) return link(b.dataset.lgnLink);
     if (b.dataset.lgnUnlink) return unlink(b.dataset.lgnUnlink);
@@ -596,6 +610,11 @@
 #globalAuthModal .gauth-box{margin:auto 0;flex:none}
 .lgn-box{margin-bottom:.2rem}
 .lgn-head{font:800 .74rem/1.2 Montserrat,system-ui,sans-serif;letter-spacing:.4px;color:var(--muted,#9a9ab5);margin:0 0 .55rem}
+.lgn-main{width:100%;min-height:50px;font-size:15px;margin:0 0 .5rem;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.lgn-main .lgn-ic{width:22px;height:22px}
+.lgn-inapp{display:flex;flex-direction:column;gap:.35rem;padding:.7rem .8rem;margin:0 0 .55rem;border-radius:12px;border:1px dashed rgba(255,209,102,.55);background:rgba(255,209,102,.07);font-size:.76rem;line-height:1.45}
+.lgn-inapp span{color:var(--muted,#9a9ab5)}.lgn-inapp .lgn-mini{align-self:flex-start;min-height:40px}
+.gauth-intent{margin:.45rem 0 0;padding:.45rem .7rem;border-radius:10px;background:rgba(145,71,255,.1);border:1px solid rgba(145,71,255,.3);font-size:.78rem;font-weight:700;color:var(--text,#f0f0f8)}
 .lgn-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:.5rem}
 .lgn-grid.one{grid-template-columns:1fr}
 .lgn-btn{display:flex;align-items:center;justify-content:center;gap:.45rem;min-height:44px;padding:.5rem .5rem;border-radius:12px;border:1px solid rgba(var(--fg-rgb),.14);

@@ -624,7 +624,7 @@ html.d37-h18 [data-age="18"]{display:none!important}
     SITE_AGE, AREAS, UGC_AGE, LEVELS, VIDEO_DEFAULT,
     group, age, known, minor, kid, allows, canOpen, hide18, listOk, num, label, badge,
     year: () => validYear(S.y) ? S.y : null,
-    set, clear, skip, confirm18, birthdayPassed, sync, ask, close,
+    set, clear, skip, confirm18, birthdayPassed, sync, ask, close, yearOptions, errText,
     on(f){ subs.add(f); return () => subs.delete(f); },
     area: route => AREAS[route] || null,
     video, isGambling, kidText,

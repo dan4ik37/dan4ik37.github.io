@@ -37,7 +37,7 @@ async function signInWithProvider(provider) {
   if (window.D37Login) return window.D37Login.start(provider);
   // ▲ ▲
   if (!sbClient) return;
-  try { localStorage.setItem('d37_after_login', '#/profile'); } catch (e) {}
+  try { if (!window.D37Intent?.pending?.()) localStorage.setItem('d37_after_login', '#/profile'); } catch (e) {}
   if (typeof window.va === 'function') window.va('event', { name: 'oauth_click', data: { provider } });
   const { error } = await sbClient.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + '/' } });
   if (error) { const el = document.getElementById('gauthErr'); if (el) el.textContent = humanErrCap(error); }
@@ -52,6 +52,8 @@ function openLoginModal(mode) {
   switchAuthTab(mode === 'register' ? 'register' : 'login');
   document.getElementById('gauthLogin').style.display = 'block';
   trapModalFocus(modal);
+  // ▼ AUTH_SOCIAL: запомнить, где был человек, — после входа он останется там же (js/features/auth-intent.js) ▼
+  window.D37Intent?.remember?.();
 }
 
 // mode = 'register' — сразу вкладка регистрации (кнопки «Создать профиль»)
@@ -68,6 +70,8 @@ function openGlobalAuth(mode) {
 // После успешного входа/регистрации/сброса пароля — закрыть модалку и
 // сразу показать полноценную страницу профиля вместо старой мини-карточки.
 function goToOwnProfile() {
+  // ▼ AUTH_SOCIAL: вход начинали с действия или с места на сайте — остаёмся там, действие доделает js/features/auth-intent.js ▼
+  if (window.D37Intent?.ON && (window.D37Intent.pending() || window.D37Intent.busy())) { closeGlobalAuth(); window.D37Intent.resume(); return; }
   closeGlobalAuth();
   // Уже на своём профиле (вход с плашки «Войди…» или по ссылке #/profile/vip со страницы /vip):
   // хэш не меняется — hashchange не придёт, перерисовываем сами
@@ -80,6 +84,7 @@ function closeGlobalAuth() {
   document.getElementById('gauthErr').textContent = '';
   document.getElementById('gauthRegErr').textContent = '';
   releaseModalFocus();
+  window.D37Intent?.onClose?.();   // закрыл, не войдя, — задуманное (❤ и т. п.) забыть
 }
 
 // ─── Переключение "Вход" / "Регистрация" / "Новый пароль" ───

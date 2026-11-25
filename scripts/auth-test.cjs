@@ -591,7 +591,7 @@ async function clientTests() {
   ok(H('#tgAuthResult=' + Buffer.from(JSON.stringify({ id: 1, hash: 'x' })).toString('base64')).tg?.id === 1, 'возврат виджета Telegram (#tgAuthResult) распознаётся');
   // какие кнопки: встроенные — по /auth/v1/settings, свои — по /api/oauth?a=providers
   const list = T.buttons({ google: true, discord: true, twitch: false, github: true, email: true }, { vk: true, yandex: false, tg: { mode: 'widget', bot: 'b', id: 1 } });
-  ok(list.join(',') === 'vk,tg,google,discord,github', 'кнопки — только включённые, в порядке для зрителей (VK, Telegram, Яндекс, Google, Discord, Twitch, GitHub)', list);
+  ok(list.join(',') === 'google,vk,tg,discord,github', 'кнопки — только включённые; AUTH_SOCIAL (владелец 25.11): Google первым, дальше VK, Telegram, Яндекс, Twitch, Discord, GitHub', list);
   ok(T.buttons({}, {}).length === 0 && T.buttons(null, null).length === 0, 'ничего не включено — кнопок нет (блок скрыт)');
   // способы входа и «последний»
   const W = T.ways;
