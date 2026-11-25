@@ -51,7 +51,11 @@
     return v;
   };
   F.set = async (uid, on, notify) => {
-    if (!me()) { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); return { ok: false, msg: 'Нужно войти' }; }
+    // AUTH_SOCIAL: гость — окно входа, после входа подписка оформится сама (js/features/auth-intent.js; обработчик follow ниже)
+    if (!me()) {
+      if (window.D37Intent?.ON && on && UUID.test(String(uid || ''))) { window.D37Intent.need('follow', { uid, notify: !!notify }, { label: 'Войди — и подписка оформится сама' }); return { ok: false, msg: '', intent: true }; }
+      if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); return { ok: false, msg: 'Нужно войти' };
+    }
     if (!UUID.test(String(uid || '')) || uid === me() || !sb()) return { ok: false, msg: 'Не получилось' };
     let d = null;
     if (await p18()) d = await rpc('follow_set', { p_user: uid, p_on: !!on, p_notify: notify === undefined ? null : !!notify });
@@ -65,6 +69,11 @@
     try { window.dispatchEvent(new CustomEvent('d37:follow', { detail: { uid, on: !!d.follow } })); } catch (e) {}
     return { ok: true, on: !!d.follow, notify: !!d.notify, followers: d.followers == null ? null : +d.followers };
   };
+  // после входа (D37Intent) — подписаться (кнопку на открытом профиле перерисует сам профиль по d37:auth / d37:follow)
+  window.D37Intent?.on('follow', async a => {
+    const r = await F.set(a?.uid, true, a?.notify ? true : undefined);
+    return r.ok ? { ok: true, msg: '🔔 Следишь — новое увидишь в профиле, вкладка «Подписки»' } : { ok: false, msg: '⚠️ ' + (r.msg || 'Не получилось') };
+  });
   let LC = null, FC = null;   // кэш списка и ленты (до изменения подписок, не дольше минуты)
   F.list = async () => {
     if (!me() || !sb()) return [];
@@ -168,7 +177,7 @@
           const r = await F.set(uid, !info.on);
           btn.disabled = false;
           if (!live()) return;
-          if (!r.ok) { if (typeof xpToast === 'function') xpToast('⚠️ ' + r.msg); return; }
+          if (!r.ok) { if (!r.intent && typeof xpToast === 'function') xpToast('⚠️ ' + r.msg); return; }
           info.on = r.on; info.notify = r.notify; if (r.followers != null) { info.followers = r.followers; paintCount(r.followers); }
           paint();
           if (typeof xpToast === 'function') xpToast(r.on ? '🔔 Следишь — новое увидишь в своём профиле, вкладка «Подписки»' : '🔕 Больше не следишь');

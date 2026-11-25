@@ -402,7 +402,10 @@
       const acts = q('.sa-pp-a');
       const btn = (t, f, cls = 'ghost') => { const b = document.createElement('button'); b.type = 'button'; b.className = 'sa-btn ' + cls; b.textContent = t; b.addEventListener('click', f); acts.appendChild(b); return b; };
       if (mine) { const a = document.createElement('a'); a.className = 'sa-btn ghost'; a.href = '#/games/studio/arena/edit/' + encodeURIComponent(g.id); a.textContent = '✏️ Изменить'; acts.appendChild(a); }
-      btn('❤️', async () => { const r = await rpc('ugc_like', { p_id: g.id }); status(r?.ok ? (r.liked ? '❤️ Понравилось' : 'Лайк убран') : '⚠ ' + why(r), r?.ok ? 'ok' : 'warn'); });
+      btn('❤️', async () => {
+        // AUTH_SOCIAL: гость — окно входа, после входа ❤ поставится сам (js/features/auth-intent.js; обработчик arena_like ниже)
+        if (!(typeof currentUser !== 'undefined' && currentUser) && window.D37Intent?.ON) { window.D37Intent.need('arena_like', { id: g.id }, { label: 'Войди — и ❤ режиму поставится сам' }); return; }
+        const r = await rpc('ugc_like', { p_id: g.id }); status(r?.ok ? (r.liked ? '❤️ Понравилось' : 'Лайк убран') : '⚠ ' + why(r), r?.ok ? 'ok' : 'warn'); });
       btn('🔗 Ссылка', async () => { try { await navigator.clipboard?.writeText(linkOf(g.id)); } catch (e) {} status('🔗 Ссылка: ' + linkOf(g.id)); });
       if (!mine) btn('⚠️ Пожаловаться', async () => { const w = prompt('Что не так с этим режимом?'); if (w == null) return; const r = await rpc('ugc_report', { p_id: g.id, p_reason: String(w).slice(0, 200) }); status(r?.ok ? 'Жалоба отправлена — модератор посмотрит.' : '⚠ ' + why(r), r?.ok ? 'ok' : 'warn'); });
       // чужую арену не копируют (владелец 22.11): здесь нет «Сохранить в файл» / копии текста — только играть. Это правило
@@ -647,5 +650,12 @@
     document.head.appendChild(l);
   }
 
+  window.D37Intent?.on('arena_like', async a => {
+    const id = String(a?.id || '').slice(0, 64);
+    if (!id) return { ok: false };
+    let r = await rpc('ugc_like', { p_id: id });
+    if (r?.ok && r.liked === false) r = await rpc('ugc_like', { p_id: id });
+    return r?.ok ? { ok: true, msg: '❤ Поставлено' } : { ok: false, msg: 'Не получилось поставить ❤ — нажми ещё раз' };
+  });
   window.D37StudioArena = { mount, unmount, projects, _test: { shareHtml, why, part19, setP19: v => { p19 = v; }, loadRow, index, newFile, defaults, usable, addRule, addObject, addLaw, addPart, refOptions, pathOf, placeFor, sectionsHtml, field, textOf, parseFile, sinceMax, setM: M => { M_ = M; }, state: () => S && { id: S.id, running: S.running, hasHost: !!S.h, report: S.report, file: S.file }, host: () => S?.h || null } };
 })();

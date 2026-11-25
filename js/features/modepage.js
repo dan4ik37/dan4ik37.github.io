@@ -209,7 +209,7 @@
         let st = null;
         const paint = () => { fb.hidden = !st || (!!st.why && !st.on); fb.textContent = st && st.on ? '✓ Слежу за автором' : '🔔 Следить за автором'; fb.setAttribute('aria-pressed', String(!!(st && st.on))); };
         F.info(m.author).then(v => { st = v; if (fb.isConnected) paint(); });
-        fb.onclick = async () => { if (!st) return; fb.disabled = true; const r = await F.set(m.author, !st.on); fb.disabled = false; if (r.ok) { st.on = r.on; paint(); } else if (typeof xpToast === 'function') xpToast('⚠️ ' + r.msg); };
+        fb.onclick = async () => { if (!st) return; fb.disabled = true; const r = await F.set(m.author, !st.on); fb.disabled = false; if (r.ok) { st.on = r.on; paint(); } else if (!r.intent && typeof xpToast === 'function') xpToast('⚠️ ' + r.msg); };
       }
       au.append(row, el('p', 'md-dim', `▶ ${m.plays} ${plural(m.plays, 'раз сыграли', 'раза сыграли', 'раз сыграли')} · 👍 ${m.likes}`));
       grid.append(au);

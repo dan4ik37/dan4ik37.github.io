@@ -937,7 +937,11 @@ Players.PlayerAdded.Connect(player => {
   }
   async function likePlace(){
     const ed = ED, row = ed?.player?.row; if (!row) return;
-    if (!me()) { msg('Войди, чтобы ставить ❤️', false); if (typeof openGlobalAuth === 'function') openGlobalAuth(); return; }
+    if (!me()) {
+      // AUTH_SOCIAL: окно входа, после входа ❤ поставится сам (js/features/auth-intent.js; обработчик place_like внизу файла)
+      if (window.D37Intent?.ON) { window.D37Intent.need('place_like', { id: row.id }, { label: 'Войди — и ❤ миру поставится сам' }); return; }
+      msg('Войди, чтобы ставить ❤️', false); if (typeof openGlobalAuth === 'function') openGlobalAuth(); return;
+    }
     const r = await rpc('ugc_like', { p_id: row.id });
     if (r?.ok) { row.likes = r.likes; renderPInfo(); msg(r.liked ? '❤️ Нравится' : 'Убрал ❤️', true); }
   }
@@ -2418,6 +2422,18 @@ Players.PlayerAdded.Connect(player => {
     const push = list.push;
     list.push = (...xs) => { const n = push.apply(list, xs); if (ED?.SC && !ED.playId) for (const x of xs) { try { x.mount?.(STUDIO_API); } catch (e) { console.error(e); } } return n; };
   }
+
+  // после входа (D37Intent) — ❤ миру ПОСТАВИТЬ (ugc_like переключает: стоял уже — вернуть)
+  window.D37Intent?.on('place_like', async a => {
+    const id = String(a?.id || '').slice(0, 64);
+    if (!id) return { ok: false };
+    let r = await rpc('ugc_like', { p_id: id });
+    if (r?.ok && r.liked === false) r = await rpc('ugc_like', { p_id: id });
+    if (!r?.ok) return { ok: false, msg: 'Не получилось поставить ❤ — нажми ещё раз' };
+    const row = ED?.player?.row;
+    if (row && row.id === id) { row.likes = r.likes; try { renderPInfo(); } catch (e) {} }
+    return { ok: true, msg: '❤ Поставлено' };
+  });
 
   window.GAME_IMPL = window.GAME_IMPL || {};
   window.GAME_IMPL.studio3d = { mount, unmount, _test: { EXAMPLES, AI_TASK, state: () => ED, template, generateHills, NET_EXTRA, mpParam, sweepTouch, mpRows, freeLook, newKindOk, startPick, tplName, WORLD_TPL } };

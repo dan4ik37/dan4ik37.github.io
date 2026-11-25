@@ -629,7 +629,8 @@ let last = performance.now();
     const g = st.game, act = b.dataset.act;
     if (act === 'share') copyLink(g.id);
     else if (act === 'like') {
-      if (!authed()) { api.toast('🔑 Войди, чтобы ставить лайки'); return; }
+      // AUTH_SOCIAL: гость — окно входа, после входа ❤ поставится сам (js/features/auth-intent.js; обработчик ugc_like внизу файла)
+      if (!authed()) { if (window.D37Intent?.ON) window.D37Intent.need('ugc_like', { id: g.id }, { label: 'Войди — и ❤ игре поставится сам' }); else api.toast('🔑 Войди, чтобы ставить лайки'); return; }
       const r = await rpc('ugc_like', { p_id: g.id });
       if (r?.ok) { g.likes = r.likes; b.classList.toggle('on', !!r.liked); root.querySelectorAll('.st-likes,.st-likes2').forEach(s => { s.textContent = num(r.likes); }); api.sfx('ok'); }
     } else if (act === 'report') {
@@ -704,6 +705,17 @@ let last = performance.now();
       if (r?.ok) { row.remove(); api.toast('Готово'); } else { b.disabled = false; api.toast('Не получилось'); }
     });
   }
+
+  // после входа (D37Intent) — ❤ ПОСТАВИТЬ (ugc_like переключает: стоял уже — вернуть), кнопку на открытой странице игры — обновить
+  window.D37Intent?.on('ugc_like', async a => {
+    const id = String(a?.id || '').slice(0, 64);
+    if (!id) return { ok: false };
+    let r = await rpc('ugc_like', { p_id: id });
+    if (r?.ok && r.liked === false) r = await rpc('ugc_like', { p_id: id });
+    if (!r?.ok) return { ok: false, msg: 'Не получилось поставить ❤ — нажми ещё раз' };
+    if (S?.game?.id === id) { S.game.likes = r.likes; root?.querySelector('[data-act="like"]')?.classList.toggle('on', true); root?.querySelectorAll('.st-likes,.st-likes2').forEach(s => { s.textContent = num(r.likes); }); }
+    return { ok: true, msg: '❤ Поставлено' };
+  });
 
   window.GAME_IMPL.studio = {
     mount(el, gameApi){ root = el; api = gameApi; show(gameApi.param); },
