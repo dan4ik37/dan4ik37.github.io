@@ -6055,4 +6055,4 @@ async function __wbg_init_once(module_or_path) {
 
 export { initSync, __wbg_init as default };
 
-export const D37_GLUE_BUILD = 'bfcf1880df';
+export const D37_GLUE_BUILD = '7d22b6d037';

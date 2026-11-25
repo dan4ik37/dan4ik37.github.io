@@ -1,9 +1,9 @@
 {
- "id": "26dd0ddb1b",
+ "id": "c89b145739",
  "bridge": 1,
  "config_build": 1,
- "wasm_raw": 19233446,
- "made": "2026-11-25T07:03:11.016Z",
+ "wasm_raw": 19238200,
+ "made": "2026-11-25T11:49:20.494Z",
  "files": {
   "blocks.json": 43322,
   "build-id.txt": 11,
@@ -11,7 +11,7 @@
   "d37-terrain-worker.js": 8246,
   "d37-world-worker.js": 6186,
   "d37_web.js": 256770,
-  "d37_web_bg.wasm": 19233446,
+  "d37_web_bg.wasm": 19238200,
   "engine-host.js": 71173,
   "index.html": 9359,
   "LICENSES.txt": 224,
@@ -120,6 +120,7 @@
   "scenes/world.ron": 1628,
   "scenes/world_1001.ron": 924,
   "scenes/world_777777.ron": 930,
+  "scenes/world_large.ron": 1395,
   "scenes/world_play.ron": 1904,
   "scenes/yard.ron": 896
  }

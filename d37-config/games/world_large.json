@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "id": "world_large",
+  "title": "Большая планета D37",
+  "scene": "world_large",
+  "engine": { "channel": "stable" },
+  "values": {}
+}

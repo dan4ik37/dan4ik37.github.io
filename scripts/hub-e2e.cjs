@@ -195,6 +195,30 @@ async function playUntilLoaded(C, label){
           } finally { await C.close(); }
         }
       }
+      if (MODE === 'large') {
+        const C = await chrome();
+        const route = '/hub/play/large';
+        try {
+          await C.view(1440, 900, false);
+          await C.send('Page.navigate', { url: site.base + '/hub' });
+          if (!await C.until(READY + ' && !!document.querySelector(\'[href="/hub/play/large"]\')', 60000)) throw new Error('Нет ссылки на большую планету');
+          await C.ev("D37Hub._idb.put('planet', {bytes: new Uint8Array([37]), at: 1, gt: 0})");
+          await C.ev('document.querySelector(\'[href="/hub/play/large"]\').click()');
+          if (!await playUntilLoaded(C, 'большая планета')) throw new Error('Большая планета не загрузилась');
+          ok(await C.ev("location.pathname === '/hub/play/large' && D37Hub._st.game?.id === 'world_large'"), 'открыта отдельная сцена');
+          await C.until('!D37Hub._st.saveBusy', 10000);
+          await C.ev("D37Hub.saveWorld('exit')");
+          ok(await C.until("D37Hub._idb.get('planet-large').then(r => !!r && D37Hub.okSave(r.bytes))", 30000), 'большая планета сохранилась в свой слот');
+          await C.ev(GO('/hub'));
+          if (!await C.until('!D37Hub.active', 20000)) throw new Error('Мир не закрылся');
+          await C.ev(GO(route));
+          if (!await playUntilLoaded(C, 'большая планета после входа')) throw new Error('Повторный вход не состоялся');
+          ok(await C.until('!!D37Hub._st.resumed', 20000), 'движок принял сохранение большой планеты');
+          ok(await C.ev("D37Hub._idb.get('planet').then(r => r?.at === 1 && r.bytes[0] === 37)"), 'старый слот не изменился');
+        } finally {
+          await C.close();
+        }
+      }
       if (MODE === 'guest') {
         const C = await chrome();
         try {
