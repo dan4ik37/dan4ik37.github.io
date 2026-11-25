@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "id": "world_random",
+  "title": "Случайная планета D37",
+  "scene": "world_random",
+  "engine": { "channel": "stable" },
+  "values": {}
+}

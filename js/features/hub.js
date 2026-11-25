@@ -91,15 +91,19 @@
     if (!cloudP) cloudP = new Promise(res => { const s = document.createElement('script'); s.src = '/js/core/cloud.js'; s.onload = () => res(root.D37Cloud || null); s.onerror = () => { cloudP = null; res(null); }; document.head.appendChild(s); });
     return cloudP;
   }
-  const GAME = 'engine', WORLD = 'planet', LARGE_WORLD = 'planet-large', SHOTS = 'shots';
+  const GAME = 'engine', WORLD = 'planet', SHOTS = 'shots';
+  const EXTRA_WORLDS = {
+    large: { scene: 'world_large', slot: 'planet-large', title: 'Большая планета D37', label: 'Большая планета' },
+    random: { scene: 'world_random', slot: 'planet-random', title: 'Случайная планета D37', label: 'Случайная планета' },
+  };
   // режимы игры: play — главный мир (долина: добыча, крафт, стройка; сцена valley), creative — «Творческий режим» (T-163: отдельный мир,
   // свободный полёт с орбиты, без выживания; старый адрес /hub/planet ведёт туда же), wardrobe — лёгкий гардероб (T-163: персонаж один
   // на подставке, без планеты — сцена wardrobe; в игре гардероб по-прежнему B / 👕)
   const MODES = { play: 'valley', creative: 'creative', planet: 'creative', wardrobe: 'wardrobe' };
   const SLOT = { play: WORLD, creative: 'creative', planet: 'creative' };   // у творческого мира своё сохранение (и в облаке — мир 'creative')
   const SAVES = (m, opt) => !!SLOT[m] && !Object.hasOwn(ROOMS, opt);
-  const slot = () => st.mode === 'play' && st.opt === 'large' ? LARGE_WORLD : SLOT[st.mode] || WORLD;
-  const SPAWNS = { home: 1, orbit: 1, new: 1, tribe: 1, large: 1, klet: 1, klet2: 1, hole2: 1, umode: 1 };   // hole2 — «Чёрная дыра 2» движка с комнатами, как klet2 (T-176 S3)
+  const slot = () => (st.mode === 'play' && EXTRA_WORLDS[st.opt]?.slot) || SLOT[st.mode] || WORLD;
+  const SPAWNS = { home: 1, orbit: 1, new: 1, tribe: 1, large: 1, random: 1, klet: 1, klet2: 1, hole2: 1, umode: 1 };   // hole2 — «Чёрная дыра 2» движка с комнатами, как klet2 (T-176 S3)
   // ep39: файл арены, который страница арены положила перед переходом в комнату (эта вкладка, не старше 30 минут)
   const arenaText = () => { try { const a = JSON.parse(sessionStorage.getItem('d37_umode_file') || 'null'); return a && typeof a.text === 'string' && a.text.length <= 65536 && Date.now() - (+a.t || 0) < 1800000 ? a.text : undefined; } catch (e) { return undefined; } };
   const ROOMS = { klet2: 1, hole2: 1, umode: 1 };   // umode — арены игроков (ep39: та же комната, файл арены движок раздаёт сам)   // режимы с комнатами (js/features/join.js GAMES)   // klet — «Клеточки» в движке (w11), мир игрока не меняется; klet2 — они же с комнатами (T-174)
@@ -112,7 +116,7 @@
   // /d37-preview/; engine.build — закреплённая сборка (ищется в stable, preview, /d37-builds/<id>/; нет — stable и отчёт).
   const CFG_DIR = '/d37-config/';
   const CHANNELS = { stable: () => BASE(), preview: () => '/d37-preview/' };
-  const gameId = (mode, opt) => opt === 'large' ? 'world_large' : opt === 'klet' ? 'klet' : ROOMS[opt] ? opt : mode === 'play' ? 'valley' : mode === 'planet' ? 'creative' : mode;
+  const gameId = (mode, opt) => EXTRA_WORLDS[opt]?.scene || (opt === 'klet' ? 'klet' : ROOMS[opt] ? opt : mode === 'play' ? 'valley' : mode === 'planet' ? 'creative' : mode);
   const cfgLive = () => { try { return typeof HUB_CONFIG_LIVE !== 'undefined' && !!HUB_CONFIG_LIVE; } catch (e) { return false; } };
   async function getText(url, ms){
     const ctl = typeof AbortController === 'function' ? new AbortController() : null;
@@ -246,7 +250,9 @@
       if (!C || !C.available()) { status('Сохранено в браузере'); return true; }
       st.lastCloud = Date.now();
       const base = Number.isInteger(rec.cloud.ver) ? rec.cloud.ver : null;
-      const r = await C.put(GAME, W, { name: W === WORLD ? 'Планета D37' : W === LARGE_WORLD ? 'Большая планета D37' : 'Творческий мир D37', data: bytes, gt, base });
+      const name = Object.values(EXTRA_WORLDS).find(world => world.slot === W)?.title
+        || (W === WORLD ? 'Планета D37' : 'Творческий мир D37');
+      const r = await C.put(GAME, W, { name, data: bytes, gt, base });
       if (r && r.ok) {
         rec.cloud = { on: true, ver: r.ver, dirty: false };
         await idbPut(W, rec);
@@ -397,7 +403,9 @@
       c.textContent = '▶ Начать с клетки в приливной луже';
       sp.append(chip('🔥 Пропустить к племени', '/hub/play/tribe', 'hub-chip-x'));
     }
-    sp.append(chip('🌍 Большая планета', '/hub/play/large'));
+    for (const [route, world] of Object.entries(EXTRA_WORLDS)) {
+      sp.append(chip('🌍 ' + world.label, '/hub/play/' + route));
+    }
     const old = card.querySelector('.hub-path');
     if (old) old.replaceWith(pathPanel(pathStep(rec)));
   }
@@ -560,7 +568,7 @@
     const bar = el('div', 'hub-bar');
     const back = el('button', 'hub-back', '← На сайт'); back.type = 'button';
     back.addEventListener('click', () => leave(mode));
-    const title = el('b', 'hub-title', mode === 'wardrobe' ? '👕 Гардероб' : cre ? '🪐 Творческий режим' : st.opt === 'klet2' ? '🟢 Клеточки' : st.opt === 'hole2' ? '🕳️ Чёрная дыра 2' : st.opt === 'umode' ? '🏟️ Арена' : st.opt === 'large' ? '🌍 Большая планета D37' : '🌍 Мой мир D37');
+    const title = el('b', 'hub-title', mode === 'wardrobe' ? '👕 Гардероб' : cre ? '🪐 Творческий режим' : st.opt === 'klet2' ? '🟢 Клеточки' : st.opt === 'hole2' ? '🕳️ Чёрная дыра 2' : st.opt === 'umode' ? '🏟️ Арена' : '🌍 ' + (EXTRA_WORLDS[st.opt]?.title || 'Мой мир D37'));
     const stat = el('span', 'hub-stat', '');
     const full = el('button', 'hub-full', '⛶'); full.type = 'button'; full.title = 'На весь экран'; full.setAttribute('aria-label', 'На весь экран');
     full.addEventListener('click', () => toggleFull(box));
@@ -714,7 +722,7 @@
     ym('d37_open');
     if (!await canRun3d()) { showError('nogpu'); st.starting = false; return; }
     const game = await resolveGame(gameId(mode, opt));   // T-166: пакет игры и её движок (канал / закреплённая сборка)
-    const entryScene = game.variants.find(v => v.id === variantId)?.scene || game.scene || (opt === 'large' ? 'world_large' : '');
+    const entryScene = game.variants.find(v => v.id === variantId)?.scene || game.scene || EXTRA_WORLDS[opt]?.scene;
     const info = game.build;
     st.game = { id: game.id, channel: game.channel, build: String(info.id || ''), base: game.base, note: game.note, config: '' };
     st.crashed = false;

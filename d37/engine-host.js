@@ -33,7 +33,7 @@ const OBJ_TEXTURES = true;
 const BUILD_CHECK = true;
 // ep38 A2: the build this page script belongs to — stamped by scripts/pack.mjs into this file, d37-page.js, d37_web.js
 // (D37_GLUE_BUILD) and the wasm (custom section «d37_build»); '' = an unpacked page (the repo's web/): no check.
-export const PAGE_BUILD = '7d22b6d037';
+export const PAGE_BUILD = 'ba24ed92c2';
 export function wasmBuildOf(module) {
   try { const s = WebAssembly.Module.customSections(module, 'd37_build'); return s.length ? new TextDecoder().decode(s[0]) : ''; } catch (e) { return ''; }
 }
@@ -215,7 +215,7 @@ export async function start(o) {
   progress('wasm', 0, o.rawSize || 0);
   // EP14-config: the settings files come in parallel with the wasm (they never wait for it, it never waits for them)
   const tCfg = performance.now();
-  const [module, sceneText, layers] = await Promise.all([
+  const [module, sceneTemplate, layers] = await Promise.all([
     compileWasm(HERE('d37_web_bg.wasm'), o.rawSize || 0, (d, t) => progress('wasm', d, t)),
     fetch(HERE('scenes/' + sceneName + '.ron')).then(res => {
       if (!res.ok) throw new Error('scene: HTTP ' + res.status);
@@ -230,6 +230,10 @@ export async function start(o) {
     try { sessionStorage.removeItem('d37.buildreload.' + PAGE_BUILD); } catch (e) { /* storage off */ }
   }
   await init({ module_or_path: module });
+  const sceneText = sceneName === 'world_random'
+    ? wasmApi.generated_planet_scene(sceneTemplate, o.save || new Uint8Array(0),
+        crypto.getRandomValues(new Uint32Array(1))[0] & 0x7fffffff)
+    : sceneTemplate;
   try { st.panic0 = last_panic(); } catch (e) { st.panic0 = ''; }
   if (bridge_version() !== BRIDGE) throw new Error('bridge version ' + bridge_version() + ', the page speaks ' + BRIDGE);
   // apply the layers before anything starts (an older engine without the key table: the built-in numbers)

@@ -219,6 +219,43 @@ async function playUntilLoaded(C, label){
           await C.close();
         }
       }
+      if (MODE === 'random') {
+        const C = await chrome();
+        const selector = '[href="/hub/play/random"]';
+        const identity = `(async () => {
+          const app = D37Hub._st.h.state.app;
+          const { radius_m: radius } = JSON.parse(app.planet_stats());
+          const { bytes } = await D37Hub._idb.get('planet-random');
+          const seed = Number(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getBigUint64(16, true));
+          return { seed, radius };
+        })()`;
+        try {
+          await C.view(1440, 900, false);
+          await C.send('Page.navigate', { url: site.base + '/hub' });
+          if (!await C.until(READY + ' && !!document.querySelector(' + JSON.stringify(selector) + ')', 60000)) {
+            throw new Error('Сайт не показал случайную планету');
+          }
+          await C.ev("D37Hub._idb.put('planet-large', {bytes: new Uint8Array([37]), at: 1, gt: 0})");
+          await C.ev('document.querySelector(' + JSON.stringify(selector) + ').click()');
+          if (!await playUntilLoaded(C, 'случайная планета')) throw new Error('Случайная планета не загрузилась');
+          await C.until('!D37Hub._st.saveBusy', 10000);
+          await C.ev("D37Hub.saveWorld('exit')");
+          if (!await C.until("D37Hub._idb.get('planet-random').then(r => !!r && D37Hub.okSave(r.bytes))", 30000)) {
+            throw new Error('Случайная планета не сохранилась');
+          }
+          const first = await C.ev(identity);
+          ok(first.radius >= 1200000 && first.radius <= 2400000, 'радиус случайного мира в заданных пределах', first);
+          await C.ev(GO('/hub'));
+          if (!await C.until('!D37Hub.active', 20000)) throw new Error('Мир не закрылся');
+          await C.ev(GO('/hub/play/random'));
+          if (!await playUntilLoaded(C, 'случайная планета после входа')) throw new Error('Повторный вход не состоялся');
+          ok(await C.until('D37Hub._st.resumed?.seed === ' + first.seed, 20000), 'движок принял seed сохранённого мира');
+          ok(await C.ev('JSON.parse(D37Hub._st.h.state.app.planet_stats()).radius_m') === first.radius, 'сохранённый мир вернулся с тем же радиусом');
+          ok(await C.ev("D37Hub._idb.get('planet-large').then(r => r?.at === 1 && r.bytes[0] === 37)"), 'слот большой планеты на месте');
+        } finally {
+          await C.close();
+        }
+      }
       if (MODE === 'guest') {
         const C = await chrome();
         try {
