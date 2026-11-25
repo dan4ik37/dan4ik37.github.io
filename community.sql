@@ -7363,7 +7363,7 @@ revoke all on function public.site_like_item(text, text) from public;
 grant execute on function public.site_like_item(text, text) to anon, authenticated;
 
 -- 20.3 Поставить / убрать ❤. p_on: true — поставить (уже стоит — ничего), false — убрать, null — наоборот тому, что есть.
---   Стрим: только сегодняшний ('live'). → { ok, liked, n } | { ok:false, reason: 'auth' | 'bad' }
+--   Стрим: только сегодняшний ('live'). → { ok, liked, n } | { ok:false, reason: 'auth' | 'bad' | 'slow' }
 create or replace function public.site_like(p_kind text, p_item text, p_on boolean default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare uid uuid := auth.uid(); v_item text; v_has boolean; v_on boolean; v_n int;
@@ -7375,6 +7375,11 @@ begin
   v_has := exists (select 1 from public.site_likes where kind = p_kind and item = v_item and user_id = uid);
   v_on := coalesce(p_on, not v_has);
   if v_on and not v_has then
+    -- защита от мусора: не больше 300 новых ❤ за сутки от одного человека (обычному зрителю не достать; без неё один аккаунт
+    -- скриптом забил бы таблицу выдуманными номерами роликов)
+    if (select count(*) from public.site_likes where user_id = uid and created_at > now() - interval '1 day') >= 300 then
+      return jsonb_build_object('ok', false, 'reason', 'slow');
+    end if;
     insert into public.site_likes (kind, item, user_id) values (p_kind, v_item, uid) on conflict do nothing;
   elsif not v_on and v_has then
     delete from public.site_likes where kind = p_kind and item = v_item and user_id = uid;

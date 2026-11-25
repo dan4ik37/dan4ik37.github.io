@@ -146,7 +146,7 @@
     const r = await set(kind, item, on);
     b.disabled = false;
     if (r?.ok) { paint(b, { mine: r.liked, n: r.n }); if (b.dataset.slFix) fixedBtns(item).forEach(x => paint(x, { mine: r.liked, n: r.n })); }
-    else { toast('Не получилось — попробуй ещё раз'); if (b.dataset.slFix) shorts(); else refresh(kind); }
+    else { toast(r?.reason === 'slow' ? 'На сегодня ❤ хватит — продолжишь завтра' : 'Не получилось — попробуй ещё раз'); if (b.dataset.slFix) shorts(); else refresh(kind); }
   }
 
   // после входа — доделать ❤ (D37Intent): ролик — тот же, если окно ролика вернули; стрим — сегодняшний
@@ -156,7 +156,7 @@
     if (!item) return { ok: false };
     if (!(await part20())) return { ok: false, msg: '❤ на сайте пока выключены' };
     const r = await set(kind, item, true);
-    if (!r?.ok) return { ok: false, msg: 'Не получилось поставить ❤ — нажми ещё раз' };
+    if (!r?.ok) return { ok: false, msg: r?.reason === 'slow' ? 'На сегодня ❤ хватит — продолжишь завтра' : 'Не получилось поставить ❤ — нажми ещё раз' };
     const b = btnOf(kind);
     if (b && itemOf(kind) === item) { show(b, true); b.dataset.slItem = item; paint(b, { mine: true, n: r.n }); }
     if (kind === 'video') {   // Shorts: лента после входа может дорисоваться позже — подождём кнопку этого ролика до 10 с

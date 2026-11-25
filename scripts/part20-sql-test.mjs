@@ -93,6 +93,17 @@ const today = (await call(`select 'tw-' || to_char(now() at time zone 'Europe/Mo
 r = await info('stream', ['live', today]);
 ok(r.items.live.n === 1 && r.items[today].n === 1 && r.items.live.mine, 'info: live = сегодняшний день', r);
 
+// защита от мусора: 300 новых ❤ за сутки от одного человека, дальше — slow; убрать свой ❤ можно всегда; старые ❤ в счёт не идут
+await db.exec(`insert into public.site_likes (kind, item, user_id) select 'video', 'x' || lpad(g::text, 10, '0'), '${B}' from generate_series(1, 300) g`);
+r = await like('video', V2, true);
+ok(r.ok === false && r.reason === 'slow', 'B: больше 300 новых ❤ за сутки — slow', r);
+r = await like('stream', 'live', false);
+ok(r.ok && r.liked === false, 'B: убрать свой ❤ при этом можно', r);
+await db.exec(`update public.site_likes set created_at = now() - interval '2 days' where user_id = '${B}'`);
+r = await like('video', V2, true);
+ok(r.ok && r.liked === true, 'B: вчерашние и старше ❤ в суточный счёт не идут', r);
+await db.exec(`delete from public.site_likes where user_id = '${B}'`);
+
 // напрямую таблицу не прочитать и не записать
 let denied = false;
 try { await db.exec(`set role authenticated; insert into public.site_likes (kind, item, user_id) values ('video', '${V2}', '${A}');`); } catch (e) { denied = true; }
