@@ -12,7 +12,11 @@
 //  (game)   страница игры студии /play/studio/play/<id> → ❤ → Google → новый аккаунт → та же страница, ugc_like вызван;
 //  (email)  вход почтой с ❤ (без перехода): после входа — не в профиль, а там же, ❤ поставлен;
 //  (close)  закрыл окно, не войдя, — задуманное забыто; (inapp) встроенный браузер Instagram — вместо Google подсказка «Открыть в браузере».
-// Запуск из корня сайта: node scripts/auth-social-e2e.cjs  (CHROME=…, PYTHON=…, BASE=…, SHOTS=<папка>, ONLY=sheet,video,stream,game,email,close,inapp)
+//  (hide)   ❤ НЕ ВИДНО (проверка по getComputedStyle / getClientRects, не по свойству .hidden — проверщик 26.11: CSS сайта
+//           .modal-act / .tw-btn перебивал [hidden], и мёртвая ❤ была видна всем): нет ч. 20 — ни у ролика, ни у стрима, ни в Shorts
+//           (телефон и 1920); ч. 20 есть, но эфира нет и плеер закрыт — у стрима нет; ролик не по возрасту (обложка) — нет;
+//  (shorts) лента Shorts (телефон): ❤ на сайте видна у ролика → гость нажал → Google → та же лента и тот же Short, ❤ стоит.
+// Запуск из корня сайта: node scripts/auth-social-e2e.cjs  (CHROME=…, PYTHON=…, BASE=…, SHOTS=<папка>, ONLY=sheet,video,stream,game,email,close,inapp,hide,shorts)
 const fs = require('fs'), os = require('os'), path = require('path'), net = require('net'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
@@ -36,7 +40,16 @@ const NOISE = /\/api\/|_vercel\/|status of 501|i\.ytimg\.com|googlesyndication|d
 const SB = 'https://zdisuowyjgqirhvcyjfq.supabase.co';
 const ME = '00000000-0000-4000-8000-0000000000a1';
 const b64u = o => Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url');
-const V = 'dQw4w9WgXcQ', GID = 'g_test_auth01';
+const V = 'dQw4w9WgXcQ', GID = 'g_test_auth01', V2 = 'aaaaaaaaaa1', V3 = 'bbbbbbbbbb2';
+// видно ли элемент на самом деле: стиль (а не свойство .hidden), есть прямоугольник, не прозрачный, предки не скрыты
+const VIS_FN = `(e => { if (!e) return false; const r = e.getBoundingClientRect(); if (!e.getClientRects().length || r.width < 2 || r.height < 2) return false;
+  for (let x = e; x && x.nodeType === 1; x = x.parentElement) { const c = getComputedStyle(x); if (c.display === 'none' || c.visibility === 'hidden' || +c.opacity === 0) return false; } return true; })`;
+const VISIBLE = sel => `${VIS_FN}(document.querySelector(${JSON.stringify(sel)}))`;
+const ANY_VISIBLE = sel => `[...document.querySelectorAll(${JSON.stringify(sel)})].some(${VIS_FN})`;
+const STYLE_OF = sel => `(() => { const e = document.querySelector(${JSON.stringify(sel)}); return e && { hidden: e.hidden, display: getComputedStyle(e).display }; })()`;
+// поддельный /api/feed (локальный сервер его не умеет): два Shorts и обычный ролик
+const FEED = () => ({ vids: [{ id: V, title: 'Тестовый шорт #shorts', ts: Date.now() - 1e5, views: 10, duration: 'PT40S' }, { id: V2, title: 'Второй шорт #shorts', ts: Date.now() - 2e5, views: 5, duration: 'PT30S' },
+  { id: V3, title: 'Обычный ролик', ts: Date.now() - 3e5, views: 7, duration: 'PT10M' }], stats: { subs: 1, views: 1, vids: 3 }, at: new Date().toISOString() });
 
 // ═══ Поддельный Supabase (в Chrome, через Fetch): что вернуть на каждый запрос; журнал — что сайт пытался записать ═══
 function mockSupabase(S){
@@ -81,7 +94,7 @@ function mockSupabase(S){
       const t = p.slice('/rest/v1/'.length);
       const one = /vnd\.pgrst\.object/.test(accept);
       if (m !== 'GET' && m !== 'HEAD') { J.push([m, t, u.search, body]); if (t === 'profiles' && body?.nick && S.profile) S.profile.nick = body.nick; return { code: 204, body: '', headers: [] }; }
-      if (t === 'site_config') { const k = (u.searchParams.get('key') || '').replace(/^eq\./, ''); const row = k === 'part20' ? { key: 'part20', value: '1' } : null; return json(one ? row : row ? [row] : []); }
+      if (t === 'site_config') { const k = (u.searchParams.get('key') || '').replace(/^eq\./, ''); const row = k === 'part20' && S.part20 !== false ? { key: 'part20', value: '1' } : null; return json(one ? row : row ? [row] : []); }
       if ((t === 'profiles' || t === 'profiles_public') && S.profile && (u.searchParams.get('id') || '') === 'eq.' + S.profile.id) return json(one ? S.profile : [S.profile]);
       if (t === 'ugc_games' && (u.searchParams.get('id') || '').includes(GID)) { const g = { id: GID, title: 'Тестовая игра', icon: '🎮', descr: 'для проверки', kind: 'tpl', tpl: 'catch', status: 'public', plays: 7, likes: 3, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z', author: '22222222-2222-4222-8222-222222222222', profiles: { nick: 'автор' }, data: {}, age_rating: 0 }; return json(one ? g : [g]); }
       return json(one ? null : [], one ? 406 : 200);
@@ -105,6 +118,7 @@ async function chrome({ w = 1440, h = 900, phone = false, theme = 'dark', S, ua 
   ws.onmessage = m => { const d = JSON.parse(m.data); if (d.id && cb.has(d.id)) { const [a, b] = cb.get(d.id); cb.delete(d.id); d.error ? b(new Error(d.error.message)) : a(d.result); return; }
     if (d.method === 'Fetch.requestPaused') {
       const r = d.params.request;
+      if (S.feed && /\/api\/feed(\?|$)/.test(r.url)) { send('Fetch.fulfillRequest', { requestId: d.params.requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body: Buffer.from(JSON.stringify(S.feed())).toString('base64') }).catch(() => {}); return; }
       if (!r.url.startsWith(SB)) { send('Fetch.continueRequest', { requestId: d.params.requestId }).catch(() => {}); return; }
       const a = answer(r);
       const hdr = [{ name: 'Access-Control-Allow-Origin', value: '*' }, { name: 'Access-Control-Allow-Headers', value: '*' }, { name: 'Access-Control-Allow-Methods', value: 'GET,POST,PATCH,DELETE,PUT,OPTIONS' }, { name: 'Access-Control-Expose-Headers', value: '*' }, ...a.headers];
@@ -120,7 +134,7 @@ async function chrome({ w = 1440, h = 900, phone = false, theme = 'dark', S, ua 
   const ev = async (expr, gesture) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true, userGesture: !!gesture }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
   await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable'); await send('Network.enable');
   await send('Page.setDownloadBehavior', { behavior: 'deny' });
-  await send('Fetch.enable', { patterns: [{ urlPattern: SB + '/*', requestStage: 'Request' }] });
+  await send('Fetch.enable', { patterns: [{ urlPattern: SB + '/*', requestStage: 'Request' }, ...(S.feed ? [{ urlPattern: '*/api/feed*', requestStage: 'Request' }] : [])] });
   // realtime Supabase (WebSocket — Fetch его не видит), чужие плееры и реклама — не грузим
   await send('Network.setBlockedURLs', { urls: ['*supabase.co/realtime*', '*youtube.com/embed*', '*player.twitch.tv*', '*googlesyndication*', '*doubleclick*', '*mc.yandex*', '*yandex.ru/ads*', '*an.yandex*', '*telegram.org*'] });
   if (ua) await send('Emulation.setUserAgentOverride', { userAgent: ua });
@@ -335,6 +349,88 @@ const sheetInfo = `(() => { const m = document.getElementById('globalAuthModal')
         ok(s.inapp && !s.main && /Открыть в браузере/.test(await c.ev(`document.querySelector('[data-lgn-outside]')?.textContent || ''`)), 'Instagram: вместо Google — «Открыть в браузере» (Google там не пускает)', s);
         await c.shot('inapp-sheet');
         ok(!c.errs.length, 'встроенный браузер: ошибок нет', c.errs);
+      } finally { await c.close(); }
+    }
+
+    // ═══ (hide) ❤ не видно, где её быть не должно — по стилю, а не по свойству .hidden ═══
+    if (want('hide')) {
+      console.log('— ❤ не видно: нет ч. 20 / нет эфира / ролик не по возрасту');
+      for (const [w, h, ph] of [[390, 844, true], [1920, 1080, false]]) {
+        const S = { providers: { google: true }, user: null, part20: false, feed: FEED };
+        const c = await chrome({ w, h, phone: ph, theme: 'dark', S });
+        try {
+          await c.send('Page.navigate', { url: B + '/' });
+          await c.until(READY);
+          ok(await c.until(`!!document.getElementById('twHeart')`, 8000) && (await c.ev(`D37SiteLike.part20()`)) === false, `${w}×${h}: нет ч. 20 — сайт это видит`);
+          await c.ev(`D37SiteLike.refresh('stream')`);
+          ok(!(await c.ev(VISIBLE('#twHeart'))), `${w}×${h}: нет ч. 20 — у блока стрима ❤ не видно`, await c.ev(STYLE_OF('#twHeart')));
+          await c.shot(`hide-nop20-home-${w}x${h}`);
+          await c.ev(`(() => { if (typeof setTwitchOpen === 'function') setTwitchOpen(true); return true; })()`, true);
+          await c.ev(`D37SiteLike.refresh('stream')`);
+          ok(!(await c.ev(VISIBLE('#twHeart'))), `${w}×${h}: нет ч. 20 — и при раскрытом плеере ❤ стрима не видно`, await c.ev(STYLE_OF('#twHeart')));
+          await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+          await c.until(`document.getElementById('modal').classList.contains('open')`, 5000);
+          await c.ev(`D37SiteLike.refresh('video')`);
+          ok(!(await c.ev(VISIBLE('#mHeart'))), `${w}×${h}: нет ч. 20 — в окне ролика ❤ не видно`, await c.ev(STYLE_OF('#mHeart')));
+          await c.shot(`hide-nop20-video-${w}x${h}`);
+          await c.ev(`closeModal()`, true);
+          await c.ev(`D37Route.go('#/shorts/${V}')`, true);
+          ok(await c.until(`!!document.querySelector('.sh-item[data-id="${V}"] .sh-side')`, 10000), `${w}×${h}: лента Shorts открылась`);
+          await c.until(`'x' === 'y'`, 800);
+          ok(!(await c.ev(ANY_VISIBLE('.sh-item .sl-btn'))), `${w}×${h}: нет ч. 20 — в Shorts ❤ не видно`);
+          ok(!c.errs.length, `${w}×${h}: нет ч. 20 — ошибок нет`, c.errs);
+        } finally { await c.close(); }
+      }
+      {
+        const S = { providers: { google: true }, user: null };
+        const c = await chrome({ w: 1440, h: 900, theme: 'light', S });
+        try {
+          await c.send('Page.navigate', { url: B + '/' });
+          await c.until(READY);
+          await c.until(`!!document.getElementById('twHeart')`, 8000);
+          await c.ev(`(() => { twLive = false; if (typeof setTwitchOpen === 'function') setTwitchOpen(false); return true; })()`, true);
+          await c.ev(`D37SiteLike.refresh('stream')`);
+          ok(!(await c.ev(VISIBLE('#twHeart'))), 'ч. 20 есть, эфира нет, плеер закрыт — ❤ стрима не видно', await c.ev(STYLE_OF('#twHeart')));
+          await c.ev(`(() => { setTwitchOpen(true); return true; })()`, true);
+          await c.ev(`D37SiteLike.refresh('stream')`);
+          ok(await c.ev(VISIBLE('#twHeart')), 'ч. 20 есть, плеер раскрыт — ❤ стрима видна');
+          await c.ev(`openVid(${JSON.stringify(V3)}, 'Открываю кейсы в казино 18+', '', '')`, true);
+          await c.until(`document.getElementById('modal').classList.contains('open') && document.getElementById('mVid').classList.contains('age-on')`, 5000);
+          await c.ev(`D37SiteLike.refresh('video')`);
+          ok(!(await c.ev(VISIBLE('#mHeart'))), 'ролик не по возрасту (обложка) — ❤ не видно', await c.ev(`({ cover: document.getElementById('mVid').classList.contains('age-on'), like: document.getElementById('mLike')?.hidden, display: getComputedStyle(document.getElementById('mHeart')).display })`));
+          await c.ev(`closeModal()`, true);
+          await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+          await c.ev(`D37SiteLike.refresh('video')`);
+          ok(await c.ev(VISIBLE('#mHeart')), 'обычный ролик — ❤ видна');
+          ok(!c.errs.length, 'ч. 20 есть: ошибок нет', c.errs);
+        } finally { await c.close(); }
+      }
+    }
+
+    // ═══ (shorts) лента Shorts: ❤ гостем → Google → тот же Short, ❤ стоит ═══
+    if (want('shorts')) {
+      console.log('— Shorts: ❤ гостем → Google (новый аккаунт)');
+      const S = { providers: { google: true }, user: newGoogleUser(), profile: newProfile(), feed: FEED };
+      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'dark', S });
+      try {
+        await c.send('Page.navigate', { url: B + '/#/shorts/' + V2 });
+        await c.until(READY);
+        const sel = `.sh-item[data-id="${V2}"] .sl-btn`;
+        ok(await c.until(VISIBLE(sel), 10000), 'в ленте Shorts у ролика видна «❤ Нравится»');
+        await c.shot('shorts-1-heart');
+        await c.click(sel);
+        ok(await c.until(`document.getElementById('globalAuthModal').classList.contains('open') && !!document.querySelector('#gauthOauth .lgn-main')`, 8000), '❤ гостем → окно входа');
+        const it = await c.ev(`D37Intent.pending()`);
+        ok(it?.kind === 'site_like' && it.args?.kind === 'video' && it.args?.item === V2 && it.hash === '#/shorts/' + V2, 'запомнено: ❤ этому Short и место в ленте', it);
+        await c.click('#gauthOauth .lgn-main');
+        ok(await c.until(`${READY} && ${SIGNED}`, 25000), 'вернулись с «Google» и вошли');
+        if (await c.until(`!!document.querySelector('.wlc-ov')`, 8000)) { await c.ev(`(() => { document.querySelector('.wlc-year').value = String(new Date().getFullYear() - 25); return true; })()`); await c.click('.wlc-ok'); }
+        ok(await c.until(`document.querySelector(${JSON.stringify(sel)})?.classList.contains('on')`, 15000), '❤ этому Short поставлен сам');
+        ok(S.journal.some(x => x[0] === 'rpc' && x[1] === 'site_like' && x[2]?.p_kind === 'video' && x[2]?.p_item === V2 && x[2]?.p_on === true), 'site_like: этот Short, «поставить»');
+        const st = await c.ev(`({ hash: D37Route.hash(), route: document.body.dataset.route })`);
+        ok(st.route === 'shorts' && st.hash === '#/shorts/' + V2, 'та же лента, тот же Short', st);
+        await c.shot('shorts-2-done');
+        ok(!c.errs.length, 'Shorts: ошибок нет', c.errs);
       } finally { await c.close(); }
     }
   } finally { site.stop(); }

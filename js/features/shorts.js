@@ -145,6 +145,7 @@ function renderShortsFeed(){
     setupShortsObserver(feed);
     feed.addEventListener('keydown', shortsKeys);
     window.D37VLike?.paint(feed);   // ✓ на «Лайк на YouTube» — отметка этого браузера (js/core/vlike.js)
+    window.D37SiteLike?.shorts(feed);   // «❤ на сайте» у каждого Short (js/features/site-like.js; без ч. 20 — кнопок не видно)
   }
   updateSoundButtons();
 

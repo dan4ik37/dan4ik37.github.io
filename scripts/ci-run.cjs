@@ -77,7 +77,7 @@ const TESTS = [
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
   { f: 'forum-e2e.cjs', args: ['phone', '20'], needs: 'pglite', e2e: true, t: 600 }, { f: 'forum-e2e.cjs', args: ['phone', '5', 'legacy'], needs: 'pglite', e2e: true, t: 400 },   // T-157: форум 2.0 и старый форум (FORUM2 = false)
-  { f: 'mod-e2e.cjs', e2e: true, t: 400 }, { f: 'part18-e2e.cjs', e2e: true, t: 900 }, { f: 'auth-social-e2e.cjs', e2e: true, t: 600 },
+  { f: 'mod-e2e.cjs', e2e: true, t: 400 }, { f: 'part18-e2e.cjs', e2e: true, t: 900 }, { f: 'auth-social-e2e.cjs', e2e: true, t: 900 },
   // 21.11: были вне списка (ops-test их считал забытыми); каждая прогнана — зелёная. Вход подделан, запись подменена, в базу ничего не уходит
   { f: 't162-e2e.cjs', e2e: true, t: 400 }, { f: 't168-e2e.cjs', e2e: true, t: 500 }, { f: 't169-e2e.cjs', e2e: true, t: 600 },   // чат и «Дискорд»: правка сообщений, раскладка, голосовые сайта
   { f: 'hub-e2e.cjs', e2e: true, t: 900 }, { f: 'hub-path-e2e.cjs', e2e: true, t: 400 }, { f: 'hub-keys-e2e.cjs', e2e: true, t: 400 },   // платформа /hub: игра движка в сайте, «Путь», клавиши игры
