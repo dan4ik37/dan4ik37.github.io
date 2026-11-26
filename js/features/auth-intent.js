@@ -10,6 +10,8 @@
 // регистрирует модуль, который умеет его делать; игры грузятся лениво — ждём обработчик до 25 с). Окно входа открыто «просто так»
 // (кнопка «Войти») — тоже запоминаем место: после входа человек остаётся там же (раньше — всегда свой профиль).
 // Закрыл окно, не войдя, — задуманное забывается (через секунду: переход на Google окно не закрывает). Место живёт 30 минут, действие — 10.
+// park() (уже вошёл, действие уводит на чужой экран и обратно) — только для ЭТОЙ вкладки (d37_tab в sessionStorage): открыл сайт заново
+// в новой вкладке — его там не видно, никуда не переносит и ничего не делает (проверщик 26.11).
 // Ключи браузера — только свои: d37_intent (localStorage: переход на Google и обратно — новая загрузка страницы), d37_welcome_<id>.
 // Откат — AUTH_SOCIAL = false (js/core/config.js): need() просто открывает окно входа, как раньше, ничего не запоминается.
 (() => {
@@ -21,6 +23,17 @@
   const KIND_RE = /^[a-z][a-z0-9_]{0,31}$/, YT_RE = /^[A-Za-z0-9_-]{11}$/;
   const lsGet = k => { try { return root.localStorage ? root.localStorage.getItem(k) : null; } catch (e) { return null; } };
   const lsSet = (k, v) => { try { if (!root.localStorage) return; if (v == null) root.localStorage.removeItem(k); else root.localStorage.setItem(k, String(v)); } catch (e) {} };
+  // id этой вкладки (sessionStorage — у каждой вкладки свой): отложенное park() принадлежит вкладке, которая ушла на чужой экран и
+  // вернётся туда же; в новой вкладке его не видно — сайт не уводит человека на старое место и не делает действие без нажатия
+  const TAB_KEY = 'd37_tab';
+  function tabId() {
+    try {
+      const ss = root.sessionStorage; if (!ss) return '';
+      let t = ss.getItem(TAB_KEY);
+      if (!t) { t = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); ss.setItem(TAB_KEY, t); }
+      return t;
+    } catch (e) { return ''; }
+  }
   const me = () => (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
   const toast = t => { if (typeof xpToast === 'function') xpToast(t); else if (typeof gameToast === 'function') gameToast(t); else root.console?.log?.(t); };
   const routeHash = () => (root.D37Route ? root.D37Route.hash() : String(root.location?.hash || '')) || '#/home';
@@ -61,6 +74,7 @@
     try {
       const o = JSON.parse(lsGet(KEY) || 'null');
       if (!o || typeof o !== 'object' || Date.now() - (+o.at || 0) > TTL || Date.now() < (+o.at || 0) - 60e3) return null;
+      if (o.tab && o.tab !== tabId()) return null;   // отложено другой вкладкой (park) — не наше, не трогаем
       // ДЕЙСТВИЕ живёт 10 минут (место — 30): на общем устройстве чужое задуманное «Следить» / ❤ не достанется следующему, кто войдёт
       if (o.kind && Date.now() - (+o.at || 0) > ACT_TTL) { o.kind = null; o.args = null; o.label = ''; }
       return o;
@@ -113,7 +127,7 @@
     let media = await captureMedia().catch(() => null);
     const om = o.media;
     if (om && om.k === 'yt' && YT_RE.test(String(om.id || '')) && (!media || (media.k === 'yt' && media.id === om.id && (+media.t || 0) < (+om.t || 0)))) media = { k: 'yt', id: om.id, title: String(om.title || media?.title || '').slice(0, 200), t: Math.max(0, Math.floor(+om.t || 0)) };
-    write({ kind, args: a, label: String(o.label || '').slice(0, 80), hash: routeHash(), y: Math.round(root.scrollY || 0), media, at: Date.now() });
+    write({ kind, args: a, label: String(o.label || '').slice(0, 80), hash: routeHash(), y: Math.round(root.scrollY || 0), media, at: Date.now(), tab: tabId() || undefined });
     return true;
   }
   // закрыл окно, не войдя: задуманное забыть (через секунду — уход на Google тоже «закрывает» страницу, но не окно)
