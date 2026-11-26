@@ -6,7 +6,7 @@
 //   говорят почему; мир со скриптом на КАЖДОМ из шести языков (JS — дверь на касание, Lua — счётчик, C# — плавное движение, Java —
 //   сообщение, Rust — монетка, C++ — крутилка; C++ и Rust собираются кнопкой сайта «⚙️ Собрать» — компиляторы с CDN, как у людей);
 //   зависший скрипт убит за 3 с и на нашем движке; старый мир после игры открывается тем же.
-// Запуск из корня сайта: node scripts/studio-d37-e2e.cjs [--gl 0|1] [--view phone|800|1920|3440|pc] [--only lesson,empty,obby,gate,s8,langs,old]
+// Запуск из корня сайта: node scripts/studio-d37-e2e.cjs [--gl 0|1] [--view phone|800|1920|3440|pc] [--only lesson,empty,obby,gate,s8,adv,langs,old]
 // Снимки — <D37_TMP>\shots\s3d-*.jpg (по умолчанию M:/d37/claude-tmp/studio/shots).
 const http = require('http'), fs = require('fs'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
@@ -52,10 +52,17 @@ async function chrome(){
   await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
   await send('Page.setDownloadBehavior', { behavior: 'deny' });
   await send('Network.setBlockedURLs', { urls: BLOCK });
-  await send('Fetch.enable', { patterns: [{ urlPattern: '*supabase.co/*', requestStage: 'Request' }] });
+  // D37_E2E_FLAG=1: the page gets js/core/config.js with STUDIO_D37 = true (the flag as it would be after the switch-on
+  // commit; the file on disk is not changed) — the check that decides the switch-on runs before it
+  const FLAG = process.env.D37_E2E_FLAG === '1';
+  await send('Fetch.enable', { patterns: [{ urlPattern: '*supabase.co/*', requestStage: 'Request' }, ...(FLAG ? [{ urlPattern: '*/js/core/config.js*', requestStage: 'Request' }] : [])] });
   subs.add(d => {
     if (d.method !== 'Fetch.requestPaused') return;
     const rq = d.params.request, u = rq.url, rid = d.params.requestId;
+    if (FLAG && /\/js\/core\/config\.js/.test(u)) {
+      const body = fs.readFileSync(path.join(SITE, 'js/core/config.js'), 'utf8').replace(/const STUDIO_D37 = false/, 'const STUDIO_D37 = true');
+      return send('Fetch.fulfillRequest', { requestId: rid, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/javascript; charset=utf-8' }, { name: 'Cache-Control', value: 'no-store' }], body: Buffer.from(body).toString('base64') }).catch(() => {});
+    }
     const reply = (code, body, type = 'application/json') => send('Fetch.fulfillRequest', { requestId: rid, responseCode: code, responseHeaders: [{ name: 'Content-Type', value: type }, { name: 'Access-Control-Allow-Origin', value: '*' }, { name: 'Access-Control-Allow-Headers', value: '*' }, { name: 'Access-Control-Allow-Methods', value: '*' }, { name: 'Content-Range', value: '0-0/0' }], body: Buffer.from(body).toString('base64') }).catch(() => {});
     if (rq.method === 'OPTIONS') return reply(204, '');
     if (rq.method !== 'GET' && rq.method !== 'HEAD') return reply(/\/rpc\//.test(u) ? 200 : 403, /\/rpc\//.test(u) ? 'null' : '{"message":"запись в тесте запрещена"}');
@@ -63,10 +70,27 @@ async function chrome(){
   });
   const L = { d37_perf: 'mid', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_fsr: 'native', d37_theme: 'dark' };
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(L).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}}catch(e){}` });
-  const shot = async name => { fs.mkdirSync(SHOTS, { recursive: true }); const r = await Promise.race([send('Page.captureScreenshot', { format: 'jpeg', quality: 82 }), sleep(45000).then(() => null)]); if (!r) { errs.push('снимок ' + name + ': страница не ответила за 45 с (зависла?)'); console.log('FAIL', 'снимок ' + name + ' — страница не ответила за 45 с'); fail++; return null; } const f = path.join(SHOTS, `s3d-${name}-gl${GL}-${VIEWN}.jpg`); fs.writeFileSync(f, Buffer.from(r.data, 'base64')); console.log('  снимок', f); return f; };
+  const shot = async name => { fs.mkdirSync(SHOTS, { recursive: true }); const r = await Promise.race([send('Page.captureScreenshot', { format: 'jpeg', quality: 82 }), sleep(45000).then(() => null)]); if (!r) { errs.push('снимок ' + name + ': страница не ответила за 45 с (зависла?)'); console.log('FAIL', 'снимок ' + name + ' — страница не ответила за 45 с'); fail++; await hang('снимок ' + name); return null; } const f = path.join(SHOTS, `s3d-${name}-gl${GL}-${VIEWN}.jpg`); fs.writeFileSync(f, Buffer.from(r.data, 'base64')); console.log('  снимок', f); return f; };
   const key = async (code, down) => { const k = { KeyW: ['w', 87], ShiftLeft: ['Shift', 16], Space: [' ', 32], KeyA: ['a', 65], KeyD: ['d', 68] }[code]; await send('Input.dispatchKeyEvent', { type: down ? 'keyDown' : 'keyUp', code, key: k[0], windowsVirtualKeyCode: k[1], nativeVirtualKeyCode: k[1] }); };
   const close = async () => { try { ws.close(); } catch (e) {} try { proc.kill(); } catch (e) {} await sleep(500); try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) {} };
-  return { send, ev, until, shot, key, close, errs };
+  // видеопамять процесса GPU этого Chrome (счётчик Windows «GPU Process Memory», МБ; null, если не узнать)
+  const gpuMem = () => { try {
+    const tag = path.basename(profile).replace(/'/g, '');
+    const BS = String.fromCharCode(92);   // обратная косая для пути счётчика
+    const ps = `$p = Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -like '*${tag}*' -and $_.CommandLine -like '*--type=gpu-process*' } | Select-Object -First 1; if ($p) { $c = Get-Counter ('${BS}GPU Process Memory(pid_' + $p.ProcessId + '*)${BS}Dedicated Usage'),('${BS}GPU Process Memory(pid_' + $p.ProcessId + '*)${BS}Shared Usage') -ErrorAction SilentlyContinue; $d = 0; $s = 0; foreach ($x in $c.CounterSamples) { if ($x.Path -like '*dedicated*') { $d += $x.CookedValue } else { $s += $x.CookedValue } }; '' + [math]::Round($d / 1MB) + ' ' + [math]::Round($s / 1MB) }`;
+    const out = require('child_process').execFileSync('powershell', ['-NoProfile', '-Command', ps], { encoding: 'utf8', timeout: 20000 }).trim().split(/\s+/).map(Number);
+    return out.length === 2 && out.every(Number.isFinite) ? { ded: out[0], shared: out[1] } : null;
+  } catch (e) { return null; } };
+  // процессы этого Chrome: тип, время ЦП (с), память (МБ) — при зависании видно, кто занят (страница или GPU)
+  const procs = () => { try {
+    const tag = path.basename(profile).replace(/'/g, '');
+    const ps = `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -like '*${tag}*' } | ForEach-Object { $t = if ($_.CommandLine -match '--type=([a-z-]+)') { $Matches[1] } else { 'browser' }; $g = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; if ($g) { $t + ':' + [math]::Round($g.CPU, 1) + 's:' + [math]::Round($g.PrivateMemorySize64 / 1MB) + 'MB' } }`;
+    return require('child_process').execFileSync('powershell', ['-NoProfile', '-Command', ps], { encoding: 'utf8', timeout: 20000 }).trim().split(/\s+/).join(' ');
+  } catch (e) { return 'нет: ' + String(e.message || e).slice(0, 80); } };
+  // зависла: два снимка процессов через 5 с и видеопамять — в лог
+  const ram = () => { try { return require('child_process').execFileSync('powershell', ['-NoProfile', '-Command', "$o = Get-CimInstance Win32_OperatingSystem; 'RAM free ' + [math]::Round($o.FreePhysicalMemory / 1MB, 1) + ' GB, commit free ' + [math]::Round($o.FreeVirtualMemory / 1MB, 1) + ' GB'"], { encoding: 'utf8', timeout: 20000 }).trim(); } catch (e) { return '?'; } };
+  const hang = async why => { console.log('  ЗАВИСАНИЕ (' + why + ') процессы:', procs(), '| видеопамять', JSON.stringify(gpuMem()), '|', ram()); await sleep(5000); console.log('  … через 5 с:', procs()); };
+  return { send, ev, until, shot, key, close, errs, gpuMem, procs, hang };
 }
 const READY = `typeof sbClient !== 'undefined' && !!window.D37Route && document.readyState === 'complete' && typeof gamesLoadScript === 'function'`;
 const ST = `(window.D37E && D37E.studioD37 ? D37E.studioD37.state() : null)`;
@@ -88,7 +112,9 @@ async function open(B, hash, tag){
 async function play(B, tag, frames = true){
   await B.ev(`document.querySelector('.s3-play').click(); 1`);
   const on = await B.until(`${ST}?.playing === true && ${ST}?.engine === true && !document.querySelector('.s3d-wait:not([hidden])')`, 180000);
-  ok(on, `${tag}: «▶ Играть» — мир играется на НАШЕМ движке`, await B.ev(ST));
+  const st0 = await B.ev(ST, 20000);
+  if (st0 === '__timeout') await B.hang(tag + ' «Играть»');
+  ok(on, `${tag}: «▶ Играть» — мир играется на НАШЕМ движке`, st0);
   ok(await B.ev(`!window.__s3.ed.playing && document.querySelector('.s3-play').textContent.includes('Стоп')`), `${tag}: старый движок не запускался, кнопка «■ Стоп»`);
   ok(await B.until(`!document.querySelector('.s3x-sheet')`, 3000), `${tag}: листы редактора закрыты (как при игре на старом движке)`);
   await sleep(2500);
@@ -114,7 +140,7 @@ async function run(port){
   try {
     await B.send('Emulation.setDeviceMetricsOverride', VIEW[VIEWN] || VIEW.pc);
     if (VIEWN === 'phone') { await B.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }); }
-    await B.send('Page.navigate', { url: `http://localhost:${port}/?gl=${GL}` });
+    await B.send('Page.navigate', { url: `http://localhost:${port}/?gl=${GL}${process.env.D37_E2E_QS ? '&' + process.env.D37_E2E_QS : ''}` });
     ok(await B.until(READY, 90000), 'сайт загрузился');
     ok(await B.ev(`typeof STUDIO_D37 !== 'undefined' && STUDIO_D37 === true`), 'флаг STUDIO_D37 включён');
 
@@ -143,7 +169,7 @@ async function run(port){
     if (want('gate')) {
       const s = await open(B, '#/games/studio3d/new/island', 'ворота «Остров»');
       ok(s?.gate?.fits === false && (s.gate.missing || []).includes('terrain.relief'), 'ворота: «Остров» (холмы, вода) — пока на старом движке, причина названа', s?.gate);
-      ok(await B.ev(`document.querySelector('.s3d-eng')?.textContent.includes('Старый движок')`), 'ворота: ярлык «🧱 Старый движок»');
+      ok(await B.ev(`document.querySelector('.s3d-eng')?.textContent.includes('Старый')`), 'ворота: ярлык «🧱 Старый»');
       await B.ev(`document.querySelector('.s3d-eng').click(); 1`);
       await sleep(400);
       ok(await B.ev(`/холмы/.test(document.querySelector('.s3d-sheet')?.textContent || '')`), 'ворота: окно говорит по-русски, чего не хватает');
@@ -169,8 +195,18 @@ async function run(port){
         SC.add('NPC', { name: 'Зомби', look: 'zombie', act: 'follow', damage: 20, speed: .75, radius: 30, pos: [0, 0.2, 14], text: 'Ммм… мозги…' });
         a.refresh(); return SC.all().length; })()`);
       await B.until(`(${ST}?.gate?.needs || []).includes('npc.follow')`, 8000);
+      const g0 = (await B.ev(ST))?.gate;
+      // проверка 26.11: ящики на старом движке кувыркаются (Rapier), здесь пока только падают; у зомби там своя внешность —
+      // такой мир остаётся на старом движке, и окно говорит почему
+      ok(g0?.fits === false && ['part.loose.rigid', 'npc.look.zombie'].every(n => g0.missing.includes(n)), 'S8: мир с кувыркающимися ящиками и зомби — на старом движке, причины названы', g0);
+      await B.ev(`document.querySelector('.s3d-eng').click(); 1`); await sleep(400);
+      ok(await B.ev(`/кувыркаются/.test(document.querySelector('.s3d-sheet')?.textContent || '') && /внешность NPC/.test(document.querySelector('.s3d-sheet')?.textContent || '')`), 'S8: окно по-русски: «детали, которые падают и кувыркаются», «внешность NPC»');
+      await B.ev(`document.querySelector('.s3d-sheet .s3d-x')?.click(); 1`);
+      // те же огонь и NPC, который догоняет и кусает, но обычной внешности и с закреплёнными ящиками — на нашем движке
+      await B.ev(`(() => { const a = window.__s3, SC = a.ed.SC; for (const o of SC.all()) { if (o.name.startsWith('Ящик ') || o.name === 'Шар') SC.set(o, 'anchored', true); if (o.cls === 'NPC') SC.set(o, 'look', 'random'); } a.refresh(); return 1; })()`);
+      await B.until(`${ST}?.gate?.fits === true`, 8000);
       const g = (await B.ev(ST))?.gate;
-      ok(g?.fits === true && ['part.loose', 'fx.fire', 'npc.follow'].every(n => g.needs.includes(n)), 'S8: мир с падающими деталями, огнём и зомби проходит ворота', g);
+      ok(g?.fits === true && ['fx.fire', 'npc.follow'].every(n => g.needs.includes(n)), 'S8: мир с огнём и NPC, который догоняет, проходит ворота', g);
       await B.ev(`document.querySelector('.s3-play').click(); 1`);
       ok(await B.until(`${ST}?.playing === true && ${ST}?.engine === true && !document.querySelector('.s3d-wait:not([hidden])')`, 180000), 'S8: играем на нашем движке');
       for (let i = 0; i < 6; i++) { await sleep(600); await B.shot(`s8-${i}`); }
@@ -186,6 +222,34 @@ async function run(port){
       // тот же адрес new/empty дальше открывает тот же мир — убрать своё
       await B.ev(`(() => { const a = window.__s3, SC = a.ed.SC; for (const o of SC.all().filter(x => x.name.startsWith('Ящик ') || ['Шар', 'Огонь', 'Зомби'].includes(x.name))) SC.remove(o); a.refresh(); return SC.all().length; })()`);
       await sleep(400);
+    }
+    if (want('adv')) {
+      // проверка 26.11: скрипты с кликами, [E], Game.*, Camera.* — на старом движке (там они работают); поток команд, 10 000
+      // деталей и огромная память — на нашем движке игра живёт, автору сказано, что лишнее отброшено
+      const SCR = (code, lang = 'js') => `(() => { const a = window.__s3, SC = a.ed.SC; for (const o of SC.all().filter(x => x.cls === 'Script' || x.name === 'Цель')) SC.remove(o); const p = SC.add('Part', { name: 'Цель', pos: [0, 2, 6], size: [2, 2, 2], color: '#e11d48' }); SC.add('Script', { name: 'adv', lang: ${JSON.stringify(lang)}, code: ${JSON.stringify(code)} }, p); a.refresh(); return 1; })()`;
+      await open(B, '#/games/studio3d/new/empty', 'скрипты, которых движок ещё не умеет');
+      for (const [code, need] of [['const cd = Instance.new("ClickDetector", script.Parent); cd.MouseClick.Connect(() => print("клик"));', 'script.click'],
+        ['script.Parent.Prompt("Открыть").Triggered.Connect(p => print("E"));', 'script.prompt'], ['Game.Mode = "coins";', 'script.game'], ['Camera.Shake(2, 0.5);', 'script.camera']]) {
+        await B.ev(SCR(code));
+        ok(await B.until(`(${ST}?.gate?.missing || []).includes(${JSON.stringify(need)})`, 8000), `ворота: скрипт с ${need} — на старом движке`, (await B.ev(ST))?.gate?.missing);
+      }
+      const alive = async () => (await B.ev(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(1))))`, 15000)) === 1;
+      for (const [k, code] of [['поток', 'const p = script.Parent; for (let n = 0; n < 20; n++) { for (let i = 0; i < 10000; i++) p.Position = new Vector3(i % 50, 2, 6); await task.wait(); } print("поток кончился");'],
+        ['10000 деталей', 'for (let i = 0; i < 10000; i++) { const q = Instance.new("Part"); q.Position = new Vector3(i % 100, 1 + Math.floor(i / 100), 20); q.Parent = workspace; } print("детали сделаны");'],
+        ['память', 'const a = []; for (let i = 0; i < 4; i++) { a.push(new Float64Array(5e7)); a[i][1] = i; } print("память взята");']]) {
+        await B.ev(SCR(code));
+        await B.until(`${ST}?.gate?.fits === true`, 8000);
+        await B.ev(`document.querySelector('.s3-play').click(); 1`);
+        ok(await B.until(`${ST}?.playing === true && ${ST}?.engine === true && !document.querySelector('.s3d-wait:not([hidden])')`, 180000), `${k}: играем на нашем движке`);
+        await sleep(6000);
+        ok(await alive() && (await B.ev(`${ST}?.playing`)) === true, `${k}: страница и игра живы`);
+        if (k === 'поток') ok(/больше 4000 команд|Движок не успел/.test(await B.ev(OUT)), 'поток: автору сказано один раз, что лишние команды отброшены', (await B.ev(OUT)).slice(-300));
+        await B.shot('adv-' + k.replace(/\s+/g, ''));
+        await B.ev(`document.querySelector('.s3-play').click(); 1`);
+        ok(await B.until(`${ST}?.playing === false`, 15000), `${k}: «■ Стоп»`);
+        await sleep(600);
+      }
+      await B.ev(`(() => { const SC = window.__s3.ed.SC; for (const o of SC.all().filter(x => x.cls === 'Script' || x.name === 'Цель')) SC.remove(o); window.__s3.refresh(); return 1; })()`);
     }
     if (want('langs')) {
       await open(B, '#/games/studio3d/new/empty', 'шесть языков');
@@ -227,7 +291,7 @@ async function run(port){
       // к двери (касание → твин на движке → Completed в скрипте) и через монетку
       await B.ev(`document.querySelector('.s3d-stage canvas')?.focus(); 1`);
       await B.key('KeyW', true);
-      for (let i = 0; i < 10; i++) { await sleep(350); await B.shot(`langs-walk${i}`); }   // персонаж «Студии» на движке ходит медленнее старого (2.2 м/с против 4) — дальше идти
+      for (let i = 0; i < 10; i++) { await sleep(350); await B.shot(`langs-walk${i}`); }   // с 26.11 персонаж ходит с числами сайта (4 м/с, бег 7, прыжок 1,2 м)
       await B.key('KeyW', false);
       await sleep(1500);
       const out = await B.ev(OUT), st = await B.ev(ST);
@@ -259,6 +323,78 @@ async function run(port){
       await sleep(600);
       const b = await B.ev(`JSON.stringify(JSON.parse(localStorage.getItem('d37_s3_oldw1')).objects)`);
       ok(a === b, 'старый мир: после игры на движке и сохранения — те же объекты', { a: a.slice(0, 200), b: b.slice(0, 200) });
+    }
+    if (want('pairs')) {
+      // R2: «старый | наш» — один кадр «🪟 Рядом» (слева старый движок, справа наш, та же камера) для урока, двух шаблонов
+      // и двух заготовок режимов (заготовки играют на старом движке — «Рядом» всё равно рисует их мир нашим)
+      const blanks = await B.ev(`Object.keys(window.D37E?.studioTemplates || {}).slice(0, 2)`);
+      const list = [['lesson', '#/games/studio3d'], ['tpl-obby', '#/games/studio3d/new/obby'], ['tpl-grass', '#/games/studio3d/new/grass'], ...(blanks || []).map(b => ['blank-' + b, '#/games/studio3d/new/' + b])];
+      for (const [name, hash] of list) {
+        await open(B, hash, 'пара ' + name);
+        await B.ev(`document.querySelector('.s3x-tut [data-l="close"]')?.click(); document.querySelector('.s3d-side')?.click(); 1`);
+        const up = await B.until(`${ST}?.engine === true && ${ST}?.side === true && !document.querySelector('.s3d-wait:not([hidden])')`, 180000);
+        await sleep(4000);
+        // листы редактора (заготовка обби сама открывает «Режим игры») не закрывают половину «нашего»
+        await B.ev(`(window.D37E?.s3ui?.closeSheet?.(), document.querySelector('.s3x-sheet')?.remove(), 1)`);
+        await sleep(1000);
+        const f = await B.shot('pair-' + name);
+        ok(up && !!f, `пара ${name}: «Рядом» — старый | наш, кадр снят`);
+        await B.ev(`document.querySelector('.s3d-side')?.click(); 1`);
+      }
+    }
+    if (want('bar')) {
+      // R2: верхняя панель — «👥 Тест вдвоём», «📤 Выложить», «▶ Играть» видны целиком без прокрутки (1920 и шире; телефон —
+      // своё меню ☰). Ширины кнопок — в лог (что занимает место)
+      await open(B, '#/games/studio3d/new/empty', 'панель');
+      await sleep(800);
+      const r = await B.ev(`(() => { const t = document.querySelector('.s3-top'), R = t.getBoundingClientRect();
+        const vis = el => { if (!el) return null; const b = el.getBoundingClientRect(); return b.width > 0 && b.left >= R.left - 1 && b.right <= R.right + 1 && getComputedStyle(el).display !== 'none'; };
+        return { sw: t.scrollWidth, cw: t.clientWidth, test: vis(t.querySelector('[data-a="mp:test"]')), pub: vis(t.querySelector('[data-a="publish"]')), play: vis(t.querySelector('.s3-play')),
+          kids: [...t.querySelectorAll(':scope > *, .s3-ext > *, .s3-ext .s3d-ui > *')].filter(e => e.getBoundingClientRect().width > 0).map(e => (e.textContent || e.className || e.tagName).trim().slice(0, 14) + ':' + Math.round(e.getBoundingClientRect().width)).join(' ') }; })()`);
+      console.log('  панель', JSON.stringify(r));
+      if (VIEWN !== 'phone' && VIEWN !== '800') ok(r && r.test && r.pub && r.play, `панель ${VIEWN}: «Тест вдвоём», «Выложить», «Играть» видны (${r?.sw}/${r?.cw})`, r);
+      else ok(r && r.play, `панель ${VIEWN}: «Играть» видна`, r);
+      await B.shot('bar');
+    }
+    if (want('repeat')) {
+      // R2: «Играть» много раз подряд в одной странице (зависание R1 после 2–3 запусков на 1920 / 3440): новый мир
+      // (новый запуск движка) через раз, между ними — тот же мир ещё раз; после каждой игры — память (JS, wasm, GPU)
+      // и отвечает ли страница. --n N (по умолчанию 10), --mode mix|new|same
+      const N = Math.max(1, +A.n || 10), MODE = A.mode || 'mix', TPL = ['empty', 'obby', 'grass'];
+      const MEM = `(async () => { let w = null; try { if (${ST}?.engine) { const m = await import('/d37-preview/d37_web.js'); const x = await m.default(); w = Math.round(x.memory.buffer.byteLength / 1048576); } } catch (e) {}
+        return { heap: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576), wasm: w, canvases: document.querySelectorAll('canvas').length }; })()`;
+      const mem = [];
+      let opened = 0;
+      for (let i = 0; i < N; i++) {
+        if (MODE === 'new' || (MODE === 'mix' && i % 2 === 0) || i === 0) {
+          const tpl = TPL[opened++ % TPL.length];
+          const s = await open(B, '#/games/studio3d/new/' + tpl, `подряд ${i + 1}: шаблон ${tpl}`);
+          if (s?.gate?.fits !== true) { ok(false, `подряд ${i + 1}: ${tpl} проходит ворота`, s?.gate?.missing); continue; }
+        }
+        const tag = `подряд ${i + 1}/${N}`;
+        await B.ev(`document.querySelector('.s3-play').click(); 1`);
+        const on = await B.until(`${ST}?.playing === true && ${ST}?.engine === true && !document.querySelector('.s3d-wait:not([hidden])')`, 180000);
+        ok(on, `${tag}: «▶ Играть» — на нашем движке`, await B.ev(ST, 10000));
+        await B.ev(`document.querySelector('.s3d-stage canvas')?.focus(); 1`, 10000);
+        await B.key('KeyW', true); await B.key('ShiftLeft', true);
+        await sleep(1500);
+        const f = await B.shot(`repeat-${i + 1}`);
+        await B.key('ShiftLeft', false); await B.key('KeyW', false);
+        const alive = await B.ev(`1`, 15000);
+        ok(f && alive === 1, `${tag}: страница отвечает в движении (кадр снят)`);
+        if (alive !== 1) break;
+        await B.ev(`document.querySelector('.s3-play').click(); 1`, 10000);
+        ok(await B.until(`${ST}?.playing === false && document.querySelector('.s3-play').textContent.includes('Играть')`, 15000), `${tag}: «■ Стоп»`);
+        const m = { i: i + 1, ...(await B.ev(MEM, 15000) || {}), gpu: B.gpuMem(), procs: B.procs() };
+        mem.push(m);
+        console.log('  память', JSON.stringify(m));
+      }
+      const g = mem.map(x => x.gpu?.ded).filter(Number.isFinite);
+      if (g.length >= 4) {
+        // рост видеопамяти от второго запуска к последнему: утечка за запуск — меньше 150 МБ
+        const per = (g[g.length - 1] - g[1]) / Math.max(1, g.length - 2);
+        ok(per < 150, `подряд: видеопамять не растёт от игры к игре (${g.join(' → ')} МБ, ${Math.round(per)} МБ за игру)`, g);
+      }
     }
     const errs = realErrors(B.errs);
     ok(errs.length === 0, 'ошибок в консоли нет', errs.slice(0, 6));

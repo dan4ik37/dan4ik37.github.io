@@ -1,9 +1,9 @@
 {
- "id": "8d4f8d9d20",
+ "id": "0fc073ea7b",
  "bridge": 1,
  "config_build": 0,
- "wasm_raw": 19365006,
- "made": "2026-11-26T15:55:07.944Z",
+ "wasm_raw": 19374101,
+ "made": "2026-11-26T22:32:47.849Z",
  "files": {
   "blocks.json": 43322,
   "build-id.txt": 11,
@@ -11,8 +11,8 @@
   "d37-terrain-worker.js": 8246,
   "d37-world-worker.js": 6186,
   "d37_web.js": 259527,
-  "d37_web_bg.wasm": 19365006,
-  "engine-host.js": 73549,
+  "d37_web_bg.wasm": 19374101,
+  "engine-host.js": 75112,
   "index.html": 9359,
   "LICENSES.txt": 224,
   "planet-jobs.js": 3160,

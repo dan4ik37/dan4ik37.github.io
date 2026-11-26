@@ -3336,6 +3336,9 @@ html.s3-open,html.s3-open body{overflow:hidden}
 .s3-top{display:flex;align-items:center;gap:4px;padding:6px;background:#2b2d36;border-bottom:1px solid #3a3d48;overflow-x:auto;scrollbar-width:none}
 .s3-top::-webkit-scrollbar{display:none}
 .s3-top>*{flex:none}
+.s3:not(.s3-playing) .s3-top>.s3-play{position:sticky;right:0;z-index:2;box-shadow:-10px 0 10px #2b2d36}
+@media (max-width:2560px){.s3-top .s3-ext button span,.s3-top .s3-tools button span,.s3-top [data-panel] span,.s3-top [data-a="menu:file"] span{display:none}}
+@media (max-width:2100px){.s3-top [data-a="menu:models"] span,.s3-top [data-a="add:Script"] span{display:none}}
 @media (max-width:1560px){.s3-tools button span,.s3-top [data-panel] span{display:none}}
 @media (max-width:1180px){.s3-top button span{display:none}}
 .s3-name{width:150px;font-weight:700}

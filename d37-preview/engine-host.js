@@ -31,9 +31,30 @@ const HERE = (f) => new URL('./' + f, import.meta.url).href;
 // ep38 A2 switches (one-line rollbacks): the CC0 object images loaded by this page; the build check below.
 const OBJ_TEXTURES = true;
 const BUILD_CHECK = true;
+// c-studio R2 (the page froze after 2–3 «Играть» in a row at 1920 / 3440): a disposed start gives its GPU memory back
+// at once. wgpu's WebGPU backend never destroys a device, a buffer or a texture on drop (they wait for the JS garbage
+// collector, which does not see GPU memory), and a WebGL2 context lives until its canvas is collected — so every start
+// of a page (each studio world opens a new one) left a device full of screen-sized targets behind. Rollback: false.
+// (`?gpufree=0` / `=1` in the page address overrides it for the A/B check in studio-d37-e2e.cjs)
+const GPU_FREE = true;
+const gpuFree = () => { try { const q = new URLSearchParams(location.search).get('gpufree'); return q === null ? GPU_FREE : q === '1'; } catch (e) { return GPU_FREE; } };
+// the WebGPU devices made while one start creates its renderer (one start at a time: an overlapping start keeps the
+// old behaviour rather than ever destroying a device it did not make)
+let devCollect = null, devPatched = false;
+function collectDevices(list) {
+  if (typeof GPUAdapter === 'undefined' || !GPUAdapter.prototype || typeof GPUAdapter.prototype.requestDevice !== 'function') return false;
+  if (!devPatched) {
+    devPatched = true;
+    const rd = GPUAdapter.prototype.requestDevice;
+    GPUAdapter.prototype.requestDevice = function (...a) { const p = rd.apply(this, a); const c = devCollect; if (c) p.then((d) => { c.push(d); }, () => { /* refused: nothing to free */ }); return p; };
+  }
+  if (devCollect) return false;
+  devCollect = list;
+  return true;
+}
 // ep38 A2: the build this page script belongs to — stamped by scripts/pack.mjs into this file, d37-page.js, d37_web.js
 // (D37_GLUE_BUILD) and the wasm (custom section «d37_build»); '' = an unpacked page (the repo's web/): no check.
-export const PAGE_BUILD = 'c3d4128490';
+export const PAGE_BUILD = '0e268589fc';
 export function wasmBuildOf(module) {
   try { const s = WebAssembly.Module.customSections(module, 'd37_build'); return s.length ? new TextDecoder().decode(s[0]) : ''; } catch (e) { return ''; }
 }
@@ -268,7 +289,11 @@ export async function start(o) {
     return false;
   };
   fit();
-  const app = await D37Web.create(canvas, !!o.gl);
+  const gpuDevices = [];
+  const collecting = gpuFree() && collectDevices(gpuDevices);
+  let app;
+  try { app = await D37Web.create(canvas, !!o.gl); } finally { if (collecting) devCollect = null; }
+  st.gpuDevices = gpuDevices;
   st.app = app;
   st.backend = app.backend();
   if (typeof app.set_gpu_culling === 'function'
@@ -389,6 +414,9 @@ export async function start(o) {
   // forwards keys / pointers (the same rules as the engine's page d37-page.js). Its save rides in save() (GAME section).
   const game = app.game_on();
   const creative = o.scene === 'creative';   // ep11 publish: the orbit button in the creative world (see the touch buttons)
+  // c-studio: a «Студия 3D» world (scene 'studio'): the studio page owns the HUD and the hints — no wardrobe (button,
+  // B key), no crouch disc, no start hint over its world; the stick and the jump stay (the old studio has them too)
+  const s3d = o.scene === 'studio';
   st.game = game;
   if (game) app.game_set_touch(touch);
   const mouse = { act: false, use: false };
@@ -537,7 +565,7 @@ export async function start(o) {
       if (!paused()) {
         if (e.code === 'KeyF') fly = !fly;
         if (e.code === 'KeyG' && !game) run('character ' + (NEXT_BODY[body] || 'girl')); // in a game G drops (inv-fix)
-        if (e.code === 'KeyB') send({ t: 'wardrobe', on: !wardrobeShown });
+        if (e.code === 'KeyB' && !s3d) send({ t: 'wardrobe', on: !wardrobeShown });
       }
       // the game takes digits, R, Q / I, T, Esc in a menu (a menu frees the mouse)
       if (game) {
@@ -594,7 +622,7 @@ export async function start(o) {
     b.addEventListener('pointerdown', h(true));
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, h(false));
   };
-  if (touch && !studio) {
+  if (touch && !studio && !s3d) {
     const bWard = button('d37h-ward', '👕', 'Гардероб');
     bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
   }
@@ -604,7 +632,7 @@ export async function start(o) {
     if (!studio) hold(button('d37h-jump', '⤒', 'Прыжок'), (v) => { touchJump = v; });
     // ep11-fix-body (CHECK-BODY 2): the touch prompts say «ПРИСЕСТЬ: СЛЕЗТЬ / СПРЫГНУТЬ», the roll needs crouch at the
     // landing, and the creative world flies (F on a PC): a held crouch disc and a fly toggle
-    if (!studio) hold(button('d37h-crouch', '⤓', 'Присесть / слезть (C)'), (v) => { touchCrouch = v; });
+    if (!studio && !s3d) hold(button('d37h-crouch', '⤓', 'Присесть / слезть (C)'), (v) => { touchCrouch = v; });
     if (o.scene === 'creative') {
       const bFly = button('d37h-fly', '🕊', 'Полёт (F)');
       bFly.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); fly = !fly; bFly.classList.toggle('on', fly); publish(); });
@@ -633,6 +661,7 @@ export async function start(o) {
     ? (planet ? 'Слева — идти / лететь · справа — смотреть · 🌍 — на землю и обратно · 👕 — гардероб' : 'Слева — идти · справа — смотреть')
     : 'Нажми на картинку — мышь смотрит · W A S D — идти · Пробел — прыжок · O — на землю и обратно · B — гардероб · V — вид'));
   if (game) hint.style.bottom = 'calc(105px + env(safe-area-inset-bottom))';
+  if (s3d) hint.style.display = 'none';
   setTimeout(() => { hint.style.opacity = '0'; }, 9000);
   let sayT = 0;
   say = (t) => { hint.textContent = t; hint.style.opacity = '1'; clearTimeout(sayT); sayT = setTimeout(() => { hint.style.opacity = '0'; }, 5000); };
@@ -970,6 +999,13 @@ export async function start(o) {
       // the game's sound stops with the game (it lives outside the app object and would keep playing on the site)
       try { a && a.audio_close(); } catch (e) { /* no sound */ }
       try { a && a.free(); } catch (e) { /* already freed */ }
+      // c-studio R2 GPU_FREE: the device's memory now, not whenever the garbage collector runs
+      if (gpuFree()) {
+        for (const d of st.gpuDevices || []) { try { d.destroy(); } catch (e) { /* gone */ } }
+        st.gpuDevices = [];
+        try { const gl = canvas.getContext('webgl2'); const x = gl && gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); } catch (e) { /* no GL context */ }
+        canvas.width = 1; canvas.height = 1;
+      }
       for (const e of made) e.remove();
       made.length = 0;
     },

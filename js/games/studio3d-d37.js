@@ -22,9 +22,12 @@
   // ── что из мира движку пока не по силам — по-русски (ключи — из отчёта движка, needs) ──
   const NEED_RU = { 'mat.glass': 'стекло (прозрачное)', 'mat.ice': 'лёд (прозрачный)', 'part.alpha': 'полупрозрачные детали', mesh: 'свои 3D-модели',
     'terrain.relief': 'холмы и ямы на земле', 'terrain.water': 'вода', 'gfx.custom': 'свои настройки графики', weather: 'погода', support: 'прочность', 'view.first': 'вид от 1-го лица',
-    'view.shoulder': 'вид из-за плеча', 'view.fixed': 'камеры в мире' };
+    'view.shoulder': 'вид из-за плеча', 'view.fixed': 'камеры в мире',
+    'part.loose.rigid': 'детали, которые падают и кувыркаются', 'script.click': 'клики по деталям (ClickDetector, Clicked) в скриптах',
+    'script.prompt': 'подсказки [E] (ProximityPrompt, Prompt) в скриптах', 'script.game': 'Game.* (режимы игры) в скриптах', 'script.camera': 'Camera.* в скриптах',
+    'script.weather': 'Weather.* (погода) в скриптах', 'script.support': 'Support.* (прочность) в скриптах', 'script.fire': 'Fire.* (огонь) в скриптах' };
   const needRu = n => NEED_RU[n] || (n.startsWith('game.') ? 'режим игры «' + n.slice(5) + '»' : n.startsWith('fx.') ? 'эффект «' + n.slice(3) + '»' : n.startsWith('class.') ? 'объект «' + n.slice(6) + '»'
-    : n.startsWith('npc.') ? 'поведение NPC «' + n.slice(4) + '»' : n.startsWith('script.') ? 'язык скрипта «' + n.slice(7) + '»' : n.startsWith('prefab.') ? 'предмет «' + n.slice(7) + '»'
+    : n.startsWith('npc.look.') ? 'внешность NPC «' + n.slice(9) + '»' : n.startsWith('npc.') ? 'поведение NPC «' + n.slice(4) + '»' : n.startsWith('script.') ? 'язык скрипта «' + n.slice(7) + '»' : n.startsWith('prefab.') ? 'предмет «' + n.slice(7) + '»'
     : n.startsWith('touch.') ? 'касание «' + n.slice(6) + '»' : n.startsWith('view.') ? 'ракурс «' + n.slice(5) + '»' : n);
 
   // ── движок: build.json, wasm (проверка мира), engine-host (картинка) ──
@@ -60,7 +63,7 @@
   function label(){
     const b = S.ui?.querySelector('.s3d-eng'); if (!b) return;
     const g = S.gate;
-    b.textContent = !g ? '⏳ Движок…' : r1() ? '⚡ Наш движок' : '🧱 Старый движок';
+    b.innerHTML = !g ? '⏳<span> Движок…</span>' : r1() ? '⚡<span> Наш движок</span>' : '🧱<span> Старый</span>';
     b.classList.toggle('s3d-r1', r1());
     b.title = !g ? 'Проверяем, может ли мир играть на нашем движке' : r1() ? 'Этот мир играется на нашем движке D37. Нажми — подробнее' : g.fits ? 'Можно на нашем движке — выключено флажком. Нажми — подробнее' : 'Этот мир пока играется на старом движке. Нажми — чего не хватает';
   }
@@ -73,6 +76,7 @@
       <p class="s3d-why"></p><ul class="s3d-miss"></ul>
       <label class="s3d-chk"><input type="checkbox" class="s3d-opt"${optedOut() ? '' : ' checked'}${g.fits ? '' : ' disabled'}> Играть на нашем движке, когда можно</label>
       <p class="s3d-note">Редактор тот же. Старые миры не меняются: этот выбор хранится только в этом браузере.</p>
+      ${g.fits ? '<p class="s3d-note">Пока отличается от старого: трава не меняет цвет по сезону (осень, снег), за краем земли мира — та же трава до горизонта.</p>' : ''}
       <div class="s3d-row"><button type="button" class="s3d-side2">🪟 Рядом: старый | наш</button><button type="button" class="s3d-x">Закрыть</button></div>`;
     const why = d.querySelector('.s3d-why'), ul = d.querySelector('.s3d-miss');
     why.textContent = g.error ? 'Движок не ответил: ' + g.error : g.fits ? `Движку хватает всего, что есть в мире (объектов: ${g.objects ?? 0}).` : 'Движок пока не умеет:';
@@ -166,7 +170,10 @@
   // команда скрипта: то, что про картинку сайта (надписи, звук, очки), — здесь; мир — движку (он проверит сам)
   function cmd(pl, d){
     if (!d || typeof d !== 'object') return;
-    if (++pl.cmds > 4000) return;   // не больше 4000 команд за кадр (как на старом движке)
+    if (++pl.cmds > 4000) {   // не больше 4000 команд за кадр (как на старом движке); автору — один раз, что лишнее отброшено
+      if (!pl.cutSaid) { pl.cutSaid = true; api?.print('⚠️ Скрипты прислали больше 4000 команд за один кадр — лишние отброшены. Делай меньше за раз: await task.wait() в циклах', 'warn'); }
+      return;
+    }
     if (d.t === 'gui') {
       const c = String(d.cmd || ''), k = String(d.key ?? '').slice(0, 30), t = String(d.text || '').slice(0, 140);
       if (c === 'message') toast(t); else if (c === 'text') pl.labels[k] = t; else if (c === 'clear') delete pl.labels[k];
@@ -201,6 +208,7 @@
     if (d.ev === 'finish' && !pl.finished) { pl.finished = true; pl.stats['Время'] = String(d.sec); pl.dirty = true; toast(`🏁 Финиш! Время: ${String(d.sec).slice(0, 12)} с`, 4000); return; }
     if (d.ev === 'died') { toast('💀 Ты погиб — сейчас вернёшься'); SH.event('died', { player: 'me' }); return; }
     if (d.ev === 'respawned') { SH.event('respawned', { player: 'me' }); return; }
+    if (d.ev === 'cut' && !pl.cutSaid) { pl.cutSaid = true; api?.print(`⚠️ Движок не успел за скриптами: ${+d.n || 0} команд отброшено. Делай меньше за раз: await task.wait() в циклах`, 'warn'); return; }
   }
   function frame(t){
     const pl = S.play; if (!pl) return;
@@ -278,7 +286,7 @@
     st.textContent = `.s3d-stage{position:relative;min-width:0;min-height:0;z-index:3;background:#0b1220;border-left:2px solid #f59e0b;overflow:hidden}
 .s3d-stage[hidden]{display:none}.s3d-sbs .s3-main{grid-template-columns:220px minmax(0,1fr) minmax(0,1fr) 290px}
 .s3d-playing .s3-view{display:none}.s3d-playing .s3-main{grid-template-rows:minmax(0,1fr)}
-.s3d-stage.s3d-full{border-left:0}.s3d-host{position:absolute;inset:0}
+.s3d-stage.s3d-full{border-left:0}.s3d-host{position:absolute;inset:0}.s3d-full .s3d-tag{top:28px;left:10px}.s3-compact.s3-playing .s3d-hud .s3-stats{bottom:150px}@media (max-width:2400px){.s3-top .s3d-ui button span{display:none}}
 .s3d-tag{position:absolute;left:8px;top:8px;z-index:6;background:rgba(245,158,11,.92);color:#111;font:600 12px/1.2 system-ui,sans-serif;padding:4px 8px;border-radius:8px;pointer-events:none}
 .s3d-wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font:600 15px system-ui,sans-serif;background:rgba(11,18,32,.75);z-index:7;text-align:center;padding:16px}
 .s3d-toast{position:absolute;left:50%;top:18%;transform:translateX(-50%);z-index:8;background:rgba(17,24,39,.88);color:#fff;font:600 16px system-ui,sans-serif;padding:8px 14px;border-radius:10px;max-width:86%;text-align:center;pointer-events:none}
@@ -298,7 +306,7 @@
       api = a; style();
       const slot = a.slot; if (!slot) return;
       const box = document.createElement('span'); box.className = 's3d-ui';
-      box.innerHTML = '<button type="button" class="s3d-eng" title="На каком движке играет мир">⏳ Движок…</button><button type="button" class="s3d-side" title="Тот же мир рядом на нашем движке">🪟<span> Рядом</span></button>';
+      box.innerHTML = '<button type="button" class="s3d-eng" title="На каком движке играет мир">⏳<span> Движок…</span></button><button type="button" class="s3d-side" title="Тот же мир рядом на нашем движке">🪟<span> Рядом</span></button>';
       slot.appendChild(box); S.ui = box;
       box.querySelector('.s3d-eng').addEventListener('click', () => { gate(true).then(sheet); });
       box.querySelector('.s3d-side').addEventListener('click', () => side(!S.side));
