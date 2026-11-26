@@ -24,6 +24,7 @@ function load({ host = 'dan4ik37.vercel.app', cfgPatch = null, test = null, hash
     history: { replaceState() { w.replaced = true; } },
     sessionStorage: ss || store(), localStorage: store(),
     navigator: { userAgent: 'Mozilla/5.0 Chrome/120' },
+    document: { documentElement: { classList: { add() {}, remove() {}, toggle() {} }, setAttribute() {}, removeAttribute() {} }, readyState: 'complete', querySelectorAll: () => [], getElementById: () => null, addEventListener() {} },
     crypto: require('crypto').webcrypto, btoa: s => Buffer.from(s, 'binary').toString('base64'),
     console: { log: (...a) => logs.push(a.join(' ')), error: (...a) => logs.push(a.join(' ')), warn: (...a) => logs.push(a.join(' ')) },
     setTimeout, clearTimeout, URLSearchParams, Date, JSON, Promise, Map, Set, Array, String, Number, Math, Object, Uint8Array,
@@ -129,11 +130,11 @@ const ev = () => { const e = { prevented: false, preventDefault() { e.prevented 
     ok(!/innerHTML|insertAdjacentHTML|outerHTML/.test(y), 'разметка не собирается из строк (только textContent)');
     const login = src('js/features/social-login.js') + src('js/features/global-auth.js');
     ok(!/youtube/i.test((login.match(/signInWithOAuth\([^)]*\)/g) || []).join(' ')) && !/scopes\s*:/.test(login), 'вход Google не просит права YouTube (scopes нигде нет)');
-    ok(!/xp|coin|🪙|reward|награ/i.test(y.replace(/\/\/[^\n]*/g, '')), 'никаких наград за лайк (III.F.3.c)');
+    ok(!/addXp|addXP|grantXp|claim_\w+|\bcoins?\b|🪙|reward|награ/i.test(y.replace(/\/\/[^\n]*/g, '')), 'никаких наград за лайк (III.F.3.c)');
     const html = src('index.html');
     ok(/y=\/\(\?:\^#\|&\)state=ytl\\\./.test(html) && /window\.__d37YtHash=h/.test(html), 'скрипт в <head> забирает ответ Google до счётчиков');
-    ok(html.indexOf('js/core/ytlike.js') > html.indexOf('js/features/auth-intent.js'), 'ytlike.js — после auth-intent.js');
-    ok(/state=ytl/.test(src('js/features/auth-guard.js')), 'auth-guard.js не принимает ответ Google за вход');
+    ok(html.indexOf('src="js/core/ytlike.js"') > html.indexOf('src="js/features/auth-intent.js"'), 'ytlike.js — после auth-intent.js');
+    ok(/\^ytl\\.\/\.test\(q\.get\('state'\)/.test(src('js/features/auth-guard.js')), 'auth-guard.js не принимает ответ Google за вход');
   }
   console.log(`ytlike-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);

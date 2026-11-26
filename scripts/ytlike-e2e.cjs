@@ -47,6 +47,7 @@ function mockGoogle(G) {
           : `state=${st}&access_token=${TOKEN}&token_type=Bearer&expires_in=3599&scope=${encodeURIComponent((G.answer === 'noscope' ? '' : SCOPE + ' ') + 'openid https://www.googleapis.com/auth/userinfo.email')}`;
         return { code: 302, body: '', headers: [{ name: 'Location', value: q.redirect_uri + '#' + frag }] };
       }
+      if (!(u.host === 'oauth2.googleapis.com' || (u.host === 'www.googleapis.com' && /^\/youtube\/v3\/videos\/(rate|getRating)$/.test(u.pathname)))) return null;   // остальное — как в стенде
       if (req.method === 'OPTIONS') return { code: 204, body: '', headers: CORS };
       const auth = String(req.headers?.Authorization || req.headers?.authorization || '');
       if (u.host === 'www.googleapis.com' && u.pathname === '/youtube/v3/videos/rate') {
@@ -82,8 +83,10 @@ const oldUser = (role, provider = 'email') => {
     profile: { id: ME, nick: 'Тестер', role } };
 };
 // вход почтой без окна (тестовые значения только для подделанного сервера)
-const PASSWORD_LOGIN = `sbClient.auth.signInWithPassword({ email: 'yt.test@example.test', password: 'test-only-123' }).then(r => !r.error)`;
-async function signedIn(c) { await c.ev(PASSWORD_LOGIN, true); return c.until(`${SIGNED} && !!currentRole`, 15000); }
+// как человек: окно входа → почта → «Войти» (doGlobalLogin), тот же путь, что в auth-social-e2e (email)
+const PASSWORD_LOGIN = `(async () => { openGlobalAuth('login'); for (let i = 0; i < 40 && !document.getElementById('gauthEmail'); i++) await new Promise(r => setTimeout(r, 100));
+  document.getElementById('gauthEmail').value = 'yt.test@example.test'; document.getElementById('gauthPassword').value = 'test-only-123'; doGlobalLogin(); return true; })()`;
+async function signedIn(c) { await c.ev(PASSWORD_LOGIN, true); const r = await c.until(`${SIGNED} && !!currentRole && !document.getElementById('globalAuthModal')?.classList.contains('open')`, 15000); await sleep(400); return r; }
 const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
 
 (async () => {
@@ -165,7 +168,7 @@ const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
       console.log('— окно ролика (test): гость — ссылка, админ — лайк с той же секунды');
       const G = { answer: 'grant' }, X = mockGoogle(G);
       const { user, profile } = oldUser('admin');
-      const S = { providers: { google: true }, user: null, passwordUser: user, profile };
+      const S = { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED };
       const c = await chrome({ w: 1920, h: 1080, theme: 'light', S, extra: X, init: initMode('test') });
       try {
         await c.send('Page.navigate', { url: B + '/' });
@@ -193,8 +196,9 @@ const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
         ok(G.J.filter(x => x[0] === 'rate').map(x => x[2]).join() === 'like,none' && count(G, 'auth') === 1, 'rating=none, повторного экрана Google нет', G.J);
         // перезагрузка: разрешение ещё живо (sessionStorage) — getRating покажет, что YouTube знает
         G.liked.add(V3);
+        await c.ev(`window.__preReload = 1`);
         await c.send('Page.reload');
-        await c.until(`${READY} && ${SIGNED}`, 20000);
+        await c.until(`!window.__preReload && ${READY} && ${SIGNED} && !!currentRole`, 20000);
         await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
         ok(await c.until(`!!document.getElementById('mLike')?.classList.contains('ytl-on')`, 10000), 'после перезагрузки: getRating → залитая 👍 (аккаунт YouTube уже лайкнул)');
         ok(G.J.some(x => x[0] === 'getRating' && x[1].includes(V3) && x[2]), 'videos.getRating с токеном в заголовке', G.J.filter(x => x[0] === 'getRating'));
@@ -206,7 +210,7 @@ const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
       } finally { await c.close(); }
       // обычный человек при 'test' — ссылка
       const G2 = {}, X2 = mockGoogle(G2), u2 = oldUser('user');
-      const c2 = await chrome({ w: 1920, h: 1080, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: u2.user, profile: u2.profile }, extra: X2, init: initMode('test') });
+      const c2 = await chrome({ w: 1920, h: 1080, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: u2.user, profile: u2.profile, feed: FEED }, extra: X2, init: initMode('test') });
       try {
         await c2.send('Page.navigate', { url: B + '/' });
         await c2.until(READY);
@@ -223,7 +227,7 @@ const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
       console.log(`— отказ (${answer === 'deny' ? 'кнопка «Отмена»' : 'снята галочка YouTube'})`);
       const G = { answer }, X = mockGoogle(G);
       const { user, profile } = oldUser('user');
-      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'light', S: { providers: { google: true }, user: null, passwordUser: user, profile }, extra: X, init: initMode('on') });
+      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'light', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') });
       try {
         await c.send('Page.navigate', { url: B + '/' });
         await c.until(READY);
@@ -247,7 +251,7 @@ const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
       console.log('— квота YouTube кончилась');
       const G = { answer: 'grant', quota: true }, X = mockGoogle(G);
       const { user, profile } = oldUser('user');
-      const c = await chrome({ w: 1920, h: 1080, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: user, profile }, extra: X, init: initMode('on') });
+      const c = await chrome({ w: 1920, h: 1080, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') });
       try {
         await c.send('Page.navigate', { url: B + '/' });
         await c.until(READY);
@@ -261,7 +265,10 @@ const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
         ok(t?.prevented === false && count(G, 'rate') === 1, 'дальше — ссылка, rate больше не зовём', { t, rate: count(G, 'rate') });
         await c.ev(TAP('#mLike'), true);
         ok(count(G, 'rate') === 1 && count(G, 'getRating') <= 1, 'нет потока запросов', G.J.map(x => x[0]));
-        ok(!c.errs.length, 'квота: ошибок нет', c.errs);
+        // Chrome сам пишет в журнал сети любой ответ 4xx («Failed to load resource … 403») — это ответ YouTube «квота кончилась», которого
+        // мы и ждём (из JS его не спрятать); других строк быть не должно, и 403 — ровно одна (нет потока запросов)
+        const q403 = c.errs.filter(e => /status of 403.*googleapis\.com\/youtube\/v3\/videos\/rate/.test(e));
+        ok(q403.length === 1 && c.errs.length === 1, 'квота: в журнале только одна строка Chrome о 403 от YouTube, ошибок сайта нет', c.errs);
       } finally { await c.close(); }
     }
 
@@ -271,7 +278,7 @@ const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
       const G = {}, X = mockGoogle(G);
       const { user, profile } = oldUser('user');
       const ua = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36 Instagram 300.0.0.0';
-      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: user, profile }, extra: X, init: initMode('on'), ua });
+      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on'), ua });
       try {
         await c.send('Page.navigate', { url: B + '/' });
         await c.until(READY);
