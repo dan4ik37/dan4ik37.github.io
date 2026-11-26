@@ -92,12 +92,12 @@ const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
   console.log('ytlike-e2e: ' + B);
   try {
     // ═══ (off) как на сайте сейчас ═══
-    if (want('off')) {
-      console.log('— флаг как на сайте (off): всё как раньше');
+    if (want('off')) for (const [w, h, ph, theme] of [[390, 844, true, 'dark'], [1920, 1080, false, 'light']]) {
+      console.log(`— флаг как на сайте (off), ${w}×${h} ${theme}: всё как раньше` + (process.env.BASE ? ' — ' + process.env.BASE : ''));
       const G = {}, X = mockGoogle(G);
       const { user, profile } = oldUser('admin');
       const S = { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED };
-      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'dark', S, extra: X });
+      const c = await chrome({ w, h, phone: ph, theme, S, extra: X });
       try {
         await c.send('Page.navigate', { url: B + '/#/shorts/' + V2 });
         await c.until(READY);
@@ -115,6 +115,7 @@ const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
         ok(t3 && t3.prevented === false && /watch\?v=/.test(t3.href), 'окно ролика: ссылка', t3);
         ok(!G.J.length, 'к Google и YouTube API — ни одного запроса', G.J);
         ok(!(await c.ev(`!!document.querySelector('.ytl-on,.ytl-busy,[data-vlike][aria-pressed]')`)), 'кнопки не тронуты (нет новых классов)');
+        await c.shot(`ytl-off-${w}x${h}-${theme}`);
         ok(!c.errs.length, 'off: ошибок в консоли нет', c.errs);
       } finally { await c.close(); }
     }

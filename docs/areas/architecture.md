@@ -109,7 +109,13 @@
     Хвост: сервер (`claim_watch_xp` в xp.sql / economy.sql, ачивки «Зритель»/«Киноман» в economy.sql / progression.sql) ещё
     начислит XP, если вызвать RPC руками — убрать может только владелец (SQL).
   - Свои метрики из данных API нельзя (III.E.4.h): «медиана просмотров» в /reklama выключена (`MEDIAN_VIEWS` в routes/reklama.js).
-  - **Настоящий лайк с сайта (НЕ сделано, решает владелец):** вход через Google (OAuth 2.0) с правом
+  - **26.11.2026 — сделано за флагом `YT_LIKE_REAL` ('off' на сайте, пока нет ID клиента и шагов владельца):** `js/core/ytlike.js`
+    (D37YtLike). Решение отличается от плана ниже: право спрашивается только по нажатию 👍 (вход — по-прежнему openid/email/profile),
+    поток OAuth 2.0 для браузера переходом (response_type=token, include_granted_scopes), токен — только во вкладке (sessionStorage,
+    ≤ 1 ч), на сервер и в базу не попадает (поэтому серверных токенов, «удалить через 7 дней» и «проверка раз в 30 дней» не нужно —
+    хранимых данных нет). Возврат на место — D37Intent.park/resume. Владельцу: docs/areas/youtube-like-setup-RU.md. Проверки:
+    scripts/ytlike-test.cjs, scripts/ytlike-e2e.cjs. Старый план (для истории):
+  - **Настоящий лайк с сайта (план 05.11):** вход через Google (OAuth 2.0) с правом
     `https://www.googleapis.com/auth/youtube.force-ssl` (sensitive scope) → `videos.rate` (rating=like/none, 50 ед. квоты — при
     10 000 в сутки это ≤ 200 лайков в день на весь сайт) и `videos.getRating` (1 ед.) — показать настоящее «ты лайкнул». Что нужно:
     (1) владелец — проект Google Cloud, экран согласия OAuth, **проверка приложения Google** для sensitive scope (подтверждённый домен в

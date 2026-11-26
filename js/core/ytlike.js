@@ -220,6 +220,11 @@
     ssSet(TRY, null); brokenN = 0;
     rating.set(id, value);
     paintId(id);
+    // после возврата лента Shorts / окно ролика могли ещё не дорисоваться — подкрасить кнопку, когда появится (до 10 с)
+    if (doc && ![...doc.querySelectorAll('a[data-vlike]')].some(a => a.getAttribute('data-vlike') === id)) (async () => {
+      for (let i = 0; i < 40 && ![...doc.querySelectorAll('a[data-vlike]')].some(a => a.getAttribute('data-vlike') === id); i++) await sleep(250);
+      paintId(id);
+    })();
     toast(value === 'like' ? '👍 Лайк поставлен на YouTube' : 'Лайк на YouTube убран');
   }
   const nonce = () => { const a = new Uint8Array(24); root.crypto.getRandomValues(a); return root.btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };

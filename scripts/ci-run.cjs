@@ -35,7 +35,7 @@ const TESTS = [
   { f: 'routes-test.cjs' }, { f: 'pwa-test.cjs' }, { f: 'games-test.cjs' }, { f: 'auth-test.cjs' }, { f: 'age-test.cjs' },
   { f: 'xss-test.cjs', t: 300 },   // чужой текст не становится разметкой (T-011): разбор всех js/api + злые строки; ~30 с ЦП
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
-  { f: 'ads-test.cjs' }, { f: 'ad-direct-test.cjs' }, { f: 'video-test.cjs' },   // video-test — ролики и YouTube: «Лайк на YouTube», /api/vstats, даты цифр, правила YouTube API
+  { f: 'ads-test.cjs' }, { f: 'ad-direct-test.cjs' }, { f: 'video-test.cjs' }, { f: 'ytlike-test.cjs', t: 60 },   // video-test — ролики и YouTube: «Лайк на YouTube», /api/vstats, даты цифр, правила YouTube API
   // 21.11: эти три стояли ПОСЛЕ комментария на строке выше и не запускались вовсе (ops-test видел их имена в тексте комментария)
   { f: 'pay-test.cjs' }, { f: 'referral-test.cjs' }, { f: 'economy-test.cjs' },
   { f: 'community-test.cjs' }, { f: 'wt-sim-test.cjs' }, { f: 'files-test.cjs' }, { f: 'files-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'chat-settings-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'ds3-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'part18-sql-test.mjs', needs: 'pglite', t: 180 }, { f: 'part19-sql-test.mjs', needs: 'pglite', t: 180 }, { f: 'part20-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 't177-sql-test.cjs', needs: 'pglite', t: 180 }, { f: 'mod-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'ds-msg-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'people-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'ds-fun-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'ds2-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 't167-test.cjs' }, { f: 'forum-test.cjs' }, { f: 'news-test.mjs' }, { f: 'forum-sql-test.mjs', needs: 'pglite', t: 180 }, { f: 'settings-test.cjs' }, { f: 'ui-test.cjs' }, { f: 'touch-layout-test.cjs' }, { f: 'radial-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },
@@ -77,7 +77,7 @@ const TESTS = [
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
   { f: 'forum-e2e.cjs', args: ['phone', '20'], needs: 'pglite', e2e: true, t: 600 }, { f: 'forum-e2e.cjs', args: ['phone', '5', 'legacy'], needs: 'pglite', e2e: true, t: 400 },   // T-157: форум 2.0 и старый форум (FORUM2 = false)
-  { f: 'mod-e2e.cjs', e2e: true, t: 400 }, { f: 'part18-e2e.cjs', e2e: true, t: 900 }, { f: 'auth-social-e2e.cjs', e2e: true, t: 900 },
+  { f: 'mod-e2e.cjs', e2e: true, t: 400 }, { f: 'part18-e2e.cjs', e2e: true, t: 900 }, { f: 'auth-social-e2e.cjs', e2e: true, t: 900 }, { f: 'ytlike-e2e.cjs', e2e: true, t: 900 },
   // 21.11: были вне списка (ops-test их считал забытыми); каждая прогнана — зелёная. Вход подделан, запись подменена, в базу ничего не уходит
   { f: 't162-e2e.cjs', e2e: true, t: 400 }, { f: 't168-e2e.cjs', e2e: true, t: 500 }, { f: 't169-e2e.cjs', e2e: true, t: 600 },   // чат и «Дискорд»: правка сообщений, раскладка, голосовые сайта
   { f: 'hub-e2e.cjs', e2e: true, t: 900 }, { f: 'hub-path-e2e.cjs', e2e: true, t: 400 }, { f: 'hub-keys-e2e.cjs', e2e: true, t: 400 },   // платформа /hub: игра движка в сайте, «Путь», клавиши игры
