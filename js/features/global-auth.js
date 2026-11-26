@@ -99,7 +99,7 @@ function switchAuthTab(mode) {
     ? 'Ссылка из письма подтверждена'
     : isReg ? 'Создай аккаунт зрителя dan4ik37' : 'Войди в свой аккаунт';
   const link = document.getElementById('gauthSwitchLink');
-  link.style.display = isReset ? 'none' : 'inline';
+  link.style.display = isReset ? 'none' : '';   // '' — как в CSS (.auth-switch: блок-кнопка); 'inline' резал кнопку на две половинки
   link.textContent = isReg ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться';
   link.dataset.to = isReg ? 'login' : 'register';
   document.getElementById('gauthErr').textContent = '';
