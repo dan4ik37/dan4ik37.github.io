@@ -81,6 +81,14 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
     r = await call({ id: visible[0], parent: 'UgxA1234567' });
     const c1 = cc().slice(-1)[0];
     ok(r.code === 200 && r.json?.items?.[0]?.text === 'ответ' && /\/comments\?part=snippet&parentId=UgxA1234567&maxResults=20&textFormat=plainText/.test(c1[0]), 'ответы ветки — comments.list по parentId', { j: r.json, u: c1 && c1[0] });
+    // ветка должна быть из ЭТОГО ролика (список веток, который сайт сам отдал): иначе ключ и квота читали бы ответы любого комментария YouTube
+    let nr = NET.calls.filter(([u]) => u.includes('/comments?')).length;
+    r = await call({ id: visible[0], parent: 'UgxZ9999999' });
+    ok(r.code === 404 && NET.calls.filter(([u]) => u.includes('/comments?')).length === nr, 'чужая ветка (не из веток этого ролика) → 404 без comments.list', r);
+    r = await call({ id: visible[0], parent: 'UgxB1234567' });
+    ok(r.code === 404 && NET.calls.filter(([u]) => u.includes('/comments?')).length === nr, 'ветка без ответов → 404 без comments.list', r);
+    r = await call({ id: OFF, parent: 'UgxA1234567' });
+    ok(r.code === 404 && NET.calls.filter(([u]) => u.includes('/comments?')).length === nr, 'ролик с отключёнными комментариями: ответы → 404', r);
     r = await call({ id: OFF });
     ok(r.code === 200 && r.json?.disabled === true && Array.isArray(r.json.items) && !r.json.items.length, 'комментарии у ролика отключены → disabled', r.json);
     r = await call({ id: Q });
