@@ -56,6 +56,7 @@
         var m = a.querySelector && a.querySelector('.vl-mark');
         if (m) m.textContent = on ? ' ✓' : '';
       }
+      if (window.D37YtLike) window.D37YtLike.paint(root || document);   // настоящий лайк (YT_LIKE_REAL): своё состояние поверх отметки
     },
     // настоящие цифры ролика с YouTube (через сервер сайта) → { id, views, likes, at, src } или null
     stats: function (id) {
@@ -113,7 +114,10 @@
   // нажатие — на всём документе и раньше обработчиков карточек (те могут остановить всплытие); переход по ссылке не отменяем
   document.addEventListener('click', function (e) {
     var a = e.target && e.target.closest ? e.target.closest('a[data-vlike]') : null;
-    if (a) V.go(a.getAttribute('data-vlike'));
+    if (!a) return;
+    // YT_LIKE_REAL (js/core/ytlike.js): настоящий лайк взял нажатие на себя — ссылку не открываем; иначе всё как раньше
+    if (window.D37YtLike && window.D37YtLike.tap(e, a, a.getAttribute('data-vlike'))) return;
+    V.go(a.getAttribute('data-vlike'));
   }, true);
   // телефон выгрузил вкладку, пока было открыто приложение YouTube, и сайт открылся заново — цифры всё равно обновим
   var was = readPend();

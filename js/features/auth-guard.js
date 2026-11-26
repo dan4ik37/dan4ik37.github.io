@@ -40,6 +40,7 @@
     if (!s || s.startsWith('/')) return null;
     let q;
     try { q = new URLSearchParams(s); } catch (e) { return null; }
+    if (/^ytl\./.test(q.get('state') || '')) return null;   // ответ Google на разрешение «👍 Лайк на YouTube» — не вход; его берёт js/core/ytlike.js
     if (q.get('access_token')) {
       const at = q.get('access_token'), rt = q.get('refresh_token') || '';
       if (!/^[\w-]+\.[\w-]+\.[\w-]*$/.test(at) || at.length > 8192 || !rt || rt.length > 512) return { bad: true };

@@ -140,6 +140,19 @@ const TURNSTILE_SITE_KEY = '';
 const AUTH_SOCIAL = true;
 
 // ═══════════════════════════════════════
+//  НАСТОЯЩИЙ ЛАЙК НА YOUTUBE С САЙТА (владелец 26.11.2026: «Yes, prepare it»)
+// ═══════════════════════════════════════
+// 'off'  — как раньше: «👍 Лайк на YouTube» — ссылка на ролик там (js/core/vlike.js);
+// 'test' — настоящий лайк только у админов сайта и аккаунтов из YT_LIKE_TEST_IDS (их почты Google — в «Тестовых пользователях»
+//          Google Cloud); гостям и всем остальным — та же ссылка, для них ничего не меняется;
+// 'on'   — у всех (после проверки приложения в Google). Код — js/core/ytlike.js (D37YtLike). Пошагово — docs/areas/youtube-like-setup-RU.md.
+// YT_CLIENT_ID — «ID клиента» Google (…apps.googleusercontent.com — НЕ секрет; «Секрет клиента» сюда не вписывать никогда). Пусто — выключено.
+// Откат — YT_LIKE_REAL = 'off'.
+const YT_LIKE_REAL = 'off';
+const YT_CLIENT_ID = '';
+const YT_LIKE_TEST_IDS = [];   // id аккаунтов сайта (uuid), не почты
+
+// ═══════════════════════════════════════
 //  GOOGLE ADSENSE — ID рекламных блоков
 // ═══════════════════════════════════════
 // AdSense → Реклама → По рекламным блокам → «Медийный» → скопировать

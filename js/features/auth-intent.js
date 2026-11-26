@@ -103,6 +103,19 @@
     write({ kind: null, args: null, label: '', hash: routeHash(), y: Math.round(root.scrollY || 0), media, at: Date.now() });
     setHead(null);
   }
+  // УЖЕ вошёл, но действие уводит со страницы и обратно (разрешение Google для «👍 Лайк на YouTube» — js/core/ytlike.js): запомнить
+  // действие и место так же, как need() гостю; после возврата resume() (страница загрузится заново, вход восстановится) вернёт туда же
+  // и вызовет обработчик kind. o.media — ролик и секунда, если их знает вызвавший (плеер мог ещё не сказать свою секунду).
+  async function park(kind, args, o = {}) {
+    if (!ON || !KIND_RE.test(String(kind || ''))) return false;
+    let a = null;
+    try { a = args == null ? null : JSON.parse(JSON.stringify(args)); if (a && JSON.stringify(a).length > 2000) a = null; } catch (e) { a = null; }
+    let media = await captureMedia().catch(() => null);
+    const om = o.media;
+    if (om && om.k === 'yt' && YT_RE.test(String(om.id || '')) && (!media || (media.k === 'yt' && media.id === om.id && (+media.t || 0) < (+om.t || 0)))) media = { k: 'yt', id: om.id, title: String(om.title || media?.title || '').slice(0, 200), t: Math.max(0, Math.floor(+om.t || 0)) };
+    write({ kind, args: a, label: String(o.label || '').slice(0, 80), hash: routeHash(), y: Math.round(root.scrollY || 0), media, at: Date.now() });
+    return true;
+  }
   // закрыл окно, не войдя: задуманное забыть (через секунду — уход на Google тоже «закрывает» страницу, но не окно)
   function onClose() {
     if (!ON) return;
@@ -155,7 +168,7 @@
       const fn = await waitHandler(it.kind);
       if (!fn) { toast('Ты вошёл — нажми ещё раз, чтобы закончить'); return; }
       let r = null;
-      try { r = await fn(it.args, { resumed: true }); } catch (e) { r = { ok: false }; }
+      try { r = await fn(it.args, { resumed: true, media: it.media || null }); } catch (e) { r = { ok: false }; }
       if (+it.y > 0) { try { root.scrollTo(0, +it.y); } catch (e) {} }   // перерисовка раздела могла сдвинуть страницу
       if (r && r.msg) toast(r.msg);
     } finally { running = false; lastAt = Date.now(); }
@@ -293,7 +306,7 @@
 
   root.D37Welcome = D37Welcome;
   root.D37Intent = {
-    ON, need, on, remember, onClose, pending: read, clear, resume, busy, inApp, openOutside,
+    ON, need, park, on, remember, onClose, pending: read, clear, resume, busy, inApp, openOutside,
     _test: { read, write, captureMedia, restoreMedia, isNewSocial, isSocial, ytTime, handlers: H, KEY, INAPP_RE },
   };
 })();

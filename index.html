@@ -22,8 +22,9 @@
 <script>(function(){try{var P={home:'hero,today,content,ad-mid,community,ad-top',about:'about,schedule,socials',donate:'donate,goalbar,leaderboard',poll:'poll',soundboard:'soundboard',clicker:'clicker',chat:'chat',profile:'profile-page',shorts:'shorts-page',ideas:'ideas-page',forum:'forum-page',lfg:'lfg-page',games:'games-page',shop:'shop-page',invite:'invite-page',ads:'ad-bottom,ads',adv:'adv-page',phone:'phone-page',photo:'photo-page',ai3d:'ai3d-page',hub:'hub-page'},p=location.pathname.split('/').filter(Boolean),r=p[0]||'home',h=location.hash||'';if(h.indexOf('#/')===0&&h.length>2)r=h.slice(2).split(/[\/?]/)[0]||r;r=r==='play'?'games':r==='c'?'chat':r==='tools'&&p[1]==='3d'?'ai3d':r;if(!P.hasOwnProperty(r))r='home';document.documentElement.setAttribute('data-boot',r);var on=','+P[r]+',',css=[],k,a,i;for(k in P){a=P[k].split(',');for(i=0;i<a.length;i++)if(on.indexOf(','+a[i]+',')<0&&css.indexOf('#'+a[i])<0)css.push('#'+a[i]);}if(css.length){var s=document.createElement('style');s.id='d37Boot';s.textContent=css.join(',')+'{display:none!important}';document.head.appendChild(s);}}catch(e){}})();</script>
 <!-- Вход по ссылке: токены во фрагменте (#access_token… — письма Supabase и Google/Discord/Twitch/GitHub; #d37auth… — VK/Яндекс/Telegram),
      метку своего входа ?oa=… и ошибки входа в адресе забрать и СРАЗУ стереть из адреса — до Метрики (url: location.href) и рекламы.
-     Разбирают js/features/auth-guard.js и social-login.js -->
-<script>(function(){try{var h=location.hash,s=location.search,m=s.match(/[?&]oa=([\w-]{8,64})/),t=/(?:^#|&)(?:access_token|refresh_token|error_description|error_code|d37auth|d37auth_err|d37link|tgAuthResult)=/.test(h),e=!t&&/[?&]error_(?:description|code)=/.test(s);if(m)window.__d37OA=m[1];if(t)window.__d37AuthHash=h;if(e){window.__d37AuthHash='#'+s.slice(1);s=''}if(m)s=s.replace(/([?&])oa=[^&]*&?/,'$1').replace(/[?&]$/,'');if(m||t||e)history.replaceState(null,'',location.pathname+s+(t?'':h))}catch(x){}})()</script>
+     Разбирают js/features/auth-guard.js и social-login.js. Ответ Google на разрешение «👍 Лайк на YouTube» (state=ytl.…) — отдельно,
+     в window.__d37YtHash (js/core/ytlike.js); тоже стирается сразу -->
+<script>(function(){try{var h=location.hash,s=location.search,m=s.match(/[?&]oa=([\w-]{8,64})/),y=/(?:^#|&)state=ytl\./.test(h),t=!y&&/(?:^#|&)(?:access_token|refresh_token|error_description|error_code|d37auth|d37auth_err|d37link|tgAuthResult)=/.test(h),e=!t&&!y&&/[?&]error_(?:description|code)=/.test(s);if(m)window.__d37OA=m[1];if(y)window.__d37YtHash=h;if(t)window.__d37AuthHash=h;if(e){window.__d37AuthHash='#'+s.slice(1);s=''}if(m)s=s.replace(/([?&])oa=[^&]*&?/,'$1').replace(/[?&]$/,'');if(m||t||e||y)history.replaceState(null,'',location.pathname+s+(t||y?'':h))}catch(x){}})()</script>
 <!-- errlog:begin — сборщик ошибок сайта, этап 1 (T-016): генерируется node scripts/make-errlog.mjs из api/_lib/errlog.js, руками не править -->
 <script>(function errHook(v) {
 var W = window;
@@ -2764,6 +2765,8 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/auth-intent.js"></script>
 <!-- ❤ на сайте у роликов, стрима и Shorts (community.sql ч. 20; без неё кнопок не видно) -->
 <script src="js/features/site-like.js"></script>
+<!-- «👍 Лайк на YouTube» по-настоящему (YT_LIKE_REAL в config.js; 'off' — как раньше, ссылка) -->
+<script src="js/core/ytlike.js"></script>
 <script src="js/features/profile.js"></script>
 <script src="js/features/forum.js"></script>
 <script src="js/features/forum-blocks.js"></script>
