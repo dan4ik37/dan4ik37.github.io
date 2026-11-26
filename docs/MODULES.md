@@ -363,7 +363,7 @@ Scripts listed by games but missing on disk: undefined.
 
 ## 3. RPC and SQL
 
-52 SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), 871 functions, 357 names called from js/ or api/ (`.rpc('x')`, any `*rpc*('x')` wrapper such as rpc / sbRpc / rpcOk / pushRpc, or `/rpc/x`).
+53 SQL files in the root (applied by the owner by hand; verify with skill d37-sql-verify), 871 functions, 357 names called from js/ or api/ (`.rpc('x')`, any `*rpc*('x')` wrapper such as rpc / sbRpc / rpcOk / pushRpc, or `/rpc/x`).
 
 | SQL file | Functions | Tables created |
 |---|---|---|
@@ -407,6 +407,7 @@ Scripts listed by games but missing on disk: undefined.
 | registration.sql | 2 | — |
 | secrets.sql | 4 | secret_hunt |
 | server-hardening.sql | 17 | integration_tokens, vip_sync_state |
+| site-like.sql | 4 | site_likes |
 | streaks-achievements.sql | 3 | user_visits |
 | ugc.sql | 22 | cloud_saves, ugc_games, ugc_likes, ugc_models, ugc_plays, ugc_reports |
 | unity.sql | 11 | unity_games, unity_likes, unity_plays, unity_reports, unity_scores |
@@ -1052,7 +1053,7 @@ Scripts listed by games but missing on disk: undefined.
 | part18_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | part18b_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | part19_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
-| part20_info | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| part20_info | community.sql, site-like.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | perk_tier_of | premium.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | pin_own_message | chat-pin-balance.sql, chat-pin.sql, premium.sql, vip-balance.sql | js/features/chat.js |
 | poll_votes_before_insert | polls-reactions-secure.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
@@ -1193,9 +1194,9 @@ Scripts listed by games but missing on disk: undefined.
 | site_cfg_int | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | site_cfg_text | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | site_creator_id | progression.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
-| site_like | community.sql | js/features/site-like.js |
-| site_like_info | community.sql | js/features/site-like.js |
-| site_like_item | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
+| site_like | community.sql, site-like.sql | js/features/site-like.js |
+| site_like_info | community.sql, site-like.sql | js/features/site-like.js |
+| site_like_item | community.sql, site-like.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | site_voice_can | community.sql | — (no call by name in js/ or api/: server-side, trigger, or the name is built at run time) |
 | site_voice_delete | community.sql | js/features/community2.js |
 | site_voice_list | community.sql | js/features/community.js |
@@ -1298,7 +1299,7 @@ Called but not defined in any root .sql (built-in, removed, or a typo — check)
 
 ## 4. Tests
 
-scripts/ci-run.cjs runs 167 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take M:\d37\claude-tmp\HEAVY.lock first (M:\d37\d37-core\spec\HEAVY_LOCK.md).
+scripts/ci-run.cjs runs 169 entries (= GitHub Actions on push; `--e2e` adds the Chrome ones). Heavy runs (the full CI, Chrome e2e with CPU ×4, perf) take M:\d37\claude-tmp\HEAVY.lock first (M:\d37\d37-core\spec\HEAVY_LOCK.md).
 
 | CI entry | Flags |
 |---|---|
@@ -1323,6 +1324,7 @@ scripts/ci-run.cjs runs 167 entries (= GitHub Actions on push; `--e2e` adds the 
 | ads-test.cjs | — |
 | ad-direct-test.cjs | — |
 | video-test.cjs | — |
+| ytlike-test.cjs | t 60 s |
 | pay-test.cjs | — |
 | referral-test.cjs | — |
 | economy-test.cjs | — |
@@ -1439,7 +1441,8 @@ scripts/ci-run.cjs runs 167 entries (= GitHub Actions on push; `--e2e` adds the 
 | forum-e2e.cjs | args phone 5 legacy, needs pglite, e2e, t 400 s |
 | mod-e2e.cjs | e2e, t 400 s |
 | part18-e2e.cjs | e2e, t 900 s |
-| auth-social-e2e.cjs | e2e, t 600 s |
+| auth-social-e2e.cjs | e2e, t 900 s |
+| ytlike-e2e.cjs | e2e, t 900 s |
 | t162-e2e.cjs | e2e, t 400 s |
 | t168-e2e.cjs | e2e, t 500 s |
 | t169-e2e.cjs | e2e, t 600 s |
