@@ -25,8 +25,15 @@
 //  (slow403) ролик не даёт лайк, ответ через 6,5 с (нажатие «остыло», вкладку открыть нельзя): строка «откроется YouTube» → следующие
 //           нажатия — ссылка, videos.rate больше не зовём;
 //  (net2)   два сбоя сети подряд: после первого следующее нажатие — ссылка, потом снова попытка, после второго — ссылка до конца визита.
+//  ПОДПИСКА (ytlike-2, 26.11: «а с подпиской так можно сделать? Как с лайками») — та же система, подделан и subscriptions.list/insert:
+//  (sub)     'on', телефон: гость в окне ролика на 42-й секунде → «▶ Подписаться на YouTube» → окно входа → Google (без права YouTube)
+//            → экран разрешения → тот же ролик с 42-й → list, потом insert ровно один раз → «✓ Ты подписан» (и на главной);
+//            второе нажатие — канал на YouTube (отписки нет);
+//  (subtest) 'test': гость — ссылка; админ, уже подписан — «✓» по list без insert и без экрана Google; не админ — ссылка;
+//  (subfall) отказ на экране Google / квота / YouTube отказал (свой канал, лимит) / встроенный браузер → строка, дальше ссылка;
+//  (sublook) 390×844, 800×600, 1920×1080, 3440×1440 × тёмная / светлая: «✓ Ты подписан» на главной, в окне ролика, в Shorts.
 // Запуск из корня сайта: node scripts/ytlike-e2e.cjs   (CHROME=…, PYTHON=…, BASE=…, SHOTS=<папка>,
-//   ONLY=off,shorts,video,deny,quota,inapp,look,card,back,newtab,r401,slow403,net2)
+//   ONLY=off,shorts,video,deny,quota,inapp,look,card,back,newtab,r401,slow403,net2,sub,subtest,subfall,sublook)
 const H = require('./auth-social-e2e.cjs');
 const { startSite, chrome, newGoogleUser, newProfile, READY, SIGNED, VISIBLE, FEED, SB, ME, V, V2, V3 } = H;
 const ONLY = new Set((process.env.ONLY || '').split(',').filter(Boolean));
@@ -65,9 +72,27 @@ function mockGoogle(G) {
           : `state=${st}&access_token=${TOKEN}&token_type=Bearer&expires_in=3599&scope=${encodeURIComponent((G.answer === 'noscope' ? '' : SCOPE + ' ') + 'openid https://www.googleapis.com/auth/userinfo.email')}`;
         return { code: 302, body: '', headers: [{ name: 'Location', value: q.redirect_uri + '#' + frag }] };
       }
-      if (!(u.host === 'oauth2.googleapis.com' || (u.host === 'www.googleapis.com' && /^\/youtube\/v3\/videos\/(rate|getRating)$/.test(u.pathname)))) return null;   // остальное — как в стенде
+      if (!(u.host === 'oauth2.googleapis.com' || (u.host === 'www.googleapis.com' && /^\/youtube\/v3\/(videos\/(rate|getRating)|subscriptions)$/.test(u.pathname)))) return null;   // остальное — как в стенде
       if (req.method === 'OPTIONS') return { code: 204, body: '', headers: CORS };
       const auth = String(req.headers?.Authorization || req.headers?.authorization || '');
+      // подписка (ytlike-2): subscriptions.list (mine, forChannelId) и subscriptions.insert; G.subbed — подписан ли «аккаунт YouTube»,
+      // G.sub: 'quota' | 'forbidden' — ответ insert (квоту list в этой подделке не видит: ответ квоты проверяется на самом действии)
+      if (u.host === 'www.googleapis.com' && u.pathname === '/youtube/v3/subscriptions') {
+        const okA = auth === 'Bearer ' + TOKEN, q = Object.fromEntries(u.searchParams);
+        if (req.method === 'GET') {
+          G.J.push(['subList', q, okA]);
+          if (!okA) return json({ error: { code: 401, errors: [{ reason: 'authError' }] } }, 401);
+          return json({ kind: 'youtube#subscriptionListResponse', pageInfo: { totalResults: G.subbed ? 1 : 0 }, items: G.subbed ? [{ kind: 'youtube#subscription', id: 'sub-test-1' }] : [] });
+        }
+        let body = null; try { body = JSON.parse(req.postData || 'null'); } catch (e) {}
+        G.J.push(['subInsert', q, body, okA, req.method]);
+        if (!okA) return json({ error: { code: 401, errors: [{ reason: 'authError' }] } }, 401);
+        if (G.sub === 'quota') return json({ error: { code: 403, message: 'quota', errors: [{ domain: 'youtube.quota', reason: 'quotaExceeded' }] } }, 403);
+        if (G.sub === 'forbidden') return json({ error: { code: 400, errors: [{ domain: 'youtube.subscription', reason: 'subscriptionForbidden' }] } }, 400);
+        if (G.subbed) return json({ error: { code: 400, errors: [{ domain: 'youtube.subscription', reason: 'subscriptionDuplicate' }] } }, 400);
+        G.subbed = true;
+        return json({ kind: 'youtube#subscription', id: 'sub-test-1', snippet: { resourceId: body?.snippet?.resourceId || null } });
+      }
       if (u.host === 'www.googleapis.com' && u.pathname === '/youtube/v3/videos/rate') {
         G.J.push(['rate', u.searchParams.get('id'), u.searchParams.get('rating'), auth === 'Bearer ' + TOKEN, req.method]);
         if (auth !== 'Bearer ' + TOKEN) return json({ error: { code: 401, errors: [{ reason: 'authError' }] } }, 401);
@@ -518,6 +543,174 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
         ok(!c.errs.length, 'сеть: ошибок в консоли нет', c.errs);
         await c.shot('ytl-net2');
       } finally { await c.close(); }
+    }
+
+    // ═══ ПОДПИСКА (ytlike-2, владелец 26.11: «а с подпиской так можно сделать? Как с лайками») ═══
+    const CH = 'UCztYAfPrieiG6kI93yE-Hdg', CH_URL = 'https://www.youtube.com/@Dan4ik37Yt';
+    const SUBBTN = '#modal .modal-act-yt', HERO = '.hero-btn.is-yt';
+    const subTxt = sel => `(document.querySelector(${JSON.stringify(sel)})?.textContent || '')`;
+    const SUBBED = sel => `/✓ Ты подписан/.test(${subTxt(sel)})`;
+    const onlyErrs = (errs, re, nWant) => errs.filter(e => re.test(e)).length === nWant && errs.length === nWant;
+    const at42 = `(() => { const fr = document.querySelector('#mVid iframe'); window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ event: 'infoDelivery', info: { currentTime: 42.4 } }), origin: 'https://www.youtube.com', source: fr.contentWindow })); return true; })()`;
+
+    // (sub) 'on', телефон: гость в окне ролика на 42-й секунде → «▶ Подписаться на YouTube» → вход → разрешение → тот же ролик → подписан
+    if (want('sub')) {
+      console.log('— подписка (on), 390×844 тёмная: гость в окне ролика → вход Google → разрешение YouTube → тот же ролик → подписан');
+      const G = { answer: 'grant' }, X = mockGoogle(G);
+      const S = { providers: { google: true }, user: newGoogleUser(), profile: newProfile(), feed: FEED };
+      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'dark', S, extra: X, init: initMode('on') + NOPOPUP });
+      try {
+        await c.send('Page.navigate', { url: B + '/' });
+        await c.until(READY);
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+        await c.until(`document.getElementById('modal').classList.contains('open') && !!document.querySelector('#mVid iframe')`, 8000);
+        await c.ev(at42);
+        ok(await c.until(VISIBLE(SUBBTN), 5000), 'в окне ролика видна «▶ Подписаться на YouTube» (там же, где была)');
+        await c.shot('ytsub-1-guest');
+        const t = await c.ev(TAP(SUBBTN), true);
+        ok(t?.prevented === true, 'нажатие взяла настоящая подписка (ссылка не открылась)', t);
+        ok(await c.until(`document.getElementById('globalAuthModal').classList.contains('open') && !!document.querySelector('#gauthOauth .lgn-main')`, 8000), 'гость → то же окно входа');
+        const it = await c.ev(`D37Intent.pending()`);
+        ok(it?.kind === 'ytsub' && it.args?.g === 1 && it.media?.id === V3, 'запомнено: подписка и ролик (D37Intent, та же система)', it);
+        ok(/подписка/.test(await c.ev(`document.getElementById('gauthIntent')?.textContent || ''`)), 'в окне входа сказано, что подписка оформится сама');
+        ok(!G.J.length, 'до входа к Google и YouTube API не ходили');
+        await c.click('#gauthOauth .lgn-main');
+        ok(await c.until(`${READY} && ${SIGNED}`, 25000), 'вошли через «Google»');
+        ok(G.sbAuthorize.length === 1 && !G.sbAuthorize[0].scopes && !/youtube/i.test(JSON.stringify(G.sbAuthorize[0])), 'вход Google (Supabase) — без права YouTube', G.sbAuthorize);
+        if (await c.until(`!!document.querySelector('.wlc-ov')`, 8000)) { await c.ev(`(() => { document.querySelector('.wlc-year').value = String(new Date().getFullYear() - 25); return true; })()`); await c.click('.wlc-ok'); }
+        ok(await c.until(`${READY} && ${SIGNED} && ${SUBBED(SUBBTN)}`, 30000), 'после разрешения — «✓ Ты подписан» в окне ролика (без второго нажатия)', await c.ev(subTxt(SUBBTN)).catch(() => ''));
+        const auth = G.J.filter(x => x[0] === 'auth').map(x => x[1]);
+        ok(auth.length === 1 && auth[0].scope === SCOPE && auth[0].response_type === 'token' && auth[0].include_granted_scopes === 'true' && auth[0].client_id === CID && /^ytl\./.test(auth[0].state || ''), 'тот же экран разрешения Google: одно право youtube.force-ssl', auth);
+        const ins = G.J.filter(x => x[0] === 'subInsert'), lst = G.J.filter(x => x[0] === 'subList');
+        ok(ins.length === 1 && ins[0][2]?.snippet?.resourceId?.channelId === CH && ins[0][2].snippet.resourceId.kind === 'youtube#channel' && ins[0][1].part === 'snippet' && ins[0][3] && ins[0][4] === 'POST', 'subscriptions.insert ОДИН раз: канал @Dan4ik37Yt, токен в заголовке', ins);
+        ok(lst.length >= 1 && lst.every(x => x[1].mine === 'true' && x[1].forChannelId === CH && x[2]) && G.J.findIndex(x => x[0] === 'subList') < G.J.findIndex(x => x[0] === 'subInsert'), 'сначала subscriptions.list (mine, только этот канал), потом insert', lst);
+        const back = await c.ev(`({ open: document.getElementById('modal').classList.contains('open'), vid: modalVidId, src: document.querySelector('#mVid iframe')?.getAttribute('src') || '', path: location.pathname, hash: location.hash, toast: ${TOAST} })`);
+        ok(back.open && back.vid === V3 && /[?&]start=42(&|$)/.test(back.src), 'тот же ролик с 42-й секунды', back);
+        ok(back.path === '/' && !back.hash, 'адрес чистый (фрагмент Google стёрт)', back);
+        ok(/✓ Ты подписан на канал на YouTube/.test(back.toast), 'строка «✓ Ты подписан на канал на YouTube»', back.toast);
+        ok(await c.ev(SUBBED(HERO)), 'и на главной кнопка «Подписаться» тоже стала «✓ Ты подписан»', await c.ev(subTxt(HERO)));
+        const lk = await c.ev(LEAK);
+        ok(!lk.ls.length && !lk.url && lk.ss, 'токен — только в sessionStorage: не в localStorage, не в адресе', lk);
+        ok(!c.logs.some(l => l.includes(TOKEN)), 'токена нет в консоли');
+        await c.shot('ytsub-2-done');
+        const t2 = await c.ev(TAP(SUBBTN), true);
+        ok(t2?.prevented === false && t2.href === CH_URL && t2.target === '_blank' && G.J.filter(x => x[0] === 'subInsert').length === 1, 'второе нажатие на «✓ Ты подписан» — открывает канал (отписки нет), insert не зовём', t2);
+        console.log(`    квота за подписку: ${await c.ev(`D37YtLike._test.stats.units`)} ед. (list 1 + insert 50)`);
+        ok(!c.errs.length, 'подписка: ошибок в консоли нет', c.errs);
+      } finally { await c.close(); }
+    }
+
+    // (subtest) 'test', 1920 светлая: гость — ссылка; админ, уже подписан — «✓» без insert; обычный человек — ссылка
+    if (want('subtest')) {
+      console.log("— подписка ('test'), 1920×1080 светлая: гость — ссылка; админ уже подписан — ✓ без insert; не админ — ссылка");
+      const G = { answer: 'grant', subbed: true }, X = mockGoogle(G);
+      const { user, profile } = oldUser('admin');
+      const c = await chrome({ w: 1920, h: 1080, theme: 'light', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('test') });
+      try {
+        await c.send('Page.navigate', { url: B + '/' });
+        await c.until(READY);
+        const h0 = await c.ev(TAP(HERO), true);
+        ok(h0?.prevented === false && /sub_confirmation=1/.test(h0.href), "гость при 'test': «Подписаться» на главной — ссылка, как раньше", h0);
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+        const g = await c.ev(TAP(SUBBTN), true);
+        ok(g?.prevented === false && /sub_confirmation=1/.test(g.href) && !G.J.length, "гость при 'test': и в окне ролика — ссылка, к Google не ходим", { g, J: G.J });
+        ok(!(await c.ev(`!!document.querySelector('[data-ytsub],.ytl-on,.ytl-busy')`)), 'гость: кнопки не тронуты');
+        await c.ev(`closeModal()`, true);
+        ok(await signedIn(c) && await presetTok(c, 10 * 60e3), 'вход почтой (админ), разрешение выдано 10 мин назад');
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+        ok(await c.until(SUBBED(SUBBTN), 10000), 'уже подписан на YouTube: «✓ Ты подписан» (subscriptions.list)', await c.ev(subTxt(SUBBTN)));
+        ok(await c.ev(SUBBED(HERO)), 'на главной — тоже ✓');
+        const t = await c.ev(TAP(SUBBTN), true);
+        ok(t?.prevented === false && t.href === CH_URL, '«✓ Ты подписан» — ссылка на канал', t);
+        ok(!G.J.some(x => x[0] === 'subInsert') && G.J.filter(x => x[0] === 'subList').length === 1 && authN(G) === 0, 'insert не вызывался, list — один раз, экрана Google не было', G.J.map(x => x[0]));
+        await c.shot('ytsub-test-admin-subbed');
+        ok(!c.errs.length, "'test' админ: ошибок нет", c.errs);
+      } finally { await c.close(); }
+      const G2 = {}, X2 = mockGoogle(G2), u2 = oldUser('user');
+      const c2 = await chrome({ w: 1920, h: 1080, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: u2.user, profile: u2.profile, feed: FEED }, extra: X2, init: initMode('test') });
+      try {
+        await c2.send('Page.navigate', { url: B + '/' });
+        await c2.until(READY);
+        ok(await signedIn(c2), 'вход почтой (не админ)');
+        await c2.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+        const t = await c2.ev(TAP(SUBBTN), true);
+        ok(t?.prevented === false && /sub_confirmation=1/.test(t.href) && !G2.J.length, "не админ при 'test': подписка — ссылка, к Google не ходим", { t, J: G2.J });
+        ok(!c2.errs.length, 'не админ: ошибок нет', c2.errs);
+      } finally { await c2.close(); }
+    }
+
+    // (subfall) отказ на экране Google, квота, YouTube отказал (свой канал / лимит), встроенный браузер → ссылка и одна строка
+    if (want('subfall')) for (const [kind, w, h, ph, theme] of [['deny', 390, 844, true, 'light'], ['quota', 1920, 1080, false, 'dark'], ['forbidden', 800, 600, false, 'dark'], ['inapp', 390, 844, true, 'dark']]) {
+      console.log(`— подписка, запасной путь «${kind}» (${w}×${h} ${theme})`);
+      const G = { answer: kind === 'deny' ? 'deny' : 'stay', sub: kind === 'quota' || kind === 'forbidden' ? kind : undefined }, X = mockGoogle(G);
+      const { user, profile } = oldUser('user');
+      const ua = kind === 'inapp' ? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36 Instagram 300.0.0.0' : undefined;
+      const c = await chrome({ w, h, phone: ph, theme, S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') + NOPOPUP, ua });
+      try {
+        await c.send('Page.navigate', { url: B + '/' });
+        await c.until(READY);
+        ok(await signedIn(c), 'вход почтой');
+        if (kind === 'quota' || kind === 'forbidden') ok(await presetTok(c, 20 * 60e3), 'разрешение выдано 20 мин назад');
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+        await sleep(800);
+        const t1 = await c.ev(TAP(SUBBTN), true);
+        if (kind === 'deny') {
+          ok(t1?.prevented === true, 'нажатие → экран Google', t1);
+          ok(await c.until(`${READY} && ${SIGNED} && /Без разрешения Google сайт не подписывает/.test(${TOAST})`, 30000), 'вернулись: «без разрешения — подписка на самом YouTube»', await c.ev(TOAST).catch(() => ''));
+          ok(/Нажми «Подписаться» ещё раз — откроется YouTube/.test(await c.ev(TOAST)), 'и что делать: «нажми ещё раз — откроется YouTube»');
+          ok(await c.ev(`document.getElementById('modal').classList.contains('open') && modalVidId === ${JSON.stringify(V3)}`), 'тот же ролик открыт');
+        } else if (kind === 'inapp') {
+          ok(t1?.prevented === false && !G.J.length, 'встроенный браузер: ссылка, к Google не ходим', { t1, J: G.J });
+          ok(/встроенном браузере/.test(await c.ev(TOAST)) && /подписка/.test(await c.ev(TOAST)) && /Chrome или Safari/.test(await c.ev(TOAST)), 'строка «открой в Chrome или Safari»', await c.ev(TOAST));
+        } else {
+          ok(t1?.prevented === true, 'нажатие → subscriptions.list → insert', t1);
+          const re = kind === 'quota' ? /Подписки с сайта на сегодня закончились/ : /не дал подписаться/;
+          ok(await c.until(`${re}.test(${TOAST})`, 10000), kind === 'quota' ? 'строка «подписки с сайта на сегодня закончились»' : 'строка «YouTube не дал подписаться с сайта»', await c.ev(TOAST));
+          if (kind === 'quota') ok(await c.ev(`D37YtLike.why()`) === 'quota', 'запомнено до полуночи по Тихоокеанскому времени');
+        }
+        const t2 = await c.ev(TAP(SUBBTN), true);
+        await sleep(800);
+        ok(t2?.prevented === false && /sub_confirmation=1/.test(t2.href) && G.J.filter(x => x[0] === 'subInsert').length <= 1 && authN(G) <= 1, 'следующее нажатие — ссылка на YouTube (не мёртвая кнопка, без повторных запросов)', { t2, J: G.J.map(x => x[0]) });
+        ok(!(await c.ev(LEAK)).ls.length, 'в localStorage токена нет');
+        await c.shot(`ytsub-fall-${kind}`);
+        // квота / отказ YouTube: Chrome сам пишет в журнал ответ 4xx от YouTube (из JS не спрятать) — ровно одна такая строка, других нет
+        if (kind === 'quota') ok(onlyErrs(c.errs, /status of 403.*googleapis\.com\/youtube\/v3\/subscriptions/, 1), 'квота: в журнале только одна строка Chrome о 403 от YouTube', c.errs);
+        else if (kind === 'forbidden') ok(onlyErrs(c.errs, /status of 400.*googleapis\.com\/youtube\/v3\/subscriptions/, 1), 'отказ YouTube: в журнале только одна строка Chrome о 400 от YouTube', c.errs);
+        else ok(!c.errs.length, `${kind}: ошибок в консоли нет`, c.errs);
+      } finally { await c.close(); }
+    }
+
+    // (sublook) 4 размера × 2 темы: «✓ Ты подписан» на главной, в окне ролика и в Shorts — целиком на экране, вбок не едет
+    if (want('sublook')) {
+      console.log('— подписка, вид: 4 размера × 2 темы');
+      for (const [w, h, ph] of [[390, 844, true], [800, 600, false], [1920, 1080, false], [3440, 1440, false]]) for (const theme of ['dark', 'light']) {
+        const G = { answer: 'grant', subbed: true }, X = mockGoogle(G);
+        const { user, profile } = oldUser('admin');
+        const tok = `try{sessionStorage.setItem('d37_ytl_tok', JSON.stringify({ t: ${JSON.stringify(TOKEN)}, exp: Date.now() + 3e6, u: ${JSON.stringify(ME)} }))}catch(e){}`;
+        const c = await chrome({ w, h, phone: ph, theme, S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('test') + tok });
+        const fits = sel => c.ev(`(() => { const a = document.querySelector(${JSON.stringify(sel)}); if (!a) return null; a.scrollIntoView({ block: 'center' }); const r = a.getBoundingClientRect(); return { w: r.width, h: r.height, l: r.left, r: r.right, iw: innerWidth, wrap: r.height > 80 }; })()`);
+        try {
+          await c.send('Page.navigate', { url: B + '/' });
+          await c.until(READY);
+          ok(await signedIn(c), `${w}×${h} ${theme}: вход`);
+          ok(await c.until(SUBBED(HERO), 10000), `${w}×${h} ${theme}: главная — «✓ Ты подписан»`, await c.ev(subTxt(HERO)));
+          const r0 = await fits(HERO);
+          ok(r0 && r0.w > 40 && r0.l >= 0 && r0.r <= r0.iw + 1 && !r0.wrap && await c.ev(noOverflow), `${w}×${h} ${theme}: кнопка на главной целиком на экране`, r0);
+          await c.shot(`ytsub-look-home-${w}x${h}-${theme}`);
+          await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+          ok(await c.until(SUBBED(SUBBTN), 8000), `${w}×${h} ${theme}: окно ролика — «✓ Ты подписан»`);
+          const r1 = await fits(SUBBTN);
+          ok(r1 && r1.w > 40 && r1.l >= 0 && r1.r <= r1.iw + 1 && await c.ev(noOverflow), `${w}×${h} ${theme}: в окне ролика целиком на экране`, r1);
+          await c.shot(`ytsub-look-modal-${w}x${h}-${theme}`);
+          await c.ev(`closeModal(); D37Route.go('#/shorts/${V2}'); true`, true);
+          const ssel = `.sh-item[data-id="${V2}"] .sh-sub`;
+          ok(await c.until(SUBBED(ssel), 12000), `${w}×${h} ${theme}: Shorts — «✓ Ты подписан»`, await c.ev(subTxt(ssel)));
+          ok(await c.ev(noOverflow), `${w}×${h} ${theme}: Shorts вбок не прокручиваются`);
+          await c.shot(`ytsub-look-shorts-${w}x${h}-${theme}`);
+          ok(G.J.filter(x => x[0] === 'subList').length === 1 && !G.J.some(x => x[0] === 'subInsert'), `${w}×${h} ${theme}: subscriptions.list один раз на визит, insert нет`, G.J.map(x => x[0]));
+          ok(!c.errs.length, `${w}×${h} ${theme}: ошибок в консоли нет`, c.errs);
+        } finally { await c.close(); }
+      }
     }
 
     // ═══ (look) размеры и темы: залитая 👍 в окне ролика и в Shorts ═══

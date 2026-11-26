@@ -213,6 +213,138 @@ const ev = () => { const e = { prevented: false, preventDefault() { e.prevented 
       ok(L.Y.tap(ev(), null, V) === false && !L.w.went, '401 на свежем токене: следующее нажатие — ссылка, не Google');
     }
   }
+  // ═══ 8. Подписка (владелец 26.11: «а с подпиской так можно сделать? Как с лайками») — та же система ═══
+  {
+    const tokn = 'ya29.TESTONLY_abcdefghijklmnop', CH = 'UCztYAfPrieiG6kI93yE-Hdg';
+    const tick = () => new Promise(r => setTimeout(r, 20));
+    // YT: { subbed, insert: 'ok' | 'dup' | 'forbidden' | 'quota' } — поддельный YouTube API
+    const mk = (o = {}) => {
+      const YT = { subbed: !!o.subbed, insert: o.insert || 'ok' };
+      const L = load({ host: '127.0.0.1', test: { mode: o.mode || 'on', cid: CID }, ss: o.ss, ytHash: o.ytHash, user: o.user === undefined ? { id: 'u1' } : o.user, roleName: o.roleName || 'admin' });
+      L.toasts = []; L.w.xpToast = t => L.toasts.push(t); L.parked = []; L.needed = []; L.calls = [];
+      L.w.D37Intent.park = async (k, a) => { L.parked.push([k, a]); return true; };
+      L.w.D37Intent.need = async (k, a, x) => { L.needed.push([k, a, x]); return false; };
+      L.w.fetch = async (u, opt = {}) => {
+        u = String(u); L.calls.push([opt.method, u, opt.body || '', String(opt.headers?.Authorization || '')]);
+        const j = (b, s = 200) => ({ ok: s < 300, status: s, json: async () => b });
+        if (u.includes('/youtube/v3/subscriptions') && opt.method === 'GET') return j({ items: YT.subbed ? [{ id: 'sub1' }] : [] });
+        if (u.includes('/youtube/v3/subscriptions') && opt.method === 'POST') {
+          if (YT.insert === 'dup') return j({ error: { errors: [{ reason: 'subscriptionDuplicate' }] } }, 400);
+          if (YT.insert === 'forbidden') return j({ error: { errors: [{ reason: 'subscriptionForbidden' }] } }, 400);
+          if (YT.insert === 'quota') return j({ error: { errors: [{ reason: 'quotaExceeded' }] } }, 403);
+          YT.subbed = true; return j({ kind: 'youtube#subscription', id: 'sub1' });
+        }
+        return j({}, 204);
+      };
+      return L;
+    };
+    const tokSS = () => { const s = store(); s.setItem('d37_ytl_tok', JSON.stringify({ t: tokn, exp: Date.now() + 3e6, u: 'u1', at: Date.now() - 30 * 60e3 })); return s; };
+    const ins = L => L.calls.filter(c => c[0] === 'POST' && c[1].includes('/subscriptions'));
+    const lst = L => L.calls.filter(c => c[0] === 'GET' && c[1].includes('/subscriptions'));
+    {
+      const { Y } = load();
+      const c = Y._test.classify;
+      ok(c(400, 'subscriptionForbidden') === 'video' && c(404, 'publisherNotFound') === 'video', 'подписка: YouTube отказал (свой канал, лимит) — «этот канал не даёт»');
+      ok(c(404, 'subscriberNotFound') === 'channel' && c(403, 'accountSuspended') === 'channel', 'подписка: у аккаунта нет канала / закрыт');
+      ok(Y._test.COST.subInsert === 50 && Y._test.COST.subList === 1, 'цена: subscriptions.insert 50, subscriptions.list 1');
+      ok(Y.CHANNEL === CH, 'канал @Dan4ik37Yt — ' + CH);
+    }
+    {
+      const L = mk();
+      const e = ev();
+      ok(L.Y.tapSub(e) === true && e.prevented, 'подписка без разрешения: нажатие берётся');
+      await tick();
+      const st = JSON.parse(L.w.sessionStorage.getItem('d37_ytl_state') || 'null');
+      ok(L.parked.length === 1 && L.parked[0][0] === 'ytsub' && L.parked[0][1].p === st?.n && st?.id === 'sub' && String(L.w.went || '').includes('state=ytl.' + st.n) && String(L.w.went).includes(encodeURIComponent(SCOPE)), 'подписка → тот же экран Google с тем же правом, отложено ytsub с меткой', { parked: L.parked, st, went: L.w.went });
+    }
+    {
+      const L = mk({ user: null, roleName: null });
+      ok(L.Y.tapSub(ev()) === true, "гость ('on'): нажатие берётся");
+      await tick();
+      ok(L.needed.length === 1 && L.needed[0][0] === 'ytsub' && L.needed[0][1].g === 1 && /подписка/.test(L.needed[0][2]?.label || ''), 'гость → то же окно входа D37Intent.need(ytsub)', L.needed);
+    }
+    {
+      const L = mk({ ss: tokSS() });
+      ok(L.Y.tapSub(ev()) === true, 'есть разрешение, не подписан: нажатие берётся');
+      await tick(); await tick();
+      const i = ins(L);
+      ok(lst(L).length === 1 && /mine=true/.test(lst(L)[0][1]) && lst(L)[0][1].includes('forChannelId=' + CH) && i.length === 1, 'list (mine, forChannelId) → insert ровно один раз', L.calls);
+      ok(i.length === 1 && JSON.parse(i[0][2]).snippet.resourceId.channelId === CH && JSON.parse(i[0][2]).snippet.resourceId.kind === 'youtube#channel' && /part=snippet/.test(i[0][1]) && i[0][3] === 'Bearer ' + tokn, 'insert: канал @Dan4ik37Yt, токен в заголовке', i);
+      ok(!L.calls.some(c => c[1].includes(tokn)), 'токена нет в адресе запроса');
+      ok(L.Y._test.subbed() === true && L.toasts.some(t => /✓ Ты подписан на канал на YouTube/.test(t)), 'строка «✓ Ты подписан на канал на YouTube»', L.toasts);
+      const e2 = ev();
+      ok(L.Y.tapSub(e2) === false && !e2.prevented && ins(L).length === 1, 'второе нажатие на «✓ Ты подписан» — ссылка на канал (отписки нет), insert не зовём');
+      ok(L.Y._test.stats.units === 51, 'квота подписки: list 1 + insert 50 = 51 ед.', L.Y._test.stats);
+    }
+    {
+      const L = mk({ ss: tokSS(), subbed: true });
+      L.Y.tapSub(ev()); await tick(); await tick();
+      ok(ins(L).length === 0 && L.Y._test.subbed() === true && L.toasts.some(t => /уже подписан/.test(t)), 'уже подписан: ✓ без вызова insert', { calls: L.calls, toasts: L.toasts });
+    }
+    {
+      const L = mk({ ss: tokSS(), insert: 'dup' });
+      L.Y.tapSub(ev()); await tick(); await tick();
+      ok(ins(L).length === 1 && L.Y._test.subbed() === true, 'insert ответил subscriptionDuplicate — тоже «подписан»');
+    }
+    {
+      const L = mk({ ss: tokSS(), insert: 'forbidden' });
+      L.Y.tapSub(ev()); await tick(); await tick();
+      ok(L.toasts.some(t => /не дал подписаться/.test(t) && /Нажми «Подписаться» ещё раз — откроется YouTube/.test(t)), 'отказ YouTube (свой канал / лимит): строка и обещание ссылки', L.toasts);
+      ok(L.Y.tapSub(ev()) === false && L.Y.tapSub(ev()) === false && ins(L).length === 1, 'дальше — ссылка, insert больше не зовём');
+      ok(L.Y.tap(ev(), null, 'dQw4w9WgXcQ') === true, 'лайк при этом работает (отказ подписки — только для подписки)');
+    }
+    {
+      const L = mk({ ss: tokSS(), insert: 'quota' });
+      L.Y.tapSub(ev()); await tick(); await tick();
+      ok(L.Y.why() === 'quota' && L.toasts.some(t => /Подписки с сайта на сегодня закончились/.test(t)), 'квота: строка, до полуночи PT — ссылка', L.toasts);
+      ok(L.Y.tapSub(ev()) === false && ins(L).length === 1, 'квота: дальше ссылка');
+    }
+    {
+      const T = mk({ mode: 'test', roleName: 'user' });
+      ok(T.Y.tapSub(ev()) === false && !T.calls.length && !T.toasts.length, "'test', не админ: подписка — ссылка, как раньше, без слов");
+      const G = mk({ mode: 'test', user: null, roleName: null });
+      ok(G.Y.tapSub(ev()) === false && !G.needed.length, "'test', гость: ссылка");
+      const K = mk(); K.w.D37Age = { kid: () => true };
+      ok(K.Y.tapSub(ev()) === false && !K.calls.length, 'ребёнок до 13 — ссылка');
+      const I = mk(); I.w.D37Intent.inApp = () => true;
+      ok(I.Y.tapSub(ev()) === false && I.toasts.some(t => /встроенном браузере/.test(t) && /подписка/.test(t)), 'встроенный браузер — ссылка со строкой про подписку', I.toasts);
+      const O = load({ host: '127.0.0.1', test: { mode: 'off', cid: CID } });
+      ok(O.Y.tapSub(ev()) === false, "'off' — ссылка");
+    }
+    // возврат с Google: ответ с меткой подписки → list + insert без второго нажатия; без ответа — не уводим
+    {
+      const mkSS = () => { const s = store(); s.setItem('d37_ytl_state', JSON.stringify({ n: 'subnonce12345678', id: 'sub', at: Date.now(), u: 'u1' })); return s; };
+      const hash = `#state=ytl.subnonce12345678&access_token=${tokn}&expires_in=3599&scope=${encodeURIComponent(SCOPE)}`;
+      const A = mk({ ss: mkSS(), ytHash: hash });
+      ok(A.Y._test.ret()?.id === 'sub' && A.Y._test.token() === tokn, 'ответ Google для подписки принят');
+      await A.Y._test.resumed({ p: 'subnonce12345678' }, {}, true);
+      ok(ins(A).length === 1 && A.Y._test.subbed() === true, 'вернулись с разрешением — подписка ровно один раз, без второго нажатия', A.calls);
+      const B = mk({ ss: mkSS(), ytHash: hash });
+      await B.Y._test.resumed({ p: 'othernonce999999' }, {}, true);
+      ok(ins(B).length === 0 && !B.w.went, 'метка не та — не подписываем, на Google не уходим');
+      const C = mk();
+      await C.Y._test.resumed({ p: 'nonceFromEarlierTry123' }, {}, true);
+      ok(!C.w.went && !C.calls.length && C.toasts.some(t => /подписка не оформлена/.test(t) && /снова откроется экран Google/.test(t)), '«Назад» с экрана Google: строка, сам не уводит', C.toasts);
+      const D = mk();
+      await D.Y._test.resumed({ g: 1 }, {}, true);
+      ok(String(D.w.went || '').startsWith('https://accounts.google.com/'), 'сразу после входа гостя — экран разрешения Google');
+      const E = mk({ ss: (() => { const s = store(); s.setItem('d37_ytl_state', JSON.stringify({ n: 'subnonce12345678', id: 'sub', at: Date.now(), u: 'u1' })); return s; })(), ytHash: '#error=access_denied&state=ytl.subnonce12345678' });
+      await E.Y._test.resumed({ p: 'subnonce12345678' }, {}, true);
+      ok(!E.calls.length && E.Y.why() === 'denied' && E.toasts.some(t => /Без разрешения Google сайт не подписывает/.test(t)), 'отказ на экране Google — строка, дальше ссылка', E.toasts);
+    }
+    // код и страницы
+    {
+      const y = src('js/core/ytlike.js');
+      ok(!/'DELETE'/.test(y), 'отписки с сайта нет (subscriptions.delete не зовётся)');
+      const subs = [];
+      for (const f of ['index.html', 'js/features/shorts.js']) for (const m of src(f).matchAll(/<a [^>]*sub_confirmation=1[^>]*>([\s\S]*?)<\/a>/g)) subs.push([f, m[1].replace(/<[^>]+>/g, '')]);
+      ok(subs.length >= 5 && subs.every(([, t]) => /на YouTube/.test(t)), 'все кнопки подписки в SPA — «… на YouTube»', subs);
+      const p = src('privacy.html');
+      ok(/YouTube API Services/.test(p) && p.includes('https://www.youtube.com/t/terms') && p.includes('https://policies.google.com/privacy') && p.includes('security.google.com/settings/security/permissions'), '/privacy: YouTube API Services, Условия YouTube, Политика Google, страница отзыва доступа');
+      ok(/subscriptions\.insert/.test(p) && /subscriptions\.list/.test(p) && /videos\.rate/.test(p) && /videos\.getRating/.test(p) && /id="youtube-en"/.test(p) && /Limited Use/.test(p), '/privacy: все четыре действия, английский раздел, Limited Use');
+      ok(/Twitch и DonationAlerts/.test(p) && /Google AdSense/.test(p) && /3\. YouTube API и встроенные видео/.test(p), '/privacy: прежние разделы на месте');
+    }
+  }
   // ═══ 7. D37Intent.park принадлежит вкладке: новая вкладка (свой sessionStorage) его не видит и никуда не уводит ═══
   {
     const ls = store(), tabA = store(), tabB = store();
