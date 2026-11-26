@@ -1,4 +1,4 @@
-# Настоящий лайк и подписка на YouTube с сайта — что сделать тебе (26.11.2026)
+# Настоящий лайк, подписка и комментарии на YouTube с сайта — что сделать тебе (26–27.11.2026)
 
 Ты сказал «Yes, prepare it» (лайк), потом «а с подпиской так можно сделать? Как с лайками» и про этот файл — «Вот тут короче что надо
 пусть сделает». Шаги 1–3 ты сделал 26.11; на сайте режим **`'test'`** (`YT_LIKE_REAL = 'test'` в `js/core/config.js`): настоящие лайк и
@@ -18,6 +18,23 @@ YouTube **без второго нажатия**, 👍 залита, строк�
 
 Наград за лайки и подписки нет и не будет (правила YouTube). Не вышло (отказ, лимит, встроенный браузер, ребёнок до 13) — кнопка снова
 просто ссылка на YouTube и одна строка «почему».
+
+**Комментарии с YouTube (27.11, твоё «можно ли сделать комменты от ютуба и убрать лишнее»).** У каждого Short и в окне ролика —
+кнопка **«💬»**: открывается окно с 20 лучшими комментариями этого ролика с YouTube, ответы — по нажатию «Ответы (N)». Читать может
+любой, кому **13 лет и больше** (возраст указан); детям до 13 и тем, кто возраст не указал, кнопки «💬» нет вовсе. Читаем ключом сайта
+через свой сервер (`/api/ytcomments`, 1 ед. квоты на ролик за 10 минут, сколько бы людей ни открыло) — разрешение человека не нужно.
+**Написать комментарий или ответ** — то же разрешение Google `youtube.force-ssl` (нового права не надо: оно уже «…ratings, **comments**…»),
+тот же экран, тот же возврат на тот же ролик; текст человека не теряется — после экрана Google он уходит сам, ровно один раз. Над полем
+написано: «Опубликуется на YouTube под именем твоего аккаунта YouTube — его увидят все». В режиме `'test'` писать могут только админы;
+остальным вместо поля — ссылка «Написать комментарий на YouTube ↗» (и «Ответить на YouTube ↗» у каждой ветки).
+
+**Меньше кнопок.** Когда у человека работает настоящий лайк на YouTube (сейчас — у тебя, админа), ❤ «Нравится» (лайк на сайте) у роликов
+**не показывается** — одна кнопка лайка, YouTube. У кого настоящего лайка нет (все остальные, пока `'test'`; дети; встроенный браузер) —
+❤ как раньше, никто рабочий лайк не теряет. ❤ у стрима Twitch остаётся всегда. Поставленные ❤ на сервере не удаляются. Переключатель —
+`SITE_LIKE_VIDEO = 'auto'` в `js/core/config.js` (`'always'` — как раньше). В окне ролика «Страница видео ↗» стала тихой ссылкой под
+кнопками. В Shorts «▶ Подписаться на YouTube» теперь в полосе кнопок у играющего Short (раньше была в подписи, которая прячется, пока
+ролик играет, — её было не видно); уже подписан — этой кнопки нет. Строки «Лайк поставлен / Ты подписан / Комментарий опубликован на
+YouTube» — без ⚡ (на сайте с XP ⚡ выглядел бы как награда).
 
 **Пропуск Google живёт только в этой вкладке браузера, не дольше часа** — ни на сервер сайта, ни в базу он не попадает.
 
@@ -51,6 +68,8 @@ YouTube **без второго нажатия**, 👍 залита, строк�
 подписка `subscriptions.insert` принимают только `youtube`, `youtube.force-ssl` или `youtubepartner`; проверки `videos.getRating` и
 `subscriptions.list` — те же и `youtube.readonly` (но им нельзя ставить лайк и подписывать). `youtubepartner` — для владельцев контента,
 `youtube` — то же «управление» без обязательного шифрования. Одно право `youtube.force-ssl` покрывает все четыре действия.
+Комментарии (27.11, сверено тем же discovery-документом): `commentThreads.insert` и `comments.insert` требуют ровно `youtube.force-ssl` —
+то же право, ничего добавлять не надо. Читать комментарии (`commentThreads.list`, `comments.list`) сайт может своим ключом, без права.
 
 ## Шаг 4. Кто сможет пробовать, пока Google не проверил
 
@@ -80,7 +99,7 @@ YouTube **без второго нажатия**, 👍 залита, строк�
 | Главная на **подтверждённом домене, который принадлежит тебе** | `dan4ik37.vercel.app` — домен Vercel | ⚠ риск, см. 5.2 |
 | Ссылка на политику конфиденциальности на главной | внизу главной: «Конфиденциальность» и «Политика конфиденциальности» → `/privacy` | ✅ |
 | Политика на том же домене, та же ссылка, что во «Брендинге» | `https://dan4ik37.vercel.app/privacy` | ✅ на сайте; **сверь ссылку во «Брендинге»** |
-| Политика говорит про YouTube API Services, ссылки на Условия YouTube и Политику Google, что берём и как отозвать | раздел «3а. Лайк и подписка на YouTube» на `/privacy` (+ по-английски) — **живой с 26.11** | ✅ |
+| Политика говорит про YouTube API Services, ссылки на Условия YouTube и Политику Google, что берём и как отозвать | раздел «3а. Лайк, подписка и комментарии на YouTube» на `/privacy` (+ по-английски) — **живой с 26.11, комментарии — с 27.11** | ✅ |
 | Limited Use (данные Google — только для функции, без рекламы и продажи) | фраза в том же разделе (RU и EN) | ✅ |
 | Авторизованные домены подтверждены в Search Console | `dan4ik37.vercel.app` — подтверждение в Search Console | ❓ проверь сам (5.3, шаг 1) |
 | Название приложения = как на сайте, без слов Google/YouTube | по инструкции входа — `dan4ik37` | ❓ сверь во «Брендинге»: **не** «Youtube d37» |
@@ -105,29 +124,41 @@ Google пишет прямо: главная страница должна бы�
    `https://dan4ik37.vercel.app`; политика `https://dan4ik37.vercel.app/privacy`; авторизованный домен `dan4ik37.vercel.app`; почта
    поддержки — твоя → «Сохранить».
 3. **«Доступ к данным»**: в «Конфиденциальных областях» ровно одно — `youtube.force-ssl`.
-4. Сними видео по сценарию 5.5 → загрузи на YouTube **«Доступ по ссылке»** (Unlisted).
-5. **«Центр проверки»** (Verification Center) → «Подготовить к проверке» / «Отправить на проверку» → вставь текст 5.4 в поле объяснения
+4. **Перед съёмкой (проверщик 26.11):** твой основной аккаунт владеет каналом — на свой канал подписаться нельзя, Google это увидит в
+   видео. Войди на сайт **вторым аккаунтом Google** (не владельцем канала) и **напиши мне «впиши второй аккаунт»** — я найду его номер и
+   впишу в `YT_LIKE_TEST_IDS` (или сделай его админом сам в админке). Без этого кнопки у второго аккаунта будут простыми ссылками.
+5. Сними видео по сценарию 5.5 этим вторым аккаунтом → загрузи на YouTube **«Доступ по ссылке»** (Unlisted).
+6. **«Центр проверки»** (Verification Center) → «Подготовить к проверке» / «Отправить на проверку» → вставь текст 5.4 в поле объяснения
    права → вставь ссылку на видео → отправь.
-6. Жди письмо Google на контактную почту. Просят исправить — **пришли мне текст письма**, я исправлю сайт и напишу ответ; отвечаешь ты.
-7. Письмо «проверка пройдена» → напиши мне «включай всем» → я ставлю `'on'`.
+7. Жди письмо Google на контактную почту. Просят исправить — **пришли мне текст письма**, я исправлю сайт и напишу ответ; отвечаешь ты.
+   **Если Google пишет, что не может найти или попробовать функцию** (в режиме `'test'` проверяющий видит только ссылки) — пришли письмо;
+   варианты: на время проверки поставить `'on'` (Google всё равно пускает не больше 100 новых людей до проверки) или вписать аккаунт
+   проверяющего в `YT_LIKE_TEST_IDS`. Решаешь ты.
+8. Письмо «проверка пройдена» → напиши мне «включай всем» → я ставлю `'on'`.
 
 ### 5.4. Зачем право (scope justification) — вставить в поле для `youtube.force-ssl` (по-английски)
 
-> dan4ik37.vercel.app is the website of the YouTube channel @Dan4ik37Yt. Two buttons on the site use this scope, both labelled
-> "on YouTube": "👍 Like on YouTube" on each video, Short and video card, and "▶ Subscribe on YouTube" (home page, video window,
-> Shorts). When a viewer taps "Like", we call videos.rate for that one video (rating=like, or rating=none when they tap again to
+> dan4ik37.vercel.app is the website of the YouTube channel @Dan4ik37Yt. Three features on the site use this scope, all labelled
+> "on YouTube": "👍 Like on YouTube" on each video, Short and video card, "▶ Subscribe on YouTube" (home page, video window,
+> Shorts), and "Send to YouTube" in the "💬 Comments from YouTube" panel of a video or Short. When a viewer taps "Like", we call videos.rate for that one video (rating=like, or rating=none when they tap again to
 > remove it), and videos.getRating to show whether their YouTube account already likes the videos on screen. When a viewer taps
 > "Subscribe", we call subscriptions.list with mine=true and forChannelId set to our own channel (UCztYAfPrieiG6kI93yE-Hdg) to see
 > whether they are already subscribed, and subscriptions.insert for that one channel only if they are not. The site never
-> unsubscribes anyone and never subscribes to any other channel. The permission is requested only when the viewer taps one of these
-> buttons, never at sign-in. videos.rate and subscriptions.insert accept only the scopes youtube, youtube.force-ssl or
-> youtubepartner; youtube.readonly cannot rate or subscribe, and youtube.force-ssl is the narrowest of the three. The access token
+> unsubscribes anyone and never subscribes to any other channel. When a viewer (13 or older) types a comment or a reply under one
+> of our channel's videos and taps "Send to YouTube", we call commentThreads.insert (new comment on that video) or comments.insert
+> (reply to that thread) once, with exactly the text they typed; the box says it is published on YouTube under their YouTube name.
+> Reading the comments in the panel uses our own API key on our server, not the viewer's token. The permission is requested only
+> when the viewer taps one of these buttons, never at sign-in. videos.rate, subscriptions.insert, commentThreads.insert and
+> comments.insert accept only the scopes youtube, youtube.force-ssl or youtubepartner (the comment inserts accept only
+> youtube.force-ssl); youtube.readonly cannot rate, subscribe or comment, and youtube.force-ssl is the narrowest that covers all. The access token
 > stays in the viewer's browser tab (sessionStorage, at most one hour); it is never sent to our servers or stored in our database.
-> We do not read, store or share any other YouTube data, and there are no rewards for likes or subscriptions.
+> We do not read, store or share any other YouTube data, and there are no rewards for likes, subscriptions or comments.
 
-(По-русски: сайт канала; две кнопки «на YouTube» — лайк и подписка; лайк ставим или снимаем одному ролику и смотрим, лайкнул ли уже;
+(По-русски: сайт канала; три вещи «на YouTube» — лайк, подписка и «Отправить на YouTube» в окне комментариев (13+); лайк ставим или снимаем одному ролику и смотрим, лайкнул ли уже;
 подписка — сначала смотрим, подписан ли на НАШ канал, и подписываем только если нет; не отписываем и не подписываем на другие каналы;
-право спрашиваем только по нажатию, не при входе; это самое узкое право, которым можно лайкать и подписывать; пропуск живёт только во
+комментарий — ровно тот текст, что человек написал, один раз, под ролик нашего канала, над полем сказано, что он публичный под его
+именем YouTube; читаем комментарии своим ключом, не его пропуском; право спрашиваем только по нажатию, не при входе; это самое узкое
+право, которым можно лайкать, подписывать и писать комментарии; пропуск живёт только во
 вкладке, у нас не хранится; наград нет.)
 
 ### 5.5. Видео-демонстрация — сценарий (2–3 минуты, английский интерфейс Google)
@@ -141,7 +172,7 @@ https://myaccount.google.com/language → English (или на экране вы
 1. **0:00** Открой `https://dan4ik37.vercel.app` — видна главная, адрес в строке браузера. Скажи/напиши в кадре: «Website of the
    YouTube channel @Dan4ik37Yt».
 2. **0:10** Прокрути вниз → нажми **«Политика конфиденциальности»** → откроется `/privacy` → прокрути до раздела
-   **«3a (English). Like and Subscribe on YouTube (YouTube API Services)»** → задержись на нём 5–10 секунд.
+   **«3a (English). Like, Subscribe and Comments on YouTube (YouTube API Services)»** → задержись на нём 5–10 секунд.
 3. **0:30** «← На сайт» → вверху **«Войти»** → **«Продолжить с Google»** → выбери аккаунт → покажи, что Google просит только имя и почту
    (никакого YouTube) → вернулся на сайт вошедшим.
 4. **0:50** Открой любой ролик в окне (раздел «Видео» → карточка) → нажми **«👍 Лайк на YouTube»**.
@@ -151,10 +182,15 @@ https://myaccount.google.com/language → English (или на экране вы
 6. **1:20** Возврат на тот же ролик → 👍 залита, строка «👍 Лайк поставлен на YouTube».
 7. **1:30** В том же окне ролика нажми **«▶ Подписаться на YouTube»** → разрешение уже есть, экрана Google нет → кнопка стала
    **«✓ Ты подписан»**, строка «✓ Ты подписан на канал на YouTube».
-8. **1:45** Новая вкладка → этот ролик на youtube.com → видно: лайк стоит, на канал подписан.
-9. **2:00** Назад на сайт → нажми 👍 ещё раз → лайк снят → обнови youtube.com → лайка нет. Нажми «✓ Ты подписан» → открывается канал
+8. **1:40** В том же окне ролика нажми **«💬 Комментарии»** → откроется окно с комментариями с YouTube → покажи строку над полем
+   «Опубликуется на YouTube под именем твоего аккаунта YouTube» → напиши «Test comment from the website» → **«Отправить на YouTube»** →
+   комментарий появился сверху, строка «💬 Комментарий опубликован на YouTube». Нажми «Ответить» у любого комментария → напиши ответ →
+   «Ответить на YouTube» → ответ появился под веткой.
+9. **2:00** Новая вкладка → этот ролик на youtube.com → видно: лайк стоит, на канал подписан, твой комментарий и ответ на месте
+   (удали их там же, если не нужны).
+10. **2:15** Назад на сайт → нажми 👍 ещё раз → лайк снят → обнови youtube.com → лайка нет. Нажми «✓ Ты подписан» → открывается канал
    (отписки с сайта нет — это нормально, отписаться можно на YouTube).
-10. **2:20** Как отозвать доступ: `https://myaccount.google.com/permissions` → dan4ik37 → «Remove access».
+11. **2:30** Как отозвать доступ: `https://myaccount.google.com/permissions` → dan4ik37 → «Remove access».
 
 (Интерфейс самого сайта — русский, его не переключить; проверяющим хватает английского экрана Google и английского раздела на
 `/privacy`. Если попросят английский интерфейс сайта — пришли письмо, сделаем подписи.)
@@ -164,7 +200,10 @@ https://myaccount.google.com/language → English (или на экране вы
 ## Шаг 6. Лимит YouTube (квота) — измерено в проверке
 
 - Бесплатно: **10 000 единиц в сутки на весь проект**. Цены Google: лайк `videos.rate` — 50 ед., проверка «лайкнул ли» `videos.getRating`
-  — 1 ед. на пачку до 50 роликов, подписка `subscriptions.insert` — 50 ед., проверка «подписан ли» `subscriptions.list` — 1 ед.
+  — 1 ед. на пачку до 50 роликов, подписка `subscriptions.insert` — 50 ед., проверка «подписан ли» `subscriptions.list` — 1 ед.,
+  комментарий / ответ `commentThreads.insert` / `comments.insert` — 50 ед. (с пропуском человека, та же квота проекта); чтение
+  комментариев (`commentThreads.list` / `comments.list`, ключ сайта) — 1 ед. на ролик / ветку за 10 минут (кэш сервера и CDN), не больше
+  40 походов за 10 минут на один сервер — дальше окно скажет «не загрузились» и даст ссылку на YouTube.
 - Что насчитала проверка (`scripts/ytlike-test.cjs`, `ytlike-e2e.cjs`): **один лайк ≈ 51 ед.** (rate 50 + getRating 1 за ленту);
   **одна подписка = 51 ед.** (list 1 + insert 50); **уже подписан = 1 ед.** (только list, insert не зовём); после подписки повторные
   нажатия — 0 ед. (ссылка на канал). Итого на весь сайт ≈ **200 лайков и подписок в сутки вместе**. Сутки — по времени Калифорнии
@@ -191,14 +230,17 @@ https://myaccount.google.com/language → English (или на экране вы
     лайк этому ролику» — скорее всего не включён YouTube Data API (**шаг 1**). Тут кнопка уже сама ведёт на YouTube.
   *(Тексты ошибок — по описанию Google; вживую на нашем клиенте я их не видел.)*
 - После письма Google «проверка пройдена» → пишешь «включай всем» → `'on'`.
-- Выключить в любой момент: `YT_LIKE_REAL = 'off'` (одна строка) — выключает и лайк, и подписку.
+- Выключить в любой момент: `YT_LIKE_REAL = 'off'` (одна строка) — выключает лайк, подписку и запись комментариев. Окно комментариев
+  целиком — `YT_COMMENTS = 'off'`; ❤ у роликов как раньше — `SITE_LIKE_VIDEO = 'always'`.
 
 ---
 
 ## Политика конфиденциальности — раздел про YouTube: ✅ НА САЙТЕ с 26.11.2026
 
 26.11.2026 ты, глядя на черновик этого раздела, написал: **«Вот тут короче что надо пусть сделает.»** Раздел выложен на
-`https://dan4ik37.vercel.app/privacy` как **«3а. Лайк и подписка на YouTube (YouTube API Services)»** (сразу после «3. YouTube API и
+`https://dan4ik37.vercel.app/privacy` как **«3а. Лайк и подписка на YouTube (YouTube API Services)»** (27.11 — «3а. Лайк, подписка и
+комментарии на YouTube»: добавлены публикация комментария / ответа по нажатию, чтение комментариев ключом сайта, черновик текста только во
+вкладке, окно комментариев не показывается детям до 13 и без указанного возраста — ровно то, что делает код) (сразу после «3. YouTube API и
 встроенные видео»), там же — **английская версия** для проверяющих Google (`/privacy#youtube-en`). Остальной текст политики не менялся.
 
 Что в разделе (требования правил YouTube API III.A.2 и Google для «sensitive scopes»): сайт пользуется **YouTube API Services**; ссылки
@@ -209,13 +251,19 @@ https://myaccount.google.com/language → English (или на экране вы
 базе) и дата квоты в браузере; **как отозвать доступ** — https://security.google.com/settings/security/permissions (и
 myaccount.google.com/permissions); дети до 13 — обычные ссылки; Limited Use; почта для вопросов `dan4ik37k@gmail.com`.
 
-Окно «Политика конфиденциальности» внутри главной (старая короткая копия в `index.html`) я не трогал — Google смотрит страницу `/privacy`.
+Старое окно «Политика конфиденциальности» внутри главной (короткая копия в `index.html` без раздела про YouTube) **убрано 27.11** — политика
+одна, на `/privacy`.
 
 ---
 
-**Где код (для агентов):** `js/core/ytlike.js` (D37YtLike — флаг, переход на Google, токен, videos.rate / getRating, подписка
+**Где код (для агентов):** комментарии — `js/features/ytcomments.js` (D37YtComments: кнопки «💬» 13+, окно, чтение `/api/ytcomments`),
+`api/_lib/routes/ytcomments.js` + `api/_lib/yt.js` (getCommentThreads / getCommentReplies), запись — `D37YtLike.comment` (D37Intent
+'ytcmt', черновик `d37_ytc_draft` в sessionStorage); ❤ роликов — `js/features/site-like.js` (`videoWanted`, `SITE_LIKE_VIDEO`); проверка
+`node scripts/ytcomments-test.cjs` и сечения `onelike`, `cmt`, `cmtage`, `cmtfall`, `cmtlook` в `ytlike-e2e.cjs`.
+`js/core/ytlike.js` (D37YtLike — флаг, переход на Google, токен, videos.rate / getRating, подписка
 `subscriptions.list` / `insert` на канал `UCztYAfPrieiG6kI93yE-Hdg` (= @Dan4ik37Yt: og:url страницы канала и ссылки подписки в описаниях
-его роликов), кнопки подписки — только свои, с меткой `data-ytsub` в разметке (6 штук: главная ×3, окно ролика, Shorts ×2); ссылка с `sub_confirmation=1` в чате или в описании — обычная ссылка, не подписка, запасные пути), `js/core/vlike.js` (кнопка
+его роликов), кнопки подписки — только свои, с меткой `data-ytsub` в разметке (6 штук: главная ×3, окно ролика, Shorts ×2 — полоса
+кнопок Short и последняя карточка); ссылка с `sub_confirmation=1` в чате или в описании — обычная ссылка, не подписка, запасные пути), `js/core/vlike.js` (кнопка
 👍-ссылка; нажатие сначала спрашивает D37YtLike.tap), `js/features/auth-intent.js` (`D37Intent.park` — 'ytlike' и 'ytsub', только в этой
 вкладке; возврат — тот же `resume`; к Google без нового нажатия — только сразу после входа гостя; вернулся без ответа Google — строка
 «нажми ещё раз»), скрипт в `<head>` index.html (`window.__d37YtHash`), `js/features/auth-guard.js` (ответ Google с `state=ytl.` — не
