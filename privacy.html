@@ -30,6 +30,7 @@ h2{font-family:Oswald,sans-serif;font-weight:600;font-size:1.15rem;text-transfor
 p,li{font-size:.92rem;color:rgba(240,240,248,.82)}
 ul{padding-left:1.2rem;margin-top:.3rem}
 li{margin:.25rem 0}
+code{font-size:.85em;background:rgba(255,255,255,.07);padding:0 .3em;border-radius:4px;overflow-wrap:anywhere}
 .foot{padding:2rem 1rem;text-align:center;font-size:.78rem;color:var(--muted);border-top:1px solid var(--line)}
 .foot a{color:inherit}
 </style>
@@ -65,6 +66,37 @@ li{margin:.25rem 0}
 
   <h2>3. YouTube API и встроенные видео</h2>
   <p>Сайт использует YouTube Data API v3 для отображения видео и статистики канала. Данные предоставляются Google LLC. Встроенный плеер YouTube может устанавливать собственные cookies. Используя эти функции, вы соглашаетесь с <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">Условиями использования YouTube</a> и <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Политикой конфиденциальности Google</a>.</p>
+
+  <!-- Раздел про YouTube API Services: владелец 26.11.2026, глядя на черновик в docs/areas/youtube-like-setup-RU.md: «Вот тут короче что
+       надо пусть сделает». Нужен Google (проверка приложения) и правилам YouTube API (III.A.2). Код: js/core/ytlike.js -->
+  <h2 id="youtube">3а. Лайк и подписка на YouTube (YouTube API Services)</h2>
+  <p>Кнопки «👍 Лайк на YouTube» и «▶ Подписаться на YouTube» на сайте используют <b>YouTube API Services</b>. Нажимая их и давая разрешение Google, вы соглашаетесь с <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">Условиями использования YouTube</a>; ваши данные в Google обрабатываются по <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Политике конфиденциальности Google</a>.</p>
+  <p><b>Когда сайт просит разрешение.</b> Только когда вы сами нажали одну из этих кнопок, и только один раз. Обычный вход «Продолжить с Google» разрешения на YouTube не просит — только имя и почту. Google показывает экран разрешения со своим текстом («просмотр, изменение и удаление ваших видео, оценок, комментариев и субтитров на YouTube» — так Google называет право <code>youtube.force-ssl</code>; более узкого права, с которым можно ставить лайк и подписываться, у Google нет).</p>
+  <p><b>Что сайт делает с разрешением — только это:</b></p>
+  <ul>
+    <li>ставит лайк тому ролику, где вы нажали «👍», или убирает его, если вы нажали ещё раз (<code>videos.rate</code>);</li>
+    <li>проверяет, стоит ли уже ваш лайк на роликах, которые вы видите на сайте, — чтобы показать залитую 👍 (<code>videos.getRating</code>);</li>
+    <li>подписывает вас на канал <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" rel="noopener">@Dan4ik37Yt</a>, когда вы нажали «▶ Подписаться на YouTube» (<code>subscriptions.insert</code>);</li>
+    <li>проверяет, подписаны ли вы уже на этот канал, — чтобы показать «✓ Ты подписан» (<code>subscriptions.list</code> только для этого одного канала).</li>
+  </ul>
+  <p>Больше ничего из вашего аккаунта YouTube или Google сайт не читает и не меняет: не смотрит ваши ролики, комментарии, другие подписки и историю, ничего не публикует. Лайк и подписка — только по вашему нажатию. Отписаться с сайта нельзя — повторное нажатие на «✓ Ты подписан» открывает канал на YouTube, отписка делается там. Наград за лайки и подписки на сайте нет.</p>
+  <p><b>Где хранится.</b> Пропуск доступа от Google хранится только в этой вкладке вашего браузера (sessionStorage) и действует не дольше часа; он не отправляется на сервер сайта, не записывается в базу данных и никому не передаётся. Закрыли вкладку — пропуск исчез. Ваши лайки и подписки YouTube сайт у себя не хранит. Если на сегодня кончился лимит запросов YouTube, браузер запоминает только дату (в локальном хранилище), чтобы до следующего дня кнопки просто открывали YouTube.</p>
+  <p><b>Как отозвать доступ.</b> В любой момент — на странице разрешений Google: <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noopener">security.google.com/settings/security/permissions</a> (то же: <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>) → dan4ik37 → «Удалить доступ». После этого сайт не сможет ставить лайки и подписывать от вашего имени, пока вы снова не разрешите. Удалять у нас нечего — мы этих данных не храним; поставленные лайки и подписки остаются на YouTube, убрать их можно там.</p>
+  <p>Как сайт использует и передаёт данные, полученные через API Google, — по <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Правилам Google об использовании данных пользователей API</a> (Google API Services User Data Policy), включая требования ограниченного использования (Limited Use): только для этих кнопок, без рекламы, без продажи и передачи третьим лицам.</p>
+  <p><b>Дети.</b> Детям до 13 лет эти кнопки работают как обычные ссылки на YouTube — разрешение у Google сайт не просит.</p>
+  <p><b>Вопросы и жалобы</b> по этому разделу: <a href="mailto:dan4ik37k@gmail.com">dan4ik37k@gmail.com</a>.</p>
+
+  <section lang="en" id="youtube-en">
+  <h2>3a (English). Like and Subscribe on YouTube (YouTube API Services)</h2>
+  <p>The "👍 Like on YouTube" and "▶ Subscribe on YouTube" buttons on this site use <b>YouTube API Services</b>. By using them and granting Google's permission you agree to the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube Terms of Service</a>; Google processes your data under the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.</p>
+  <p><b>When we ask.</b> Only after you tap one of these buttons yourself, and only once. The ordinary "Continue with Google" sign-in never asks for YouTube access — only your name and email. Google shows its own consent screen for the <code>youtube.force-ssl</code> scope; Google offers no narrower scope that allows rating videos and subscribing.</p>
+  <p><b>What the site does with the permission — only this:</b> rate the video you tapped "👍" on (like, or remove the like on a second tap — <code>videos.rate</code>); check whether you already like the videos shown on the site to display a filled 👍 (<code>videos.getRating</code>); subscribe you to the channel <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" rel="noopener">@Dan4ik37Yt</a> when you tap "Subscribe on YouTube" (<code>subscriptions.insert</code>); check whether you are already subscribed to that one channel to show "✓ Subscribed" (<code>subscriptions.list</code> filtered to this channel). Nothing else is read or changed in your YouTube or Google account. Every like and subscription happens only on your tap. Unsubscribing is not offered on the site — a second tap opens the channel on YouTube. There are no rewards for likes or subscriptions.</p>
+  <p><b>Storage.</b> Google's access token stays only in your current browser tab (sessionStorage) for at most one hour. It is never sent to our servers, never stored in our database and never shared. Closing the tab removes it. We do not store your YouTube likes or subscriptions. If the daily YouTube quota runs out, the browser keeps only the date (local storage) so that the buttons simply open YouTube until the next day.</p>
+  <p><b>Revoking access.</b> At any time on Google's security settings page: <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noopener">security.google.com/settings/security/permissions</a> → dan4ik37 → "Remove access". We hold no YouTube data to delete; likes and subscriptions you made stay on YouTube and can be removed there.</p>
+  <p>dan4ik37's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+  <p><b>Children.</b> For users under 13 these buttons are plain links to YouTube; the site does not ask Google for permission.</p>
+  <p><b>Questions or complaints:</b> <a href="mailto:dan4ik37k@gmail.com">dan4ik37k@gmail.com</a>.</p>
+  </section>
 
   <h2>4. Twitch и DonationAlerts</h2>
   <p>Встроенные плееры и чат Twitch работают в iframe. DonationAlerts используется для приёма донатов. Эти сервисы имеют собственные политики конфиденциальности.</p>
