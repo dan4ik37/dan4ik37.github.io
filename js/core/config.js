@@ -93,7 +93,7 @@ const STUDIO_SHARE = true;
 // «Студия 3D» на нашем движке (EDITOR_ONE S7 / S8, js/games/studio3d-d37.js): мир, которому хватает движка (проверяет сам движок —
 // канал /d37-preview/), по «▶ Играть» играется на нашем движке D37; «🪟 Рядом» — тот же мир справа на нашем движке; ярлык в верхней
 // панели говорит, на каком движке мир. Редактор, кнопки и урок — те же; файлы миров не меняются. Откат — STUDIO_D37 = false.
-const STUDIO_D37 = true;
+const STUDIO_D37 = false;   // 27.11 coordinator: OFF on live — the independent check found the page freezing after 2–3 plays at desktop sizes and worlds that play worse; fixes wait on branch c-studio-site; back on after a passed check
 
 // ═══════════════════════════════════════
 //  ИНТЕРФЕЙС ИГР 2.0 (T-123, docs/HUD_V2.md) — откат одной строкой
