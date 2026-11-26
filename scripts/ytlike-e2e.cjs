@@ -41,7 +41,9 @@
 //            отправлено само ровно один раз;
 //  (cmtage)  возраст не указан и до 13 → «💬» нет ни в Shorts, ни в окне ролика; 13+ — есть;
 //  (cmtfall) отказ на экране Google / квота / встроенный браузер / не админ в 'test' → вместо поля ссылка «Написать на YouTube»;
-//  (cmtlook) окно комментариев: 390×844, 800×600, 1920×1080, 3440×1440 × тёмная / светлая — целиком на экране, ошибок нет.
+//            написанный текст остаётся виден (только чтение) с «Скопировать текст», строка не обещает «Отправить»;
+//  (cmtlook) окно комментариев: 390×844, 800×600, 1920×1080, 3440×1440 × тёмная / светлая — целиком на экране, ошибок нет; в окне
+//            ролика и в Shorts поле, «Отправить», «опубликуется…» и подпись видны на экране (размер не 0) — «Отправить» жмётся настоящей мышью.
 // Запуск из корня сайта: node scripts/ytlike-e2e.cjs   (CHROME=…, PYTHON=…, BASE=…, SHOTS=<папка>,
 //   ONLY=off,shorts,video,deny,quota,inapp,look,card,back,newtab,r401,slow403,net2,sub,subtest,subchat,subfall,sublook,onelike,cmt,cmtage,cmtfall,cmtlook)
 const H = require('./auth-social-e2e.cjs');
@@ -792,11 +794,30 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
     const ADULT = AGE(new Date().getFullYear() - 30), KID = AGE(new Date().getFullYear() - 10);
     const TOK = (agoMs = 30 * 60e3) => `try{sessionStorage.setItem('d37_ytl_tok', JSON.stringify({ t: ${JSON.stringify(TOKEN)}, exp: Date.now() + 3e6, u: ${JSON.stringify(ME)}, at: Date.now() - ${agoMs} }))}catch(e){}`;
     const SHB = `.sh-item[data-id="${V2}"]`;
+    // видно ли на самом деле (а не только .hidden): размер не 0, внутри экрана, не прозрачно — проверка 27.11 нашла поле с display:none
+    // (правило Shorts для <footer>), а e2e читал только .hidden и жал .click() из кода
     const PANEL = `(() => { const p = document.getElementById('ytcPanel'); if (!p || p.hidden) return null; const s = p.querySelector('.ytc-sheet').getBoundingClientRect();
+      const vis = e => { if (!e) return false; const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 2 && r.height > 2 && r.top >= -1 && r.bottom <= innerHeight + 1 && r.left >= -1 && r.right <= innerWidth + 1 && cs.visibility !== 'hidden' && +cs.opacity > 0.05; };
+      const ta = p.querySelector('.ytc-ta'), send = p.querySelector('.ytc-send'), note = p.querySelector('.ytc-note'), ytw = p.querySelector('.ytc-ytw'), src = p.querySelector('.ytc-src'), copy = p.querySelector('.ytc-copy');
       return { items: [...p.querySelectorAll('.ytc-list > .ytc-it')].map(x => ({ cid: x.dataset.cid, au: x.querySelector('.ytc-au')?.textContent, href: x.querySelector('a.ytc-au')?.getAttribute('href') || null, txt: x.querySelector('.ytc-txt')?.textContent })),
-        compose: !p.querySelector('.ytc-compose').hidden, ytw: p.querySelector('.ytc-ytw').hidden ? null : p.querySelector('.ytc-ytw').getAttribute('href'), note: p.querySelector('.ytc-note')?.textContent || '',
-        src: p.querySelector('.ytc-src')?.textContent || '', xssEl: !!document.getElementById('xssb') || !!window.__xss, l: s.left, r: s.right, t: s.top, b: s.bottom, iw: innerWidth, ih: innerHeight }; })()`;
-    const SEND = text => `(() => { const p = document.getElementById('ytcPanel'); const ta = p.querySelector('.ytc-ta'); ta.value = ${JSON.stringify(text)}; ta.dispatchEvent(new Event('input')); p.querySelector('.ytc-send').click(); return true; })()`;
+        compose: vis(ta) && vis(send) && !ta.readOnly, ta: vis(ta), send: vis(send), noteV: vis(note), ytwV: vis(ytw), srcV: vis(src), copy: vis(copy), ro: !!ta?.readOnly, taVal: ta?.value || '',
+        ytw: vis(ytw) ? ytw.getAttribute('href') : null, note: note?.textContent || '',
+        src: src?.textContent || '', xssEl: !!document.getElementById('xssb') || !!window.__xss, l: s.left, r: s.right, t: s.top, b: s.bottom, iw: innerWidth, ih: innerHeight }; })()`;
+    // нажать как человек: точка в середине элемента, сверху именно он (elementFromPoint), настоящие события мыши Chrome
+    const tap = async (c, sel) => {
+      const pt = await c.ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return { miss: 'нет элемента' }; const r = e.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2;
+        if (r.width < 2 || r.height < 2) return { miss: 'размер 0' }; const h = document.elementFromPoint(x, y); return h && (h === e || e.contains(h)) ? { x, y } : { miss: h ? h.tagName + '.' + h.className : 'вне экрана' }; })()`);
+      if (!pt || pt.miss) return pt || { miss: '?' };
+      for (const type of ['mousePressed', 'mouseReleased']) await c.send('Input.dispatchMouseEvent', { type, x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
+      return true;
+    };
+    const SEND = async (c, text) => {
+      await c.ev(`(() => { const ta = document.querySelector('#ytcPanel .ytc-ta'); ta.value = ${JSON.stringify(text)}; ta.dispatchEvent(new Event('input')); return true; })()`);
+      const t = await tap(c, '#ytcPanel .ytc-send');
+      ok(t === true, '«Отправить» видна и нажимается пальцем/мышью', t);
+    };
+    // всё нижнее окна на экране: поле, «Отправить», строка «опубликуется…», подпись источника
+    const FOOT_OK = p => !!p && p.ta && p.send && p.noteV && p.srcV;
     const playingSideBtns = sel => `[...document.querySelectorAll(${JSON.stringify(sel + ' .sh-side a, ' + sel + ' .sh-side button')})].filter(${'e => { const r = e.getBoundingClientRect(); if (!e.getClientRects().length || r.width < 2) return false; for (let x = e; x && x.nodeType === 1; x = x.parentElement) { const c = getComputedStyle(x); if (c.display === "none" || c.visibility === "hidden") return false; } return true; }'}).map(e => e.className)`;
 
     // (onelike) 'test': админ — одна кнопка лайка (YouTube); не админ — ❤ сайта и ссылка как раньше
@@ -857,17 +878,18 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
           ok(p.items[0].href === 'https://www.youtube.com/@viewer_one' && p.items[1].href === null, 'ссылка — только имя автора на youtube.com (javascript: — не ссылка)', p.items);
           ok(p.compose && /опубликуется на YouTube под именем твоего аккаунта YouTube/i.test(p.note) && /Комментарии с YouTube · обновлено/.test(p.src), 'поле: «опубликуется на YouTube под именем твоего аккаунта YouTube»; подпись «Комментарии с YouTube · обновлено …»', p);
           ok(p.b <= p.ih + 1 && p.l >= 0 && p.r <= p.iw + 1, 'окно целиком на экране телефона', p);
+          ok(FOOT_OK(p), 'Shorts, телефон: поле, «Отправить», «опубликуется под именем…» и «Комментарии с YouTube · обновлено» видны на экране', p);
           await c.shot('ytl3-cmt-shorts-open');
           await c.ev(`document.querySelector('#ytcPanel .ytc-more').click(); true`, true);
           ok(await c.until(`[...document.querySelectorAll('#ytcPanel .ytc-rep .ytc-txt')].some(e => e.textContent === 'ответ из YouTube')`, 6000) && G.J.some(x => x[0] === 'ytc' && x[2] === 'UgxThreadOne01'), 'ответы — по нажатию (parent=ветка)');
           await c.ev(`document.querySelector('#ytcPanel .ytc-list > .ytc-it .ytc-reply').click(); true`, true);
-          await c.ev(SEND('Согласен!'), true);
+          await SEND(c, 'Согласен!');
           ok(await c.until(`[...document.querySelectorAll('#ytcPanel .ytc-mine .ytc-txt')].some(e => e.textContent === 'Согласен!')`, 8000), 'ответ появился в окне («твой»)');
           await sleep(800);
           const rep = G.J.filter(x => x[0] === 'replyInsert');
           ok(rep.length === 1 && rep[0][1]?.snippet?.parentId === 'UgxThreadOne01' && rep[0][1]?.snippet?.textOriginal === 'Согласен!' && rep[0][2] === true && !G.J.some(x => x[0] === 'cmtInsert'), 'comments.insert ровно один раз: ветка, текст, токен', rep);
           ok(/Ответ опубликован на YouTube/.test(await c.ev(TOAST)) && !/⚡/.test(await c.ev(TOAST)), 'строка «Ответ опубликован на YouTube» — без ⚡', await c.ev(TOAST));
-          await c.ev(SEND('Новый коммент'), true);
+          await SEND(c, 'Новый коммент');
           ok(await c.until(`[...document.querySelectorAll('#ytcPanel .ytc-list > .ytc-mine .ytc-txt')].some(e => e.textContent === 'Новый коммент')`, 8000), 'новый комментарий — сверху списка');
           const ins = G.J.filter(x => x[0] === 'cmtInsert');
           ok(ins.length === 1 && ins[0][1]?.snippet?.videoId === V2 && ins[0][1]?.snippet?.topLevelComment?.snippet?.textOriginal === 'Новый коммент', 'commentThreads.insert ровно один раз с id ЭТОГО Short', ins);
@@ -894,8 +916,9 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
           ok(await c.until(`(${PANEL})?.items?.length === 2`, 8000), 'окно комментариев этого ролика');
           const p0 = await c.ev(PANEL);
           ok(p0.l > 1920 / 2, 'на компьютере — справа, не поверх середины ролика', p0);
+          ok(FOOT_OK(p0), 'окно ролика: поле, «Отправить», строка «опубликуется…» и подпись видны', p0);
           await c.shot('ytl3-cmt-modal-open');
-          await c.ev(SEND('С сайта, после Google'), true);
+          await SEND(c, 'С сайта, после Google');
           for (let i = 0; i < 100 && authN(G) < 1; i++) await sleep(150);   // ушли на экран Google (подделка ответит сразу)
           ok(await c.until(`location.href.startsWith(${JSON.stringify(B)}) && document.readyState === 'complete'`, 15000) && await c.until(`(${PANEL})?.items?.length >= 2`, 20000), 'вернулись с Google — окно комментариев снова открыто');
           ok(G.J.filter(x => x[0] === 'auth').length === 1 && G.J.find(x => x[0] === 'auth')[1].scope === SCOPE, 'экран Google — один раз, право youtube.force-ssl', G.J.filter(x => x[0] === 'auth'));
@@ -954,7 +977,7 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
         if (kind === 'deny' || kind === 'quota') {
           ok((await c.ev(PANEL)).compose, `${kind}: сначала поле (настоящая запись доступна)`);
           await c.ev(`document.querySelector('#ytcPanel .ytc-list > .ytc-it .ytc-reply').click(); true`, true);
-          await c.ev(SEND('текст'), true);
+          await SEND(c, 'текст');
           if (kind === 'deny') {
             for (let i = 0; i < 100 && authN(G) < 1; i++) await sleep(150);   // ушли на экран Google (подделка сразу ответит отказом)
             ok(authN(G) === 1 && await c.until(`location.href.startsWith(${JSON.stringify(B)}) && document.readyState === 'complete' && (${PANEL})?.items?.length === 2`, 20000), 'deny: вернулись с Google, окно снова открыто');
@@ -962,7 +985,14 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
           await c.until(`(${PANEL}) && !(${PANEL}).compose`, 8000);
         }
         const p = await c.ev(PANEL);
-        ok(p && !p.compose && /^https:\/\/www\.youtube\.com\/watch\?v=/.test(p.ytw || ''), `${kind}: вместо поля — ссылка на YouTube`, p);
+        ok(p && !p.compose && /^https:\/\/www\.youtube\.com\/watch\?v=/.test(p.ytw || ''), `${kind}: вместо поля — ссылка на YouTube (видна на экране)`, p);
+        ok(p.srcV, `${kind}: подпись «Комментарии с YouTube · обновлено» видна`, p);
+        // текст, который человек написал, не пропадает: виден (только чтение) и копируется одной кнопкой рядом со ссылкой
+        if (kind === 'deny' || kind === 'quota') {
+          ok(p.ta && p.ro && p.taVal === 'текст' && p.copy && !p.send, `${kind}: написанный текст виден (только чтение), «Скопировать текст» рядом, «Отправить» нет`, p);
+          ok(/«Скопировать текст»/.test(await c.ev(TOAST)) && !/«Отправить» теперь откроет YouTube/.test(await c.ev(TOAST)), `${kind}: строка говорит правду — текст в окне, скопировать и вставить на YouTube`, await c.ev(TOAST));
+          ok(await tap(c, '#ytcPanel .ytc-copy') === true && await c.until(`/Скопировано/.test(document.querySelector('#ytcPanel .ytc-copy').textContent)`, 3000), `${kind}: «Скопировать текст» нажимается → «Скопировано»`);
+        } else ok(!p.ta, `${kind}: черновика нет — поля нет, только ссылка`, p);
         if (kind === 'deny' || kind === 'quota') ok(/lc=UgxThreadOne01/.test(p.ytw) && /Ответить на YouTube/.test(await c.ev(`document.querySelector('#ytcPanel .ytc-ytw').textContent`)), `${kind}: «Ответить на YouTube ↗» ведёт на ту же ветку`, p.ytw);
         ok(await c.ev(`[...document.querySelectorAll('#ytcPanel a.ytc-reply')].length`) >= 2, `${kind}: у веток — «Ответить на YouTube ↗»`);
         const ins = G.J.filter(x => x[0] === 'cmtInsert' || x[0] === 'replyInsert');
@@ -990,11 +1020,14 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
         ok(await c.until(`(${PANEL})?.items?.length === 2`, 8000), `${w}×${h} ${theme}: окно комментариев`);
         const p = await c.ev(PANEL);
         ok(p.l >= -1 && p.r <= p.iw + 1 && p.t >= -1 && p.b <= p.ih + 1 && await c.ev(noOverflow), `${w}×${h} ${theme}: целиком на экране, вбок не едет`, p);
+        ok(FOOT_OK(p), `${w}×${h} ${theme}: окно ролика — поле, «Отправить», «опубликуется…», подпись на экране`, p);
         await c.shot(`ytl3-cmtlook-modal-${w}x${h}-${theme}`);
         await c.ev(`D37YtComments.close(); closeModal(); D37Route.go('#/shorts/${V2}'); true`, true);
         ok(await c.until(VISIBLE(`${SHB} .ytc-btn`), 10000), `${w}×${h} ${theme}: Shorts — «💬» видна`);
         await c.click(`${SHB} .ytc-btn`);
         ok(await c.until(`(${PANEL})?.items?.length === 2`, 8000), `${w}×${h} ${theme}: Shorts — окно комментариев`);
+        const ps = await c.ev(PANEL);
+        ok(FOOT_OK(ps) && ps.b <= ps.ih + 1 && ps.r <= ps.iw + 1, `${w}×${h} ${theme}: Shorts — поле, «Отправить», «опубликуется…», подпись на экране`, ps);
         await c.shot(`ytl3-cmtlook-shorts-${w}x${h}-${theme}`);
         ok(!c.errs.length, `${w}×${h} ${theme}: ошибок в консоли нет`, c.errs);
       } finally { await c.close(); }

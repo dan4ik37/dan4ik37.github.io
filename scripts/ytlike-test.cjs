@@ -433,11 +433,14 @@ const ev = () => { const e = { prevented: false, preventDefault() { e.prevented 
       const L = mk({ ss, ytHash: `#error=access_denied&state=ytl.${n}` });
       await L.Y._test.resumed({ id: V, p: n }, {}, 'cmt');
       ok(!posts(L).length && L.Y.why() === 'denied' && L.toasts.some(t => /не публикует комментарии/.test(t)) && JSON.parse(L.w.sessionStorage.getItem('d37_ytc_draft') || '{}').text === 'отказ', 'отказ на экране Google: не отправлено, строка, текст цел, дальше ссылка', L.toasts);
+      // поле в окне становится «только чтение» (запись недоступна) — строка не обещает «Отправить», а говорит скопировать (проверка 27.11)
+      ok(L.toasts.some(t => /не публикует комментарии/.test(t) && /«Скопировать текст»/.test(t)) && !L.toasts.some(t => /«Отправить» теперь откроет YouTube/.test(t)), 'отказ: строка — «Скопировать текст» и вставить на YouTube, без обещания «Отправить»', L.toasts);
     }
     {
       const L = mk({ ss: tokSS(), insert: 'quota' });
       L.Y.comment(V, 'квота'); await tick(); await tick();
       ok(L.Y.why() === 'quota' && L.toasts.some(t => /Комментарии с сайта на сегодня закончились/.test(t)) && JSON.parse(L.w.sessionStorage.getItem('d37_ytc_draft') || '{}').text === 'квота', 'квота: строка, текст вернулся в черновик', L.toasts);
+      ok(L.toasts.some(t => /закончились/.test(t) && /«Скопировать текст»/.test(t)) && !L.toasts.some(t => /«Отправить» теперь откроет YouTube/.test(t)), 'квота: строка — «Скопировать текст», без обещания «Отправить»', L.toasts);
       ok(L.Y.comment(V, 'ещё').ok === false && posts(L).length === 1, 'квота: дальше не пишем (окно покажет ссылку)');
     }
     {

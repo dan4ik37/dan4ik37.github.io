@@ -41,6 +41,10 @@
     try { return !!A.known() && !A.kid(); } catch (e) { return false; }
   }
   // настоящая запись доступна? (иначе — ссылка на YouTube)
+  const KEEP_DRAFT = true;   // запись недоступна — написанный текст виден (только чтение) + «Скопировать текст» (откат: false — только ссылка, как до 27.11)
+  const NOTE_W = 'Опубликуется на YouTube под именем твоего аккаунта YouTube — его увидят все. Пиши по-доброму.';
+  const NOTE_COPY = 'С сайта сейчас не отправить — скопируй текст и вставь его на YouTube по ссылке ниже.';
+  const COPY_T = 'Скопировать текст';
   const canWrite = () => { try { return !!Y() && Y().why() === null; } catch (e) { return false; } };
 
   // ═══ Кнопки «💬» ═══
@@ -102,7 +106,8 @@
     const x = el('button', 'ytc-x', '✕'); x.type = 'button'; x.setAttribute('aria-label', 'Закрыть комментарии'); x.addEventListener('click', close);
     head.append(title, x);
     const list = el('div', 'ytc-list'); list.setAttribute('aria-live', 'polite');
-    const foot = el('footer', 'ytc-foot');
+    // не <footer>: правила сайта для подвала страницы (css/premium.css: в Shorts footer{display:none}) прятали всё нижнее окна (проверка 27.11)
+    const foot = el('div', 'ytc-foot');
     const compose = el('div', 'ytc-compose');
     const to = el('div', 'ytc-to'); to.hidden = true;
     const toTxt = el('span', 'ytc-to-t'); const toX = el('button', 'ytc-to-x', '✕'); toX.type = 'button'; toX.setAttribute('aria-label', 'Не отвечать, а написать свой комментарий');
@@ -112,17 +117,20 @@
     ta.setAttribute('aria-label', 'Текст комментария для YouTube');
     let dT = 0;
     ta.addEventListener('input', () => { clearTimeout(dT); dT = setTimeout(() => { if (cur) Y()?.saveDraft?.(cur.id, ta.value, cur.parent); }, 300); syncSend(); });
-    const note = el('p', 'ytc-note', 'Опубликуется на YouTube под именем твоего аккаунта YouTube — его увидят все. Пиши по-доброму.');
+    const note = el('p', 'ytc-note', NOTE_W);
     const send = el('button', 'ytc-send', 'Отправить на YouTube'); send.type = 'button';
     send.addEventListener('click', submit);
-    compose.append(to, ta, note, send);
+    // запись недоступна, а текст уже написан — поле остаётся (только чтение) и «Скопировать текст» рядом со ссылкой на YouTube
+    const copy = el('button', 'ytc-copy', COPY_T); copy.type = 'button'; copy.hidden = true;
+    copy.addEventListener('click', copyDraft);
+    compose.append(to, ta, note, send, copy);
     const ytw = linkOut('ytc-ytw', 'Написать комментарий на YouTube ↗', '');
     const src = el('div', 'ytc-src');
     foot.append(compose, ytw, src);
     sheet.append(head, list, foot);
     box.append(back, sheet);
     doc.body.appendChild(box);
-    box._ = { list, compose, to, toTxt, ta, send, ytw, src, sheet, x };
+    box._ = { list, compose, to, toTxt, ta, note, send, copy, ytw, src, sheet, x };
     return box;
   }
   function syncSend() {
@@ -131,16 +139,31 @@
     P.send.disabled = busy || !P.ta.value.trim();
     P.send.textContent = busy ? 'Отправляем на YouTube…' : cur.parent ? 'Ответить на YouTube' : 'Отправить на YouTube';
   }
-  // поле или ссылка: настоящая запись доступна — поле; нет — ссылка на YouTube (тот же текст из черновика можно скопировать)
+  // поле или ссылка: настоящая запись доступна — поле; нет — ссылка на YouTube, а уже написанный текст виден (только чтение) с кнопкой
+  // «Скопировать текст» (отказ Google / квота / встроенный браузер / нет канала: проверка 27.11 — раньше текст пропадал с глаз)
   function paintCompose() {
     if (!box || !cur) return;
-    const P = box._, w = canWrite();
-    P.compose.hidden = !w;
+    const P = box._, w = canWrite(), keep = !w && KEEP_DRAFT && !!P.ta.value.trim();
+    P.compose.hidden = !w && !keep;
+    P.ta.readOnly = !w;
+    P.send.hidden = !w;
+    P.copy.hidden = !keep;
+    if (!keep) P.copy.textContent = COPY_T;
+    P.note.textContent = w ? NOTE_W : NOTE_COPY;
     P.ytw.hidden = w;
     P.ytw.href = 'https://www.youtube.com/' + ytUrl(cur.id, cur.parent);
     P.ytw.textContent = cur.parent ? 'Ответить на YouTube ↗' : 'Написать комментарий на YouTube ↗';
     P.list.querySelectorAll('.ytc-reply[data-tid]').forEach(r => { if ((r.tagName === 'BUTTON') !== w) r.replaceWith(replyCtl(r.dataset.tid, r.dataset.au || '')); });
     syncSend();
+  }
+  async function copyDraft() {
+    if (!box) return;
+    const P = box._, t = P.ta.value;
+    let done = false;
+    try { await root.navigator.clipboard.writeText(t); done = true; } catch (e) {}
+    if (!done) { try { P.ta.focus(); P.ta.select(); done = !!doc.execCommand('copy'); } catch (e) {} }
+    P.copy.textContent = done ? 'Скопировано ✓' : 'Выдели текст и скопируй';
+    if (!done) { try { P.ta.focus(); P.ta.select(); } catch (e) {} }
   }
   function setParent(parent, author) {
     if (!cur) return;
@@ -323,7 +346,7 @@ a.ytc-au:hover{text-decoration:underline}
 .ytc-reps{margin-top:.3rem}
 .ytc-empty{color:var(--muted,#8d8daa);font-size:.85rem;margin:.8rem 0}
 .ytc-foot{border-top:1px solid var(--line,rgba(255,255,255,.1));padding:.7rem 1rem calc(.7rem + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:.5rem}
-.ytc-compose[hidden],.ytc-ytw[hidden],.ytc-to[hidden]{display:none!important}
+.ytc-compose[hidden],.ytc-ytw[hidden],.ytc-to[hidden],.ytc-send[hidden],.ytc-copy[hidden],.ytc-note[hidden]{display:none!important}
 .ytc-compose{display:flex;flex-direction:column;gap:.4rem}
 .ytc-to{display:flex;align-items:center;justify-content:space-between;font-size:.76rem;color:var(--muted,#8d8daa)}
 .ytc-ta{width:100%;box-sizing:border-box;resize:vertical;min-height:2.6rem;max-height:9rem;padding:.55rem .7rem;border-radius:10px;font:inherit;font-size:.88rem;
@@ -332,6 +355,9 @@ a.ytc-au:hover{text-decoration:underline}
 .ytc-send,.ytc-ytw{align-self:flex-end;display:inline-flex;align-items:center;padding:.5rem .95rem;border-radius:10px;border:0;cursor:pointer;font:inherit;font-size:.8rem;font-weight:800;
   color:#fff;background:linear-gradient(135deg,#ff4040,#d90429);text-decoration:none}
 .ytc-send:disabled{opacity:.5;cursor:default}
+.ytc-ta[readonly]{opacity:.9;cursor:text;border-style:dashed}
+.ytc-copy{align-self:flex-end;padding:.45rem .9rem;border-radius:10px;cursor:pointer;font:inherit;font-size:.78rem;font-weight:700;color:inherit;background:rgba(var(--fg-rgb,255,255,255),.08);border:1px solid var(--line-hi,rgba(255,255,255,.18))}
+.ytc-copy:hover{background:rgba(var(--fg-rgb,255,255,255),.14)}
 .ytc-src{font-size:.68rem;color:var(--muted,#8d8daa)}
 .ytc-src a{color:inherit}
 @media(max-width:640px){

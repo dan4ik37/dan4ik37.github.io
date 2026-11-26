@@ -182,6 +182,9 @@
     back: 'Разрешение Google не дано — комментарий не опубликован.',
   };
   const AGAIN_CMT = ' Текст остался в окне — «Отправить» теперь откроет YouTube.';
+  // запись недоступна (why() не null: отказ, квота, встроенный браузер, нет канала, 'test' не админ) — окно показывает текст только для
+  // чтения с «Скопировать текст» (ytcomments.js paintCompose), «Отправить» там нет — строка говорит ровно это (проверка 27.11)
+  const COPY_CMT = ' Текст остался в окне — нажми «Скопировать текст» и вставь его на YouTube.';
   const AGAIN_GOOGLE_CMT = { expired: ' Текст остался в окне — нажми «Отправить» ещё раз, Google спросит разрешение снова.', back: ' Текст остался в окне — нажми «Отправить» ещё раз, снова откроется экран Google.' };
   const kindOf = id => id === SUB ? 'sub' : CMT_RE.test(String(id || '')) ? 'cmt' : 'like';
   const TXT = { like: [LINE, AGAIN, AGAIN_GOOGLE], sub: [LINE_SUB, AGAIN_SUB, AGAIN_GOOGLE_SUB], cmt: [LINE_CMT, AGAIN_CMT, AGAIN_GOOGLE_CMT] };
@@ -192,7 +195,8 @@
     if (Date.now() - (said.get(k) || 0) < 10 * 60e3 && !async) return;   // без потока одинаковых строк
     said.set(k, Date.now());
     const [L, A, AG] = TXT[kd];
-    toast((L[w] || L.broken) + (async ? (AG[w] || A) : ''));
+    const copy = kd === 'cmt' && why() !== null;
+    toast((L[w] || L.broken) + (copy ? COPY_CMT : async ? (AG[w] || A) : ''));
   }
   // «следующее нажатие на ЭТОТ ролик — ссылка на YouTube» (строка это пообещала, а вкладку открыть не дали): 'video' — до конца визита
   // (ролик лайк не даёт), 'broken' — одно нажатие. sessionStorage d37_ytl_link: { id: [причина, одноразово] }, не больше 50 роликов
@@ -510,7 +514,7 @@
     }
     if (p) { fail('back', id, {}); return {}; }
     const w = why();
-    if (w === 'off') { toast(sub ? 'Ты вошёл. Подписка на YouTube оформляется на самом YouTube.' + AGAIN_SUB : cmt ? 'Ты вошёл. Комментарий пишется на самом YouTube.' + AGAIN_CMT : 'Ты вошёл. Лайк на YouTube ставится на самом YouTube.' + AGAIN); return {}; }
+    if (w === 'off') { toast(sub ? 'Ты вошёл. Подписка на YouTube оформляется на самом YouTube.' + AGAIN_SUB : cmt ? 'Ты вошёл. Комментарий пишется на самом YouTube.' + COPY_CMT : 'Ты вошёл. Лайк на YouTube ставится на самом YouTube.' + AGAIN); return {}; }
     if (w) { fail(w, id, {}); return {}; }
     if (token()) { await act(); return {}; }
     if (!args.g) { line('back', true, id); return {}; }   // не от входа гостя (старое задуманное) — без нажатия на Google не уводим
