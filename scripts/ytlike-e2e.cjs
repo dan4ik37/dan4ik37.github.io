@@ -896,6 +896,7 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
           ok(p0.l > 1920 / 2, 'на компьютере — справа, не поверх середины ролика', p0);
           await c.shot('ytl3-cmt-modal-open');
           await c.ev(SEND('С сайта, после Google'), true);
+          for (let i = 0; i < 100 && authN(G) < 1; i++) await sleep(150);   // ушли на экран Google (подделка ответит сразу)
           ok(await c.until(`location.href.startsWith(${JSON.stringify(B)}) && document.readyState === 'complete'`, 15000) && await c.until(`(${PANEL})?.items?.length >= 2`, 20000), 'вернулись с Google — окно комментариев снова открыто');
           ok(G.J.filter(x => x[0] === 'auth').length === 1 && G.J.find(x => x[0] === 'auth')[1].scope === SCOPE, 'экран Google — один раз, право youtube.force-ssl', G.J.filter(x => x[0] === 'auth'));
           ok(await c.until(`document.getElementById('modal')?.classList.contains('open') && modalVidId === ${JSON.stringify(V3)}`, 8000), 'тот же ролик в окне');
@@ -918,13 +919,17 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
       try {
         await c.send('Page.navigate', { url: B + '/#/shorts/' + V2 });
         await c.until(READY);
-        ok(await c.until(`!!document.querySelector('${SHB}.is-active')`, 10000), 'Short играет');
+        // до 13 тестовых Shorts (12+ по названию) в ленте нет вовсе — тогда проверяем, что «💬» нет нигде
+        if (init !== KID) ok(await c.until(`!!document.querySelector('${SHB}.is-active')`, 20000), 'Short играет');
         await sleep(1000);
-        const vs = await c.ev(VISIBLE(`${SHB} .ytc-btn`));
+        const vs = await c.ev(`[...document.querySelectorAll('.ytc-btn')].some(${'e => e.getClientRects().length > 0 && getComputedStyle(e).display !== "none"'})`);
         ok(vs === want13, `${label}: «💬» в Shorts ${want13 ? 'есть' : 'нет'}`, vs);
+        ok(await c.ev(`D37YtComments.allowed()`) === want13, `${label}: D37YtComments.allowed() = ${want13}`);
         ok(await c.ev(`D37YtComments.open(${JSON.stringify(V2)})`) === want13, `${label}: окно ${want13 ? 'открывается' : 'не открывается даже вызовом'}`);
         await c.ev(`D37YtComments.close(); D37Route.go('#/home'); true`); await sleep(800);
-        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true); await sleep(800);
+        // ролик 6+ (Roblox) — не закрыт обложкой и для ребёнка: «💬» прячет именно правило 13+
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Roblox обычный ролик', '', '')`, true); await sleep(800);
+        ok(await c.ev(VISIBLE('#mLike')), `${label}: ролик 6+ открыт без обложки (👍 видна)`);
         ok(await c.ev(VISIBLE('#mCmt')) === want13, `${label}: «💬» в окне ролика ${want13 ? 'есть' : 'нет'}`);
         if (!want13) ok(!G.J.some(x => x[0] === 'ytc'), `${label}: к комментариям ни одного запроса`, G.J);
         await c.shot(`ytl3-cmtage-${want13 ? 'adult' : init ? 'kid' : 'unknown'}-${w}x${h}-${theme}`);
@@ -950,8 +955,11 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
           ok((await c.ev(PANEL)).compose, `${kind}: сначала поле (настоящая запись доступна)`);
           await c.ev(`document.querySelector('#ytcPanel .ytc-list > .ytc-it .ytc-reply').click(); true`, true);
           await c.ev(SEND('текст'), true);
-          if (kind === 'deny') ok(await c.until(`(${PANEL})?.items?.length === 2`, 20000), 'deny: вернулись с Google, окно снова открыто');
-          await sleep(1500);
+          if (kind === 'deny') {
+            for (let i = 0; i < 100 && authN(G) < 1; i++) await sleep(150);   // ушли на экран Google (подделка сразу ответит отказом)
+            ok(authN(G) === 1 && await c.until(`location.href.startsWith(${JSON.stringify(B)}) && document.readyState === 'complete' && (${PANEL})?.items?.length === 2`, 20000), 'deny: вернулись с Google, окно снова открыто');
+          }
+          await c.until(`(${PANEL}) && !(${PANEL}).compose`, 8000);
         }
         const p = await c.ev(PANEL);
         ok(p && !p.compose && /^https:\/\/www\.youtube\.com\/watch\?v=/.test(p.ytw || ''), `${kind}: вместо поля — ссылка на YouTube`, p);

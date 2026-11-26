@@ -85,8 +85,10 @@
     try { return new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return ''; }
   }
   const fmt = n => (root.D37VLike?.fmt ? root.D37VLike.fmt(n) : String(n));
-  const ytUrl = (id, parent) => Y()?.cmtUrl ? Y().cmtUrl(id, parent) : 'https://www.youtube.com/watch?v=' + encodeURIComponent(id) + (parent ? '&lc=' + encodeURIComponent(parent) : '');
-  function linkOut(cls, text, href) { const a = el('a', cls, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; }
+  // ссылки — только на youtube.com: адрес всегда начинается с нашей строки 'https://www.youtube.com/', дальше — путь (id — через
+  // encodeURIComponent; путь автора — уже проверен YT_URL_RE)
+  const ytUrl = (id, parent) => 'watch?v=' + encodeURIComponent(String(id || '')) + (parent ? '&lc=' + encodeURIComponent(String(parent)) : '');
+  function linkOut(cls, text, ytPath) { const a = el('a', cls, text); a.href = 'https://www.youtube.com/' + ytPath; a.target = '_blank'; a.rel = 'noopener'; return a; }
 
   function build() {
     if (box) return box;
@@ -114,7 +116,7 @@
     const send = el('button', 'ytc-send', 'Отправить на YouTube'); send.type = 'button';
     send.addEventListener('click', submit);
     compose.append(to, ta, note, send);
-    const ytw = linkOut('ytc-ytw', 'Написать комментарий на YouTube ↗', 'https://www.youtube.com/');
+    const ytw = linkOut('ytc-ytw', 'Написать комментарий на YouTube ↗', '');
     const src = el('div', 'ytc-src');
     foot.append(compose, ytw, src);
     sheet.append(head, list, foot);
@@ -135,7 +137,7 @@
     const P = box._, w = canWrite();
     P.compose.hidden = !w;
     P.ytw.hidden = w;
-    P.ytw.href = ytUrl(cur.id, cur.parent);
+    P.ytw.href = 'https://www.youtube.com/' + ytUrl(cur.id, cur.parent);
     P.ytw.textContent = cur.parent ? 'Ответить на YouTube ↗' : 'Написать комментарий на YouTube ↗';
     P.list.querySelectorAll('.ytc-reply[data-tid]').forEach(r => { if ((r.tagName === 'BUTTON') !== w) r.replaceWith(replyCtl(r.dataset.tid, r.dataset.au || '')); });
     syncSend();
@@ -162,7 +164,7 @@
   }
   function author(c) {
     const name = String(c.author || 'Автор YouTube');
-    return YT_URL_RE.test(String(c.authorUrl || '')) ? Object.assign(linkOut('ytc-au', name, c.authorUrl), { rel: 'noopener nofollow ugc' }) : el('b', 'ytc-au', name);
+    return YT_URL_RE.test(String(c.authorUrl || '')) ? Object.assign(linkOut('ytc-au', name, String(c.authorUrl).replace(/^https:\/\/(www\.)?youtube\.com\//, '')), { rel: 'noopener nofollow ugc' }) : el('b', 'ytc-au', name);
   }
   function item(c, threadId, isReply) {
     const li = el('article', 'ytc-it' + (isReply ? ' ytc-rep' : '') + (c.mine ? ' ytc-mine' : ''));
@@ -235,7 +237,8 @@
     const P = box._;
     const same = cur && cur.id === id && isOpen();
     if (!same) {
-      cur = { id, short: !!o.short, parent: '', author: '', opener: o.opener || doc.activeElement, paused: [], mine: [] };
+      // route — раздел, где открыли (Shorts / главная с окном ролика): ушёл в другой раздел — окно закрывается
+      cur = { id, short: !!o.short || doc.body?.dataset?.route === 'shorts', route: String(doc.body?.dataset?.route || ''), parent: '', author: '', opener: o.opener || doc.activeElement, paused: [], mine: [] };
       const d = Y()?.draft?.(id);
       P.ta.value = d ? d.text : '';
       setParent(d ? d.parent : '', '');
@@ -347,7 +350,7 @@ a.ytc-au:hover{text-decoration:underline}
     });
     // Esc закрывает окно комментариев, а не окно ролика под ним
     root.addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen()) { e.stopImmediatePropagation(); e.preventDefault(); close(); } }, true);
-    root.addEventListener('d37:route', () => { if (isOpen() && !(cur && cur.short && doc.body?.dataset?.route === 'shorts')) close(); });
+    root.addEventListener('d37:route', () => { if (isOpen() && cur && String(doc.body?.dataset?.route || '') !== cur.route) close(); });
     root.addEventListener('d37:age', () => paint());
     root.addEventListener('d37:auth', () => { paint(); paintCompose(); });
     root.addEventListener('d37:ytl', () => paintCompose());
