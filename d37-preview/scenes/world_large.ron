@@ -1,0 +1,28 @@
+// The large procedural planet, with its own scene and save slot.
+(
+    version: 0,
+    name: "world_large",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "world_large",
+        at: (-14.58, 8.13),
+        altitude: 0,
+        yaw_deg: 0,
+        pitch_deg: -8,
+        time: 2090,
+        views: {
+            "orbit": (lat: 20, lon: 40, altitude: 2800000, pitch_deg: -90, time: 2100),
+            "orbit_b": (lat: -25, lon: 160, altitude: 2800000, pitch_deg: -90, time: 1300),
+            // the highest range of seed 37 (~4.6 km, snow above ~4.3 km at 33 N): from far, then the snow line close
+            "range_far": (lat: 32.55, lon: -155.55, altitude: 6000, yaw_deg: 135, pitch_deg: -8, time: 1080, fov_y_deg: 70),
+            "range_snow": (lat: 32.78, lon: -155.15, altitude: 4200, yaw_deg: 135, pitch_deg: -6, time: 1080, fov_y_deg: 70),
+            // strata terraces in arid plateau country (14.6 S 8.1 E): ledges between cliff bands
+            "terraces_air": (lat: -14.58, lon: 8.13, altitude: 350, yaw_deg: 60, pitch_deg: -22, time: 2090, fov_y_deg: 70),
+            "terraces_ground": (lat: -14.58, lon: 8.13, altitude: 2, yaw_deg: 60, pitch_deg: 4, time: 2090, fov_y_deg: 70),
+        },
+    ),
+    game: (spawn: Last, hints: false, radius: 72, forest: 0.5),
+)

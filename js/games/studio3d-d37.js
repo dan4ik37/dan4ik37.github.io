@@ -85,11 +85,11 @@
 
   // ── картинка движка: одна на студию, поверх правой половины («Рядом») или всего окна («Играть») ──
   function stage(){
-    const view = api?.ed?.q('.s3-view'); if (!view) return null;
+    const view = api?.ed?.q('.s3-view'); if (!view?.parentElement) return null;
     if (S.stage && S.stage.isConnected) return S.stage;
     const s = document.createElement('div'); s.className = 's3d-stage'; s.hidden = true;
     s.innerHTML = '<div class="s3d-host"></div><div class="s3d-tag">⚡ Наш движок D37</div><div class="s3d-wait" hidden>⏳ Загружаем наш движок…</div>';
-    view.appendChild(s);
+    view.parentElement.insertBefore(s, view.nextSibling);   // рядом с окном старого движка (оба — половины), не поверх
     S.stage = s;
     return s;
   }
@@ -110,7 +110,7 @@
       const host = await import(BASE + 'engine-host.js' + (/^[0-9a-f]{6,16}$/.test(String(b.id || '')) ? '?v=' + b.id : ''));
       const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
       let gl = ''; try { gl = new URLSearchParams(location.search).get('gl') || ''; } catch (e) {}
-      const h = await host.start({ root: s.querySelector('.s3d-host'), scene: 'studio', world: 'main', rawSize: +b.wasm_raw || 0, quality: touch ? 'low' : '', gl: gl || undefined,
+      const h = await host.start({ root: s.querySelector('.s3d-host'), scene: 'studio', world: 'main', rawSize: +b.wasm_raw || 0, quality: touch ? 'low' : '', gl: gl === '1',
         onMessage: m => onMsg(m), onProgress: () => {} });
       H = h;
       try { h.studio.hud(false); h.input(false); } catch (e) {}
@@ -217,6 +217,9 @@
     const nick = (typeof currentProfile !== 'undefined' && currentProfile?.nick) || 'Игрок';
     const pl = S.play = { nick, stats: {}, labels: {}, health: 100, max: 100, me: [0, 0, 0], batch: [], cmds: 0, dirty: true, finished: false, AU: null };
     try { pl.AU = E.audio ? E.audio() : null; } catch (e) {}
+    // то же, что студия делает перед своей игрой: расширения (урок — шаг «Играть», листы и панели закрываются, подсказки),
+    // сохранить правки, снять выделение и меню
+    try { api.core.ext?.('play'); if (ed.dirty) api.core.save(true); api.core.tut?.('play'); ed.TR?.cursor(null); ed.G?.attach(null); if (ed.boxHelper) ed.boxHelper.visible = false; api.core.closeMenu?.(); } catch (e) {}
     layout();
     ed.box.classList.add('s3-playing', 's3d-playing');
     ed.q('.s3-play').textContent = '■ Стоп';
@@ -259,6 +262,7 @@
       ed.box.classList.remove('s3-playing', 's3d-playing');
       ed.q('.s3-play').textContent = '▶ Играть';
       ed.loop?.pause(false);
+      if (!S.leaving) try { api.core.ext?.('stop'); } catch (e) {}
       api.print('■ Остановлено — мир вернулся как был', 'sys');
     }
     S.loadedSig = ''; S.camSig = '';
@@ -271,8 +275,10 @@
   function style(){
     if (document.getElementById('s3d-css')) return;
     const st = document.createElement('style'); st.id = 's3d-css';
-    st.textContent = `.s3d-stage{position:absolute;top:0;bottom:0;right:0;width:50%;z-index:4;background:#0b1220;border-left:2px solid #f59e0b;overflow:hidden}
-.s3d-stage.s3d-full{left:0;width:auto;border-left:0}.s3d-host{position:absolute;inset:0}
+    st.textContent = `.s3d-stage{position:relative;min-width:0;min-height:0;z-index:3;background:#0b1220;border-left:2px solid #f59e0b;overflow:hidden}
+.s3d-stage[hidden]{display:none}.s3d-sbs .s3-main{grid-template-columns:220px minmax(0,1fr) minmax(0,1fr) 290px}
+.s3d-playing .s3-view{display:none}.s3d-playing .s3-main{grid-template-rows:minmax(0,1fr)}
+.s3d-stage.s3d-full{border-left:0}.s3d-host{position:absolute;inset:0}
 .s3d-tag{position:absolute;left:8px;top:8px;z-index:6;background:rgba(245,158,11,.92);color:#111;font:600 12px/1.2 system-ui,sans-serif;padding:4px 8px;border-radius:8px;pointer-events:none}
 .s3d-wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font:600 15px system-ui,sans-serif;background:rgba(11,18,32,.75);z-index:7;text-align:center;padding:16px}
 .s3d-toast{position:absolute;left:50%;top:18%;transform:translateX(-50%);z-index:8;background:rgba(17,24,39,.88);color:#fff;font:600 16px system-ui,sans-serif;padding:8px 14px;border-radius:10px;max-width:86%;text-align:center;pointer-events:none}
@@ -280,7 +286,7 @@
 .s3d-sheet{position:absolute;right:12px;top:52px;z-index:40;max-width:min(360px,calc(100% - 24px));background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:12px;padding:12px 14px;font:14px/1.4 system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.5)}
 .s3d-sheet p{margin:6px 0}.s3d-sheet ul{margin:4px 0 8px 18px;padding:0}.s3d-chk{display:flex;gap:8px;align-items:center;margin:6px 0}.s3d-note{font-size:12px;opacity:.75}
 .s3d-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.s3d-row button{flex:1;min-height:36px;border-radius:8px;border:1px solid #4b5563;background:#1f2937;color:#fff;cursor:pointer}
-@media (max-width:700px){.s3d-stage{top:50%;width:auto;left:0;border-left:0;border-top:2px solid #f59e0b}.s3d-stage.s3d-full{top:0;border-top:0}}`;
+@media (max-width:760px){.s3d-sbs .s3-main{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}.s3d-stage{border-left:0;border-top:2px solid #f59e0b}.s3d-stage.s3d-full{border-top:0}}`;
     document.head.appendChild(st);
   }
 
@@ -306,7 +312,7 @@
     unmount(){
       clearInterval(S.timer); S.timer = 0;
       window.removeEventListener('keydown', onKey, true);
-      stopPlay();
+      S.leaving = true; stopPlay(); S.leaving = false;
       try { H?.studio.quit(); H?.dispose(); } catch (e) {}
       H = null; hostP = null; S.stage?.remove(); S.stage = null; S.ui?.remove(); S.ui = null; S.side = false; S.gate = null; api = null;
     },
@@ -323,5 +329,5 @@
     },
   });
   // для проверок (scripts/studio-d37-e2e.cjs): состояние без внутренностей
-  E.studioD37 = { state: () => ({ on: on(), gate: S.gate, side: S.side, playing: !!S.play, engine: !!H, me: S.play?.me || null, stats: S.play ? { ...S.play.stats } : null, labels: S.play ? { ...S.play.labels } : null }), handle: () => H };
+  E.studioD37 = { state: () => ({ on: on(), gate: S.gate, side: S.side, playing: !!S.play, engine: !!H, me: S.play?.me || null, hp: S.play ? S.play.health : null, stats: S.play ? { ...S.play.stats } : null, labels: S.play ? { ...S.play.labels } : null }), handle: () => H };
 })();

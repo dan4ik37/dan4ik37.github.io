@@ -1,0 +1,27 @@
+// c-studio (EDITOR_ONE S7 / S8): the stage for a «Студия 3D» world played on the engine. The page opens this scene and
+// hands it the world with `game studio file <base64>` (the site's own snapshot file; `game/sys/studio`); the world stands
+// on a 600-unit ground slab over the highest ground of the home valley (nothing of the planet pokes through), the
+// creative rules (no hunger, no damage from the planet's things), no hints. The editor's buttons stay the site's.
+(
+    version: 0,
+    name: "studio",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 30, elevation_deg: 50),
+    cameras: {},
+    planet: (
+        profile: "home",
+        at: (29.0, 80.36),
+        altitude: 0,
+        yaw_deg: 250,
+        pitch_deg: -8,
+        // early afternoon (the studio's default time of day is 14:00)
+        time: 1800,
+        // the clock stands still (the studio's «смена дня и ночи» is off unless the world turns it on; the system then
+        // moves the hour itself, as the site does: game/sys/studio)
+        time_scale: 0.0,
+        views: {},
+    ),
+    game: (spawn: Home, hints: false, radius: 72, forest: 0.0, creative: true),
+    start: [],
+)

@@ -1,0 +1,22 @@
+// Template for the generated planet. The web host resolves the seed before starting workers.
+(
+    version: 0,
+    name: "world_random",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "world_random_v1@37",
+        at: (-14.58, 8.13),
+        altitude: 0,
+        yaw_deg: 40,
+        pitch_deg: -8,
+        time: 1120,
+        views: {
+            "orbit": (lat: 0, lon: 0, altitude: 2400000, pitch_deg: -90),
+            "surface": (lat: 0, lon: 0, altitude: 50, pitch_deg: -20),
+        },
+    ),
+    game: (spawn: Last, hints: false, radius: 72, forest: 0.5),
+)

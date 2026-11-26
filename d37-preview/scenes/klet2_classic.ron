@@ -1,0 +1,20 @@
+(
+    version: 0,
+    name: "klet2_classic",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "home",
+        at: (29.0, 80.36),
+        altitude: 0,
+        yaw_deg: 250,
+        pitch_deg: -8,
+        // noon: the arena's colours under a high sun
+        time: 1800,
+        views: {},
+    ),
+    game: (spawn: Home, hints: false, radius: 72, forest: 0.5),
+    start: ["game klet2 classic"],
+)

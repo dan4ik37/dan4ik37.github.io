@@ -39,6 +39,23 @@
   #wardrobe .astatus { margin-top: 8px; font-size: 12px; color: #9f9; }
   /* a phone: the panel takes the lower part of the screen, the face (screen middle, upper half) stays clear */
   @media (max-width: 700px) { #wardrobe { top: auto; bottom: 8px; left: 8px; right: 8px; width: auto; max-height: 42%; } }
+
+  #tree-workshop { position: fixed; z-index: 6; top: 64px; right: 20px; width: min(320px, 88vw); max-height: calc(100dvh - 86px); overflow: auto; padding: 16px; box-sizing: border-box; background: #172019f5; color: #e7eee6; border: 1px solid #4d6251; border-radius: 14px; box-shadow: 0 12px 36px #10130baa; }
+  #tree-workshop summary { cursor: pointer; font-size: 17px; font-weight: 650; }
+  #tree-workshop form { display: grid; gap: 11px; margin-top: 14px; }
+  #tree-workshop label { display: grid; gap: 4px; color: #ccd8cc; min-width: 0; }
+  #tree-workshop .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #tree-workshop input, #tree-workshop select, #tree-workshop button, #tree-workshop .load { box-sizing: border-box; min-height: 36px; width: 100%; border-radius: 7px; border: 1px solid #56695a; background: #223026; color: #edf3eb; font: inherit; padding: 5px 8px; }
+  #tree-workshop .lod { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #tree-workshop button, #tree-workshop .load { cursor: pointer; text-align: center; }
+  #tree-workshop [aria-pressed="true"], #tree-workshop button[type="submit"] { background: #bcdb9c; border-color: #bcdb9c; color: #192413; font-weight: 650; }
+  #tree-workshop .load { display: grid; place-items: center; position: relative; }
+  #tree-workshop .load input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  #tree-workshop .load:focus-within { outline: 2px solid #bcdb9c; }
+  #tree-workshop output { min-height: 1.4em; color: #bdceba; overflow-wrap: anywhere; }
+  @media (max-width: 700px) {
+    #tree-workshop { top: auto; bottom: 8px; left: 8px; right: 8px; width: auto; max-height: 48dvh; }
+  }
 </style>
 </head>
 <body>
@@ -53,6 +70,47 @@
 <div id="gear" class="btn" title="меню админа">⚙</div>
 <div id="admin"></div>
 <div id="wardrobe"></div>
+
+<details id="tree-workshop" open hidden>
+  <summary>Мастерская деревьев</summary>
+  <form>
+    <label>Вид дерева
+      <select name="species">
+        <option value="tree_broad" data-size="12 0.32">Лиственное</option>
+        <option value="tree_pine" data-size="16 0.32" selected>Сосна</option>
+        <option value="biomes_spruce" data-size="14 0.25">Ель</option>
+        <option value="biomes_birch" data-size="12 0.18">Берёза</option>
+        <option value="biomes_palm" data-size="9 0.2">Пальма</option>
+        <option value="biomes_swamp_tree" data-size="10 0.3">Болотное дерево</option>
+        <option value="zones_gloom_tree" data-size="10 0.25">Чёрное дерево</option>
+        <option value="zones_jungle_tree" data-size="24 0.5">Дерево джунглей</option>
+        <option value="zones_bamboo" data-size="9 0.08">Бамбук</option>
+        <option value="zones_amber_tree" data-size="10 0.25">Янтарное дерево</option>
+        <option value="zones_giant_mushroom" data-size="7 0.35">Гигантский гриб</option>
+        <option value="zones_dead_snag" data-size="6 0.16">Сухостой</option>
+        <option value="forests_giant" data-size="95 4">Дерево-великан</option>
+      </select>
+    </label>
+    <div class="fields">
+      <label>Высота, м<input type="number" name="height" value="16" min="1" max="150" step="0.1" required></label>
+      <label>Радиус ствола, м<input type="number" name="radius" value="0.32" min="0.03" max="10" step="0.01" required></label>
+      <label>Ширина кроны ×<input type="number" name="crown" value="1" min="0.55" max="1.6" step="0.01" required></label>
+      <label>Seed<input type="number" name="seed" value="37" min="0" max="4294967295" step="1" required></label>
+    </div>
+    <div class="lod" role="group" aria-label="Уровень детализации">
+      <button type="button" data-level="0" aria-pressed="true" title="Подробное дерево">LOD 0</button>
+      <button type="button" data-level="1" aria-pressed="false" title="Упрощённая геометрия">LOD 1</button>
+      <button type="button" data-level="2" aria-pressed="false" title="Дальний силуэт">LOD 2</button>
+    </div>
+    <div class="fields">
+      <button type="submit">Обновить дерево</button>
+      <button type="button" data-seed>Случайный seed</button>
+      <button type="button" data-save>Скачать пресет</button>
+      <label class="load">Загрузить пресет<input type="file" name="preset" accept=".json,application/json"></label>
+    </div>
+    <output aria-live="polite"></output>
+  </form>
+</details>
 <div id="error"></div>
 <script type="module" src="./d37-page.js"></script>
 </body>

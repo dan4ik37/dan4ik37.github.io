@@ -2354,6 +2354,7 @@ Players.PlayerAdded.Connect(player => {
       copy: cut => copySel(!!cut), paste: () => paste(),
       menu: a => menuAct(a), act: (a, b) => act(a, b || null), openMenu: (kind, btn) => openMenu(kind, btn), closeMenu: () => closeMenu(),
       play: () => { if (!ED.playing) startPlay(); }, stop: () => { if (ED.playing) stopPlay(); },
+      ext: fn => { if (fn === 'play' || fn === 'stop') ext(fn); },   // игра на нашем движке (studio3d-d37.js): урок, листы, подсказки — как при игре здесь
       save: quiet => save(quiet), insertPoint: () => insertPoint(), moveBy: (o, d) => moveBy(o, d), turnAround: (o, c, dy) => turnAround(o, c, dy),
       updateGizmo: () => updateGizmo(), renderProps: () => renderProps(), renderTree: () => renderTree(), setPanel: p => setPanel(p), hint: t => hint(t),
       selTop: () => selTop(), tut: k => tutStep(k), npcPresets: () => NPC_PRESETS, colors: () => COLORS.slice(),

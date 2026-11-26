@@ -33,7 +33,7 @@ const OBJ_TEXTURES = true;
 const BUILD_CHECK = true;
 // ep38 A2: the build this page script belongs to — stamped by scripts/pack.mjs into this file, d37-page.js, d37_web.js
 // (D37_GLUE_BUILD) and the wasm (custom section «d37_build»); '' = an unpacked page (the repo's web/): no check.
-export const PAGE_BUILD = '8e3b20a652';
+export const PAGE_BUILD = 'c3d4128490';
 export function wasmBuildOf(module) {
   try { const s = WebAssembly.Module.customSections(module, 'd37_build'); return s.length ? new TextDecoder().decode(s[0]) : ''; } catch (e) { return ''; }
 }
@@ -182,9 +182,11 @@ async function compileWasm(url, rawSize, onBytes) {
 // The 'wardrobe' scene is a studio: the panel is open from the start, no walking (the keys and the left half of a phone
 // turn the camera round the character instead), no jump / orbit / 👕 buttons; «Готово» is sent to the page as
 // {t:'wardrobe', on:false} as always (the site goes back where it came from).
-const SCENES = ['planet', 'planet_ground', 'valley', 'creative', 'wardrobe', 'umode'];
+const SCENE_ID = /^[a-z0-9_]{1,32}$/;
 // ep36: a mode file as one command word (hex of its UTF-8 bytes: no spaces, no `;`), solo, (re)started at once
 const MODE_CMD = (text) => { let h = ''; for (const b of new TextEncoder().encode(String(text))) h += (b < 16 ? '0' : '') + b.toString(16); return 'game umode file ' + h + '; game umode play mine'; };
+// c-studio: a text as one command word (base64 of its UTF-8 bytes: no spaces, no `;`)
+const B64 = (text) => { const b = new TextEncoder().encode(String(text)); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); };
 const CHECK = (text) => { try { return JSON.parse(wasmApi.blocks_check(String(text))); } catch (e) { return { ok: false, error: 'проверка не прошла: ' + e }; } };
 export async function start(o) {
   const root = o.root;
@@ -206,7 +208,7 @@ export async function start(o) {
   // a lost graphics context (WebGL2; a lost WebGPU device fails the next frame) stops the game with the message
   on(canvas, 'webglcontextlost', (e) => { try { e.preventDefault(); } catch (er) { /* old event */ } fail('context-lost', 'WebGL context lost'); });
 
-  const sceneName = SCENES.includes(o.scene) ? o.scene : 'planet';
+  const sceneName = typeof o.scene === 'string' && SCENE_ID.test(o.scene) ? o.scene : 'planet';
   const studio = sceneName === 'wardrobe';
   // a portrait phone: the wardrobe panel takes the lower 44 % — the studio draws the character in the free part above it
   const place = () => { canvas.style.height = studio && typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches ? '56%' : '100%'; };
@@ -215,7 +217,7 @@ export async function start(o) {
   progress('wasm', 0, o.rawSize || 0);
   // EP14-config: the settings files come in parallel with the wasm (they never wait for it, it never waits for them)
   const tCfg = performance.now();
-  const [module, sceneText, layers] = await Promise.all([
+  const [module, sceneTemplate, layers] = await Promise.all([
     compileWasm(HERE('d37_web_bg.wasm'), o.rawSize || 0, (d, t) => progress('wasm', d, t)),
     fetch(HERE('scenes/' + sceneName + '.ron')).then(res => {
       if (!res.ok) throw new Error('scene: HTTP ' + res.status);
@@ -230,6 +232,10 @@ export async function start(o) {
     try { sessionStorage.removeItem('d37.buildreload.' + PAGE_BUILD); } catch (e) { /* storage off */ }
   }
   await init({ module_or_path: module });
+  const sceneText = sceneName === 'world_random'
+    ? wasmApi.generated_planet_scene(sceneTemplate, o.save || new Uint8Array(0),
+        crypto.getRandomValues(new Uint32Array(1))[0] & 0x7fffffff)
+    : sceneTemplate;
   try { st.panic0 = last_panic(); } catch (e) { st.panic0 = ''; }
   if (bridge_version() !== BRIDGE) throw new Error('bridge version ' + bridge_version() + ', the page speaks ' + BRIDGE);
   // apply the layers before anything starts (an older engine without the key table: the built-in numbers)
@@ -348,6 +354,7 @@ export async function start(o) {
         if (!st.app || st.dead) return;
         if (m.type === 'frame') { st.worldAt = performance.now(); st.app.world_in(new Uint8Array(m.bytes)); }
         else if (m.type === 'alive') st.worldAt = performance.now();
+        else if (m.type === 'hitch') st.app.world_hitch?.(m.data);
         else if (m.type === 'pace') st.paceStats = m.stats;   // ep14-perf: the world Worker's pacing line (F3 / tests)
         else if (m.type === 'config') checkWorkerConfig(m);
         else if (m.type === 'error') fail('world-worker', m.error);
@@ -587,9 +594,10 @@ export async function start(o) {
     b.addEventListener('pointerdown', h(true));
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, h(false));
   };
-  const bWard = button('d37h-ward', '👕', 'Гардероб (B)');
-  if (studio) bWard.style.display = 'none';
-  bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
+  if (touch && !studio) {
+    const bWard = button('d37h-ward', '👕', 'Гардероб');
+    bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
+  }
   // ep11 publish: the creative world has the game layer (creative rules) and still flies back up with one button
   if (planet && (!game || creative)) hold(button('d37h-orbit', '🌍', 'Орбита ↔ земля (O)'), (v) => { orbitHeld = v; });
   if (touch) {
@@ -620,11 +628,11 @@ export async function start(o) {
     on(canvas, 'pointerup', end); on(canvas, 'pointercancel', end);
   }
   const hint = add(el('div', 'd37h-hint', studio ? (touch ? 'Проведи пальцем — повернуть камеру' : 'Тяни мышью — повернуть камеру · колесо — ближе и дальше') : game
-    ? (touch ? 'Слева — идти · справа — смотреть · кнопки: ДЕЙСТВИЕ, СУМКА, РЕМЕСЛО' : 'Нажми на картинку · ЛКМ / E — рубить, брать, ставить · ПКМ — поставить / съесть · 1-8 — в руку · Q — сумка · T — ремесло · R — повернуть')
+    ? (touch ? 'Слева — идти · справа — смотреть' : 'Щелчок — управление · Tab — действия')
     : touch
     ? (planet ? 'Слева — идти / лететь · справа — смотреть · 🌍 — на землю и обратно · 👕 — гардероб' : 'Слева — идти · справа — смотреть')
     : 'Нажми на картинку — мышь смотрит · W A S D — идти · Пробел — прыжок · O — на землю и обратно · B — гардероб · V — вид'));
-  if (game) { hint.style.bottom = 'auto'; hint.style.top = '56px'; }
+  if (game) hint.style.bottom = 'calc(105px + env(safe-area-inset-bottom))';
   setTimeout(() => { hint.style.opacity = '0'; }, 9000);
   let sayT = 0;
   say = (t) => { hint.textContent = t; hint.style.opacity = '1'; clearTimeout(sayT); sayT = setTimeout(() => { hint.style.opacity = '0'; }, 5000); };
@@ -839,6 +847,7 @@ export async function start(o) {
     }
   }
   publish();
+  on(document, 'visibilitychange', () => st.app?.reset_frame_clock?.());
   st.raf = requestAnimationFrame(frame);
 
   // EP14-config live: the files again when the tab comes back and every o.config.poll ms (default 5 min); a changed
@@ -872,6 +881,7 @@ export async function start(o) {
     stats() { try { return st.app ? JSON.parse(st.app.stats()) : null; } catch (e) { return null; } },
     // EP7: the game's numbers (items, parts, saves...; null without a game layer)
     gameStats() { try { return st.app && game ? JSON.parse(st.app.game_stats()) : null; } catch (e) { return null; } },
+    hitchStats() { return st.app?.hitch_stats ? JSON.parse(st.app.hitch_stats()) : []; },
     // a DOM sheet over the world (chat, menu): the keys stop reaching the game
     input(enabled) { st.inputOn = !!enabled; if (!enabled) { keys.clear(); unlock(); } publish(); },
     pause() { if (st.paused || st.dead) return; st.paused = true; if (ww) ww.postMessage({ type: 'pause' }); keys.clear(); publish(); try { st.app && st.app.audio_park(true); } catch (e) { /* no sound */ } cancelAnimationFrame(st.raf); st.raf = 0; unlock(); },
@@ -887,6 +897,22 @@ export async function start(o) {
     // goes to the engine and the round restarts with it (solo; no page reload). A refused file is not sent.
     checkMode(text) { return CHECK(text); },
     runMode(text) { const r = CHECK(text); if (r.ok && st.app && !st.dead) { const a = run(MODE_CMD(text)); if (typeof a === 'string' && /^отказ/.test(a)) return { ok: false, error: a.slice(0, 300) }; } return r; },
+    // c-studio (EDITOR_ONE S7 / S8): a «Студия 3D» world on the engine (scene 'studio', game/sys/studio). check(text) — the
+    // engine's gate report {ok, fits, needs, missing, …} (fits = every need is on this engine); load(text) — the world (the
+    // site's own snapshot JSON) into the edit view; cam(eye, at) — the editor's camera (studio units); play() / stop();
+    // cmd(list) — the scripts' commands of this frame (the engine re-checks each with the site's rules, ≤ 4000 a tick);
+    // quit(). Its page lines come as onMessage {t:'mode', data:{kind:'studio', ev, …}}.
+    studio: {
+      ok() { return typeof wasmApi.studio_check === 'function'; },
+      check(text) { try { return JSON.parse(wasmApi.studio_check(String(text))); } catch (e) { return { ok: false, fits: false, error: 'движок не ответил: ' + String(e).slice(0, 120) }; } },
+      load(text) { return st.app && !st.dead ? run('game studio file ' + B64(text)) : 'отказ: нет движка'; },
+      cam(e, a) { if (!st.app || st.dead) return; const n = (v) => (Number.isFinite(+v) ? Math.max(-4999, Math.min(4999, +v)) : 0).toFixed(3); run('game studio cam ' + [e[0], e[1], e[2], a[0], a[1], a[2]].map(n).join(' ')); },
+      play() { return st.app && !st.dead ? run('game studio play') : 'отказ: нет движка'; },
+      stop() { return st.app && !st.dead ? run('game studio stop') : 'отказ: нет движка'; },
+      cmd(list) { if (!st.app || st.dead || !list || !list.length) return; for (let i = 0; i < list.length; i += 4000) run('game studio cmd ' + B64(JSON.stringify(list.slice(i, i + 4000)))); },
+      quit() { if (st.app && !st.dead) run('game studio quit'); },
+      hud(on) { try { st.app && !st.dead && st.app.set_game_hud(!!on); } catch (e) { /* older build */ } },
+    },
     // NET_JOIN (d37-core/spec/NET_JOIN.md): sessions of the game modes on our d37-server. server = 'ws://host:7377'
     // (or wss:// behind the TLS proxy); the HTTP list is the same host. The engine emits {t:'mode', data:{kind:
     // 'presence'|'meta', …}} messages: presence = where the player is / can friends join; meta = records,
@@ -925,7 +951,7 @@ export async function start(o) {
       state() { const s = handle.lobby.state(); return s && s.p2p ? s.p2p : null; },
       leave(game) { handle.lobby.leave(game); },
     },
-    resume() { if (!st.paused || st.dead) return; st.paused = false; st.worldAt = performance.now(); if (ww) ww.postMessage({ type: 'resume' }); try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
+    resume() { if (!st.paused || st.dead) return; st.paused = false; st.app?.reset_frame_clock?.(); st.worldAt = performance.now(); if (ww) ww.postMessage({ type: 'resume' }); try { st.app && st.app.audio_park(false); } catch (e) { /* no sound */ } last = performance.now(); if (!st.raf) st.raf = requestAnimationFrame(frame); },
     // everything this start made goes away: the frame loop, listeners, Workers, the GPU device (free), the DOM
     dispose() {
       if (st.disposed) return;
