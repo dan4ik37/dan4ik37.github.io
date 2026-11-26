@@ -103,7 +103,9 @@ function mockSupabase(S){
   };
 }
 
-async function chrome({ w = 1440, h = 900, phone = false, theme = 'dark', S, ua } = {}){
+// extra (ytlike-e2e.cjs): { patterns: [шаблоны Fetch], answer(req) → { code, body, headers } | null } — подделать ещё сервисы (Google, YouTube API);
+// init — свой скрипт до страницы; logs — ВСЕ строки консоли (проверка «токена нет в журнале»)
+async function chrome({ w = 1440, h = 900, phone = false, theme = 'dark', S, ua, extra, init } = {}){
   fs.mkdirSync(TMP, { recursive: true });
   const port = await freePort(), profile = fs.mkdtempSync(path.join(TMP, 'chr-'));
   const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMP, TEMP: TMP } });
@@ -112,12 +114,14 @@ async function chrome({ w = 1440, h = 900, phone = false, theme = 'dark', S, ua 
   if (!page) { proc.kill(); throw new Error('Chrome не запустился'); }
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
-  let id = 0; const cb = new Map(), errs = [], leaked = [];
+  let id = 0; const cb = new Map(), errs = [], leaked = [], logs = [];
   const answer = mockSupabase(S);
   const send = (method, params = {}) => new Promise((a, b) => { const i = ++id; cb.set(i, [a, b]); ws.send(JSON.stringify({ id: i, method, params })); });
   ws.onmessage = m => { const d = JSON.parse(m.data); if (d.id && cb.has(d.id)) { const [a, b] = cb.get(d.id); cb.delete(d.id); d.error ? b(new Error(d.error.message)) : a(d.result); return; }
     if (d.method === 'Fetch.requestPaused') {
       const r = d.params.request;
+      const xa = extra ? extra.answer(r) : null;
+      if (xa) { send('Fetch.fulfillRequest', { requestId: d.params.requestId, responseCode: xa.code, responseHeaders: xa.headers || [], body: Buffer.from(xa.body || '').toString('base64') }).catch(() => {}); return; }
       if (S.feed && /\/api\/feed(\?|$)/.test(r.url)) { send('Fetch.fulfillRequest', { requestId: d.params.requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body: Buffer.from(JSON.stringify(S.feed())).toString('base64') }).catch(() => {}); return; }
       if (!r.url.startsWith(SB)) { send('Fetch.continueRequest', { requestId: d.params.requestId }).catch(() => {}); return; }
       const a = answer(r);
@@ -126,6 +130,7 @@ async function chrome({ w = 1440, h = 900, phone = false, theme = 'dark', S, ua 
       return;
     }
     if (d.method === 'Network.requestWillBeSent' && d.params.request.url.startsWith(SB) && !/^(GET|HEAD|OPTIONS)$/.test(d.params.request.method) && !d.params.request.url.includes('/auth/v1/')) leaked.push(d.params.request.method + ' ' + d.params.request.url);   // для журнала — все они перехвачены Fetch
+    if (d.method === 'Runtime.consoleAPICalled') logs.push(d.params.args.map(a => a.value ?? a.description ?? '').join(' '));
     let e = '';
     if (d.method === 'Runtime.exceptionThrown') e = 'EXC ' + (d.params.exceptionDetails?.exception?.description || d.params.exceptionDetails?.text || '');
     else if (d.method === 'Runtime.consoleAPICalled' && d.params.type === 'error') e = 'CON ' + d.params.args.map(a => a.value ?? a.description ?? '').join(' ');
@@ -134,7 +139,7 @@ async function chrome({ w = 1440, h = 900, phone = false, theme = 'dark', S, ua 
   const ev = async (expr, gesture) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true, userGesture: !!gesture }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
   await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable'); await send('Network.enable');
   await send('Page.setDownloadBehavior', { behavior: 'deny' });
-  await send('Fetch.enable', { patterns: [{ urlPattern: SB + '/*', requestStage: 'Request' }, ...(S.feed ? [{ urlPattern: '*/api/feed*', requestStage: 'Request' }] : [])] });
+  await send('Fetch.enable', { patterns: [{ urlPattern: SB + '/*', requestStage: 'Request' }, ...(S.feed ? [{ urlPattern: '*/api/feed*', requestStage: 'Request' }] : []), ...((extra && extra.patterns) || []).map(u => ({ urlPattern: u, requestStage: 'Request' }))] });
   // realtime Supabase (WebSocket — Fetch его не видит), чужие плееры и реклама — не грузим; превью YouTube — тоже (у тестовых роликов
   // их нет: 404 картинки Chrome пишет в журнал от имени shorts.js / youtube.js, и это выглядело как «нет файла сайта»)
   await send('Network.setBlockedURLs', { urls: ['*i.ytimg.com*', '*supabase.co/realtime*', '*youtube.com/embed*', '*player.twitch.tv*', '*googlesyndication*', '*doubleclick*', '*mc.yandex*', '*yandex.ru/ads*', '*an.yandex*', '*telegram.org*'] });
@@ -143,12 +148,13 @@ async function chrome({ w = 1440, h = 900, phone = false, theme = 'dark', S, ua 
   await size(w, h, phone);
   // первый заход: тема, без окошка «Сколько тебе лет?» и баннера приложения (возраст гостю НЕ задаём — новый аккаунт должен его спросить)
   const L = { d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_theme: theme };
+  if (init) await send('Page.addScriptToEvaluateOnNewDocument', { source: init });
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{if(!sessionStorage.getItem('aset')){sessionStorage.setItem('aset','1');${Object.entries(L).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}}}catch(e){}` });
   const until = async (expr, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { try { if (await ev(expr)) return true; } catch (e) {} await sleep(150); } return false; };
   const shot = async name => { if (!SHOTS) return; fs.mkdirSync(SHOTS, { recursive: true }); const r = await send('Page.captureScreenshot', { format: 'jpeg', quality: 60 }); fs.writeFileSync(path.join(SHOTS, name + '.jpg'), Buffer.from(r.data, 'base64')); };
   const click = async sel => ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return false; e.scrollIntoView({ block: 'center' }); e.click(); return true; })()`, true);
   const close = async () => { try { ws.close(); } catch (e) {} try { proc.kill(); } catch (e) {} await sleep(500); try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) {} };
-  return { send, ev, until, close, errs, shot, size, click, leaked };
+  return { send, ev, until, close, errs, shot, size, click, leaked, logs };
 }
 const READY = `typeof sbClient !== 'undefined' && !!window.D37Route && !!window.D37Intent && !!window.D37Login && document.readyState === 'complete'`;
 const SIGNED = `typeof currentUser !== 'undefined' && !!currentUser`;
@@ -163,7 +169,9 @@ const sheetInfo = `(() => { const m = document.getElementById('globalAuthModal')
     intent: (document.getElementById('gauthIntent')?.hidden === false) ? document.getElementById('gauthIntent').textContent : '', overflowX: document.documentElement.scrollWidth > innerWidth + 1,
     emailLast: !!document.getElementById('gauthLoginFields') && (box.compareDocumentPosition(document.getElementById('gauthLoginFields')) & 4) > 0, inapp: !!document.querySelector('#gauthOauth .lgn-inapp') }; })()`;
 
-(async () => {
+// общий стенд для других проверок входа (scripts/ytlike-e2e.cjs): require — без запуска своих проверок
+module.exports = { startSite, chrome, mockSupabase, newGoogleUser, newProfile, sheetInfo, READY, SIGNED, VISIBLE, ANY_VISIBLE, FEED, SB, ME, V, V2, V3, NOISE, ok: (...a) => ok(...a), counts: () => ({ n, fails }) };
+if (require.main === module) (async () => {
   const site = await startSite();
   const B = site.base;
   console.log('auth-social-e2e: ' + B);
