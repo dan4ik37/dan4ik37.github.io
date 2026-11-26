@@ -1325,6 +1325,7 @@ Players.PlayerAdded.Connect(player => {
   function startPlay(opt = {}){
     const ed = ED, E = window.D37E, SC = ed.SC, R = ed.R, T = R.T;
     if (ed.playing) return;
+    if (extAny('playOn', opt)) return;   // «Студия 3D» на нашем движке (studio3d-d37.js, флаг STUDIO_D37): мир, которому хватает движка, играется там
     ext('play');
     if (ed.dirty) save(true);   // снимок берётся сразу, до первого шага игры
     if (SC.all().some(o => o.anchored === false)) E.rigid?.load();   // физика деталей (Rapier) — заранее, без паузы в игре
