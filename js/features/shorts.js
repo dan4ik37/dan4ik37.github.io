@@ -124,7 +124,7 @@ function renderShortsFeed(){
           <div class="sh-info">
             <div class="sh-title">${esc(v.title)}</div>
             <div class="sh-meta">${v.views ? '👁 ' + v.views : ''}${v.date ? ' · ' + v.date : ''}</div>
-            <a class="sh-sub" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
+            <a data-ytsub class="sh-sub" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
           </div>
         </div>
         <div class="sh-side">
@@ -138,7 +138,7 @@ function renderShortsFeed(){
           <div class="sh-empty-ic">⚡</div>
           <b>Это все Shorts на сайте</b>
           <span>Новые выходят регулярно — подпишись, чтобы не пропустить.</span>
-          <a class="yt-sub" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
+          <a data-ytsub class="yt-sub" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
           <a class="sh-row-all" href="#/home">← К видео</a>
         </div>
       </section>`;

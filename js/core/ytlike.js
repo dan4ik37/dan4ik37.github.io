@@ -27,7 +27,7 @@
 // docs/areas/youtube-like-setup-RU.md.
 // ПОДПИСКА (владелец 26.11: «а с подпиской так можно сделать? Как с лайками») — ТА ЖЕ система, не вторая: тот же флаг, то же право
 // youtube.force-ssl (Google discovery: subscriptions.insert и .list его принимают), тот же экран Google, тот же токен, D37Intent
-// ('ytsub'), те же запасные пути и строки. Кнопки — все ссылки «▶ Подписаться на YouTube» (href …?sub_confirmation=1: главная, окно
+// ('ytsub'), те же запасные пути и строки. Кнопки — свои ссылки «▶ Подписаться на YouTube» с меткой data-ytsub в разметке (главная, окно
 // ролика, Shorts, раздел видео) — нажатие ловится здесь. subscriptions.list?mine=true&forChannelId=<канал> (1 ед.) → «✓ Ты подписан»;
 // subscriptions.insert (50 ед.) — только если list сказал «не подписан» (уже подписан — insert не зовём). Отписки с сайта НЕТ: второе
 // нажатие на «✓ Ты подписан» открывает канал. Канал @Dan4ik37Yt = UCztYAfPrieiG6kI93yE-Hdg (og:url страницы youtube.com/@Dan4ik37Yt
@@ -47,7 +47,10 @@
   const PATH = { rate: 'videos/rate', getRating: 'videos/getRating', subInsert: 'subscriptions', subList: 'subscriptions' };
   // подписка: канал @Dan4ik37Yt; SUB — ключ подписки там, где у лайка id ролика (state, ответ Google, linkNext, paintId)
   const CHANNEL = 'UCztYAfPrieiG6kI93yE-Hdg', CH_URL = 'https://www.youtube.com/@Dan4ik37Yt', SUB = 'sub';
-  const SUB_SEL = 'a[data-ytsub], a[href*="sub_confirmation=1"]';
+  // только свои кнопки (метка data-ytsub в разметке index.html и shorts.js), не любая ссылка с sub_confirmation=1: ссылка в чате
+  // (/v/<id>?sub_confirmation=1, чужой канал) — обычная ссылка, нажатие на неё не подписывает (проверка 26.11). Откат — добавить
+  // к правилу и ссылки, в адресе которых есть sub_confirmation=1 (как было до 27.11).
+  const SUB_SEL = 'a[data-ytsub]';
   const isKey = id => id === SUB || RE.test(String(id || ''));
   const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(String(root.location?.hostname || ''));
   const ssGet = k => { try { return root.sessionStorage ? root.sessionStorage.getItem(k) : null; } catch (e) { return null; } };
@@ -246,15 +249,14 @@
     if (m) m.textContent = on ? ' ✓' : '';
   }
   // «▶ Подписаться на YouTube»: YouTube сказал «подписан» → «✓ Ты подписан», ссылка ведёт на канал (без ?sub_confirmation); иначе —
-  // прежние надпись и ссылка (вернуть то, что было: содержимое, title; ссылка — снова на подписку канала). data-ytsub — метка «надпись
-  // подменена» (href уже без sub_confirmation, а нажатие всё равно наше). Адреса — только свои постоянные (не из чужих данных).
+  // прежние надпись и ссылка (вернуть то, что было: содержимое, title; ссылка — снова на подписку канала). Подменённые — в subOrig
+  // (метка data-ytsub стоит в разметке всегда). Адреса — только свои постоянные (не из чужих данных).
   const subOrig = new WeakMap();
   function paintSub(a) {
     const on = why() === null && !!token() && subbed === true;
     a.classList.toggle('ytl-busy', busy.has(SUB));
     if (on && !subOrig.has(a)) {
       subOrig.set(a, { nodes: [...a.childNodes].map(n => n.cloneNode(true)), title: a.getAttribute('title') });
-      a.setAttribute('data-ytsub', '1');
       a.textContent = '✓ Ты подписан';
       a.setAttribute('href', CH_URL);
       a.title = 'Ты подписан на канал на YouTube — нажми, чтобы открыть канал';
@@ -264,7 +266,6 @@
       a.replaceChildren(...o.nodes);
       a.setAttribute('href', CH_URL + '?sub_confirmation=1');
       if (o.title == null) a.removeAttribute('title'); else a.title = o.title;
-      a.removeAttribute('data-ytsub');
       a.classList.remove('ytl-on');
     }
   }
@@ -468,7 +469,7 @@ a[data-vlike].ytl-on{border-color:#f00!important;background:rgba(255,0,0,.22)!im
 a[data-vlike].ytl-on .vl-mark{color:#ff4d4d}
 a[data-vlike].ytl-busy{opacity:.6;pointer-events:none}
 a[data-ytsub].ytl-on{filter:saturate(.6)}
-a[href*="sub_confirmation=1"].ytl-busy{opacity:.6;pointer-events:none}`;
+a[data-ytsub].ytl-busy{opacity:.6;pointer-events:none}`;
     doc.head.appendChild(s);
   }
 

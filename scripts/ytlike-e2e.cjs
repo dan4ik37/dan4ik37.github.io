@@ -33,7 +33,7 @@
 //  (subfall) отказ на экране Google / квота / YouTube отказал (свой канал, лимит) / встроенный браузер → строка, дальше ссылка;
 //  (sublook) 390×844, 800×600, 1920×1080, 3440×1440 × тёмная / светлая: «✓ Ты подписан» на главной, в окне ролика, в Shorts.
 // Запуск из корня сайта: node scripts/ytlike-e2e.cjs   (CHROME=…, PYTHON=…, BASE=…, SHOTS=<папка>,
-//   ONLY=off,shorts,video,deny,quota,inapp,look,card,back,newtab,r401,slow403,net2,sub,subtest,subfall,sublook)
+//   ONLY=off,shorts,video,deny,quota,inapp,look,card,back,newtab,r401,slow403,net2,sub,subtest,subchat,subfall,sublook)
 const H = require('./auth-social-e2e.cjs');
 const { startSite, chrome, newGoogleUser, newProfile, READY, SIGNED, VISIBLE, FEED, SB, ME, V, V2, V3 } = H;
 const ONLY = new Set((process.env.ONLY || '').split(',').filter(Boolean));
@@ -377,6 +377,7 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
         ok(/👍 Лайк поставлен на YouTube/.test(after.toast), 'строка «👍 Лайк поставлен на YouTube»', after.toast);
         ok(!(await c.ev(`window.__opened.length`)), 'вкладка YouTube не открывалась');
         // лента перерисовалась (свежий ответ /api/feed после кэша — новые карточки): 👍 на новой карточке тоже залита, getRating не нужен
+        await sleep(900);   // первый getRating после возврата (таймер 300 мс) успевает уйти до замера — иначе гонка под нагрузкой (27.11)
         const gr0 = count(G, 'getRating');
         await c.ev(`renderCurrentVids(); true`);
         ok(await c.until(`!!document.querySelector(${JSON.stringify(sel)})?.classList.contains('ytl-on')`, 3000) && count(G, 'getRating') === gr0, 'лента перерисована — 👍 на новой карточке всё ещё залита', { gr0, gr: count(G, 'getRating') });
@@ -614,7 +615,7 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
         await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
         const g = await c.ev(TAP(SUBBTN), true);
         ok(g?.prevented === false && /sub_confirmation=1/.test(g.href) && !G.J.length, "гость при 'test': и в окне ролика — ссылка, к Google не ходим", { g, J: G.J });
-        ok(!(await c.ev(`!!document.querySelector('[data-ytsub],.ytl-on,.ytl-busy')`)), 'гость: кнопки не тронуты');
+        ok(!(await c.ev(`!!document.querySelector('.ytl-on,.ytl-busy') || [...document.querySelectorAll('a[data-ytsub]')].some(a => /✓/.test(a.textContent) || !/sub_confirmation=1/.test(a.getAttribute('href') || ''))`)), 'гость: кнопки не тронуты');
         await c.ev(`closeModal()`, true);
         ok(await signedIn(c) && await presetTok(c, 10 * 60e3), 'вход почтой (админ), разрешение выдано 10 мин назад');
         await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
@@ -637,6 +638,43 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
         ok(t?.prevented === false && /sub_confirmation=1/.test(t.href) && !G2.J.length, "не админ при 'test': подписка — ссылка, к Google не ходим", { t, J: G2.J });
         ok(!c2.errs.length, 'не админ: ошибок нет', c2.errs);
       } finally { await c2.close(); }
+    }
+
+    // (subchat) проверка 26.11: ссылка в чате с «?sub_confirmation=1» (на ролик сайта, на чужой канал YouTube) — обычная ссылка:
+    // нажатие не подписывает, надпись и адрес не трогаются. Рисует сообщение настоящая лента чата (MsgView.richBase, msgview.js).
+    // Для сравнения — своя кнопка «▶ Подписаться» на главной в той же вкладке нажатие берёт.
+    if (want('subchat')) for (const [w, h, ph, theme] of [[390, 844, true, 'dark'], [1920, 1080, false, 'light']]) {
+      console.log(`— подписка: ссылки с sub_confirmation=1 в чате — обычные ссылки (${w}×${h} ${theme})`);
+      const G = { answer: 'grant' }, X = mockGoogle(G);
+      const { user, profile } = oldUser('user');
+      const c = await chrome({ w, h, phone: ph, theme, S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') + NOPOPUP });
+      try {
+        await c.send('Page.navigate', { url: B + '/' });
+        await c.until(READY);
+        ok(await signedIn(c) && await presetTok(c, 10 * 60e3), 'вход почтой (не админ, флаг on), разрешение YouTube выдано');
+        await c.ev(`(() => { if (window.MsgView?.richBase) return true; const s = document.createElement('script'); s.src = '/js/features/msgview.js'; document.head.appendChild(s); return true; })()`);
+        ok(await c.until(`!!window.MsgView?.richBase`, 8000), 'лента чата (msgview.js) загружена');
+        const msg = `смотри dan4ik37.vercel.app/v/${V3}?sub_confirmation=1 и https://www.youtube.com/channel/UCxxxxxxxxxxxxxxxxxxxxxx?sub_confirmation=1`;
+        const html = await c.ev(`(() => { const d = document.createElement('div'); d.id = 'subchatMsg'; d.innerHTML = MsgView.richBase(${JSON.stringify(msg)}, 'кто-то').html; document.body.appendChild(d); return d.innerHTML; })()`);
+        const links = await c.ev(`[...document.querySelectorAll('#subchatMsg a')].map(a => ({ href: a.getAttribute('href'), text: a.textContent }))`);
+        ok(links.length >= 1 && links.every(l => /sub_confirmation=1/.test(l.href)), 'в сообщении — ссылки с sub_confirmation=1 (как их рисует чат)', { links, html });
+        await sleep(1200);   // наблюдатель (60 мс) + paint + subscriptions.list (300 мс) — если бы правило поймало ссылку, надпись бы сменилась
+        const after = await c.ev(`[...document.querySelectorAll('#subchatMsg a')].map(a => ({ href: a.getAttribute('href'), text: a.textContent, cls: a.className, ytsub: a.hasAttribute('data-ytsub') }))`);
+        ok(JSON.stringify(after.map(l => [l.href, l.text])) === JSON.stringify(links.map(l => [l.href, l.text])) && after.every(l => !l.ytsub && !/ytl-/.test(l.cls)), 'ссылки в чате не переписаны (ни «✓ Ты подписан», ни адрес канала)', after);
+        for (let i = 0; i < links.length; i++) {
+          const t = await c.ev(TAP(`#subchatMsg a:nth-of-type(${i + 1})`), true);
+          ok(t?.prevented === false && t.href === links[i].href, `нажатие на ссылку чата ${links[i].href.slice(0, 40)}… — обычный переход, не подписка`, t);
+        }
+        await sleep(1500);   // подписка идёт асинхронно (list → insert) — дать ей время, если бы нажатие её запустило
+        ok(!G.J.some(x => x[0] === 'subInsert') && authN(G) === 0, 'subscriptions.insert не вызывался, экрана Google не было', G.J.map(x => x[0]));
+        const own = await c.ev(TAP(HERO), true);
+        ok(own?.prevented === true, 'а своя кнопка «▶ Подписаться на YouTube» на главной нажатие берёт (та же вкладка)', own);
+        ok(await c.until(SUBBED(HERO), 10000) && G.J.filter(x => x[0] === 'subInsert').length === 1, 'своя кнопка: подписка ровно один раз → «✓ Ты подписан»', G.J.map(x => x[0]));
+        const after2 = await c.ev(`[...document.querySelectorAll('#subchatMsg a')].map(a => ({ href: a.getAttribute('href'), text: a.textContent }))`);
+        ok(JSON.stringify(after2) === JSON.stringify(links.map(l => ({ href: l.href, text: l.text }))), 'после подписки ссылка в чате всё та же (не «✓ Ты подписан»)', after2);
+        await c.shot(`ytsub-chat-${w}x${h}-${theme}`);
+        ok(!c.errs.length, 'ссылки в чате: ошибок в консоли нет', c.errs);
+      } finally { await c.close(); }
     }
 
     // (subfall) отказ на экране Google, квота, YouTube отказал (свой канал / лимит), встроенный браузер → ссылка и одна строка

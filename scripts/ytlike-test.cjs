@@ -339,6 +339,12 @@ const ev = () => { const e = { prevented: false, preventDefault() { e.prevented 
       const subs = [];
       for (const f of ['index.html', 'js/features/shorts.js']) for (const m of src(f).matchAll(/<a [^>]*sub_confirmation=1[^>]*>([\s\S]*?)<\/a>/g)) subs.push([f, m[1].replace(/<[^>]+>/g, '')]);
       ok(subs.length >= 5 && subs.every(([, t]) => /на YouTube/.test(t)), 'все кнопки подписки в SPA — «… на YouTube»', subs);
+      // проверка 26.11: правило ловило ЛЮБУЮ ссылку с sub_confirmation=1 (ссылка в чате /v/<id>?sub_confirmation=1, чужой канал) —
+      // нажатие подписывало вместо перехода. Теперь только свои кнопки с меткой data-ytsub в разметке.
+      const tags = [];
+      for (const f of ['index.html', 'js/features/shorts.js']) for (const m of src(f).matchAll(/<a [^>]*sub_confirmation=1[^>]*>/g)) tags.push([f, m[0]]);
+      ok(tags.length === 6 && tags.every(([, t]) => /\sdata-ytsub(\s|=|>)/.test(t)), 'все 6 кнопок подписки в SPA помечены data-ytsub', tags.filter(([, t]) => !/data-ytsub/.test(t)));
+      ok(/const SUB_SEL = 'a\[data-ytsub\]';/.test(y) && !/\[href\*="sub_confirmation/.test(y), 'подписка ловит только свои кнопки (a[data-ytsub]), не любую ссылку с sub_confirmation=1');
       const p = src('privacy.html');
       ok(/YouTube API Services/.test(p) && p.includes('https://www.youtube.com/t/terms') && p.includes('https://policies.google.com/privacy') && p.includes('security.google.com/settings/security/permissions'), '/privacy: YouTube API Services, Условия YouTube, Политика Google, страница отзыва доступа');
       ok(/subscriptions\.insert/.test(p) && /subscriptions\.list/.test(p) && /videos\.rate/.test(p) && /videos\.getRating/.test(p) && /id="youtube-en"/.test(p) && /Limited Use/.test(p), '/privacy: все четыре действия, английский раздел, Limited Use');

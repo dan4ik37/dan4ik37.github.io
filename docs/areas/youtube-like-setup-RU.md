@@ -215,7 +215,7 @@ myaccount.google.com/permissions); дети до 13 — обычные ссыл�
 
 **Где код (для агентов):** `js/core/ytlike.js` (D37YtLike — флаг, переход на Google, токен, videos.rate / getRating, подписка
 `subscriptions.list` / `insert` на канал `UCztYAfPrieiG6kI93yE-Hdg` (= @Dan4ik37Yt: og:url страницы канала и ссылки подписки в описаниях
-его роликов), кнопки подписки ловятся по `a[href*="sub_confirmation=1"]` на всём документе, запасные пути), `js/core/vlike.js` (кнопка
+его роликов), кнопки подписки — только свои, с меткой `data-ytsub` в разметке (6 штук: главная ×3, окно ролика, Shorts ×2); ссылка с `sub_confirmation=1` в чате или в описании — обычная ссылка, не подписка, запасные пути), `js/core/vlike.js` (кнопка
 👍-ссылка; нажатие сначала спрашивает D37YtLike.tap), `js/features/auth-intent.js` (`D37Intent.park` — 'ytlike' и 'ytsub', только в этой
 вкладке; возврат — тот же `resume`; к Google без нового нажатия — только сразу после входа гостя; вернулся без ответа Google — строка
 «нажми ещё раз»), скрипт в `<head>` index.html (`window.__d37YtHash`), `js/features/auth-guard.js` (ответ Google с `state=ytl.` — не
