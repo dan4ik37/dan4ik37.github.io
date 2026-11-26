@@ -19,6 +19,15 @@
   const me = () => (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
   const toast = t => { if (typeof xpToast === 'function') xpToast(t); else if (typeof gameToast === 'function') gameToast(t); };
   const fmt = n => (root.D37VLike?.fmt ? root.D37VLike.fmt(n) : String(n));
+  // ❤ у РОЛИКОВ (окно ролика, Shorts) — SITE_LIKE_VIDEO (js/core/config.js, владелец 26.11: «кнопка „Нравится“ лишняя будто теперь»):
+  // 'auto' — не показываем, пока у человека работает настоящий лайк на YouTube (D37YtLike.why() === null): одна кнопка лайка; не работает
+  // — ❤ как раньше (никто не теряет рабочий лайк). Стрим — всегда (у Twitch своего лайка с сайта нет). Счёт на сервере не трогаем.
+  function videoWanted() {
+    let m = 'always';
+    try { if (typeof SITE_LIKE_VIDEO === 'string' && ['auto', 'always', 'never'].includes(SITE_LIKE_VIDEO)) m = SITE_LIKE_VIDEO; } catch (e) {}
+    if (m !== 'auto') return m === 'always';
+    try { return !(root.D37YtLike && root.D37YtLike.why() === null); } catch (e) { return true; }
+  }
 
   // ═══ Есть ли ч. 20 на сервере (метка site_config part20; один раз за визит) ═══
   let p20 = null;
@@ -87,10 +96,10 @@
     if (!(await part20())) { show(b, false); return; }
     const item = itemOf(kind);
     if (!item) { show(b, false); return; }
-    if (kind === 'video') {   // ролик не по возрасту (обложка) — без ❤ (как без «Лайк на YouTube»)
+    if (kind === 'video') {   // ролик не по возрасту (обложка) — без ❤ (как без «Лайк на YouTube»); настоящий лайк работает — тоже без ❤
       const covered = !!doc.getElementById('mLike')?.hidden || !!doc.getElementById('mVid')?.classList.contains('age-on');
-      show(b, !covered);
-      if (covered) return;
+      show(b, !covered && videoWanted());
+      if (covered || !videoWanted()) return;
     } else {   // стрим: ❤ — когда идёт эфир (twitch.js: twLive) или плеер раскрыт; без эфира и закрытым плеером — нечего лайкать
       const live = typeof twLive !== 'undefined' && twLive === true;
       const on = live || !!doc.getElementById('autoStreamWrap')?.classList.contains('open');
@@ -106,7 +115,7 @@
   async function shorts(feed) {
     feed = feed || doc?.getElementById('shFeed');
     if (!feed) return;
-    const ok = await part20();
+    const ok = (await part20()) && videoWanted();
     const items = [...feed.querySelectorAll('.sh-item[data-id]')].filter(x => YT_RE.test(x.dataset.id || ''));
     for (const it of items) {
       let b = it.querySelector('.sl-btn');
@@ -201,9 +210,11 @@
       if (tw && root.MutationObserver) new root.MutationObserver(() => { const o = tw.classList.contains('open'); if (o !== twOpen) { twOpen = o; refresh('stream'); } }).observe(tw, { attributes: true, attributeFilter: ['class'] });
     };
     if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
-    root.addEventListener('d37:auth', () => { refresh('stream'); if (doc.getElementById('modal')?.classList.contains('open')) refresh('video'); if (doc.querySelector('#shFeed .sl-btn')) shorts(); });
+    // настоящий лайк стал доступен / недоступен (вход, отказ Google, квота — js/core/ytlike.js шлёт d37:ytl) — ❤ роликов показать / спрятать
+    root.addEventListener('d37:ytl', () => { if (doc.getElementById('modal')?.classList.contains('open')) refresh('video'); if (doc.querySelector('#shFeed .sh-item')) shorts(); });
+    root.addEventListener('d37:auth', () => { refresh('stream'); if (doc.getElementById('modal')?.classList.contains('open')) refresh('video'); if (doc.querySelector('#shFeed .sh-item')) shorts(); });
     root.D37Intent?.on('site_like', resumed);
   }
 
-  root.D37SiteLike = { ON, part20, refresh, tap, shorts: ON ? shorts : () => {}, _test: { resumed, setP20: v => { p20 = Promise.resolve(!!v); }, itemOf } };
+  root.D37SiteLike = { ON, part20, refresh, tap, videoWanted, shorts: ON ? shorts : () => {}, _test: { resumed, setP20: v => { p20 = Promise.resolve(!!v); }, itemOf } };
 })();

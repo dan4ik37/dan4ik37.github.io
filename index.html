@@ -2657,53 +2657,8 @@ body.low .donation-alert-icon{animation:none}
   </div>
 </div>
 
-<!-- PRIVACY POLICY MODAL -->
-<div id="privacyModal" onclick="if(event.target===this)closePrivacy()">
-  <div class="privacy-box">
-    <div class="privacy-head">
-      <h2>Политика конфиденциальности</h2>
-      <button onclick="closePrivacy()" aria-label="Закрыть политику конфиденциальности" style="background:rgba(var(--fg-rgb),.08);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center;transition:background .2s" onmouseover="this.style.background='rgba(255,45,85,.35)'" onmouseout="this.style.background='rgba(var(--fg-rgb),.08)'">✕</button>
-    </div>
-    <div class="privacy-body">
-      <p>Дата вступления в силу: 1 января 2026 г.</p>
-      <p>Добро пожаловать на официальный сайт <strong style="color:var(--text)">dan4ik37</strong> (<strong style="color:var(--text)">dan4ik37.vercel.app</strong>). Настоящая политика описывает, как мы собираем и используем данные при посещении сайта.</p>
-
-      <h3>1. Какие данные собираются</h3>
-      <p><strong style="color:var(--text)">Автоматически:</strong> IP-адрес, тип браузера, страницы сайта, время посещения — через стандартные веб-технологии.</p>
-      <p><strong style="color:var(--text)">Вводимые вами:</strong> никнейм в чате (хранится локально в браузере), сообщения в чате сайта (хранятся в базе Supabase).</p>
-      <p><strong style="color:var(--text)">Cookies:</strong> используются для Google Translate, Google AdSense, Яндекс Метрики и запоминания настроек сайта (режим отображения, ник).</p>
-      <p><strong style="color:var(--text)">Покупки кристаллов:</strong> оплату проводит платёжная система (TipTop Pay, Freedom Pay или Kaspi) на своей стороне — номер карты сайт не получает и не хранит. В базе сайта хранятся номер заказа, сумма, валюта, время, статус и номер платежа в платёжной системе — чтобы начислить кристаллы и при необходимости сделать возврат. Донаты через DonationAlerts: имя донатера и сумма — чтобы выдать VIP или кристаллы.</p>
-      <p><strong style="color:var(--text)">Приглашения друзей:</strong> кто кого пригласил по ссылке, до какого уровня дошёл друг и какие награды выданы. Чтобы нельзя было «пригласить» самого себя или свой второй аккаунт, у тех, кто зовёт друзей, и у новичков по ссылке в первые 30 дней сайт хранит отпечаток IP-адреса и случайного ключа браузера — только в виде хеша (по нему нельзя узнать сам адрес), до 90 дней и только для этой проверки. Пригласивший видит у друга только ник и уровень (дату и профиль — если профиль открыт), но никогда — его покупки, возраст и почту.</p>
-      <p><strong style="color:var(--text)">Возраст (по желанию):</strong> только год рождения, не дата. Он нужен, чтобы показывать подходящие по возрасту игры, ролики и рекламу и включать защиту детей. Год видит только сам человек — ни другие посетители, ни модераторы, ни администратор; он не публикуется, не попадает в адреса страниц и статистику и не передаётся третьим лицам. Рекламе Google уходит только признак «ребёнок» или «подросток» (без года) — чтобы реклама была без персонализации. У гостя год хранится в браузере, у аккаунта — в базе сайта; удалить его можно в любой момент: ⚙️ Настройки → Сайт → «Удалить», а вместе с аккаунтом он удаляется сам.</p>
-      <p><strong style="color:var(--text)">Вход через другие сервисы (по желанию):</strong> при входе через VK ID, Яндекс ID или Telegram сайт получает от сервиса только номер аккаунта в этом сервисе, имя и аватарку — почту, телефон, друзей и переписку не запрашивает. Номер нужен, чтобы узнавать тебя при следующем входе; имя и аватарку видишь только ты (Профиль → «Способы входа»), их можно стереть кнопкой «Скрыть имя». Пароли и токены доступа сервисов сайт не получает и не хранит. Вход через Google, Discord, Twitch и GitHub проводит сервис аутентификации Supabase — он хранит то, что передал сервис (номер, имя, почту, аватарку). Модераторы видят только, какие сервисы привязаны к аккаунту, — без номеров, имён и почты. Чтобы защищаться от ботов, сайт считает новые аккаунты по отпечатку IP-адреса: сам адрес не хранится, отпечаток меняется каждый день и стирается через 2 дня. Если аккаунт заблокирован, привязанные к нему входы тоже блокируются (хранится отпечаток, а не номер). Во время входа ставится техническая cookie на 10 минут (защита от подделки входа). Проверка «я не робот» — Cloudflare Turnstile (<a href="https://www.cloudflare.com/privacypolicy/" target="_blank" style="color:var(--accent)">политика Cloudflare</a>). Отвязать вход — Профиль → «Способы входа»; вместе с аккаунтом всё это удаляется.</p>
-
-      <p><strong style="color:var(--text)">Сообщения об ошибках сайта:</strong> если на странице что-то ломается, браузер отправляет на сайт короткое обезличенное сообщение — текст ошибки, имя файла сайта и строку, раздел, версию сайта, тип браузера и устройства. Без ника, адреса с параметрами, текста сообщений и IP-адреса. Хранится 14 суток, видит только администратор сайта.</p>
-
-      <h3>2. Google AdSense</h3>
-      <p>Сайт использует Google AdSense для показа рекламы. Google может использовать cookies для персонализации рекламы. Подробнее: <a href="https://policies.google.com/privacy" target="_blank" style="color:var(--accent)">Политика конфиденциальности Google</a>. Вы можете отключить персонализированную рекламу в <a href="https://adssettings.google.com" target="_blank" style="color:var(--accent)">настройках рекламы Google</a>.</p>
-      <p><strong style="color:var(--text)">Яндекс Метрика:</strong> сайт использует счётчик посещаемости Яндекс Метрики — он собирает обезличенные данные о визитах (какие страницы открыты, откуда пришёл посетитель, тип устройства) с помощью cookies. Запись действий на экране (Вебвизор) выключена. Подробнее: <a href="https://yandex.ru/legal/confidential/" target="_blank" style="color:var(--accent)">Политика конфиденциальности Яндекса</a>.</p>
-
-      <h3>3. YouTube API</h3>
-      <p>Сайт использует YouTube Data API v3 для отображения видео и статистики канала. Данные предоставляются Google LLC. Подробнее: <a href="https://www.youtube.com/t/terms" target="_blank" style="color:var(--accent)">Условия использования YouTube</a>.</p>
-
-      <h3>4. Twitch и DonationAlerts</h3>
-      <p>Встроенные плееры и чат Twitch работают в iframe. DonationAlerts используется для приёма донатов. Эти сервисы имеют собственные политики конфиденциальности.</p>
-
-      <h3>5. Чат сайта</h3>
-      <p>Сообщения в чате сайта хранятся в базе данных Supabase и видны всем посетителям. Не вводите личные данные в чат. Никнейм хранится только в вашем браузере (localStorage).</p>
-
-      <h3>6. Как мы не используем данные</h3>
-      <p>Мы не продаём, не передаём и не сдаём в аренду ваши персональные данные третьим лицам в коммерческих целях.</p>
-
-      <h3>7. Хранение данных</h3>
-      <p>Данные чата хранятся до 30 дней, после чего автоматически удаляются. Cookies удаляются при очистке браузера.</p>
-
-      <h3>8. Контакты</h3>
-      <p>По вопросам конфиденциальности: <a href="mailto:dan4ik37k@gmail.com" style="color:var(--accent)">dan4ik37k@gmail.com</a></p>
-      <p style="margin-top:1.5rem;opacity:.5;font-size:.72rem">Последнее обновление: октябрь 2026</p>
-    </div>
-  </div>
-</div>
+<!-- Политика конфиденциальности — одна, на /privacy (privacy.html). Старое окно #privacyModal со старым текстом (без раздела про
+     YouTube API) убрано 27.11 (проверщик ytlike-2): его никто не открывал, но текст был в коде страницы. openPrivacy() ведёт на /privacy. -->
 
 <!-- MODAL -->
 <div class="modal-ov" id="modal" onclick="if(event.target===this)closeModal()">
@@ -2716,9 +2671,12 @@ body.low .donation-alert-icon{animation:none}
       <div class="modal-actions">
         <a data-ytsub class="modal-act modal-act-yt" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
         <a class="modal-act" id="mLike" data-vlike="" href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" rel="noopener">👍 Лайк на YouTube<span class="vl-mark"></span></a>
+        <!-- 💬 комментарии с YouTube — только 13+ (js/features/ytcomments.js показывает) -->
+        <button type="button" class="modal-act ytc-btn" id="mCmt" data-ytc="" hidden style="display:none" aria-label="Комментарии с YouTube">💬 Комментарии</button>
         <button type="button" class="modal-act" id="mShare" onclick="shareCurrentVid()">🔗 Поделиться</button>
-        <a class="modal-act" id="mPage" href="#" target="_blank" rel="noopener">Страница видео ↗</a>
       </div>
+      <!-- ytlike-3 (меньше кнопок): «Страница видео» — не кнопка в ряду, а тихая ссылка под ним (та же /v/<id>, что у «Поделиться») -->
+      <a class="modal-page" id="mPage" href="#" target="_blank" rel="noopener">страница ролика на сайте ↗</a>
     </div>
   </div>
 </div>
@@ -2767,6 +2725,8 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/site-like.js"></script>
 <!-- «👍 Лайк на YouTube» по-настоящему (YT_LIKE_REAL в config.js; 'off' — как раньше, ссылка) -->
 <script src="js/core/ytlike.js"></script>
+<!-- 💬 комментарии с YouTube (чтение — /api/ytcomments, написать — D37YtLike.comment); только 13+ -->
+<script src="js/features/ytcomments.js"></script>
 <script src="js/features/profile.js"></script>
 <script src="js/features/forum.js"></script>
 <script src="js/features/forum-blocks.js"></script>

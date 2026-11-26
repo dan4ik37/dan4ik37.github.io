@@ -32,6 +32,13 @@
 // subscriptions.insert (50 ед.) — только если list сказал «не подписан» (уже подписан — insert не зовём). Отписки с сайта НЕТ: второе
 // нажатие на «✓ Ты подписан» открывает канал. Канал @Dan4ik37Yt = UCztYAfPrieiG6kI93yE-Hdg (og:url страницы youtube.com/@Dan4ik37Yt
 // и ссылки подписки в описаниях роликов самого канала, api/_lib/video-details.js). Наград за подписку нет (III.F); «на YouTube» в надписи.
+// КОММЕНТАРИЙ (ytlike-3, владелец 26.11: «можно ли сделать комменты от ютуба») — та же система: флаг, право youtube.force-ssl (Google
+// discovery: commentThreads.insert и comments.insert его требуют), экран Google, токен, D37Intent ('ytcmt'), запасные пути. Окно
+// комментариев (js/features/ytcomments.js) зовёт comment(id, текст, parent) по нажатию «Отправить» — сначала действие, потом разрешение:
+// текст — черновик этой вкладки (sessionStorage d37_ytc_draft, до 2000 знаков, только сам текст и id ролика), после экрана Google
+// отправляется сам ровно один раз (черновик забирается ДО запроса; вернётся в окно только при неудаче). commentThreads.insert /
+// comments.insert — 50 ед. Ключ комментария там, где у лайка id ролика, — 'c:<id>'. Читает окно через сервер сайта (/api/ytcomments),
+// токен человека для чтения не нужен. Наград за комментарий нет (III.F).
 (() => {
   'use strict';
   const root = typeof window !== 'undefined' ? window : globalThis;
@@ -43,15 +50,19 @@
   const REVOKE = 'https://oauth2.googleapis.com/revoke';
   const RE = /^[A-Za-z0-9_-]{11}$/, CID_RE = /^[\w-]{6,120}\.apps\.googleusercontent\.com$/;
   const TOK = 'd37_ytl_tok', ST = 'd37_ytl_state', NO = 'd37_ytl_no', LINK = 'd37_ytl_link', QUOTA = 'd37_ytl_quota';
-  const COST = { rate: 50, getRating: 1, subInsert: 50, subList: 1 };
-  const PATH = { rate: 'videos/rate', getRating: 'videos/getRating', subInsert: 'subscriptions', subList: 'subscriptions' };
+  const COST = { rate: 50, getRating: 1, subInsert: 50, subList: 1, cmtInsert: 50, replyInsert: 50 };
+  const PATH = { rate: 'videos/rate', getRating: 'videos/getRating', subInsert: 'subscriptions', subList: 'subscriptions', cmtInsert: 'commentThreads', replyInsert: 'comments' };
   // подписка: канал @Dan4ik37Yt; SUB — ключ подписки там, где у лайка id ролика (state, ответ Google, linkNext, paintId)
   const CHANNEL = 'UCztYAfPrieiG6kI93yE-Hdg', CH_URL = 'https://www.youtube.com/@Dan4ik37Yt', SUB = 'sub';
   // только свои кнопки (метка data-ytsub в разметке index.html и shorts.js), не любая ссылка с sub_confirmation=1: ссылка в чате
   // (/v/<id>?sub_confirmation=1, чужой канал) — обычная ссылка, нажатие на неё не подписывает (проверка 26.11). Откат — добавить
   // к правилу и ссылки, в адресе которых есть sub_confirmation=1 (как было до 27.11).
   const SUB_SEL = 'a[data-ytsub]';
-  const isKey = id => id === SUB || RE.test(String(id || ''));
+  // комментарий: ключ 'c:<id ролика>'; черновик — sessionStorage этой вкладки (переживает переход на экран Google и обратно)
+  const CMT_RE = /^c:[A-Za-z0-9_-]{11}$/, PARENT_RE = /^[A-Za-z0-9_-]{10,100}$/, DRAFT = 'd37_ytc_draft', MAXC = 2000;
+  const cmtKey = id => 'c:' + id;
+  const cmtUrl = (id, parent) => 'https://www.youtube.com/watch?v=' + encodeURIComponent(String(id || '')) + (parent ? '&lc=' + encodeURIComponent(String(parent)) : '');
+  const isKey = id => id === SUB || RE.test(String(id || '')) || CMT_RE.test(String(id || ''));
   const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(String(root.location?.hostname || ''));
   const ssGet = k => { try { return root.sessionStorage ? root.sessionStorage.getItem(k) : null; } catch (e) { return null; } };
   const ssSet = (k, v) => { try { if (!root.sessionStorage) return; if (v == null) root.sessionStorage.removeItem(k); else root.sessionStorage.setItem(k, String(v)); } catch (e) {} };
@@ -61,7 +72,9 @@
   const me = () => (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
   const role = () => (typeof currentRole !== 'undefined' ? currentRole : null);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const toast = t => { if (typeof xpToast === 'function') xpToast(t); else if (typeof gameToast === 'function') gameToast(t); };
+  // строка без ⚡ (xpToast 'plain'): ⚡ на сайте с XP выглядел бы как награда за лайк / подписку / комментарий (III.F)
+  const toast = t => { if (typeof xpToast === 'function') xpToast(t, 'plain'); else if (typeof gameToast === 'function') gameToast(t); };
+  const emit = (name, d) => { try { root.dispatchEvent(new root.CustomEvent(name, { detail: d })); } catch (e) {} };
 
   // ═══ Флаг (на localhost проверка может подменить его через window.__d37YtLikeTest — на сайте это не работает) ═══
   function cfg() {
@@ -157,14 +170,29 @@
   };
   const AGAIN_SUB = ' Нажми «Подписаться» ещё раз — откроется YouTube.';
   const AGAIN_GOOGLE_SUB = { expired: ' Нажми «Подписаться» ещё раз — Google спросит разрешение снова.', back: ' Нажми «Подписаться» ещё раз — снова откроется экран Google.' };
+  // те же причины — для комментария; текст не теряется (черновик вкладки, окно комментариев показывает его снова)
+  const LINE_CMT = {
+    inapp: 'Во встроенном браузере Google не даёт разрешение — комментарий пишется на самом YouTube. С сайта — открой его в Chrome или Safari.',
+    quota: 'Комментарии с сайта на сегодня закончились (лимит YouTube) — комментарий пишется на самом YouTube.',
+    denied: 'Без разрешения Google сайт не публикует комментарии — комментарий пишется на самом YouTube.',
+    channel: 'Этот аккаунт Google не может писать комментарии на YouTube (нет канала или не подтверждена почта) — комментарий пишется на самом YouTube.',
+    expired: 'Разрешение Google больше не действует — комментарий не опубликован.',
+    video: 'YouTube не принял комментарий (комментарии к ролику закрыты или текст отклонён) — комментарий пишется на самом YouTube.',
+    broken: 'Не получилось связаться с YouTube — комментарий не опубликован.',
+    back: 'Разрешение Google не дано — комментарий не опубликован.',
+  };
+  const AGAIN_CMT = ' Текст остался в окне — «Отправить» теперь откроет YouTube.';
+  const AGAIN_GOOGLE_CMT = { expired: ' Текст остался в окне — нажми «Отправить» ещё раз, Google спросит разрешение снова.', back: ' Текст остался в окне — нажми «Отправить» ещё раз, снова откроется экран Google.' };
+  const kindOf = id => id === SUB ? 'sub' : CMT_RE.test(String(id || '')) ? 'cmt' : 'like';
+  const TXT = { like: [LINE, AGAIN, AGAIN_GOOGLE], sub: [LINE_SUB, AGAIN_SUB, AGAIN_GOOGLE_SUB], cmt: [LINE_CMT, AGAIN_CMT, AGAIN_GOOGLE_CMT] };
   const said = new Map();
   function line(w, async, id) {
-    const sub = id === SUB;
-    const k = (sub ? 's:' : '') + w + (async ? '+' : '');
+    const kd = kindOf(id);
+    const k = kd + ':' + w + (async ? '+' : '');
     if (Date.now() - (said.get(k) || 0) < 10 * 60e3 && !async) return;   // без потока одинаковых строк
     said.set(k, Date.now());
-    const L = sub ? LINE_SUB : LINE;
-    toast((L[w] || L.broken) + (async ? ((sub ? AGAIN_GOOGLE_SUB : AGAIN_GOOGLE)[w] || (sub ? AGAIN_SUB : AGAIN)) : ''));
+    const [L, A, AG] = TXT[kd];
+    toast((L[w] || L.broken) + (async ? (AG[w] || A) : ''));
   }
   // «следующее нажатие на ЭТОТ ролик — ссылка на YouTube» (строка это пообещала, а вкладку открыть не дали): 'video' — до конца визита
   // (ролик лайк не даёт), 'broken' — одно нажатие. sessionStorage d37_ytl_link: { id: [причина, одноразово] }, не больше 50 роликов
@@ -187,10 +215,10 @@
   const stats = { rate: 0, getRating: 0, subInsert: 0, subList: 0, units: 0, errors: 0 };
   function classify(status, reason) {
     if (/quotaExceeded|dailyLimitExceeded/i.test(reason)) return 'quota';
-    if (/youtubeSignupRequired|emailNotVerified|subscriberNotFound|accountClosed|accountSuspended/i.test(reason)) return 'channel';
+    if (/youtubeSignupRequired|emailNotVerified|subscriberNotFound|accountClosed|accountSuspended|ineligibleAccount/i.test(reason)) return 'channel';
     if (status === 401) return 'expired';
     if (/insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(reason)) return 'denied';
-    if (status === 404 || /videoRatingDisabled|videoNotFound|videoPurchaseRequired|^forbidden$|subscriptionForbidden|publisherNotFound/.test(reason)) return 'video';
+    if (status === 404 || /videoRatingDisabled|videoNotFound|videoPurchaseRequired|^forbidden$|subscriptionForbidden|publisherNotFound|commentsDisabled|commentTextTooLong|parentCommentIsPrivate|operationNotSupported/.test(reason)) return 'video';
     return 'broken';
   }
   // name — ключ PATH / COST; body — JSON (subscriptions.insert)
@@ -221,11 +249,12 @@
     else if (w === 'expired') dropTok();
     else if (w === 'broken' && ++brokenN >= 2) { ssSet(NO, 'broken'); all = true; }
     if (w === 'video') linkNext(id, 'video', false);   // ролик лайк не даёт — дальше всегда ссылка
+    if (all) emit('d37:ytl', { why: why() });   // настоящий лайк больше недоступен — ❤ роликов на сайте снова (site-like.js, SITE_LIKE_VIDEO)
     paintId(id);
     if (o.silent) return;
     let opened = false;
     if (o.gesture && w !== 'back' && w !== 'expired' && isKey(id) && root.navigator?.userActivation?.isActive) {
-      const url = id === SUB ? CH_URL + '?sub_confirmation=1' : root.D37VLike ? root.D37VLike.url(id, !!o.s) : 'https://www.youtube.com/watch?v=' + id;
+      const url = id === SUB ? CH_URL + '?sub_confirmation=1' : CMT_RE.test(id) ? cmtUrl(id.slice(2), (draftGet(id.slice(2)) || {}).parent || '') : root.D37VLike ? root.D37VLike.url(id, !!o.s) : 'https://www.youtube.com/watch?v=' + id;
       try { opened = !!root.open(url, '_blank', 'noopener'); } catch (e) {}
     }
     // строка скажет «нажми ещё раз — откроется YouTube»: следующее нажатие на этот ролик (на «Подписаться») должно открыть ссылку
@@ -271,6 +300,7 @@
   }
   function paintId(id) {
     if (!doc) return;
+    if (CMT_RE.test(String(id || ''))) { emit('d37:ytcmt', { id: id.slice(2), busy: busy.has(id) }); return; }   // окно комментариев
     if (id === SUB) { doc.querySelectorAll(SUB_SEL).forEach(paintSub); return; }
     if (RE.test(String(id || ''))) doc.querySelectorAll('a[data-vlike]').forEach(a => { if (a.getAttribute('data-vlike') === id) paintBtn(a); });
   }
@@ -333,6 +363,31 @@
     })();
     toast(value === 'like' ? '👍 Лайк поставлен на YouTube' : 'Лайк на YouTube убран');
   }
+  // ═══ Комментарий: черновик вкладки и отправка ═══
+  function draftGet(id) {
+    const d = jget(DRAFT);
+    return d && RE.test(String(d.id || '')) && typeof d.text === 'string' && (!id || d.id === id) && Date.now() - (+d.at || 0) < 30 * 60e3 ? d : null;
+  }
+  function draftSet(d) { ssSet(DRAFT, d ? JSON.stringify({ id: d.id, parent: d.parent || '', text: String(d.text || '').slice(0, MAXC), at: +d.at || Date.now() }) : null); }
+  // commentThreads.insert (новый) / comments.insert (ответ), 50 ед.; черновик забирается ДО запроса — ровно одна отправка
+  async function postComment(key, o = {}) {
+    const id = key.slice(2), d = draftGet(id);
+    if (!d || !d.text.trim()) { emit('d37:ytcmt', { id, ok: false, why: 'empty' }); return; }
+    if (busy.has(key)) return;
+    busy.add(key); paintId(key);
+    draftSet(null);
+    let r;
+    try {
+      r = d.parent ? await api('replyInsert', 'POST', { part: 'snippet' }, { snippet: { parentId: d.parent, textOriginal: d.text } })
+        : await api('cmtInsert', 'POST', { part: 'snippet' }, { snippet: { channelId: CHANNEL, videoId: id, topLevelComment: { snippet: { textOriginal: d.text } } } });
+    } finally { busy.delete(key); }
+    if (!r.ok) { draftSet(d); fail(r.why, key, o); emit('d37:ytcmt', { id, parent: d.parent || '', ok: false, why: r.why }); return; }
+    brokenN = 0;
+    const c = d.parent ? r.j : r.j?.snippet?.topLevelComment, cs = c?.snippet || {};
+    emit('d37:ytcmt', { id, parent: d.parent || '', ok: true, item: { id: String(c?.id || ''), author: String(cs.authorDisplayName || ''), authorUrl: String(cs.authorChannelUrl || ''),
+      text: String(cs.textOriginal || cs.textDisplay || d.text), at: String(cs.publishedAt || new Date().toISOString()), likes: 0, replies: 0, mine: true } });
+    toast(d.parent ? '💬 Ответ опубликован на YouTube' : '💬 Комментарий опубликован на YouTube');
+  }
   const nonce = () => { const a = new Uint8Array(24); root.crypto.getRandomValues(a); return root.btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
   // подписка (id = SUB): уже подписан (list) — insert не зовём; insert ответил subscriptionDuplicate — тоже «подписан»
   async function subscribe(o = {}) {
@@ -359,6 +414,7 @@
     const n = nonce();
     ssSet(ST, JSON.stringify({ n, id, at: Date.now(), u: u ? u.id : '' }));
     if (id === SUB) await root.D37Intent.park('ytsub', { p: n }, { media: o.media || null });
+    else if (CMT_RE.test(id)) await root.D37Intent.park('ytcmt', { id: id.slice(2), p: n }, { media: o.media || null });
     else await root.D37Intent.park('ytlike', { id, s: !!o.s, p: n }, { media: o.media || null });
     const q = new URLSearchParams({ client_id: c.cid, redirect_uri: String(root.location.origin) + '/', response_type: 'token', scope: SCOPE, include_granted_scopes: 'true', state: 'ytl.' + n });
     root.D37YtLike._go(AUTH + '?' + q.toString());
@@ -402,6 +458,31 @@
     runSub({ gesture: true }).catch(() => fail('broken', SUB, {}));
     return true;
   }
+  // «Отправить» в окне комментариев: { ok: true, pending } — взято (гость — окно входа, нет разрешения — экран Google, есть — отправка);
+  // { ok: false, why } — нет: 'off' (окно покажет ссылку на YouTube), причина (строка), 'link' (обещанная ссылка открыта). Текст — черновик.
+  async function runCmt(key, o = {}) {
+    if (!me()) {   // гость (только 'on'): то же окно входа, после входа — resumed(…, 'cmt')
+      const d = draftGet(key.slice(2));
+      await root.D37Intent.need('ytcmt', { id: key.slice(2), parent: d?.parent || '', g: 1 }, { label: 'Войди — и комментарий уйдёт на YouTube сам' });
+      return;
+    }
+    if (token()) return postComment(key, o);
+    return permit(key, o);
+  }
+  function comment(id, text, parent) {
+    if (!RE.test(String(id || ''))) return { ok: false, why: 'bad' };
+    text = String(text || '').replace(/\r\n?/g, '\n').trim().slice(0, MAXC);
+    parent = PARENT_RE.test(String(parent || '')) ? String(parent) : '';
+    if (!text) return { ok: false, why: 'empty' };
+    const key = cmtKey(id), w = why();
+    draftSet({ id, parent, text, at: Date.now() });
+    if (w === 'off') return { ok: false, why: 'off' };
+    if (w) { line(w, false, key); return { ok: false, why: w }; }
+    if (busy.has(key)) return { ok: false, why: 'busy' };
+    if (linkTake(key)) { let opened = false; try { opened = !!root.open(cmtUrl(id, parent), '_blank', 'noopener'); } catch (e) {} return { ok: false, why: 'link', opened }; }
+    runCmt(key, { gesture: true }).catch(() => fail('broken', key, {}));
+    return { ok: true, pending: true };
+  }
 
   // после входа гостя / после экрана Google — D37Intent вернул на место и зовёт сюда.
   // args.p — задуманное отложено перед экраном Google (permit): лайк — только если этот же переход вернулся с ответом Google (ret.n === p);
@@ -410,13 +491,17 @@
   // args.g — задумано гостем до входа: сразу после его входа — экран разрешения (единственный переход на Google без нового нажатия).
   // sub — то же для подписки (D37Intent 'ytsub'): ключ SUB вместо id ролика, действие — subscribe()
   let consumed = false;
-  async function resumed(args, ctx = {}, sub = false) {
-    const id = sub ? SUB : RE.test(String(args?.id || '')) ? args.id : null;
+  // k: true — подписка (как раньше), 'cmt' — комментарий (ключ 'c:<id>', действие — postComment черновика)
+  async function resumed(args, ctx = {}, k = false) {
+    const sub = k === true, cmt = k === 'cmt';
+    const id = sub ? SUB : RE.test(String(args?.id || '')) ? (cmt ? cmtKey(args.id) : args.id) : null;
     if (!id) return {};
     args = args || {};
     const p = typeof args.p === 'string' && args.p ? args.p : null;
-    // «поставить», не «переключить»: стоявший лайк не снимется; подписка — только если ещё не подписан
-    const act = () => sub ? subscribe({}) : rate(id, 'like', { s: !!args.s });
+    // окно комментариев этого ролика — снова открыто (с черновиком): человек видит, что уходит и что ушло
+    if (cmt) { try { root.D37YtComments?.open?.(args.id, { resumed: true }); } catch (e) {} }
+    // «поставить», не «переключить»: стоявший лайк не снимется; подписка — только если ещё не подписан; комментарий — черновик, один раз
+    const act = () => sub ? subscribe({}) : cmt ? postComment(id, {}) : rate(id, 'like', { s: !!args.s });
     if (ret && ret.id === id && (!p || ret.n === p)) {
       const r = ret; ret = null; consumed = true;
       if (r.err) { fail(r.err === 'state' ? 'broken' : r.err, id, {}); return {}; }
@@ -425,7 +510,7 @@
     }
     if (p) { fail('back', id, {}); return {}; }
     const w = why();
-    if (w === 'off') { toast(sub ? 'Ты вошёл. Подписка на YouTube оформляется на самом YouTube.' + AGAIN_SUB : 'Ты вошёл. Лайк на YouTube ставится на самом YouTube.' + AGAIN); return {}; }
+    if (w === 'off') { toast(sub ? 'Ты вошёл. Подписка на YouTube оформляется на самом YouTube.' + AGAIN_SUB : cmt ? 'Ты вошёл. Комментарий пишется на самом YouTube.' + AGAIN_CMT : 'Ты вошёл. Лайк на YouTube ставится на самом YouTube.' + AGAIN); return {}; }
     if (w) { fail(w, id, {}); return {}; }
     if (token()) { await act(); return {}; }
     if (!args.g) { line('back', true, id); return {}; }   // не от входа гостя (старое задуманное) — без нажатия на Google не уводим
@@ -436,20 +521,21 @@
   function abandoned(e) {
     if (!e || !e.persisted || ret) return;
     const it = root.D37Intent?.pending?.();
-    if (!it || (it.kind !== 'ytlike' && it.kind !== 'ytsub') || !it.args?.p) return;
+    if (!it || (it.kind !== 'ytlike' && it.kind !== 'ytsub' && it.kind !== 'ytcmt') || !it.args?.p) return;
     root.D37Intent.clear?.();
     ssSet(ST, null);
-    fail('back', it.kind === 'ytsub' ? SUB : RE.test(String(it.args.id || '')) ? it.args.id : null, {});
+    const vid = RE.test(String(it.args.id || '')) ? it.args.id : null;
+    fail('back', it.kind === 'ytsub' ? SUB : it.kind === 'ytcmt' ? (vid ? cmtKey(vid) : null) : vid, {});
   }
   // ответ Google есть, а задуманное потерялось (прошло > 10 мин) — лайк всё равно ставим (место не восстанавливаем)
   async function orphan() {
     if (!ret || consumed || !me()) return;
     const it = root.D37Intent?.pending?.();
-    if (it && (it.kind === 'ytlike' || it.kind === 'ytsub')) return;
+    if (it && (it.kind === 'ytlike' || it.kind === 'ytsub' || it.kind === 'ytcmt')) return;
     await sleep(2500);
     if (!ret || consumed || root.D37Intent?.busy?.()) return;
     const r = ret; ret = null; consumed = true;
-    if (r.id) await resumed(r.id === SUB ? {} : { id: r.id }, {}, r.id === SUB).catch(() => {});
+    if (r.id) await resumed(r.id === SUB ? {} : { id: CMT_RE.test(r.id) ? r.id.slice(2) : r.id }, {}, r.id === SUB ? true : CMT_RE.test(r.id) ? 'cmt' : false).catch(() => {});
     else if (r.err) fail('broken', null, {});
   }
 
@@ -475,10 +561,13 @@ a[data-ytsub].ytl-busy{opacity:.6;pointer-events:none}`;
 
   root.D37YtLike = {
     SCOPE, CHANNEL, tap, tapSub, paint, why, revoke, mode: () => cfg().mode,
+    // комментарии (js/features/ytcomments.js): отправка, черновик вкладки, ссылка на YouTube, занято ли
+    comment, MAXC, cmtUrl, draft: id => draftGet(id), cmtBusy: id => busy.has(cmtKey(id)),
+    saveDraft: (id, text, parent) => { if (!RE.test(String(id || ''))) return; if (!String(text || '').trim()) { if (draftGet(id)) draftSet(null); return; } draftSet({ id, parent: PARENT_RE.test(String(parent || '')) ? parent : '', text, at: Date.now() }); },
     _go: url => { root.location.assign(url); },   // переход на Google (проверка может подменить)
-    _test: { cfg, token, rating, stats, classify, ptDay, ret: () => ret, resumed, abandoned, COST, subbed: () => subbed },
+    _test: { cfg, token, rating, stats, classify, ptDay, ret: () => ret, resumed, abandoned, COST, subbed: () => subbed, postComment },
   };
-  if (root.D37Intent?.on) { root.D37Intent.on('ytlike', resumed); root.D37Intent.on('ytsub', (a, c) => resumed(a, c, true)); }
+  if (root.D37Intent?.on) { root.D37Intent.on('ytlike', resumed); root.D37Intent.on('ytsub', (a, c) => resumed(a, c, true)); root.D37Intent.on('ytcmt', (a, c) => resumed(a, c, 'cmt')); }
   if (root.addEventListener) {
     root.addEventListener('pageshow', abandoned);
     // «▶ Подписаться на YouTube» — на всём документе и раньше обработчиков разделов (как «👍» в vlike.js); 'off' — не трогаем вовсе

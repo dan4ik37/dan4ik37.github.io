@@ -244,6 +244,10 @@
       "destination": "/api/pages?page=vstats"
     },
     {
+      "source": "/api/ytcomments",
+      "destination": "/api/pages?page=ytcomments"
+    },
+    {
       "source": "/history",
       "destination": "/api/pages?page=history"
     },

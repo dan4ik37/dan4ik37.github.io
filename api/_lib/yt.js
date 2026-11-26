@@ -196,6 +196,39 @@ export function getVideoLive(id) {
   });
 }
 
+// 💬 Комментарии с YouTube на сайте (/api/ytcomments, routes/ytcomments.js; владелец 26.11: «можно ли сделать комменты от ютуба»).
+// commentThreads.list (ролик, order=relevance, 20 веток, textFormat=plainText) и comments.list (ответы ветки по нажатию) — по 1 ед. квоты,
+// ключ сайта (не токен человека). Память инстанса — YTC_TTL_S на ролик / ветку (столько же держит CDN). Ответ — только нужные поля;
+// ссылка на автора — только на youtube.com. Ошибка YouTube → исключение с .reason (commentsDisabled, quotaExceeded…).
+export const YTC_TTL_S = 600;
+const YT_URL_RE = /^https?:\/\/(www\.)?youtube\.com\/[\w@%.\/-]{1,200}$/;
+function cmtOut(c, replies) {
+  const s = c?.snippet || {};
+  const url = String(s.authorChannelUrl || '');
+  return { id: String(c?.id || ''), author: String(s.authorDisplayName || '').slice(0, 100), authorUrl: YT_URL_RE.test(url) ? url.replace(/^http:/, 'https:') : '',
+    text: String(s.textDisplay || s.textOriginal || '').slice(0, 10000), likes: +s.likeCount || 0, at: String(s.publishedAt || ''), replies: +replies || 0 };
+}
+async function apiReason(path) {
+  const r = await fetch(API + path + '&key=' + KEY, { headers: { Referer: SITE + '/' } });
+  let j = null; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) { const e = new Error('YouTube API ' + r.status); e.status = r.status; e.reason = String(j?.error?.errors?.[0]?.reason || ''); throw e; }
+  return j || {};
+}
+export function getCommentThreads(videoId) {
+  return cached('ytc:' + videoId, YTC_TTL_S * 1000, async () => {
+    let d;
+    try { d = await apiReason(`commentThreads?part=snippet&videoId=${encodeURIComponent(videoId)}&order=relevance&maxResults=20&textFormat=plainText`); }
+    catch (e) { if (e.reason === 'commentsDisabled') return { disabled: true, items: [], at: new Date().toISOString() }; throw e; }
+    return { items: (d.items || []).map(t => cmtOut(t.snippet?.topLevelComment, t.snippet?.totalReplyCount)).filter(x => x.id && x.text), at: new Date().toISOString() };
+  });
+}
+export function getCommentReplies(parentId) {
+  return cached('ytr:' + parentId, YTC_TTL_S * 1000, async () => {
+    const d = await apiReason(`comments?part=snippet&parentId=${encodeURIComponent(parentId)}&maxResults=20&textFormat=plainText`);
+    return { items: (d.items || []).map(c => cmtOut(c, 0)).filter(x => x.id && x.text), at: new Date().toISOString() };
+  });
+}
+
 // Ролики про открытие кейсов / промокоды на депозит (GGDROP, CaseBattle…): у AdSense это «азартные игры» —
 // рекламу Google рядом показывать нельзя, иначе могут отклонить сайт или отключить показы.
 // «деп» отдельным словом: \b в JS — только для латиницы (у «деп» он не срабатывал никогда) — границы по кириллице руками, без

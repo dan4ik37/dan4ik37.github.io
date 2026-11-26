@@ -1196,6 +1196,9 @@ a.vtitle:hover{color:var(--text-hi);text-decoration:underline;text-decoration-co
 .modal-act:hover{background:rgba(var(--fg-rgb),.1)}
 .modal-act-yt{background:linear-gradient(135deg,#ff4040,#d90429);border-color:transparent;color:#fff}
 .modal-act-yt:hover{background:linear-gradient(135deg,#ff5555,#e0102f)}
+/* ytlike-3: «Страница видео» — тихая ссылка под рядом кнопок, не кнопка (меньше кнопок в ряду) */
+.modal-page{display:inline-block;margin-top:.55rem;font-size:.7rem;color:var(--muted);text-decoration:none}
+.modal-page:hover{color:var(--text-hi);text-decoration:underline}
 
 /* ═══════════════════════════════════════════════════════════════════
    SHORTS — ряд на главной и вертикальная лента (js/features/shorts.js)
@@ -1270,6 +1273,12 @@ body[data-route="shorts"] footer,body[data-route="shorts"] #donateFab,body[data-
 .sh-btn.sh-like small{line-height:1.2}
 .sh-btn .vl-mark{color:#9fe870}
 .sh-btn .vl-mark:empty{display:none}
+/* ytlike-3: «Подписаться на YouTube» — у самого Short в полосе кнопок (подпись над плеером .sh-info спрятана, пока ролик играет,
+   и подписка там была не видна); уже подписан (YouTube сказал — js/core/ytlike.js ставит ytl-on) — кнопки нет, меньше лишнего */
+.sh-btn.sh-subbtn{width:64px;text-align:center}
+.sh-btn.sh-subbtn span{color:#ff3b3b}
+.sh-btn.sh-subbtn small{line-height:1.2}
+.sh-side .sh-subbtn.ytl-on{display:none}
 /* Звук выключен — кнопка звука заметная, это главное действие */
 .sh-feed.is-muted .sh-sound{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
 body.high .sh-feed.is-muted .sh-item.is-active .sh-sound{animation:pillPulse 2s ease-out infinite;color:var(--ac-55)}
@@ -1293,6 +1302,10 @@ body.high .sh-feed.is-muted .sh-item.is-active .sh-sound{animation:pillPulse 2s 
   .sh-btn,.sh-btn.sh-like{flex-direction:row;width:auto;padding:.45rem .75rem;gap:.35rem;background:rgba(var(--fg-rgb),.08)}
   .sh-btn span{font-size:1.05rem}
   .sh-btn small br{display:none}
+  /* ytlike-3: на телефоне в полосе — только значки (подпись — в aria-label), кроме «Лайк на YouTube»: кнопок больше, ширина та же */
+  .sh-btn:not(.sh-like) small{display:none}
+  .sh-btn:not(.sh-like){padding:.45rem .6rem}
+  .sh-btn.sh-subbtn{width:auto}
   .sh-info{bottom:58px;padding-right:1rem}
   .sh-row-track{grid-auto-columns:minmax(130px,42vw)}
 }

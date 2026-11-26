@@ -14,6 +14,7 @@ import cps from './_lib/routes/cps.js';
 import about from './_lib/routes/about.js';
 import feed from './_lib/routes/feed.js';
 import vstats from './_lib/routes/vstats.js';     // 👍 «Лайк на YouTube»: свежие цифры одного ролика /api/vstats?id= (кэш 10 мин)
+import ytcomments from './_lib/routes/ytcomments.js';   // 💬 комментарии с YouTube /api/ytcomments?id=[&parent=] (ключ сайта, кэш 10 мин)
 import top from './_lib/routes/top.js';
 import quiz from './_lib/routes/quiz.js';
 import wheel from './_lib/routes/wheel.js';
@@ -35,7 +36,7 @@ import news from './_lib/routes/news.js';            // 📰 «Что новог
 import map from './_lib/routes/sitemap-page.js';     // /sitemap — карта сайта для людей (все разделы, открытые поиску)
 import { turnCred, extCheck } from './_lib/routes/ds2.js';   // T-167: пароли TURN Cloudflare /api/turn-cred (выключено без ключей) и проверка картинок сообществ /api/ext-check
 
-const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, vstats, top, quiz, wheel, random, typing, ugc,
+const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, vstats, ytcomments, top, quiz, wheel, random, typing, ugc,
   shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, forumping: forum, photo, map, news, turncred: turnCred, extcheck: extCheck, diag };   // raid — набеги
 
 export default function handler(req, res) {

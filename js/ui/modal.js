@@ -38,12 +38,11 @@ function closeAnyOpenModal(){
   if (authM && getComputedStyle(authM).display !== 'none') { closeGlobalAuth(); return true; }
   return false;
 }
-function openPrivacy(){
-  document.getElementById('privacyModal').classList.add('open');
-  trapModalFocus(document.getElementById('privacyModal'));
-}
+// Политика одна — страница /privacy (privacy.html); старого окна #privacyModal со старым текстом больше нет (ytlike-3, 27.11)
+function openPrivacy(){ location.href = '/privacy'; }
 function closePrivacy(){
-  document.getElementById('privacyModal').classList.remove('open');
+  const m = document.getElementById('privacyModal');
+  if (m) m.classList.remove('open');
   releaseModalFocus();
 }
 
@@ -88,12 +87,16 @@ function openVid(id,title,date,views,start){
     like.hidden = false;
     window.D37VLike?.paint(like.parentNode);
   }
+  // «💬 Комментарии» с YouTube — этого ролика; видно только 13+ (js/features/ytcomments.js; обложку по возрасту проверяет paint)
+  const cmt = document.getElementById('mCmt');
+  if (cmt) cmt.dataset.ytc = id;
   // Возраст (js/core/age.js): ролик не по возрасту — вместо плеера «обложка» (метка — по названию, как на /v/<id>)
   const va = window.D37Age?.video(title), box = document.getElementById('mVid');
   box.classList.remove('age-on');
   if (va) document.getElementById('mMeta').insertAdjacentHTML('afterbegin', D37Age.badge(va.age, { title: va.why }) + ' ');
   if (va && D37Age.cover(box, va.age, { why: va.why, compact: true, back: closeModal, onOpen: () => openVid(id, title, date, views, start) })) {
     if (like) like.hidden = true;   // ролик не по возрасту — и на YouTube за лайком не отправляем
+    window.D37YtComments?.paint(document.getElementById('modal'));   // и без «💬»
     document.getElementById('modal').classList.add('open'); document.body.style.overflow='hidden';
     trapModalFocus(document.getElementById('modal'));
     return;
@@ -103,6 +106,7 @@ function openVid(id,title,date,views,start){
   const st = Math.floor(+start || 0) > 0 ? '&start=' + Math.min(86400, Math.floor(+start)) : '';
   document.getElementById('mVid').innerHTML=`<iframe src="https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0&enablejsapi=1${st}&origin=${encodeURIComponent(location.origin)}" allowfullscreen allow="autoplay;encrypted-media"></iframe>`;
   if (typeof xpTrackIframe === 'function') xpTrackIframe(document.querySelector('#mVid iframe'), id, 60);
+  window.D37YtComments?.paint(document.getElementById('modal'));
   document.getElementById('modal').classList.add('open');document.body.style.overflow='hidden';
   trapModalFocus(document.getElementById('modal'));
 }

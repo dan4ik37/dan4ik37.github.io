@@ -351,6 +351,109 @@ const ev = () => { const e = { prevented: false, preventDefault() { e.prevented 
       ok(/Twitch и DonationAlerts/.test(p) && /Google AdSense/.test(p) && /3\. YouTube API и встроенные видео/.test(p), '/privacy: прежние разделы на месте');
     }
   }
+  // ═══ 8. Комментарий (ytlike-3): та же система — флаг, право, экран Google, D37Intent 'ytcmt', запасные пути; черновик вкладки;
+  //        отправка ровно одна; строка без ⚡ (xpToast 'plain') ═══
+  {
+    const tokn = 'ya29.TESTONLY_abcdefghijklmnop', V = 'dQw4w9WgXcQ', TH = 'UgxThreadId0001';
+    const tick = () => new Promise(r => setTimeout(r, 20));
+    const mk = (o = {}) => {
+      const YT = { insert: o.insert || 'ok' };
+      const L = load({ host: '127.0.0.1', test: { mode: o.mode || 'on', cid: CID }, ss: o.ss, ytHash: o.ytHash, user: o.user === undefined ? { id: 'u1' } : o.user, roleName: o.roleName || 'admin' });
+      L.toasts = []; L.kinds = []; L.w.xpToast = (t, k) => { L.toasts.push(t); L.kinds.push(k); }; L.parked = []; L.needed = []; L.calls = []; L.opened = [];
+      L.w.open = u => { L.opened.push(u); return {}; };
+      L.w.navigator.userActivation = { isActive: false };
+      if (o.kid) L.w.D37Age = { kid: () => true };
+      L.w.D37Intent.park = async (k, a) => { L.parked.push([k, a]); return true; };
+      L.w.D37Intent.need = async (k, a, x) => { L.needed.push([k, a, x]); return false; };
+      L.w.fetch = async (u, opt = {}) => {
+        u = String(u); L.calls.push([opt.method, u, opt.body || '', String(opt.headers?.Authorization || '')]);
+        const j = (b, s = 200) => ({ ok: s < 300, status: s, json: async () => b });
+        if (/\/youtube\/v3\/(commentThreads|comments)\?/.test(u) && opt.method === 'POST') {
+          if (YT.insert === 'quota') return j({ error: { errors: [{ reason: 'quotaExceeded' }] } }, 403);
+          if (YT.insert === 'disabled') return j({ error: { errors: [{ reason: 'commentsDisabled' }] } }, 403);
+          const b = JSON.parse(opt.body);
+          if (u.includes('/commentThreads?')) return j({ id: 'UgxNew', snippet: { videoId: b.snippet.videoId, topLevelComment: { id: 'UgxNew', snippet: { authorDisplayName: '@me', textOriginal: b.snippet.topLevelComment.snippet.textOriginal, publishedAt: new Date().toISOString() } } } });
+          return j({ id: TH + '.rep1', snippet: { parentId: b.snippet.parentId, authorDisplayName: '@me', textOriginal: b.snippet.textOriginal } });
+        }
+        return j({}, 204);
+      };
+      return L;
+    };
+    const tokSS = () => { const s = store(); s.setItem('d37_ytl_tok', JSON.stringify({ t: tokn, exp: Date.now() + 3e6, u: 'u1', at: Date.now() - 30 * 60e3 })); return s; };
+    const posts = L => L.calls.filter(c => c[0] === 'POST' && /\/youtube\/v3\/(commentThreads|comments)\?/.test(c[1]));
+    {
+      const { Y } = load();
+      const c = Y._test.classify;
+      ok(c(403, 'commentsDisabled') === 'video' && c(403, 'ineligibleAccount') === 'channel' && c(400, 'commentTextTooLong') === 'video', 'комментарий: «комментарии закрыты» / «аккаунт не может» / «текст длинный» — свои причины');
+      ok(Y._test.COST.cmtInsert === 50 && Y._test.COST.replyInsert === 50, 'цена: commentThreads.insert и comments.insert — 50');
+      ok(Y.MAXC === 2000 && typeof Y.comment === 'function' && /watch\?v=dQw4w9WgXcQ&lc=Ugx/.test(Y.cmtUrl(V, 'UgxAbc12345')), 'comment(), предел 2000, ссылка «Ответить на YouTube» ведёт на ветку (lc=)');
+    }
+    {
+      const L = mk();
+      const r = L.Y.comment(V, '  Привет из сайта  ');
+      await tick();
+      const st = JSON.parse(L.w.sessionStorage.getItem('d37_ytl_state') || 'null');
+      const d = JSON.parse(L.w.sessionStorage.getItem('d37_ytc_draft') || 'null');
+      ok(r.ok && L.parked.length === 1 && L.parked[0][0] === 'ytcmt' && L.parked[0][1].id === V && L.parked[0][1].p === st?.n && st?.id === 'c:' + V, 'нет разрешения: отложено ytcmt (ролик, метка), state c:<id>', { parked: L.parked, st });
+      ok(String(L.w.went || '').startsWith('https://accounts.google.com/') && String(L.w.went).includes(encodeURIComponent(SCOPE)) && !posts(L).length, 'тот же экран Google с тем же правом, без записи на YouTube', L.w.went);
+      ok(d && d.id === V && d.text === 'Привет из сайта' && !L.w.localStorage.getItem('d37_ytc_draft'), 'текст — черновик ЭТОЙ вкладки (sessionStorage), не localStorage', d);
+    }
+    {
+      const L = mk({ user: null, roleName: null });
+      ok(L.Y.comment(V, 'гость пишет').ok === true, "гость ('on'): «Отправить» берётся");
+      await tick();
+      ok(L.needed.length === 1 && L.needed[0][0] === 'ytcmt' && L.needed[0][1].id === V && L.needed[0][1].g === 1 && /комментарий/.test(L.needed[0][2]?.label || ''), 'гость → то же окно входа D37Intent.need(ytcmt)', L.needed);
+    }
+    {
+      const L = mk({ ss: tokSS() });
+      ok(L.Y.comment(V, 'Первый!').ok === true, 'есть разрешение: «Отправить» берётся');
+      await tick(); await tick();
+      const p = posts(L);
+      const b = p[0] && JSON.parse(p[0][2]);
+      ok(p.length === 1 && /\/commentThreads\?part=snippet$/.test(p[0][1]) && b.snippet.videoId === V && b.snippet.topLevelComment.snippet.textOriginal === 'Первый!' && p[0][3] === 'Bearer ' + tokn, 'commentThreads.insert ровно один раз: этот ролик, этот текст, токен в заголовке', p);
+      ok(!L.w.sessionStorage.getItem('d37_ytc_draft') && L.toasts.some(t => /Комментарий опубликован на YouTube/.test(t)) && L.kinds.every(k => k === 'plain'), 'черновик забран, строка «опубликован на YouTube» без ⚡', { t: L.toasts, k: L.kinds });
+      L.Y.comment(V, 'Ответ', TH); await tick(); await tick();
+      const p2 = posts(L);
+      ok(p2.length === 2 && /\/comments\?part=snippet$/.test(p2[1][1]) && JSON.parse(p2[1][2]).snippet.parentId === TH, 'ответ — comments.insert с parentId ветки', p2[1]);
+    }
+    {
+      const n = 'cmtnonce1234567890';
+      const ss = store(); ss.setItem('d37_ytl_state', JSON.stringify({ n, id: 'c:' + V, at: Date.now(), u: 'u1' }));
+      ss.setItem('d37_ytc_draft', JSON.stringify({ id: V, parent: '', text: 'после Google', at: Date.now() }));
+      const L = mk({ ss, ytHash: `#state=ytl.${n}&access_token=${tokn}&expires_in=3599&scope=${encodeURIComponent(SCOPE)}` });
+      await L.Y._test.resumed({ id: V, p: n }, {}, 'cmt');
+      await L.Y._test.resumed({ id: V, p: n }, {}, 'cmt');
+      const p = posts(L);
+      ok(p.length === 1 && JSON.parse(p[0][2]).snippet.topLevelComment.snippet.textOriginal === 'после Google', 'после экрана Google — черновик отправлен сам, ровно один раз (повтор не шлёт)', p);
+    }
+    {
+      const n = 'cmtnonce1234567890';
+      const ss = store(); ss.setItem('d37_ytl_state', JSON.stringify({ n, id: 'c:' + V, at: Date.now(), u: 'u1' }));
+      ss.setItem('d37_ytc_draft', JSON.stringify({ id: V, parent: '', text: 'отказ', at: Date.now() }));
+      const L = mk({ ss, ytHash: `#error=access_denied&state=ytl.${n}` });
+      await L.Y._test.resumed({ id: V, p: n }, {}, 'cmt');
+      ok(!posts(L).length && L.Y.why() === 'denied' && L.toasts.some(t => /не публикует комментарии/.test(t)) && JSON.parse(L.w.sessionStorage.getItem('d37_ytc_draft') || '{}').text === 'отказ', 'отказ на экране Google: не отправлено, строка, текст цел, дальше ссылка', L.toasts);
+    }
+    {
+      const L = mk({ ss: tokSS(), insert: 'quota' });
+      L.Y.comment(V, 'квота'); await tick(); await tick();
+      ok(L.Y.why() === 'quota' && L.toasts.some(t => /Комментарии с сайта на сегодня закончились/.test(t)) && JSON.parse(L.w.sessionStorage.getItem('d37_ytc_draft') || '{}').text === 'квота', 'квота: строка, текст вернулся в черновик', L.toasts);
+      ok(L.Y.comment(V, 'ещё').ok === false && posts(L).length === 1, 'квота: дальше не пишем (окно покажет ссылку)');
+    }
+    {
+      const L = mk({ ss: tokSS(), insert: 'disabled' });
+      L.Y.comment(V, 'закрыто'); await tick(); await tick();
+      ok(L.toasts.some(t => /комментарии к ролику закрыты/.test(t) && /«Отправить» теперь откроет YouTube/.test(t)), 'комментарии закрыты: строка обещает ссылку', L.toasts);
+      const r = L.Y.comment(V, 'закрыто');
+      ok(r.why === 'link' && L.opened.length === 1 && /youtube\.com\/watch\?v=/.test(L.opened[0]) && posts(L).length === 1, 'следующее «Отправить» — ссылка на YouTube, insert больше не зовём', { r, o: L.opened });
+    }
+    {
+      const L = mk({ mode: 'test', roleName: 'user' });
+      ok(L.Y.comment(V, 'не админ').why === 'off' && !L.calls.length && !L.parked.length, "'test', не админ: не пишем (окно — ссылка «Написать на YouTube»)");
+      const K = mk({ kid: true, ss: tokSS() });
+      ok(K.Y.comment(V, 'ребёнок').why === 'off' && !K.calls.length, 'до 13 (D37Age.kid): не пишем');
+    }
+  }
   // ═══ 7. D37Intent.park принадлежит вкладке: новая вкладка (свой sessionStorage) его не видит и никуда не уводит ═══
   {
     const ls = store(), tabA = store(), tabB = store();

@@ -27,7 +27,7 @@ function fromSnapshot(id) {
 }
 
 // Ролик этого канала и не спрятан (кейсы/депозит — yt.js hiddenVideo)? Снимок — без сети; новее снимка — загрузки (память 1 ч)
-async function ownVideo(id) {
+export async function ownVideo(id) {   // и для /api/ytcomments (routes/ytcomments.js)
   const snap = snapshotById(id);
   if (snap) return !hiddenVideo(id, snap.title);
   let list = [];

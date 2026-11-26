@@ -32,8 +32,18 @@
 //  (subtest) 'test': гость — ссылка; админ, уже подписан — «✓» по list без insert и без экрана Google; не админ — ссылка;
 //  (subfall) отказ на экране Google / квота / YouTube отказал (свой канал, лимит) / встроенный браузер → строка, дальше ссылка;
 //  (sublook) 390×844, 800×600, 1920×1080, 3440×1440 × тёмная / светлая: «✓ Ты подписан» на главной, в окне ролика, в Shorts.
+//  КОММЕНТАРИИ И МЕНЬШЕ КНОПОК (ytlike-3, 26.11: «можно ли сделать комменты от ютуба и убрать лишнее… кнопка «Нравится» лишняя»):
+//  (onelike) 'test': админ (настоящий лайк работает) в Shorts и окне ролика — ОДНА кнопка лайка (YouTube), ❤ сайта нет; не админ — ❤ и
+//            ссылка как раньше; телефон 390×844 тёмная и 1920×1080 светлая;
+//  (cmt)     'on', админ: «💬» у играющего Short → окно комментариев этого Short (подделанный /api/ytcomments), текст с YouTube — только
+//            текстом, ответы по нажатию; ответ уходит ровно один раз (comments.insert с parentId), новый — commentThreads.insert с id
+//            этого ролика; без разрешения в окне ролика: «Отправить» → экран Google → тот же ролик, окно комментариев снова открыто →
+//            отправлено само ровно один раз;
+//  (cmtage)  возраст не указан и до 13 → «💬» нет ни в Shorts, ни в окне ролика; 13+ — есть;
+//  (cmtfall) отказ на экране Google / квота / встроенный браузер / не админ в 'test' → вместо поля ссылка «Написать на YouTube»;
+//  (cmtlook) окно комментариев: 390×844, 800×600, 1920×1080, 3440×1440 × тёмная / светлая — целиком на экране, ошибок нет.
 // Запуск из корня сайта: node scripts/ytlike-e2e.cjs   (CHROME=…, PYTHON=…, BASE=…, SHOTS=<папка>,
-//   ONLY=off,shorts,video,deny,quota,inapp,look,card,back,newtab,r401,slow403,net2,sub,subtest,subchat,subfall,sublook)
+//   ONLY=off,shorts,video,deny,quota,inapp,look,card,back,newtab,r401,slow403,net2,sub,subtest,subchat,subfall,sublook,onelike,cmt,cmtage,cmtfall,cmtlook)
 const H = require('./auth-social-e2e.cjs');
 const { startSite, chrome, newGoogleUser, newProfile, READY, SIGNED, VISIBLE, FEED, SB, ME, V, V2, V3 } = H;
 const ONLY = new Set((process.env.ONLY || '').split(',').filter(Boolean));
@@ -56,9 +66,19 @@ const CORS = [{ name: 'Access-Control-Allow-Origin', value: '*' }, { name: 'Acce
 function mockGoogle(G) {
   G.J = []; G.liked = G.liked || new Set(); G.sbAuthorize = [];
   return {
-    patterns: ['https://accounts.google.com/*', 'https://www.googleapis.com/*', 'https://oauth2.googleapis.com/*'],
+    patterns: ['https://accounts.google.com/*', 'https://www.googleapis.com/*', 'https://oauth2.googleapis.com/*', '*/api/ytcomments*'],
     answer(req) {
       const u = new URL(req.url);
+      // сервер сайта /api/ytcomments (ключ сайта): ветки ролика или ответы ветки — подделка; G.J: ['ytc', id, parent]
+      if (u.pathname === '/api/ytcomments') {
+        const id = u.searchParams.get('id'), parent = u.searchParams.get('parent') || '';
+        G.J.push(['ytc', id, parent]);
+        const ok200 = b => ({ code: 200, body: JSON.stringify(b), headers: [{ name: 'Content-Type', value: 'application/json' }] });
+        if (parent) return ok200({ id, parent, at: new Date().toISOString(), items: [{ id: parent + '.r1', author: '@answer', authorUrl: 'https://www.youtube.com/@answer', text: 'ответ из YouTube', likes: 1, at: new Date(Date.now() - 6e5).toISOString(), replies: 0 }] });
+        return ok200({ id, parent: '', at: new Date().toISOString(), items: [
+          { id: 'UgxThreadOne01', author: '@viewer_one', authorUrl: 'https://www.youtube.com/@viewer_one', text: 'Классно! <b id="xssb">жирный?</b> <img src=x onerror="window.__xss=1">', likes: 12, at: new Date(Date.now() - 864e5).toISOString(), replies: 1 },
+          { id: 'UgxThreadTwo02', author: '@viewer_two', authorUrl: 'javascript:alert(1)', text: 'второй\nв две строки', likes: 0, at: new Date(Date.now() - 3600e3).toISOString(), replies: 0 }] });
+      }
       if (req.url.startsWith(SB + '/auth/v1/authorize')) { G.sbAuthorize.push(Object.fromEntries(u.searchParams)); return null; }   // журнал входа; ответ — поддельный Supabase
       const json = (b, code = 200) => ({ code, body: b === undefined ? '' : JSON.stringify(b), headers: [...CORS, { name: 'Content-Type', value: 'application/json' }] });
       if (u.host === 'accounts.google.com') {
@@ -72,7 +92,7 @@ function mockGoogle(G) {
           : `state=${st}&access_token=${TOKEN}&token_type=Bearer&expires_in=3599&scope=${encodeURIComponent((G.answer === 'noscope' ? '' : SCOPE + ' ') + 'openid https://www.googleapis.com/auth/userinfo.email')}`;
         return { code: 302, body: '', headers: [{ name: 'Location', value: q.redirect_uri + '#' + frag }] };
       }
-      if (!(u.host === 'oauth2.googleapis.com' || (u.host === 'www.googleapis.com' && /^\/youtube\/v3\/(videos\/(rate|getRating)|subscriptions)$/.test(u.pathname)))) return null;   // остальное — как в стенде
+      if (!(u.host === 'oauth2.googleapis.com' || (u.host === 'www.googleapis.com' && /^\/youtube\/v3\/(videos\/(rate|getRating)|subscriptions|commentThreads|comments)$/.test(u.pathname)))) return null;   // остальное — как в стенде
       if (req.method === 'OPTIONS') return { code: 204, body: '', headers: CORS };
       const auth = String(req.headers?.Authorization || req.headers?.authorization || '');
       // подписка (ytlike-2): subscriptions.list (mine, forChannelId) и subscriptions.insert; G.subbed — подписан ли «аккаунт YouTube»,
@@ -92,6 +112,17 @@ function mockGoogle(G) {
         if (G.subbed) return json({ error: { code: 400, errors: [{ domain: 'youtube.subscription', reason: 'subscriptionDuplicate' }] } }, 400);
         G.subbed = true;
         return json({ kind: 'youtube#subscription', id: 'sub-test-1', snippet: { resourceId: body?.snippet?.resourceId || null } });
+      }
+      // комментарий (ytlike-3): commentThreads.insert / comments.insert; G.cmt: 'quota' — ответ квоты
+      if (u.host === 'www.googleapis.com' && (u.pathname === '/youtube/v3/commentThreads' || u.pathname === '/youtube/v3/comments')) {
+        const okA = auth === 'Bearer ' + TOKEN;
+        let body = null; try { body = JSON.parse(req.postData || 'null'); } catch (e) {}
+        G.J.push([u.pathname.endsWith('/comments') ? 'replyInsert' : 'cmtInsert', body, okA, req.method]);
+        if (!okA) return json({ error: { code: 401, errors: [{ reason: 'authError' }] } }, 401);
+        if (G.cmt === 'quota') return json({ error: { code: 403, errors: [{ domain: 'youtube.quota', reason: 'quotaExceeded' }] } }, 403);
+        const sn = { authorDisplayName: '@tester', authorChannelUrl: 'http://www.youtube.com/@tester', publishedAt: new Date().toISOString() };
+        if (u.pathname.endsWith('/comments')) return json({ id: body?.snippet?.parentId + '.mine', snippet: { ...sn, parentId: body?.snippet?.parentId, textOriginal: body?.snippet?.textOriginal } });
+        return json({ id: 'UgxMine000001', snippet: { videoId: body?.snippet?.videoId, topLevelComment: { id: 'UgxMine000001', snippet: { ...sn, textOriginal: body?.snippet?.topLevelComment?.snippet?.textOriginal } } } });
       }
       if (u.host === 'www.googleapis.com' && u.pathname === '/youtube/v3/videos/rate') {
         G.J.push(['rate', u.searchParams.get('id'), u.searchParams.get('rating'), auth === 'Bearer ' + TOKEN, req.method]);
@@ -741,14 +772,224 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
           ok(r1 && r1.w > 40 && r1.l >= 0 && r1.r <= r1.iw + 1 && await c.ev(noOverflow), `${w}×${h} ${theme}: в окне ролика целиком на экране`, r1);
           await c.shot(`ytsub-look-modal-${w}x${h}-${theme}`);
           await c.ev(`closeModal(); D37Route.go('#/shorts/${V2}'); true`, true);
-          const ssel = `.sh-item[data-id="${V2}"] .sh-sub`;
-          ok(await c.until(SUBBED(ssel), 12000), `${w}×${h} ${theme}: Shorts — «✓ Ты подписан»`, await c.ev(subTxt(ssel)));
+          // ytlike-3 (проверщик 26.11: «подписка у играющего Short невидима, проверка читала только текст»): кнопка подписки — в полосе
+          // кнопок Short; уже подписан — её там нет (меньше лишнего), «✓ Ты подписан» — на последней карточке ленты, и она ВИДНА
+          const ssel = `.sh-item[data-id="${V2}"] .sh-subbtn`, esel = '.sh-end .yt-sub';
+          ok(await c.until(SUBBED(ssel), 12000) && !(await c.ev(VISIBLE(ssel))), `${w}×${h} ${theme}: Shorts — подписан: кнопки подписки у Short нет`, await c.ev(subTxt(ssel)));
+          await c.ev(`document.querySelector('.sh-end').scrollIntoView({ block: 'start' }); true`);
+          ok(await c.until(SUBBED(esel), 5000) && await c.until(VISIBLE(esel), 5000), `${w}×${h} ${theme}: Shorts — «✓ Ты подписан» на последней карточке, видно`, await c.ev(subTxt(esel)));
           ok(await c.ev(noOverflow), `${w}×${h} ${theme}: Shorts вбок не прокручиваются`);
           await c.shot(`ytsub-look-shorts-${w}x${h}-${theme}`);
           ok(G.J.filter(x => x[0] === 'subList').length === 1 && !G.J.some(x => x[0] === 'subInsert'), `${w}×${h} ${theme}: subscriptions.list один раз на визит, insert нет`, G.J.map(x => x[0]));
           ok(!c.errs.length, `${w}×${h} ${theme}: ошибок в консоли нет`, c.errs);
         } finally { await c.close(); }
       }
+    }
+
+    // ═══ ytlike-3: одна кнопка лайка и комментарии с YouTube ═══
+    // возраст в браузере (гость указал год; после входа почтой он переносится в аккаунт — age_set подделан)
+    const AGE = y => `try{localStorage.setItem('d37_age', JSON.stringify({ y: ${y}, s: 'g' }))}catch(e){}`;
+    const ADULT = AGE(new Date().getFullYear() - 30), KID = AGE(new Date().getFullYear() - 10);
+    const TOK = (agoMs = 30 * 60e3) => `try{sessionStorage.setItem('d37_ytl_tok', JSON.stringify({ t: ${JSON.stringify(TOKEN)}, exp: Date.now() + 3e6, u: ${JSON.stringify(ME)}, at: Date.now() - ${agoMs} }))}catch(e){}`;
+    const SHB = `.sh-item[data-id="${V2}"]`;
+    const PANEL = `(() => { const p = document.getElementById('ytcPanel'); if (!p || p.hidden) return null; const s = p.querySelector('.ytc-sheet').getBoundingClientRect();
+      return { items: [...p.querySelectorAll('.ytc-list > .ytc-it')].map(x => ({ cid: x.dataset.cid, au: x.querySelector('.ytc-au')?.textContent, href: x.querySelector('a.ytc-au')?.getAttribute('href') || null, txt: x.querySelector('.ytc-txt')?.textContent })),
+        compose: !p.querySelector('.ytc-compose').hidden, ytw: p.querySelector('.ytc-ytw').hidden ? null : p.querySelector('.ytc-ytw').getAttribute('href'), note: p.querySelector('.ytc-note')?.textContent || '',
+        src: p.querySelector('.ytc-src')?.textContent || '', xssEl: !!document.getElementById('xssb') || !!window.__xss, l: s.left, r: s.right, t: s.top, b: s.bottom, iw: innerWidth, ih: innerHeight }; })()`;
+    const SEND = text => `(() => { const p = document.getElementById('ytcPanel'); const ta = p.querySelector('.ytc-ta'); ta.value = ${JSON.stringify(text)}; ta.dispatchEvent(new Event('input')); p.querySelector('.ytc-send').click(); return true; })()`;
+    const playingSideBtns = sel => `[...document.querySelectorAll(${JSON.stringify(sel + ' .sh-side a, ' + sel + ' .sh-side button')})].filter(${'e => { const r = e.getBoundingClientRect(); if (!e.getClientRects().length || r.width < 2) return false; for (let x = e; x && x.nodeType === 1; x = x.parentElement) { const c = getComputedStyle(x); if (c.display === "none" || c.visibility === "hidden") return false; } return true; }'}).map(e => e.className)`;
+
+    // (onelike) 'test': админ — одна кнопка лайка (YouTube); не админ — ❤ сайта и ссылка как раньше
+    if (want('onelike')) for (const [w, h, ph, theme] of [[390, 844, true, 'dark'], [1920, 1080, false, 'light']]) for (const role of ['admin', 'user']) {
+      console.log(`— одна кнопка лайка ('test', ${role}), ${w}×${h} ${theme}`);
+      const G = { answer: 'grant' }, X = mockGoogle(G);
+      const { user, profile } = oldUser(role);
+      const c = await chrome({ w, h, phone: ph, theme, S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('test') + ADULT + (role === 'admin' ? TOK() : '') });
+      try {
+        await c.send('Page.navigate', { url: B + '/#/shorts/' + V2 });
+        await c.until(READY);
+        ok(await signedIn(c), `${role}: вход`);
+        ok(await c.until(`!!document.querySelector('${SHB}.is-active')`, 10000), `${role}: Short играет`);
+        await sleep(1200);
+        const why = await c.ev(`D37YtLike.why()`);
+        const btns = await c.ev(playingSideBtns(SHB));
+        if (role === 'admin') {
+          ok(why === null, 'админ в test: настоящий лайк работает (why = null)', why);
+          ok(btns.some(x => /sh-like/.test(x)) && !btns.some(x => /sl-btn/.test(x)), 'Shorts: одна кнопка лайка — «👍 Лайк на YouTube», ❤ сайта нет', btns);
+        } else {
+          ok(why === 'off', "не админ в 'test': настоящего лайка нет (why = 'off')", why);
+          ok(btns.some(x => /sh-like/.test(x)) && btns.some(x => /sl-btn/.test(x)), 'Shorts: ❤ «Нравится» на месте и «👍 Лайк на YouTube» — как раньше', btns);
+          const t = await c.ev(TAP(`${SHB} .sh-like`), true);
+          ok(t && t.prevented === false && /youtube\.com\/shorts\//.test(t.href), 'не админ: 👍 — ссылка на YouTube, как раньше', t);
+        }
+        ok(btns.some(x => /ytc-btn/.test(x)) && btns.some(x => /sh-subbtn/.test(x)), 'Shorts: «💬» (13+) и «▶ Подписаться» видны у играющего Short', btns);
+        ok(await c.ev(noOverflow), 'Shorts вбок не прокручиваются');
+        await c.shot(`ytl3-onelike-shorts-${role}-${w}x${h}-${theme}`);
+        await c.ev(`D37Route.go('#/home'); true`, true); await sleep(900);
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+        await sleep(1200);
+        const heart = await c.ev(VISIBLE('#mHeart'));
+        ok(role === 'admin' ? !heart : heart, role === 'admin' ? 'окно ролика: ❤ сайта нет — лайк один, YouTube' : 'окно ролика: ❤ сайта на месте', heart);
+        ok(await c.ev(VISIBLE('#mLike')) && await c.ev(VISIBLE('#mCmt')) && await c.ev(VISIBLE('#modal .modal-act-yt')) && await c.ev(VISIBLE('#mShare')), 'окно ролика: «Подписаться», «👍 Лайк на YouTube», «💬 Комментарии», «Поделиться»');
+        ok(!(await c.ev(`!!document.getElementById('mPage')?.classList.contains('modal-act')`)) && await c.ev(VISIBLE('#mPage')), '«Страница видео» — тихая ссылка под рядом, не кнопка');
+        await c.shot(`ytl3-onelike-modal-${role}-${w}x${h}-${theme}`);
+        ok(!c.errs.length, 'ошибок в консоли нет', c.errs);
+      } finally { await c.close(); }
+    }
+
+    // (cmt) 'on', админ: «💬» → комментарии этого Short → ответ ровно один раз; окно ролика без разрешения → Google → само
+    if (want('cmt')) {
+      console.log('— комментарии: Shorts (есть разрешение), телефон, тёмная');
+      {
+        const G = { answer: 'grant' }, X = mockGoogle(G);
+        const { user, profile } = oldUser('admin');
+        const c = await chrome({ w: 390, h: 844, phone: true, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') + ADULT + TOK() });
+        try {
+          await c.send('Page.navigate', { url: B + '/#/shorts/' + V2 });
+          await c.until(READY);
+          ok(await signedIn(c), 'вход (админ)');
+          ok(await c.until(VISIBLE(`${SHB} .ytc-btn`), 10000), '«💬» у играющего Short видна');
+          await c.click(`${SHB} .ytc-btn`);
+          ok(await c.until(`(${PANEL})?.items?.length === 2`, 8000), 'окно комментариев открыто, 2 ветки');
+          const p = await c.ev(PANEL);
+          ok(G.J.some(x => x[0] === 'ytc' && x[1] === V2 && !x[2]), 'читаем комментарии ЭТОГО Short через сервер сайта (/api/ytcomments?id=…)', G.J.filter(x => x[0] === 'ytc'));
+          ok(p.items[0].txt.includes('<b id="xssb">') && !p.xssEl, 'текст с YouTube — только текстом (разметка не исполнилась)', p.items[0]);
+          ok(p.items[0].href === 'https://www.youtube.com/@viewer_one' && p.items[1].href === null, 'ссылка — только имя автора на youtube.com (javascript: — не ссылка)', p.items);
+          ok(p.compose && /опубликуется на YouTube под именем твоего аккаунта YouTube/i.test(p.note) && /Комментарии с YouTube · обновлено/.test(p.src), 'поле: «опубликуется на YouTube под именем твоего аккаунта YouTube»; подпись «Комментарии с YouTube · обновлено …»', p);
+          ok(p.b <= p.ih + 1 && p.l >= 0 && p.r <= p.iw + 1, 'окно целиком на экране телефона', p);
+          await c.shot('ytl3-cmt-shorts-open');
+          await c.ev(`document.querySelector('#ytcPanel .ytc-more').click(); true`, true);
+          ok(await c.until(`[...document.querySelectorAll('#ytcPanel .ytc-rep .ytc-txt')].some(e => e.textContent === 'ответ из YouTube')`, 6000) && G.J.some(x => x[0] === 'ytc' && x[2] === 'UgxThreadOne01'), 'ответы — по нажатию (parent=ветка)');
+          await c.ev(`document.querySelector('#ytcPanel .ytc-list > .ytc-it .ytc-reply').click(); true`, true);
+          await c.ev(SEND('Согласен!'), true);
+          ok(await c.until(`[...document.querySelectorAll('#ytcPanel .ytc-mine .ytc-txt')].some(e => e.textContent === 'Согласен!')`, 8000), 'ответ появился в окне («твой»)');
+          await sleep(800);
+          const rep = G.J.filter(x => x[0] === 'replyInsert');
+          ok(rep.length === 1 && rep[0][1]?.snippet?.parentId === 'UgxThreadOne01' && rep[0][1]?.snippet?.textOriginal === 'Согласен!' && rep[0][2] === true && !G.J.some(x => x[0] === 'cmtInsert'), 'comments.insert ровно один раз: ветка, текст, токен', rep);
+          ok(/Ответ опубликован на YouTube/.test(await c.ev(TOAST)) && !/⚡/.test(await c.ev(TOAST)), 'строка «Ответ опубликован на YouTube» — без ⚡', await c.ev(TOAST));
+          await c.ev(SEND('Новый коммент'), true);
+          ok(await c.until(`[...document.querySelectorAll('#ytcPanel .ytc-list > .ytc-mine .ytc-txt')].some(e => e.textContent === 'Новый коммент')`, 8000), 'новый комментарий — сверху списка');
+          const ins = G.J.filter(x => x[0] === 'cmtInsert');
+          ok(ins.length === 1 && ins[0][1]?.snippet?.videoId === V2 && ins[0][1]?.snippet?.topLevelComment?.snippet?.textOriginal === 'Новый коммент', 'commentThreads.insert ровно один раз с id ЭТОГО Short', ins);
+          const lk = await c.ev(LEAK);
+          ok(lk && !lk.ls.length && !lk.url, 'токена нет в localStorage и адресе', lk);
+          await c.shot('ytl3-cmt-shorts-posted');
+          await c.ev(`document.querySelector('#ytcPanel .ytc-x').click(); true`, true);
+          ok(!(await c.ev(`D37YtComments.isOpen()`)), '✕ закрывает окно');
+          ok(!c.errs.length, 'ошибок в консоли нет', c.errs);
+        } finally { await c.close(); }
+      }
+      console.log('— комментарии: окно ролика без разрешения → «Отправить» → Google → само, 1920, светлая');
+      {
+        const G = { answer: 'grant' }, X = mockGoogle(G);
+        const { user, profile } = oldUser('admin');
+        const c = await chrome({ w: 1920, h: 1080, phone: false, theme: 'light', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') + ADULT });
+        try {
+          await c.send('Page.navigate', { url: B + '/' });
+          await c.until(READY);
+          ok(await signedIn(c), 'вход (админ, разрешения YouTube ещё нет)');
+          await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '', 42)`, true);
+          ok(await c.until(VISIBLE('#mCmt'), 8000), '«💬 Комментарии» в окне ролика');
+          await c.click('#mCmt');
+          ok(await c.until(`(${PANEL})?.items?.length === 2`, 8000), 'окно комментариев этого ролика');
+          const p0 = await c.ev(PANEL);
+          ok(p0.l > 1920 / 2, 'на компьютере — справа, не поверх середины ролика', p0);
+          await c.shot('ytl3-cmt-modal-open');
+          await c.ev(SEND('С сайта, после Google'), true);
+          ok(await c.until(`location.href.startsWith(${JSON.stringify(B)}) && document.readyState === 'complete'`, 15000) && await c.until(`(${PANEL})?.items?.length >= 2`, 20000), 'вернулись с Google — окно комментариев снова открыто');
+          ok(G.J.filter(x => x[0] === 'auth').length === 1 && G.J.find(x => x[0] === 'auth')[1].scope === SCOPE, 'экран Google — один раз, право youtube.force-ssl', G.J.filter(x => x[0] === 'auth'));
+          ok(await c.until(`document.getElementById('modal')?.classList.contains('open') && modalVidId === ${JSON.stringify(V3)}`, 8000), 'тот же ролик в окне');
+          ok(await c.until(`[...document.querySelectorAll('#ytcPanel .ytc-mine .ytc-txt')].some(e => e.textContent === 'С сайта, после Google')`, 10000), 'комментарий отправился сам и виден в окне');
+          await sleep(800);
+          const ins = G.J.filter(x => x[0] === 'cmtInsert');
+          ok(ins.length === 1 && ins[0][1]?.snippet?.videoId === V3, 'commentThreads.insert ровно один раз, id этого ролика', ins);
+          ok(!(await c.ev(`sessionStorage.getItem('d37_ytc_draft')`)), 'черновик забран');
+          await c.shot('ytl3-cmt-modal-after-google');
+          ok(!c.errs.length, 'ошибок в консоли нет', c.errs);
+        } finally { await c.close(); }
+      }
+    }
+
+    // (cmtage) возраст не указан / до 13 → «💬» нет; 13+ — есть (гость, без входа)
+    if (want('cmtage')) for (const [label, init, want13] of [['возраст не указан', '', false], ['до 13', KID, false], ['30 лет', ADULT, true]]) for (const [w, h, ph, theme] of [[390, 844, true, 'light'], [1920, 1080, false, 'dark']]) {
+      console.log(`— «💬» и возраст: ${label}, ${w}×${h} ${theme}`);
+      const G = {}, X = mockGoogle(G);
+      const c = await chrome({ w, h, phone: ph, theme, S: { providers: { google: true }, user: null, feed: FEED }, extra: X, init: initMode('test') + init });
+      try {
+        await c.send('Page.navigate', { url: B + '/#/shorts/' + V2 });
+        await c.until(READY);
+        ok(await c.until(`!!document.querySelector('${SHB}.is-active')`, 10000), 'Short играет');
+        await sleep(1000);
+        const vs = await c.ev(VISIBLE(`${SHB} .ytc-btn`));
+        ok(vs === want13, `${label}: «💬» в Shorts ${want13 ? 'есть' : 'нет'}`, vs);
+        ok(await c.ev(`D37YtComments.open(${JSON.stringify(V2)})`) === want13, `${label}: окно ${want13 ? 'открывается' : 'не открывается даже вызовом'}`);
+        await c.ev(`D37YtComments.close(); D37Route.go('#/home'); true`); await sleep(800);
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true); await sleep(800);
+        ok(await c.ev(VISIBLE('#mCmt')) === want13, `${label}: «💬» в окне ролика ${want13 ? 'есть' : 'нет'}`);
+        if (!want13) ok(!G.J.some(x => x[0] === 'ytc'), `${label}: к комментариям ни одного запроса`, G.J);
+        await c.shot(`ytl3-cmtage-${want13 ? 'adult' : init ? 'kid' : 'unknown'}-${w}x${h}-${theme}`);
+        ok(!c.errs.length, 'ошибок в консоли нет', c.errs);
+      } finally { await c.close(); }
+    }
+
+    // (cmtfall) нет настоящей записи → ссылка «Написать на YouTube»
+    if (want('cmtfall')) for (const kind of ['deny', 'quota', 'inapp', 'user']) {
+      console.log('— комментарии, запасной путь: ' + kind);
+      const G = { answer: kind === 'deny' ? 'deny' : 'grant', cmt: kind === 'quota' ? 'quota' : undefined }, X = mockGoogle(G);
+      const { user, profile } = oldUser(kind === 'user' ? 'user' : 'admin');
+      const ua = kind === 'inapp' ? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36 Instagram 300.0.0.0' : undefined;
+      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'dark', ua, S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode(kind === 'user' ? 'test' : 'on') + ADULT + (kind === 'quota' ? TOK() : '') + NOPOPUP });
+      try {
+        await c.send('Page.navigate', { url: B + '/#/shorts/' + V2 });
+        await c.until(READY);
+        ok(await signedIn(c), `${kind}: вход`);
+        ok(await c.until(VISIBLE(`${SHB} .ytc-btn`), 10000), `${kind}: «💬» есть (читать можно)`);
+        await c.click(`${SHB} .ytc-btn`);
+        ok(await c.until(`(${PANEL})?.items?.length === 2`, 8000), `${kind}: комментарии читаются`);
+        if (kind === 'deny' || kind === 'quota') {
+          ok((await c.ev(PANEL)).compose, `${kind}: сначала поле (настоящая запись доступна)`);
+          await c.ev(`document.querySelector('#ytcPanel .ytc-list > .ytc-it .ytc-reply').click(); true`, true);
+          await c.ev(SEND('текст'), true);
+          if (kind === 'deny') ok(await c.until(`(${PANEL})?.items?.length === 2`, 20000), 'deny: вернулись с Google, окно снова открыто');
+          await sleep(1500);
+        }
+        const p = await c.ev(PANEL);
+        ok(p && !p.compose && /^https:\/\/www\.youtube\.com\/watch\?v=/.test(p.ytw || ''), `${kind}: вместо поля — ссылка на YouTube`, p);
+        if (kind === 'deny' || kind === 'quota') ok(/lc=UgxThreadOne01/.test(p.ytw) && /Ответить на YouTube/.test(await c.ev(`document.querySelector('#ytcPanel .ytc-ytw').textContent`)), `${kind}: «Ответить на YouTube ↗» ведёт на ту же ветку`, p.ytw);
+        ok(await c.ev(`[...document.querySelectorAll('#ytcPanel a.ytc-reply')].length`) >= 2, `${kind}: у веток — «Ответить на YouTube ↗»`);
+        const ins = G.J.filter(x => x[0] === 'cmtInsert' || x[0] === 'replyInsert');
+        ok(kind === 'quota' ? ins.length === 1 : !ins.length, `${kind}: записей на YouTube ${kind === 'quota' ? 'одна попытка (ответ — квота)' : 'нет'}`, ins);
+        if (kind === 'deny') ok(/не публикует комментарии/.test(await c.ev(TOAST)), 'deny: строка «почему»', await c.ev(TOAST));
+        if (kind === 'quota') ok(/Комментарии с сайта на сегодня закончились/.test(await c.ev(TOAST)), 'quota: строка «почему»', await c.ev(TOAST));
+        await c.shot(`ytl3-cmtfall-${kind}`);
+        if (kind === 'quota') ok(onlyErrs(c.errs, /status of 403.*googleapis\.com\/youtube\/v3\/comments/, 1), 'quota: в журнале только строка Chrome о 403', c.errs);
+        else ok(!c.errs.length, `${kind}: ошибок в консоли нет`, c.errs);
+      } finally { await c.close(); }
+    }
+
+    // (cmtlook) окно комментариев на 4 размерах × 2 темы
+    if (want('cmtlook')) for (const [w, h, ph] of [[390, 844, true], [800, 600, false], [1920, 1080, false], [3440, 1440, false]]) for (const theme of ['dark', 'light']) {
+      const G = { answer: 'grant' }, X = mockGoogle(G);
+      const { user, profile } = oldUser('admin');
+      const c = await chrome({ w, h, phone: ph, theme, S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('test') + ADULT + TOK() });
+      try {
+        await c.send('Page.navigate', { url: B + '/' });
+        await c.until(READY);
+        ok(await signedIn(c), `${w}×${h} ${theme}: вход`);
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+        await c.until(VISIBLE('#mCmt'), 8000);
+        await c.click('#mCmt');
+        ok(await c.until(`(${PANEL})?.items?.length === 2`, 8000), `${w}×${h} ${theme}: окно комментариев`);
+        const p = await c.ev(PANEL);
+        ok(p.l >= -1 && p.r <= p.iw + 1 && p.t >= -1 && p.b <= p.ih + 1 && await c.ev(noOverflow), `${w}×${h} ${theme}: целиком на экране, вбок не едет`, p);
+        await c.shot(`ytl3-cmtlook-modal-${w}x${h}-${theme}`);
+        await c.ev(`D37YtComments.close(); closeModal(); D37Route.go('#/shorts/${V2}'); true`, true);
+        ok(await c.until(VISIBLE(`${SHB} .ytc-btn`), 10000), `${w}×${h} ${theme}: Shorts — «💬» видна`);
+        await c.click(`${SHB} .ytc-btn`);
+        ok(await c.until(`(${PANEL})?.items?.length === 2`, 8000), `${w}×${h} ${theme}: Shorts — окно комментариев`);
+        await c.shot(`ytl3-cmtlook-shorts-${w}x${h}-${theme}`);
+        ok(!c.errs.length, `${w}×${h} ${theme}: ошибок в консоли нет`, c.errs);
+      } finally { await c.close(); }
     }
 
     // ═══ (look) размеры и темы: залитая 👍 в окне ролика и в Shorts ═══

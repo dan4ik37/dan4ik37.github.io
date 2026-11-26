@@ -261,9 +261,10 @@ function xpToast(text, kind){
     el.setAttribute('role', 'status');
     document.body.appendChild(el);
   }
+  // kind 'plain' — строка без ⚡ (YouTube: лайк / подписка / комментарий — ⚡ на сайте с XP выглядел бы как награда, правила III.F)
   el.innerHTML = kind === 'guest'
     ? `<span>⚡</span><span>${esc(text)}</span><button type="button" onclick="openGlobalAuth()">Войти</button>`
-    : `<span>⚡</span><span>${esc(text)}</span>`;
+    : kind === 'plain' ? `<span>${esc(text)}</span>` : `<span>⚡</span><span>${esc(text)}</span>`;
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('show'), kind === 'guest' ? 6000 : 3000);

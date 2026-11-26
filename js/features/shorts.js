@@ -124,13 +124,14 @@ function renderShortsFeed(){
           <div class="sh-info">
             <div class="sh-title">${esc(v.title)}</div>
             <div class="sh-meta">${v.views ? '👁 ' + v.views : ''}${v.date ? ' · ' + v.date : ''}</div>
-            <a data-ytsub class="sh-sub" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на YouTube</a>
           </div>
         </div>
         <div class="sh-side">
           <button type="button" class="sh-btn sh-sound" onclick="toggleShortsSound()" aria-label="Звук"><span>${shortsMuted ? '🔇' : '🔊'}</span></button>
           <a class="sh-btn sh-like" data-vlike="${v.id}" href="https://www.youtube.com/shorts/${v.id}" target="_blank" rel="noopener" aria-label="Лайк на YouTube — откроется YouTube"><span>👍</span><small>Лайк <br>на YouTube</small><small class="vl-mark"></small></a>
-          <button type="button" class="sh-btn" onclick="shareShort('${v.id}',this)" aria-label="Поделиться"><span>🔗</span><small>Ссылка</small></button>
+          <button type="button" class="sh-btn ytc-btn" data-ytc="${v.id}" hidden style="display:none" aria-label="Комментарии с YouTube"><span>💬</span><small>Комменты</small></button>
+          <a data-ytsub class="sh-btn sh-subbtn" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener" aria-label="Подписаться на YouTube" title="Подписаться на канал на YouTube"><span>▶</span><small>Подписаться <br>на YouTube</small></a>
+          <button type="button" class="sh-btn sh-share" onclick="shareShort('${v.id}',this)" aria-label="Поделиться"><span>🔗</span><small>Ссылка</small></button>
         </div>
       </section>`).join('') + `
       <section class="sh-item sh-end">
@@ -146,6 +147,7 @@ function renderShortsFeed(){
     feed.addEventListener('keydown', shortsKeys);
     window.D37VLike?.paint(feed);   // ✓ на «Лайк на YouTube» — отметка этого браузера (js/core/vlike.js)
     window.D37SiteLike?.shorts(feed);   // «❤ на сайте» у каждого Short (js/features/site-like.js; без ч. 20 — кнопок не видно)
+    window.D37YtComments?.paint(feed);   // «💬» — только 13+ (js/features/ytcomments.js)
   }
   updateSoundButtons();
 
