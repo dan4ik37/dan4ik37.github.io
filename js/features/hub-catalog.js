@@ -36,8 +36,8 @@
     { id: 'words', title: '5 букв', icon: '🔤', href: '/play/words', age: 0, tag: 'Слово дня', g: 'linear-gradient(135deg,#ca8a04,#16a34a)' },
     { id: 'durak', title: 'Дурак', icon: '♠️', href: '/play/durak', age: 0, tag: 'До 4 игроков', g: 'linear-gradient(135deg,#9f1239,#1e293b)' },
   ];
-  const KIND = { tpl: 'Аркада', html: 'Своя игра', place: '3D-мир', unity: 'Unity' };
-  const GENRES = [['all', 'Все жанры'], ['tpl', '🕹 Аркады'], ['place', '🧱 3D-миры'], ['html', '💻 Свой код'], ['unity', '🎮 Unity']];
+  const KIND = { tpl: 'Аркада', html: 'Своя игра', place: '3D-мир', arena: 'Арена', unity: 'Unity' };
+  const GENRES = [['all', 'Все жанры'], ['tpl', '🕹 Аркады'], ['place', '🧱 3D-миры'], ['arena', '⚡ Арены'], ['html', '💻 Свой код'], ['unity', '🎮 Unity']];
   // старше какой метки не показываем: 18+ — никому (взрослого мира нет), 16+ — только тем, кто сам указал 16 лет и больше
   const ageMax = () => { let g = 'unknown'; try { g = root.D37Age ? D37Age.group() : 'unknown'; } catch (e) {} return g === 'teen16' || g === 'adult' ? 16 : 12; };
 
@@ -61,7 +61,7 @@
       };
       await Promise.all([
         pull('ugc_games', 'id,title,icon,kind,plays,likes,created_at,updated_at,age_rating,profiles!ugc_games_author_fkey(nick)', g => (KIND[g.kind] ? g.kind : 'tpl'),
-          g => g.kind === 'place' ? '#/games/studio3d/play/' + encodeURIComponent(g.id) : '#/games/studio/play/' + encodeURIComponent(g.id)),
+          g => g.kind === 'place' ? '#/games/studio3d/play/' + encodeURIComponent(g.id) : g.kind === 'arena' ? '#/games/studio/arena/play/' + encodeURIComponent(g.id) : '#/games/studio/play/' + encodeURIComponent(g.id)),   // арена (ч. 19) — своя страница, как в studio-home.js / modepage.js
         pull('unity_games', 'id,title,icon,plays,likes,created_at,updated_at,profiles!unity_games_author_fkey(nick)', () => 'unity', g => '#/games/unity/play/' + encodeURIComponent(g.id)),
       ]);
       const max = ageMax();
