@@ -246,14 +246,15 @@
     if (m) m.textContent = on ? ' ✓' : '';
   }
   // «▶ Подписаться на YouTube»: YouTube сказал «подписан» → «✓ Ты подписан», ссылка ведёт на канал (без ?sub_confirmation); иначе —
-  // прежние надпись и ссылка (вернуть то, что было: содержимое, href, title). data-ytsub — исходный href, пока надпись подменена.
+  // прежние надпись и ссылка (вернуть то, что было: содержимое, title; ссылка — снова на подписку канала). data-ytsub — метка «надпись
+  // подменена» (href уже без sub_confirmation, а нажатие всё равно наше). Адреса — только свои постоянные (не из чужих данных).
   const subOrig = new WeakMap();
   function paintSub(a) {
     const on = why() === null && !!token() && subbed === true;
     a.classList.toggle('ytl-busy', busy.has(SUB));
     if (on && !subOrig.has(a)) {
-      subOrig.set(a, { nodes: [...a.childNodes].map(n => n.cloneNode(true)), title: a.getAttribute('title'), href: a.getAttribute('href') });
-      a.setAttribute('data-ytsub', a.getAttribute('href') || '');
+      subOrig.set(a, { nodes: [...a.childNodes].map(n => n.cloneNode(true)), title: a.getAttribute('title') });
+      a.setAttribute('data-ytsub', '1');
       a.textContent = '✓ Ты подписан';
       a.setAttribute('href', CH_URL);
       a.title = 'Ты подписан на канал на YouTube — нажми, чтобы открыть канал';
@@ -261,7 +262,7 @@
     } else if (!on && subOrig.has(a)) {
       const o = subOrig.get(a); subOrig.delete(a);
       a.replaceChildren(...o.nodes);
-      if (o.href != null) a.setAttribute('href', o.href);
+      a.setAttribute('href', CH_URL + '?sub_confirmation=1');
       if (o.title == null) a.removeAttribute('title'); else a.title = o.title;
       a.removeAttribute('data-ytsub');
       a.classList.remove('ytl-on');
