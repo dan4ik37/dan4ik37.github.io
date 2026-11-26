@@ -166,3 +166,6 @@ Russian). Read only the area file(s) your task needs — never all of them.
 
 Other key docs: docs/TASKS.md (board), docs/progress.md, docs/ENGINE_SIM.md (simulation patterns), docs/PHYSICS_PLAN.md,
 docs/plans/*.md (universe path, planet, planet-space…), docs/MODS.md, docs/ECONOMY.md, docs/SERVER.md, docs/OPS.md.
+
+## Standing agent rules (27.11)
+Before any work read `M:\d37\d37-core\spec\AGENT_RULES.md` (economy: one target dir per lane, shared compile cache, queue jobs in the background and keep working, small per-step proofs, commit after every step).
