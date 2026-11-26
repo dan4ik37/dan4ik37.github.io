@@ -131,17 +131,18 @@ const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new Reg
   try {
     // ═══ (off) как на сайте сейчас ═══
     if (want('off')) for (const [w, h, ph, theme] of [[390, 844, true, 'dark'], [1920, 1080, false, 'light']]) {
-      console.log(`— флаг как на сайте (off), ${w}×${h} ${theme}: всё как раньше` + (process.env.BASE ? ' — ' + process.env.BASE : ''));
+      console.log(`— флаг 'off' (откат), ${w}×${h} ${theme}: всё как раньше` + (process.env.BASE ? ' — ' + process.env.BASE : ''));
       const G = {}, X = mockGoogle(G);
       const { user, profile } = oldUser('admin');
       const S = { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED };
-      const c = await chrome({ w, h, phone: ph, theme, S, extra: X });
+      // флаг выключен явно (с 26.11 на сайте 'test' с ID клиента; это сечение проверяет «off» — откат одной строкой)
+      const c = await chrome({ w, h, phone: ph, theme, S, extra: X, init: initMode('off') });
       try {
         await c.send('Page.navigate', { url: B + '/#/shorts/' + V2 });
         await c.until(READY);
         const sel = `.sh-item[data-id="${V2}"] .sh-like`;
         await c.until(`!!document.querySelector(${JSON.stringify(sel)})`, 10000);
-        ok(await c.ev(`D37YtLike.mode()`) === 'off', 'флаг на сайте — off (нет ID клиента)');
+        ok(await c.ev(`D37YtLike.mode()`) === 'off', "флаг 'off' — выключено");
         const t1 = await c.ev(TAP(sel), true);
         ok(t1 && t1.prevented === false && t1.target === '_blank' && /youtube\.com\/shorts\//.test(t1.href), 'гость: 👍 — обычная ссылка на YouTube', t1);
         ok(await c.ev(`D37VLike.marked(${JSON.stringify(V2)})`), 'гость: ✓ в этом браузере, как раньше');

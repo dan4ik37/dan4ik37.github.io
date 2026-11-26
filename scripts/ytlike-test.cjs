@@ -59,13 +59,14 @@ const ev = () => { const e = { prevented: false, preventDefault() { e.prevented 
     ok(Y.mode() === (liveCid ? live : 'off') && (Y.mode() !== 'off' || Y.tap(e, null, 'dQw4w9WgXcQ') === false) && !e.prevented, 'как на сайте: нажатие не берётся — ссылка как раньше', Y.mode());
   }
   {
-    const { Y } = load({ cfgPatch: [["const YT_LIKE_REAL = '" + live + "';", "const YT_LIKE_REAL = 'on';"]] });
+    const { Y } = load({ cfgPatch: [["const YT_LIKE_REAL = '" + live + "';", "const YT_LIKE_REAL = 'on';"], ["const YT_CLIENT_ID = '" + liveCid + "';", "const YT_CLIENT_ID = '';"]] });
     ok(Y.mode() === 'off', "'on' без ID клиента — выключено");
   }
   // ═══ 2. Подмена флага — только localhost ═══
   {
     const { Y } = load({ test: { mode: 'on', cid: CID } });
-    ok(Y.mode() === 'off', 'на сайте __d37YtLikeTest ничего не включает');
+    const siteMode = load().Y.mode();   // что на сайте и без подмены (сейчас 'test' у админа или 'off')
+    ok(Y.mode() === siteMode && Y.mode() !== 'on', 'на сайте __d37YtLikeTest ничего не включает', { with: Y.mode(), without: siteMode });
     const L = load({ host: '127.0.0.1', test: { mode: 'on', cid: CID } });
     ok(L.Y.mode() === 'on' && L.Y.why() === null, 'на localhost проверка включает');
     const e = ev();
