@@ -14,7 +14,19 @@
 //  (quota)  YouTube ответил quotaExceeded → строка, до полуночи PT — ссылка, больше вызовов rate нет;
 //  (inapp)  встроенный браузер (Instagram) → ссылка + строка «открой в Chrome или Safari», к Google не ходим;
 //  (look)   390×844, 800×600, 1920×1080, 3440×1440 × тёмная / светлая: залитая 👍 в окне ролика и в Shorts, вбок не прокручивается, ошибок нет.
-// Запуск из корня сайта: node scripts/ytlike-e2e.cjs   (CHROME=…, PYTHON=…, BASE=…, SHOTS=<папка>, ONLY=off,shorts,video,deny,quota,inapp,look)
+//  Проверщик 26.11 — пути, которых не было:
+//  (card)   'on', вошёл: 👍 на КАРТОЧКЕ ленты (youtube.js, a.vlike) → Google → та же главная, та же прокрутка → лайк этому ролику (390 и 1920);
+//  (back)   экран Google открыт, человек нажал «Назад»: строка «разрешение не дано», к Google сам НЕ уходит ни сразу, ни после перезагрузки;
+//           следующее нажатие — снова экран Google (как обещано);
+//  (newtab) экран Google брошен, сайт открыт заново в новой вкладке (свой sessionStorage) в пределах 10 минут: на Google не уходит,
+//           на старый Short не переносит;
+//  (r401)   videos.rate ответил 401 (разрешение истекло): строка «Google спросит снова» → следующее нажатие ведёт на Google; 401 на только
+//           что выданном токене — строка «откроется YouTube» → следующее нажатие — ссылка (не круг через Google);
+//  (slow403) ролик не даёт лайк, ответ через 6,5 с (нажатие «остыло», вкладку открыть нельзя): строка «откроется YouTube» → следующие
+//           нажатия — ссылка, videos.rate больше не зовём;
+//  (net2)   два сбоя сети подряд: после первого следующее нажатие — ссылка, потом снова попытка, после второго — ссылка до конца визита.
+// Запуск из корня сайта: node scripts/ytlike-e2e.cjs   (CHROME=…, PYTHON=…, BASE=…, SHOTS=<папка>,
+//   ONLY=off,shorts,video,deny,quota,inapp,look,card,back,newtab,r401,slow403,net2)
 const H = require('./auth-social-e2e.cjs');
 const { startSite, chrome, newGoogleUser, newProfile, READY, SIGNED, VISIBLE, FEED, SB, ME, V, V2, V3 } = H;
 const ONLY = new Set((process.env.ONLY || '').split(',').filter(Boolean));
@@ -26,11 +38,14 @@ const ok = (c, m, x) => { n++; console.log((c ? '  ✓ ' : '  ✗ ') + m + (!c &
 const SCOPE = 'https://www.googleapis.com/auth/youtube.force-ssl';
 const CID = '123456789012-ytliketest0.apps.googleusercontent.com';
 const TOKEN = 'ya29.TESTONLY_ytlike_9f8e7d6c5b4a3210';
+// лента для проверки карточек: к двум Shorts и одному длинному ролику (он уходит в «главный» блок) — ещё два длинных, чтобы были карточки
+const V4 = 'cccccccccc3', V5 = 'dddddddddd4';
+const FEED_YT = () => { const f = FEED(); f.vids.push({ id: V4, title: 'Длинный ролик два', ts: Date.now() - 4e5, views: 4, duration: 'PT8M' }, { id: V5, title: 'Длинный ролик три', ts: Date.now() - 5e5, views: 3, duration: 'PT12M' }); f.stats.vids = 5; return f; };
 const initMode = mode => `window.__d37YtLikeTest = { mode: ${JSON.stringify(mode)}, cid: ${JSON.stringify(CID)} };`;
 const CORS = [{ name: 'Access-Control-Allow-Origin', value: '*' }, { name: 'Access-Control-Allow-Headers', value: 'authorization,content-type' }, { name: 'Access-Control-Allow-Methods', value: 'GET,POST,OPTIONS' }];
 
 // ═══ Поддельные Google (экран разрешения) и YouTube Data API ═══
-// G: { answer: 'grant' | 'deny' | 'noscope', quota, liked: Set, J: журнал }
+// G: { answer: 'grant' | 'deny' | 'noscope' | 'stay' (человек стоит на экране Google), quota, rate: '401' | 'video', liked: Set, J: журнал }
 function mockGoogle(G) {
   G.J = []; G.liked = G.liked || new Set(); G.sbAuthorize = [];
   return {
@@ -40,8 +55,11 @@ function mockGoogle(G) {
       if (req.url.startsWith(SB + '/auth/v1/authorize')) { G.sbAuthorize.push(Object.fromEntries(u.searchParams)); return null; }   // журнал входа; ответ — поддельный Supabase
       const json = (b, code = 200) => ({ code, body: b === undefined ? '' : JSON.stringify(b), headers: [...CORS, { name: 'Content-Type', value: 'application/json' }] });
       if (u.host === 'accounts.google.com') {
+        // Chrome сам просит /favicon.ico у страницы-заглушки — это не переход на экран разрешения, в счёт 'auth' не идёт
+        if (u.pathname !== '/o/oauth2/v2/auth') { G.J.push(['gother', u.pathname]); return { code: 404, body: '', headers: [{ name: 'Content-Type', value: 'text/plain' }] }; }
         const q = Object.fromEntries(u.searchParams);
         G.J.push(['auth', q]);
+        if (G.answer === 'stay') return { code: 200, body: '<!doctype html><meta charset="utf-8"><title>Google (заглушка)</title><p>экран разрешения (заглушка проверки)</p>', headers: [{ name: 'Content-Type', value: 'text/html; charset=utf-8' }] };
         const st = encodeURIComponent(q.state || '');
         const frag = G.answer === 'deny' ? `error=access_denied&state=${st}`
           : `state=${st}&access_token=${TOKEN}&token_type=Bearer&expires_in=3599&scope=${encodeURIComponent((G.answer === 'noscope' ? '' : SCOPE + ' ') + 'openid https://www.googleapis.com/auth/userinfo.email')}`;
@@ -53,6 +71,8 @@ function mockGoogle(G) {
       if (u.host === 'www.googleapis.com' && u.pathname === '/youtube/v3/videos/rate') {
         G.J.push(['rate', u.searchParams.get('id'), u.searchParams.get('rating'), auth === 'Bearer ' + TOKEN, req.method]);
         if (auth !== 'Bearer ' + TOKEN) return json({ error: { code: 401, errors: [{ reason: 'authError' }] } }, 401);
+        if (G.rate === '401') return json({ error: { code: 401, errors: [{ reason: 'authError' }] } }, 401);
+        if (G.rate === 'video') return json({ error: { code: 403, errors: [{ domain: 'youtube.video', reason: 'videoRatingDisabled' }] } }, 403);
         if (G.quota) return json({ error: { code: 403, message: 'quota', errors: [{ domain: 'youtube.quota', reason: 'quotaExceeded' }] } }, 403);
         if (u.searchParams.get('rating') === 'like') G.liked.add(u.searchParams.get('id')); else G.liked.delete(u.searchParams.get('id'));
         return { code: 204, body: '', headers: CORS };
@@ -88,6 +108,21 @@ const PASSWORD_LOGIN = `(async () => { openGlobalAuth('login'); for (let i = 0; 
   document.getElementById('gauthEmail').value = 'yt.test@example.test'; document.getElementById('gauthPassword').value = 'test-only-123'; doGlobalLogin(); return true; })()`;
 async function signedIn(c) { await c.ev(PASSWORD_LOGIN, true); const r = await c.until(`${SIGNED} && !!currentRole && !document.getElementById('globalAuthModal')?.classList.contains('open')`, 15000); await sleep(400); return r; }
 const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
+// разрешение «уже есть» (как после экрана Google раньше: at — когда выдано). Кладём ПОСЛЕ входа: до входа сайт по праву стирает
+// токен (token() без вошедшего = dropTok), а человек с таким токеном на деле уже вошёл
+const presetTok = (c, agoMs) => c.ev(`sessionStorage.setItem('d37_ytl_tok', JSON.stringify({ t: ${JSON.stringify(TOKEN)}, exp: Date.now() + 9e5, u: ${JSON.stringify(ME)}, at: Date.now() - ${agoMs} })); !!D37YtLike._test.token()`);
+// window.open (вкладка YouTube) — не открываем по-настоящему: журнал и «браузер не дал» (null), как на телефоне без свежего нажатия
+const NOPOPUP = `window.__opened = []; window.open = function (u) { window.__opened.push(String(u)); return null; };`;
+// ответ videos.rate через 6,5 с (медленная сеть телефона): Chrome «остужает» нажатие через ~5 с
+const DELAY_RATE = `(() => { const of = window.fetch; window.fetch = function (u, o) { if (String(u && u.url || u).includes('/youtube/v3/videos/rate')) return new Promise(r => setTimeout(r, 6500)).then(() => of.call(window, u, o)); return of.apply(this, arguments); }; })();`;
+// сбой сети на videos.rate (запрос не уходит): счётчик попыток
+const NETFAIL = `(() => { const of = window.fetch; window.__rateCalls = 0; window.fetch = function (u, o) { if (String(u && u.url || u).includes('/youtube/v3/videos/rate')) { window.__rateCalls++; return Promise.reject(new TypeError('Failed to fetch')); } return of.apply(this, arguments); }; })();`;
+// «новая вкладка»: при следующем заходе на сайт (не на Google) — чистый sessionStorage (localStorage общий, вход остаётся)
+const NEWTAB = `try { if (location.port && localStorage.getItem('ytl_newtab') === '1') { localStorage.removeItem('ytl_newtab'); sessionStorage.clear(); } } catch (e) {}`;
+const ON_GOOGLE = `location.host === 'accounts.google.com'`;
+const authN = G => G.J.filter(x => x[0] === 'auth').length;
+// Chrome сам пишет в журнал каждый ответ 4xx (из JS не спрятать): ровно столько строк про videos.rate, сколько ждали, других ошибок нет
+const onlyRateErrs = (errs, code, nWant) => { const r = errs.filter(e => new RegExp('status of ' + code + '.*googleapis\\.com/youtube/v3/videos/rate').test(e)); return r.length === nWant && errs.length === nWant; };
 
 (async () => {
   const site = await startSite();
@@ -288,6 +323,199 @@ const noOverflow = `document.documentElement.scrollWidth <= innerWidth + 1`;
         ok(t?.prevented === false && !G.J.length, 'ссылка на YouTube, к Google не ходим', { t, J: G.J });
         ok(/встроенном браузере/.test(await c.ev(TOAST)) && /Chrome или Safari/.test(await c.ev(TOAST)), 'строка «открой в Chrome или Safari»', await c.ev(TOAST));
         ok(!c.errs.length, 'встроенный браузер: ошибок нет', c.errs);
+      } finally { await c.close(); }
+    }
+
+    // ═══ (card) карточка ленты на главной: 'on', вошёл ═══
+    if (want('card')) for (const [w, h, ph, theme] of [[390, 844, true, 'dark'], [1920, 1080, false, 'light']]) {
+      console.log(`— карточка ленты (on), ${w}×${h} ${theme}: вошёл → 👍 на карточке → Google → то же место → лайк`);
+      const G = { answer: 'grant' }, X = mockGoogle(G);
+      const { user, profile } = oldUser('user');
+      const c = await chrome({ w, h, phone: ph, theme, S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED_YT }, extra: X, init: initMode('on') + NOPOPUP });
+      try {
+        await c.send('Page.navigate', { url: B + '/' });
+        await c.until(READY);
+        ok(await signedIn(c), 'вход почтой');
+        const sel = `.vcard a.vlike[data-vlike="${V4}"]`;
+        ok(await c.until(`!!document.querySelector(${JSON.stringify(sel)})`, 15000), 'в ленте есть карточка с «Лайк на YouTube»', await c.ev(`document.querySelectorAll('.vcard').length`));
+        await c.ev(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: 'center' }); true`);
+        await sleep(300);
+        const before = await c.ev(`({ y: Math.round(scrollY), hash: location.hash, route: document.body.dataset.route || '' })`);
+        const t = await c.ev(TAP(sel), true);
+        ok(t?.prevented === true, 'нажатие на карточке взял настоящий лайк (ссылка не открылась)', t);
+        ok(await c.until(`${READY} && ${SIGNED} && !!document.querySelector(${JSON.stringify(sel)})?.classList.contains('ytl-on')`, 30000), 'вернулись — 👍 на этой карточке залита', await c.ev(`({ n: document.querySelectorAll(${JSON.stringify(sel)}).length, all: [...document.querySelectorAll('a[data-vlike="${V4}"]')].map(a => a.className + '|' + (a.closest('[class]')?.parentElement?.className || '')), tok: !!D37YtLike._test.token(), why: D37YtLike.why(), rating: [...D37YtLike._test.rating], ss: !!sessionStorage.getItem('d37_ytl_tok') })`).catch(e => String(e)));
+        const after = await c.ev(`({ y: Math.round(scrollY), hash: location.hash, route: document.body.dataset.route || '', toast: ${TOAST} })`);
+        ok(after.hash === before.hash && after.route === before.route && Math.abs(after.y - before.y) < 200, 'та же главная, та же прокрутка (±200 px)', { before, after });
+        const rates = G.J.filter(x => x[0] === 'rate');
+        ok(authN(G) === 1 && rates.length === 1 && rates[0][1] === V4 && rates[0][2] === 'like', 'один экран Google, videos.rate(like) ровно этому ролику', G.J.map(x => x.slice(0, 3)));
+        ok(/👍 Лайк поставлен на YouTube/.test(after.toast), 'строка «👍 Лайк поставлен на YouTube»', after.toast);
+        ok(!(await c.ev(`window.__opened.length`)), 'вкладка YouTube не открывалась');
+        // лента перерисовалась (свежий ответ /api/feed после кэша — новые карточки): 👍 на новой карточке тоже залита, getRating не нужен
+        const gr0 = count(G, 'getRating');
+        await c.ev(`renderCurrentVids(); true`);
+        ok(await c.until(`!!document.querySelector(${JSON.stringify(sel)})?.classList.contains('ytl-on')`, 3000) && count(G, 'getRating') === gr0, 'лента перерисована — 👍 на новой карточке всё ещё залита', { gr0, gr: count(G, 'getRating') });
+        await c.shot(`ytl-card-${w}x${h}-${theme}`);
+        ok(!c.errs.length, 'карточка: ошибок в консоли нет', c.errs);
+      } finally { await c.close(); }
+    }
+
+    // ═══ (back) экран Google открыт — человек нажал «Назад» ═══
+    if (want('back')) {
+      console.log('— «Назад» с экрана Google: сам на Google больше не уходит');
+      const G = { answer: 'stay' }, X = mockGoogle(G);
+      const { user, profile } = oldUser('user');
+      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') + NOPOPUP });
+      try {
+        await c.send('Page.navigate', { url: B + '/#/shorts/' + V2 });
+        await c.until(READY);
+        ok(await signedIn(c), 'вход почтой');
+        const sel = `.sh-item[data-id="${V2}"] .sh-like`;
+        await c.until(`!!document.querySelector(${JSON.stringify(sel)})`, 10000);
+        await c.ev(`window.__beforeGoogle = 1; true`);
+        ok((await c.ev(TAP(sel), true))?.prevented === true, 'нажатие → экран Google');
+        ok(await c.until(ON_GOOGLE, 10000) && authN(G) === 1, 'на экране Google (заглушка), запрос один', authN(G));
+        try { await c.ev(`history.back(); true`); } catch (e) {}
+        ok(await c.until(`location.port !== '' && ${READY} && ${SIGNED}`, 20000), '«Назад» — снова сайт');
+        const how = await c.ev(`({ cache: window.__beforeGoogle === 1, nav: performance.getEntriesByType('navigation')[0]?.type })`);
+        console.log(`    страница вернулась ${how.cache ? 'из кэша браузера (bfcache)' : 'загрузкой заново (' + how.nav + ')'}`);
+        ok(await c.until(`/не дано/.test(${TOAST}) && /снова откроется экран Google/.test(${TOAST})`, 10000), 'строка «разрешение не дано — нажми ещё раз, снова откроется экран Google»', await c.ev(TOAST));
+        await sleep(6000);
+        ok(authN(G) === 1 && await c.ev(`location.port !== ''`), 'за 6 с сам на Google не ушёл', authN(G));
+        ok(!(await c.ev(`D37Intent.pending()`))?.kind, 'отложенное для Google забыто');
+        ok(await c.ev(`D37Route.hash() === '#/shorts/${V2}'`), 'человек там же, в ленте Shorts');
+        await c.shot('ytl-back-1');
+        await c.ev(`window.__preReload = 1`);
+        await c.send('Page.reload');
+        await c.until(`!window.__preReload && ${READY} && ${SIGNED}`, 20000);
+        await sleep(6000);
+        ok(authN(G) === 1 && await c.ev(`location.port !== ''`), 'перезагрузка — тоже без перехода на Google', authN(G));
+        await c.until(`!!document.querySelector(${JSON.stringify(sel)})`, 10000);
+        ok((await c.ev(TAP(sel), true))?.prevented === true && await c.until(ON_GOOGLE, 10000) && authN(G) === 2, 'новое нажатие — снова экран Google (как сказала строка)', authN(G));
+        ok(!c.errs.length, '«Назад»: ошибок в консоли нет', c.errs);
+      } finally { await c.close(); }
+    }
+
+    // ═══ (newtab) экран Google брошен, сайт открыт заново в новой вкладке ═══
+    if (want('newtab')) {
+      console.log('— экран Google брошен, сайт в новой вкладке в пределах 10 минут');
+      const G = { answer: 'stay' }, X = mockGoogle(G);
+      const { user, profile } = oldUser('user');
+      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') + NOPOPUP + NEWTAB });
+      try {
+        await c.send('Page.navigate', { url: B + '/#/shorts/' + V2 });
+        await c.until(READY);
+        ok(await signedIn(c), 'вход почтой');
+        const sel = `.sh-item[data-id="${V2}"] .sh-like`;
+        await c.until(`!!document.querySelector(${JSON.stringify(sel)})`, 10000);
+        await c.ev(`localStorage.setItem('ytl_newtab', '1'); true`);
+        ok((await c.ev(TAP(sel), true))?.prevented === true && await c.until(ON_GOOGLE, 10000) && authN(G) === 1, 'нажатие → экран Google (брошен)');
+        await c.send('Page.navigate', { url: B + '/' });
+        ok(await c.until(`location.port !== '' && ${READY} && ${SIGNED}`, 20000), 'новая вкладка: сайт открылся, вход на месте');
+        await sleep(8000);
+        const st = await c.ev(`({ port: location.port, hash: D37Route.hash(), pend: D37Intent.pending(), stored: (JSON.parse(localStorage.getItem('d37_intent') || 'null') || {}).kind || null, toast: ${TOAST} })`);
+        ok(authN(G) === 1 && st.port !== '', 'новая вкладка: на Google не ушла (без нажатия)', { auth: authN(G), st });
+        ok(st.hash !== '#/shorts/' + V2 && !st.pend, 'новая вкладка: на старый Short не перенесла, отложенного другой вкладки не видит', st);
+        ok(!/Лайк|лайк/.test(st.toast), 'новая вкладка: никаких строк про лайк', st.toast);
+        await c.shot('ytl-newtab');
+        ok(!c.errs.length, 'новая вкладка: ошибок в консоли нет', c.errs);
+      } finally { await c.close(); }
+    }
+
+    // ═══ (r401) videos.rate ответил 401 ═══
+    if (want('r401')) {
+      console.log('— videos.rate: 401 (разрешение истекло / отозвано)');
+      // getRating отвечает как обычно (иначе токен стёрся бы ещё при показе кнопки и нажатие сразу ушло бы на Google — тоже верно, но
+      // здесь проверяем ответ самого videos.rate)
+      const G = { answer: 'stay', rate: '401' }, X = mockGoogle(G);
+      const { user, profile } = oldUser('user');
+      const c = await chrome({ w: 1920, h: 1080, theme: 'light', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') + NOPOPUP });
+      try {
+        await c.send('Page.navigate', { url: B + '/' });
+        await c.until(READY);
+        ok(await signedIn(c) && await presetTok(c, 50 * 60e3), 'вход почтой (разрешение выдано 50 мин назад)');
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+        await sleep(800);
+        ok((await c.ev(TAP('#mLike'), true))?.prevented === true, '401: нажатие → videos.rate');
+        ok(await c.until(`/Google спросит разрешение снова/.test(${TOAST})`, 10000) && !/откроется YouTube/.test(await c.ev(TOAST)), '401: строка «нажми ещё раз — Google спросит разрешение снова»', await c.ev(TOAST));
+        ok(count(G, 'rate') === 1 && authN(G) === 0, '401: rate один раз, на Google сам не ушёл');
+        ok((await c.ev(TAP('#mLike'), true))?.prevented === true && await c.until(ON_GOOGLE, 10000) && authN(G) === 1, '401: следующее нажатие — экран Google, как обещано');
+        // Google выдаёт новый токен, а YouTube опять 401 — не ходить по кругу
+        G.answer = 'grant';
+        const e0 = c.errs.slice();
+        try { await c.ev(`history.back(); true`); } catch (e) {}
+        await c.until(`location.port !== '' && ${READY} && ${SIGNED}`, 20000);
+        // страница вернулась из кэша браузера (bfcache) — Chrome заново присылает в журнал её прежние строки (тот же первый 401, запроса нет:
+        // журнал заглушки это подтверждает); такие повторы не считаем новыми ошибками
+        const replay = c.errs.slice(e0.length).filter(x => e0.includes(x)).length;
+        await c.until(`/не дано/.test(${TOAST})`, 10000);
+        await c.ev(`(async () => { if (!(document.getElementById('modal').classList.contains('open') && modalVidId === ${JSON.stringify(V3)})) openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', ''); await new Promise(r => setTimeout(r, 600)); return true; })()`, true);
+        ok((await c.ev(TAP('#mLike'), true))?.prevented === true, '401 на свежем: нажатие → Google → назад');
+        ok(await c.until(`location.port !== '' && ${READY} && ${SIGNED} && /откроется YouTube/.test(${TOAST})`, 30000), '401 на только что выданном токене: строка «нажми ещё раз — откроется YouTube»', await c.ev(TOAST).catch(() => ''));
+        const n0 = { auth: authN(G), rate: count(G, 'rate') };
+        ok(n0.auth === 2 && n0.rate === 2, '401 на свежем: Google ещё раз, rate ещё раз', n0);
+        await c.until(`document.getElementById('modal').classList.contains('open') && !!document.getElementById('mLike')`, 8000);
+        const t = await c.ev(TAP('#mLike'), true);
+        await sleep(1500);
+        ok(t?.prevented === false && authN(G) === 2 && count(G, 'rate') === 2, '401 на свежем: следующее нажатие — ссылка на YouTube (не круг через Google)', { t, auth: authN(G), rate: count(G, 'rate') });
+        ok(count(G, 'rate') === 2 && onlyRateErrs(c.errs, 401, 2 + replay), '401: в журнале только строки Chrome о двух 401 от videos.rate (+ повтор журнала при возврате из bfcache: ' + replay + ')', { replay, errs: c.errs });
+        await c.shot('ytl-r401');
+      } finally { await c.close(); }
+    }
+
+    // ═══ (slow403) ролик не даёт лайк, ответ через 6,5 с ═══
+    if (want('slow403')) {
+      console.log('— ролик не даёт лайк (403 videoRatingDisabled), ответ через 6,5 с');
+      const G = { answer: 'stay', rate: 'video' }, X = mockGoogle(G);
+      const { user, profile } = oldUser('user');
+      const c = await chrome({ w: 390, h: 844, phone: true, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') + NOPOPUP + DELAY_RATE });
+      try {
+        await c.send('Page.navigate', { url: B + '/' });
+        await c.until(READY);
+        ok(await signedIn(c) && await presetTok(c, 20 * 60e3), 'вход почтой (разрешение выдано 20 мин назад)');
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+        await sleep(800);
+        const t1 = await c.ev(TAP('#mLike'), true);
+        ok(t1?.prevented === true, 'первое нажатие — videos.rate', t1);
+        ok(await c.until(`/не дал поставить лайк этому ролику/.test(${TOAST}) && /откроется YouTube/.test(${TOAST})`, 12000), 'через 6,5 с: строка «нажми ещё раз — откроется YouTube»', await c.ev(TOAST));
+        const ua = await c.ev(`({ opened: window.__opened.length, active: !!navigator.userActivation?.isActive })`);
+        console.log(`    вкладка YouTube сама: ${ua.opened ? 'пробовали открыть' : 'не открывали'} (нажатие «остыло»: isActive=${ua.active})`);
+        const t2 = await c.ev(TAP('#mLike'), true);
+        await sleep(1500);
+        ok(t2?.prevented === false && /youtube\.com\/watch\?v=/.test(t2.href) && count(G, 'rate') === 1, 'второе нажатие — ссылка на YouTube, rate снова не зовём', { t2, rate: count(G, 'rate') });
+        const t3 = await c.ev(TAP('#mLike'), true);
+        await sleep(1500);
+        ok(t3?.prevented === false && count(G, 'rate') === 1, 'третье — тоже ссылка (ролик лайк не даёт), квоту не тратим', { t3, rate: count(G, 'rate'), units: await c.ev(`D37YtLike._test.stats.units`) });
+        ok(onlyRateErrs(c.errs, 403, 1), 'в журнале только одна строка Chrome о 403 от videos.rate', c.errs);
+        await c.shot('ytl-slow403');
+      } finally { await c.close(); }
+    }
+
+    // ═══ (net2) два сбоя сети подряд ═══
+    if (want('net2')) {
+      console.log('— два сбоя сети подряд');
+      const G = { answer: 'stay' }, X = mockGoogle(G);
+      const { user, profile } = oldUser('user');
+      const c = await chrome({ w: 800, h: 600, theme: 'dark', S: { providers: { google: true }, user: null, passwordUser: user, profile, feed: FEED }, extra: X, init: initMode('on') + NOPOPUP + NETFAIL });
+      try {
+        await c.send('Page.navigate', { url: B + '/' });
+        await c.until(READY);
+        ok(await signedIn(c) && await presetTok(c, 20 * 60e3), 'вход почтой (разрешение выдано 20 мин назад)');
+        await c.ev(`openVid(${JSON.stringify(V3)}, 'Обычный ролик', '', '')`, true);
+        await sleep(800);
+        ok((await c.ev(TAP('#mLike'), true))?.prevented === true, 'сбой 1: нажатие → videos.rate');
+        ok(await c.until(`/Не получилось связаться с YouTube/.test(${TOAST})`, 8000), 'сбой 1: строка «не получилось связаться»', await c.ev(TOAST));
+        const opened1 = await c.ev(`window.__opened.length`);
+        console.log(`    сбой 1: ${opened1 ? 'вкладку YouTube пробовали открыть — браузер не дал (null)' : 'вкладку не пробовали открыть'}`);
+        ok(/откроется YouTube/.test(await c.ev(TOAST)), 'сбой 1: и обещание «нажми ещё раз — откроется YouTube»');
+        const t2 = await c.ev(TAP('#mLike'), true);
+        ok(t2?.prevented === false && await c.ev(`window.__rateCalls`) === 1, 'после сбоя 1: следующее нажатие — ссылка (как обещано)', t2);
+        ok((await c.ev(TAP('#mLike'), true))?.prevented === true, 'потом — снова попытка');
+        await sleep(1200);
+        ok(await c.ev(`window.__rateCalls`) === 2 && await c.ev(`D37YtLike.why()`) === 'broken', 'сбой 2: дальше ссылка до конца визита', { calls: await c.ev(`window.__rateCalls`), why: await c.ev(`D37YtLike.why()`) });
+        const t4 = await c.ev(TAP('#mLike'), true);
+        ok(t4?.prevented === false && await c.ev(`window.__rateCalls`) === 2, 'после сбоя 2: ссылка, запросов больше нет', t4);
+        ok(!c.errs.length, 'сеть: ошибок в консоли нет', c.errs);
+        await c.shot('ytl-net2');
       } finally { await c.close(); }
     }
 
