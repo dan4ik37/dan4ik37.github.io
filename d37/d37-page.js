@@ -209,7 +209,7 @@ async function main() {
   let fly = false, third = true;
   const stick = { id: -1, x0: 0, y0: 0, sx: 0, sy: 0 }, look = { id: -1, x: 0, y: 0 };
   let touchJump = false, touchCrouch = false, orbitHeld = false;
-  const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64 };
+  const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64, guard: 128 };
   // EP7 the game layer (a scene with a `game` block): the HUD is drawn and hit tested by the engine; the page forwards
   // keys / pointers and keeps the world's save in this browser (local storage; the site's host may use save() instead)
   const game = app.game_on();
@@ -242,6 +242,7 @@ async function main() {
     if (planet && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
     if (game && (mouse.act || k('KeyE'))) b |= BTN.act;
     if (game && mouse.use) b |= BTN.use;
+    if (game && k('KeyQ')) b |= BTN.guard; // combat v1: hold = block, tap = dodge
     if (game && app.game_paused()) { app.set_move(0, 0, 0); return; }
     app.set_move(sx, sf, b);
   }

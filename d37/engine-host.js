@@ -33,7 +33,7 @@ const OBJ_TEXTURES = true;
 const BUILD_CHECK = true;
 // ep38 A2: the build this page script belongs to — stamped by scripts/pack.mjs into this file, d37-page.js, d37_web.js
 // (D37_GLUE_BUILD) and the wasm (custom section «d37_build»); '' = an unpacked page (the repo's web/): no check.
-export const PAGE_BUILD = 'ba24ed92c2';
+export const PAGE_BUILD = '861b49c17a';
 export function wasmBuildOf(module) {
   try { const s = WebAssembly.Module.customSections(module, 'd37_build'); return s.length ? new TextDecoder().decode(s[0]) : ''; } catch (e) { return ''; }
 }
@@ -114,6 +114,7 @@ user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparen
 .d37h-game.d37h-crouch{bottom:calc(212px + env(safe-area-inset-bottom))}.d37h-game.d37h-fly{bottom:calc(280px + env(safe-area-inset-bottom))}
 .d37h-game.d37h-orbit{bottom:calc(348px + env(safe-area-inset-bottom))}
 @media (pointer:fine){.d37h-orbit,.d37h-game.d37h-orbit{bottom:24px}.d37h-ward{bottom:92px}}
+.d37h-game.d37h-guard{right:16px;bottom:calc(280px + env(safe-area-inset-bottom))}
 .d37h-game.d37h-jump{bottom:calc(76px + env(safe-area-inset-bottom))}.d37h-game.d37h-ward{bottom:calc(144px + env(safe-area-inset-bottom))}
 .d37h-cell .d37h-jump,.d37h-cell .d37h-ward,.d37h-cell .d37h-orbit,.d37h-cell .d37h-hint{display:none!important}
 .d37h-safe{position:absolute;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
@@ -428,8 +429,8 @@ export async function start(o) {
   if (o.wardrobe || studio) send({ t: 'wardrobe', on: true });
 
   // ── input: the held keys -> one action state (the same as the engine's test page d37-page.js) ──
-  const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64 };
-  let fly = false, third = true, body = (o.look && o.look.body) || 'girl', touchJump = false, touchCrouch = false, orbitHeld = false;
+  const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64, guard: 128 };
+  let fly = false, third = true, body = (o.look && o.look.body) || 'girl', touchJump = false, touchCrouch = false, orbitHeld = false, touchGuard = false;
   const stick = { id: -1, x0: 0, y0: 0, sx: 0, sy: 0 }, look = { id: -1, x: 0, y: 0 };
   const NEXT_BODY = { girl: 'boy', boy: 'mannequin', mannequin: 'girl' };
   const keys = st.keys;
@@ -449,6 +450,8 @@ export async function start(o) {
     if (planet && (!game || creative) && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
     if (game && (mouse.act || k('KeyE'))) b |= BTN.act;
     if (game && mouse.use) b |= BTN.use;
+    // combat v1: the one guard button (Q / the phone's shield): hold = block, tap = dodge
+    if (game && (touchGuard || k('KeyQ'))) b |= BTN.guard;
     st.app.set_move(sx, fw, b);
   }
   const run = (cmd) => { try { const r = st.app.admin(cmd); const m = /^character (\w+)$/.exec(cmd); if (m) body = m[1]; return r; } catch (e) { return 'отказ: ' + e; } };
@@ -592,7 +595,8 @@ export async function start(o) {
     b.addEventListener('pointerdown', h(true));
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, h(false));
   };
-  // 27.11 hotfix (engine c-wardrobe 1f02da0): bWard outside the if — syncPanel toggles it; inside the if every B press on desktop threw
+  // the touch button only (desktop uses B). bWard lives here, outside the if: syncPanel toggles it and must not throw
+  // when there is none (a1e2c85 scoped it inside the if and every B press on desktop died in syncPanel)
   let bWard = null;
   if (touch && !studio) {
     bWard = button('d37h-ward', '👕', 'Гардероб');
@@ -602,6 +606,8 @@ export async function start(o) {
   if (planet && (!game || creative)) hold(button('d37h-orbit', '🌍', 'Орбита ↔ земля (O)'), (v) => { orbitHeld = v; });
   if (touch) {
     if (!studio) hold(button('d37h-jump', '⤒', 'Прыжок'), (v) => { touchJump = v; });
+    // combat v1: the guard button of the phone (hold = block, tap = dodge); the attack is the existing action button
+    if (!studio && game && !creative) hold(button('d37h-guard', '🛡', 'Защита: держать — блок, тап — уворот (Q)'), (v) => { touchGuard = v; });
     // ep11-fix-body (CHECK-BODY 2): the touch prompts say «ПРИСЕСТЬ: СЛЕЗТЬ / СПРЫГНУТЬ», the roll needs crouch at the
     // landing, and the creative world flies (F on a PC): a held crouch disc and a fly toggle
     if (!studio) hold(button('d37h-crouch', '⤓', 'Присесть / слезть (C)'), (v) => { touchCrouch = v; });

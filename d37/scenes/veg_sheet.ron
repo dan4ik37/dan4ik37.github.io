@@ -1,0 +1,17 @@
+(
+    version: 0,
+    name: "veg_sheet",
+    seed: 37,
+    terrain: (radius: 1),
+    sun: (azimuth_deg: 0, elevation_deg: 45),
+    cameras: {},
+    planet: (
+        profile: "home",
+        at: (29.0, 81.0),
+        altitude: 2.0,
+        yaw_deg: 30,
+        pitch_deg: 8,
+        time: 1200,
+    ),
+    game: (spawn: Home, hints: false, radius: 72, forest: 0.0, creative: false),
+)
