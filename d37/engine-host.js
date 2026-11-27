@@ -592,8 +592,10 @@ export async function start(o) {
     b.addEventListener('pointerdown', h(true));
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, h(false));
   };
+  // 27.11 hotfix (engine c-wardrobe 1f02da0): bWard outside the if — syncPanel toggles it; inside the if every B press on desktop threw
+  let bWard = null;
   if (touch && !studio) {
-    const bWard = button('d37h-ward', '👕', 'Гардероб');
+    bWard = button('d37h-ward', '👕', 'Гардероб');
     bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
   }
   // ep11 publish: the creative world has the game layer (creative rules) and still flies back up with one button
@@ -676,7 +678,7 @@ export async function start(o) {
   function syncPanel(show) {
     wardrobeShown = !!show;
     panel.style.display = wardrobeShown ? 'block' : 'none';
-    bWard.classList.toggle('on', wardrobeShown);
+    if (bWard) bWard.classList.toggle('on', wardrobeShown);
     if (wardrobeShown) {
       if (document.pointerLockElement === canvas) unlock(); else if (document.pointerLockElement) document.exitPointerLock();
       hint.style.opacity = '0';
