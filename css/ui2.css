@@ -346,6 +346,8 @@ html.pff-on .pff-b>*>.pf2-kick:first-child{justify-content:flex-end}
 /* вкладки + «Свернуть всё» одной полосой */
 .pfw-bar{display:flex;gap:.6rem;align-items:stretch;min-width:0}
 .pfw-bar>.pfw-tabs{flex:1 1 auto;min-width:0}
+/* 27.11: вкладки переносятся на вторую строку — пятая «⚙️ Моё» (там «Выйти из аккаунта») пряталась за краем без видимой прокрутки; откат — удалить эту строку */
+.pfw-tabs{flex-wrap:wrap;overflow-x:visible}
 .pfw-all{flex:none;min-height:44px;padding:0 1rem;border-radius:16px;border:1px solid var(--line-hi);background:var(--card);color:var(--muted);font:700 .86rem 'Montserrat',sans-serif;cursor:pointer;white-space:nowrap}
 .pfw-all:hover{color:var(--text-hi)}
 .pfw-all[hidden]{display:none}
