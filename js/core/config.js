@@ -152,7 +152,7 @@ const AUTH_SOCIAL = true;
 // 'on'   — у всех (после проверки приложения в Google). Код — js/core/ytlike.js (D37YtLike). Пошагово — docs/areas/youtube-like-setup-RU.md.
 // YT_CLIENT_ID — «ID клиента» Google (…apps.googleusercontent.com — НЕ секрет; «Секрет клиента» сюда не вписывать никогда). Пусто — выключено.
 // Откат — YT_LIKE_REAL = 'off'.
-const YT_LIKE_REAL = 'test';   // 26.11: владелец сделал шаги 1–3 (YouTube Data API, адрес возврата, право youtube.force-ssl) — пока только админы
+const YT_LIKE_REAL = 'off';   // 27.11 СРОЧНО: канал Dan4ik37 удалён YouTube («спам, обман») — все действия от имени зрителей (лайк, подписка, комментарий) выключены до решения по апелляции; было 'test'.   // 26.11: владелец сделал шаги 1–3 (YouTube Data API, адрес возврата, право youtube.force-ssl) — пока только админы
 const YT_CLIENT_ID = '1031322105401-qgimdprp8i6odgjddrbuovqq05u75eae.apps.googleusercontent.com';   // публичный ID клиента проекта «Youtube d37» (тот же, что у входа через Google)
 const YT_LIKE_TEST_IDS = ['f4bae9f4-f634-4138-92b8-02b33d6e36cc'];   // 27.11: аккаунт «тест» владельца — для видео проверки Google   // id аккаунтов сайта (uuid), не почты
 // ❤ «Нравится» (на сайте) у РОЛИКОВ — владелец 26.11: «кнопка „Нравится“ лишняя будто теперь». 'auto' — когда настоящий лайк на YouTube
