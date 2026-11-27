@@ -27,13 +27,34 @@ const { D37Web, ground_layer, bridge_version, last_panic } = wasmApi;
 import { finishDigJob, planetJobs, terrainWorkerCount } from './planet-jobs.js';
 
 export const BRIDGE = 1;
+
+// c-settings ST-05b (checker round): the frame cap as a due-time accumulator. A frame is drawn when the display's
+// frame reaches the next due time (less half a display frame); each drawn frame moves the due time on by 1000 / cap.
+// The old rule («skip while less than 1000 / cap - 1.5 ms passed since the last drawn frame») never skipped at 144 on
+// a 165 Hz display and halved 90 and 120 to ~82. `g` = {due, prev, dt} kept by the caller; returns true = draw.
+// CAP_ACCUMULATOR = false is the one-line rollback to the old rule.
+export const CAP_ACCUMULATOR = true;
+export function capGate(g, now, cap) {
+  if (g.prev) { const d = now - g.prev; if (d > 0 && d < 100) g.dt = g.dt ? g.dt * 0.9 + d * 0.1 : d; }
+  g.prev = now;
+  if (!(cap > 0 && cap < 1e9)) { g.due = 0; g.last = now; return true; }
+  if (!CAP_ACCUMULATOR) {
+    if (g.last && now - g.last < 1000 / cap - 1.5) return false;
+    g.last = now; return true;
+  }
+  const step = 1000 / cap;
+  if (!g.due || now - g.due > step * 2) g.due = now; // the first frame, or after a stall: count again from now
+  if (now < g.due - (g.dt || step) * 0.5) return false;
+  g.due += step;
+  return true;
+}
 const HERE = (f) => new URL('./' + f, import.meta.url).href;
 // ep38 A2 switches (one-line rollbacks): the CC0 object images loaded by this page; the build check below.
 const OBJ_TEXTURES = true;
 const BUILD_CHECK = true;
 // ep38 A2: the build this page script belongs to — stamped by scripts/pack.mjs into this file, d37-page.js, d37_web.js
 // (D37_GLUE_BUILD) and the wasm (custom section «d37_build»); '' = an unpacked page (the repo's web/): no check.
-export const PAGE_BUILD = '6e3ad92425';
+export const PAGE_BUILD = 'bc2467a48f';
 export function wasmBuildOf(module) {
   try { const s = WebAssembly.Module.customSections(module, 'd37_build'); return s.length ? new TextDecoder().decode(s[0]) : ''; } catch (e) { return ''; }
 }
@@ -117,6 +138,10 @@ user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparen
 .d37h-game.d37h-guard{right:16px;bottom:calc(280px + env(safe-area-inset-bottom))}
 .d37h-game.d37h-jump{bottom:calc(76px + env(safe-area-inset-bottom))}.d37h-game.d37h-ward{bottom:calc(144px + env(safe-area-inset-bottom))}
 .d37h-cell .d37h-jump,.d37h-cell .d37h-ward,.d37h-cell .d37h-orbit,.d37h-cell .d37h-hint{display:none!important}
+/* c-settings: the touch buttons' size (touch.button_size) and the lefty mirror (touch.lefty) */
+.d37h-btn{transform:scale(var(--d37h-bs,1));transform-origin:100% 100%}
+.d37h-lefty .d37h-btn{right:auto!important;left:16px;transform-origin:0 100%}
+.d37h-menuopen .d37h-btn{display:none!important}
 .d37h-safe{position:absolute;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 .d37h-hint{position:absolute;z-index:2;left:50%;bottom:calc(10px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:min(92%,640px);
 padding:6px 12px;border-radius:10px;background:rgba(0,0,0,.5);color:#fff;font:13px/1.35 system-ui,sans-serif;text-align:center;pointer-events:none;transition:opacity .8s}
@@ -260,8 +285,17 @@ export async function start(o) {
     if (mine && theirs && mine !== theirs) { log('config: Worker rules ' + theirs + ' != page ' + mine); emit({ t: 'error', code: 'config-mismatch', msg: 'rules page ' + mine + ' worker ' + theirs }); }
   }
   progress('gpu', 0, 1);
+  // c-settings ST-05b: the render scale (gfx.render_scale, battery mode, the dynamic resolution) shrinks the canvas'
+  // backing size; the page's CSS size stays (the browser scales the picture up)
+  const hs = { gen: -1, v: {}, dyn: 1, fpsT: 0, fpsN: 0, gate: { due: 0, prev: 0, dt: 0, last: 0 }, measure: null };
+  const renderScale = () => {
+    let k = (hs.v['gfx.render_scale'] || 100) / 100;
+    if (hs.v['gfx.battery']) k = Math.min(k, 0.75);
+    if (hs.v['gfx.dynamic_res']) k *= hs.dyn;
+    return Math.max(0.25, Math.min(1, k));
+  };
   const fit = () => {
-    const dpr = Math.min(window.devicePixelRatio || 1, touch ? 1.5 : 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, touch ? 1.5 : 2) * renderScale();
     const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; return true; }
     return false;
@@ -274,7 +308,24 @@ export async function start(o) {
     && (o.gpuCulling ?? (new URLSearchParams(location.search).get('gpu_cull') === '1'))) {
     st.gpuCullingEnabled = await app.set_gpu_culling(true);
   }
-  if (o.quality) { try { app.set_quality(o.quality); } catch (e) { /* keeps mid */ } }
+  // c-settings ST-04: the player's settings of this device (localStorage «d37.settings»), the device class and the
+  // tier the site chose today («Авто» keeps it); ?q= stays a developer's override over everything
+  const SKEY = 'd37.settings';
+  const hasSettings = typeof wasmApi.settings_load === 'function' && typeof app.settings_device === 'function';
+  if (hasSettings) {
+    let saved = '';
+    try { saved = localStorage.getItem(SKEY) || ''; } catch (e) { /* storage off: the defaults */ }
+    try { const w = JSON.parse(wasmApi.settings_load(saved)); if (w.length) log('settings: ' + w.slice(0, 3).join('; ')); } catch (e) { log('settings: ' + String(e).slice(0, 120)); }
+    try { app.settings_device(touch, o.quality || 'mid'); } catch (e) { /* an older engine */ }
+    try {
+      const dt = document.documentElement.dataset.theme;
+      wasmApi.settings_theme_hint(dt ? dt === 'light' : typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: light)').matches);
+    } catch (e) { /* no theme hint */ }
+  }
+  let qUrl = '';
+  try { qUrl = new URLSearchParams(location.search).get('q') || ''; } catch (e) { /* no address */ }
+  if (qUrl) { try { app.set_quality(qUrl); } catch (e) { /* keeps the settings' tier */ } }
+  else if (o.quality && !hasSettings) { try { app.set_quality(o.quality); } catch (e) { /* keeps mid */ } }
   // ep38 A2 (R-LATE-1122-05, the site's game drew leaf cards and tufts as flat pale squares): the things' CC0 material
   // images, as the standalone page loads them — this page never did, so every card kept the 1 x 1 stand-in (no
   // cut-out). Rollback: OBJ_TEXTURES = false.
@@ -430,7 +481,9 @@ export async function start(o) {
 
   // ── input: the held keys -> one action state (the same as the engine's test page d37-page.js) ──
   const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64, guard: 128 };
-  let fly = false, third = true, body = (o.look && o.look.body) || 'girl', touchJump = false, touchCrouch = false, orbitHeld = false, touchGuard = false;
+  let fly = false, third = true, body = (o.look && o.look.body) || 'girl', touchJump = false, touchCrouch = false, orbitHeld = false, touchGuard = false, guardOn = false;
+  // c-settings IN-02c: the gamepad (the Gamepad API, polled each frame): the left stick, the buttons as actions
+  const pad = { sx: 0, sy: 0, held: new Map(), present: false };
   const stick = { id: -1, x0: 0, y0: 0, sx: 0, sy: 0 }, look = { id: -1, x: 0, y: 0 };
   const NEXT_BODY = { girl: 'boy', boy: 'mannequin', mannequin: 'girl' };
   const keys = st.keys;
@@ -442,6 +495,8 @@ export async function start(o) {
     let sx = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
     let b = 0;
     if (stick.id !== -1) { sx += stick.sx; fw += stick.sy; if (Math.hypot(stick.sx, stick.sy) > 0.9) b |= BTN.run; }
+    // c-settings IN-02c: the pad's left stick walks like the touch stick
+    if (pad.sx || pad.sy) { sx += pad.sx; fw += pad.sy; if (Math.hypot(pad.sx, pad.sy) > 0.9) b |= BTN.run; }
     sx = Math.max(-1, Math.min(1, sx)); fw = Math.max(-1, Math.min(1, fw));
     if (touchJump || k('Space')) b |= BTN.jump;
     if (k('ShiftLeft') || k('ShiftRight')) b |= BTN.run;
@@ -451,7 +506,8 @@ export async function start(o) {
     if (game && (mouse.act || k('KeyE'))) b |= BTN.act;
     if (game && mouse.use) b |= BTN.use;
     // combat v1: the one guard button (Q / the phone's shield): hold = block, tap = dodge
-    if (game && (touchGuard || k('KeyQ'))) b |= BTN.guard;
+    // c-settings: «Защита: нажать, не держать» (ctl.guard_toggle) — Q / the shield toggle the same guard bit
+    if (game && (hs.v['ctl.guard_toggle'] ? guardOn : (touchGuard || k('KeyQ')))) b |= BTN.guard;
     st.app.set_move(sx, fw, b);
   }
   const run = (cmd) => { try { const r = st.app.admin(cmd); const m = /^character (\w+)$/.exec(cmd); if (m) body = m[1]; return r; } catch (e) { return 'отказ: ' + e; } };
@@ -521,13 +577,23 @@ export async function start(o) {
   });
   // look-fix: a turn the page means exactly (keys, the lift after a landing) skips the engine's spike filter
   const turn = (dx, dy) => { if (st.app.turn_look) st.app.turn_look(dx, dy); else st.app.add_look(dx, dy); };
-  on(window, 'keydown', (e) => {
-    if (!live() || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
+  // c-settings IN-02a: every key / mouse button / pad button goes through the engine's action map (the identity with
+  // the default map; '' = a key the player took away from its action: nothing; the raw code while a field of the
+  // controls page waits for a key). `down` remembers what a held key was translated to (the release matches it).
+  const tr = (c) => { try { return st.app && typeof st.app.input_code === 'function' ? st.app.input_code(c) : c; } catch (er) { return c; } };
+  const down = new Map();
+  on(window, 'keydown', (ev) => {
+    if (!live() || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(ev.code)) ev.preventDefault();
     // F5 never reloads the site, F1 never opens the browser's help, F3 never its search, F11 is ours
-    if (GAME_FKEY.test(e.code)) e.preventDefault();
+    if (GAME_FKEY.test(ev.code)) ev.preventDefault();
     // the same Esc that released the pointer lock (and opened the pause through pointerlockchange) does not close it
-    if (e.code === 'Escape' && performance.now() - pauseAt < 400) { e.stopPropagation(); return; }
+    if (ev.code === 'Escape' && performance.now() - pauseAt < 400) { ev.stopPropagation(); return; }
+    const mapped = ev.repeat && down.has(ev.code) ? down.get(ev.code) : tr(ev.code);
+    if (!mapped) { ev.stopPropagation(); return; }
+    down.set(ev.code, mapped);
+    const e = { code: mapped, repeat: ev.repeat, preventDefault: () => ev.preventDefault() };
+    if (!e.repeat && e.code === 'KeyQ' && game && hs.v['ctl.guard_toggle'] && !paused()) guardOn = !guardOn;
     if (!e.repeat && !game) {
       // scenes without the game layer: F5 = the view, F11 = our fullscreen
       if (e.code === 'F5') { third = !third; st.app.set_third_person(third); }
@@ -555,10 +621,14 @@ export async function start(o) {
     if (studio && !e.repeat) { const t = { KeyA: [-180, 0], ArrowLeft: [-180, 0], KeyD: [180, 0], ArrowRight: [180, 0], KeyW: [0, -60], ArrowUp: [0, -60], KeyS: [0, 60], ArrowDown: [0, 60] }[e.code]; if (t) turn(t[0], t[1]); }
     keys.add(e.code); publish();
     // the key is the game's: the page under it (site hotkeys, Esc of its panels, a focused site button) never sees it
-    e.stopPropagation();
+    ev.stopPropagation();
   }, true);
-  on(window, 'keyup', (e) => { if (keys.delete(e.code)) publish(); if (live() && !e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation(); }, true);
-  on(window, 'blur', () => { keys.clear(); drag = false; publish(); });
+  on(window, 'keyup', (e) => { const m = down.has(e.code) ? down.get(e.code) : e.code; down.delete(e.code); if (keys.delete(m)) publish(); if (live() && !e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation(); }, true);
+  on(window, 'blur', () => { keys.clear(); down.clear(); drag = false; publish(); focus(false); });
+  on(window, 'focus', () => focus(true));
+  on(document, 'visibilitychange', () => focus(document.visibilityState !== 'hidden'));
+  // c-settings ST-02: «Тихо в другой вкладке» needs to know where the focus is
+  function focus(onPage) { try { st.app && st.app.audio_focus && st.app.audio_focus(onPage); } catch (e) { /* no sound */ } }
   // look-fix (owner 13.11 «резко в разные стороны тащит»): the engine drops pointer-lock spikes (camera::LookFilter);
   // a new lock drops its first event (the cursor's jump to the centre), a drag or a finger starts a fresh gesture
   const lookReset = (skip) => { try { if (st.app && st.app.look_reset) st.app.look_reset(skip); } catch (e) { /* an older engine: no filter */ } };
@@ -575,12 +645,23 @@ export async function start(o) {
       // a menu or the tray takes the click; with the pointer locked: left = the action, right = place / eat
       // (the HUD's release comes on mouseup: the inventory window drags items; the other menus act the same on it)
       if (document.pointerLockElement !== canvas && st.app.game_pointer(x, y, 0, 1)) { hudMouse = true; return; }
-      if (document.pointerLockElement === canvas) { if (e.button === 0) mouse.act = true; if (e.button === 2) mouse.use = true; publish(); return; }
+      if (document.pointerLockElement === canvas) { mouseBtn(e.button, true); publish(); return; }
     }
     drag = true;
     lookReset(false);
   });
-  on(window, 'mouseup', (e) => { drag = false; if (hudMouse) { hudMouse = false; if (game) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 2, 1); acts(); publish(); } return; } if (game) { if (e.button === 0) mouse.act = false; if (e.button === 2) mouse.use = false; publish(); } });
+  on(window, 'mouseup', (e) => { drag = false; if (hudMouse) { hudMouse = false; if (game) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 2, 1); acts(); publish(); } return; } if (game) { mouseBtn(e.button, false); publish(); } });
+  // c-settings IN-02a: a mouse button as its action (Mouse0 = act, Mouse2 = use by default; a key bound to act / use
+  // reaches them as KeyE / ... through the key path, a mouse button moved to another action presses that action's key)
+  const mouseHeld = new Map();
+  function mouseBtn(b, isDown) {
+    const raw = 'Mouse' + b;
+    const c = isDown ? tr(raw) : (mouseHeld.get(raw) || '');
+    if (isDown) mouseHeld.set(raw, c); else mouseHeld.delete(raw);
+    if (c === 'Mouse0') mouse.act = isDown;
+    else if (c === 'Mouse2') mouse.use = isDown;
+    else if (c) { if (isDown) keys.add(c); else keys.delete(c); }
+  }
   on(canvas, 'wheel', (e) => { e.preventDefault(); st.app.zoom_by(-e.deltaY / (e.deltaMode === 1 ? 3 : 100)); }, { passive: false });
   on(window, 'mousemove', (e) => {
     if (!live()) return;
@@ -607,7 +688,7 @@ export async function start(o) {
   if (touch) {
     if (!studio) hold(button('d37h-jump', '⤒', 'Прыжок'), (v) => { touchJump = v; });
     // combat v1: the guard button of the phone (hold = block, tap = dodge); the attack is the existing action button
-    if (!studio && game && !creative) hold(button('d37h-guard', '🛡', 'Защита: держать — блок, тап — уворот (Q)'), (v) => { touchGuard = v; });
+    if (!studio && game && !creative) hold(button('d37h-guard', '🛡', 'Защита: держать — блок, тап — уворот (Q)'), (v) => { if (hs.v['ctl.guard_toggle']) { if (v) guardOn = !guardOn; } else touchGuard = v; });
     // ep11-fix-body (CHECK-BODY 2): the touch prompts say «ПРИСЕСТЬ: СЛЕЗТЬ / СПРЫГНУТЬ», the roll needs crouch at the
     // landing, and the creative world flies (F on a PC): a held crouch disc and a fly toggle
     if (!studio) hold(button('d37h-crouch', '⤓', 'Присесть / слезть (C)'), (v) => { touchCrouch = v; });
@@ -622,13 +703,14 @@ export async function start(o) {
       e.preventDefault();
       if (game) { const [x, y] = toCanvas(e); if (st.app.game_pointer(x, y, 0, e.pointerId)) { hudTouch.add(e.pointerId); acts(); publish(); return; } }
       const r = canvas.getBoundingClientRect();
-      if (!studio && e.clientX - r.left < r.width / 2 && stick.id === -1) { stick.id = e.pointerId; stick.x0 = e.clientX; stick.y0 = e.clientY; stick.sx = 0; stick.sy = 0; }
+      const stickSide = hs.v['touch.lefty'] ? e.clientX - r.left >= r.width / 2 : e.clientX - r.left < r.width / 2;
+      if (!studio && stickSide && stick.id === -1) { stick.id = e.pointerId; stick.x0 = e.clientX; stick.y0 = e.clientY; stick.sx = 0; stick.sy = 0; }
       else if (look.id === -1) { look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; lookReset(false); }
     });
     on(canvas, 'pointermove', (e) => {
       if (hudTouch.has(e.pointerId)) { const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 1, e.pointerId); return; }
       if (e.pointerId === stick.id) { stick.sx = Math.max(-1, Math.min(1, (e.clientX - stick.x0) / R)); stick.sy = Math.max(-1, Math.min(1, (stick.y0 - e.clientY) / R)); publish(); }
-      else if (e.pointerId === look.id) { st.app.add_look((e.clientX - look.x) * 2.5, (e.clientY - look.y) * 2.5); look.x = e.clientX; look.y = e.clientY; }
+      else if (e.pointerId === look.id) { const k = hs.v['ctl.touch_sens'] || 2.5; st.app.add_look((e.clientX - look.x) * k, (e.clientY - look.y) * k); look.x = e.clientX; look.y = e.clientY; }
     });
     const end = (e) => { if (hudTouch.has(e.pointerId)) { hudTouch.delete(e.pointerId); const [x, y] = toCanvas(e); st.app.game_pointer(x, y, 2, e.pointerId); publish(); return; } if (e.pointerId === stick.id) { stick.id = -1; stick.sx = 0; stick.sy = 0; publish(); } if (e.pointerId === look.id) look.id = -1; };
     on(canvas, 'pointerup', end); on(canvas, 'pointercancel', end);
@@ -761,6 +843,10 @@ export async function start(o) {
     st.raf = 0;
     if (st.dead || st.paused || !st.app) return;
     const a = st.app;
+    // c-settings ST-05b: the frame cap (gfx.fps_cap, battery mode = 30 at most): a frame comes early is skipped
+    const cap = Math.min(+hs.v['gfx.fps_cap'] || 1e9, hs.v['gfx.battery'] ? 30 : 1e9);
+    if (!capGate(hs.gate, now, cap)) { st.raf = requestAnimationFrame(frame); return; }
+    pollPad();
     // a world Worker that died without a word (killed for memory): no frame for o.worldTimeoutMs while the game runs
     if (ww && st.worldAt && now - st.worldAt > (o.worldTimeoutMs || 20000) && document.visibilityState !== 'hidden') { fail('world-worker', 'no world frame for ' + Math.round((now - st.worldAt) / 1000) + ' s'); return; }
     if (fit()) a.resize(canvas.width, canvas.height);
@@ -808,6 +894,9 @@ export async function start(o) {
     if (now - lastT > 250) {
       st.fps = n * 1000 / Math.max(acc, 1); acc = 0; n = 0; lastT = now;
       if (game) { try { a.game_set_fps(st.fps); } catch (e) { /* numbers only */ } cellSync(); }
+      settingsTick(now);
+      // c-settings: the page's touch buttons never sit over the game's menu
+      root.classList.toggle('d37h-menuopen', menuOpen());
       if (!st.loaded && planet) { try { const p = JSON.parse(a.planet_stats()); progress('world', p.shown || 0, (p.shown || 0) + (p.queued || 0) + (p.ready || 0)); } catch (e) { /* numbers only */ } }
     }
     st.raf = requestAnimationFrame(frame);
@@ -852,6 +941,89 @@ export async function start(o) {
       } catch (e) { emit({ t: 'error', code: 'join', msg: String(e && e.message || e).slice(0, 200) }); }
     }
   }
+  // c-settings: the settings moved (the game menu, a load): keep the text in localStorage, re-read what the page
+  // applies itself, resize for a new render scale, show / hide the hint pill, the touch buttons' size and side
+  function settingsTick(now) {
+    if (!hasSettings || !st.app) return;
+    let g = -1;
+    try { g = wasmApi.settings_gen(); } catch (e) { return; }
+    if (g !== hs.gen) {
+      const first = hs.gen === -1;
+      hs.gen = g;
+      try { hs.v = JSON.parse(wasmApi.settings_host_json()); } catch (e) { hs.v = {}; }
+      if (!first) { try { localStorage.setItem(SKEY, wasmApi.settings_text()); } catch (e) { /* storage off: this session only */ } }
+      root.classList.toggle('d37h-lefty', !!hs.v['touch.lefty']);
+      root.style.setProperty('--d37h-bs', String((hs.v['touch.button_size'] || 100) / 100));
+      if (hs.v['ui.hints'] === 0) hint.style.display = 'none'; else hint.style.display = '';
+      if (fit()) st.app.resize(canvas.width, canvas.height);
+    }
+    // the dynamic resolution: below the target the picture gets coarser by steps, above it finer again
+    if (hs.v['gfx.dynamic_res'] && now - hs.fpsT > 1000) {
+      hs.fpsT = now;
+      const target = Math.min(+hs.v['gfx.fps_cap'] || 60, hs.v['gfx.battery'] ? 30 : 1e9);
+      const was = hs.dyn;
+      if (st.fps < target * 0.85) hs.dyn = Math.max(0.5, hs.dyn - 0.1);
+      else if (st.fps > target * 0.97 && hs.dyn < 1) hs.dyn = Math.min(1, hs.dyn + 0.05);
+      if (was !== hs.dyn && fit()) st.app.resize(canvas.width, canvas.height);
+    }
+    // «Авто» on its first run: 5 s of play are measured once; a slow device steps down to «Низкая» (stored), a fast
+    // one keeps the site's tier; the result is kept and never measured again
+    if (st.loaded && hs.v && typeof wasmApi.settings_set === 'function') {
+      let done = true;
+      try { done = !!localStorage.getItem(SKEY + '.measured'); } catch (e) { done = true; }
+      if (!done) {
+        if (!hs.measure) hs.measure = { t0: now, n: 0, sum: 0 };
+        hs.measure.n++; hs.measure.sum += st.fps;
+        if (now - hs.measure.t0 > 5000) {
+          const fps = hs.measure.sum / Math.max(1, hs.measure.n);
+          let picked = 'auto';
+          try { if (fps < 28 && wasmApi.settings_preset() === 'auto') { wasmApi.settings_set('gfx.preset', 1); picked = 'low'; } } catch (e) { /* older engine */ }
+          try { localStorage.setItem(SKEY + '.measured', JSON.stringify({ fps: Math.round(fps), picked })); } catch (e) { /* storage off */ }
+          log('settings: first-run measure ' + Math.round(fps) + ' fps -> ' + picked);
+        }
+      }
+    }
+  }
+  // c-settings IN-02c: the first connected gamepad — buttons as actions (through the map), the left stick walks, the
+  // right stick looks; unplugging releases whatever it held
+  function pollPad() {
+    let p = null;
+    try { const list = navigator.getGamepads ? navigator.getGamepads() : []; for (const g of list) if (g && g.connected) { p = g; break; } } catch (e) { p = null; }
+    // the phone's controls tab lists the pad rows only while a gamepad is there (said to the engine on a change)
+    if (!!p !== pad.present) { pad.present = !!p; try { if (typeof wasmApi.input_pad_present === 'function') wasmApi.input_pad_present(pad.present); } catch (e) { /* older engine */ } }
+    if (!p) { if (pad.held.size || pad.sx || pad.sy) padRelease(); return; }
+    const dz = hs.v['ctl.pad_deadzone'] || 0.15;
+    const ax = (v) => (Math.abs(v) < dz ? 0 : Math.sign(v) * (Math.abs(v) - dz) / (1 - dz));
+    const nsx = ax(p.axes[0] || 0), nsy = -ax(p.axes[1] || 0);
+    if (nsx !== pad.sx || nsy !== pad.sy) { pad.sx = nsx; pad.sy = nsy; publish(); }
+    const lx = ax(p.axes[2] || 0), ly = ax(p.axes[3] || 0);
+    if ((lx || ly) && !paused()) { try { st.app.add_look(lx * 14, ly * 14); } catch (e) { /* gone */ } }
+    p.buttons.forEach((b, i) => {
+      const raw = 'Pad' + i, was = pad.held.has(raw), is = !!(b && b.pressed);
+      if (is === was) return;
+      if (is) {
+        const c = tr(raw);
+        pad.held.set(raw, c);
+        if (!c) return;
+        if (c === 'KeyQ' && game && hs.v['ctl.guard_toggle']) guardOn = !guardOn;
+        if (c === 'Mouse0') mouse.act = true; else if (c === 'Mouse2') mouse.use = true;
+        else if (game) { try { if (st.app.game_key(c)) { if (menuOpen()) unlock(); } acts(); } catch (e) { /* not a game key */ } }
+        if (!paused()) { if (c === 'KeyV') { third = !third; st.app.set_third_person(third); } if (c === 'KeyF') fly = !fly; if (c === 'KeyB') send({ t: 'wardrobe', on: !wardrobeShown }); }
+        keys.add(c);
+      } else {
+        const c = pad.held.get(raw) || '';
+        pad.held.delete(raw);
+        if (c === 'Mouse0') mouse.act = false; else if (c === 'Mouse2') mouse.use = false; else if (c) keys.delete(c);
+      }
+      publish();
+    });
+  }
+  function padRelease() {
+    for (const c of pad.held.values()) { if (c === 'Mouse0') mouse.act = false; else if (c === 'Mouse2') mouse.use = false; else if (c) keys.delete(c); }
+    pad.held.clear(); pad.sx = 0; pad.sy = 0; publish();
+  }
+  on(window, 'gamepaddisconnected', () => padRelease());
+  settingsTick(performance.now());
   publish();
   on(document, 'visibilitychange', () => st.app?.reset_frame_clock?.());
   st.raf = requestAnimationFrame(frame);
@@ -882,6 +1054,13 @@ export async function start(o) {
   const handle = {
     state: st,
     send,
+    // c-settings ST-04: the site's account values (bridge message `settings`): the text is loaded and kept here
+    settings(text) {
+      if (!hasSettings || typeof text !== 'string') return false;
+      try { wasmApi.settings_load(text); localStorage.setItem(SKEY, wasmApi.settings_text()); } catch (e) { return false; }
+      return true;
+    },
+    settingsText() { try { return hasSettings ? wasmApi.settings_text() : ''; } catch (e) { return ''; } },
     // the player's game as bytes (bridge::SaveV1); empty when the engine is gone
     save() { try { return st.app && !st.dead ? st.app.save() : new Uint8Array(0); } catch (e) { return new Uint8Array(0); } },
     stats() { try { return st.app ? JSON.parse(st.app.stats()) : null; } catch (e) { return null; } },
