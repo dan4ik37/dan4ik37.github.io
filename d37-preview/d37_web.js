@@ -543,7 +543,8 @@ export class D37Web {
         wasm.d37web_game_set_touch(this.__wbg_ptr, on);
     }
     /**
-     * The game's numbers for the page and the tests: JSON {"on", "ring", "parts", "drops", "items", "hint", "saves",
+     * The game's numbers for the page and the tests: JSON {"on", "ring", "parts", "drops", "items", "picked" (picked
+     * ground-cover instances near the player: the view's rows, grassfix), "hint", "saves",
      * "lights", "hash"} ("{}" without a game layer).
      * @returns {string}
      */
@@ -6120,4 +6121,4 @@ async function __wbg_init_once(module_or_path) {
 
 export { initSync, __wbg_init as default };
 
-export const D37_GLUE_BUILD = '861b49c17a';
+export const D37_GLUE_BUILD = '6e3ad92425';
