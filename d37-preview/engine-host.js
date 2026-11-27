@@ -31,30 +31,9 @@ const HERE = (f) => new URL('./' + f, import.meta.url).href;
 // ep38 A2 switches (one-line rollbacks): the CC0 object images loaded by this page; the build check below.
 const OBJ_TEXTURES = true;
 const BUILD_CHECK = true;
-// c-studio R2 (the page froze after 2–3 «Играть» in a row at 1920 / 3440): a disposed start gives its GPU memory back
-// at once. wgpu's WebGPU backend never destroys a device, a buffer or a texture on drop (they wait for the JS garbage
-// collector, which does not see GPU memory), and a WebGL2 context lives until its canvas is collected — so every start
-// of a page (each studio world opens a new one) left a device full of screen-sized targets behind. Rollback: false.
-// (`?gpufree=0` / `=1` in the page address overrides it for the A/B check in studio-d37-e2e.cjs)
-const GPU_FREE = true;
-const gpuFree = () => { try { const q = new URLSearchParams(location.search).get('gpufree'); return q === null ? GPU_FREE : q === '1'; } catch (e) { return GPU_FREE; } };
-// the WebGPU devices made while one start creates its renderer (one start at a time: an overlapping start keeps the
-// old behaviour rather than ever destroying a device it did not make)
-let devCollect = null, devPatched = false;
-function collectDevices(list) {
-  if (typeof GPUAdapter === 'undefined' || !GPUAdapter.prototype || typeof GPUAdapter.prototype.requestDevice !== 'function') return false;
-  if (!devPatched) {
-    devPatched = true;
-    const rd = GPUAdapter.prototype.requestDevice;
-    GPUAdapter.prototype.requestDevice = function (...a) { const p = rd.apply(this, a); const c = devCollect; if (c) p.then((d) => { c.push(d); }, () => { /* refused: nothing to free */ }); return p; };
-  }
-  if (devCollect) return false;
-  devCollect = list;
-  return true;
-}
 // ep38 A2: the build this page script belongs to — stamped by scripts/pack.mjs into this file, d37-page.js, d37_web.js
 // (D37_GLUE_BUILD) and the wasm (custom section «d37_build»); '' = an unpacked page (the repo's web/): no check.
-export const PAGE_BUILD = '0e268589fc';
+export const PAGE_BUILD = '861b49c17a';
 export function wasmBuildOf(module) {
   try { const s = WebAssembly.Module.customSections(module, 'd37_build'); return s.length ? new TextDecoder().decode(s[0]) : ''; } catch (e) { return ''; }
 }
@@ -135,6 +114,7 @@ user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparen
 .d37h-game.d37h-crouch{bottom:calc(212px + env(safe-area-inset-bottom))}.d37h-game.d37h-fly{bottom:calc(280px + env(safe-area-inset-bottom))}
 .d37h-game.d37h-orbit{bottom:calc(348px + env(safe-area-inset-bottom))}
 @media (pointer:fine){.d37h-orbit,.d37h-game.d37h-orbit{bottom:24px}.d37h-ward{bottom:92px}}
+.d37h-game.d37h-guard{right:16px;bottom:calc(280px + env(safe-area-inset-bottom))}
 .d37h-game.d37h-jump{bottom:calc(76px + env(safe-area-inset-bottom))}.d37h-game.d37h-ward{bottom:calc(144px + env(safe-area-inset-bottom))}
 .d37h-cell .d37h-jump,.d37h-cell .d37h-ward,.d37h-cell .d37h-orbit,.d37h-cell .d37h-hint{display:none!important}
 .d37h-safe{position:absolute;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
@@ -206,8 +186,6 @@ async function compileWasm(url, rawSize, onBytes) {
 const SCENE_ID = /^[a-z0-9_]{1,32}$/;
 // ep36: a mode file as one command word (hex of its UTF-8 bytes: no spaces, no `;`), solo, (re)started at once
 const MODE_CMD = (text) => { let h = ''; for (const b of new TextEncoder().encode(String(text))) h += (b < 16 ? '0' : '') + b.toString(16); return 'game umode file ' + h + '; game umode play mine'; };
-// c-studio: a text as one command word (base64 of its UTF-8 bytes: no spaces, no `;`)
-const B64 = (text) => { const b = new TextEncoder().encode(String(text)); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); };
 const CHECK = (text) => { try { return JSON.parse(wasmApi.blocks_check(String(text))); } catch (e) { return { ok: false, error: 'проверка не прошла: ' + e }; } };
 export async function start(o) {
   const root = o.root;
@@ -289,11 +267,7 @@ export async function start(o) {
     return false;
   };
   fit();
-  const gpuDevices = [];
-  const collecting = gpuFree() && collectDevices(gpuDevices);
-  let app;
-  try { app = await D37Web.create(canvas, !!o.gl); } finally { if (collecting) devCollect = null; }
-  st.gpuDevices = gpuDevices;
+  const app = await D37Web.create(canvas, !!o.gl);
   st.app = app;
   st.backend = app.backend();
   if (typeof app.set_gpu_culling === 'function'
@@ -414,9 +388,6 @@ export async function start(o) {
   // forwards keys / pointers (the same rules as the engine's page d37-page.js). Its save rides in save() (GAME section).
   const game = app.game_on();
   const creative = o.scene === 'creative';   // ep11 publish: the orbit button in the creative world (see the touch buttons)
-  // c-studio: a «Студия 3D» world (scene 'studio'): the studio page owns the HUD and the hints — no wardrobe (button,
-  // B key), no crouch disc, no start hint over its world; the stick and the jump stay (the old studio has them too)
-  const s3d = o.scene === 'studio';
   st.game = game;
   if (game) app.game_set_touch(touch);
   const mouse = { act: false, use: false };
@@ -458,8 +429,8 @@ export async function start(o) {
   if (o.wardrobe || studio) send({ t: 'wardrobe', on: true });
 
   // ── input: the held keys -> one action state (the same as the engine's test page d37-page.js) ──
-  const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64 };
-  let fly = false, third = true, body = (o.look && o.look.body) || 'girl', touchJump = false, touchCrouch = false, orbitHeld = false;
+  const BTN = { run: 1, jump: 2, crouch: 4, fly: 8, orbit: 16, act: 32, use: 64, guard: 128 };
+  let fly = false, third = true, body = (o.look && o.look.body) || 'girl', touchJump = false, touchCrouch = false, orbitHeld = false, touchGuard = false;
   const stick = { id: -1, x0: 0, y0: 0, sx: 0, sy: 0 }, look = { id: -1, x: 0, y: 0 };
   const NEXT_BODY = { girl: 'boy', boy: 'mannequin', mannequin: 'girl' };
   const keys = st.keys;
@@ -479,6 +450,8 @@ export async function start(o) {
     if (planet && (!game || creative) && (orbitHeld || k('KeyO'))) b |= BTN.orbit;
     if (game && (mouse.act || k('KeyE'))) b |= BTN.act;
     if (game && mouse.use) b |= BTN.use;
+    // combat v1: the one guard button (Q / the phone's shield): hold = block, tap = dodge
+    if (game && (touchGuard || k('KeyQ'))) b |= BTN.guard;
     st.app.set_move(sx, fw, b);
   }
   const run = (cmd) => { try { const r = st.app.admin(cmd); const m = /^character (\w+)$/.exec(cmd); if (m) body = m[1]; return r; } catch (e) { return 'отказ: ' + e; } };
@@ -565,7 +538,7 @@ export async function start(o) {
       if (!paused()) {
         if (e.code === 'KeyF') fly = !fly;
         if (e.code === 'KeyG' && !game) run('character ' + (NEXT_BODY[body] || 'girl')); // in a game G drops (inv-fix)
-        if (e.code === 'KeyB' && !s3d) send({ t: 'wardrobe', on: !wardrobeShown });
+        if (e.code === 'KeyB') send({ t: 'wardrobe', on: !wardrobeShown });
       }
       // the game takes digits, R, Q / I, T, Esc in a menu (a menu frees the mouse)
       if (game) {
@@ -622,17 +595,22 @@ export async function start(o) {
     b.addEventListener('pointerdown', h(true));
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, h(false));
   };
-  if (touch && !studio && !s3d) {
-    const bWard = button('d37h-ward', '👕', 'Гардероб');
+  // the touch button only (desktop uses B). bWard lives here, outside the if: syncPanel toggles it and must not throw
+  // when there is none (a1e2c85 scoped it inside the if and every B press on desktop died in syncPanel)
+  let bWard = null;
+  if (touch && !studio) {
+    bWard = button('d37h-ward', '👕', 'Гардероб');
     bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
   }
   // ep11 publish: the creative world has the game layer (creative rules) and still flies back up with one button
   if (planet && (!game || creative)) hold(button('d37h-orbit', '🌍', 'Орбита ↔ земля (O)'), (v) => { orbitHeld = v; });
   if (touch) {
     if (!studio) hold(button('d37h-jump', '⤒', 'Прыжок'), (v) => { touchJump = v; });
+    // combat v1: the guard button of the phone (hold = block, tap = dodge); the attack is the existing action button
+    if (!studio && game && !creative) hold(button('d37h-guard', '🛡', 'Защита: держать — блок, тап — уворот (Q)'), (v) => { touchGuard = v; });
     // ep11-fix-body (CHECK-BODY 2): the touch prompts say «ПРИСЕСТЬ: СЛЕЗТЬ / СПРЫГНУТЬ», the roll needs crouch at the
     // landing, and the creative world flies (F on a PC): a held crouch disc and a fly toggle
-    if (!studio && !s3d) hold(button('d37h-crouch', '⤓', 'Присесть / слезть (C)'), (v) => { touchCrouch = v; });
+    if (!studio) hold(button('d37h-crouch', '⤓', 'Присесть / слезть (C)'), (v) => { touchCrouch = v; });
     if (o.scene === 'creative') {
       const bFly = button('d37h-fly', '🕊', 'Полёт (F)');
       bFly.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); fly = !fly; bFly.classList.toggle('on', fly); publish(); });
@@ -661,7 +639,6 @@ export async function start(o) {
     ? (planet ? 'Слева — идти / лететь · справа — смотреть · 🌍 — на землю и обратно · 👕 — гардероб' : 'Слева — идти · справа — смотреть')
     : 'Нажми на картинку — мышь смотрит · W A S D — идти · Пробел — прыжок · O — на землю и обратно · B — гардероб · V — вид'));
   if (game) hint.style.bottom = 'calc(105px + env(safe-area-inset-bottom))';
-  if (s3d) hint.style.display = 'none';
   setTimeout(() => { hint.style.opacity = '0'; }, 9000);
   let sayT = 0;
   say = (t) => { hint.textContent = t; hint.style.opacity = '1'; clearTimeout(sayT); sayT = setTimeout(() => { hint.style.opacity = '0'; }, 5000); };
@@ -707,7 +684,7 @@ export async function start(o) {
   function syncPanel(show) {
     wardrobeShown = !!show;
     panel.style.display = wardrobeShown ? 'block' : 'none';
-    bWard.classList.toggle('on', wardrobeShown);
+    if (bWard) bWard.classList.toggle('on', wardrobeShown);
     if (wardrobeShown) {
       if (document.pointerLockElement === canvas) unlock(); else if (document.pointerLockElement) document.exitPointerLock();
       hint.style.opacity = '0';
@@ -926,22 +903,6 @@ export async function start(o) {
     // goes to the engine and the round restarts with it (solo; no page reload). A refused file is not sent.
     checkMode(text) { return CHECK(text); },
     runMode(text) { const r = CHECK(text); if (r.ok && st.app && !st.dead) { const a = run(MODE_CMD(text)); if (typeof a === 'string' && /^отказ/.test(a)) return { ok: false, error: a.slice(0, 300) }; } return r; },
-    // c-studio (EDITOR_ONE S7 / S8): a «Студия 3D» world on the engine (scene 'studio', game/sys/studio). check(text) — the
-    // engine's gate report {ok, fits, needs, missing, …} (fits = every need is on this engine); load(text) — the world (the
-    // site's own snapshot JSON) into the edit view; cam(eye, at) — the editor's camera (studio units); play() / stop();
-    // cmd(list) — the scripts' commands of this frame (the engine re-checks each with the site's rules, ≤ 4000 a tick);
-    // quit(). Its page lines come as onMessage {t:'mode', data:{kind:'studio', ev, …}}.
-    studio: {
-      ok() { return typeof wasmApi.studio_check === 'function'; },
-      check(text) { try { return JSON.parse(wasmApi.studio_check(String(text))); } catch (e) { return { ok: false, fits: false, error: 'движок не ответил: ' + String(e).slice(0, 120) }; } },
-      load(text) { return st.app && !st.dead ? run('game studio file ' + B64(text)) : 'отказ: нет движка'; },
-      cam(e, a) { if (!st.app || st.dead) return; const n = (v) => (Number.isFinite(+v) ? Math.max(-4999, Math.min(4999, +v)) : 0).toFixed(3); run('game studio cam ' + [e[0], e[1], e[2], a[0], a[1], a[2]].map(n).join(' ')); },
-      play() { return st.app && !st.dead ? run('game studio play') : 'отказ: нет движка'; },
-      stop() { return st.app && !st.dead ? run('game studio stop') : 'отказ: нет движка'; },
-      cmd(list) { if (!st.app || st.dead || !list || !list.length) return; for (let i = 0; i < list.length; i += 4000) run('game studio cmd ' + B64(JSON.stringify(list.slice(i, i + 4000)))); },
-      quit() { if (st.app && !st.dead) run('game studio quit'); },
-      hud(on) { try { st.app && !st.dead && st.app.set_game_hud(!!on); } catch (e) { /* older build */ } },
-    },
     // NET_JOIN (d37-core/spec/NET_JOIN.md): sessions of the game modes on our d37-server. server = 'ws://host:7377'
     // (or wss:// behind the TLS proxy); the HTTP list is the same host. The engine emits {t:'mode', data:{kind:
     // 'presence'|'meta', …}} messages: presence = where the player is / can friends join; meta = records,
@@ -999,13 +960,6 @@ export async function start(o) {
       // the game's sound stops with the game (it lives outside the app object and would keep playing on the site)
       try { a && a.audio_close(); } catch (e) { /* no sound */ }
       try { a && a.free(); } catch (e) { /* already freed */ }
-      // c-studio R2 GPU_FREE: the device's memory now, not whenever the garbage collector runs
-      if (gpuFree()) {
-        for (const d of st.gpuDevices || []) { try { d.destroy(); } catch (e) { /* gone */ } }
-        st.gpuDevices = [];
-        try { const gl = canvas.getContext('webgl2'); const x = gl && gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); } catch (e) { /* no GL context */ }
-        canvas.width = 1; canvas.height = 1;
-      }
       for (const e of made) e.remove();
       made.length = 0;
     },

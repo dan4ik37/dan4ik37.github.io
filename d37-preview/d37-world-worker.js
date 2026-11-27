@@ -88,6 +88,9 @@ onmessage = async (ev) => {
       world = new WorldWorker(m.scene, m.save && m.save.length ? m.save : new Uint8Array(0));
       if (m.profile) world.set_profile(true);
       if (m.slow > 1) world.set_slow(m.slow);   // tests: a phone emulation's CPU factor (DevTools cannot throttle Workers)
+      // optim lane r2 (worker.rs WARM_START_TICKS): the world's first ticks — the weather's spin-up, the first forest
+      // list — run now, while the page still shows its loading state, not as a frozen third of a second after it
+      if (typeof world.warm_start === 'function') world.warm_start();
       wake();
     } catch (e) { fail(e); }
   } else if (m.type === 'in') {
