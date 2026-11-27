@@ -35,6 +35,9 @@
             "taiga_300": (lat: 52.366, lon: 39.119, altitude: 300, yaw_deg: 200, pitch_deg: -28, time: 1930, fov_y_deg: 70),
             "taiga_1500": (lat: 52.366, lon: 39.119, altitude: 1500, yaw_deg: 200, pitch_deg: -22, time: 1930, fov_y_deg: 70),
             "taiga_6000": (lat: 52.366, lon: 39.119, altitude: 6000, yaw_deg: 200, pitch_deg: -25, time: 1930, fov_y_deg: 70),
+            // lagfix (owner 27.11, build a57a17c78d: «ФПС показывает большой, а лагает сильно»): his swamp with a tribe and a herd
+            // nearby (his panel: МЕСТО 31614 68378 -79763, БИОМ БОЛОТО) — scenarios/lag_swamp_*.ron, the browser gate's swamp rows
+            "owner_swamp": (lat: 38.5531, lon: 68.3791, altitude: 1.7, yaw_deg: 0, pitch_deg: -4, time: 1930, fov_y_deg: 70),
         },
     ),
     // w11 creative: the game layer in creative mode (no guided start: the palette is in the pockets)
