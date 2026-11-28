@@ -422,7 +422,7 @@ function selfCheck(){
       {   // форум 2.0: ссылки статьи — только https с rel="nofollow ugc noopener"; старый адрес /forum/6 → 301 на /forum/6-<slug>
         CUR = 'Привет <b>мир</b>';
         const g = FBS.slug(CUR), art = await call(pages, { page: 'forum', id: '6' + (g ? '-' + g : '') });
-        const outer = [...art.body.matchAll(/<a\b[^>]*href="(https?:[^"]*)"[^>]*>/g)].map(m => m[0]).filter(t => !/dan4ik37\.vercel\.app|youtube\.com\/@|twitch\.tv\/dan4ik37|t\.me\/|vk\.com\/dan4ik37|youtube\.com\/watch|sb\.test\/storage/.test(t));
+        const outer = [...art.body.matchAll(/<a\b[^>]*href="(https?:[^"]*)"[^>]*>/g)].map(m => m[0]).filter(t => !/dan4ik37\.vercel\.app|youtube\.com\/@|twitch\.tv\/dan4ik37|t\.me\/|discord\.gg\/Z2Thp46WvR|vk\.com\/dan4ik37|youtube\.com\/watch|sb\.test\/storage/.test(t));
         ok(art.code === 200 && outer.length >= 1 && outer.every(t => /href="https:/.test(t) && /rel="nofollow ugc noopener"/.test(t)), '/forum/6-<slug>: чужие ссылки статьи — https и rel="nofollow ugc noopener"', outer.slice(0, 3));
         const old = await call(pages, { page: 'forum', id: '6' });
         ok(old.code === 301 && old.headers.Location === '/forum/6' + (g ? '-' + g : ''), '/forum/6 → 301 на адрес со «слагом»', old.headers.Location);

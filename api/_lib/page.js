@@ -62,7 +62,7 @@ export const TRUST_LINKS = [
 ];
 // Кто выпускает сайт — для поисковиков (schema.org Organization + WebSite). Те же @id — в <head> index.html и на /about.
 const SITE_URL = 'https://www.dan4ik37.com';
-export const SAME_AS = [YT_CHANNEL, 'https://www.twitch.tv/dan4ik37', 'https://www.tiktok.com/@.dan4ik37', 'https://vk.com/dan4ik37', 'https://t.me/+LE25p4pQojkyYjli'];
+export const SAME_AS = [YT_CHANNEL, 'https://www.twitch.tv/dan4ik37', 'https://www.tiktok.com/@.dan4ik37', 'https://vk.com/dan4ik37', 'https://t.me/+LE25p4pQojkyYjli', 'https://discord.gg/Z2Thp46WvR'];
 export const SITE_LD = [
   { '@type': 'Organization', '@id': SITE_URL + '/#org', name: 'dan4ik37', alternateName: ['Денчик37', 'Сайт dan4ik37'], url: SITE_URL + '/',
     logo: SITE_URL + '/icon-512.png', email: 'dan4ik37k@gmail.com', founder: { '@id': SITE_URL + '/#person' }, sameAs: SAME_AS },
@@ -184,6 +184,7 @@ ${rsv ? withRsv(body) : body}
   <a href="/">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/studio">Студия игр</a> · <a href="/forum">Форум</a> · <a href="/ideas">Идеи для видео</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/tools/random">Рандомайзер</a> · <a href="/tools/typing">Тест печати</a> · <a href="/tools/photo">Фоторедактор</a> · <a href="/vip">VIP</a> · <a href="/shop">💎 Магазин</a> · <a href="/donate">💝 Поддержать</a> · <a href="/reklama">Реклама</a> · <a href="/adv">Разместить рекламу</a> · <a href="/ads-terms">Правила рекламы</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> ·<a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
   <a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch</a> ·
   <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" rel="noopener">Telegram</a> ·
+  <a href="https://discord.gg/Z2Thp46WvR" target="_blank" rel="noopener">Discord</a> ·
   <a href="https://vk.com/dan4ik37" target="_blank" rel="noopener">ВКонтакте</a>
   <div class="foot-age">${AGE_MARK} <a href="/privacy">Конфиденциальность</a></div>
 </footer>
