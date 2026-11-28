@@ -119,7 +119,7 @@
   } catch (e) {}
 })((function errCore() {
   // свой сайт: только настоящий адрес (не localhost, не file:, не копия на github.io, не предпросмотры Vercel)
-  function site(h) { return /(^|\.)dan4ik37\.vercel\.app$/i.test(String(h || '')); }
+  function site(h) { return /(^|\.)dan4ik37\.(vercel\.app|com)$/i.test(String(h || '')); }
   // Адрес → путь без запроса и #: свой — "/js/x.js", jsDelivr (наши зависимости) — "cdn:/npm/…", чужой и blob:/data: — ''
   function urlPath(u, host) {
     u = String(u == null ? '' : u).slice(0, 400);
