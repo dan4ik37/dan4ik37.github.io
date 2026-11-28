@@ -25,7 +25,7 @@ const STATE_TTL = 600, HANDOFF_TTL = 180, TICKET_TTL = 600, FRESH_SEC = 15 * 60,
 // ═══ Настройки из Vercel (нет переменных — вход выключен, кнопки не видно) ═══
 const clean = v => String(v || '').trim();
 export function config(env = process.env) {
-  const site = (clean(env.SITE_URL) || 'https://dan4ik37.vercel.app').replace(/\/+$/, '');
+  const site = (clean(env.SITE_URL) || 'https://www.dan4ik37.com').replace(/\/+$/, '');
   const vkId = clean(env.VK_ID_CLIENT_ID);
   const vk = /^\d{1,12}$/.test(vkId) ? { id: vkId, secret: clean(env.VK_ID_SECRET) } : null;
   const yaId = clean(env.YANDEX_CLIENT_ID), yaSec = clean(env.YANDEX_CLIENT_SECRET);

@@ -73,7 +73,7 @@ export function publicText(raw, max = 5000){
   for (const re of HIDE) s = s.replace(new RegExp(re.source, re.flags), m => (/^[\s.,!?:;()"'«»-]/.test(m) ? m[0] : '') + '[скрыто]');
   s = mask(s);
   if (s.length > max) s = s.slice(0, max).replace(/\s+\S*$/, '') + '…';
-  const label = p => 'dan4ik37.vercel.app' + (p === '/' ? '' : p);
+  const label = p => 'www.dan4ik37.com' + (p === '/' ? '' : p);
   const text = s.replace(/\u0001(\d+)\u0002/g, (x, i) => label(own[+i]));
   const html = esc(s).replace(/\u0001(\d+)\u0002/g, (x, i) => `<a href="${esc(own[+i])}">${esc(label(own[+i]))}</a>`).replace(/\n/g, '<br>');
   return { text, html };
@@ -263,7 +263,7 @@ async function threadPage(res, id, raw){
     ld.image = imageOf(t);
     if (tags.length) ld.keywords = tags.join(', ');
     if (t.source_url && FB.https(t.source_url)) ld.citation = t.source_url;
-    if (vid) ld.video = { '@type': 'VideoObject', name: title, embedUrl: FB.embedUrl(vid, 'dan4ik37.vercel.app'), contentUrl: FB.watchUrl(vid),
+    if (vid) ld.video = { '@type': 'VideoObject', name: title, embedUrl: FB.embedUrl(vid, 'www.dan4ik37.com'), contentUrl: FB.watchUrl(vid),
       ...(FB.poster(vid) ? { thumbnailUrl: FB.poster(vid) } : {}), uploadDate: iso(t.published_at || t.created_at), description: description };
   }
   res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=3600');
