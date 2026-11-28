@@ -54,7 +54,7 @@ const OBJ_TEXTURES = true;
 const BUILD_CHECK = true;
 // ep38 A2: the build this page script belongs to — stamped by scripts/pack.mjs into this file, d37-page.js, d37_web.js
 // (D37_GLUE_BUILD) and the wasm (custom section «d37_build»); '' = an unpacked page (the repo's web/): no check.
-export const PAGE_BUILD = 'bc2467a48f';
+export const PAGE_BUILD = '5d8460f3a9';
 export function wasmBuildOf(module) {
   try { const s = WebAssembly.Module.customSections(module, 'd37_build'); return s.length ? new TextDecoder().decode(s[0]) : ''; } catch (e) { return ''; }
 }
@@ -122,6 +122,12 @@ export const layersJson = (got) => JSON.stringify(got.filter((l) => l.text != nu
 
 const TOUCH = () => (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 const HEX = /^[0-9a-f]{6}$/i;
+// proto-ui (COMBAT_UI_V1 §5.1 / UI-10, 27.11): ONE touch layer. true = in the game the engine's own HUD draws the phone
+// controls (Jump, Pose, Action, the tray handle, the menu; «Защита» only in a fight; the wardrobe in the Pose ring) and
+// this page draws none of its jump / crouch / guard / 👕 discs there. Rollback (one line): false = the page's discs as
+// before — together with HUD_CLEAN = false in crates/d37-app/src/game/hud.rs. The viewer scenes without the game layer
+// (planet, the wardrobe studio) keep the page's discs either way; the creative world keeps its fly / orbit discs.
+const ENGINE_TOUCH = true;
 
 // the buttons and the wardrobe panel over the canvas (one <style>, whatever page hosts the engine)
 const CSS = `.d37h-btn{position:absolute;z-index:3;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -441,6 +447,12 @@ export async function start(o) {
   const creative = o.scene === 'creative';   // ep11 publish: the orbit button in the creative world (see the touch buttons)
   st.game = game;
   if (game) app.game_set_touch(touch);
+  // proto-ui: the engine's HUD in the page's theme and language (o.theme: 'light' | 'dark', o.lang: 'ru' | 'en';
+  // the site passes its settings.theme / language; none given = dark, Russian, as before)
+  const hudSet = (k, v) => { try { if (game && v && app.game_hud_set) app.game_hud_set(k, String(v)); } catch (e) { /* an older engine */ } };
+  hudSet('theme', o.theme); hudSet('lang', o.lang);
+  // the engine's own phone controls replace this page's discs (an older engine without them keeps the page's)
+  const engineTouch = ENGINE_TOUCH && game && typeof app.game_hud_ask === 'function';
   const mouse = { act: false, use: false };
   const toCanvas = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * canvas.width / Math.max(1, r.width), (e.clientY - r.top) * canvas.height / Math.max(1, r.height)]; };
   const menuOpen = () => { try { return game && st.app.game_menu_open(); } catch (e) { return false; } };
@@ -679,19 +691,19 @@ export async function start(o) {
   // the touch button only (desktop uses B). bWard lives here, outside the if: syncPanel toggles it and must not throw
   // when there is none (a1e2c85 scoped it inside the if and every B press on desktop died in syncPanel)
   let bWard = null;
-  if (touch && !studio) {
+  if (touch && !studio && !engineTouch) {
     bWard = button('d37h-ward', '👕', 'Гардероб');
     bWard.addEventListener('click', (e) => { e.stopPropagation(); send({ t: 'wardrobe', on: !wardrobeShown }); });
   }
   // ep11 publish: the creative world has the game layer (creative rules) and still flies back up with one button
   if (planet && (!game || creative)) hold(button('d37h-orbit', '🌍', 'Орбита ↔ земля (O)'), (v) => { orbitHeld = v; });
   if (touch) {
-    if (!studio) hold(button('d37h-jump', '⤒', 'Прыжок'), (v) => { touchJump = v; });
+    if (!studio && !engineTouch) hold(button('d37h-jump', '⤒', 'Прыжок'), (v) => { touchJump = v; });
     // combat v1: the guard button of the phone (hold = block, tap = dodge); the attack is the existing action button
-    if (!studio && game && !creative) hold(button('d37h-guard', '🛡', 'Защита: держать — блок, тап — уворот (Q)'), (v) => { if (hs.v['ctl.guard_toggle']) { if (v) guardOn = !guardOn; } else touchGuard = v; });
+    if (!studio && game && !creative && !engineTouch) hold(button('d37h-guard', '🛡', 'Защита: держать — блок, тап — уворот (Q)'), (v) => { if (hs.v['ctl.guard_toggle']) { if (v) guardOn = !guardOn; } else touchGuard = v; });
     // ep11-fix-body (CHECK-BODY 2): the touch prompts say «ПРИСЕСТЬ: СЛЕЗТЬ / СПРЫГНУТЬ», the roll needs crouch at the
     // landing, and the creative world flies (F on a PC): a held crouch disc and a fly toggle
-    if (!studio) hold(button('d37h-crouch', '⤓', 'Присесть / слезть (C)'), (v) => { touchCrouch = v; });
+    if (!studio && !engineTouch) hold(button('d37h-crouch', '⤓', 'Присесть / слезть (C)'), (v) => { touchCrouch = v; });
     if (o.scene === 'creative') {
       const bFly = button('d37h-fly', '🕊', 'Полёт (F)');
       bFly.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); fly = !fly; bFly.classList.toggle('on', fly); publish(); });
@@ -732,7 +744,7 @@ export async function start(o) {
   const hex2 = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
   const hsv = (h, s, v) => { const c = v * s, hp = (((h % 360) + 360) % 360) / 60, x = c * (1 - Math.abs((hp % 2) - 1)), m = v - c; const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x]; return hex2(r + m) + hex2(g + m) + hex2(b + m); };
   const wbtn = (text, isOn, click) => { const b = el('button', isOn ? 'on' : '', text); b.type = 'button'; b.addEventListener('click', (e) => { e.stopPropagation(); click(); }); return b; };
-  function wrun(cmd) { run(cmd); setTimeout(buildPanel, /^character/.test(cmd) ? 120 : 0); }
+  function wrun(cmd) { run(cmd); setTimeout(buildPanel, /^(character|game combat body)/.test(cmd) ? 120 : 0); }
   function buildPanel() {
     if (!wardrobeShown || !st.app) return;
     let w; try { w = JSON.parse(st.app.wardrobe_json()); } catch (e) { return; }
@@ -741,9 +753,10 @@ export async function start(o) {
     panel.appendChild(el('div', 'd37h-wt', 'Гардероб'));
     const row = (label) => { panel.appendChild(el('div', 'd37h-wg', label)); const r = el('div', 'd37h-wr'); panel.appendChild(r); return r; };
     const rb = row('Персонаж');
-    for (const b of w.bodies || []) rb.appendChild(wbtn(String(b.label), b.name === w.body, () => wrun('character ' + b.name)));
+    // (combat prototype: a creature body brings its own command — `b.cmd` — and its own note; the human bodies keep `character`)
+    for (const b of w.bodies || []) rb.appendChild(wbtn(String(b.label), b.name === w.body, () => wrun(typeof b.cmd === 'string' && /^game combat body [a-z0-9_]+$/.test(b.cmd) ? b.cmd : 'character ' + b.name)));
     const slots = Array.isArray(w.slots) ? w.slots : [];
-    if (!slots.length) panel.appendChild(el('div', 'd37h-ws', 'У манекена нет одежды и цветов — выбери девочку или мальчика'));
+    if (!slots.length) panel.appendChild(el('div', 'd37h-ws', typeof w.note === 'string' ? w.note : 'У манекена нет одежды и цветов — выбери девочку или мальчика'));
     if (!slots.find((x) => x.slot === wSlot)) wSlot = slots.length ? slots[0].slot : null;
     for (const sl of slots) {
       const r = row(String(sl.label) + (sl.slot === wSlot ? ' ◂' : ''));
@@ -897,6 +910,8 @@ export async function start(o) {
       settingsTick(now);
       // c-settings: the page's touch buttons never sit over the game's menu
       root.classList.toggle('d37h-menuopen', menuOpen());
+      // proto-ui: the engine HUD's pose ring asked for the wardrobe (the page owns its panel)
+      if (engineTouch) { try { if (a.game_hud_ask() === 'wardrobe') send({ t: 'wardrobe', on: !wardrobeShown }); } catch (e) { /* numbers only */ } }
       if (!st.loaded && planet) { try { const p = JSON.parse(a.planet_stats()); progress('world', p.shown || 0, (p.shown || 0) + (p.queued || 0) + (p.ready || 0)); } catch (e) { /* numbers only */ } }
     }
     st.raf = requestAnimationFrame(frame);
