@@ -203,7 +203,7 @@ globalThis.window = globalThis;
 globalThis.document = doc;
 globalThis.localStorage = mem();
 globalThis.sessionStorage = mem();
-globalThis.location = { hash: '#/home', search: '', pathname: '/', hostname: 'dan4ik37.vercel.app', origin: 'https://dan4ik37.vercel.app', href: 'https://dan4ik37.vercel.app/' };
+globalThis.location = { hash: '#/home', search: '', pathname: '/', hostname: 'dan4ik37.vercel.app', origin: 'https://www.dan4ik37.com', href: 'https://www.dan4ik37.com/' };
 Object.defineProperty(globalThis, 'innerWidth', { get: () => ENV.width, configurable: true });
 globalThis.matchMedia = q => ({ matches: /pointer:\s*coarse/.test(q) ? ENV.coarse : (m => m ? ENV.width <= +m[1] : false)(/max-width:\s*(\d+)px/.exec(q)) });
 globalThis.addEventListener = (t, fn) => { (winListeners[t] = winListeners[t] || []).push(fn); };
@@ -1165,7 +1165,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
       ok(!/content="noindex"/.test(g0) && /adsbygoogle\.js/.test(g0), `/games/${gid}: в поиске, с рекламой`);
       ok(/<meta name="robots" content="noindex">/.test(g1) && /adsbygoogle\.js/.test(g1) && /⚔️ <b>Друг<\/b>/.test(g1), '/games/<id>?s= (вызов без ника — «Друг»): noindex, реклама есть (своё содержимое)');
       ok(/<meta name="robots" content="noindex">/.test(g2) && !/adsbygoogle\.js/.test(g2) && /ctx\("gambling",true\)/.test(g2) && /⚔️ <b>Вася<\/b>/.test(g2), '/games/<id>?s=&n= — ник из ссылки (чужой текст без проверки): noindex и без рекламы');
-      ok(/rel="canonical" href="https:\/\/dan4ik37\.vercel\.app\/games\/[a-z0-9-]+">/.test(g2), 'вызов: canonical — чистый /games/<id>');
+      ok(/rel="canonical" href="https:\/\/www\.dan4ik37\.com\/games\/[a-z0-9-]+">/.test(g2), 'вызов: canonical — чистый /games/<id>');
     }
     const kub = GAME_PAGES.find(g => /майнкрафт/i.test(g.title));
     const gk = mkRes(); game({ query: { id: kub.id } }, gk);

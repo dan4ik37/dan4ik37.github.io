@@ -87,7 +87,7 @@ function browser(startUrl, routing){
 
 (async () => {
   // ═══ 1. Карта адресов ═══
-  const B0 = browser('https://dan4ik37.vercel.app/');
+  const B0 = browser('https://www.dan4ik37.com/');
   const R = B0.R, PAGES = B0.run('PAGES');
   const routes = Object.keys(PAGES);
   // 05.11.2026: первый кадр (index.html <head>, стиль d37Boot) — та же карта разделов; прячет всё, кроме раздела адреса
@@ -207,7 +207,7 @@ function browser(startUrl, routing){
 
   // ═══ 3. Роутер в режиме адресов ═══
   {
-    const B = browser('https://dan4ik37.vercel.app/?ref=k7m2qz#/games/chess/abcd');
+    const B = browser('https://www.dan4ik37.com/?ref=k7m2qz#/games/chess/abcd');
     B.R.start();
     ok(B.cur().pathname === '/play/chess/abcd' && B.cur().search === '?ref=k7m2qz' && B.cur().hash === '', 'загрузка по старой ссылке → настоящий адрес (параметры сохранены)', B.cur().href);
     ok(B.R.hash() === '#/games/chess/abcd' && B.run('currentRoute()') === 'games' && B.run('currentRouteParam()') === 'chess/abcd', 'D37Route.hash(), currentRoute(), currentRouteParam() — как раньше');
@@ -252,11 +252,11 @@ function browser(startUrl, routing){
     ok(B.cur().pathname === '/shorts/dQw4w9WgXcQ' && B.routes.length === m && B.history.length === B.H.entries.length, 'setUrl — адрес меняется, раздел — нет');
     B.history.pushState({ x: 1 }, '', B.location.href); B.history.back(); await tick(); await tick();
     ok(B.routes.length === m, 'после setUrl «Назад» по своей записи — тоже не переход');
-    ok(B.R.href('#/games/2048') === '/play/2048' && B.R.href('/chat') === '/chat' && B.R.href('#/home') === '/' && B.R.abs('#/games/chess/abc') === 'https://dan4ik37.vercel.app/play/chess/abc', 'href / abs — настоящие адреса');
-    ok(B.R.abs('#/games/world', 'https://dan4ik37.vercel.app') === 'https://dan4ik37.vercel.app/play/world', 'abs(…, сайт) — для текстов «поделиться»');
+    ok(B.R.href('#/games/2048') === '/play/2048' && B.R.href('/chat') === '/chat' && B.R.href('#/home') === '/' && B.R.abs('#/games/chess/abc') === 'https://www.dan4ik37.com/play/chess/abc', 'href / abs — настоящие адреса');
+    ok(B.R.abs('#/games/world', 'https://www.dan4ik37.com') === 'https://www.dan4ik37.com/play/world', 'abs(…, сайт) — для текстов «поделиться»');
     // переход на серверную страницу через go — обычный переход
     B.R.go('/videos');
-    ok(B.H.reloads.includes('https://dan4ik37.vercel.app/videos'), 'go(/videos) — переход на серверную страницу');
+    ok(B.H.reloads.includes('https://www.dan4ik37.com/videos'), 'go(/videos) — переход на серверную страницу');
     // токены входа в решётке — не наше (их разбирает auth-guard.js), роутер не трогает
     const k = B.routes.length;
     B.location.hash = '#access_token=abc&type=magiclink'; await tick();
@@ -264,39 +264,39 @@ function browser(startUrl, routing){
   }
   // Загрузка по настоящему адресу, /index.html и /home
   {
-    const B = browser('https://dan4ik37.vercel.app/play/2048'); B.R.start();
+    const B = browser('https://www.dan4ik37.com/play/2048'); B.R.start();
     ok(B.cur().pathname === '/play/2048' && B.R.hash() === '#/games/2048', '/play/2048 — раздел игр, игра 2048');
-    const C = browser('https://dan4ik37.vercel.app/index.html?x=1'); C.R.start();
+    const C = browser('https://www.dan4ik37.com/index.html?x=1'); C.R.start();
     ok(C.cur().pathname === '/' && C.cur().search === '?x=1', '/index.html → / (параметры на месте)');
   }
   // Заголовок, описание, canonical, noindex
   {
-    const B = browser('https://dan4ik37.vercel.app/');
+    const B = browser('https://www.dan4ik37.com/');
     const M = (r, p) => B.R.routeMeta(r, p);
-    ok(M('ai3d').noindex && M('ai3d').canonical === 'https://dan4ik37.vercel.app/tools/3d', 'AI3D /tools/3d: noindex, canonical /tools/3d (скрытая страница)');
-    ok(M('home').canonical === 'https://dan4ik37.vercel.app/' && !M('home').noindex, 'главная: canonical «/», индексируется');
-    ok(M('forum', '42').canonical === 'https://dan4ik37.vercel.app/forum/42' && !M('forum', '42').noindex, 'тема форума: canonical /forum/42 (как у серверной страницы)');
-    ok(M('ideas', '7').canonical === 'https://dan4ik37.vercel.app/ideas/7', 'идея: canonical /ideas/7');
+    ok(M('ai3d').noindex && M('ai3d').canonical === 'https://www.dan4ik37.com/tools/3d', 'AI3D /tools/3d: noindex, canonical /tools/3d (скрытая страница)');
+    ok(M('home').canonical === 'https://www.dan4ik37.com/' && !M('home').noindex, 'главная: canonical «/», индексируется');
+    ok(M('forum', '42').canonical === 'https://www.dan4ik37.com/forum/42' && !M('forum', '42').noindex, 'тема форума: canonical /forum/42 (как у серверной страницы)');
+    ok(M('ideas', '7').canonical === 'https://www.dan4ik37.com/ideas/7', 'идея: canonical /ideas/7');
     ok(['profile', 'phone', 'adv', 'invite', 'games'].every(r => M(r).noindex) && M('chat', 'c/5').noindex && M('shop', 'o/D37-1').noindex && !M('shop').noindex
       && ['chat', 'shorts', 'donate', 'poll', 'soundboard', 'clicker', 'lfg', 'ideas', 'hub'].every(r => M(r).noindex) && !M('about').noindex && !M('forum').noindex,
       'noindex: профиль, телефон, кабинет, приглашения, экраны игр, каналы чата, заказы; оболочки приложения (чат, шортсы, донат… — индекс-диета 14.11); /shop, /about, /forum — индексируются');
-    ok(M('shorts', 'dQw4w9WgXcQ').canonical === 'https://dan4ik37.vercel.app/v/dQw4w9WgXcQ' && M('ads').canonical === 'https://dan4ik37.vercel.app/reklama', 'Shorts → страница ролика, «Реклама» → /reklama');
+    ok(M('shorts', 'dQw4w9WgXcQ').canonical === 'https://www.dan4ik37.com/v/dQw4w9WgXcQ' && M('ads').canonical === 'https://www.dan4ik37.com/reklama', 'Shorts → страница ролика, «Реклама» → /reklama');
     const titles = routes.map(r => M(r).title), descs = routes.map(r => M(r).description);
     ok(new Set(titles).size === titles.length && new Set(descs).size === descs.length, 'у каждого раздела свой заголовок и описание');
     ok(titles.every(t => t.length >= 15 && t.length <= 70) && descs.every(d => d.length >= 50 && d.length <= 200), 'длины заголовков (15–70) и описаний (50–200)', titles.filter(t => t.length > 70));
     B.R.meta(M('profile')); const d = B.document;
     ok(d.title === 'Профиль — dan4ik37' && d.head.querySelector('meta[name="robots"]')?.attrs.content === 'noindex', 'meta: заголовок и noindex');
     B.R.meta(M('about'));
-    ok(d.head.querySelector('meta[name="robots"]')?.attrs.content === 'max-image-preview:large' && d.head.querySelector('link[rel="canonical"]').attrs.href === 'https://dan4ik37.vercel.app/about'
-      && d.head.querySelector('meta[property="og:url"]').attrs.content === 'https://dan4ik37.vercel.app/about' && d.head.querySelector('meta[name="description"]'), 'meta: noindex снят, canonical и og:url — раздел');
+    ok(d.head.querySelector('meta[name="robots"]')?.attrs.content === 'max-image-preview:large' && d.head.querySelector('link[rel="canonical"]').attrs.href === 'https://www.dan4ik37.com/about'
+      && d.head.querySelector('meta[property="og:url"]').attrs.content === 'https://www.dan4ik37.com/about' && d.head.querySelector('meta[name="description"]'), 'meta: noindex снят, canonical и og:url — раздел');
     B.R.meta({ title: 'Тема <b>x</b> — форум dan4ik37' });
     ok(d.title === 'Тема <b>x</b> — форум dan4ik37' && d.head.querySelector('meta[property="og:title"]').attrs.content === 'Тема <b>x</b> — форум dan4ik37', 'meta({ title }) — текстом (без разметки)');
   }
   // Режим 'hash' (откат одной строкой)
   {
-    const B = browser('https://dan4ik37.vercel.app/chat/c/5?x=1', 'hash'); B.R.start();
+    const B = browser('https://www.dan4ik37.com/chat/c/5?x=1', 'hash'); B.R.start();
     ok(B.R.mode === 'hash' && B.cur().pathname === '/' && B.cur().hash === '#/chat/c/5' && B.cur().search === '?x=1', 'ROUTING = hash: настоящий адрес → /#/chat/c/5', B.cur().href);
-    ok(B.R.href('#/games/2048') === '#/games/2048' && B.R.href('/play/2048') === '#/games/2048' && B.R.abs('#/chat') === 'https://dan4ik37.vercel.app/#/chat', 'hash: href/abs — решётка');
+    ok(B.R.href('#/games/2048') === '#/games/2048' && B.R.href('/play/2048') === '#/games/2048' && B.R.abs('#/chat') === 'https://www.dan4ik37.com/#/chat', 'hash: href/abs — решётка');
     ok(B.click('/forum') && B.cur().hash === '#/forum' && B.cur().pathname === '/', 'hash: клик по /forum — решётка, без перезагрузки');
     ok(!B.click('#/donate'), 'hash: клик по #/donate — браузер сам (обычная решётка)');
     B.location.hash = '#/donate'; await tick();
@@ -343,20 +343,20 @@ function browser(startUrl, routing){
       return out;
     };
     let r = await call(pages, { page: 'forum' });
-    ok(r.code === 200 && r.canon === 'https://dan4ik37.vercel.app/forum' && /Форум dan4ik37/.test(r.title), '/forum: 200, canonical, заголовок');
-    ok(r.ld.some(x => x['@type'] === 'CollectionPage' && x.mainEntity?.itemListElement?.[0]?.url === 'https://dan4ik37.vercel.app/forum/5') && r.ld.some(x => x['@type'] === 'BreadcrumbList'), '/forum: JSON-LD ItemList тем + хлебные крошки');
+    ok(r.code === 200 && r.canon === 'https://www.dan4ik37.com/forum' && /Форум dan4ik37/.test(r.title), '/forum: 200, canonical, заголовок');
+    ok(r.ld.some(x => x['@type'] === 'CollectionPage' && x.mainEntity?.itemListElement?.[0]?.url === 'https://www.dan4ik37.com/forum/5') && r.ld.some(x => x['@type'] === 'BreadcrumbList'), '/forum: JSON-LD ItemList тем + хлебные крошки');
     ok(r.body.includes('href="/forum/5"') && r.body.includes('href="/#/forum"') && !/adsbygoogle\.js/.test(r.body), '/forum: ссылки на темы, «Создать тему» → раздел, без рекламы');
     ok(/sessionStorage\.getItem\('d37_spa'\)\)location\.replace\("\/#\/forum"\)/.test(r.body), '/forum: вкладка-приложение сразу открывает раздел');
     r = await call(pages, { page: 'forum', id: '5' });
     const main = r.body.slice(r.body.indexOf('<main'), r.body.indexOf('</main>'));
-    ok(r.code === 200 && r.canon === 'https://dan4ik37.vercel.app/forum/5' && r.title.startsWith('Как пройти &lt;script&gt;'), '/forum/5: canonical, заголовок темы (экранирован)');
+    ok(r.code === 200 && r.canon === 'https://www.dan4ik37.com/forum/5' && r.title.startsWith('Как пройти &lt;script&gt;'), '/forum/5: canonical, заголовок темы (экранирован)');
     ok(!/<script>alert|<img src=x/.test(r.body) && main.includes('&lt;img src=x onerror=alert(1)&gt;'), '/forum/5: текст игроков экранирован');
     ok(main.includes('[ссылка]') && !main.includes('evil.example') && !main.includes('bad.ru') && main.includes('<a href="/play/chess">'), 'чужие ссылки — «[ссылка]», свои — ссылками');
     ok(!main.includes('+7 999') && !main.includes('@vasya_pro') && main.includes('[скрыто]'), 'телефон и @ник — «[скрыто]»');
     ok(main.includes('это ***** какая-то') && !main.includes('хуйня'), 'мат закрыт');
     ok(!main.includes('**жирно') && !main.includes('||') && main.includes('жирно спойлер'), 'разметка VIP (**, ||) — простым текстом');
     const post = r.ld.find(x => x['@type'] === 'DiscussionForumPosting');
-    ok(post && post.headline.includes('<script>') === true && post.author?.name === 'Vasya' && post.datePublished === '2026-10-01T10:00:00.000Z' && post.url === 'https://dan4ik37.vercel.app/forum/5', 'JSON-LD DiscussionForumPosting: заголовок, автор, дата, адрес');
+    ok(post && post.headline.includes('<script>') === true && post.author?.name === 'Vasya' && post.datePublished === '2026-10-01T10:00:00.000Z' && post.url === 'https://www.dan4ik37.com/forum/5', 'JSON-LD DiscussionForumPosting: заголовок, автор, дата, адрес');
     ok(post.comment?.length === 1 && post.comment[0].text === 'это ***** какая-то' && post.interactionStatistic?.userInteractionCount === 1 && !/evil|vasya_pro|\+7/.test(JSON.stringify(post)), 'JSON-LD: ответы (Comment) и счётчик; ссылок и контактов нет');
     ok(!r.body.includes('</script><script>alert') && r.body.includes('\\u003cscript>alert(1)\\u003c/script>'), 'JSON-LD: «<» внутри экранирован (\\u003c)');
     ok(r.body.includes('href="/#/forum/5"') && !/adsbygoogle\.js/.test(r.body) && r.body.includes('data-age-page="12"'), '«Ответить» → раздел; без рекламы; метка 12+ как у раздела');
@@ -365,11 +365,11 @@ function browser(startUrl, routing){
     r = await call(pages, { page: 'forum', id: '../x' });
     ok(r.code === 404 && !NET.calls.some(u => u.includes('../x')), 'мусор в номере — 404 без запроса в базу');
     r = await call(pages, { page: 'ideas' });
-    ok(r.code === 200 && r.canon === 'https://dan4ik37.vercel.app/ideas' && r.body.includes('href="/ideas/9"') && !r.body.includes('Плохая идея'), '/ideas: идеи (без отклонённых), canonical');
+    ok(r.code === 200 && r.canon === 'https://www.dan4ik37.com/ideas' && r.body.includes('href="/ideas/9"') && !r.body.includes('Плохая идея'), '/ideas: идеи (без отклонённых), canonical');
     ok(r.ld.some(x => x['@type'] === 'CollectionPage' && x.mainEntity?.numberOfItems === 1), '/ideas: JSON-LD ItemList');
     r = await call(pages, { page: 'ideas', id: '9' });
     const idea = r.ld.find(x => x['@type'] === 'DiscussionForumPosting');
-    ok(r.code === 200 && r.canon === 'https://dan4ik37.vercel.app/ideas/9' && idea?.interactionStatistic?.userInteractionCount === 12 && idea?.sharedContent?.url === 'https://dan4ik37.vercel.app/v/dQw4w9WgXcQ', '/ideas/9: голоса и ролик в JSON-LD');
+    ok(r.code === 200 && r.canon === 'https://www.dan4ik37.com/ideas/9' && idea?.interactionStatistic?.userInteractionCount === 12 && idea?.sharedContent?.url === 'https://www.dan4ik37.com/v/dQw4w9WgXcQ', '/ideas/9: голоса и ролик в JSON-LD');
     ok(r.body.includes('href="/v/dQw4w9WgXcQ"') && r.body.includes('href="/#/ideas/9"') && !/adsbygoogle\.js/.test(r.body), '/ideas/9: «Смотреть ролик», «Поддержать» → раздел, без рекламы');
     r = await call(pages, { page: 'ideas', id: '404' });
     ok(r.code === 404, 'нет идеи — 404');
@@ -400,19 +400,19 @@ function browser(startUrl, routing){
     const sitemap = (await import(pathToFileURL(path.join(tmp, 'api/sitemap.js')).href)).default;
     r = await call(sitemap, { part: 'pages' });
     for (const u of ['/games', '/about', '/tools/nick', '/quiz', '/privacy'])
-      ok(r.body.includes(`<loc>https://dan4ik37.vercel.app${u}</loc>`), `карта сайта: ${u}`);
+      ok(r.body.includes(`<loc>https://www.dan4ik37.com${u}</loc>`), `карта сайта: ${u}`);
     // 14.11.2026 индекс-диета (AdSense «Бесполезный контент»): без своего текста — не в карте (старая база без chars — темы тоже)
     for (const u of ['/forum<', '/forum/5', '/forum/6', '/ideas', '/shorts', '/chat', '/videos', '/top<', '/topics', '/topic/', '/history', '/g/'])
-      ok(!r.body.includes(`<loc>https://dan4ik37.vercel.app${u}`), `карта сайта (индекс-диета): без ${u}`);
+      ok(!r.body.includes(`<loc>https://www.dan4ik37.com${u}`), `карта сайта (индекс-диета): без ${u}`);
     // 05.11.2026: разделы-приложения без своего HTML (сервер отдаёт главную) — не в карте
     for (const u of ['/profile', '/phone', '/adv', '/invite', '/play', '/shop/', '/donate', '/lfg', '/soundboard', '/poll', '/clicker', '/terms', '/refund', '/ads-terms'])
-      ok(!r.body.includes(`<loc>https://dan4ik37.vercel.app${u}`), `карта сайта: без ${u}`);
+      ok(!r.body.includes(`<loc>https://www.dan4ik37.com${u}`), `карта сайта: без ${u}`);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   // robots.txt
   const robots = src('robots.txt');
   for (const d of ['/api/', '/auth/', '/go/', '/profile', '/phone', '/adv', '/invite', '/chat/', '/shop/', '/play/studio/mod', '/play/unity/mod'])
     ok(new RegExp('^Disallow: ' + d.replace(/[/.]/g, '\\$&') + '\\s*$', 'm').test(robots), `robots.txt: закрыто ${d}`);
-  ok(/^Allow: \/api\/feed$/m.test(robots) && /^Sitemap: https:\/\/dan4ik37\.vercel\.app\/sitemap\.xml$/m.test(robots) && !/^Disallow: \/\s*$/m.test(robots), 'robots.txt: /api/feed открыт (ролики главной), карта сайта, сайт не закрыт целиком');
+  ok(/^Allow: \/api\/feed$/m.test(robots) && /^Sitemap: https:\/\/www\.dan4ik37\.com\/sitemap\.xml$/m.test(robots) && !/^Disallow: \/\s*$/m.test(robots), 'robots.txt: /api/feed открыт (ролики главной), карта сайта, сайт не закрыт целиком');
   for (const p of ['/forum', '/ideas', '/chat', '/about', '/shop', '/play/chess', '/games/chess']) ok(!robotsBlocked(robots, p), `robots.txt: ${p} открыт`);
   ok(/^User-agent: Mediapartners-Google\r?\nDisallow:\s*$/m.test(robots), 'robots.txt: робот AdSense (Mediapartners-Google) — своя группа без запретов');
   function robotsBlocked(txt, p){
@@ -422,17 +422,17 @@ function browser(startUrl, routing){
   }
 
   // ═══ 5. sw.js, manifest, index.html, 404.html, page.js, фильтр мата ═══
-  const sw = {}; const swCtx = { self: { location: { origin: 'https://dan4ik37.vercel.app' }, addEventListener(){}, registration: {} }, URL, caches: {}, Response, Request, fetch(){}, console };
+  const sw = {}; const swCtx = { self: { location: { origin: 'https://www.dan4ik37.com' }, addEventListener(){}, registration: {} }, URL, caches: {}, Response, Request, fetch(){}, console };
   vm.createContext(swCtx); vm.runInContext(src('sw.js'), swCtx);
   const X = swCtx.self.__d37sw;
-  const nav = p => X.route({ method: 'GET', url: 'https://dan4ik37.vercel.app' + p, mode: 'navigate', headers: { get: () => null } });
+  const nav = p => X.route({ method: 'GET', url: 'https://www.dan4ik37.com' + p, mode: 'navigate', headers: { get: () => null } });
   for (const p of ['/', '/chat', '/chat/c/5', '/play', '/play/sudoku', '/profile/vip', '/shop/o/D37-1', '/app', '/donate']) ok(nav(p) === 'shell', `sw.js: ${p} — оболочка (без сети — приложение)`);
   for (const p of ['/forum', '/forum/5', '/ideas', '/about', '/shop', '/games/chess', '/videos', '/v/abc']) ok(nav(p) === 'page', `sw.js: ${p} — серверная страница`);
   ok(vj.rewrites.filter(r => r.destination === '/index.html').every(r => X.SPA_PATH.test(r.source.replace(/\/:path\+$/, '/x'))), 'sw.js SPA_PATH = разделы из vercel.json');
   ok(+(/const VERSION = 'v(\d+)'/.exec(src('sw.js')) || [])[1] >= 5, 'sw.js: VERSION поднят (не ниже v5 — настоящие адреса)');
   const man = JSON.parse(src('manifest.json'));
   ok(man.start_url === '/' && man.scope === '/' && man.share_target?.action === '/', 'manifest: start_url, scope, «Поделиться» — «/»');
-  ok(man.shortcuts.every(s => { const u = new URL(s.url, 'https://dan4ik37.vercel.app'); return R.toHash(u.pathname) || u.hash.startsWith('#/'); }) && !man.shortcuts.some(s => s.url.startsWith('/#/games')), 'manifest: ярлыки — разделы (настоящие адреса)', man.shortcuts.map(s => s.url));
+  ok(man.shortcuts.every(s => { const u = new URL(s.url, 'https://www.dan4ik37.com'); return R.toHash(u.pathname) || u.hash.startsWith('#/'); }) && !man.shortcuts.some(s => s.url.startsWith('/#/games')), 'manifest: ярлыки — разделы (настоящие адреса)', man.shortcuts.map(s => s.url));
   const idx = src('index.html'), headPart = idx.slice(0, idx.indexOf('</head>'));
   ok(/<meta charset="UTF-8">\s*(<!--[\s\S]*?-->\s*)?<base href="\/">/.test(idx) && headPart.indexOf('<base href="/">') < headPart.indexOf('<link') && headPart.indexOf('<base') < headPart.indexOf('src='), 'index.html: <base href="/"> — первым в <head>');
   ok(!/href="#\//.test(idx), 'index.html: ни одной ссылки href="#/…" (меню, подвал, карточки — настоящие адреса)', (idx.match(/href="#\/[^"]*"/g) || []).slice(0, 5));
