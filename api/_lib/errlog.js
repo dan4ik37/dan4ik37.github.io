@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 // Общие помощники. Дальше в тексте K — это их результат
 export function errCore() {
   // свой сайт: только настоящий адрес (не localhost, не file:, не копия на github.io, не предпросмотры Vercel)
-  function site(h) { return /(^|\.)dan4ik37\.vercel\.app$/i.test(String(h || '')); }
+  function site(h) { return /(^|\.)dan4ik37\.(vercel\.app|com)$/i.test(String(h || '')); }
   // Адрес → путь без запроса и #: свой — "/js/x.js", jsDelivr (наши зависимости) — "cdn:/npm/…", чужой и blob:/data: — ''
   function urlPath(u, host) {
     u = String(u == null ? '' : u).slice(0, 400);
@@ -128,7 +128,7 @@ function errHook(v) {
   var W = window;
   try {
     var L = W.location;
-    if (W.__d37el || !L || !/^https?:$/.test(L.protocol) || !/(^|\.)dan4ik37\.vercel\.app$/i.test(L.hostname)) return;
+    if (W.__d37el || !L || !/^https?:$/.test(L.protocol) || !/(^|\.)dan4ik37\.(vercel\.app|com)$/i.test(L.hostname)) return;
     var S = W.__d37el = { v: 1, q: [], on: null }, seen = {}, nk = 0, total = 0, timer = 0;
     function load() {
       try {
