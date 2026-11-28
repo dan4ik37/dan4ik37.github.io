@@ -12,7 +12,7 @@
 // /play/chess — vercel.json → index.html), сюда не попадают. Копия на GitHub Pages — на главный адрес с тем же путём;
 // раздел с заглавными буквами (/Chat) — на свой адрес; комната игры без решётки (/games/chess/abcd) — в игру (/play/chess/abcd).
 (function () {
-  if (/\.github\.io$/.test(location.hostname)) { location.replace('https://dan4ik37.vercel.app' + location.pathname + location.search + location.hash); return; }
+  if (/\.github\.io$/.test(location.hostname)) { location.replace('https://www.dan4ik37.com' + location.pathname + location.search + location.hash); return; }
   var p = location.pathname.replace(/\/+$/, '');
   var g = /^\/games\/([a-z0-9_-]+)\/(.+)$/i.exec(p);
   if (g) { location.replace('/play/' + g[1].toLowerCase() + '/' + g[2] + location.search); return; }

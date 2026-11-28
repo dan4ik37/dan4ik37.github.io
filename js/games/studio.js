@@ -18,7 +18,7 @@
   const num = n => Number(n || 0).toLocaleString('ru');
   const authed = () => typeof currentUser !== 'undefined' && !!currentUser;
   const isStaff = () => { try { return typeof currentProfile !== 'undefined' && ['admin', 'moderator'].includes(currentProfile?.role); } catch (e) { return false; } };
-  const SITE = 'https://dan4ik37.vercel.app';
+  const SITE = 'https://www.dan4ik37.com';
   let root = null, api = null, S = null;   // S — состояние текущего экрана
 
   // ── Черновики в браузере ──

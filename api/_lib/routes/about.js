@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     ...(top.length ? [['Во что играет dan4ik37?', `Больше всего роликов на канале по играм: ${top.join(', ')}. Ещё — хорроры, инди и шортсы с моментами со стримов.`]] : []),
     ['Где стримит dan4ik37?', 'Прямые эфиры — на Twitch (twitch.tv/dan4ik37), ролики и шортсы — на YouTube, клипы — в TikTok. Анонсы — в Telegram и ВКонтакте.'],
     ...(since ? [['Когда dan4ik37 создал канал?', `YouTube-канал создан ${since}.${first ? ` Самое раннее видео в списке загрузок — «${first.title}» (${ruDate(first.publishedAt)}).` : ''}`]] : []),
-    ['Как связаться с dan4ik37?', 'По рекламе и сотрудничеству — почта dan4ik37k@gmail.com или раздел «Реклама» на сайте. Пообщаться — в чате на сайте dan4ik37.vercel.app и на стримах.'],
+    ['Как связаться с dan4ik37?', 'По рекламе и сотрудничеству — почта dan4ik37k@gmail.com или раздел «Реклама» на сайте. Пообщаться — в чате на сайте www.dan4ik37.com и на стримах.'],
   ];
   const ld = { '@context': 'https://schema.org', '@graph': [
     { '@type': 'ProfilePage', url, name: 'Кто такой dan4ik37', inLanguage: 'ru', dateModified: new Date().toISOString().slice(0, 10), mainEntity: { '@id': SITE + '/#person' } },
@@ -62,7 +62,7 @@ export default async function handler(req, res) {
     ${fact('Подписчики', esc(subs))}
     ${fact('Просмотры', ch ? esc(num(ch.viewCount)) : '')}
     ${fact('Стримы', '<a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch — dan4ik37</a>')}
-    ${fact('Сайт', '<a href="/">dan4ik37.vercel.app</a> — чат, игры с друзьями, все видео')}
+    ${fact('Сайт', '<a href="/">www.dan4ik37.com</a> — чат, игры с друзьями, все видео')}
   </dl>
   ${games.length ? `<section class="box"><h2>Во что играет</h2><p>Темы по названиям всех ${esc(num(vids.length))} роликов канала:</p>
     <ul class="ab-games">${games.slice(0, 12).map(x => `<li><a href="/topic/${x.t.slug}">${esc(x.t.name)}</a><span>${esc(num(x.n))} видео</span></li>`).join('')}</ul>
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
     <li><a href="/vip">VIP</a> за поддержку — цветной ник, стикеры, своя тема сайта.</li>
   </ul></section>
   <section class="box" id="site"><h2>Что за сайт</h2>
-    <p>dan4ik37.vercel.app — сайт Денчика37, автора канала. Здесь собраны его ролики и стримы, а ещё то, чего на YouTube нет:
+    <p>www.dan4ik37.com — сайт Денчика37, автора канала. Здесь собраны его ролики и стримы, а ещё то, чего на YouTube нет:
     ${esc(String(GAME_PAGES.length))} браузерных игр, в которые можно играть одному, с ботом или с другом по ссылке, ${esc(String(QUIZZES.length))} тестов,
     ${TOOLS.length} инструментов для игроков, форум со статьями и гайдами, «Идеи для видео», где зрители предлагают темы роликов, и живой чат.
     Всё бесплатно, большинство разделов работает без регистрации. Полный список — <a href="/sitemap">«Карта сайта»</a>.</p></section>

@@ -51,7 +51,7 @@ const ALL_PAGE_IDS = Object.values(PAGES).flat();
 const D37Route = (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const MODE = typeof ROUTING !== 'undefined' && ROUTING === 'hash' ? 'hash' : 'path';
-  const SITE = 'https://dan4ik37.vercel.app';
+  const SITE = 'https://www.dan4ik37.com';
   const YM_ID = 113596397;   // Яндекс Метрика (index.html, api/_lib/page.js)
   const ROOTS = new Set(Object.keys(PAGES).filter(k => k !== 'home' && k !== 'games').concat('app'));
   const segs = s => String(s || '').split(/[?#]/)[0].split('/').filter(Boolean);

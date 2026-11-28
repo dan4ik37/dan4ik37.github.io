@@ -767,7 +767,7 @@
   // Ссылка на комнату: настоящий адрес (/play/<игра>/<код> — D37Route, T-007), без роутера — по-старому #/games/…; + код приглашения
   function linkFor(game, code){
     const h = `#/games/${game}/${code}`;
-    const abs = root.D37Route?.abs ? root.D37Route.abs(h) : (root.location ? location.origin + location.pathname : 'https://dan4ik37.vercel.app/') + h;
+    const abs = root.D37Route?.abs ? root.D37Route.abs(h) : (root.location ? location.origin + location.pathname : 'https://www.dan4ik37.com/') + h;
     return (root.D37Ref?.wrap || (u => u))(abs);
   }
   // Новая комната: ссылку — другу сразу (в том же нажатии), сами — в комнату по адресу #/games/<игра>/<код>

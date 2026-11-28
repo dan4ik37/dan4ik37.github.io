@@ -595,7 +595,7 @@
     if (r.err) { S.reason = 'mic'; S.err = r.err; setState('failed'); return; }
     S.room = r.R;
     // вызов — личным сообщением (его может прислать только друг; ребёнку взрослый — нет: сервер, community.sql ч. 5)
-    const link = `https://dan4ik37.vercel.app/#/phone/call/${code}`;
+    const link = `https://www.dan4ik37.com/#/phone/call/${code}`;
     const { error } = await sbClient.from('direct_messages').insert([{ sender_id: P.me(), recipient_id: uid, text: `📞 Звоню тебе! ${link}` }]);
     if (error) { S.reason = 'dm'; S.err = dmErr(error); setState('failed'); return; }
     S.timer = setTimeout(() => { if (S?.code === code && S.state === 'out') { S.reason = 'noanswer'; setState('timeout'); } }, DIAL_MS);
@@ -621,7 +621,7 @@
     const n = people().length; if (n >= MAX) { P.toast('В разговоре уже 6 человек — больше нельзя', false); return; }
     const kb = await kidBlock(uid);
     if (kb) { P.toast(kidMsg(kb), false); return; }
-    const { error } = await sbClient.from('direct_messages').insert([{ sender_id: P.me(), recipient_id: uid, text: `🎧 Зову в голосовой чат! https://dan4ik37.vercel.app/#/phone/call/${S.code}` }]);
+    const { error } = await sbClient.from('direct_messages').insert([{ sender_id: P.me(), recipient_id: uid, text: `🎧 Зову в голосовой чат! https://www.dan4ik37.com/#/phone/call/${S.code}` }]);
     P.toast(error ? dmErr(error) : `📨 Позвал(а) ${nick}`, !error);
   };
   // Голосовая компания: своя комната, зовёшь друзей

@@ -52,7 +52,7 @@ function closePrivacy(){
 // Ссылка «поделиться» ведёт на страницу ролика на сайте (/v/<id>, api/video.js),
 // а не на YouTube: у неё красивое превью, и пришедший остаётся на сайте.
 let modalVidId = '';
-function vidPageUrl(id){ return 'https://dan4ik37.vercel.app/v/' + id; }
+function vidPageUrl(id){ return 'https://www.dan4ik37.com/v/' + id; }
 function shareCurrentVid(){
   const url = (window.D37Ref?.wrap || (u => u))(vidPageUrl(modalVidId)), btn = document.getElementById('mShare');   // 👥 с кодом приглашения
   const title = document.getElementById('mTitle').textContent;

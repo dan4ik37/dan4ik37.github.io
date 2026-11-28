@@ -32,7 +32,7 @@
   const NICK_RE = /^[\p{L}\p{N} _.-]{1,24}$/u;
   const PLACE_RE = /^[A-Za-z0-9/_-]{1,80}$/;
   const DAY = 864e5, KEEP = RULES.keepDays * DAY;
-  const SITE = 'https://dan4ik37.vercel.app';
+  const SITE = 'https://www.dan4ik37.com';
   const LS = 'd37_ref2', LS_OLD = 'd37_ref', LS_MY = 'd37_ref_my', LS_DEV = 'd37_dev', LS_DONE = 'd37_ref_done', LS_PING = 'd37_ref_ping', LS_TOUCH = 'd37_ref_touch';
 
   const lsGet = k => { try { return root.localStorage ? root.localStorage.getItem(k) : null; } catch (e) { return null; } };

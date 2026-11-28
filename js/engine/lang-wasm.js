@@ -812,7 +812,7 @@ fn start() {
 Задача: `;
   const RUST_AI = `Напиши скрипт на Rust для «Студии 3D» сайта dan4ik37 (это как Roblox Studio). Скрипт — библиотека Rust без внешних crate'ов,
 собирается в WebAssembly: cargo build --release --target wasm32-unknown-unknown (Cargo.toml: crate-type = ["cdylib"], panic = "abort"),
-рядом с lib.rs лежит SDK сайта src/d37.rs (https://dan4ik37.vercel.app/sdk/d37.rs). lib.rs начинается строго так:
+рядом с lib.rs лежит SDK сайта src/d37.rs (https://www.dan4ik37.com/sdk/d37.rs). lib.rs начинается строго так:
 #[macro_use]
 mod d37;
 use d37::*;

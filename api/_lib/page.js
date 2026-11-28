@@ -61,7 +61,7 @@ export const TRUST_LINKS = [
   ['/contacts', 'Контакты'], ['/privacy', 'Конфиденциальность'], ['/privacy#ads', 'Реклама и cookie'],
 ];
 // Кто выпускает сайт — для поисковиков (schema.org Organization + WebSite). Те же @id — в <head> index.html и на /about.
-const SITE_URL = 'https://dan4ik37.vercel.app';
+const SITE_URL = 'https://www.dan4ik37.com';
 export const SAME_AS = [YT_CHANNEL, 'https://www.twitch.tv/dan4ik37', 'https://www.tiktok.com/@.dan4ik37', 'https://vk.com/dan4ik37', 'https://t.me/+LE25p4pQojkyYjli'];
 export const SITE_LD = [
   { '@type': 'Organization', '@id': SITE_URL + '/#org', name: 'dan4ik37', alternateName: ['Денчик37', 'Сайт dan4ik37'], url: SITE_URL + '/',

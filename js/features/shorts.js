@@ -222,7 +222,7 @@ function updateSoundButtons(){
 }
 
 function shareShort(id, btn){
-  const url = typeof vidPageUrl === 'function' ? vidPageUrl(id) : 'https://dan4ik37.vercel.app/v/' + id;
+  const url = typeof vidPageUrl === 'function' ? vidPageUrl(id) : 'https://www.dan4ik37.com/v/' + id;
   if (navigator.share) { navigator.share({ url }).catch(() => {}); return; }
   (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(
     () => { const t = btn?.querySelector('small'); if (t) { t.textContent = 'Готово'; setTimeout(() => t.textContent = 'Ссылка', 1500); } },

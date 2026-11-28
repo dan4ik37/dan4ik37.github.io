@@ -12,7 +12,7 @@ const KEY = process.env.YT_API_KEY || 'AIzaSyA0dK2a1YG_s54zG-zapYgjycIempCvHp0';
 const HANDLE = '@Dan4ik37Yt';
 const API = 'https://www.googleapis.com/youtube/v3/';
 
-export const SITE = 'https://dan4ik37.vercel.app';
+export const SITE = 'https://www.dan4ik37.com';   // канонический адрес сайта (canonical, sitemap, share). YouTube API ниже шлёт Referer на старый адрес — ключ YouTube может быть привязан к нему — не менять без проверки в Google Cloud
 export const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 // Весь архив (~6000 роликов на 2026). Через API это 120 запросов по 50 подряд — поэтому берётся из снимка
 // (uploads-snapshot.js, scripts/snapshot-uploads.mjs) плюс свежие ролики сверху. Страница ролика — getUploads(200).
@@ -34,7 +34,7 @@ async function cached(key, ttlMs, fn) {
 
 async function api(path) {
   // Ключ может быть ограничен по HTTP-рефереру (настройка в Google Cloud) — представляемся сайтом
-  const r = await fetch(API + path + '&key=' + KEY, { headers: { Referer: SITE + '/' } });
+  const r = await fetch(API + path + '&key=' + KEY, { headers: { Referer: 'https://dan4ik37.vercel.app/' } });
   if (!r.ok) throw new Error('YouTube API ' + r.status);
   return r.json();
 }
@@ -209,7 +209,7 @@ function cmtOut(c, replies) {
     text: String(s.textDisplay || s.textOriginal || '').slice(0, 10000), likes: +s.likeCount || 0, at: String(s.publishedAt || ''), replies: +replies || 0 };
 }
 async function apiReason(path) {
-  const r = await fetch(API + path + '&key=' + KEY, { headers: { Referer: SITE + '/' } });
+  const r = await fetch(API + path + '&key=' + KEY, { headers: { Referer: 'https://dan4ik37.vercel.app/' } });
   let j = null; try { j = await r.json(); } catch (e) {}
   if (!r.ok) { const e = new Error('YouTube API ' + r.status); e.status = r.status; e.reason = String(j?.error?.errors?.[0]?.reason || ''); throw e; }
   return j || {};
