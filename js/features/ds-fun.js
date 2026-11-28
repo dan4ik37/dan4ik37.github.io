@@ -19,7 +19,7 @@
   const X = DS.x = DS.x || {};
   X.sub = X.sub || {};
   const e = s => (typeof esc === 'function' ? esc(s) : String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
-  const SITE = 'https://dan4ik37.vercel.app';
+  const SITE = 'https://www.dan4ik37.com';
   const skey = srv => (srv?.official ? 'o' : String(srv?.id ?? 'o'));
   const cidOf = srv => (srv?.official ? null : +srv.id);
   const LS = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? d; } catch (er) { return d; } };

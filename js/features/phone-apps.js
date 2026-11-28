@@ -8,7 +8,7 @@
 (() => {
   const P = window.D37Phone, MV = window.MsgView;
   const e = s => esc(s);
-  const SITE = 'https://dan4ik37.vercel.app';
+  const SITE = 'https://www.dan4ik37.com';
   const rid = n => { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; for (const x of crypto.getRandomValues(new Uint8Array(n))) s += a[x % a.length]; return s; };
 
   // ═══ Сообщения ═══

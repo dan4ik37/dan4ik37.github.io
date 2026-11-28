@@ -30,7 +30,7 @@
   const VER = '1';                 // js/features/app-guide.js?v=VER — поменял инструкцию, подними
   const LS = 'd37_app';            // { v: заходов, first, last, n: показов карточки, sv: на каком заходе, x: закрыта, inst, nb: без значка, ao: запусков приложения }
   const SS_VISIT = 'd37_app_v', SS_SRC = 'd37_app_src', SS_OPEN = 'd37_app_open';
-  const ORIGIN = 'https://dan4ik37.vercel.app';
+  const ORIGIN = 'https://www.dan4ik37.com';
   // Игры, которым не нужен интернет (бот, свои правила, всё в браузере) — их файлы приложение держит в кэше
   const OFFLINE_GAMES = ['sudoku', '2048', 'kosynka', 'freecell', 'pauk', 'blocks', 'miner', 'mahjong', 'snake', 'memory', 'reaction', 'ttt', 'checkers', 'chess', 'sea', 'words', 'catch', 'balda', 'domino', 'fillword', 'podzem', 'kletochki', 'chervyachki'];
   const now = () => Date.now();

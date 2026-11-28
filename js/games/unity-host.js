@@ -14,7 +14,7 @@
 (() => {
   const PROTO = 1;
   const LS = 'd37_unity_drafts', LS_BEST = 'd37_unity_best';
-  const SITE = 'https://dan4ik37.vercel.app';
+  const SITE = 'https://www.dan4ik37.com';
   const SDK_URL = 'https://github.com/dan4ik37/dan4ik37.github.io/tree/main/sdk/unity';
   const OWN_HOSTS = ['dan4ik37.vercel.app', 'dan4ik37.github.io'];
   // Песочница сборки. allow-same-origin здесь безопасен: сборка всегда на ДРУГОМ сайте (свой адрес не принимаем ни при
