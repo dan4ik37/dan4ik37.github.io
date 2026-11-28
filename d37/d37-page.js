@@ -599,12 +599,17 @@ async function main() {
     : 'Осмотреться: нажми на картинку или зажми кнопку мыши и веди · W A S D — ' + (planet ? 'лететь / идти · O — орбита ↔ земля · Shift — быстро' : 'ходить · Shift — бег · Пробел — прыжок · F — полёт');
   if (TOUCH) {
     const R = 56;   // stick radius in CSS px
+    // proto-ui (ENGINE_TOUCH in engine-host.js): in the game the engine's own HUD draws Jump and Pose (crouch) — this
+    // test page keeps its two discs only for an engine without them and for the viewer scenes
+    const engineTouch = game && typeof app.game_hud_ask === 'function';
     const jump = $('jump');
-    jump.style.display = 'flex';
-    hold(jump, (v) => { touchJump = v; });
-    // ep11-fix-body (CHECK-BODY 2): crouch (roll, let go of a hang / tree / ladder); fly only in the creative world
-    $('crouch').style.display = 'flex';
-    hold($('crouch'), (v) => { touchCrouch = v; });
+    if (!engineTouch) {
+      jump.style.display = 'flex';
+      hold(jump, (v) => { touchJump = v; });
+      // ep11-fix-body (CHECK-BODY 2): crouch (roll, let go of a hang / tree / ladder); fly only in the creative world
+      $('crouch').style.display = 'flex';
+      hold($('crouch'), (v) => { touchCrouch = v; });
+    }
     if (/creative:\s*true/.test(sceneText)) {
       const bFly = $('fly');
       bFly.style.display = 'flex';
