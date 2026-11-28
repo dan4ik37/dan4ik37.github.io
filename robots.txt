@@ -26,4 +26,4 @@ Clean-param: ref /
 User-agent: Mediapartners-Google
 Disallow:
 
-Sitemap: https://dan4ik37.vercel.app/sitemap.xml
+Sitemap: https://www.dan4ik37.com/sitemap.xml
